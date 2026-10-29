@@ -63,7 +63,10 @@ export function ProjectsSidebar(props: ProjectsSidebarProps) {
           <span class="min-w-0 truncate">My projects</span>
           <CollapsibleSection.Indicator />
         </CollapsibleSection.Trigger>
-        <CollapsibleSection.Action label="New project" onClick={props.onCreate}>
+        <CollapsibleSection.Action
+          aria-label="New project"
+          onClick={props.onCreate}
+        >
           <PlusIcon class="size-3.5" />
         </CollapsibleSection.Action>
       </CollapsibleSection.Header>

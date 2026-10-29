@@ -674,9 +674,9 @@ pub(super) async fn insert_draft_attachment(
     let result = sqlx::query!(
         r#"
         INSERT INTO email_attachments_drafts (
-            id, draft_id, file_name, content_type, sha, size, s3_key
+            id, draft_id, file_name, content_type, sha, size, s3_key, content_id, is_inline
         )
-        SELECT $1, $2, $3, $4, $5, $6, $7
+        SELECT $1, $2, $3, $4, $5, $6, $7, $9, $10
         FROM email_messages m
         WHERE m.id = $2 AND m.link_id = $8
         "#,
@@ -688,6 +688,8 @@ pub(super) async fn insert_draft_attachment(
         attachment.size,
         attachment.s3_key,
         link_id,
+        attachment.content_id,
+        attachment.is_inline,
     )
     .execute(&mut *tx)
     .await?;

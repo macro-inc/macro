@@ -1,6 +1,9 @@
+import EmptyStateEmailGraphic from '@design/empty-state-email.svg';
 import { Tabs } from '@ui';
 import { createSignal } from 'solid-js';
+import { CrmListEmpty } from '../components/list-state';
 import { RecordSection } from '../components/record-section';
+import { useCrmContext } from '../context/crm-context';
 import type {
   CrmEmailSignal as EmailSignalView,
   CrmEmailScope as EmailView,
@@ -12,6 +15,7 @@ import { useContactEmailsQuery } from './use-crm';
 export function ContactEmailsSection(props: { contact?: CrmContactResponse }) {
   const email = () => props.contact?.email;
   const [search, setSearch] = createSignal('');
+  const crm = useCrmContext();
   const [view, setView] = createSignal<EmailView>('team');
   const [signalView, setSignalView] = createSignal<EmailSignalView>('all');
   const emailsQuery = useContactEmailsQuery(email, view, signalView);
@@ -52,7 +56,18 @@ export function ContactEmailsSection(props: { contact?: CrmContactResponse }) {
         source={emailsQuery}
         search={search()}
         pending={!props.contact}
-        empty={`No ${signalView() === 'signal' ? 'signal emails' : 'emails'} with this contact ${view() === 'me' ? 'in your inbox' : 'yet'}.`}
+        onClearSearch={() => setSearch('')}
+        emptyContent={
+          <CrmListEmpty
+            graphic={EmptyStateEmailGraphic}
+            title={`No ${signalView() === 'signal' ? 'signal emails' : 'emails'} with this contact ${view() === 'me' ? 'in your inbox' : 'yet'}.`}
+            description="Email this contact to start a conversation."
+            action={{
+              label: 'New email',
+              onClick: () => crm.openEmailComposer(props.contact?.email),
+            }}
+          />
+        }
       />
     </RecordSection>
   );

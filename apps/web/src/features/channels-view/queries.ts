@@ -25,7 +25,7 @@ import type {
   ChannelsQueryScope,
   ChannelsSortGroup,
 } from './types';
-import { channelHasMessages, isDirectMessage } from './utils';
+import { channelHasMessages, isDirectMessage, isTeamChannel } from './utils';
 
 /** Threads per page the Threads rail reads to find their channels. */
 const THREAD_CHANNELS_PAGE_SIZE = 100;
@@ -66,13 +66,20 @@ export const CHANNELS_QUERY_DEFINITIONS = {
     }),
     matches: channelHasMessages,
   },
+  team_channels: {
+    params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'created_at' },
+    filters: defineQueryFilters({
+      include: { channelType: ['team'], channelIsParticipant: [true] },
+    }),
+    matches: isTeamChannel,
+  },
   channels: {
     params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'created_at' },
     filters: defineQueryFilters({
       include: { channelIsParticipant: [true] },
-      exclude: { channelType: ['direct_message'] },
+      exclude: { channelType: ['direct_message', 'team'] },
     }),
-    matches: (channel) => !isDirectMessage(channel),
+    matches: (channel) => !isDirectMessage(channel) && !isTeamChannel(channel),
   },
   direct_messages: {
     params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'updated_at' },
@@ -381,6 +388,11 @@ export function useChannelsSources(
   sortBy: (group: ChannelsSortGroup) => ChannelListSort
 ): ChannelsSources {
   return {
+    team_channels: useChannelsDataSource(
+      'team_channels',
+      () => enabled('team_channels'),
+      () => sortBy('team_channels')
+    ),
     channels: useChannelsDataSource(
       'channels',
       () => enabled('channels'),

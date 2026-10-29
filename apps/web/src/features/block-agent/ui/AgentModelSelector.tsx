@@ -47,7 +47,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
         shown() ?? undefined,
         props.options.find((option) => option.id === shown())?.name
       ),
-      props.effortLabel,
+      isTouchDevice() ? props.effortLabel : undefined,
     ]
       .filter(Boolean)
       .join(' · ');

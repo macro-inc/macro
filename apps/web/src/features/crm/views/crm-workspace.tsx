@@ -24,7 +24,10 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { usePreference } from '@app/preferences/use-preference';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SplitPanel } from '@components/app/split-panel';
-import { enableCrmActivity } from '@core/constant/featureFlags';
+import {
+  enableCrmActivity,
+  enableDatabases,
+} from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -37,7 +40,7 @@ import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import FileCsvIcon from '@icon/system/regular/file-csv.svg';
 import ListIcon from '@icon/system/regular/list.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import { Button, Dropdown, Tooltip } from '@ui';
+import { Button, ButtonGroup, Dropdown, Tooltip } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import {
   createEffect,
@@ -53,6 +56,7 @@ import { CrmListDialog } from '../components/company-list-dialog';
 import { CrmCreateMenu } from '../components/crm-create-menu';
 import { CrmMobileTabs } from '../components/crm-mobile-tabs';
 import { CrmSidebar } from '../components/crm-sidebar';
+import { CrmListError, CrmListSkeleton } from '../components/list-state';
 import { PipelineDialog } from '../components/pipeline-dialog';
 import { PipelineSidebar } from '../components/pipeline-sidebar';
 import { useCrmContext } from '../context/crm-context';
@@ -97,9 +101,10 @@ function NavigationToggle(props: {
           fallback={
             <Tooltip label="Expand CRM sidebar">
               <Button
+                aria-label="Expand CRM sidebar"
+                tooltip="Expand CRM sidebar"
                 variant="ghost"
                 size="icon-sm"
-                label="Expand CRM sidebar"
                 ref={toggleTarget}
                 onClick={props.onExpand}
               >
@@ -244,9 +249,12 @@ function CrmFilterChips(props: { onReset: () => void }) {
 export function CrmWorkspaceView(props: {
   children: (options: {
     onOpenEntity?: (entity: EntityData) => boolean;
+    clearPeopleSearch: () => void;
+    editList?: () => void;
   }) => JSX.Element;
 }) {
   const activityFlag = useFeatureFlag(enableCrmActivity);
+  const databasesFlag = useFeatureFlag(enableDatabases);
   const {
     openCreateCompany: openCreateCompanyModal,
     openCreateContact: openCreateContactModal,
@@ -269,6 +277,11 @@ export function CrmWorkspaceView(props: {
   const searchPeople = (value: string) => {
     setPeopleSearch(value);
     applyPeopleSearch(value);
+  };
+  const clearPeopleSearch = () => {
+    applyPeopleSearch.clear();
+    setPeopleSearch('');
+    view.queryFilters.set({ include: { crmContactSearch: undefined } });
   };
 
   const settings = view.host.settings;
@@ -338,13 +351,28 @@ export function CrmWorkspaceView(props: {
   const peopleActive = () => active() === 'people';
   const activityTab = () => {
     const tab = active();
-    return activityFlag().enabled && isCrmActivityTab(tab) ? tab : undefined;
+    return activityFlag().enabled &&
+      (tab !== 'databases' || databasesFlag().enabled) &&
+      isCrmActivityTab(tab)
+      ? tab
+      : undefined;
   };
   const activityPending = () =>
-    isCrmActivityTab(active()) && activityFlag().loading;
+    isCrmActivityTab(active()) &&
+    (activityFlag().loading ||
+      (active() === 'databases' && databasesFlag().loading));
   const [exporting, setExporting] = createSignal(false);
   const activeList = () =>
     lists.lists().find((list) => `list:${list.id}` === active());
+  const editActiveList = () => {
+    const list = activeList();
+    if (list)
+      setEditing({
+        id: list.id,
+        name: list.name,
+        companyIds: [...list.config.companyIds],
+      });
+  };
   // A list tab from the URL has no preset, so apply its company filter once the list loads.
   createEffect(() => {
     const list = activeList();
@@ -384,6 +412,7 @@ export function CrmWorkspaceView(props: {
     settings.close();
     if (!listsEnabled() && id.startsWith('list:')) id = 'active';
     if (!activityFlag().enabled && isCrmActivityTab(id)) id = 'active';
+    if (id === 'databases' && !databasesFlag().enabled) id = 'active';
     if (id !== 'people' && !id.startsWith('list:') && !isCrmActivityTab(id))
       id = 'active';
     if (id === active()) view.host.record.close();
@@ -442,9 +471,20 @@ export function CrmWorkspaceView(props: {
   // Keep cold activity links intact until PostHog resolves; off falls back to Companies.
   createEffect(
     on(
-      () => [activityFlag().loading, activityFlag().enabled, active()] as const,
-      ([loading, enabled, tab]) => {
-        if (!loading && !enabled && isCrmActivityTab(tab)) navigate('active');
+      () =>
+        [
+          activityPending(),
+          activityFlag().enabled,
+          databasesFlag().enabled,
+          active(),
+        ] as const,
+      ([loading, activityEnabled, databasesEnabled, tab]) => {
+        if (
+          !loading &&
+          isCrmActivityTab(tab) &&
+          (!activityEnabled || (tab === 'databases' && !databasesEnabled))
+        )
+          navigate('active');
       }
     )
   );
@@ -519,9 +559,7 @@ export function CrmWorkspaceView(props: {
   return (
     <ViewShell.Root aside={collapsed() ? false : {}} main={{ min: 320 }}>
       <ViewShell.Aside>
-        <Suspense
-          fallback={<div class="p-4 text-sm text-ink-muted">Loading CRM…</div>}
-        >
+        <Suspense fallback={<CrmListSkeleton label="Loading CRM" />}>
           {sidebar(() => setCollapsed(true))}
         </Suspense>
       </ViewShell.Aside>
@@ -536,9 +574,10 @@ export function CrmWorkspaceView(props: {
                 </NavigationToggle>
                 <Tooltip label="Back">
                   <Button
+                    aria-label="Close CRM settings"
+                    tooltip="Close CRM settings"
                     variant="ghost"
                     size="icon-sm"
-                    label="Close CRM settings"
                     onClick={settings.close}
                   >
                     <ArrowLeftIcon class="size-4" />
@@ -630,31 +669,31 @@ export function CrmWorkspaceView(props: {
               </Show>
             )}
           </Show>
-          <Show when={pipelineId() && !activePipeline()}>
-            <div class="flex flex-col items-start gap-3 p-6 text-sm text-ink-muted">
-              <p>
-                {pipelines.loading()
-                  ? 'Loading pipeline…'
-                  : pipelines.error()
+          <Show when={!recordOpen() && pipelineId() && !activePipeline()}>
+            <Show
+              when={!pipelines.loading()}
+              fallback={<CrmListSkeleton label="Loading pipeline" />}
+            >
+              <CrmListError
+                title={
+                  pipelines.error()
                     ? 'Could not load this pipeline.'
-                    : 'This pipeline is unavailable or you no longer have access.'}
-              </p>
+                    : 'This pipeline is unavailable or you no longer have access.'
+                }
+                onRetry={() => pipelines.refresh()}
+              />
               <Button variant="ghost" onClick={() => navigate('active')}>
                 Back to companies
               </Button>
-            </div>
+            </Show>
           </Show>
           <Show when={!recordOpen() && !pipelineId() && activityPending()}>
-            <div class="p-4 text-sm text-ink-muted">Loading CRM activity…</div>
+            <CrmListSkeleton label="Loading CRM activity" />
           </Show>
           <Show when={!recordOpen() && !pipelineId() && activityTab()} keyed>
             {(tab) => (
               <Suspense
-                fallback={
-                  <div class="p-4 text-sm text-ink-muted">
-                    Loading CRM activity…
-                  </div>
-                }
+                fallback={<CrmListSkeleton label="Loading CRM activity" />}
               >
                 <CrmActivityView
                   tab={tab}
@@ -691,7 +730,7 @@ export function CrmWorkspaceView(props: {
                         onValueChange={searchPeople}
                       />
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         class="ml-auto shrink-0"
                         onClick={() => openCreateContactModal()}
                       >
@@ -717,31 +756,22 @@ export function CrmWorkspaceView(props: {
               >
                 <Show when={!peopleActive()}>
                   <HeaderActionGroup label="Company filters">
-                    <UnifiedFilterDropdown hideLabel variant="ghost" />
+                    <UnifiedFilterDropdown grouped hideLabel variant="ghost" />
                   </HeaderActionGroup>
                   <HeaderActionGroup label="Company view options">
-                    <SoupViewContextSort />
-                    <SoupViewContextGroup hideLabel variant="ghost" />
-                    <CompanyDisplayMenu />
+                    <SoupViewContextSort grouped />
+                    <SoupViewContextGroup grouped hideLabel variant="ghost" />
+                    <CompanyDisplayMenu grouped />
                     <Suspense>
-                      <CompanyViewsMenu hideLabel />
+                      <CompanyViewsMenu grouped hideLabel />
                     </Suspense>
                     <Show when={listsEnabled() && activeList()}>
-                      {(list) => (
-                        <Button
-                          variant="ghost"
-                          size="md"
-                          onClick={() =>
-                            setEditing({
-                              id: list().id,
-                              name: list().name,
-                              companyIds: [...list().config.companyIds],
-                            })
-                          }
-                        >
-                          Edit list
-                        </Button>
-                      )}
+                      <ButtonGroup.Button
+                        variant="ghost"
+                        onClick={editActiveList}
+                      >
+                        Edit list
+                      </ButtonGroup.Button>
                     </Show>
                   </HeaderActionGroup>
                 </Show>
@@ -766,6 +796,8 @@ export function CrmWorkspaceView(props: {
             <div class="flex min-h-0 min-w-0 flex-1 flex-col [--mobile-content-inset-top:0px]">
               {props.children({
                 onOpenEntity: isTouchDevice() ? undefined : openRecord,
+                clearPeopleSearch,
+                editList: activeList() ? editActiveList : undefined,
               })}
             </div>
           </Show>

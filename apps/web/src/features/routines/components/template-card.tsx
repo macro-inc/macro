@@ -53,11 +53,15 @@ export function TemplateCard(props: {
             : `Active for ${props.activeCount} people`}
         </span>
         <div class="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => props.onView()}>
+          <Button variant="secondary" size="sm" onClick={() => props.onView()}>
             View template
           </Button>
           <Show when={props.canActivate}>
-            <Button variant="cta" size="sm" onClick={() => props.onActivate()}>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => props.onActivate()}
+            >
               Activate for me
             </Button>
           </Show>

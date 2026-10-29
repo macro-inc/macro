@@ -9,25 +9,49 @@ use non_empty::NonEmpty;
 use super::state::{Changed, FoldState};
 
 impl FoldState {
-    /// Show that the agent summarized its own context. Nothing answers it,
-    /// and it is no turn: it lands between turns, or beside one running.
+    /// Show that the agent summarized its own context. Nothing answers it.
+    ///
+    /// Between turns it is a message of its own. Within one it is a part of
+    /// the turn's agent message, after whatever the agent had produced when
+    /// the summary landed: as a message of its own it would sort after the
+    /// whole turn, below calls that started after it.
     pub(super) fn record_compaction(&mut self) -> Option<Changed> {
+        let part = MessagePart::Control {
+            control: Control::Compact,
+            outcome: ControlOutcome::Accepted,
+        };
+        // Still consumes a turn id in a turn, so every later turn keeps the
+        // id a comms placeholder may have stored.
         let id = TurnId(self.turns_opened);
         self.turns_opened += 1;
         let message = self.messages.len();
+        match self.turn.as_ref().map(|turn| (turn.id, turn.agent)) {
+            Some((_, Some(agent))) => {
+                self.messages.get_mut(agent)?.parts.push(part);
+                Some(Changed::updated(agent))
+            }
+            Some((turn_id, None)) => {
+                self.push_agent_message(turn_id, part);
+                self.open_turn().agent = Some(message);
+                Some(Changed::new(message))
+            }
+            None => {
+                self.push_agent_message(id, part);
+                Some(Changed::new(message))
+            }
+        }
+    }
+
+    fn push_agent_message(&mut self, id: TurnId, part: MessagePart) {
         self.messages.push(FoldedMessage {
             id,
             author: Author::Agent,
             request_id: None,
-            parts: NonEmpty::one(MessagePart::Control {
-                control: Control::Compact,
-                outcome: ControlOutcome::Accepted,
-            }),
+            parts: NonEmpty::one(part),
             stop: None,
             pending: self.speculative,
             posted_at: None,
         });
-        Some(Changed::new(message))
     }
 
     /// Emit a standalone control message. A request-backed control starts

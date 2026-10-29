@@ -25,6 +25,7 @@ mod herdr;
 mod outbound;
 mod repository;
 mod runtime;
+mod self_knowledge;
 mod service;
 mod trigger;
 mod tui;

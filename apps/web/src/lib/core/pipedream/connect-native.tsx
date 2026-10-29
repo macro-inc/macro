@@ -57,7 +57,7 @@ export function openNativePipedreamConnectUI(
           </Show>
           <div class="flex gap-2">
             <Button
-              variant="outline"
+              variant="secondary"
               onClick={() => fireAndForget(launch(), 'pipedream-connect-open')}
             >
               Open browser again

@@ -202,6 +202,7 @@ impl MailboxIngest for PgMailboxSync {
                 lease.mailbox.link_id,
                 recipients,
                 false,
+                None,
             )
             .await
             .map_err(|_| MailboxError::Persistence)?;

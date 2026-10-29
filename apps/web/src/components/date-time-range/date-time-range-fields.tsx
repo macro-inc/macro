@@ -57,7 +57,7 @@ function DateField(props: DateFieldProps) {
         aria-invalid={props.invalid || undefined}
         aria-describedby={props.describedBy}
         class={buttonClasses({
-          variant: 'outline',
+          variant: 'secondary',
           size: 'sm',
           class: cn(
             'max-w-40 justify-start',
@@ -65,7 +65,7 @@ function DateField(props: DateFieldProps) {
           ),
         })}
       >
-        <CalendarBlankIcon />
+        <CalendarBlankIcon class="size-3.5 shrink-0" />
         <span class="truncate">
           {selectedDate()
             ? dateLabelFormatter.format(selectedDate())

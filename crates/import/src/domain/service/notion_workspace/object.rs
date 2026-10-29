@@ -19,7 +19,8 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{
     CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, NotionLinks, NotionPlanRepo,
-    NotionRunRepo, Result, SharedEntity, SlackWorkspaceSource, WorkspaceWriter, WrittenObjects,
+    NotionRunRepo, Result, SharedEntity, SlackWorkspaceSource, SourceDates, WorkspaceWriter,
+    WrittenObjects,
 };
 
 /// Times a waiting object is checked again before it is given up on: each
@@ -180,11 +181,14 @@ where
                     .ok_or_else(|| {
                         ImportError::Other(anyhow::anyhow!("page {} has no id", item.notion_id))
                     })?;
-                let properties = match api.page(&item.notion_id).await {
-                    Ok(page) => values::document_properties(&page),
+                let (properties, dates) = match api.page(&item.notion_id).await {
+                    Ok(page) => (
+                        values::document_properties(&page),
+                        Some(SourceDates::from(&page)),
+                    ),
                     Err(error) => {
                         tracing::warn!(error = ?error, "notion page properties were not read");
-                        Default::default()
+                        (Default::default(), None)
                     }
                 };
                 let document = self
@@ -197,6 +201,7 @@ where
                         target.links,
                         &properties,
                         Some(folder),
+                        dates,
                     )
                     .await?;
                 if share {

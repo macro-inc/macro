@@ -58,9 +58,8 @@ function ReturnToCallButtonContent() {
         variant="success"
         size="icon-md"
         class="size-10 cursor-default rounded-xl"
-        label={t('nav.returnToCall')}
-        tooltip={t('nav.returnToCall')}
-        tooltipPlacement="right"
+        aria-label={t('nav.returnToCall')}
+        tooltip={{ content: t('nav.returnToCall'), placement: 'right' }}
         draggable={false}
         data-sidebar-next-item="active-call"
         {...pressHandlers(open)}

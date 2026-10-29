@@ -9,7 +9,10 @@ use crate::domain::events::{CalendarEventMetadata, CalendarMacroEvent, CalendarT
 use macro_event_broker::MacroEventBroker;
 
 use super::{
-    ics::{CalendarEventExportAccess, CalendarEventForward, CalendarEventIcs, render_event_ics},
+    ics::{
+        CalendarEventExportAccess, CalendarEventForward, CalendarEventForwardKind,
+        CalendarEventIcs, IcsParticipant, IcsPurpose, render_event_ics,
+    },
     models::{
         ActorInboxes, AppliedGoogleGrant, CalendarBackfillClaim,
         CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJobKey,
@@ -232,20 +235,31 @@ where
     ) -> Result<Option<CalendarEventIcs>, Report> {
         let event = self.repository.event_export(requester_id, event_id).await?;
         Ok(event.map(|event| CalendarEventIcs {
-            document: render_event_ics(&event),
+            document: render_event_ics(&event, IcsPurpose::Share),
             title: event.title,
         }))
     }
 
-    /// The .ics a forward of the requester's own copy of an event carries,
-    /// and that copy's inbox, which sends it. `None` unless `event_id` is a
-    /// live copy held through one of the requester's own inboxes: a channel
-    /// share or a delegated inbox's copy has no inbox of theirs to send from.
-    #[tracing::instrument(skip(self, requester_id), err)]
+    /// What a forward of the requester's own copy of an event to `invitees`
+    /// sends, and that copy's inbox, which sends it. The copy decides the
+    /// kind ([`ForwardedCopy::outside_organizer`]): an invitation naming
+    /// `invitees` when its organizer is outside Google, else the
+    /// shared-event file. Both carry the copy's join link. `None` unless
+    /// `event_id` is a live copy held through one of the requester's own
+    /// inboxes: a channel share or a delegated inbox's copy has no inbox of
+    /// theirs to send from.
+    ///
+    /// [`ForwardedCopy::outside_organizer`]: super::ics::ForwardedCopy::outside_organizer
+    #[tracing::instrument(
+        skip(self, requester_id, invitees),
+        fields(invitee_count = invitees.len(), kind = tracing::field::Empty),
+        err
+    )]
     pub async fn event_forward(
         &self,
         requester_id: &str,
         event_id: Uuid,
+        invitees: &[IcsParticipant],
     ) -> Result<Option<CalendarEventForward>, Report> {
         let copies = self
             .repository
@@ -262,12 +276,30 @@ where
         else {
             return Ok(None);
         };
+        let Some(forwarded) = self
+            .repository
+            .forwarded_copy(requester_id, event_id)
+            .await?
+        else {
+            return Ok(None);
+        };
+        let kind = match forwarded.outside_organizer(&event) {
+            Some(organizer) => CalendarEventForwardKind::Invitation { organizer },
+            None => CalendarEventForwardKind::EventFile,
+        };
+        tracing::Span::current().record("kind", kind.as_str());
+        let purpose = IcsPurpose::Forward {
+            join_link: forwarded.join_link.as_ref(),
+            invitees: matches!(kind, CalendarEventForwardKind::Invitation { .. })
+                .then_some(invitees),
+        };
         Ok(Some(CalendarEventForward {
             ics: CalendarEventIcs {
-                document: render_event_ics(&event),
+                document: render_event_ics(&event, purpose),
                 title: event.title,
             },
             inbox: copy.inbox,
+            kind,
         }))
     }
 
@@ -302,8 +334,9 @@ where
         &self,
         requester_id: &str,
         event_id: Uuid,
+        invitees: &[IcsParticipant],
     ) -> impl Future<Output = Result<Option<CalendarEventForward>, Report>> + Send {
-        CalendarService::event_forward(self, requester_id, event_id)
+        CalendarService::event_forward(self, requester_id, event_id, invitees)
     }
 }
 

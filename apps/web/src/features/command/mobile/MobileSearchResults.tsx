@@ -353,6 +353,7 @@ function MobileFullTextResults(props: {
           {t('commandMenu.searchFailed')}
         </p>
         <Button
+          variant="ghost"
           onClick={() => fireAndForget(search.refetch(), 'mobile-search')}
         >
           {t('commandMenu.retry')}

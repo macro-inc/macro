@@ -155,9 +155,8 @@ function InviteGuestsForm(props: {
           />
         </Show>
         <Button
-          variant="strong"
+          variant="secondary"
           size="sm"
-          depth={3}
           class="ml-auto"
           disabled={added().length === 0}
           onClick={send}
@@ -169,9 +168,13 @@ function InviteGuestsForm(props: {
   );
 }
 
-/** Shown above the forward button; Google says the same of its own forward. */
+/**
+ * Shown above the forward button; Google says the same of its own forward.
+ * The server decides whether recipients get an invitation to answer or a
+ * file to add, so this says only what both share.
+ */
 const FORWARD_FORM_NOTE =
-  "They can add the event to their calendar but won't appear in the guest list.";
+  "They'll get the event by email but won't appear in the guest list.";
 
 /**
  * Forwarding the invitation, for a guest who cannot add guests: the same
@@ -212,9 +215,8 @@ function ForwardInvitationForm(props: {
       <div class="flex shrink-0 items-center gap-2 border-t border-edge-muted p-2">
         <p class="min-w-0 flex-1 text-xs text-ink-muted">{FORWARD_FORM_NOTE}</p>
         <Button
-          variant="strong"
+          variant="secondary"
           size="sm"
-          depth={3}
           class="shrink-0"
           disabled={added().length === 0}
           onClick={send}
@@ -246,16 +248,22 @@ function GuestEditorAction(props: {
           onOpenChange={props.onOpenChange}
           placement="bottom-end"
           gutter={4}
-          flip
+          // Flip only to the other side, and let overlap slide it up over its
+          // button when neither side fits. Overlap also sizes the editor to
+          // the whole window rather than the room below: sized to that room,
+          // it never overflowed, so it never flipped, and suggestions that
+          // arrived after it opened squeezed the chosen people to nothing.
+          flip="top-end"
           slide
+          overlap
         >
           <Popover.Trigger
+            aria-label={props.label}
+            tooltip={props.label}
             as={Button}
-            label={props.label}
             variant="ghost"
             size="icon-sm"
-            depth={3}
-            class="text-ink-muted [&_svg]:size-4"
+            class="text-ink-muted"
           >
             {props.icon}
           </Popover.Trigger>
@@ -271,11 +279,11 @@ function GuestEditorAction(props: {
       }
     >
       <Button
-        label={props.label}
+        aria-label={props.label}
+        tooltip={props.label}
         variant="ghost"
         size="icon-sm"
-        depth={3}
-        class="text-ink-muted [&_svg]:size-4"
+        class="text-ink-muted"
         onClick={() => props.onOpenChange(true)}
       >
         {props.icon}
@@ -298,7 +306,7 @@ function EventInviteGuestsAction(props: {
   return (
     <GuestEditorAction
       label="Add guests"
-      icon={<UserPlusIcon />}
+      icon={<UserPlusIcon class="size-4 shrink-0" />}
       open={props.invites.editorOpen()}
       onOpenChange={props.invites.setEditorOpen}
     >
@@ -322,7 +330,7 @@ export function EventForwardInvitationAction(props: {
   return (
     <GuestEditorAction
       label="Forward invitation"
-      icon={<PaperPlaneTiltIcon />}
+      icon={<PaperPlaneTiltIcon class="size-4 shrink-0" />}
       open={props.invites.forwardEditorOpen()}
       onOpenChange={props.invites.setForwardEditorOpen}
     >
@@ -356,29 +364,29 @@ function EventGuestActions(props: {
       <Show when={eventEmailRecipients(props.event).length > 0}>
         <Show when={!guestListHidden(props.event)}>
           <Button
-            label="Copy guest emails"
+            aria-label="Copy guest emails"
+            tooltip="Copy guest emails"
             variant="ghost"
             size="icon-sm"
-            depth={3}
-            class="text-ink-muted [&_svg]:size-4"
+            class="text-ink-muted"
             onClick={() => copyGuestEmails(guestEmails(props.event.attendees))}
           >
-            <CopyIcon />
+            <CopyIcon class="size-4 shrink-0" />
           </Button>
         </Show>
         <Button
-          label="Email guests"
+          aria-label="Email guests"
+          tooltip="Email guests"
           variant="ghost"
           size="icon-sm"
-          depth={3}
-          class="text-ink-muted [&_svg]:size-4"
+          class="text-ink-muted"
           onClick={() => {
             const event = props.event;
             props.closeDetails();
             openEventEmail(event);
           }}
         >
-          <EnvelopeIcon />
+          <EnvelopeIcon class="size-4 shrink-0" />
         </Button>
       </Show>
       <Show when={props.invites.canInvite()}>

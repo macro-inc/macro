@@ -46,12 +46,12 @@ vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
 vi.mock('@ui', () => ({
   Surface: (props: { children?: JSX.Element }) => props.children,
   Button: (props: {
-    label?: string;
+    'aria-label'?: string;
     disabled?: boolean;
     onClick?: () => void;
   }) => (
     <button
-      aria-label={props.label}
+      aria-label={props['aria-label']}
       disabled={props.disabled}
       onClick={props.onClick}
     />
@@ -275,4 +275,34 @@ describe('queued prompt access', () => {
     fireEvent.click(steer);
     expect(onSteer).not.toHaveBeenCalled();
   });
+});
+
+it('hides private context in the queue and preserves it when editing', () => {
+  const prefix =
+    '<m-agent-context>{"version":1,"text":"Private instructions"}</m-agent-context>\n\n';
+  const onEdit = vi.fn();
+  const view = render(() => (
+    <QueuedPrompts
+      items={[
+        {
+          actionId: 'queued-context',
+          kind: 'prompt',
+          prompt: prefix + 'Queued request',
+        },
+      ]}
+      onEdit={onEdit}
+      onRemove={() => {}}
+    />
+  ));
+  expect(view.getByRole('button', { name: 'Queued request' })).toBeTruthy();
+  expect(view.getByRole('textbox', { hidden: true }).textContent).toBe(
+    'Queued request'
+  );
+  editor.markdown = 'Updated request';
+  editor.change?.('Updated request');
+  fireEvent.focusOut(view.getByRole('textbox', { hidden: true }));
+  expect(onEdit).toHaveBeenCalledWith(
+    'queued-context',
+    prefix + 'Updated request'
+  );
 });

@@ -29,7 +29,7 @@ export const EntitySelectionToolbarModal = (
               variant="ghost"
               onClick={props.onClose}
             >
-              <CloseIcon />
+              <CloseIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
             <span class="text-ink font-normal flex-1 whitespace-nowrap">
               {t('entityActions.selectedCount', {
@@ -40,9 +40,8 @@ export const EntitySelectionToolbarModal = (
             <Show when={props.onAction}>
               <Button
                 onClick={props.onAction}
-                variant="outline"
+                variant="secondary"
                 class="p-1 pl-2 bg-surface"
-                depth={3}
               >
                 <span>{t('entityActions.actions')}</span>
                 <Hotkey token={TOKENS.global.commandMenu} theme="subtle" />
@@ -51,9 +50,8 @@ export const EntitySelectionToolbarModal = (
             {props.children}
             <Button
               onClick={props.onClose}
-              variant="outline"
+              variant="secondary"
               class="p-1 pl-2 bg-surface"
-              depth={3}
             >
               <span>{t('entityActions.clear')}</span>
               <Hotkey shortcut="escape" theme="subtle" />

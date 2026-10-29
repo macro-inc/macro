@@ -42,7 +42,8 @@ the gateway `/email` prefix.
 
 ## Checks
 
-- `cargo test -p email_service` (`SQLX_OFFLINE` unset).
+- `cargo test -p email_service` (`SQLX_OFFLINE` unset; the `label_write_sim`
+  tests also need Redis, at `REDIS_URI` or `redis://127.0.0.1:6379`).
 - `just check` (from this directory) runs `cargo check` with `SQLX_OFFLINE=true`.
 - Local SQS: `just create-localstack` / `create-queues` before running
   `pubsub_workers` locally; queue names are in the `justfile`.
@@ -107,18 +108,48 @@ the gateway `/email` prefix.
   so a stalled write can't lose its slot to another writer. Live inbox
   sync writes take no slot. Keep new bulk backfill writes behind the same slots.
 - `gmail_ops` workers decode both label write forms: single-message
-  `ModifyMessageLabels` and `ModifyMessageLabelsBatch` (up to 1,000 messages;
-  one `batchModify` from ten messages up, separate `messages.modify` calls
-  below that, at 5 units each against a flat 50; a permanent failure reverts
-  the whole batch). Producers send the batch form only with
-  `GMAIL_LABEL_WRITE_BATCHES_ENABLED` (here and in `document_storage_service`,
-  default off), because workers released before it delete batches as
-  undecodable. Rollout: deploy with the switch off; once every
-  `pubsub_workers` task runs that release, set it to `true` in the
+  `ModifyMessageLabels` and `ModifyMessageLabelsBatch` (up to 1,000 messages).
+  From ten messages up a batch is one `batchModify`, which a permanent failure
+  reverts as a whole. Below that, gmail_ops sends one `messages.modify` per
+  message (5 units each against a flat 50), checks the message's turn just
+  before each, and settles each message as Gmail answers: a permanent
+  rejection reverts only the messages Gmail hasn't accepted, and a resumed
+  older write skips messages a newer write took over. Producers send the
+  batch form only with `GMAIL_LABEL_WRITE_BATCHES_ENABLED` (here and in
+  `document_storage_service`, default off), because workers released before
+  it delete batches as undecodable. Rollout: deploy with the switch off; once
+  every `pubsub_workers` task runs that release, set it to `true` in the
   `email-service` and `document-storage` Doppler projects (dev, then prd) and
   redeploy both services. Before rolling workers back past that release, turn
   it off and let the gmail-ops queues drain. Retire the single-message form
   only after every producer sends batches.
+- Gmail label writes leave a marker in `email_gmail_pending_label_writes`.
+  Inbox sync keeps the local state of a label marked before or after it reads
+  Gmail (`inbox_sync::operations::pending_labels`); a re-sync or recovery
+  backfill of a stored message also keeps labels Gmail's answer agrees with
+  the pre-fetch snapshot on. gmail_ops sends only messages its write is the
+  newest on, and sends them before an operation with a newer write still on
+  its way (whatever its id) waits in the retry queue
+  (`NewerLabelWritePending`), so bulk writes that are each newer on one of the
+  other's messages don't wait on each other. A waiting message sends if the
+  newer write is rejected. A permanent failure gives up the write's unaccepted
+  and waiting messages and puts back what the newest older write still on its
+  way, or the state before the write, says; an expired marker no longer
+  counts. Both label write forms carry the write's `pendingWriteId`; with
+  batches off, each message's operation settles only that message's markers.
+  Markers expire after 12 hours, which must outlast an operation's redelivery
+  through the gmail_ops queues.
+- `pubsub::label_write_sim` wires one mailbox to the production label-write,
+  gmail_ops and inbox sync code with fake Gmail and SQS. Add a test there for a
+  new race between writes and syncs; its ignored `randomized_shard_*` tests run
+  the seeded simulation (`SIM_SEEDS`, `SIM_OVERLAP`, `SIM_BATCHES`, see
+  `sim/test.rs`). Scenarios run in both label write forms (`scenario!`).
+- Local stacks run debug workers on tokio's 2 MiB worker stacks, where every
+  awaited future takes its own stack slot. Pass a Gmail call through a helper
+  as a `BoxFuture`, and box an operation the dispatch awaits in several arms;
+  a `label_write_sim` test runs the label paths on 1.5 MiB worker stacks.
+- gmail_ops moves transient Gmail failures to the retry queue like rate limits;
+  the primary queue dead-letters after three receives.
 - Header addresses that Gmail accepts can fail `MacroUserIdStr::try_from_email`.
   Skip the bad address with a WARN that omits it (the parse error echoes it)
   instead of failing the step; see `pubsub::util::build_contact_connections`.

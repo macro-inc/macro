@@ -388,14 +388,15 @@ function ModelCatalogSheet(
               <Button
                 variant="ghost"
                 size="icon-md"
-                label="Back to Suggested"
+                aria-label="Back to Suggested"
+                tooltip="Back to Suggested"
                 onClick={() => {
                   setShowAll(false);
                   setQuery('');
                   searchInput?.focus();
                 }}
               >
-                <ArrowLeft />
+                <ArrowLeft class="size-4 shrink-0 touch:size-6" />
               </Button>
             </Show>
             <MobileDrawer.Title class="min-w-0 flex-1 truncate font-medium">

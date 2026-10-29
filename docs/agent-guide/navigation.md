@@ -191,6 +191,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/tasks/projects/<uuid>/overview` | Project detail in Tasks, with breadcrumbs, properties, description, and discussions; replace `overview` with `tasks` for the task list |
 | `/app/component/project-compose` | Native project composer, sharing the task composer layout and property controls |
 | `/app/component/new-project` | Alias for the project composer; existing links remain valid |
+| `/app/initiative/<uuid>` | Shared project link; opens the project in Tasks |
 | `/app/component/initiative-view~<uuid>~overview` | Compatibility link that opens the project in Tasks |
 | `/app/agents/<uuid>` | Chat agent session with the Agents sidebar |
 | `/app/coders/<uuid>` | Code session with the Agents sidebar |
@@ -469,7 +470,9 @@ External (plug icon, `g x`) appears on the rail only with the
   its surface and item styling with the sidebar right-click menus.
 - Nav: `Home`, `Drive`, `Email`, `Chat`, `Tasks`, `Calendar`,
   `Agents`, `Customers`. Calendar and Customers appear only when
-  their features are enabled.
+  their features are enabled. Calendar shows a next-meeting badge (`Now`, or
+  minutes under an hour away) unless **Next meeting countdown** is off in
+  **Settings → Calendar**.
 - Bottom: `Settings` (`Ctrl ;`) — a gear with the signed-in account's profile
   photo as a badge in its corner. It opens Settings directly in the active
   split (Shift-click for a new split); there is no account menu. Log out lives
@@ -956,7 +959,10 @@ on desktop, including task, project, calendar event, skill, and agent session co
 
 Hovering an `@user` mention or a profile picture on desktop opens the user card:
 the person's name and email above Copy email, Copy name, Open contact (CRM teams
-only), DM, and Assign task. Touch devices have no hover, so tapping the mention
+only), DM, and Assign task. An agent's or bot's card offers Settings instead of
+DM when the viewer can configure it: Macro opens Settings → Agents, an agent the
+viewer manages opens straight into its Edit agent form, and a plain bot opens
+its page under Settings → Bots. Touch devices have no hover, so tapping the mention
 or the picture opens that same card as a bottom sheet; any action there runs and
 dismisses the sheet. Desktop keeps click-to-DM on the picture itself, which touch
 drops in favour of the card's DM action.
@@ -1205,6 +1211,18 @@ between buckets must still appear without retyping in every affected view.
 Older cache runtimes without bucket metadata, mutations, and identity resets
 refresh conservatively. For an empty search, scroll toward the end (or use
 Down); mentions offer **View all** for a category and then load more local pages.
+The @ menu ranks loaded projects and cached document/task matches together
+before choosing preview rows, with the same ranking on desktop and phone.
+Exact and prefix name matches get boosts, task projects get a type boost, and
+viewed recency and shorter names contribute. Empty-query browsing remains
+recency-led; existing People preview slots and phone pinning remain. Tuning lives
+in `MENTION_RANKING_CONFIG` in the mention menu's `utils/mention-ranking.ts`.
+Broader cache/server matches remain reachable even when the local fuzzy matcher
+would omit them. To verify, type `@task` with a project named `Task planning`
+and many recent tasks containing “task”: the project should appear in the first
+preview rows and stay near the top in **View all**. Select it with Enter or a
+phone tap and confirm a project mention is inserted.
+
 Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
 navigating/scrolling, or narrow the query, to resume from the saved cursor.

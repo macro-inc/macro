@@ -59,7 +59,7 @@ function PrShareModal(props: PrShareModalProps) {
               />
               <div class="px-4 py-3 border-t border-edge-muted">
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   onClick={() =>
                     fireAndForget(props.copyLink(), 'pr-share-modal')
                   }
@@ -118,7 +118,7 @@ function PrShareModal(props: PrShareModalProps) {
                       Macro
                     </span>
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       onClick={() =>
                         fireAndForget(props.copyLink(), 'pr-share-modal')
                       }

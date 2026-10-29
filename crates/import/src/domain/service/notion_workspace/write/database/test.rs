@@ -153,6 +153,7 @@ struct WrittenDocument {
     name: String,
     markdown: String,
     links: NotionLinks,
+    dates: Option<SourceDates>,
 }
 
 /// Records what the import asks Macro to create. `fail_at_batch` makes that
@@ -241,6 +242,7 @@ impl WorkspaceWriter for FakeWriter {
         links: &NotionLinks,
         _properties: &ImportedDocumentProperties,
         _folder: Option<Uuid>,
+        dates: Option<SourceDates>,
     ) -> anyhow::Result<String> {
         let mut documents = self.documents.lock().unwrap();
         // Like Macro: a document id already in use is the earlier attempt's.
@@ -250,6 +252,7 @@ impl WorkspaceWriter for FakeWriter {
                 name: name.to_string(),
                 markdown: markdown.to_string(),
                 links: links.clone(),
+                dates,
             });
         }
         Ok(id.to_string())
@@ -264,6 +267,7 @@ impl WorkspaceWriter for FakeWriter {
         _links: &NotionLinks,
         _properties: &ImportedTaskProperties,
         _folder: Option<Uuid>,
+        _dates: Option<SourceDates>,
     ) -> anyhow::Result<String> {
         unimplemented!("a copied database writes no tasks")
     }
@@ -492,6 +496,14 @@ async fn a_data_source_becomes_a_database_with_typed_columns_rows_bodies_and_pen
     assert_eq!(
         documents[0].links, links,
         "row bodies resolve the import's pages"
+    );
+    assert_eq!(
+        documents[0].dates,
+        Some(SourceDates {
+            created: Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap(),
+            last_edited: Utc.with_ymd_and_hms(2026, 10, 1, 9, 0, 0).unwrap(),
+        }),
+        "a row body keeps its Notion page's dates"
     );
     // The Page column is created first in the table...
     let DatabaseOp::Column {

@@ -185,7 +185,7 @@ function RecurringSettings(props: {
               <For each={WEEKDAY_OPTIONS}>
                 {(day) => (
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     class="flex-1"
                     aria-pressed={props.trigger.daysOfWeek.includes(day.value)}

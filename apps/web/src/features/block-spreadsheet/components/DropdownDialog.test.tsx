@@ -5,14 +5,10 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import type { ParentProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DropdownDialog, type DropdownDialogState } from './DropdownDialog';
 
 // App hotkey registries are outside this dialog fixture.
-vi.mock('@ui/components/Tooltip', () => ({
-  Tooltip: (props: ParentProps) => props.children,
-}));
 
 let animationStyle: HTMLStyleElement;
 beforeEach(() => {

@@ -348,6 +348,32 @@ async fn reads_share_permissions_and_bumps_modified_timestamp(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("projects_test_data"))
 )]
+async fn create_keeps_the_last_edit_time_it_is_given(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = test_repo(pool.clone());
+    let project = repo
+        .create_project(CreateProjectArgs {
+            owner: project_owner(),
+            name: "Imported".to_owned(),
+            parent_id: Some(ROOT_ID.to_owned()),
+            share_permission: SharePermissionV2::new_project_share_permission(None),
+            updated_at: Some(chrono::DateTime::UNIX_EPOCH),
+        })
+        .await?;
+
+    let updated_at = sqlx::query_scalar!(
+        r#"SELECT "updatedAt"::text AS "updated_at!" FROM "Project" WHERE id = $1"#,
+        project.id,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(updated_at, "1970-01-01 00:00:00");
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
 async fn create_is_atomic_and_inserts_all_metadata(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = test_repo(pool.clone());
     let permission = SharePermissionV2::new_project_share_permission(None);
@@ -357,6 +383,7 @@ async fn create_is_atomic_and_inserts_all_metadata(pool: Pool<Postgres>) -> anyh
             name: "Created".to_owned(),
             parent_id: Some(ROOT_ID.to_owned()),
             share_permission: permission.clone(),
+            updated_at: None,
         })
         .await?;
 
@@ -397,6 +424,7 @@ async fn create_is_atomic_and_inserts_all_metadata(pool: Pool<Postgres>) -> anyh
             name: "Must roll back".to_owned(),
             parent_id: Some("missing-parent".to_owned()),
             share_permission: permission,
+            updated_at: None,
         })
         .await
         .is_err()
@@ -457,6 +485,7 @@ async fn unsponsored_bot_owner_leaves_no_project_rows(pool: Pool<Postgres>) -> a
         name: "Bot project".to_owned(),
         parent_id: None,
         share_permission: SharePermissionV2::new_project_share_permission(None),
+        updated_at: None,
     };
     let before = ownership_row_counts(&pool).await;
 
@@ -497,6 +526,7 @@ async fn create_defaults_enabled_link_share_to_view(pool: Pool<Postgres>) -> any
             name: "Team project".to_owned(),
             parent_id: None,
             share_permission: permission,
+            updated_at: None,
         })
         .await?;
 

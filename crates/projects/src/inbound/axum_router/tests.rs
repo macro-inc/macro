@@ -173,6 +173,14 @@ impl ProjectService for FakeProjectService {
         Ok(project())
     }
 
+    async fn create_project_dated_by_contents(
+        &self,
+        _principal: &CreationPrincipal,
+        _args: CreateProjectRequest,
+    ) -> Result<Project, ProjectError> {
+        panic!("dated projects are not created by these tests")
+    }
+
     async fn edit_project(
         &self,
         _receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,

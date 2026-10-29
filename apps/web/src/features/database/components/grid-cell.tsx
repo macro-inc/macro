@@ -597,6 +597,12 @@ function TextCell(props: {
         (!props.isEntity && formatted()) ||
         undefined
       }
+      onContextMenu={(event) => {
+        if (!props.onOpen || !props.editable) return;
+        event.preventDefault();
+        event.stopPropagation();
+        props.onBeginEdit(undefined, event);
+      }}
       onClick={(event) => {
         if (props.onOpen) props.onOpen();
         else if (props.editable) props.onBeginEdit(undefined, event);

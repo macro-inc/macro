@@ -1,0 +1,10 @@
+# Allowlist for tooling/pii/scan.py.
+#
+# Only humans add entries here, unless they ask an agent to. Each non-comment
+# line is one exception:
+#
+#   customer@example-corp.com          exact finding, any file
+#   crates/foo/src/lib.rs:555-0100     finding in that path only
+#   @example-corp.com                  any email at that domain
+#
+# Prefer placeholders (customer@example.com) over exceptions.

@@ -216,6 +216,8 @@ function $createNode(
 /**
  * Removes the children of `parent` that the new state no longer lists there.
  * Nodes with ids are found by id: one may already have moved to a new parent.
+ * Nodes without ids are matched by position, walking the live children
+ * alongside the old ones.
  */
 function $removeDroppedChildren(
   reconcile: Reconcile,
@@ -228,11 +230,15 @@ function $removeDroppedChildren(
     const id = getNodeId(child);
     if (id) newIds.add(id);
   }
-  for (let i = oldChildren.length - 1; i >= 0; i--) {
-    const id = getNodeId(oldChildren[i]);
+  const dropped: LexicalNode[] = [];
+  let child = parent.getFirstChild();
+  for (const oldChild of oldChildren) {
+    const live = child;
+    child = child?.getNextSibling() ?? null;
+    const id = getNodeId(oldChild);
     if (id && newIds.has(id)) continue;
     if (!id) {
-      if (i < parent.getChildrenSize()) parent.splice(i, 1, []);
+      if (live) dropped.push(live);
       continue;
     }
     const node = $getNodeById(
@@ -240,10 +246,9 @@ function $removeDroppedChildren(
       reconcile.mapping.idToNodeKeyMap,
       id
     );
-    if (node?.getParent()?.is(parent)) {
-      parent.splice(node.getIndexWithinParent(), 1, []);
-    }
+    if (node?.getParent()?.is(parent)) dropped.push(node);
   }
+  for (const node of dropped) node.remove(true);
 }
 
 /** Diff and apply changes between two sets of nodes
@@ -274,24 +279,44 @@ function $applyChildren(
 
   $removeDroppedChildren(reconcile, parent, oldChildren, newChildren);
 
-  for (let newIndex = 0; newIndex < newChildren.length; newIndex++) {
-    const newChild = newChildren[newIndex];
+  // The first `index` children are in place and `previous` is the last of
+  // them. New nodes collect in `inserts` and go in with one splice per run,
+  // since each splice walks to its index.
+  let index = 0;
+  let previous: LexicalNode | null = null;
+  let inserts: LexicalNode[] = [];
+  const flushInserts = () => {
+    if (inserts.length === 0) return;
+    parent.splice(index, 0, inserts);
+    index += inserts.length;
+    previous = inserts[inserts.length - 1];
+    inserts = [];
+  };
+
+  for (const newChild of newChildren) {
     const id = getNodeId(newChild);
     const node = id ? $getNodeById(editor, mapping.idToNodeKeyMap, id) : null;
 
     if (!node || !id) {
-      parent.splice(newIndex, 0, [$createNode(reconcile, newChild)]);
+      inserts.push($createNode(reconcile, newChild));
       continue;
     }
 
-    if (!node.getParent()?.is(parent)) {
-      // Moved here from another parent: splice detaches it from that one.
-      parent.splice(newIndex, 0, [node]);
-    } else if (node.getIndexWithinParent() !== newIndex) {
-      parent.splice(node.getIndexWithinParent(), 1, []);
-      parent.splice(newIndex, 0, [node]);
+    flushInserts();
+    // Read after any creates: one may have moved the old next sibling into
+    // a new parent.
+    const expected = previous
+      ? previous.getNextSibling()
+      : parent.getFirstChild();
+    if (!node.is(expected)) {
+      // Moved here from another parent or from later in this one: splice
+      // detaches it from where it was.
+      parent.splice(index, 0, [node]);
     }
+    index++;
+    previous = node;
 
     $updateExistingNode(reconcile, id, newChild);
   }
+  flushInserts();
 }

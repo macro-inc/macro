@@ -1137,3 +1137,10 @@ Storage/schema failures that cannot prove preservation show recovery/update
 instructions instead of repeatedly reopening potentially damaged storage.
 
 Date-grouped email lists start directly with today's messages; Today is not shown as a leading group heading. Older date headings remain visible and ordering still uses the server's thread activity timestamp.
+
+## Dragging sidebar tags
+
+On desktop, drag a tag from the sidebar onto an email row. Its existing tags
+remain; dropping onto a selected row applies the tag to every taggable selected
+row. The dragged chip shows the tag color and name, and the target gets an outline.
+Clicking the tag still filters the list. Mobile uses the existing tag menu.

@@ -296,15 +296,13 @@ function ProfilePictureRow(props: { userId: string }) {
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
                 variant="ghost"
-                depth={3}
                 disabled={isRemoving()}
                 onClick={() => setShowRemoveConfirmModal(false)}
               >
                 Cancel
               </Button>
               <Button
-                variant="strong"
-                depth={3}
+                variant="secondary"
                 disabled={isRemoving()}
                 onClick={handleRemove}
               >
@@ -504,12 +502,7 @@ export function Account() {
           label="Log out"
           description="Sign out of Macro on this device."
         >
-          <Button
-            variant="outline"
-            size="sm"
-            depth={3}
-            onClick={() => logout()}
-          >
+          <Button variant="secondary" size="sm" onClick={() => logout()}>
             <SignOutIcon class="size-4" />
             Log out
           </Button>
@@ -526,7 +519,6 @@ export function Account() {
         <Button
           variant="danger"
           size="sm"
-          depth={3}
           onClick={() => {
             resetDeleteFlow();
             setShowDeleteModal(true);
@@ -617,7 +609,6 @@ export function Account() {
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
                 variant="ghost"
-                depth={3}
                 onClick={() => {
                   setShowDeleteModal(false);
                   resetDeleteFlow();
@@ -626,8 +617,7 @@ export function Account() {
                 Cancel
               </Button>
               <Button
-                variant="strong"
-                depth={3}
+                variant="secondary"
                 onClick={() => {
                   setShowDeleteConfirmModal(true);
                   setShowDeleteModal(false);
@@ -664,7 +654,6 @@ export function Account() {
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
                 variant="ghost"
-                depth={3}
                 disabled={isDeleting()}
                 onClick={() => {
                   setShowDeleteConfirmModal(false);
@@ -675,7 +664,6 @@ export function Account() {
               </Button>
               <HoldButton
                 variant="danger"
-                depth={3}
                 duration={DELETE_HOLD_MS}
                 disabled={isDeleting()}
                 onConfirm={deleteAccountHandler}
@@ -883,7 +871,7 @@ function BundleUpdateRow() {
         </span>
         <Show when={action()}>
           {(a) => (
-            <Button variant="accent" size="sm" depth={3} onClick={a().action}>
+            <Button variant="primary" size="sm" onClick={a().action}>
               {a().label}
             </Button>
           )}
@@ -904,9 +892,8 @@ function NativeUpdateRow() {
           </span>
           <Show when={tauri?.nativeUpdateStatus().status === 'Ready'}>
             <Button
-              variant="accent"
+              variant="primary"
               size="sm"
-              depth={3}
               onClick={() =>
                 fireAndForget(tauri?.restartNativeUpdate(), 'native-updates')
               }

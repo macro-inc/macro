@@ -174,13 +174,13 @@ function InlineTaskGithubPullRequestsContent(props: {
       <For each={pullRequests()}>{(pr) => <PullRequestPill pr={pr} />}</For>
       <Show when={!isWaitingForPullRequests() && pullRequests().length === 0}>
         <CopyButton
-          variant="outline"
+          variant="secondary"
           size="sm"
-          noTouchResize
-          depth={2}
-          tooltip="Copy branch name"
+          tooltip={{
+            content: 'Copy branch name',
+            hotkey: TOKENS.entity.action.copyBranchName,
+          }}
           aria-label="Copy branch name"
-          hotkey={TOKENS.entity.action.copyBranchName}
           class={badgeTriggerClasses({
             variant: 'outline',
             size: 'sm',

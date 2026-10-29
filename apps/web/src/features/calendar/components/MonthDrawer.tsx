@@ -42,6 +42,7 @@ export function MonthDrawer(props: MonthDrawerProps) {
           preventScrollbarShift={false}
         >
           <MobileDrawer.Trigger
+            variant="ghost"
             as={Button}
             aria-label="Choose month"
             class="max-w-full min-w-0 shrink justify-start gap-1 rounded-full border-none bg-transparent px-1 text-base font-semibold text-ink not-touch:hover:bg-hover"

@@ -33,11 +33,9 @@ vi.mock('@solid-primitives/resize-observer', () => ({
 vi.mock('@ui', async () => ({
   ...(await import('../ui/utils/classname')),
   ...(await import('../ui/utils/press')),
-  Button: (
-    props: JSX.ButtonHTMLAttributes<HTMLButtonElement> & { label?: string }
-  ) => (
+  Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button
-      aria-label={props.label}
+      aria-label={props['aria-label']}
       aria-expanded={props['aria-expanded']}
       onClick={props.onClick}
       onMouseDown={props.onMouseDown}
