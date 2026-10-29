@@ -65,7 +65,7 @@ function DateField(props: DateFieldProps) {
           ),
         })}
       >
-        <CalendarBlankIcon />
+        <CalendarBlankIcon class="size-3.5 shrink-0" />
         <span class="truncate">
           {selectedDate()
             ? dateLabelFormatter.format(selectedDate())

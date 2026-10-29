@@ -54,7 +54,7 @@ function AddonsDemo() {
         <InputGroup.Input placeholder="macro.com" aria-label="Website" />
         <InputGroup.Addon align="inline-end">
           <InputGroup.Button size="icon-md" aria-label="Open website">
-            <ArrowRightIcon />
+            <ArrowRightIcon class="size-4" />
           </InputGroup.Button>
         </InputGroup.Addon>
       </InputGroup>

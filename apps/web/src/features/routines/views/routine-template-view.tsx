@@ -76,7 +76,7 @@ export function RoutineTemplateView(props: {
               class="ml-auto shrink-0"
               onClick={() => props.onActivate()}
             >
-              <PlayIcon />
+              <PlayIcon class="size-4" />
               Activate for me
             </Button>
           </Show>
