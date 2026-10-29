@@ -92,7 +92,7 @@ async fn real_sdk_nested_calls_are_authenticated_and_concurrent() {
     let (_root, service) = setup(Limits {
         max_output_bytes: 1024,
         max_frame_bytes: 1024,
-        max_result_bytes: 1024,
+        max_result_bytes: 512,
         ..Limits::default()
     })
     .await;
@@ -350,7 +350,7 @@ async fn times_out_cancels_and_reaps_busy_processes() {
 async fn bounds_output_and_rejects_invalid_or_duplicate_frames() {
     let (_root, service) = setup(Limits {
         max_frame_bytes: 16 * 1024,
-        max_result_bytes: 16 * 1024,
+        max_result_bytes: 8 * 1024,
         ..Limits::default()
     })
     .await;
@@ -373,6 +373,36 @@ async fn bounds_output_and_rejects_invalid_or_duplicate_frames() {
             "{body}: {outcome:?}"
         );
     }
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn result_at_the_limit_fits_its_frame_unsummarized() {
+    let (_root, service) = setup(Limits {
+        max_frame_bytes: 1024,
+        max_output_bytes: 4096,
+        max_result_bytes: 1024 - RESULT_FRAME_OVERHEAD,
+        ..Limits::default()
+    })
+    .await;
+    // JSON quotes bring the string to exactly max_result_bytes.
+    let (_, outcome) = run(
+        &service,
+        &format!(
+            "export function main() {{ return 'x'.repeat({}); }}",
+            1024 - RESULT_FRAME_OVERHEAD - 2
+        ),
+        5000,
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        value.as_str().unwrap().len(),
+        1024 - RESULT_FRAME_OVERHEAD - 2
+    );
     service.shutdown().await;
 }
 
@@ -445,7 +475,7 @@ async fn total_output_budget_applies_across_small_frames() {
     let (_root, service) = setup(Limits {
         max_frame_bytes: 1024,
         max_output_bytes: 4096,
-        max_result_bytes: 1024,
+        max_result_bytes: 512,
         ..Limits::default()
     })
     .await;

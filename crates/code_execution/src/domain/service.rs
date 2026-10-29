@@ -95,7 +95,10 @@ impl ExecutionService {
                                         service
                                             .runner
                                             .run(job, &mut sink, token)
-                                            .instrument(tracing::info_span!("code_execution.process"))
+                                            .instrument(tracing::info_span!(
+                                                "code_execution.process",
+                                                result_summarized_from_bytes = tracing::field::Empty,
+                                            ))
                                             .await
                                     }
                                 }
@@ -112,7 +115,7 @@ impl ExecutionService {
                 tracing::Span::current().record("outcome", label);
                 sink.finish(outcome);
             }
-            .instrument(span),
+            .instrument(span.or_current()),
         );
         Ok(ExecutionHandle {
             run_id,

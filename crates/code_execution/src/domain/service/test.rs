@@ -148,10 +148,19 @@ fn result_budget_must_fit_in_a_frame() {
         .validate(),
         Err(AdmissionError::InvalidLimits)
     ));
-    assert!(
+    assert!(matches!(
         Limits {
             max_frame_bytes: 16 * 1024,
             max_result_bytes: 16 * 1024,
+            ..Limits::default()
+        }
+        .validate(),
+        Err(AdmissionError::InvalidLimits)
+    ));
+    assert!(
+        Limits {
+            max_frame_bytes: 16 * 1024,
+            max_result_bytes: 16 * 1024 - RESULT_FRAME_OVERHEAD,
             ..Limits::default()
         }
         .validate()

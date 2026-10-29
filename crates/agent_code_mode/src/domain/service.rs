@@ -325,7 +325,7 @@ impl SessionCodeMode for CodeModeService {
                 }
                 result
             }
-            .instrument(span),
+            .instrument(span.or_current()),
         )
         .await
         .map_err(CodeModeError::Task)?

@@ -235,10 +235,22 @@ struct ChildContext<'a> {
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 enum ChildFrame {
-    Log { level: LogLevel, message: String },
-    Progress { value: Value },
-    Result { value: Value },
-    Error { message: String },
+    Log {
+        level: LogLevel,
+        message: String,
+    },
+    Progress {
+        value: Value,
+    },
+    Result {
+        value: Value,
+        /// Set when the bootstrap summarized an oversized result of this size.
+        #[serde(default)]
+        summarized_from_bytes: Option<usize>,
+    },
+    Error {
+        message: String,
+    },
 }
 
 async fn bridge(
@@ -294,7 +306,12 @@ async fn bridge(
                 match frame {
                     ChildFrame::Log { level, message } => events.emit(EventKind::Log { level, message })?,
                     ChildFrame::Progress { value } => events.progress(value),
-                    ChildFrame::Result { value } => outcome = Some(Outcome::Succeeded { value }),
+                    ChildFrame::Result { value, summarized_from_bytes } => {
+                        if let Some(bytes) = summarized_from_bytes {
+                            tracing::Span::current().record("result_summarized_from_bytes", bytes);
+                        }
+                        outcome = Some(Outcome::Succeeded { value });
+                    }
                     ChildFrame::Error { message } => outcome = Some(ExecutionFailure::new(FailureCode::Runtime, message).into()),
                 }
             }

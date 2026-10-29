@@ -36,10 +36,10 @@ function outline(value, depth) {
 }
 // The result is read by a model: an oversized `data` becomes its outline and
 // the start of its JSON instead of failing the whole run.
-function bounded(value, limitBytes) {
+function resultFrame(value, limitBytes) {
   const text = stringify(value);
   const bytes = encoder.encode(text).length;
-  if (bytes <= limitBytes) return value;
+  if (bytes <= limitBytes) return {type: "result", value};
   // Outline the JSON form, so handles appear as what they serialize to.
   const json = parse(text);
   const wrapped = json !== null && typeof json === "object" && !isArray(json) && hasOwn(json, "data");
@@ -50,7 +50,7 @@ function bounded(value, limitBytes) {
     preview: cut(stringify(data) ?? "null", limitBytes / 4),
     hint: `The result was ${bytes} bytes, over the ${limitBytes}-byte limit, so only its outline and start are returned. Return only the fields and items you need, filter in code, or use batched reads such as macro.tasks.summaries and macro.initiatives.summaries.`,
   };
-  return wrapped ? {...json, data: summary} : summary;
+  return {type: "result", value: wrapped ? {...json, data: summary} : summary, summarized_from_bytes: bytes};
 }
 const consoleMethod = (level) => (...args) => emit({
   type: "log", level,
@@ -100,7 +100,7 @@ try {
   const { main } = await import(program);
   if (typeof main !== "function") throw new Error("Export an async main({macro, session, execution}) function.");
   const value = await main({...context, macro, session, execution});
-  emit({type: "result", value: bounded(value ?? null, maxResultBytes)});
+  emit(resultFrame(value ?? null, maxResultBytes));
   exit(0);
 } catch (error) {
   emit({type: "error", message: String(error)});
