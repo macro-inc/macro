@@ -174,6 +174,41 @@ describe('deferred website PostHog', () => {
     ]);
   });
 
+  it('drops Android in-app browser bridge failures before they are sent', async () => {
+    const fixture = setup();
+    frames.shift()?.(0);
+    frames.shift()?.(16);
+    await settle();
+    fixture.resolve();
+    await settle();
+    const calls = fixture.client.init.mock.calls as unknown as Array<
+      [
+        string,
+        {
+          before_send?: (event: {
+            event: string;
+            properties?: Record<string, unknown>;
+          }) => unknown;
+        },
+      ]
+    >;
+    const beforeSend = calls[0]?.[1].before_send;
+    if (!beforeSend) throw new Error('PostHog was not initialized');
+    const page = { event: '$pageview', properties: {} };
+
+    expect(
+      beforeSend({
+        event: '$exception',
+        properties: {
+          $exception_list: [
+            { value: 'Error invoking postMessage: Java object is gone' },
+          ],
+        },
+      })
+    ).toBeNull();
+    expect(beforeSend(page)).toBe(page);
+  });
+
   it('starts in background tabs where animation frames are suspended', async () => {
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
     const fixture = setup();

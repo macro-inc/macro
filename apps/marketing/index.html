@@ -2,6 +2,83 @@
 <html lang="en" style="overscroll-behavior: none; scrollbar-width: none; background-color: var(--b0, #000);">
   <head>
     <meta charset="utf-8" />
+    <script data-bridge-guard>
+// Instagram and Facebook's Android browser reports "Java object is gone"
+// when its injected navigation logger calls a collected Java bridge.
+(function () {
+  if (window.__TAURI_INTERNALS__) return;
+  var mark = '__macroAndroidBridgeGuard';
+  if (window[mark]) return;
+  window[mark] = true;
+  var bridgeName = 'navigationPerformanceLoggerJavascriptInterface';
+  var methods = [
+    'postMessage',
+    'postEvent',
+    'enableDidUserTypeOnKeyboardLogging',
+    'enableButtonsClickedMetaDataLogging',
+  ];
+  function isGone(error) {
+    var message = error && error.message ? error.message : String(error);
+    return message.indexOf('Java object is gone') !== -1;
+  }
+  function wrapMethod(bridge, name, original) {
+    try {
+      bridge[name] = function () {
+        try {
+          return original.apply(bridge, arguments);
+        } catch (error) {
+          if (isGone(error)) return;
+          throw error;
+        }
+      };
+    } catch (error) {
+      return;
+    }
+  }
+  function wrapBridge() {
+    var bridge;
+    try {
+      bridge = window[bridgeName];
+    } catch (error) {
+      return;
+    }
+    if (!bridge) return;
+    try {
+      if (bridge[mark]) return;
+    } catch (error) {
+      return;
+    }
+    for (var i = 0; i < methods.length; i++) {
+      var name = methods[i];
+      var original;
+      try {
+        original = bridge[name];
+      } catch (error) {
+        continue;
+      }
+      if (typeof original !== 'function') continue;
+      wrapMethod(bridge, name, original);
+    }
+    try {
+      bridge[mark] = true;
+    } catch (error) {
+      return;
+    }
+  }
+  wrapBridge();
+  window.addEventListener('load', wrapBridge, { once: true });
+  window.addEventListener(
+    'error',
+    function (event) {
+      if (!event.message || event.message.indexOf('Java object is gone') === -1)
+        return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    },
+    true
+  );
+})();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
     <script>
