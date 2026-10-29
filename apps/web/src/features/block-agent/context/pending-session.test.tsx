@@ -426,6 +426,9 @@ describe('first prompt on the create', () => {
           parts: [{ kind: 'text', text: 'Hello' }],
           stop: null,
           pending: false,
+          segments: [],
+          phase: null,
+          postedAt: null,
         },
       },
       {
@@ -438,6 +441,9 @@ describe('first prompt on the create', () => {
           parts: [{ kind: 'text', text: 'Ready' }],
           stop: null,
           pending: false,
+          segments: [],
+          phase: null,
+          postedAt: null,
         },
       },
     ] satisfies FoldedStreamEvent[]);
