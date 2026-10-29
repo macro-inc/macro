@@ -206,6 +206,8 @@ Since Macro already has your CRM, chats, DMs, booking links, and calendar, calls
 - Calls are automatically recorded and transcribed, with speaker labels and AI summaries.
 - Agents can use the call context to write follow-ups, create tasks, and update documents.
 
+![A recorded design-review call showing screen sharing, participant video, playback controls, and a speaker-labelled transcript](.github/readme/calls-recording.png)
+
 [Calls docs &rarr;](https://docs.macro.com/product/calls)
 
 <br />

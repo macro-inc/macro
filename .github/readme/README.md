@@ -2,12 +2,15 @@
 
 ## Product screenshots
 
-The root README uses eight product screenshots. The October 29 final gallery
+The root README uses nine product screenshots. The October 29 final gallery
 supplies Databases, Agents, and Calendar. A subsequent sharpness review replaces
 Chat, Tasks, and Docs with the user's higher-resolution first-pass captures.
 Email and CRM retain Jacob's clean test/demo JPEGs pending equivalent sharp
 recaptures. The CRM pipeline and database contain fictional sample data.
 Calendar retains the real meeting names explicitly selected by the user.
+Calls uses the approved web capture of the internal Tasks & Docs design review
+at 3:45, with the recording and speaker-labelled transcript visible. The
+2374×1470 focused crop preserves the call header and actual playback frame.
 
 Chat and Tasks use 3024-pixel-wide desktop sources, trimmed by 6 pixels left,
 8 right, and 12 bottom to remove capture edges. Docs uses the 2402×1308 compact
@@ -28,6 +31,7 @@ the README's display width before saving. Use lossless PNG for cropped UI text.
 | `crm-board.jpg` | Sales Demo pipeline, showing 9 fictional companies in Lead, Demo, and Customer; 2 Churned companies are outside the crop; all deal values are sample data |
 | `databases-table.png` | Donations Example, showing dates, amounts, designations, and donor relations |
 | `agents-task-handoff.png` | Add Reminder Icon To Tasks, recaptured on web with a successful audit and PR #8824 |
+| `calls-recording.png` | Tasks & Docs Page Design Review with Jacob, recording at 3:45 and speaker-labelled transcript |
 | `calendar-week.png` | Populated weekly calendar with connected calendars and booking-link controls |
 
 Keep the navigation rail visible; show the expanded sidebar when it adds useful context. Capture browser page
@@ -41,8 +45,7 @@ conversations. Use a populated pipeline board with fictional sample companies
 for CRM and keep the root README's alt text consistent with each displayed
 view. Review every saved image before staging it.
 Previous Chat, Tasks, Docs, and Agents JPEGs remain available but are no longer
-referenced by the root README. The banner is unchanged. Calls and booking-link companion
-images remain optional and are not part of this eight-image selection.
+referenced by the root README. The banner is unchanged. A booking-link companion image remains optional.
 
 The marketing homepage's separate screenshot copies under
 `apps/marketing/src/app/assets/desktop-feature-screens` are independent.
