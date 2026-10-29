@@ -78,7 +78,8 @@ external chat replies depend on it. Direct session controls still mint IDs.
   `workspace create`; worktree commands group them under the main checkout's workspace.
 - Set native workspace names only at creation; preserve manual Herdr workspace
   and tab labels through later prompts, Macro title changes, moves, and restarts. Exclude
-  hidden context and mention payloads from initial labels (`src/herdr/hub.rs`).
+  runtime instructions, hidden context, and mention payloads from initial labels
+  (`src/herdr/hub.rs`); mention-only prompts use the provider's fallback label.
 - Switching native agents clears the previous agent's model/extra-args but
   keeps storage and focus preferences (README.md, "Setup").
 

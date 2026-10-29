@@ -5,12 +5,25 @@ fn prompt_titles_skip_hidden_context_and_leading_mentions() {
     assert_eq!(
         title_from(
             "<m-agent-context>{\"text\":\"hidden context\"}</m-agent-context>\n\n\
-             <m-user-mention>{\"displayName\":\"Gab Codex\"}</m-user-mention> Fix channel split\nmore"
+             <m-user-mention>{\"displayName\":\"Test Agent\"}</m-user-mention> Fix channel split\nmore"
         ),
         Some("Fix channel split".to_owned())
     );
     assert_eq!(title_from("<m-agent-context>incomplete"), None);
     assert_eq!(title_from("<m-agent-context>{}</m-agent-context>\n"), None);
+}
+
+#[test]
+fn runtime_context_is_never_used_as_a_workspace_title() {
+    let context = "<macrod-runtime>\nRuntime instructions\n</macrod-runtime>\n\n\
+                   <m-agent-context>{\"text\":\"hidden context\"}</m-agent-context>\n\
+                   <m-user-mention>{\"displayName\":\"Test Agent\"}</m-user-mention>";
+    assert_eq!(
+        title_from(&format!("{context} Fix the broken link\nMore detail")),
+        Some("Fix the broken link".to_owned())
+    );
+    assert_eq!(title_from(context), None);
+    assert_eq!(title_from("<macrod-runtime>incomplete"), None);
 }
 
 fn owner() -> Owner {

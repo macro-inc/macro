@@ -363,7 +363,9 @@ impl HubState {
 pub(crate) fn title_from(text: &str) -> Option<String> {
     let mut text = text.trim_start();
     loop {
-        let closing = if text.starts_with("<m-agent-context>") {
+        let closing = if text.starts_with("<macrod-runtime>") {
+            "</macrod-runtime>"
+        } else if text.starts_with("<m-agent-context>") {
             "</m-agent-context>"
         } else if text.starts_with("<m-user-mention>") {
             "</m-user-mention>"

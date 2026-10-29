@@ -17,8 +17,9 @@ Cached repositories and worktrees live under `~/.macrod/herdr/<harness-id>/`. Ea
 paired macrod instance has one configuration and its own storage directory.
 
 Native workspace names are set once, when the workspace is created, from the
-prompt's visible text. Hidden context and mention payloads are excluded. The
-initial tab keeps Herdr's default label.
+prompt's visible text. Runtime instructions, hidden context, and mention payloads
+are excluded; a mention-only prompt uses the provider name. The initial tab keeps
+Herdr's default label.
 macrod does not rename an existing native workspace or tab: manual Herdr names
 survive later prompts, Macro-generated title changes, moves, and daemon restarts.
 Use Herdr's rename action to change them explicitly. Macro's session title is
