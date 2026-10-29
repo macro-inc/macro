@@ -14,7 +14,7 @@ import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { createCallback } from '@solid-primitives/rootless';
 import { createMemo, Show } from 'solid-js';
 import { EntityMetadata, EntityMetadataRow } from './EntityMetadata';
-import { SidePanel } from './SidePanel';
+import { SidePanel, type SidePanelSectionLayout } from './SidePanel';
 
 export function FileSidePanelSections() {
   return (
@@ -80,9 +80,10 @@ export function FilePropertiesSection(props: { order?: number }) {
       title="Properties"
       defaultOpen
       order={props.order}
-    >
-      <PropertiesSectionContent />
-    </SidePanel.Section>
+      render={(renderSection) => (
+        <PropertiesSectionContent renderSection={renderSection} />
+      )}
+    />
   );
 }
 
@@ -98,15 +99,17 @@ export function DocumentFilePropertiesSection(props: {
       title="Properties"
       defaultOpen
       order={props.order}
-    >
-      <EntityPropertiesSection
-        entityId={props.documentId}
-        entityType="DOCUMENT"
-        canEdit={props.canEdit}
-        documentName={props.documentName}
-        showTags={false}
-      />
-    </SidePanel.Section>
+      render={(renderSection) => (
+        <EntityPropertiesSection
+          entityId={props.documentId}
+          entityType="DOCUMENT"
+          canEdit={props.canEdit}
+          documentName={props.documentName}
+          showTags={false}
+          renderSection={renderSection}
+        />
+      )}
+    />
   );
 }
 
@@ -124,7 +127,9 @@ export function FileTagsSection(props: { order?: number }) {
   );
 }
 
-function PropertiesSectionContent() {
+function PropertiesSectionContent(props: {
+  renderSection: SidePanelSectionLayout;
+}) {
   const blockId = useBlockId();
   const canEdit = useCanEdit();
   const documentName = useBlockDocumentName();
@@ -136,6 +141,7 @@ function PropertiesSectionContent() {
       canEdit={canEdit()}
       documentName={documentName()}
       showTags={false}
+      renderSection={props.renderSection}
     />
   );
 }

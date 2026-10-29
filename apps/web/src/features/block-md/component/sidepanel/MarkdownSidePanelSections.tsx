@@ -11,6 +11,7 @@ import {
   GithubPullRequestDetailsRows,
   SidePanel,
 } from '@components/app/side-panel';
+import type { SidePanelSectionLayout } from '@components/app/side-panel/SidePanel';
 import {
   EntityMetadata,
   EntityMetadataRow,
@@ -104,14 +105,16 @@ export function MarkdownSidePanelSections() {
         title="Properties"
         defaultOpen
         order={25}
-      >
-        <PropertiesSectionContent
-          documentId={documentId()}
-          isTask={isTask()}
-          canEdit={canEdit()}
-          documentName={displayName() ?? ''}
-        />
-      </SidePanel.Section>
+        render={(renderSection) => (
+          <PropertiesSectionContent
+            documentId={documentId()}
+            isTask={isTask()}
+            canEdit={canEdit()}
+            documentName={displayName() ?? ''}
+            renderSection={renderSection}
+          />
+        )}
+      />
       <EntityActivitySectionConditional
         entityId={documentId()}
         entityType={propertiesEntityType()}
@@ -198,6 +201,7 @@ function PropertiesSectionContent(props: {
   isTask: boolean;
   canEdit: boolean;
   documentName: string;
+  renderSection: SidePanelSectionLayout;
 }) {
   const { state } = useMarkdownDocument();
   const mdData = state.editor.md;
@@ -235,6 +239,7 @@ function PropertiesSectionContent(props: {
       onPropertyPinned={mdData.editor ? pins.pin : undefined}
       onPropertyUnpinned={pins.unpin}
       showTags={false}
+      renderSection={props.renderSection}
       // A task joins a project through its Project property, edited like the others.
       defaultProperties={() =>
         props.isTask && projects().enabled
@@ -267,7 +272,7 @@ function StatsSectionContent() {
     <Show when={md.wordcountStats}>
       {(stats) => (
         <Wordcount.Root stats={stats()}>
-          <div class="mt-1 flex flex-col gap-1">
+          <div class="mt-2 flex flex-col gap-2">
             <EntityMetadataRow icon={<TextTIcon class="size-3.5" />} label="Words">
               <Wordcount.Words />
             </EntityMetadataRow>

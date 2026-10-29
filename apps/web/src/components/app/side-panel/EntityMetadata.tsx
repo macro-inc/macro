@@ -10,7 +10,7 @@ export function EntityMetadataRow(
 ) {
   return (
     <div class="flex min-w-0 items-center gap-3">
-      <span class="flex shrink-0 items-center gap-2 whitespace-nowrap">
+      <span class="flex w-28 shrink-0 items-center gap-2 whitespace-nowrap">
         {props.icon}
         {props.label}
       </span>
@@ -28,7 +28,7 @@ export function EntityMetadata(
   }>
 ) {
   return (
-    <div class="flex flex-col gap-1">
+    <div class="flex flex-col gap-2">
       <Show when={props.ownerId}>
         {(owner) => (
           <EntityMetadataRow icon={<UserIcon class="size-3.5" />} label="Owner">

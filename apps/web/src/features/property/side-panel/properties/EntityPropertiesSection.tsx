@@ -1,4 +1,8 @@
-import { SidePanel } from '@components/app/side-panel/SidePanel';
+import { t } from '@app/lib/i18n';
+import {
+  SidePanel,
+  type SidePanelSectionLayout,
+} from '@components/app/side-panel/SidePanel';
 import { useIsAuthenticated } from '@core/auth';
 import Plus from '@icon/system/regular/plus.svg';
 import PushPinIcon from '@icon/system/regular/push-pin.svg';
@@ -56,6 +60,7 @@ export interface EntityPropertiesSectionProps {
   propertyFilter?: (property: Property) => boolean;
   getEmptyLabel?: (property: Property) => JSX.Element | undefined;
   showAddProperty?: boolean;
+  renderSection?: SidePanelSectionLayout;
   showTags?: boolean;
   defaultPinnedPropertyIds?: () => readonly string[];
   /** Keep required fields attached without hiding other entity properties. */
@@ -306,7 +311,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
       saveOne(property, { valueType: 'DATE', value: date }),
   };
 
-  return (
+  const renderContent = () => (
     <Show
       when={!error()}
       fallback={
@@ -314,24 +319,6 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
       }
     >
       <div class="text-xs">
-        <PropertiesProvider
-          entityId={props.entityId}
-          entityType={props.entityType}
-          canEdit={props.canEdit}
-          documentName={props.documentName}
-          properties={filteredProperties}
-          onRefresh={refetch}
-          onPropertyAdded={handlePropertyAdded}
-          onPropertyAddFailed={handlePropertyAddFailed}
-          onPropertyDeleted={refetch}
-          onPropertyUnpinned={
-            props.onPropertyUnpinned ? unpinProperty : undefined
-          }
-          pinnedPropertyIds={titlePinnedIds}
-          addProperty={addEntityProperty}
-          removeProperty={removeEntityProperty}
-          saveHandler={saveHandler}
-        >
           <Show when={isLoading()}>
             <SidePanel.Loading />
           </Show>
@@ -429,13 +416,63 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
               <AddPropertyButton size="xs" class="m-px gap-1.5" />
             </div>
           </Show>
-          <Modals />
-        </PropertiesProvider>
       </div>
     </Show>
   );
+
+  return (
+    <PropertiesProvider
+      entityId={props.entityId}
+      entityType={props.entityType}
+      canEdit={props.canEdit}
+      documentName={props.documentName}
+      properties={filteredProperties}
+      onRefresh={refetch}
+      onPropertyAdded={handlePropertyAdded}
+      onPropertyAddFailed={handlePropertyAddFailed}
+      onPropertyDeleted={refetch}
+      onPropertyUnpinned={props.onPropertyUnpinned ? unpinProperty : undefined}
+      pinnedPropertyIds={titlePinnedIds}
+      addProperty={addEntityProperty}
+      removeProperty={removeEntityProperty}
+      saveHandler={saveHandler}
+    >
+      {props.renderSection
+        ? props.renderSection(
+            renderContent,
+            <Show
+              when={
+                !error() && props.canEdit && props.showAddProperty !== false
+              }
+            >
+              <AddPropertyHeaderAction />
+            </Show>
+          )
+        : renderContent()}
+      <Modals />
+    </PropertiesProvider>
+  );
 }
 
+function AddPropertyHeaderAction() {
+  const ctx = usePropertiesContext();
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-xs"
+      class="text-ink-extra-muted"
+      aria-label={t('common.addProperty')}
+      title={t('common.addProperty')}
+      onClick={(event) => {
+        event.stopPropagation();
+        ctx.openPropertySelector();
+      }}
+    >
+      <Plus class="size-4" />
+    </Button>
+  );
+}
 function propertyFromPendingDefinition(
   definition: PropertyDefinitionDomain
 ): Property | undefined {

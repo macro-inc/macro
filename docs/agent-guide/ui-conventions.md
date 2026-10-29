@@ -157,10 +157,11 @@ confirmation drawers use the same action hierarchy.
 Multi-entity property collections use a compact empty message and trailing Add
 action inside a light dashed border at rest. While dragging an app item,
 compatible collections expand into dashed dropzones; hovering a valid zone
-strengthens its accent treatment.
-Incompatible or unavailable collections show a small muted rejection hint instead
-of expanding or accepting the drop. Existing values stay visible. Dropping adds
-a reference without moving the original item.
+strengthens its accent treatment. Empty-state and dropzone content keep the same
+spacing below the field label. Incompatible or unavailable collections show a
+small muted rejection hint only while the dragged item's pointer is over that
+field. Existing values stay visible. Dropping adds a reference without moving
+the original item.
 Existing references stay in place. Duplicate references, the owning entity's
 matching type-and-ID pair, unsupported item types, and types outside the property's
 restriction are ignored. Read-only, metadata, loading, saving, and open-editor
@@ -202,14 +203,17 @@ includes Ask Macro and Create task; PDF and calls include Ask Macro. Native
 projects put Delete in the `Project actions` menu after the project title.
 
 Standard metadata appears at the top of each panel, before the interactive
-sections and separated by a muted divider. Each row places an icon and label on
-the left, followed by a nearby left-aligned value with a consistent gap; owner,
-timestamps, folder, and document counts share this layout. Word and character
-counts appear last. There is no standard Details or Stats disclosure. Agent
-runtime information remains in its dedicated Session section. Section headers
-and bodies use 12px horizontal insets, with 12px bottom padding on the body.
-Collapsible headers use the shared view-sidebar caret beside the section name,
-with matching hover and focus treatment rather than an underline.
+sections and separated by a muted divider. Each row places an icon and label in
+a fixed-width left column, followed by a nearby left-aligned value; owner,
+timestamps, folder, and document counts share this alignment and 8px row gaps.
+Word and character counts appear last. There is no standard Details or Stats
+disclosure. Agent runtime information remains in its dedicated Session section.
+Section headers and bodies use 12px horizontal insets, with 12px bottom padding
+on the body. Collapsible headers place the shared view-sidebar caret immediately
+after the section name, with matching hover and focus treatment rather than an
+underline. Editable Properties headers have a right-aligned, icon-only Add
+property action that opens the existing picker. Compose that action natively
+with the section and property provider; do not mount it through a portal.
 
 Block information panels float over the right side of the block without changing
 the content width or its centered position. A single rounded bubble fits its

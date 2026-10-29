@@ -4,6 +4,7 @@ import {
   EntityTagsSection,
 } from '@app/features/property/side-panel/properties';
 import { FolderLink, SidePanel } from '@components/app/side-panel';
+import type { SidePanelSectionLayout } from '@components/app/side-panel/SidePanel';
 import {
   EntityMetadata,
   EntityMetadataRow,
@@ -37,11 +38,14 @@ export function ChatSidePanelSections() {
         title="Properties"
         defaultOpen
         order={30}
-      >
-        <Suspense fallback={<SidePanel.Loading />}>
-          <ChatPropertiesContent chatId={chatId} canEdit={canEdit()} />
-        </Suspense>
-      </SidePanel.Section>
+        render={(renderSection) => (
+          <ChatPropertiesContent
+            chatId={chatId}
+            canEdit={canEdit()}
+            renderSection={renderSection}
+          />
+        )}
+      />
       <EntityActivitySectionConditional
         entityId={chatId}
         entityType="CHAT"
@@ -81,7 +85,11 @@ function ChatDetailsContent(props: { chatId: string }) {
   );
 }
 
-function ChatPropertiesContent(props: { chatId: string; canEdit: boolean }) {
+function ChatPropertiesContent(props: {
+  chatId: string;
+  canEdit: boolean;
+  renderSection: SidePanelSectionLayout;
+}) {
   const query = useChatDataQuery(() => props.chatId);
 
   return (
@@ -91,6 +99,7 @@ function ChatPropertiesContent(props: { chatId: string; canEdit: boolean }) {
       canEdit={props.canEdit}
       documentName={query.data?.name}
       showTags={false}
+      renderSection={props.renderSection}
     />
   );
 }

@@ -13,8 +13,9 @@ Debug page: `/props-debug` (LOCAL_ONLY).
 
 `side-panel/properties/EntityCollectionProperty.tsx` renders non-user, multi-entity
 properties. Empty collections use a compact message and trailing Add action.
-During app-item drags, compatible collections expand into dropzones; incompatible
-or unavailable collections show a muted rejection hint. The same target covers
+During app-item drags, compatible collections expand into dropzones with the
+same label-to-content gap. Incompatible or unavailable collections show a muted
+rejection hint only while the pointer is over that field. The same target covers
 empty and populated bodies, and geometry updates during expansion. Drops append
 a reference using the same entity-type conversion as the picker,
 ignore duplicate references and the owning entity's type-and-ID pair, and retain
@@ -25,3 +26,10 @@ remains available for keyboard and touch.
 
 `CollectionEmptyState` remains presentation-only. Property-specific drop handling
 and save callbacks belong to the surrounding collection, not the shared UI component.
+
+## Side-panel header actions
+
+Pass `renderSection` from `SidePanel.Section` to `EntityPropertiesSection` to
+compose its icon-only Add property action directly in the header. The existing
+property provider owns the header action and picker; no action portal is used.
+Read-only sections and `showAddProperty={false}` omit the action.

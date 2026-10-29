@@ -622,6 +622,11 @@ function Footer(props: ParentProps) {
   return null;
 }
 
+/** Native section composition; defer body content until the accordion opens. */
+export type SidePanelSectionLayout = (
+  content: () => JSX.Element,
+  actions?: JSX.Element
+) => JSX.Element;
 /**
  * A collapsible section that registers itself with the nearest SidePanel.Root.
  *
@@ -629,6 +634,7 @@ function Footer(props: ParentProps) {
  * inside the side panel's Accordion. Children evaluate lazily when the
  * panel renders the section, so they only mount when the panel is visible.
  *
+ * Use `render` when a provider must own both header actions and body content.
  * Must be a descendant of `<SidePanel.Root>`. A standalone Layout creates one.
  */
 function Section(
@@ -644,6 +650,8 @@ function Section(
      * section.
      */
     actions?: JSX.Element;
+    /** Compose header and body beneath a shared provider without a portal. */
+    render?: (layout: SidePanelSectionLayout) => JSX.Element;
   }>
 ) {
   const ctx = useContext(SidePanelContext);
@@ -687,26 +695,34 @@ function Section(
   return null;
 
   function SectionContent() {
-    return (
-      <>
-        <Accordion.Header class="flex min-w-0 items-center gap-1">
-          <Accordion.Trigger class="flex min-w-0 flex-1 items-center gap-1 rounded-lg p-3 text-left text-xs font-medium leading-5 text-ink-muted outline-none transition-colors group-hover/sidebar-section:text-ink focus-visible:outline-2 focus-visible:outline-accent">
-            <CollapsibleSection.Indicator class="touch:opacity-100 group-focus-within/sidebar-section:opacity-100" />
-            <span class="min-w-0 truncate">{props.title}</span>
-          </Accordion.Trigger>
-          <Show when={props.actions}>
-            <div class="shrink-0 pr-3">{props.actions}</div>
-          </Show>
-        </Accordion.Header>
-        <Accordion.Content class="group/content overflow-hidden data-expanded:animate-accordion-down data-closed:animate-accordion-up">
-          <Suspense fallback={<Loading />}>
-            <div class="px-3 pb-3 text-sm opacity-0 group-data-expanded/content:opacity-100 transition-opacity duration-150 ease-out">
-              {props.children}
-            </div>
-          </Suspense>
-        </Accordion.Content>
-      </>
-    );
+    const renderSection: SidePanelSectionLayout = (content, actions) => {
+      const resolvedActions = children(() =>
+        actions === undefined ? props.actions : actions
+      );
+      return (
+        <>
+          <Accordion.Header class="flex min-w-0 items-center gap-1">
+            <Accordion.Trigger class="flex min-w-0 flex-1 items-center gap-1 rounded-lg p-3 text-left text-xs font-medium leading-5 text-ink-muted outline-none transition-colors group-hover/sidebar-section:text-ink focus-visible:outline-2 focus-visible:outline-accent">
+              <span class="min-w-0 truncate">{props.title}</span>
+              <CollapsibleSection.Indicator class="touch:opacity-100 group-focus-within/sidebar-section:opacity-100" />
+            </Accordion.Trigger>
+            <Show when={resolvedActions.toArray().length > 0}>
+              <div class="flex shrink-0 items-center pr-3">{resolvedActions()}</div>
+            </Show>
+          </Accordion.Header>
+          <Accordion.Content class="group/content overflow-hidden data-expanded:animate-accordion-down data-closed:animate-accordion-up">
+            <Suspense fallback={<Loading />}>
+              <div class="px-3 pb-3 text-sm opacity-0 group-data-expanded/content:opacity-100 transition-opacity duration-150 ease-out">
+                {content()}
+              </div>
+            </Suspense>
+          </Accordion.Content>
+        </>
+      );
+    };
+
+    if (props.render) return props.render(renderSection);
+    return renderSection(() => props.children);
   }
 }
 

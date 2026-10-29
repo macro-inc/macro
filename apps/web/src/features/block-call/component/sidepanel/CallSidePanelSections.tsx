@@ -2,6 +2,7 @@ import { EntityActivitySectionConditional } from '@app/features/activity/views/e
 import { EntityPropertiesSection } from '@app/features/property/side-panel/properties';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { SidePanel } from '@components/app/side-panel';
+import type { SidePanelSectionLayout } from '@components/app/side-panel/SidePanel';
 import {
   EntityMetadata,
   EntityMetadataRow,
@@ -40,11 +41,13 @@ export function CallSidePanelSections(props: CallSidePanelSectionsProps) {
         title="Properties"
         defaultOpen
         order={15}
-      >
-        <Suspense fallback={<SidePanel.Loading />}>
-          <PropertiesSectionContent record={props.record} />
-        </Suspense>
-      </SidePanel.Section>
+        render={(renderSection) => (
+          <PropertiesSectionContent
+            record={props.record}
+            renderSection={renderSection}
+          />
+        )}
+      />
       <Show when={props.record.channelId != null}>
         <SidePanel.Section id="sharing" title="Sharing" order={20}>
           <SharingSectionContent record={props.record} />
@@ -97,7 +100,10 @@ function DetailsSectionContent(props: { record: CallRecord }) {
   );
 }
 
-function PropertiesSectionContent(props: { record: CallRecord }) {
+function PropertiesSectionContent(props: {
+  record: CallRecord;
+  renderSection: SidePanelSectionLayout;
+}) {
   // Tag/property writes are authorized server-side via the call's owning
   // channel (edit access), mirroring the sharing control above, so the editor
   // is always mounted and the backend rejects unauthorized mutations.
@@ -109,6 +115,7 @@ function PropertiesSectionContent(props: { record: CallRecord }) {
       documentName={
         props.record.customName ?? props.record.channelName ?? undefined
       }
+      renderSection={props.renderSection}
     />
   );
 }
