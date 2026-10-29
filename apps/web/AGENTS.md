@@ -428,7 +428,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   membership snapshots separate from normalized field/link updates; restored
   properties do not prove prior membership. Supply complete prior multi-value
   memberships when adjusting counts: a row loaded in one bin may already be an
-  unloaded member of another.
+  unloaded member of another. Index immutable baseline evidence once and track
+  grouping fields per reactive row; never cache mutable live rows by identity.
 - Reconcile authoritative Mail first pages in the shared Soup projection adapter,
   not a UI exclusion list: invalidate contradicted facts within the supported
   page range without deleting normalized threads or treating backfill gaps as

@@ -81,6 +81,7 @@ import { batch, createSignal, untrack } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { delegateChannelNotificationRefresh } from '../../queries/channel/notification-refresh';
 import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
+import { createPropertyNetworkOptimism } from '../../queries/properties/graphql/network-optimism';
 import { createCacheRecovery } from './cache-recovery';
 import { emailCacheDeletionKeys } from './email-cache-deletions';
 import type { SoupApiItem } from './generated/schemas/soupApiItem';
@@ -373,15 +374,26 @@ export async function dssGraphqlFetch(
   });
 }
 
-const graphqlSoupClient = createClient({
-  url: `${dssHost}/items/soup/graphql`,
-  exchanges: [networkRevalidationExchange(), fetchExchange],
-  fetch: dssGraphqlFetch,
-  // urql's default ("within-url-limit") sends small documents as GET, but
-  // GET on the DSS GraphQL path serves the GraphiQL IDE — only POST
-  // executes. Every pre-activity document was too large to trigger this.
-  preferGetMethod: false,
-});
+function createPlainGraphqlSoupClient(): Client {
+  return createClient({
+    url: `${dssHost}/items/soup/graphql`,
+    exchanges: [
+      networkRevalidationExchange(
+        () => true,
+        createPropertyNetworkOptimism,
+        () => cacheSessionGeneration
+      ),
+      fetchExchange,
+    ],
+    fetch: dssGraphqlFetch,
+    // urql's default ("within-url-limit") sends small documents as GET, but
+    // GET on the DSS GraphQL path serves the GraphiQL IDE — only POST
+    // executes. Every pre-activity document was too large to trigger this.
+    preferGetMethod: false,
+  });
+}
+
+let graphqlSoupClient = createPlainGraphqlSoupClient();
 
 const reconnectListeners = new Set<() => void>();
 
@@ -478,7 +490,11 @@ function getUncachedRealtimeClient(): Client {
     url: `${dssHost}/items/soup/graphql`,
     preferGetMethod: false,
     exchanges: [
-      networkRevalidationExchange(),
+      networkRevalidationExchange(
+        () => true,
+        createPropertyNetworkOptimism,
+        () => cacheSessionGeneration
+      ),
       notificationReceiptExchange(publishNotificationPatch),
       graphqlSoupSubscriptionExchange(websocketClient),
       fetchExchange,
@@ -554,6 +570,8 @@ export function setGraphqlSoupSessionActive(active: boolean): void {
 
 function disposeSessionClients(): void {
   cacheSessionGeneration += 1;
+  // A plain urql client also retains query results; never replay another session's data.
+  graphqlSoupClient = createPlainGraphqlSoupClient();
   cacheRecovery.reset();
   cacheInitializationFailed = false;
   const cleanup = cachedCacheCleanup;
@@ -791,7 +809,11 @@ export function getGraphqlSoupClient(): Client {
         preferGetMethod: false,
         exchanges: [
           optimisticResolversExchange(soupOptimisticResolvers),
-          networkRevalidationExchange(() => host?.disabled === true),
+          networkRevalidationExchange(
+            () => host?.disabled === true,
+            createPropertyNetworkOptimism,
+            () => cacheSessionGeneration
+          ),
           normalizedCacheExchange(host, {
             ...localDraftQueueLifecycle(host),
             deletedRecordKeys: emailCacheDeletionKeys,

@@ -1,5 +1,7 @@
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
-import { describe, expect, it } from 'vitest';
+import { createRoot, createSignal } from 'solid-js';
+import { createStore } from 'solid-js/store';
+import { describe, expect, it, onTestFinished } from 'vitest';
 import { parseCacheRevision } from '../../../graphql-cache/protocol';
 import type {
   GroupedSoupInitialInput,
@@ -12,6 +14,7 @@ import {
   resolveGroupMetaForKey,
 } from '../grouped/api';
 import {
+  createLocalGroupedSoupProjection,
   localSoupGroupKeys,
   mergeGroupedSoupBins,
   projectLocalGroupedSoup,
@@ -94,6 +97,131 @@ describe('loaded grouped pages', () => {
 });
 
 describe('local grouped Soup projection', () => {
+  it('does not index baseline evidence before a live snapshot is available', () => {
+    createRoot((dispose) => {
+      onTestFinished(dispose);
+      const row = groupedDocument('a');
+      let reads = 0;
+      const [live, setLive] = createSignal<ReturnType<typeof snapshot>>();
+      const [baseline, setBaseline] = createSignal({
+        bins: [{ key: 'todo', items: [row], totalCount: 1, nextCursor: null }],
+        untrustedKeys: new Set<string>(),
+      });
+      const project = createLocalGroupedSoupProjection({
+        baseline: () => {
+          reads++;
+          return baseline();
+        },
+        currentItems: () => new Map(),
+        snapshot: live,
+        input: () => input,
+        now: () => now,
+      });
+      expect(project()).toBeUndefined();
+      expect(reads).toBe(0);
+      setLive(snapshot([row]));
+      expect(project()?.[0].items).toHaveLength(1);
+      expect(reads).toBe(1);
+      setLive(undefined);
+      setBaseline({ bins: [], untrustedKeys: new Set() });
+      expect(project()).toBeUndefined();
+      expect(reads).toBe(1);
+    });
+  });
+
+  it('only reevaluates the changed grouping row and keeps unrelated field updates live', () => {
+    createRoot((dispose) => {
+      onTestFinished(dispose);
+      const original = [groupedDocument('a'), groupedDocument('b')];
+      const reads = [0, 0];
+      const current = original.map((row, index) => {
+        const next = structuredClone(row);
+        Object.defineProperty(next.properties[0], 'propertyDefinitionId', {
+          configurable: true,
+          enumerable: true,
+          get() {
+            reads[index]++;
+            return input.groupBy.propertyDefinitionId;
+          },
+        });
+        return next;
+      });
+      const [rows, setRows] = createStore(current);
+      const records = rows.map((record) => ({
+        recordKey: soupItemKey(record),
+        record,
+      }));
+      const keys = original.map(soupItemKey);
+      const [revision, setRevision] = createSignal('1');
+      const [baseline, setBaseline] = createSignal({
+        bins: [
+          { key: 'todo', totalCount: 30, nextCursor: 'more', items: original },
+        ],
+        untrustedKeys: new Set<string>(),
+      });
+      const project = createLocalGroupedSoupProjection({
+        baseline,
+        currentItems: () => new Map(),
+        input: () => input,
+        now: () => now,
+        snapshot: () => ({
+          revision: parseCacheRevision(revision()),
+          optimistic: true,
+          keys,
+          records,
+          retainedKeys: [],
+        }),
+      });
+      const before = project();
+      const initialReads = [...reads];
+      setRows(0, 'displayName', 'Renamed');
+      setRevision('2');
+      expect(project()).toBe(before);
+      expect(project()?.[0].items[0].displayName).toBe('Renamed');
+      expect(reads).toEqual(initialReads);
+
+      setRows(0, 'properties', 0, 'value', {
+        __typename: 'GraphqlSelectOptionPropertyValue',
+        optionIds: ['done'],
+      });
+      setRevision('3');
+      expect(
+        project()?.map((bin) => [
+          bin.key,
+          bin.totalCount,
+          bin.items.map((row) => row.id),
+        ])
+      ).toEqual([
+        ['todo', 29, ['b']],
+        ['done', 1, ['a']],
+      ]);
+      expect(reads[0]).toBe(initialReads[0] + 1);
+      expect(reads[1]).toBe(initialReads[1]);
+      expect(project()?.[0].nextCursor).toBe('more');
+
+      setRows(0, 'properties', 0, 'value', {
+        __typename: 'GraphqlSelectOptionPropertyValue',
+        optionIds: ['todo'],
+      });
+      expect(project()?.map((bin) => [bin.key, bin.totalCount])).toEqual([
+        ['todo', 30],
+      ]);
+      expect(reads[1]).toBe(initialReads[1]);
+      setBaseline({
+        bins: [
+          {
+            key: 'todo',
+            totalCount: 45,
+            nextCursor: 'refreshed',
+            items: original,
+          },
+        ],
+        untrustedKeys: new Set(),
+      });
+      expect(project()?.[0].totalCount).toBe(45);
+      expect(project()?.[0].nextCursor).toBe('refreshed');
+    });
+  });
   it('retains server membership for an unfamiliar grouping while refreshing rows', () => {
     const before = groupedDocument('a');
     const next = { ...groupedDocument('a', ['done']), displayName: 'Updated' };

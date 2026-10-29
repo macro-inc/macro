@@ -59,6 +59,21 @@ function setup(enabled = () => true) {
 
 describe('networkRevalidationExchange', () => {
   afterEach(() => vi.useRealTimers());
+  it.each(['__proto__', 'constructor', 'prototype'])(
+    'keeps a plain query snapshot when an opaque value contains %s',
+    (key) => {
+      const { client, respond } = setup();
+      const values: unknown[] = [];
+      const subscription = client
+        .query(LIST, {})
+        .subscribe((result) => values.push(result.data));
+      const data: unknown = JSON.parse(`{"opaque":{"${key}":"value"}}`);
+      expect(() => respond(0, { data })).not.toThrow();
+      expect(values).toEqual([data]);
+      subscription.unsubscribe();
+    }
+  );
+
   it('updates every mounted query before releasing mutation optimism', async () => {
     const { client, requests, respond, flush } = setup();
     const events: string[] = [];

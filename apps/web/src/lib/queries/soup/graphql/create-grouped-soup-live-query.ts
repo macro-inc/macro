@@ -31,8 +31,8 @@ import { registerGroupedSoupContinuation } from '../grouped/graphql-operation-re
 import { registerGraphqlSoupRevalidations } from './active-queries';
 import { createPredicateQuery } from './create-predicate-query';
 import {
+  createLocalGroupedSoupProjection,
   mergeGroupedSoupBins,
-  projectLocalGroupedSoup,
 } from './grouped-local-projection';
 import { createGroupedPageEvidence } from './grouped-page-evidence';
 import { soupItemKey, soupReconciliationBaseline } from './reconciliation';
@@ -417,37 +417,26 @@ export function createGroupedSoupLiveQuery(
       };
     },
   });
+  const currentItems = createMemo(() => {
+    const items = new Map<string, SoupItemFieldsFragment>();
+    for (const page of serverPages())
+      for (const bin of page.user.groupSoup.bins)
+        for (const item of bin.items) items.set(soupItemKey(item), item);
+    return items;
+  });
+  const projectedBins = createLocalGroupedSoupProjection({
+    baseline,
+    currentItems,
+    snapshot: live.data,
+    input: () => input()?.initial,
+    now,
+  });
   const bins = createMemo(() => {
-    const initial = input()?.initial;
-    const evidence = baseline();
-    const snapshot = live.data();
-    if (!initial || !evidence || !snapshot || live.status() !== 'ready')
-      return mergeGroupedSoupBins(serverPages());
-    const span = Telemetry.span('graphql_cache.soup_grouped_local_evaluation');
-    try {
-      const currentItems = new Map<string, SoupItemFieldsFragment>();
-      for (const page of serverPages())
-        for (const bin of page.user.groupSoup.bins)
-          for (const item of bin.items)
-            currentItems.set(soupItemKey(item), item);
-      const result = projectLocalGroupedSoup(
-        evidence.bins,
-        currentItems,
-        snapshot,
-        initial,
-        now(),
-        evidence.untrustedKeys
-      );
-      span.setAttr('grouping.field', initial.groupBy.field);
-      span.setAttr('grouping.bin_count', result.length);
-      span.setAttr(
-        'grouping.baseline_count',
-        evidence.bins.reduce((count, bin) => count + bin.items.length, 0)
-      );
-      return result;
-    } finally {
-      span.end();
+    if (live.status() === 'ready') {
+      const projected = projectedBins();
+      if (projected) return projected;
     }
+    return mergeGroupedSoupBins(serverPages());
   });
   const paging: GroupedSoupPaging = {
     hasNextPage: (key) => {

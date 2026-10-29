@@ -1,7 +1,7 @@
 import { createSoupEntityRow } from '@app/features/soup/collection/rows';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { boardEntity, boardProperty } from '../tests/task-board-fixture';
 import { createTaskBoardQueries } from './task-board-queries';
@@ -91,7 +91,7 @@ it('allows task editing without a permission prefetch and keeps missing-row guar
   expect(fixture.projectIds).toEqual([]);
 });
 
-it('blocks overlapping property writes and restores editability when a write fails', async () => {
+it('blocks same-property writes and grouping moves until a failed write finishes', async () => {
   fixture.definitions = {
     isSuccess: true,
     data: [
@@ -106,7 +106,7 @@ it('blocks overlapping property writes and restores editability when a write fai
         reject = fail;
       })
   );
-  const source = setup();
+  const source = setup({ grouping: () => 'priority' });
   const property = source.property('one', SYSTEM_PROPERTY_IDS.PRIORITY)!;
   const values = {
     valueType: 'SELECT_STRING' as const,
@@ -116,6 +116,9 @@ it('blocks overlapping property writes and restores editability when a write fai
   const failed = expect(pending).rejects.toThrow('rejected');
 
   expect(source.actions.canEditTask('one')).toBe(false);
+  expect(source.canEditProperty('one', SYSTEM_PROPERTY_IDS.PRIORITY)).toBe(
+    false
+  );
   await expect(source.saveProperty('one', property, values)).rejects.toThrow(
     'no longer editable'
   );
@@ -130,6 +133,144 @@ it('blocks overlapping property writes and restores editability when a write fai
 
   expect(fixture.save).toHaveBeenCalledOnce();
   expect(source.actions.canEditTask('one')).toBe(true);
+});
+
+it('allows independent property saves and retains each lock through out-of-order completion', async () => {
+  fixture.definitions = {
+    isSuccess: true,
+    data: [
+      boardProperty(SYSTEM_PROPERTY_IDS.PRIORITY, null, 'SELECT_STRING')
+        .definition,
+      boardProperty(SYSTEM_PROPERTY_IDS.PROJECT, null).definition,
+    ],
+  };
+  let rejectPriority!: (error: Error) => void;
+  let resolveProject!: () => void;
+  fixture.save
+    .mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectPriority = reject;
+        })
+    )
+    .mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveProject = resolve;
+        })
+    );
+  const source = setup();
+  const priority = source.property('one', SYSTEM_PROPERTY_IDS.PRIORITY)!;
+  const project = source.property('one', SYSTEM_PROPERTY_IDS.PROJECT)!;
+  const priorityValues = {
+    valueType: 'SELECT_STRING' as const,
+    values: [PROPERTY_OPTION_IDS.PRIORITY.HIGH],
+  };
+  const projectValues = {
+    valueType: 'ENTITY' as const,
+    refs: [{ entity_id: 'launch', entity_type: 'INITIATIVE' as const }],
+  };
+
+  const pendingPriority = source.saveProperty('one', priority, priorityValues);
+  const failedPriority = expect(pendingPriority).rejects.toThrow('rejected');
+  expect(source.actions.canEditTask('one')).toBe(true);
+  expect(source.canEditProperty('one', SYSTEM_PROPERTY_IDS.PRIORITY)).toBe(
+    false
+  );
+  expect(source.canEditProperty('one', SYSTEM_PROPERTY_IDS.PROJECT)).toBe(true);
+
+  const pendingProject = source.saveProperty('one', project, projectValues);
+  expect(fixture.save).toHaveBeenCalledTimes(2);
+  expect(source.canEditProperty('one', SYSTEM_PROPERTY_IDS.PROJECT)).toBe(
+    false
+  );
+  await expect(
+    source.saveProperty('one', project, projectValues)
+  ).rejects.toThrow('no longer editable');
+
+  resolveProject();
+  await pendingProject;
+  expect(source.canEditProperty('one', SYSTEM_PROPERTY_IDS.PROJECT)).toBe(true);
+  expect(source.canEditProperty('one', SYSTEM_PROPERTY_IDS.PRIORITY)).toBe(
+    false
+  );
+  rejectPriority(new Error('rejected'));
+  await failedPriority;
+  expect(source.canEditProperty('one', SYSTEM_PROPERTY_IDS.PRIORITY)).toBe(
+    true
+  );
+  expect(fixture.save).toHaveBeenCalledTimes(2);
+});
+
+it('keeps an in-flight grouping property protected after grouping changes', async () => {
+  fixture.definitions = {
+    isSuccess: true,
+    data: [boardProperty(SYSTEM_PROPERTY_IDS.PROJECT, null).definition],
+  };
+  let resolve!: () => void;
+  fixture.save.mockImplementationOnce(
+    () =>
+      new Promise<void>((done) => {
+        resolve = done;
+      })
+  );
+  const [grouping, setGrouping] = createSignal<'project' | 'status'>('project');
+  const source = setup({ grouping });
+  const project = source.property('one', SYSTEM_PROPERTY_IDS.PROJECT)!;
+  const pending = source.saveProperty('one', project, {
+    valueType: 'ENTITY',
+    refs: [{ entity_id: 'launch', entity_type: 'INITIATIVE' }],
+  });
+  expect(source.actions.canEditTask('one')).toBe(false);
+
+  setGrouping('status');
+  expect(source.actions.canEditTask('one')).toBe(true);
+  await expect(
+    source.actions.save(
+      { id: 'one', fromLane: 'launch', toLane: '' },
+      'project'
+    )
+  ).rejects.toThrow('no longer editable');
+  expect(fixture.save).toHaveBeenCalledOnce();
+
+  resolve();
+  await pending;
+  expect(source.canEditProperty('one', SYSTEM_PROPERTY_IDS.PROJECT)).toBe(true);
+});
+
+it('keeps the project permission check independent of other property saves', async () => {
+  fixture.definitions = {
+    isSuccess: true,
+    data: [
+      boardProperty(SYSTEM_PROPERTY_IDS.PRIORITY, null, 'SELECT_STRING')
+        .definition,
+      boardProperty(SYSTEM_PROPERTY_IDS.PROJECT, null).definition,
+    ],
+  };
+  let resolve!: () => void;
+  fixture.save.mockImplementationOnce(
+    () =>
+      new Promise<void>((done) => {
+        resolve = done;
+      })
+  );
+  const source = setup({ projectsEnabled: () => false });
+  const priority = source.property('one', SYSTEM_PROPERTY_IDS.PRIORITY)!;
+  const project = source.property('one', SYSTEM_PROPERTY_IDS.PROJECT)!;
+  const pending = source.saveProperty('one', priority, {
+    valueType: 'SELECT_STRING',
+    values: [PROPERTY_OPTION_IDS.PRIORITY.HIGH],
+  });
+
+  await expect(
+    source.saveProperty('one', project, {
+      valueType: 'ENTITY',
+      refs: [{ entity_id: 'launch', entity_type: 'INITIATIVE' }],
+    })
+  ).rejects.toThrow('Project editing is unavailable');
+  expect(fixture.save).toHaveBeenCalledOnce();
+  resolve();
+  await pending;
 });
 
 it('attempts project moves without destination edit access and preserves column labels', async () => {

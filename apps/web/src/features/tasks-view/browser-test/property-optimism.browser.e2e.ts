@@ -1,16 +1,20 @@
-import { expect, test } from '@playwright/test';
+import { test as base, expect } from '@playwright/test';
 
-test.beforeEach(async ({ page }) => {
+const test = base.extend<{ uncached: boolean }>({
+  uncached: [false, { option: true }],
+});
+
+test.beforeEach(async ({ page, uncached }) => {
   // The fixture replaces GraphQL HTTP, and does not need live subscriptions.
   await page.routeWebSocket('**', (socket) => socket.close());
   await page.goto(
-    '/src/features/tasks-view/browser-test/property-optimism.html'
+    `/src/features/tasks-view/browser-test/property-optimism.html${uncached ? '?uncached' : ''}`
   );
   await expect(
     page
       .getByRole('region', { name: 'Task 1' })
       .getByRole('button', { name: 'Priority', exact: true })
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 30_000 });
 });
 
 test('unset priority updates before HTTP and adopts the server assignment ID', async ({
@@ -145,4 +149,65 @@ test('bulk layers appear before the first response and rollback stays task-scope
   await expect(
     second.getByRole('button', { name: 'Urgent', exact: true })
   ).toBeVisible();
+});
+
+test.describe('without persistent storage', () => {
+  test.use({ uncached: true });
+  for (const width of [1280, 390]) {
+    test(`uncached property saves stay optimistic at ${width}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 800 });
+      const first = page.getByRole('region', { name: 'Task 1' });
+      await first
+        .getByRole('button', { name: 'Priority', exact: true })
+        .click();
+      await page
+        .locator('[role="menu"]')
+        .getByText('Urgent', { exact: true })
+        .click();
+      await expect(
+        first.getByRole('button', { name: 'Urgent', exact: true })
+      ).toBeVisible();
+      await expect(
+        page.getByText('HTTP requests: 1 · Settled: 0')
+      ).toBeVisible();
+      await page.getByRole('button', { name: 'Fail next request' }).click();
+      await expect(
+        first.getByRole('button', { name: 'Priority', exact: true })
+      ).toBeVisible();
+      await expect(page.getByLabel('Save status')).toHaveText(
+        'Pending: no · Succeeded: 0 · Failed: 1'
+      );
+    });
+  }
+
+  test('uncached bulk saves start together and roll back only the failed task', async ({
+    page,
+  }) => {
+    const first = page.getByRole('region', { name: 'Task 1' });
+    const second = page.getByRole('region', { name: 'Task 2' });
+    await page.getByRole('button', { name: 'Set both Urgent' }).click();
+    await expect(
+      first.getByRole('button', { name: 'Urgent', exact: true })
+    ).toBeVisible();
+    await expect(
+      second.getByRole('button', { name: 'Urgent', exact: true })
+    ).toBeVisible();
+    await expect(page.getByText('HTTP requests: 2 · Settled: 0')).toBeVisible();
+    await page.getByRole('button', { name: 'Fail next request' }).click();
+    await expect(
+      first.getByRole('button', { name: 'Priority', exact: true })
+    ).toBeVisible();
+    await expect(
+      second.getByRole('button', { name: 'Urgent', exact: true })
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Commit next request' }).click();
+    await expect(second.locator('output')).toHaveText(
+      '00000000-0000-0000-0000-000000000202'
+    );
+    await expect(page.getByLabel('Save status')).toHaveText(
+      'Pending: no · Succeeded: 0 · Failed: 1'
+    );
+  });
 });
