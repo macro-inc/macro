@@ -45,7 +45,7 @@ export function BoardModal(props: {
                 size="icon-sm"
                 aria-label={t('board.close')}
               >
-                <XIcon />
+                <XIcon class="size-4" />
               </Dialog.CloseButton>
               <ItemFace item={item()} size={20} Avatar={board.Avatar} />
               <Dialog.Title
@@ -59,7 +59,7 @@ export function BoardModal(props: {
                 size="sm"
                 onClick={() => props.onDismiss(item().key)}
               >
-                <EyeSlashIcon />
+                <EyeSlashIcon class="size-4" />
                 {t('board.remove')}
               </Button>
               <Button
@@ -69,7 +69,7 @@ export function BoardModal(props: {
                   props.onOpenInSplit(item().key, event.shiftKey)
                 }
               >
-                <ArrowSquareOutIcon />
+                <ArrowSquareOutIcon class="size-4" />
                 {t('board.openInSplit')}
               </Button>
             </Panel.Header>

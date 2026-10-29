@@ -96,15 +96,16 @@ export function BoardNode(props: {
         )}
       >
         <Button
-          variant="outline"
-          size="icon-sm"
-          label={props.dismissLabel}
+          variant="secondary"
+          size="icon-xs"
+          aria-label={props.dismissLabel}
+          tooltip={props.dismissLabel}
           onClick={(event) => {
             event.stopPropagation();
             props.onDismiss();
           }}
         >
-          <XIcon />
+          <XIcon class="size-3.5" />
         </Button>
       </div>
     </div>

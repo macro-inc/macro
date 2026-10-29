@@ -24,8 +24,12 @@ export function ZoomToolbar(props: {
     <div data-board-overlay="" class="absolute bottom-4 left-4 z-30">
       <Toolbar size="icon-sm" aria-label={t('board.boardZoom')}>
         <Toolbar.Group>
-          <Toolbar.Button label={t('board.zoomOut')} onClick={props.onZoomOut}>
-            <MinusIcon />
+          <Toolbar.Button
+            aria-label={t('board.zoomOut')}
+            tooltip={t('board.zoomOut')}
+            onClick={props.onZoomOut}
+          >
+            <MinusIcon class="size-4" />
           </Toolbar.Button>
           <output
             aria-label={t('board.zoomLevel')}
@@ -33,17 +37,22 @@ export function ZoomToolbar(props: {
           >
             {percent().format(props.scale)}
           </output>
-          <Toolbar.Button label={t('board.zoomIn')} onClick={props.onZoomIn}>
-            <PlusIcon />
+          <Toolbar.Button
+            aria-label={t('board.zoomIn')}
+            tooltip={t('board.zoomIn')}
+            onClick={props.onZoomIn}
+          >
+            <PlusIcon class="size-4" />
           </Toolbar.Button>
         </Toolbar.Group>
         <Toolbar.Divider />
         <Toolbar.Button
-          label={t('board.zoomToFit')}
+          aria-label={t('board.zoomToFit')}
+          tooltip={t('board.zoomToFit')}
           aria-pressed={props.fitted}
           onClick={props.onFit}
         >
-          <CornersOutIcon />
+          <CornersOutIcon class="size-4" />
         </Toolbar.Button>
       </Toolbar>
     </div>

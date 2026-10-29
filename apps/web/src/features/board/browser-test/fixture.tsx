@@ -7,7 +7,7 @@ import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
-import { themeCssVars } from '../../theme/utils/themeColorTokens';
+import { themeCssVars } from '../../theme/utils/themeCssVars';
 import { MessageStack } from '../components/message-stack';
 import { SpeechBubble } from '../components/speech-bubble';
 import {
@@ -207,19 +207,19 @@ function Fixture() {
         class="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge-muted px-3 py-2 text-xs"
       >
         <span class="font-semibold">Board fixture</span>
-        <Button size="sm" variant="outline" onClick={arrive}>
+        <Button size="sm" variant="secondary" onClick={arrive}>
           New message
         </Button>
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           onClick={() => setNow((value) => value + 3 * 3_600_000)}
         >
           +3 hours
         </Button>
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           onClick={() =>
             setState((value) => (value === 'loading' ? 'ready' : 'loading'))
           }
@@ -228,7 +228,7 @@ function Fixture() {
         </Button>
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           onClick={() => {
             localStorage.removeItem(STORAGE_KEY);
             window.location.reload();
@@ -236,7 +236,11 @@ function Fixture() {
         >
           Reset memory
         </Button>
-        <Button size="sm" variant="outline" onClick={() => applyTheme(!dark())}>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => applyTheme(!dark())}
+        >
           {dark() ? 'Light theme' : 'Dark theme'}
         </Button>
         <ol

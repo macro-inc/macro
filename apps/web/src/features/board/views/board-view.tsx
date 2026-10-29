@@ -5,7 +5,7 @@ import { t } from '@app/lib/i18n';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
-import { Button } from '@ui';
+import { ButtonGroup } from '@ui';
 import { type Component, createSignal } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useBoard } from '../context/board-context';
@@ -63,14 +63,14 @@ export function BoardView(props: {
     if (key) board.close(key);
   };
 
-  const step = (offset: 1 | -1) => {
+  /** The variant before or after this one, wrapping around. */
+  const neighbor = (offset: 1 | -1) => {
     const index = BOARD_VARIANTS.indexOf(props.variant);
-    const next =
-      BOARD_VARIANTS[
-        (index + offset + BOARD_VARIANTS.length) % BOARD_VARIANTS.length
-      ];
-    props.onVariantChange(next);
+    return BOARD_VARIANTS[
+      (index + offset + BOARD_VARIANTS.length) % BOARD_VARIANTS.length
+    ];
   };
+  const step = (offset: 1 | -1) => props.onVariantChange(neighbor(offset));
 
   if (props.hotkeys) {
     const hotkeys = props.hotkeys;
@@ -139,34 +139,24 @@ export function BoardView(props: {
               </span>
             </div>
             <HeaderActionGroup label={t('board.variants')}>
-              <Button
+              <ButtonGroup.Button
                 variant="ghost"
-                size="icon-md"
-                label={variantName(
-                  BOARD_VARIANTS[
-                    (BOARD_VARIANTS.indexOf(props.variant) +
-                      BOARD_VARIANTS.length -
-                      1) %
-                      BOARD_VARIANTS.length
-                  ]
-                )}
+                size="icon-sm"
+                aria-label={variantName(neighbor(-1))}
+                tooltip={variantName(neighbor(-1))}
                 onClick={() => step(-1)}
               >
-                <CaretLeftIcon />
-              </Button>
-              <Button
+                <CaretLeftIcon class="size-4" />
+              </ButtonGroup.Button>
+              <ButtonGroup.Button
                 variant="ghost"
-                size="icon-md"
-                label={variantName(
-                  BOARD_VARIANTS[
-                    (BOARD_VARIANTS.indexOf(props.variant) + 1) %
-                      BOARD_VARIANTS.length
-                  ]
-                )}
+                size="icon-sm"
+                aria-label={variantName(neighbor(1))}
+                tooltip={variantName(neighbor(1))}
                 onClick={() => step(1)}
               >
-                <CaretRightIcon />
-              </Button>
+                <CaretRightIcon class="size-4" />
+              </ButtonGroup.Button>
             </HeaderActionGroup>
           </ViewShell.TopBar>
           <div class="relative min-h-0 flex-1 overflow-hidden border-t border-edge-muted">

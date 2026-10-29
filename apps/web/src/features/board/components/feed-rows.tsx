@@ -137,7 +137,7 @@ export function FeedEnd(props: {
             </Match>
             <Match when={props.state === 'more'}>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() => props.onLoadOlder()}
               >
