@@ -50,6 +50,6 @@ pub mod outbound;
 #[cfg(any(test, feature = "test-utils"))]
 pub mod replay;
 
-/// In-memory port implementations and recorded fixtures, for tests.
+/// In-memory port implementations for tests.
 #[cfg(any(test, feature = "test-utils"))]
 pub mod testing;
