@@ -49,3 +49,25 @@ test('the caret on a new line of a code block stays there when someone else edit
     .poll(() => alice.page.evaluate(() => window.lexFuzz!.blocks()[1]))
     .toEqual({ type: 'code', text: 'abc\nxyz' });
 });
+
+test('one undo takes back a word typed while someone else was typing', async ({
+  browser,
+}) => {
+  const relay = new Relay(seededRandom(1), 0);
+  const [alice, bob] = await openPeers(browser, relay, 'busy-undo', 2);
+
+  const bobTyping = (async () => {
+    for (let i = 0; i < 10; i++)
+      await bob.page.keyboard.type('bob ', { delay: 15 });
+  })();
+  await alice.page.keyboard.type('hello world', { delay: 30 });
+  await bobTyping;
+  await expect
+    .poll(() => alice.page.evaluate(() => window.lexFuzz!.editorMarkdown()))
+    .toContain(`Peer B:${'bob '.repeat(10)}`);
+  await alice.page.keyboard.press('Control+z');
+
+  await expect
+    .poll(() => alice.page.evaluate(() => window.lexFuzz!.blocks()[0]))
+    .toEqual({ type: 'p', text: 'Peer A:' });
+});

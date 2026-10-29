@@ -52,8 +52,6 @@ filter.
 
 Known findings, which show up in most runs:
 
-- Undo phase: while someone else types, an undo step is a character or two
-  instead of the burst of typing, so undoing everything runs out of steps.
 
 - `markdown-round-trip`: internal markdown drops empty paragraphs on import
   (`PRESERVE_LINES` writes them as a space line, and Lexical's importer then

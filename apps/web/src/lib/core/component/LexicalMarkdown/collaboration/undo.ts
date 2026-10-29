@@ -5,6 +5,10 @@
 
 import { mergeRegister } from '@lexical/utils';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
+import {
+  COLLAB_SELECTION_TAG,
+  COLLABORATION_TAG,
+} from '@macro-inc/lexical-core';
 import type { EditorState, LexicalEditor } from 'lexical';
 import {
   $isRangeSelection,
@@ -254,6 +258,13 @@ export function registerLoroHistory(
     if (tags.has('historic')) {
       prevChangeType = OTHER;
       prevChangeTime = changeTime;
+      return DISCARD_HISTORY_CANDIDATE;
+    }
+
+    // Someone else's change, and putting this person's caret back after it,
+    // are not this person's history: they must not end the group their own
+    // typing is merging into.
+    if (tags.has(COLLABORATION_TAG) || tags.has(COLLAB_SELECTION_TAG)) {
       return DISCARD_HISTORY_CANDIDATE;
     }
 
