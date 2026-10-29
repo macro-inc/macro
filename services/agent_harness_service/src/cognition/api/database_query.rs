@@ -31,7 +31,7 @@ fn discovery_tools() -> ai_toolset::AsyncToolCollection<ai_tools::ToolServiceCon
         (status = 504, body = StructuredCompletionError)))]
 #[tracing::instrument(skip_all, fields(user_id = %user.authorization.user.macro_user_id,
     database_query.model = %request.model), err)]
-pub async fn handler(
+pub async fn generate_database_query(
     State(state): State<ApiContext>,
     model_access: DcsChatModelAccess,
     user: MacroAuthorizationExtractor<DcsAuthorizationService, UserOrInternal>,

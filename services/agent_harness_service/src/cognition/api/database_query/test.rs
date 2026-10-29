@@ -24,7 +24,7 @@ async fn admission_rejects_before_database_discovery_or_model_calls(pool: sqlx::
         let admission = TestAdmission::rejecting(error);
         state.ai_admission = admission.clone();
         let router = Router::new()
-            .route("/database-query", post(handler))
+            .route("/database-query", post(generate_database_query))
             .with_state(state);
         let response = router
             .oneshot(authorized_request(

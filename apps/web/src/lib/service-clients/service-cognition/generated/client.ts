@@ -1193,66 +1193,69 @@ export const getCitationHandler = async (
   } as getCitationHandlerResponse;
 };
 
-export type handlerResponse200 = {
+export type generateDatabaseQueryResponse200 = {
   data: DatabaseQueryAnswer;
   status: 200;
 };
 
-export type handlerResponse401 = {
+export type generateDatabaseQueryResponse401 = {
   data: void;
   status: 401;
 };
 
-export type handlerResponse402 = {
+export type generateDatabaseQueryResponse402 = {
   data: StructuredCompletionError;
   status: 402;
 };
 
-export type handlerResponse403 = {
+export type generateDatabaseQueryResponse403 = {
   data: StructuredCompletionError;
   status: 403;
 };
 
-export type handlerResponse500 = {
+export type generateDatabaseQueryResponse500 = {
   data: StructuredCompletionError;
   status: 500;
 };
 
-export type handlerResponse503 = {
+export type generateDatabaseQueryResponse503 = {
   data: StructuredCompletionError;
   status: 503;
 };
 
-export type handlerResponse504 = {
+export type generateDatabaseQueryResponse504 = {
   data: StructuredCompletionError;
   status: 504;
 };
 
-export type handlerResponseSuccess = handlerResponse200 & {
-  headers: Headers;
-};
-export type handlerResponseError = (
-  | handlerResponse401
-  | handlerResponse402
-  | handlerResponse403
-  | handlerResponse500
-  | handlerResponse503
-  | handlerResponse504
+export type generateDatabaseQueryResponseSuccess =
+  generateDatabaseQueryResponse200 & {
+    headers: Headers;
+  };
+export type generateDatabaseQueryResponseError = (
+  | generateDatabaseQueryResponse401
+  | generateDatabaseQueryResponse402
+  | generateDatabaseQueryResponse403
+  | generateDatabaseQueryResponse500
+  | generateDatabaseQueryResponse503
+  | generateDatabaseQueryResponse504
 ) & {
   headers: Headers;
 };
 
-export type handlerResponse = handlerResponseSuccess | handlerResponseError;
+export type generateDatabaseQueryResponse =
+  | generateDatabaseQueryResponseSuccess
+  | generateDatabaseQueryResponseError;
 
-export const getHandlerUrl = () => {
+export const getGenerateDatabaseQueryUrl = () => {
   return `/database-query`;
 };
 
-export const handler = async (
+export const generateDatabaseQuery = async (
   databaseQueryRequest: DatabaseQueryRequest,
   options?: RequestInit
-): Promise<handlerResponse> => {
-  const res = await fetch(getHandlerUrl(), {
+): Promise<generateDatabaseQueryResponse> => {
+  const res = await fetch(getGenerateDatabaseQueryUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -1261,8 +1264,14 @@ export const handler = async (
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: handlerResponse['data'] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as handlerResponse;
+  const data: generateDatabaseQueryResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as generateDatabaseQueryResponse;
 };
 
 export type decisionsResponse200 = {

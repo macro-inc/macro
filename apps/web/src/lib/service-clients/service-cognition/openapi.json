@@ -1049,7 +1049,7 @@
     "/database-query": {
       "post": {
         "tags": ["database_query"],
-        "operationId": "handler",
+        "operationId": "generate_database_query",
         "requestBody": {
           "content": {
             "application/json": {

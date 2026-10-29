@@ -193,6 +193,7 @@
   "cognition.updateToolResponse": "Update Tool Response",
   "cognition.updateToolCall": "Update Tool Call",
   "cognition.getCitationHandler": "Get Citation",
+  "cognition.generateDatabaseQuery": "Generate Database Query",
   "cognition.decisions": "Classify content",
   "cognition.healthHandler": "Health",
   "cognition.notionReportHandler": "Notion Report",

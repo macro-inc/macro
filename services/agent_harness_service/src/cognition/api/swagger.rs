@@ -93,7 +93,7 @@ use utoipa::OpenApi;
             stream_stop::stop_chat_stream,
             structured_completion::structured_completion,
             decisions::decide,
-            database_query::handler,
+            database_query::generate_database_query,
             memory_api::get_memory_handler,
             import_api::get_state_handler,
             import_api::run_import_handler,
