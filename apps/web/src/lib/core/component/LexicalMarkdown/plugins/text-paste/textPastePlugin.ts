@@ -10,6 +10,7 @@ import {
   type BlockName,
   BlockRegistry,
 } from '@core/block';
+import { shouldUseMobileClipboardImageRecovery } from '@core/mobile/mobileClipboardImageRecovery';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isValidMacroAppHostname } from '@core/util/macroAppUrl';
 import { $isCodeNode } from '@lexical/code';
@@ -44,6 +45,7 @@ import {
   $isRangeSelection,
   COMMAND_PRIORITY_HIGH,
   type LexicalEditor,
+  type LexicalNode,
   PASTE_COMMAND,
 } from 'lexical';
 import { $insertNodesAndSplitList } from '../../utils';
@@ -182,15 +184,19 @@ export function parsePastedGithubPrUrl(text: string): PrRef | null {
   return { owner: match[1], repo: match[2], number: Number(match[3]) };
 }
 
+function $getCodeAncestor(node: LexicalNode) {
+  return $findMatchingParent(
+    node,
+    (node) => $isCodeNode(node) || $isCustomCodeNode(node)
+  );
+}
+
+/** Whether both ends of the selection sit in the same code block. */
 function $isSelectionInCode(): boolean {
   const selection = $getSelection();
   if (!$isRangeSelection(selection)) return false;
-  return (
-    $findMatchingParent(
-      selection.anchor.getNode(),
-      (node) => $isCodeNode(node) || $isCustomCodeNode(node)
-    ) !== null
-  );
+  const code = $getCodeAncestor(selection.anchor.getNode());
+  return code !== null && code.is($getCodeAncestor(selection.focus.getNode()));
 }
 
 /**
@@ -273,9 +279,18 @@ function registerTextPastePlugin(
 
           // Code blocks hold plain text, so paste it verbatim: the code
           // highlighter drops mentions and chips inserted there, and parsing
-          // the text as Markdown strips its syntax. Files still attach.
+          // the text as Markdown strips its syntax. Files, including mobile
+          // pasteboard images, still go to the file paste handler.
           if ($isSelectionInCode()) {
-            if (!pastedText || event.clipboardData?.files.length) return false;
+            const clipboard = event.clipboardData;
+            if (
+              !clipboard ||
+              !pastedText ||
+              clipboard.files.length > 0 ||
+              shouldUseMobileClipboardImageRecovery(clipboard)
+            ) {
+              return false;
+            }
             event.preventDefault();
             $getSelection()?.insertRawText(pastedText);
             return true;
