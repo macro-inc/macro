@@ -363,14 +363,13 @@ function useChannelsDataSource(
   );
   const extra = createMemo(() => {
     if (!hideSupportChannels() || scope !== 'channels') return [];
-    return list
-      .channels()
-      .filter(
-        (channel) =>
-          channel.channel_type !== 'direct_message' &&
-          !isSupportChannelName(channel.name)
-      )
-      .map(channelEntityFromListItem);
+    return filterChannelsForScope(
+      scope,
+      list
+        .channels()
+        .filter((channel) => !isSupportChannelName(channel.name))
+        .map(channelEntityFromListItem)
+    );
   });
   const items = createMemo<ChannelEntity[]>((previous) => {
     if (!query.isEnabled || query.isPending) return previous;

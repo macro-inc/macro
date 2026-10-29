@@ -822,7 +822,9 @@ independently paginated `Team channels`, `Channels`, and `DMs` sections, in
 that order. `Team channels` lists team channels; `Channels` lists every other
 non-DM channel (public and private). Each section collapses on its own and
 keeps its own sort; open sections split the column evenly, and the bottom-most
-open one takes any remaining height. Favorites appears when
+open one takes any remaining height. Hiding support channels preserves those
+section boundaries when filling sparse lists; team channels must not also
+appear in the Channels section or produce duplicate-row errors. Favorites appears when
 the user has channel favorites and only lists channels. Channel favorites open
 in the shared channel detail. Shift-clicking a favorite, channel, or DM opens that
 conversation in a new split instead. Shift-click refreshes the notification
