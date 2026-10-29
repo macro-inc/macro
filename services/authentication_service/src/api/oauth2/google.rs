@@ -249,10 +249,7 @@ fn resolved_granted_scopes(returned: &str, requested: Vec<String>) -> Vec<String
 /// Sends a refused consent back to the page that started it, which explains
 /// the outcome and offers a retry. A link flow without a return URL gets the
 /// explanation as the response body instead.
-fn mailbox_not_granted_response(
-    original_url: Option<&str>,
-    link_id: &Uuid,
-) -> Result<Response, Response> {
+fn mailbox_not_granted_response(original_url: Option<&str>, link_id: &Uuid) -> Response {
     match original_url {
         Some(original_url) => build_return_redirect(
             original_url,
@@ -262,15 +259,15 @@ fn mailbox_not_granted_response(
                 ("provider", provider_query_value(LinkProvider::Google)),
             ],
         )
-        .map_err(IntoResponse::into_response),
-        None => Err((
+        .unwrap_or_else(IntoResponse::into_response),
+        None => (
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
                 message: "Gmail access was not granted; allow the Gmail permissions and try again"
                     .into(),
             }),
         )
-            .into_response()),
+            .into_response(),
     }
 }
 
@@ -302,7 +299,10 @@ pub(in crate::api::oauth2) async fn handler(
 
         if outcome == GoogleLinkOutcome::MailboxNotGranted {
             cleanup_pending_link(ctx, link_id).await;
-            return mailbox_not_granted_response(state.original_url.as_deref(), link_id);
+            return Ok(mailbox_not_granted_response(
+                state.original_url.as_deref(),
+                link_id,
+            ));
         }
 
         if let Some(original_url) = &state.original_url {

@@ -48,8 +48,7 @@ fn a_refused_consent_returns_to_the_app_with_the_error() {
     let response = mailbox_not_granted_response(
         Some("https://macro.com/app/inbox-link-callback?view=all&email_link_error=cancelled"),
         &link_id,
-    )
-    .unwrap();
+    );
 
     assert_eq!(response.status(), StatusCode::SEE_OTHER);
     let location = response.headers()[LOCATION].to_str().unwrap().to_owned();
@@ -71,7 +70,7 @@ fn a_refused_consent_returns_to_the_app_with_the_error() {
 
 #[test]
 fn a_refused_consent_without_a_return_url_keeps_the_error_body() {
-    let response = mailbox_not_granted_response(None, &Uuid::now_v7()).unwrap_err();
+    let response = mailbox_not_granted_response(None, &Uuid::now_v7());
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
