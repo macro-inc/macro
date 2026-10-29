@@ -173,17 +173,19 @@ The problem with standalone CRM is the same as with task trackers: it's not up t
 
 # Agents and unified team-level memory
 
-Since Macro has the team context in a single database, it is uniquely positioned to offer team-level memory with full context of all of the operations of the business. We do this every day via a cron job. Your memory is updated from team conversations, your DMs, your sent and received emails, tasks created and completed, etc. All of this is synthesized together in one pass, rather than severally, and combined with your previous memory to form the new memory output. The net result:
+Agents in Macro have the superpower of all your context. Your emails, conversations, docs, tasks, and customer records are already connected so agents have the context behind a request and complete high quality work without giving you slop.
 
-- Macro has the best memory on what you're working on and what you care about vs. chatbots that only build memory from prior chats.
-- This memory is available to external agents via MCP, or any AI model (OpenAI, Google, Anthropic, etc.) through the model picker for maximum portability.
-- The memory is plainly stored in markdown so you can export it as you please. To manually update it, just ask the AI to remember something/update your memory.
+- DM an agent, @mention one in a channel, or assign it a task.
+- Have agents research a customer, draft a reply, update a document, maintain a database, or take an engineering task through to a pull request.
+- Use the models we provide, connect Cursor with your own API key, or bring agents running on your own machine into Macro through macrod.
+- Create routines for work that should happen on a schedule or in response to activity in your workspace.
+- Give agents reusable instructions through skills, so you don’t have to explain the same process every time.
 
 ![A Macro coding-agent session with tool calls, a successful audit, and a pull request](.github/readme/agents-task-handoff.png)
 
-Memory isn't supposed to encompass everything. Macro also has a tool/MCP surface with near 100% coverage of the things you can do in Macro's UI, so that your agents aren't limited in what they can do like they are in most SaaS.
+Macro also builds memory from your work across conversations, email, tasks, and documents. That gives agents background on what you’re working on and what matters to you, beyond what you’ve told them in an individual chat.
 
-[Agents docs &rarr;](https://docs.macro.com/product/agents)
+Memory isn't supposed to encompass everything. Agents can also search your workspace for current information and use Macro’s tools to act on it. The context and the resulting work stay connected: a customer email can become a task, that task can go to an agent, and the agent’s work can become a document update or pull request.
 
 Your coding agents can use Macro too. Point Claude Code, Codex, or any MCP client at your workspace:
 
@@ -191,7 +193,7 @@ Your coding agents can use Macro too. Point Claude Code, Codex, or any MCP clien
 claude mcp add --transport http macro https://mcp-server.macro.com/mcp
 ```
 
-See [MCP setup](https://docs.macro.com/AI/mcp/overview) and [agent recipes](https://docs.macro.com/AI/recipes) for what they can do once connected.
+See [Agents docs](https://docs.macro.com/product/agents), [MCP setup](https://docs.macro.com/AI/mcp/overview), and [agent recipes](https://docs.macro.com/AI/recipes).
 
 <br />
 
