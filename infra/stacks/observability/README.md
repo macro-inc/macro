@@ -517,6 +517,9 @@ a rotation are follow-ups.
   `https://oncall.macro-internal.com/api/v2/identity/providers/oidc/callback`.
   GoAlert cannot restrict OIDC to a domain, so that client must keep the
   Internal audience. The basic-auth `admin` login is the break-glass account.
+- Every `@macro.com` account is a GoAlert admin from its first sign-in:
+  `goalert/workspace-admins.sql` installs a trigger on GoAlert's `users` table
+  on every start. Other accounts stay plain users.
 - The ALB sends the on-call host to its own target group, health-checked at
   `/goalert-healthz`. Alarm `observability-goalert` publishes to `alarmTopicArn`
   when it fails, so a GoAlert outage is reported without GoAlert.
