@@ -432,6 +432,7 @@ tokio-tungstenite-signal = { package = "tokio-tungstenite", version = "0.27", de
 tungstenite-signal = { package = "tungstenite", version = "0.27", default-features = false, features = ["handshake", "deflate"] }
 tokio-util = "0.7.13"
 tower = { version = "0.5.1", features = ["util"] }
+tower-service = "0.3"
 tower-http = { version = "0.6.1", features = [
   "compression-gzip",
   "cors",
