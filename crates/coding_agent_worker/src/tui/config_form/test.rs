@@ -153,7 +153,7 @@ fn quickstart_edits_preserve_existing_deployment_and_comments() {
     fs::write(
         &path,
         format!(
-            "# keep me\n[macro]\napi_url = \"https://custom-api\"\nstorage_url = \"https://custom-storage\"\nweb_url = \"https://custom-web\"\n\n[identity]\nscope = \"private\"\n\n[harness]\ncommand = \"old\"\nargs = []\n\n[workspace]\npath = {:?}\n",
+            "# keep me\n[macro]\napi_url = \"https://custom-api\"\nstorage_url = \"https://custom-storage\"\nweb_url = \"https://custom-web\"\n\n[harness]\ncommand = \"old\"\nargs = []\n\n[workspace]\npath = {:?}\n",
             directory.path().to_string_lossy()
         ),
     )
@@ -161,7 +161,7 @@ fn quickstart_edits_preserve_existing_deployment_and_comments() {
     let agent = discover(&HermesOnly).remove(0);
 
     let mut form = ConfigForm::load(&path).expect("load existing config");
-    form.apply_quickstart(&agent, &workspace, IdentityScope::Team);
+    form.apply_quickstart(&agent, &workspace);
     form.save().expect("save Quickstart changes");
 
     let config = Config::load(&path).expect("load edited config");
@@ -170,7 +170,6 @@ fn quickstart_edits_preserve_existing_deployment_and_comments() {
     assert_eq!(config.macro_api.web_url, "https://custom-web");
     assert_eq!(config.harness.command, "hermes");
     assert_eq!(config.workspace.path, workspace);
-    assert_eq!(config.identity.scope, IdentityScope::Team);
     assert!(
         fs::read_to_string(&path)
             .expect("read config")
@@ -256,40 +255,6 @@ fn assert_private_mode(path: &Path) {
 
 #[cfg(not(unix))]
 fn assert_private_mode(_path: &Path) {}
-
-#[test]
-fn permission_bypass_edits_preserve_credentials_and_comments() {
-    let directory = tempfile::tempdir().unwrap();
-    let path = directory.path().join("macrod.toml");
-    let agent = discover(&HermesOnly).remove(0);
-    ConfigForm::create_for_deployment(&path, &agent, directory.path(), Deployment::Production)
-        .unwrap();
-    let credentials = HarnessCredentials {
-        harness_id: HarnessId::TEST_A,
-        token: "mhns_secret".to_owned(),
-        scope: HarnessScope::User,
-    };
-    let mut form = ConfigForm::load(&path).unwrap();
-    form.persist_credentials(&credentials).unwrap();
-    assert!(
-        !Config::load(&path)
-            .unwrap()
-            .identity
-            .allow_permission_bypass
-    );
-    for allowed in [true, false] {
-        form.set_permission_bypass(allowed);
-        form.save().unwrap();
-        let config = Config::load(&path).unwrap();
-        assert_eq!(config.identity.allow_permission_bypass, allowed);
-        assert_eq!(config.credentials.as_ref(), Some(&credentials));
-        assert!(
-            fs::read_to_string(&path)
-                .unwrap()
-                .contains("# macrod configuration")
-        );
-    }
-}
 
 #[test]
 fn native_settings_round_trip_and_agent_switch_resets_provider_defaults() {

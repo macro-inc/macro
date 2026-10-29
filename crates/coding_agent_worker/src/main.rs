@@ -9,7 +9,7 @@
 //!
 //! A first run starts unpaired: the panel offers pairing (press `p`), the
 //! user approves the printed code in the web app, and the minted harness
-//! credential is embedded in the sensitive `macrod.toml`. Once paired, the
+//! credential is embedded in the sensitive `~/.macrod/macrod.toml`. Once paired, the
 //! daemon connects to the runtime gateway and bridges the configured ACP
 //! harness, making model discovery available before any agents exist. Each
 //! `agent_trigger.new` delivery opens a session and forwards the first prompt;
@@ -46,6 +46,10 @@ struct Args {
     /// Internal browser helper, isolated so terminal browsers cannot claim the TUI's stdin.
     #[arg(long, hide = true)]
     open_url: Option<String>,
+    /// Config file for the control panel; defaults to `~/.macrod/macrod.toml`,
+    /// the one `macrod service` also uses.
+    #[arg(long)]
+    config: Option<std::path::PathBuf>,
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -106,15 +110,6 @@ enum Command {
         /// Absolute directory sessions run in; created when missing.
         #[arg(long)]
         workspace: Option<std::path::PathBuf>,
-        /// Requested display name for the next pairing.
-        #[arg(long)]
-        name: Option<String>,
-        /// Requested ownership for the next pairing.
-        #[arg(long, value_enum)]
-        scope: Option<service::ServiceScope>,
-        /// Whether the next pairing may enable permission bypass.
-        #[arg(long)]
-        allow_permission_bypass: Option<bool>,
     },
     /// List the ACP agents installed on this machine as JSON.
     DetectAgents,
@@ -124,6 +119,22 @@ enum Command {
         #[arg(long)]
         config: Option<std::path::PathBuf>,
     },
+}
+
+/// The default config, after moving one an older release left in the working
+/// directory to it.
+fn default_tui_config() -> rootcause::Result<std::path::PathBuf> {
+    let path = config::default_config_path().ok_or_else(|| {
+        rootcause::report!("no config path: pass --config or set HOME (USERPROFILE on Windows)")
+    })?;
+    let legacy = std::path::Path::new("macrod.toml");
+    config::adopt_working_directory_config(&path, legacy).map_err(|error| {
+        rootcause::report!(
+            "could not move ./macrod.toml to {}: {error}",
+            path.display()
+        )
+    })?;
+    Ok(path)
 }
 
 #[tokio::main]
@@ -154,9 +165,6 @@ async fn main() -> ExitCode {
             config,
             agent,
             workspace,
-            name,
-            scope,
-            allow_permission_bypass,
         }) => {
             // stdout is the event protocol: logs go to stderr, like herdr-acp.
             tracing_subscriber::fmt()
@@ -166,9 +174,6 @@ async fn main() -> ExitCode {
                 config,
                 agent,
                 workspace,
-                name,
-                scope,
-                allow_permission_bypass,
             })
             .await
             {
@@ -240,10 +245,28 @@ async fn main() -> ExitCode {
         }
         None => {}
     }
-    let config_path = std::path::Path::new("macrod.toml");
-
     // The TUI owns the terminal, so its logs go to a ring buffer it renders.
+    // Installed first so the config move and load below log into it.
     let logs = tui::LogBuffer::install();
+    let config_path = match args.config {
+        Some(path) => path,
+        None => match default_tui_config() {
+            Ok(path) => path,
+            Err(error) => {
+                eprintln!("macrod: {error:?}");
+                return ExitCode::FAILURE;
+            }
+        },
+    };
+    // Released by the exec of an update handoff (the descriptor is
+    // close-on-exec); the replacement process takes it again right here.
+    let _lock = match config::lock(&config_path) {
+        Ok(lock) => lock,
+        Err(error) => {
+            eprintln!("macrod: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
     // The agent the macrod this process replaced was relaying, if any.
     #[cfg(unix)]
     let mut inherited = handoff::take_inherited();
@@ -254,7 +277,7 @@ async fn main() -> ExitCode {
         from_handoff: inherited.is_some(),
     });
     loop {
-        match tui::run(config_path, logs.clone(), inherited.take()).await {
+        match tui::run(&config_path, logs.clone(), inherited.take()).await {
             Ok(None) => return ExitCode::SUCCESS,
             #[cfg(unix)]
             Ok(Some(restart)) => {

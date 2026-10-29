@@ -164,17 +164,11 @@ async fn run_quickstart(
                 }
                 let saved = if existing_config.is_some() {
                     ConfigForm::load(config_path).and_then(|mut form| {
-                        form.apply_quickstart(&agent, &workspace, quickstart.scope);
-                        form.set_permission_bypass(quickstart.allow_permission_bypass);
+                        form.apply_quickstart(&agent, &workspace);
                         form.save()
                     })
                 } else {
-                    ConfigForm::create(config_path, &agent, &workspace).and_then(|()| {
-                        let mut form = ConfigForm::load(config_path)?;
-                        form.set_scope(quickstart.scope);
-                        form.set_permission_bypass(quickstart.allow_permission_bypass);
-                        form.save()
-                    })
+                    ConfigForm::create(config_path, &agent, &workspace)
                 };
                 match saved {
                     Ok(()) => {

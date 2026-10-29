@@ -14,8 +14,6 @@ fn quickstart_uses_one_flat_focus_order_without_preselecting_an_agent() {
         selected_agent: None,
         focus: QuickstartFocus::Agent(0),
         workspace: "/tmp".to_owned(),
-        scope: IdentityScope::Private,
-        allow_permission_bypass: false,
         mode: QuickstartMode::Normal,
         status: None,
     };
@@ -23,13 +21,11 @@ fn quickstart_uses_one_flat_focus_order_without_preselecting_an_agent() {
     quickstart.on_key(key(KeyCode::Down));
     assert_eq!(quickstart.focus, QuickstartFocus::Workspace);
     quickstart.on_key(key(KeyCode::Down));
-    assert_eq!(quickstart.focus, QuickstartFocus::Scope);
-    quickstart.on_key(key(KeyCode::Down));
-    assert_eq!(quickstart.focus, QuickstartFocus::PermissionBypass);
+    assert_eq!(quickstart.focus, QuickstartFocus::Submit);
     quickstart.on_key(key(KeyCode::Down));
     assert_eq!(quickstart.focus, QuickstartFocus::Submit);
     quickstart.on_key(key(KeyCode::Up));
-    assert_eq!(quickstart.focus, QuickstartFocus::PermissionBypass);
+    assert_eq!(quickstart.focus, QuickstartFocus::Workspace);
     assert!(quickstart.selected_agent.is_none());
 }
 
@@ -40,21 +36,17 @@ fn tab_and_shift_tab_reach_and_leave_the_submit_button() {
         selected_agent: None,
         focus: QuickstartFocus::Agent(0),
         workspace: "/tmp".to_owned(),
-        scope: IdentityScope::Private,
-        allow_permission_bypass: false,
         mode: QuickstartMode::Normal,
         status: None,
     };
 
     quickstart.on_key(key(KeyCode::Tab));
-    quickstart.on_key(key(KeyCode::Tab));
-    quickstart.on_key(key(KeyCode::Tab));
-    assert_eq!(quickstart.focus, QuickstartFocus::PermissionBypass);
+    assert_eq!(quickstart.focus, QuickstartFocus::Workspace);
     quickstart.on_key(key(KeyCode::Tab));
     assert_eq!(quickstart.focus, QuickstartFocus::Submit);
 
     quickstart.on_key(key(KeyCode::BackTab));
-    assert_eq!(quickstart.focus, QuickstartFocus::PermissionBypass);
+    assert_eq!(quickstart.focus, QuickstartFocus::Workspace);
 }
 
 #[test]
@@ -64,8 +56,6 @@ fn custom_agent_reedit_preserves_arguments() {
         selected_agent: Some(agent_catalog::custom("agent --mode 'acp bridge'").unwrap()),
         focus: QuickstartFocus::Agent(0),
         workspace: "/tmp".to_owned(),
-        scope: IdentityScope::Private,
-        allow_permission_bypass: false,
         mode: QuickstartMode::Normal,
         status: None,
     };
@@ -79,7 +69,7 @@ fn custom_agent_reedit_preserves_arguments() {
 }
 
 #[test]
-fn unpaired_config_prefills_recognized_agent_workspace_and_scope() {
+fn unpaired_config_prefills_recognized_agent_and_workspace() {
     let config = config(Harness {
         command: "hermes".to_owned(),
         args: vec!["acp".to_owned()],
@@ -101,7 +91,6 @@ fn unpaired_config_prefills_recognized_agent_workspace_and_scope() {
 
     assert_eq!(quickstart.selected_agent.unwrap().kind, AgentKind::Hermes);
     assert_eq!(quickstart.workspace, "/existing/workspace");
-    assert_eq!(quickstart.scope, IdentityScope::Team);
     assert_eq!(quickstart.focus, QuickstartFocus::Agent(0));
 }
 
@@ -130,7 +119,6 @@ fn config(harness: Harness) -> Config {
         storage_url: "https://storage.example.com".to_owned(),
         web_url: "https://example.com/app".to_owned(),
     };
-    config.identity.scope = IdentityScope::Team;
     config.harness = harness;
     config.workspace = Workspace {
         path: "/existing/workspace".into(),
@@ -140,37 +128,7 @@ fn config(harness: Harness) -> Config {
 }
 
 #[test]
-fn permission_bypass_defaults_off_and_can_be_toggled() {
-    let mut setup = Quickstart::from_config_with_agents(
-        &config(Harness {
-            command: "hermes".to_owned(),
-            args: vec!["acp".to_owned()],
-            env: Default::default(),
-        }),
-        Vec::new(),
-    );
-    assert!(!setup.allow_permission_bypass);
-    setup.focus = QuickstartFocus::PermissionBypass;
-    setup.on_key(key(KeyCode::Enter));
-    assert!(setup.allow_permission_bypass);
-    setup.on_key(key(KeyCode::Enter));
-    assert!(!setup.allow_permission_bypass);
-}
-
-#[test]
-fn unpaired_config_prefills_permission_bypass_consent() {
-    let mut config = config(Harness {
-        command: "hermes".to_owned(),
-        args: vec!["acp".to_owned()],
-        env: Default::default(),
-    });
-    config.identity.allow_permission_bypass = true;
-    let setup = Quickstart::from_config_with_agents(&config, Vec::new());
-    assert!(setup.allow_permission_bypass);
-}
-
-#[test]
-fn quickstart_renders_permission_consent_and_warning() {
+fn quickstart_renders_the_form_at_small_sizes() {
     use ratatui::{Terminal, backend::TestBackend};
     let mut setup = Quickstart::from_config_with_agents(
         &config(Harness {
@@ -180,19 +138,13 @@ fn quickstart_renders_permission_consent_and_warning() {
         }),
         Vec::new(),
     );
-    for (width, height, allowed, status) in [
-        (100, 40, false, false),
-        (100, 40, true, false),
-        (80, 26, false, false),
-        (80, 26, true, false),
-        (80, 26, false, true),
-        (80, 26, true, true),
-        (80, 24, false, false),
-        (80, 24, true, false),
-        (80, 24, false, true),
-        (80, 24, true, true),
+    for (width, height, status) in [
+        (100, 40, false),
+        (80, 26, false),
+        (80, 26, true),
+        (80, 24, false),
+        (80, 24, true),
     ] {
-        setup.allow_permission_bypass = allowed;
         setup.status = status.then(|| ("Pairing failed".to_owned(), true));
         let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
         terminal
@@ -211,37 +163,9 @@ fn quickstart_renders_permission_consent_and_warning() {
             .iter()
             .map(|cell| cell.symbol())
             .collect::<String>();
-        assert!(screen.contains("Full Access"));
-        assert!(screen.contains(if allowed {
-            "[x] On"
-        } else {
-            "[ ] Off (always prompt)"
-        }));
-        assert_eq!(screen.contains("without approval"), allowed);
+        assert!(screen.contains("Workspace"));
+        assert!(screen.contains("set on the web"));
         assert!(screen.contains("Create and pair"));
-        let rows = terminal
-            .backend()
-            .buffer()
-            .content()
-            .chunks(usize::from(width))
-            .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
-            .collect::<Vec<_>>();
-        let workspace = rows.iter().find(|row| row.contains("Workspace")).unwrap();
-        let scope = rows
-            .iter()
-            .find(|row| row.contains("Access") && !row.contains("Full Access"))
-            .unwrap();
-        let full_access = rows.iter().find(|row| row.contains("Full Access")).unwrap();
-        // Borders use multibyte glyphs; compare columns rather than UTF-8 offsets.
-        let workspace_column = workspace.chars().position(|character| character == '/');
-        assert_eq!(
-            workspace_column,
-            scope.chars().position(|character| character == 'T')
-        );
-        assert_eq!(
-            workspace_column,
-            full_access.chars().position(|character| character == '[')
-        );
     }
 }
 
@@ -269,8 +193,6 @@ fn quickstart_groups_herdr_agents_apart_from_headless_ones() {
         selected_agent: None,
         focus: QuickstartFocus::Agent(1),
         workspace: "/tmp".to_owned(),
-        scope: IdentityScope::Private,
-        allow_permission_bypass: false,
         mode: QuickstartMode::Normal,
         status: None,
     };

@@ -8,7 +8,7 @@ use tui_input::Input;
 use super::agent_catalog::{self, AgentKind, DetectedAgent, PathCommands};
 use super::input::handle_text_input;
 use super::platform::{BYO_AGENT_URL, browser_status, launch_browser_helper};
-use crate::config::{Config, IdentityScope};
+use crate::config::Config;
 
 /// Editable state shown until `macrod.toml` has a working credential.
 pub(crate) struct Quickstart {
@@ -16,8 +16,6 @@ pub(crate) struct Quickstart {
     pub(crate) selected_agent: Option<DetectedAgent>,
     pub(crate) focus: QuickstartFocus,
     pub(crate) workspace: String,
-    pub(crate) scope: IdentityScope,
-    pub(crate) allow_permission_bypass: bool,
     pub(crate) mode: QuickstartMode,
     pub(crate) status: Option<(String, bool)>,
 }
@@ -34,8 +32,6 @@ pub(crate) enum QuickstartMode {
 pub(crate) enum QuickstartFocus {
     Agent(usize),
     Workspace,
-    Scope,
-    PermissionBypass,
     Submit,
 }
 
@@ -56,8 +52,6 @@ impl Quickstart {
             selected_agent: None,
             focus: QuickstartFocus::Agent(0),
             workspace,
-            scope: IdentityScope::Private,
-            allow_permission_bypass: false,
             mode: QuickstartMode::Normal,
             status: None,
         })
@@ -97,8 +91,6 @@ impl Quickstart {
             selected_agent,
             focus,
             workspace: config.workspace.path.display().to_string(),
-            scope: config.identity.scope,
-            allow_permission_bypass: config.identity.allow_permission_bypass,
             mode: QuickstartMode::Normal,
             status: None,
         }
@@ -120,9 +112,7 @@ impl Quickstart {
                             QuickstartFocus::Agent(index.saturating_sub(1))
                         }
                         QuickstartFocus::Workspace => QuickstartFocus::Agent(self.agents.len()),
-                        QuickstartFocus::Scope => QuickstartFocus::Workspace,
-                        QuickstartFocus::PermissionBypass => QuickstartFocus::Scope,
-                        QuickstartFocus::Submit => QuickstartFocus::PermissionBypass,
+                        QuickstartFocus::Submit => QuickstartFocus::Workspace,
                     };
                     QuickstartAction::Continue
                 }
@@ -132,9 +122,7 @@ impl Quickstart {
                             QuickstartFocus::Agent(index + 1)
                         }
                         QuickstartFocus::Agent(_) => QuickstartFocus::Workspace,
-                        QuickstartFocus::Workspace => QuickstartFocus::Scope,
-                        QuickstartFocus::Scope => QuickstartFocus::PermissionBypass,
-                        QuickstartFocus::PermissionBypass | QuickstartFocus::Submit => {
+                        QuickstartFocus::Workspace | QuickstartFocus::Submit => {
                             QuickstartFocus::Submit
                         }
                     };
@@ -171,17 +159,6 @@ impl Quickstart {
                         self.mode = QuickstartMode::EditWorkspace {
                             buffer: self.workspace.clone().into(),
                         };
-                        QuickstartAction::Continue
-                    }
-                    QuickstartFocus::Scope => {
-                        self.scope = match self.scope {
-                            IdentityScope::Private => IdentityScope::Team,
-                            IdentityScope::Team => IdentityScope::Private,
-                        };
-                        QuickstartAction::Continue
-                    }
-                    QuickstartFocus::PermissionBypass => {
-                        self.allow_permission_bypass = !self.allow_permission_bypass;
                         QuickstartAction::Continue
                     }
                     QuickstartFocus::Submit if self.selected_agent.is_none() => {
