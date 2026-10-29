@@ -413,6 +413,7 @@ fn a_managed_follow_up_carries_its_context_to_delivery() {
     let context = TriggerContext::FollowUp(FollowUpContext {
         addressed_by: AddressedBy::Inferred,
         discussion: DiscussionContext {
+            agent_request: None,
             surface: DiscussionSurface::DocumentComment {
                 id: "doc".to_owned(),
                 name: "Spec".to_owned(),

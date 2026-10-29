@@ -8,6 +8,7 @@ fn a_channel_follow_up_has_a_stable_wire_shape() {
     let context = TriggerContext::FollowUp(FollowUpContext {
         addressed_by: AddressedBy::ExplicitReply,
         discussion: DiscussionContext {
+            agent_request: None,
             surface: DiscussionSurface::Channel {
                 id: Uuid::parse_str("00000000-0000-0000-0000-0000000000c1").unwrap(),
                 name: Some("eng".to_owned()),

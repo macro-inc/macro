@@ -475,7 +475,10 @@ same thread. The originating user's permissions, connected runtime, and usage
 allowance apply through the bot message's server-recorded attribution. Autonomous
 webhook posts without that attribution do not start sessions. Bot messages never
 trigger inferred replies or their own bot. Mentions in finalized bot answers are
-also routed; streaming updates and ordinary edits are not.
+also routed; streaming updates and ordinary edits are not. Agents handing the
+thread back and forth stop after three agent turns with no person writing in
+between; the fourth mention is logged and starts nothing. The invoked session's
+prompt reads "Started by <agent> for <person>" (or "Asked by" on a follow-up).
 To verify, ask session-backed `@Macro` to post a mention of `@cursor`, then have
 Cursor post a mention of session-backed Macro in the same thread. Check that the
 first mention opens Cursor and the return mention continues Macro's existing

@@ -1349,6 +1349,10 @@ async fn attributed_bot_mentions_open_or_resume_the_target_session() {
                     assert_eq!(actor, &user());
                     allow_invocation(actor, parent, root)
                 });
+            history
+                .expect_thread_messages()
+                .once()
+                .returning(|_| Box::pin(async { Ok(vec![]) }));
             let (replies, judge) = no_implicit();
             let events = service_reading(sessions, bots, replies, judge, history)
                 .evaluate(&posted)
@@ -1437,5 +1441,48 @@ async fn unattributed_or_unmentioned_bot_messages_do_not_trigger() {
             .unwrap()
             .is_empty()
         );
+    }
+}
+
+#[tokio::test]
+async fn agents_mentioning_each_other_stop_after_three_hops_without_a_person() {
+    let person = ChannelSender::new_from_user(user());
+    let macro_ai = ChannelSender::new_from_bot(bot_id::MACRO_NEW_BOT_ID);
+    let cursor = ChannelSender::new_from_bot(bot_id::CURSOR_BOT_ID);
+    let thread = vec![
+        thread_message(100, person, "@macro hand this to cursor"),
+        thread_message(101, macro_ai.clone(), "@cursor please fix it"),
+        thread_message(102, cursor.clone(), "@macro done, check it"),
+        thread_message(103, macro_ai.clone(), "@cursor one more change"),
+    ];
+    for (read, sender, target, triggers) in [
+        (3, macro_ai.clone(), bot_id::CURSOR_BOT_ID, true),
+        (4, cursor.clone(), bot_id::MACRO_NEW_BOT_ID, false),
+    ] {
+        let mut posted = message(vec![mention_of(target)]);
+        posted.sender = sender;
+        posted.triggered_by = Some(user().to_string());
+        let mut bots = MockAgentBotLookup::new();
+        bots.expect_get_agent()
+            .returning(|_| Box::pin(async { Ok(None) }));
+        bots.expect_get_bot()
+            .returning(|bot| Box::pin(async move { Ok(Some(system_bot(bot))) }));
+        let (replies, judge) = no_implicit();
+        let sessions = if triggers {
+            sessions_without_existing()
+        } else {
+            MockAgentSessionRepo::new()
+        };
+        let events = service_reading(
+            sessions,
+            bots,
+            replies,
+            judge,
+            thread_of(thread[..read].to_vec()),
+        )
+        .evaluate(&posted)
+        .await
+        .unwrap();
+        assert_eq!(!events.is_empty(), triggers, "after {read} thread messages");
     }
 }

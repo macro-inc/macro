@@ -24,6 +24,7 @@ use channel_sender::ChannelSender;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
+use crate::domain::agent_hops::{MAX_AGENT_HOPS, agent_hops};
 use crate::domain::broker_events::{ThreadMessageKind, TriggerDecision};
 use crate::domain::thread_window::{ThreadMessage, render_transcript, thread_window};
 use crate::domain::yield_event::{
@@ -352,19 +353,52 @@ where
         }
     }
 
-    /// The poster's current capability on the message's conversation, for
-    /// reading it as context. `None` when the poster is no user or may no
+    /// The invoking user's current capability on the message's conversation,
+    /// for reading it as context. `None` when nobody invoked it or they may no
     /// longer write there.
     pub async fn invocation(
         &self,
         posted: &MessagePostedMetadata,
     ) -> Result<Option<AuthorizedInvocation>> {
-        let Some(user) = posted.sender.as_user().cloned().map(CowLike::into_owned) else {
+        let Some(user) = posted.invoking_user() else {
             return Ok(None);
         };
         self.history
             .authorize_invocation(&user, &posted.parent, posted.root_id())
             .await
+    }
+
+    /// Whether a bot's mention stays within [`MAX_AGENT_HOPS`] of the last
+    /// person in its thread. An unreadable thread counts as over the limit:
+    /// an agent loop is worse than one missed handoff.
+    async fn within_hop_limit(
+        &self,
+        posted: &MessagePostedMetadata,
+        invocation: &AuthorizedInvocation,
+    ) -> bool {
+        let messages = match self.history.thread_messages(invocation).await {
+            Ok(messages) => messages,
+            Err(error) => {
+                tracing::warn!(error = ?error, "thread read failed; not counting agent hops");
+                return false;
+            }
+        };
+        let senders: Vec<&ChannelSender<'static>> = messages
+            .iter()
+            .take_while(|message| message.id != posted.message_id)
+            .map(|message| &message.sender)
+            .chain(std::iter::once(&posted.sender))
+            .collect();
+        let hops = agent_hops(senders.into_iter());
+        if hops > MAX_AGENT_HOPS {
+            tracing::info!(
+                message_id = %posted.message_id,
+                hops,
+                "agent mention exceeds the hop limit; not starting another agent"
+            );
+            return false;
+        }
+        true
     }
 
     /// Evaluates a posted message for every mentioned bot.
@@ -389,6 +423,9 @@ where
         else {
             return Ok(Vec::new());
         };
+        if posted.sender.as_bot().is_some() && !self.within_hop_limit(posted, &invocation).await {
+            return Ok(Vec::new());
+        }
         if let Some(router) = &self.conversations {
             match router.evaluate(posted).await? {
                 ConversationDecision::NotConversation => {}

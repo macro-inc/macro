@@ -184,6 +184,12 @@ const discussionContext = z.object({
   surface: discussionSurface,
   prompt_message_id: z.string().min(1),
   sender: triggerPerson,
+  agent_request: z
+    .object({
+      on_behalf_of: triggerPerson,
+      hops: z.number().int().nonnegative(),
+    })
+    .optional(),
   reply_target: triggerReplyTarget,
   thread: triggerThread.optional(),
   channel: z.array(triggerThread).optional(),

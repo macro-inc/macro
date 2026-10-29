@@ -1181,3 +1181,43 @@ async fn design_discussions_reach_the_agent_unanchored() {
     );
     assert!(context.thread.is_some());
 }
+
+#[tokio::test]
+async fn an_agent_asking_for_a_person_names_them_and_counts_its_hop() {
+    let parent = document();
+    let root = posted(&parent, 1, None, "alice@example.com", "@Macro fix this", 0);
+    let by_bot = |id: u128, bot: bot_id::BotId, name: &str, content: &str, minute: i64| Message {
+        sender_id: channel_sender::ChannelSender::new_from_bot(bot),
+        triggered_by: Some(actor().as_ref().to_owned()),
+        bot_profile: Some(BotSenderProfile {
+            name: name.to_owned(),
+            avatar_url: None,
+        }),
+        ..posted(&parent, id, Some(1), "unused@example.com", content, minute)
+    };
+    let macro_reply = by_bot(2, bot_id::MACRO_NEW_BOT_ID, "Macro", "@Cursor fix it", 1);
+    let prompt = by_bot(3, bot_id::CURSOR_BOT_ID, "Cursor", "@Macro done, check", 2);
+
+    let mut source = MockMessageReader::new();
+    let prompt_message = prompt.clone();
+    source
+        .expect_get()
+        .returning(move |_, _| Ok(prompt_message.clone()));
+    source.expect_preceding().never();
+    let replies = vec![macro_reply, prompt.clone()];
+    source
+        .expect_get_thread()
+        .once()
+        .return_once(move |_, _| Ok(discussion(root, replies, None)));
+
+    let context = context_from(source, document_names(), Lexical::none(), &prompt).await;
+
+    assert_eq!(context.sender.name, "Cursor");
+    assert_eq!(
+        context.agent_request,
+        Some(AgentRequest {
+            on_behalf_of: person("actor@example.com"),
+            hops: 2,
+        })
+    );
+}
