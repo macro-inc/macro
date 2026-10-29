@@ -856,10 +856,12 @@ without unread channels are hidden), DMs, Recent, and the Threads tab's
 Conversations. Search results are not filtered. The open conversation stays
 listed after it is read and drops out once another is opened. Unread state comes
 from the loaded pages, like the section counts. An emptied tab shows **No unread
-conversations** with a `Show all` action. When the rail is too narrow for every
-tab label, the switch drops its text and shows it as a tooltip. The toggle
-persists with the rail's other view state across reloads. The mobile Recent feed
-has no toggle.
+conversations** with a `Show all` action. Its track shows a crossed-out eye.
+When the rail is too narrow for every tab label, the switch drops its text into
+a tooltip, and if that is still not enough the tabs show icons (All, a speech
+bubble; Recent, a clock; Threads, a reply arrow) with their names as tooltips.
+The toggle persists with the rail's other view state across reloads. The mobile
+Recent feed has no toggle.
 
 With GraphQL caching enabled, a current-query cached Team channels, Channels, or DMs page
 (including an empty page) remains quiet on a response-free refresh failure.

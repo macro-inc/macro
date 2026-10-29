@@ -9,9 +9,13 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import { type ChannelEntity, Entity } from '@entity';
+import ArrowBendUpLeftIcon from '@icon/system/regular/arrow-bend-up-left.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import ChatCircleTextIcon from '@icon/system/regular/chat-circle-text.svg';
 import ChatsCircleIcon from '@icon/system/regular/chats-circle.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import EyeSlashIcon from '@icon/system/regular/eye-slash.svg';
 import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import SortIcon from '@icon/system/regular/sort-ascending.svg';
 import XIcon from '@icon/system/regular/x.svg';
@@ -94,13 +98,14 @@ import {
   useChannelRailVirtualizer,
 } from './hooks/useChannelRailState';
 
+// Icons stand in for the labels when the rail is too narrow for them.
 const CHANNEL_TABS: TabOption<ChannelsTab>[] = [
-  { value: 'browse', label: 'All' },
-  { value: 'recents', label: 'Recent' },
+  { value: 'browse', label: 'All', icon: ChatCircleTextIcon },
+  { value: 'recents', label: 'Recent', icon: ClockIcon },
 ];
 const CHANNEL_TABS_WITH_THREADS: TabOption<ChannelsTab>[] = [
   ...CHANNEL_TABS,
-  { value: 'threads', label: 'Threads' },
+  { value: 'threads', label: 'Threads', icon: ArrowBendUpLeftIcon },
 ];
 
 type ChannelRailSearch = {
@@ -448,6 +453,7 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
             onChange={selectTab}
             toggle={{
               label: 'Unread',
+              icon: EyeSlashIcon,
               checked: rail.unreadOnly(),
               onChange: rail.setUnreadOnly,
             }}

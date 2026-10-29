@@ -1,4 +1,5 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
+import EyeSlashIcon from '@icon/system/regular/eye-slash.svg';
 import { createSignal, For } from 'solid-js';
 import { ToggleSwitch } from './ToggleSwitch';
 
@@ -40,6 +41,22 @@ function SizesDemo() {
         )}
       </For>
     </div>
+  );
+}
+// #endregion
+
+// #region demo:track-icon
+function TrackIconDemo() {
+  const [unreadOnly, setUnreadOnly] = createSignal(false);
+
+  return (
+    <ToggleSwitch
+      trackIcon={EyeSlashIcon}
+      checked={unreadOnly()}
+      onChange={setUnreadOnly}
+      label="Unread only"
+      labelClass="text-sm text-ink"
+    />
   );
 }
 // #endregion
@@ -138,6 +155,13 @@ export default defineDoc({
       description:
         '`sm` is the default toolbar size (32×16px); `md` is for settings rows (40×20px); `xs` is for dense inline chrome (28×14px).',
       render: SizesDemo,
+    },
+    {
+      id: 'track-icon',
+      title: 'Track icon',
+      description:
+        '`trackIcon` shows a glyph in the half of the track the thumb leaves free, so a compact switch says what it does even when its label is hidden.',
+      render: TrackIconDemo,
     },
     {
       id: 'disabled',
