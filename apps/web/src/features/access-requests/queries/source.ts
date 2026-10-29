@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { accessRequestKeys } from '@queries/access-requests/keys';
 import {
@@ -80,7 +81,9 @@ export function createSharingSource(
             accessRequestsClient.setGrant(target, change.userId, change.level)
           )
         )
-        .exhaustive();
+        .exhaustive(() =>
+          Promise.reject(new Error(`Unknown access change: ${change.kind}`))
+        );
     },
     onSuccess: (_result, change) => {
       refreshSharedAccess(change.target);
@@ -92,7 +95,7 @@ export function createSharingSource(
         setOffset(0);
     },
     onError: (_error, change) => {
-      void invalidateAccessRequests(change.target);
+      fireAndForget(invalidateAccessRequests(change.target), 'access-requests');
     },
   }));
   const mutate = (action: Action) => {

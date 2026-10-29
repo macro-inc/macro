@@ -3,8 +3,9 @@ import {
   createPipedreamCatalogConnect,
   createPipedreamCatalogSearch,
 } from '@core/pipedream/catalog';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
-import XIcon from '@phosphor/x.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import type { PipedreamCatalogEntryResponse } from '@service-cognition/client';
 import type { AgentMcpServer } from '@service-storage/generated/schemas/agentMcpServer';
 import { Button } from '@ui';
@@ -19,14 +20,14 @@ import { ConnectAction, StatusDot } from './integration-ui';
 import { IntegrationRow } from './primitives';
 
 /**
- * Picks Pipedream apps for an agent from the whole catalog, connected or
- * not, and shows for each picked app whether the *viewer* has connected it.
+ * Picks Pipedream apps from the whole catalog, connected or not, and shows
+ * for each picked app whether the *viewer* has connected it.
  *
- * Selection is the agent's; connection is personal. A teammate opening the
- * same agent sees their own dots, because a session spends the connections
- * of whoever runs it. So an unconnected pick is never an error here - it is
- * the agent's author saying "this agent uses Linear", and each person
- * connects Linear on their own, from this row or from Settings → Integrations.
+ * For an agent, selection is the agent's and connection is personal: a
+ * teammate opening the same agent sees their own dots, because a session
+ * spends the connections of whoever runs it, so an unconnected pick is not
+ * an error. A routine runs as its owner and requires its apps, so the
+ * routine editor refuses to save until each one is connected.
  */
 export function PipedreamAppPicker(props: {
   selected: readonly AgentMcpServer[];
@@ -72,9 +73,8 @@ export function PipedreamAppPicker(props: {
             <div class="px-4 py-4 text-center text-sm text-ink-muted">
               Couldn't load the connector catalog.
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
-                depth={3}
                 onClick={() => catalog.query.refetch()}
                 class="ml-2"
               >
@@ -113,11 +113,15 @@ export function PipedreamAppPicker(props: {
             <Show when={catalog.query.hasNextPage}>
               <div class="px-3 py-2 text-center">
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
-                  depth={3}
                   disabled={catalog.query.isFetchingNextPage}
-                  onClick={() => void catalog.query.fetchNextPage()}
+                  onClick={() =>
+                    fireAndForget(
+                      catalog.query.fetchNextPage(),
+                      'agent-settings'
+                    )
+                  }
                 >
                   {catalog.query.isFetchingNextPage ? 'Loading…' : 'Load more'}
                 </Button>
@@ -239,7 +243,7 @@ function SelectedAppRow(props: {
         <ConnectAction
           label="Connect"
           loading={busy()}
-          onClick={() => void connect()}
+          onClick={() => fireAndForget(connect(), 'agent-settings')}
         />
       </Show>
       <Button
@@ -249,7 +253,7 @@ function SelectedAppRow(props: {
         aria-label={`Remove ${props.server.server_name}`}
         onClick={() => props.onRemove()}
       >
-        <XIcon />
+        <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
       </Button>
     </IntegrationRow>
   );

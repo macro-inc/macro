@@ -15,6 +15,32 @@ fn utc_datetime(value: &str) -> DateTime<Utc> {
 }
 
 #[test]
+fn calendar_join_requests_name_the_requester_and_the_event() {
+    let request = CalendarEventJoinRequestMetadata {
+        request_id: Uuid::nil(),
+        event_id: Uuid::nil(),
+        title: "Design review".into(),
+    };
+    let event: NotifEvent = serde_json::from_value(
+        serde_json::to_value(NotifEvent::CalendarEventJoinRequest(request.clone())).unwrap(),
+    )
+    .unwrap();
+    assert!(matches!(event, NotifEvent::CalendarEventJoinRequest(_)));
+    assert_eq!(
+        request
+            .format_title(Some(uid("macro|teo@macro.com")))
+            .unwrap(),
+        "teo@macro.com asked to join Design review"
+    );
+    assert_eq!(request.format_body(None).unwrap(), "Design review");
+    let untitled = CalendarEventJoinRequestMetadata {
+        title: String::new(),
+        ..request
+    };
+    assert_eq!(untitled.format_body(None).unwrap(), "(No title)");
+}
+
+#[test]
 fn view_access_notifications_preserve_permission_and_format_copy() {
     let request = EntityAccessRequestedMetadata {
         request_id: Uuid::nil(),
@@ -1258,4 +1284,28 @@ fn agent_excerpt_flattens_whitespace_and_truncates() {
     let excerpt = agent_excerpt(&long);
     assert_eq!(excerpt.chars().count(), AGENT_EXCERPT_MAX_CHARS);
     assert!(excerpt.ends_with('…'));
+}
+
+#[test]
+fn calendar_email_reminder_escapes_content_and_limits_each_distinct_alarm() {
+    use notification::domain::models::NotificationExtEmail;
+    let metadata = CalendarEventReminderMetadata {
+        event_id: Uuid::now_v7(),
+        occurrence_key: "one".into(),
+        title: "<img src=x> & Planning\r\nMeeting".into(),
+        starts_at: None,
+        ends_at: None,
+        start_date: Some(chrono::NaiveDate::from_ymd_opt(2026, 10, 5).unwrap()),
+        time_zone: Some("UTC".into()),
+        minutes_before: 10,
+    };
+    let email = metadata.format_email();
+    assert!(!email.body.contains("<img"));
+    assert!(email.body.contains("&lt;img"));
+    assert!(!email.subject.contains(['\r', '\n']));
+    assert!(email.body.contains("All day"));
+    let first = metadata.rate_limit_key();
+    let mut second = metadata.clone();
+    second.minutes_before = 5;
+    assert_ne!(first.as_bytes(), second.rate_limit_key().as_bytes());
 }

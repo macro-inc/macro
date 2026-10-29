@@ -3,8 +3,10 @@ import {
   normalizeContentId,
   staticFileIdsByContentId,
 } from '@app/features/email-message/core/inline-images';
+import { convertBookingLinkMentionsToLinks } from '@core/component/LexicalMarkdown/utils/convertBookingLinkMentionsToLinks';
 import { convertDocumentMentionsToLinks } from '@core/component/LexicalMarkdown/utils/convertDocumentMentionsToLinks';
 import { staticFileReferenceEndpoint } from '@core/constant/servers';
+import { encodeBase64UrlUtf8 } from '@core/util/base64';
 import { formatEmailDate } from '@core/util/date';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import { $createQuoteNode } from '@lexical/rich-text';
@@ -450,8 +452,9 @@ export function prepareEmailBodyFromHtml(
   // Apply image scale to width/height attributes so the recipient sees the resized dimensions
   applyMediaScale(parsed.body);
 
-  // Convert Macro document mentions to HTML links in the parsed DOM
+  // Convert Macro mentions to HTML links in the parsed DOM
   const mentions = convertDocumentMentionsToLinks(parsed.body);
+  convertBookingLinkMentionsToLinks(parsed.body);
 
   // HtmlRenderNode exports as declarative shadow DOM; email clients and the
   // backend sanitizer drop template content, so inline it
@@ -470,10 +473,7 @@ export function prepareEmailBodyFromHtml(
     parsed.body.appendChild(appendedReplyElement);
   }
 
-  const html = btoa(unescape(encodeURIComponent(parsed.body.outerHTML)))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/={1,}$/, '');
+  const html = encodeBase64UrlUtf8(parsed.body.outerHTML);
   const bodyHtml = html;
   const bodyText = parsed.body.firstChild?.textContent ?? '';
 

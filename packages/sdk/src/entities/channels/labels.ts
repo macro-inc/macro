@@ -38,17 +38,17 @@ export class ChannelLabelsNamespace {
     return unwrap(
       await this.client.storage.createChannelLabel({
         body: { name, channelIds: channels.map((channel) => channel.id) },
-      })
+      }),
     );
   }
 
   /** Create a smart tag whose membership follows an attribute rule automatically. */
   async createSmartTag(
     name: string,
-    rule: ChannelLabelRule
+    rule: ChannelLabelRule,
   ): Promise<ChannelLabel> {
     return unwrap(
-      await this.client.storage.createChannelLabel({ body: { name, rule } })
+      await this.client.storage.createChannelLabel({ body: { name, rule } }),
     );
   }
 
@@ -61,13 +61,13 @@ export class ChannelLabelsNamespace {
   async updateSmartTag(
     label: ChannelLabel,
     name: string,
-    rule: ChannelLabelRule
+    rule: ChannelLabelRule,
   ): Promise<ChannelLabel> {
     return unwrap(
       await this.client.storage.renameChannelLabel({
         path: { label_id: label.id },
         body: { name, rule },
-      })
+      }),
     );
   }
 
@@ -77,7 +77,7 @@ export class ChannelLabelsNamespace {
       await this.client.storage.renameChannelLabel({
         path: { label_id: label.id },
         body: { name },
-      })
+      }),
     );
   }
 
@@ -86,20 +86,20 @@ export class ChannelLabelsNamespace {
     unwrap(
       await this.client.storage.deleteChannelLabel({
         path: { label_id: label.id },
-      })
+      }),
     );
   }
 
   /** Move a channel into `label`, or out of any label when `label` is `undefined`. */
   async setLabel(
     channel: Channel,
-    label: ChannelLabel | undefined
+    label: ChannelLabel | undefined,
   ): Promise<void> {
     unwrap(
       await this.client.storage.setChannelLabel({
         path: { channel_id: channel.id },
         body: { labelId: label?.id ?? null },
-      })
+      }),
     );
   }
 }

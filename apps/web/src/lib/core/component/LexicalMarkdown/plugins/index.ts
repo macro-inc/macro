@@ -17,6 +17,7 @@ export * from './emojis';
 export * from './file-paste';
 export * from './find-and-replace';
 export * from './generate';
+export * from './gif';
 export * from './horizontal-rules';
 export * from './insert-text';
 export * from './ios-cursor-scroll';

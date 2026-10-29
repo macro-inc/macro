@@ -6,6 +6,7 @@ use crate::pubsub::worker_lifecycle::run_until_cancelled;
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
 use futures::StreamExt;
 use sqlx::PgPool;
 use sqs_client::SQS;
@@ -25,6 +26,7 @@ pub async fn run_worker(
     connection_gateway_client: ConnectionGatewayClient,
     notification_ingress_service: Arc<NotificationIngressType>,
     macro_event_broker: PubSubEventBroker,
+    contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
 ) {
     run_worker_with_cancellation(
         worker,
@@ -37,6 +39,7 @@ pub async fn run_worker(
         connection_gateway_client,
         notification_ingress_service,
         macro_event_broker,
+        contacts_ingress,
         CancellationToken::new(),
     )
     .await;
@@ -57,15 +60,61 @@ pub async fn run_worker_with_cancellation(
     connection_gateway_client: ConnectionGatewayClient,
     notification_ingress_service: Arc<NotificationIngressType>,
     macro_event_broker: PubSubEventBroker,
+    contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     cancellation_token: CancellationToken,
 ) {
+    let outlook = loop {
+        let result = async {
+            let connection = redis_client
+                .inner
+                .get_multiplexed_async_connection()
+                .await?;
+            Ok::<_, anyhow::Error>(email_api_client::OutlookApiClientRepository::with_gate(
+                Arc::new(crate::outbound::email_api::RedisMicrosoftRequestGate(
+                    connection,
+                )),
+            )?)
+        }
+        .await;
+        match result {
+            Ok(provider) => break provider,
+            Err(error) => tracing::warn!(
+                ?error,
+                "Inbox lifecycle client initialization failed; retrying"
+            ),
+        }
+        if run_until_cancelled(
+            &cancellation_token,
+            tokio::time::sleep(std::time::Duration::from_secs(2)),
+        )
+        .await
+        .is_none()
+        {
+            return;
+        }
+    };
     let ctx = LinkManagerContext {
+        inbox_lifecycle: Arc::new(crate::composition::inbox_lifecycle(
+            outlook,
+            db.clone(),
+            auth_service_client.clone(),
+            sqs_client.clone(),
+            connection_gateway_client.clone(),
+        )),
+        inbox_health: Arc::new(crate::composition::inbox_health(
+            db.clone(),
+            email_api.clone(),
+            auth_service_client.clone(),
+            redis_client.clone(),
+            sqs_client.clone(),
+            macro_event_broker.clone(),
+            contacts_ingress,
+        )),
         db,
         sqs_worker: worker.clone(),
         email_api,
         auth_service_client,
         redis_client,
-        sqs_client,
         crm_service,
         connection_gateway_client,
         notification_ingress_service,

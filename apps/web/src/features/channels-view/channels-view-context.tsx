@@ -17,6 +17,7 @@ import { enableChannelThreadsPreview } from '@core/constant/featureFlags';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import { type Accessor, createEffect, createMemo, on } from 'solid-js';
 import { createStore, type Store } from 'solid-js/store';
@@ -73,12 +74,15 @@ function createInitialState(
     tab: initial.tab ?? 'browse',
     expandedGroups: {
       favorites: initial.expandedGroups?.favorites ?? true,
+      team_channels: initial.expandedGroups?.team_channels ?? true,
       channels: initial.expandedGroups?.channels ?? true,
       direct_messages: initial.expandedGroups?.direct_messages ?? true,
     },
     collapsedLabels: initial.collapsedLabels ?? [],
     threadsChannelId: initial.threadsChannelId,
     sortBy: {
+      team_channels:
+        initial.sortBy?.team_channels ?? CHANNELS_DEFAULT_SORT_BY.team_channels,
       channels: initial.sortBy?.channels ?? CHANNELS_DEFAULT_SORT_BY.channels,
       direct_messages:
         initial.sortBy?.direct_messages ??
@@ -159,24 +163,30 @@ export const [ChannelsViewProvider, useChannelsView] =
         channel: ChannelPreviewSelection,
         replace = false
       ) => {
-        navigate(
-          {
-            route: channelDetailRoute,
-            params: { channelId: channelIdForPreviewNavigation(channel) },
-          },
-          {
-            replace,
-            search: { [channelsSearch.namespace]: routeSearch(channel) },
-          }
+        fireAndForget(
+          navigate(
+            {
+              route: channelDetailRoute,
+              params: { channelId: channelIdForPreviewNavigation(channel) },
+            },
+            {
+              replace,
+              search: { [channelsSearch.namespace]: routeSearch(channel) },
+            }
+          ),
+          'channels-view'
         );
       };
       const setSelectedChannel = (
         channel: ChannelPreviewSelection | undefined
       ) => {
         if (!channel) {
-          navigate(
-            { route: channelsSplitRoute, params: {} },
-            { search: { [channelsSearch.namespace]: routeSearch() } }
+          fireAndForget(
+            navigate(
+              { route: channelsSplitRoute, params: {} },
+              { search: { [channelsSearch.namespace]: routeSearch() } }
+            ),
+            'channels-view'
           );
           return true;
         }
@@ -190,12 +200,15 @@ export const [ChannelsViewProvider, useChannelsView] =
           if (!selectPreview(channel)) {
             if (previous) navigateToChannel(previous, true);
             else
-              navigate(
-                { route: channelsSplitRoute, params: {} },
-                {
-                  replace: true,
-                  search: { [channelsSearch.namespace]: routeSearch() },
-                }
+              fireAndForget(
+                navigate(
+                  { route: channelsSplitRoute, params: {} },
+                  {
+                    replace: true,
+                    search: { [channelsSearch.namespace]: routeSearch() },
+                  }
+                ),
+                'channels-view'
               );
           }
         })

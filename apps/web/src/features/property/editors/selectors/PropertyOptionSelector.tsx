@@ -1,9 +1,10 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useKeyPressed } from '@core/util/useKeyPressed';
-import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
+import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { useSearchInputFocus } from '@property/utils';
 import { ERROR_MESSAGES } from '@property/utils/errorHandling';
@@ -206,7 +207,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
   const handleSelectableItem = (idx: number, event?: KeyboardEvent) => {
     const item = selectableItems()[idx];
     if (item?.type === 'add') {
-      handleAddOption(event);
+      fireAndForget(handleAddOption(event), 'property-editor');
     } else if (item?.type === 'clear') {
       props.clearOption?.onClear();
       if (shouldCloseAfterSelect(event) && props.onClose) {

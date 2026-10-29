@@ -6,10 +6,12 @@
  */
 import type { ApiAttachmentEntityReferenceOneOf } from './apiAttachmentEntityReferenceOneOf';
 import type { ApiAttachmentEntityReferenceOneOfFour } from './apiAttachmentEntityReferenceOneOfFour';
+import type { ApiAttachmentEntityReferenceOneOfSeven } from './apiAttachmentEntityReferenceOneOfSeven';
 
 /**
  * An attachment reference, tagged by source kind.
  */
 export type ApiAttachmentEntityReference =
   | ApiAttachmentEntityReferenceOneOf
-  | ApiAttachmentEntityReferenceOneOfFour;
+  | ApiAttachmentEntityReferenceOneOfFour
+  | ApiAttachmentEntityReferenceOneOfSeven;

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffect, createSignal, on, onCleanup, Show } from 'solid-js';
 
 export function CanvasMediaSkeleton() {
@@ -60,7 +61,7 @@ function LoadedMedia(props: MediaContentProps & { url: string }) {
           if (!cancelled) props.onStop();
         }
       }
-      void play();
+      fireAndForget(play(), 'canvas-media');
     })
   );
   return (

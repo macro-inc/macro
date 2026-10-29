@@ -7,10 +7,11 @@ use async_graphql::{Enum, ID, SimpleObject, Union};
 use calendar_events::domain::{
     changes::{CalendarChangesPage, CalendarEventChange, CalendarWatermark, EventOccurrence},
     models::{
-        AttendeeResponseStatus, CalendarAttendee, CalendarEvent, CalendarEventSourceContent,
-        CalendarOccurrence, CalendarSyncStatus, ConferenceProvider, EventReminderOverride,
-        EventReminders, EventStatus, EventTime, EventTransparency, EventType, EventVisibility,
-        OccurrenceException, OccurrenceListing, VisibleCalendar,
+        AttendeeResponseStatus, CalendarAttendee, CalendarCapabilities, CalendarEvent,
+        CalendarEventSourceContent, CalendarOccurrence, CalendarProvider, CalendarSyncStatus,
+        ConferenceProvider, EventReminderOverride, EventReminders, EventStatus, EventTime,
+        EventTransparency, EventType, EventVisibility, GuestPolicy, OccurrenceException,
+        OccurrenceListing, ViewerCapabilities, VisibleCalendar,
     },
 };
 use uuid::Uuid;
@@ -114,6 +115,8 @@ impl From<EventType> for GraphqlCalendarEventType {
 /// Conferencing system backing an event's join URL.
 #[derive(Enum, Copy, Clone, Debug, Eq, PartialEq)]
 pub enum GraphqlCalendarConferenceProvider {
+    /// Microsoft Teams.
+    MicrosoftTeams,
     /// Google Meet.
     GoogleMeet,
     /// Any other conferencing system.
@@ -123,6 +126,7 @@ pub enum GraphqlCalendarConferenceProvider {
 impl From<ConferenceProvider> for GraphqlCalendarConferenceProvider {
     fn from(provider: ConferenceProvider) -> Self {
         match provider {
+            ConferenceProvider::MicrosoftTeams => Self::MicrosoftTeams,
             ConferenceProvider::GoogleMeet => Self::GoogleMeet,
             ConferenceProvider::Other => Self::Other,
         }
@@ -293,6 +297,58 @@ impl From<EventReminders> for GraphqlCalendarReminders {
     }
 }
 
+/// What the organizer lets an event's guests do.
+#[derive(SimpleObject, Clone, Debug, PartialEq, Eq)]
+pub struct GraphqlCalendarGuestPolicy {
+    /// Whether guests may change the event, including its guest list.
+    can_modify: bool,
+    /// Whether guests may invite others.
+    can_invite_others: bool,
+    /// Whether guests may see the guest list.
+    can_see_other_guests: bool,
+}
+
+impl From<GuestPolicy> for GraphqlCalendarGuestPolicy {
+    fn from(policy: GuestPolicy) -> Self {
+        Self {
+            can_modify: policy.can_modify,
+            can_invite_others: policy.can_invite_others,
+            can_see_other_guests: policy.can_see_other_guests,
+        }
+    }
+}
+
+/// What the viewer may do with an event.
+#[derive(SimpleObject, Clone, Debug, PartialEq, Eq)]
+pub struct GraphqlCalendarViewerCapabilities {
+    /// Change the event's details (title, time, description, conference).
+    edit_details: bool,
+    /// Add guests.
+    invite_guests: bool,
+    /// Remove guests.
+    remove_guests: bool,
+    /// Change the event's guest policy, which only Google calendars have.
+    set_guest_policy: bool,
+    /// Answer the invitation.
+    rsvp: bool,
+    /// Act as the event's organizer: replace its whole guest list and manage
+    /// its conferencing.
+    organize: bool,
+}
+
+impl From<ViewerCapabilities> for GraphqlCalendarViewerCapabilities {
+    fn from(capabilities: ViewerCapabilities) -> Self {
+        Self {
+            edit_details: capabilities.edit_details,
+            invite_guests: capabilities.invite_guests,
+            remove_guests: capabilities.remove_guests,
+            set_guest_policy: capabilities.set_guest_policy,
+            rsvp: capabilities.rsvp,
+            organize: capabilities.organize,
+        }
+    }
+}
+
 /// Content of one calendar's copy of an event.
 #[derive(SimpleObject, Clone, Debug, PartialEq, Eq)]
 pub struct GraphqlCalendarEventSource {
@@ -391,6 +447,13 @@ pub struct GraphqlCalendarEvent {
     attendees: Vec<GraphqlCalendarAttendee>,
     /// Reminder configuration.
     reminders: GraphqlCalendarReminders,
+    /// What the organizer lets guests do.
+    guest_policy: GraphqlCalendarGuestPolicy,
+    /// Whether this is a snapshot of a meeting shared with the owner: a
+    /// private copy the meeting's changes never reach.
+    is_snapshot: bool,
+    /// What the viewer may do with the event.
+    viewer_can: GraphqlCalendarViewerCapabilities,
     /// Entity creation time in RFC 3339 format.
     created_at: String,
     /// Entity update time in RFC 3339 format.
@@ -426,6 +489,9 @@ impl GraphqlCalendarEvent {
             is_read_only: event.is_read_only,
             attendees: event.attendees.into_iter().map(Into::into).collect(),
             reminders: event.reminders.into(),
+            guest_policy: event.guest_policy.into(),
+            is_snapshot: event.is_snapshot,
+            viewer_can: event.viewer_can.into(),
             created_at: event.created_at.to_rfc3339(),
             updated_at: event.updated_at.to_rfc3339(),
         }
@@ -524,6 +590,57 @@ pub(crate) fn occurrence_nodes(listings: Vec<OccurrenceListing>) -> Vec<GraphqlC
         .collect()
 }
 
+/// Provider selected from the persisted calendar account and email binding.
+#[derive(Enum, Copy, Clone, Debug, Eq, PartialEq)]
+pub enum GraphqlCalendarProvider {
+    /// Google Calendar.
+    Google,
+    /// Microsoft Outlook calendar.
+    Outlook,
+}
+
+impl From<CalendarProvider> for GraphqlCalendarProvider {
+    fn from(provider: CalendarProvider) -> Self {
+        match provider {
+            CalendarProvider::Google => Self::Google,
+            CalendarProvider::Outlook => Self::Outlook,
+        }
+    }
+}
+
+/// Actual provider capabilities used by calendar editors.
+#[derive(SimpleObject, Clone, Debug, PartialEq, Eq)]
+pub struct GraphqlCalendarCapabilities {
+    /// Whether event-level automatic invitation declines are supported.
+    auto_decline: bool,
+    /// Conferencing system available when creating an online meeting.
+    conference_provider: Option<GraphqlCalendarConferenceProvider>,
+    /// Whether arbitrary RFC 5545 recurrence properties can be written.
+    custom_recurrence: bool,
+    /// Whether email reminders are delivered by the provider or Macro.
+    email_reminders: bool,
+    /// Whether an existing conference can be detached.
+    remove_conference: bool,
+    /// Whether an attendee can reset their RSVP to unanswered.
+    reset_rsvp: bool,
+    /// Whether the organizer can set what guests may do.
+    guest_policy: bool,
+}
+
+impl From<CalendarCapabilities> for GraphqlCalendarCapabilities {
+    fn from(capabilities: CalendarCapabilities) -> Self {
+        Self {
+            auto_decline: capabilities.auto_decline,
+            conference_provider: capabilities.conference_provider.map(Into::into),
+            custom_recurrence: capabilities.custom_recurrence,
+            email_reminders: capabilities.email_reminders,
+            remove_conference: capabilities.remove_conference,
+            reset_rsvp: capabilities.reset_rsvp,
+            guest_policy: capabilities.guest_policy,
+        }
+    }
+}
+
 /// A calendar visible to the viewer.
 #[derive(SimpleObject, Clone, Debug, PartialEq, Eq)]
 pub struct GraphqlCalendar {
@@ -533,6 +650,10 @@ pub struct GraphqlCalendar {
     link_id: ID,
     /// Connected inbox address.
     email_address: String,
+    /// Calendar provider, for display and reconnect routing.
+    provider: GraphqlCalendarProvider,
+    /// Provider features available on this actual calendar.
+    capabilities: GraphqlCalendarCapabilities,
     /// Provider display name.
     name: String,
     /// Provider color.
@@ -555,6 +676,8 @@ impl From<VisibleCalendar> for GraphqlCalendar {
             id: id(calendar.id),
             link_id: id(calendar.email_link_id),
             email_address: calendar.email_address,
+            provider: calendar.provider.into(),
+            capabilities: calendar.capabilities.into(),
             name: calendar.name,
             color: calendar.color,
             is_primary: calendar.is_primary,

@@ -35,6 +35,9 @@ pub struct RunEnvironment {
     pub hosts: std::collections::BTreeMap<String, String>,
 }
 
+/// Frame bytes kept beside a full-size result for its `{"type":"result",...}` envelope.
+pub const RESULT_FRAME_OVERHEAD: usize = 256;
+
 /// Server-owned admission and execution limits.
 #[derive(Debug, Clone)]
 pub struct Limits {
@@ -50,6 +53,8 @@ pub struct Limits {
     pub max_frame_bytes: usize,
     /// Combined stdout and stderr budget per execution.
     pub max_output_bytes: usize,
+    /// Largest model-facing result JSON; a larger `data` is replaced by a bounded summary.
+    pub max_result_bytes: usize,
     /// Maximum regular events, plus a separate equal budget for advisory progress.
     pub max_events: usize,
 }
@@ -63,6 +68,7 @@ impl Default for Limits {
             max_source_bytes: 64 * 1024,
             max_frame_bytes: 256 * 1024,
             max_output_bytes: 2 * 1024 * 1024,
+            max_result_bytes: 64 * 1024,
             max_events: 1024,
         }
     }
@@ -79,6 +85,8 @@ impl Limits {
             || !(1024..=1024 * 1024).contains(&self.max_frame_bytes)
             || self.max_output_bytes < self.max_frame_bytes
             || self.max_output_bytes > 16 * 1024 * 1024
+            || self.max_result_bytes < 512
+            || self.max_result_bytes + RESULT_FRAME_OVERHEAD > self.max_frame_bytes
             || !(2..=65536).contains(&self.max_events)
         {
             return Err(AdmissionError::InvalidLimits);

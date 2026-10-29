@@ -25,6 +25,24 @@ handle loads its detail by listing the caller's calendars and matching on id.
 
 ## Methods
 
+### setContributesToAvailability()
+
+> **setContributesToAvailability**(`contributesToAvailability`): `Promise`\<`void`\>
+
+Set whether this calendar contributes to the caller's availability.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `contributesToAvailability` | `boolean` |
+
+#### Returns
+
+`Promise`\<`void`\>
+
+***
+
 ### toJSON()
 
 > **toJSON**(): \{ `detail?`: [`VisibleCalendar`](../../../../../generated/calendar/types.gen/type-aliases/VisibleCalendar.md); `id`: `string`; \}

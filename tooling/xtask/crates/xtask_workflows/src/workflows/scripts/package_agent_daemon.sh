@@ -6,7 +6,11 @@ set -euo pipefail
 # exactly the failure this whole pipeline exists to prevent, so it is checked
 # here rather than assumed.
 
-binary="target/$TARGET/release/macrod"
+case "$TARGET" in
+  *-windows-*) executable="macrod.exe" ;;
+  *) executable="macrod" ;;
+esac
+binary="target/$TARGET/release/$executable"
 if [ ! -x "$binary" ]; then
   echo "no daemon binary at $binary" >&2
   exit 1
@@ -35,6 +39,19 @@ case "$TARGET" in
       exit 1
     fi
     ;;
+  *-windows-msvc)
+    # Every DLL must come from Windows itself. Git Bash's ldd resolves the
+    # imports; one found outside C:\Windows (a vcruntime, a build-tool DLL)
+    # will not be on a user's machine.
+    imports=$(ldd "$binary")
+    strays=$(printf '%s\n' "$imports" | awk '$2 == "=>" { print $3 }' \
+      | grep -Eiv '^(/c/windows/|\?\?\?$)' || true)
+    if [ -n "$strays" ]; then
+      echo "daemon links DLLs that will not exist on a user's PC:" >&2
+      echo "$strays" >&2
+      exit 1
+    fi
+    ;;
   *)
     echo "no self-containment check defined for $TARGET" >&2
     exit 1
@@ -52,20 +69,34 @@ else
 fi
 
 mkdir -p artifacts
-name="macrod-${SAFE_TAG}-${SLUG}"
 stage=$(mktemp -d)
-install -m 755 "$binary" "$stage/macrod"
-tar -czf "artifacts/${name}.tar.gz" -C "$stage" macrod
+install -m 755 "$binary" "$stage/$executable"
+
+# Every archive is published twice: under the tag, and under a name without
+# it, which `releases/latest/download/<name>` serves — the URL the install
+# scripts download from.
+for name in "macrod-${SAFE_TAG}-${SLUG}" "macrod-${SLUG}"; do
+  case "$TARGET" in
+    *-windows-*)
+      archive="${name}.zip"
+      powershell.exe -NoProfile -NonInteractive -Command \
+        "Compress-Archive -Path '$(cygpath -w "$stage/$executable")' -DestinationPath '$(cygpath -w "artifacts/$archive")'"
+      ;;
+    *)
+      archive="${name}.tar.gz"
+      tar -czf "artifacts/$archive" -C "$stage" "$executable"
+      ;;
+  esac
+
+  # coreutils on Linux and Git Bash, BSD/perl on macOS.
+  (
+    cd artifacts
+    if command -v sha256sum >/dev/null 2>&1; then
+      sha256sum "$archive" >"$archive.sha256"
+    else
+      shasum -a 256 "$archive" >"$archive.sha256"
+    fi
+  )
+  echo "packaged $archive"
+done
 rm -rf "$stage"
-
-# coreutils on Linux, BSD/perl on macOS.
-(
-  cd artifacts
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "${name}.tar.gz" >"${name}.tar.gz.sha256"
-  else
-    shasum -a 256 "${name}.tar.gz" >"${name}.tar.gz.sha256"
-  fi
-)
-
-echo "packaged ${name}.tar.gz"

@@ -1,23 +1,25 @@
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowRight from '@phosphor/arrow-right.svg';
-import CaretCircleDown from '@phosphor/caret-circle-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import ChartBar from '@phosphor/chart-bar.svg';
-import CheckSquare from '@phosphor/check-square.svg';
-import Clipboard from '@phosphor/clipboard-text.svg';
-import Crosshair from '@phosphor/crosshair.svg';
-import Download from '@phosphor/download-simple.svg';
-import Eraser from '@phosphor/eraser.svg';
-import Eye from '@phosphor/eye.svg';
-import FileCsv from '@phosphor/file-csv.svg';
-import FileXls from '@phosphor/file-xls.svg';
-import ImageIcon from '@phosphor/image.svg';
-import Selection from '@phosphor/selection.svg';
-import Sliders from '@phosphor/sliders-horizontal.svg';
-import SortAscending from '@phosphor/sort-ascending.svg';
-import SortDescending from '@phosphor/sort-descending.svg';
-import TextAlignLeft from '@phosphor/text-align-left.svg';
-import Upload from '@phosphor/upload-simple.svg';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
+import CaretCircleDown from '@icon/system/regular/caret-circle-down.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import ChartBar from '@icon/system/regular/chart-bar.svg';
+import CheckSquare from '@icon/system/regular/check-square.svg';
+import Clipboard from '@icon/system/regular/clipboard-text.svg';
+import Crosshair from '@icon/system/regular/crosshair.svg';
+import Download from '@icon/system/regular/download-simple.svg';
+import Eraser from '@icon/system/regular/eraser.svg';
+import Eye from '@icon/system/regular/eye.svg';
+import FileCsv from '@icon/system/regular/file-csv.svg';
+import FileXls from '@icon/system/regular/file-xls.svg';
+import ImageIcon from '@icon/system/regular/image.svg';
+import Selection from '@icon/system/regular/selection.svg';
+import Sliders from '@icon/system/regular/sliders-horizontal.svg';
+import SortAscending from '@icon/system/regular/sort-ascending.svg';
+import SortDescending from '@icon/system/regular/sort-descending.svg';
+import Table from '@icon/system/regular/table.svg';
+import TextAlignLeft from '@icon/system/regular/text-align-left.svg';
+import Upload from '@icon/system/regular/upload-simple.svg';
+import { Button } from '@ui/components/Button';
 import { Dropdown } from '@ui/components/Dropdown';
 import { For, type JSX, type ParentProps, Show } from 'solid-js';
 import { CHART_TYPES } from '../core/chart-builder';
@@ -39,9 +41,10 @@ function ActionMenu(
   return (
     <Dropdown placement={props.placement ?? 'bottom-start'} modal={false}>
       <Dropdown.Trigger
+        aria-label={props.label}
+        tooltip={props.label}
         size="icon-sm"
         variant="ghost"
-        label={props.label}
         disabled={props.disabled}
         class="h-7 w-7 min-h-7 min-w-7 shrink-0 p-1 text-ink-muted touch:h-[44px] touch:w-[44px] touch:min-h-[44px] touch:min-w-[44px]"
       >
@@ -248,6 +251,14 @@ export function DataFormatMenu(props: SpreadsheetToolbarProps) {
         <Dropdown.Item
           closeOnSelect
           disabled={props.readonly}
+          onSelect={() => props.onCommand('table')}
+        >
+          <Table class="size-4" />
+          {props.inTable ? 'Table options' : 'Convert to table'}
+        </Dropdown.Item>
+        <Dropdown.Item
+          closeOnSelect
+          disabled={props.readonly}
           onSelect={() => props.onCommand('goal-seek')}
         >
           <Crosshair class="size-4" />
@@ -293,6 +304,25 @@ export function DataFormatMenu(props: SpreadsheetToolbarProps) {
   );
 }
 
+export function SpreadsheetImportButton(props: {
+  disabled?: boolean;
+  onCommand: (command: SpreadsheetCommand) => void;
+}) {
+  return (
+    <Button
+      aria-label="Import"
+      tooltip="Import"
+      size="icon-sm"
+      variant="ghost"
+      disabled={props.disabled}
+      class="h-7 w-7 min-h-7 min-w-7 shrink-0 p-1 text-ink-muted touch:h-[44px] touch:w-[44px] touch:min-h-[44px] touch:min-w-[44px]"
+      onClick={() => props.onCommand('import')}
+    >
+      <Upload class="size-[18px]" />
+    </Button>
+  );
+}
+
 export function SpreadsheetFileMenu(props: {
   readonly: boolean;
   canExport: boolean;
@@ -301,21 +331,11 @@ export function SpreadsheetFileMenu(props: {
 }) {
   return (
     <ActionMenu
-      label="Import and export"
+      label="Download"
       icon={<Download class="size-[18px]" />}
       placement="top-end"
       onRestoreFocus={props.onRestoreFocus}
     >
-      <Dropdown.Group>
-        <Dropdown.Item
-          closeOnSelect
-          disabled={props.readonly}
-          onSelect={() => props.onCommand('import')}
-        >
-          <Upload class="size-4" />
-          Import…
-        </Dropdown.Item>
-      </Dropdown.Group>
       <Dropdown.Group>
         <Dropdown.Item
           closeOnSelect

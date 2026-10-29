@@ -23,6 +23,7 @@ import {
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import deepEqual from 'fast-deep-equal';
 import {
@@ -71,7 +72,10 @@ export type HomeViewContext = {
   calendarOpen: Accessor<boolean>;
   /** Bumped when the open calendar event is requested again, to re-aim in place. */
   calendarRefocus: Accessor<number>;
-  openPreview: (entity: PreviewSelection) => boolean;
+  openPreview: (
+    entity: PreviewSelection,
+    options?: { activate?: boolean }
+  ) => boolean;
   closePreview: () => void;
   setTab: (tab: HomeTab) => void;
   setFacets: (facets: FacetSelection) => void;
@@ -160,19 +164,31 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
               params: { documentType: blockType, documentId: previewId },
             }
           : { route: homePreviewRoute, params };
-    navigate(target, { replace, search: withTab(search) });
+    fireAndForget(
+      navigate(target, { replace, search: withTab(search) }),
+      'home-view'
+    );
   };
   const navigateTarget = (target: PreviewBlockTarget, replace = false) =>
     navigateDetail(homePreviewTargetNavigation(target), replace);
-  const closePreview = () =>
-    navigate(
-      { route: homeSplitRoute, params: {} },
-      { search: withTab(homeDetailSearch()) }
+  const closePreview = () => {
+    fireAndForget(
+      navigate(
+        { route: homeSplitRoute, params: {} },
+        { search: withTab(homeDetailSearch()) }
+      ),
+      'home-view'
     );
+  };
   const [previewNavigationRequest, setPreviewNavigationRequest] =
     createSignal(0);
-  const openPreview = (entity: PreviewSelection) => {
-    if (entity.type === 'calendar_event') return openCalendarEvent(entity);
+  const openPreview = (
+    entity: PreviewSelection,
+    options?: { activate?: boolean }
+  ) => {
+    if (entity.type === 'calendar_event') {
+      return openCalendarEvent(entity, options);
+    }
     return openPreviewTarget(previewBlockTarget(entity));
   };
   const openPreviewTarget = (target: PreviewBlockTarget) => {
@@ -197,9 +213,12 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
       if (selectPreview(target)) return;
       if (previous) navigateTarget(previous, true);
       else
-        navigate(
-          { route: homeSplitRoute, params: {} },
-          { replace: true, search: withTab(homeDetailSearch()) }
+        fireAndForget(
+          navigate(
+            { route: homeSplitRoute, params: {} },
+            { replace: true, search: withTab(homeDetailSearch()) }
+          ),
+          'home-view'
         );
     })
   );

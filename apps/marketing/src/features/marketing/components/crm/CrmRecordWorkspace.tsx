@@ -1,5 +1,7 @@
-import { Match, Switch } from 'solid-js';
+import { type JSX, Match, Switch } from 'solid-js';
+import type { WorkspaceView } from '../../core/dummy-workspace';
 import type { DummyWorkspace } from '../../primitives/createDummyWorkspace';
+import type { ChannelComposerHandle } from '../email/frozen/ChannelComposer';
 import {
   type CompanySection,
   WorkspaceCompanies,
@@ -16,6 +18,13 @@ import '../workspace/dummy-workspace.css';
 export function CrmRecordWorkspace(props: {
   workspace: DummyWorkspace;
   initialPanelOpen?: boolean;
+  pipeline?: JSX.Element;
+  hideCopyLink?: boolean;
+  onComposerReady?: (handle: ChannelComposerHandle | undefined) => void;
+  richComposer?: boolean;
+  onOpenItem?: (view: WorkspaceView, id: string) => void;
+  onOpenCall?: (id: string) => void;
+  onOpenTask?: (id: string) => void;
   section?: CompanySection;
   onSectionChange?: (section: CompanySection) => void;
 }) {
@@ -24,8 +33,15 @@ export function CrmRecordWorkspace(props: {
     <Switch
       fallback={
         <WorkspaceCompanies
+          onComposerReady={props.onComposerReady}
+          richComposer={props.richComposer}
           workspace={w}
+          onOpenItem={props.onOpenItem}
+          onOpenCall={props.onOpenCall}
+          onOpenTask={props.onOpenTask}
+          hideCopyLink={props.hideCopyLink}
           initialPanelOpen={props.initialPanelOpen}
+          pipeline={() => props.pipeline}
           section={props.section}
           onSectionChange={props.onSectionChange}
         />

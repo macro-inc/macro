@@ -220,6 +220,17 @@ export type CalendarEventSearchResult = {
 };
 
 /**
+ * Which calendar events a unified search covers.
+ *
+ * Sharing an event with a channel lets its members see the sharer's copy,
+ * which is on none of their own calendars, so the default scope never finds
+ * it. Shared events are a separate scope rather than part of the default, so
+ * a caller can list them after the caller's own events without reordering
+ * those.
+ */
+export type CalendarEventSearchScope = 'own' | 'shared_with_you';
+
+/**
  * Timed or all-day span of a calendar event.
  *
  * Deliberately a local mirror of `models_soup::calendar_event::SoupCalendarEventTime`
@@ -858,7 +869,16 @@ export type CrmCompanySearchResponseItem = {
 /**
  * Data type for property values, determining storage and validation.
  */
-export type DataType = 'BOOLEAN' | 'DATE' | 'NUMBER' | 'STRING' | 'SELECT_NUMBER' | 'SELECT_STRING' | 'TAG' | 'ENTITY' | 'LINK';
+export type DataType = 'BOOLEAN' | 'DATE' | 'DATE_RANGE' | 'NUMBER' | 'STRING' | 'SELECT_NUMBER' | 'SELECT_STRING' | 'TAG' | 'ENTITY' | 'LINK';
+
+/**
+ * A span of time from `start` to `end`, both included. The end is never
+ * before the start: a range that would end earlier does not deserialize.
+ */
+export type DateRange = {
+    end: string;
+    start: string;
+};
 
 /**
  * The document filters used to filter down what documents you search over.
@@ -1712,6 +1732,13 @@ export type PropertyValue = {
      */
     value: string;
 } | {
+    type: 'DateRange';
+    /**
+     * Date range value
+     * Serializes as: {"type": "DateRange", "value": {"start": "2025-01-01T00:00:00Z", "end": "2025-01-31T00:00:00Z"}}
+     */
+    value: DateRange;
+} | {
     type: 'SelectOption';
     /**
      * Select option(s) - always an array (check is_multi_select to determine if single or multi)
@@ -2422,6 +2449,13 @@ export type TaskFilters = {
 };
 
 export type UnifiedSearchRequest = {
+    /**
+     * Which calendar events to search. Defaults to `own`: events on the
+     * caller's own and delegated calendars. `shared_with_you` searches only
+     * events shared with a channel the caller belongs to that are on none of
+     * their calendars.
+     */
+    calendar_event_scope?: CalendarEventSearchScope;
     collapse?: boolean | null;
     /**
      * Entity filters in the same shape as soup. Entity types with a NIL UUID in their primary ID field are excluded from search.

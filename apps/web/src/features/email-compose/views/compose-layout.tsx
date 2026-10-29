@@ -15,6 +15,7 @@ import { Dynamic } from 'solid-js/web';
 import { FromInboxSelector } from '../components/from-inbox-selector';
 import { useCompose } from '../context/compose-context';
 import { registerCcBccHotkeys } from '../primitives/cc-bcc-hotkeys';
+import { registerDraftActionHotkeys } from '../primitives/draft-action-hotkeys';
 import { ComposeBody } from './compose-body';
 import { ComposeRecipients } from './compose-recipients';
 import { ComposeSubject } from './compose-subject';
@@ -134,6 +135,13 @@ export function ComposeLayout(props: {
     shouldReturnFocusOnClose: false,
   });
 
+  registerDraftActionHotkeys({
+    scopeId: composeHotkeyScope,
+    disabled: ctx.disabled,
+    discard: () => ctx.onDelete?.(),
+    attach: ctx.hideAttachments ? undefined : ctx.onAddAttachments,
+  });
+
   registerHotkey({
     hotkey: 'cmd+enter',
     scopeId: composeHotkeyScope,
@@ -250,6 +258,7 @@ export function ComposeLayout(props: {
               <div class="flex shrink-0 items-center">
                 <Show when={!isCcVisible()}>
                   <Button
+                    variant="ghost"
                     size="sm"
                     onClick={() => setShowCc(true)}
                     disabled={ctx.disabled()}
@@ -259,6 +268,7 @@ export function ComposeLayout(props: {
                 </Show>
                 <Show when={!isBccVisible()}>
                   <Button
+                    variant="ghost"
                     size="sm"
                     onClick={() => setShowBcc(true)}
                     disabled={ctx.disabled()}
@@ -281,11 +291,7 @@ export function ComposeLayout(props: {
           debugName={props.bodyDebugName}
           inputRef={registerRef('messageInput')}
           mobileScrollRef={() => mobileScrollRef}
-          onAddFiles={(files) => {
-            ctx.onAddAttachments(
-              files.map((file) => ({ type: 'local', file }))
-            );
-          }}
+          onAddFiles={ctx.onAddAttachments}
         />
         {props.toolbar}
       </div>

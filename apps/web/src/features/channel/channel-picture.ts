@@ -1,5 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { createStaticFile } from '@core/util/create';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { openFilePicker } from '@core/util/upload';
 import {
   useChannelPicture,
@@ -58,7 +59,8 @@ export function useChannelPictureEditor() {
   return {
     isPending: () => mutation.isPending,
     pickFile,
-    remove: (channelId: string) => void save(channelId, null),
+    remove: (channelId: string) =>
+      fireAndForget(save(channelId, null), 'channel-picture'),
   };
 }
 

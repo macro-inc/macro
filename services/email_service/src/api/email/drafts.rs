@@ -1,9 +1,12 @@
 pub(crate) mod add_attachment;
 pub(crate) mod add_forwarded_attachment;
+pub(crate) mod attachment_error;
+pub(crate) mod complete_attachment;
 pub(crate) mod delete;
 pub(crate) mod remove_attachment;
 pub(crate) mod remove_forwarded_attachment;
 pub(crate) mod scheduled;
+pub(crate) mod transfer;
 
 use crate::api::ApiContext;
 use axum::Router;
@@ -20,6 +23,11 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .nest("/scheduled", scheduled::router())
         .route("/{id}", delete(delete::handler))
         .route("/{id}/attachments", post(add_attachment::handler))
+        .route("/{id}/transfer", post(transfer::handler))
+        .route(
+            "/{id}/attachments/{attachment_id}/complete",
+            post(complete_attachment::handler),
+        )
         .route(
             "/{id}/attachments/{attachment_id}",
             delete(remove_attachment::handler),

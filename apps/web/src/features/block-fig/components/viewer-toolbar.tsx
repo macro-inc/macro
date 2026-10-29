@@ -1,17 +1,17 @@
 /** Figma's compact, grouped drawing tools in a single floating strip. */
-import ArrowUpRight from '@phosphor/arrow-up-right.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import Circle from '@phosphor/circle.svg';
-import Code from '@phosphor/code.svg';
-import Hand from '@phosphor/hand.svg';
-import Hash from '@phosphor/hash.svg';
-import LineSegment from '@phosphor/line-segment.svg';
-import NavigationArrow from '@phosphor/navigation-arrow.svg';
-import PenNib from '@phosphor/pen-nib.svg';
-import PencilSimple from '@phosphor/pencil-simple.svg';
-import Shapes from '@phosphor/shapes.svg';
-import Square from '@phosphor/square.svg';
-import TextT from '@phosphor/text-t.svg';
+import ArrowUpRight from '@icon/system/regular/arrow-up-right.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Circle from '@icon/system/regular/circle.svg';
+import Code from '@icon/system/regular/code.svg';
+import Hand from '@icon/system/regular/hand.svg';
+import Hash from '@icon/system/regular/hash.svg';
+import LineSegment from '@icon/system/regular/line-segment.svg';
+import NavigationArrow from '@icon/system/regular/navigation-arrow.svg';
+import PenNib from '@icon/system/regular/pen-nib.svg';
+import PencilSimple from '@icon/system/regular/pencil-simple.svg';
+import Shapes from '@icon/system/regular/shapes.svg';
+import Square from '@icon/system/regular/square.svg';
+import TextT from '@icon/system/regular/text-t.svg';
 import { createMemo, For, type JSX, Show } from 'solid-js';
 import type { Tool } from '../primitives/create-fig-viewer';
 import { EditorMenu } from './editor-menu';
@@ -121,7 +121,7 @@ export function ViewerToolbar(props: {
 }) {
   return (
     <div
-      class="-translate-x-1/2 absolute bottom-4 left-1/2 z-10 flex w-max max-w-[calc(100%-1rem)] items-center gap-1 rounded-2xl border border-edge-muted bg-menu p-2 shadow-lg"
+      class="menu-surface -translate-x-1/2 absolute bottom-4 left-1/2 z-10 flex w-max max-w-[calc(100%-1rem)] items-center gap-1 rounded-2xl p-2"
       data-testid="fig-toolbar"
       aria-label="Drawing tools"
       role="toolbar"

@@ -35,6 +35,15 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         })
     }
 
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
+
     async fn authorize_internal(
         &self,
         _provided_key: &str,
@@ -79,7 +88,7 @@ fn collection() -> Vec<Favorite> {
 impl FavoritesService for FakeFavoritesService {
     async fn add_favorite(
         &self,
-        _receipt: &entity_access::domain::models::EntityAccessReceipt<ViewAccessLevel>,
+        _receipt: &entity_access::domain::models::EntityAccessReceipt<FavoriteView>,
     ) -> Result<Favorite, FavoritesError> {
         unimplemented!("the list boundary does not add favorites")
     }

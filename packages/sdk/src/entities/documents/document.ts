@@ -6,6 +6,9 @@ import type {
   GithubPullRequest,
   MessageCursor,
   MessageListItem,
+  PdfHighlightAnchorRequest,
+  PreSaveDocumentRequest,
+  SaveDocumentRequest,
   ThreadState,
 } from '../../../generated/storage/types.gen';
 import {
@@ -17,11 +20,20 @@ import {
 } from '../../mentions';
 import { MacroApiError, mapConcurrently, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { CalendarNote } from '../calendar/note';
 import { PropertiedEntity } from '../entity';
+import {
+  MessageThread,
+  type TimelineOptions,
+  timeline,
+} from '../messages/thread';
 import { Project } from '../projects/project';
 import { entitySearch } from '../search';
+import { EntityAccess } from '../sharing/access';
 import { User } from '../users/user';
+import { DocumentAnchor } from './anchor';
 import { Comment } from './comment';
+import { DocumentVersion } from './version';
 
 type DocumentDetail = GetDocumentResponses[200]['data']['documentMetadata'];
 
@@ -44,6 +56,121 @@ export class Document
   extends PropertiedEntity<DocumentDetail>
   implements Mentionable
 {
+  /** Meeting links visible to the reader. Owners also receive unavailable grants and may unlink them to revoke meeting/team access. */
+  async meetingNotes(): Promise<
+    Array<{ note: CalendarNote; eventTitle: string }>
+  > {
+    const links = unwrap(
+      await this.client.calendar.documentNoteLinks({
+        path: { document_id: this.id },
+      }),
+    );
+    return links.map((link) => ({
+      note: CalendarNote.fromDocumentLink(this.client, this, link),
+      eventTitle: link.eventTitle,
+    }));
+  }
+  /** PDF annotations in this document. */
+  async anchors(): Promise<DocumentAnchor[]> {
+    return unwrap(
+      await this.client.storage.getDocumentAnchors({
+        path: { document_id: this.id },
+      }),
+    ).data.map((a) => DocumentAnchor.from(this.client, this, a));
+  }
+
+  /** Create a standalone PDF highlight. */
+  async createHighlight(
+    options: Omit<PdfHighlightAnchorRequest, 'uuid'>,
+  ): Promise<DocumentAnchor> {
+    return DocumentAnchor.from(
+      this.client,
+      this,
+      unwrap(
+        await this.client.storage.createAnchor({
+          path: { document_id: this.id },
+          body: { ...options, fileType: 'pdf', anchorType: 'highlight' },
+        }),
+      ),
+    );
+  }
+
+  /** A handle to an immutable version. */
+  version(version: number): DocumentVersion {
+    return DocumentVersion.byId(this.client, this, version);
+  }
+
+  /** Sharing configuration. */
+  async sharePermissions() {
+    return unwrap(
+      await this.client.storage.getDocumentPermissionsV2({
+        path: { document_id: this.id },
+      }),
+    ).documentPermissions;
+  }
+
+  /** Mint a scoped permissions token. */
+  async permissionsToken(): Promise<string> {
+    return unwrap(
+      await this.client.storage.getDocumentPermissionsToken({
+        path: { document_id: this.id },
+      }),
+    ).token;
+  }
+
+  /** Prepare multipart content saving and return the service's upload instructions. */
+  async prepareSave(parts: PreSaveDocumentRequest['newBom']) {
+    return unwrap(
+      await this.client.storage.presaveDocumentHandler({
+        path: { document_id: this.id },
+        body: { newBom: parts },
+      }),
+    ).data;
+  }
+
+  /** Commit uploaded content. Does not retry uncertain writes. */
+  async save(options: SaveDocumentRequest) {
+    return (
+      await this.mutate((c) =>
+        c.storage.saveDocumentHandler({
+          path: { document_id: this.id },
+          body: options,
+        }),
+      )
+    ).data;
+  }
+
+  /** Commit a simple document save. */
+  async simpleSave() {
+    return (
+      await this.mutate((c) =>
+        c.storage.simpleSave({ path: { document_id: this.id } }),
+      )
+    ).data;
+  }
+
+  /** A shared message thread scoped to this resource. */
+  messageThreadById(id: string): MessageThread {
+    return MessageThread.byId(
+      this.client,
+      { type: 'document', entity: this },
+      id,
+    );
+  }
+
+  /** A mixed message and activity timeline page. */
+  timelinePage(selection?: TimelineOptions<Comment>) {
+    return timeline(
+      this.client,
+      { type: 'document', entity: this },
+      (record) => Comment.from(this.client, this.id, record),
+      selection,
+    );
+  }
+
+  /** Access requests and direct user grants. */
+  readonly access = new EntityAccess(this.client, 'document', this);
+
   protected async fetch(): Promise<DocumentDetail> {
     const { data } = unwrap(
       await this.client.storage.getDocument({

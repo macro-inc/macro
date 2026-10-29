@@ -1,4 +1,4 @@
-import { TabsInset } from '@core/component/TabsInset';
+import { Tabs } from '@ui';
 import type { CodeBlockMode } from './CodeContent';
 
 export function CodeModeControl(props: {
@@ -6,15 +6,16 @@ export function CodeModeControl(props: {
   onModeChange: (mode: CodeBlockMode) => void;
 }) {
   return (
-    <TabsInset
+    <Tabs
       aria-label="HTML views"
-      class="shrink-0 whitespace-nowrap"
-      list={[
+      touch="inset"
+      class="shrink-0"
+      options={[
         { value: 'render', label: 'Render' },
         { value: 'code', label: 'Code' },
       ]}
       value={props.mode}
-      onChange={(value) => props.onModeChange(value as CodeBlockMode)}
+      onChange={props.onModeChange}
     />
   );
 }

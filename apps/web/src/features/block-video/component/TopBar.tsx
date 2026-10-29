@@ -1,3 +1,4 @@
+import { FileDownloadHeader } from '@components/app/FileDownloadHeader';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import {
   ResponsiveBlockToolbar,
@@ -6,9 +7,7 @@ import {
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
-
 import { useBlockId } from '@core/block';
-import { toast } from '@core/component/Toast/Toast';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
@@ -16,16 +15,15 @@ import {
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
+import { createFileDownload } from '@core/util/createFileDownload';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
-import { downloadFile } from '@filesystem/download';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { catchToResult } from '@core/util/result';
 import IconShared from '@icon/share.svg';
-import Download from '@phosphor/download.svg';
-import Spinner from '@phosphor/spinner.svg';
-import { createCallback } from '@solid-primitives/rootless';
-import { createSignal } from 'solid-js';
+import Download from '@icon/system/regular/download.svg';
 import { useGetFileBlob } from '../signal/blockData';
 
 export function TopBar() {
@@ -44,31 +42,14 @@ export function TopBar() {
     owner: blockMetadataSignal()?.owner,
   }));
 
-  const downloadDocument = createCallback(async () => {
-    const fileName = downloadName();
-    const [progress, setProgress] = createSignal({ loaded: 0, total: 0 });
-
-    const toastId = toast.custom(
-      {
-        title: `Downloading ${fileName}`,
-        icon: () => <Spinner class="text-accent size-5 animate-spin" />,
-        color: 'var(--color-accent)',
-        content: () => <DownloadProgressBar progress={progress()} />,
-      },
-      { persistent: true }
-    );
-
-    try {
-      const blob = await getBlob({ onProgress: setProgress });
-      toast.dismiss(toastId);
-      const { saved } = await downloadFile(blob, fileName);
-      if (saved) toast.success(`Downloaded ${fileName}`);
-    } catch (e) {
-      toast.dismiss(toastId);
-      console.error('error downloading file', e);
-      toast.failure('Error downloading file');
-    }
-  });
+  const download = createFileDownload(() => ({
+    id: `${blockId}:${blockMetadataSignal()?.documentVersionId}`,
+    name: downloadName(),
+    load: (options) =>
+      catchToResult(async () => ({ blob: await getBlob(options) })),
+  }));
+  const downloadDocument = () =>
+    fireAndForget(download.start(), 'video-download');
 
   const ops: FileOperation[] = [
     { op: 'rename' },
@@ -96,6 +77,7 @@ export function TopBar() {
 
   return (
     <>
+      <FileDownloadHeader download={download} />
       <SplitHeaderLeft>
         <BlockItemSplitLabel />
       </SplitHeaderLeft>
@@ -110,48 +92,5 @@ export function TopBar() {
         name={name()}
       />
     </>
-  );
-}
-
-const SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
-
-function formatBytes(bytes: number): string {
-  if (bytes <= 0) return '0 B';
-  const exp = Math.min(
-    Math.floor(Math.log(bytes) / Math.log(1024)),
-    SIZE_UNITS.length - 1
-  );
-  const value = bytes / 1024 ** exp;
-  const decimals = exp === 0 || value >= 100 ? 0 : value >= 10 ? 1 : 2;
-  return `${value.toFixed(decimals)} ${SIZE_UNITS[exp]}`;
-}
-
-function DownloadProgressBar(props: {
-  progress: { loaded: number; total: number };
-}) {
-  const hasTotal = () => props.progress.total > 0;
-  const percent = () =>
-    hasTotal()
-      ? Math.min(
-          100,
-          Math.round((props.progress.loaded / props.progress.total) * 100)
-        )
-      : 0;
-
-  return (
-    <div class="space-y-1">
-      <div class="h-1 w-full bg-edge rounded-full overflow-hidden">
-        <div
-          class="h-full bg-accent transition-[width] duration-150 ease-linear"
-          classList={{ 'animate-pulse w-full': !hasTotal() }}
-          style={hasTotal() ? { width: `${percent()}%` } : undefined}
-        />
-      </div>
-      <div class="text-xs text-ink-extra-muted">
-        {hasTotal() ? `${percent()}% — ` : ''}
-        {formatBytes(props.progress.loaded)}
-        {hasTotal() ? ` of ${formatBytes(props.progress.total)}` : ''}
-      </div>
-    </div>
   );
 }

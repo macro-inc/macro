@@ -323,3 +323,54 @@ fn configuration_rejects_invalid_urls_and_marks_credentials_sensitive() {
     let client = CodingAgentsClient::new("https://example.com/agent-harness", KEY).unwrap();
     assert!(client.internal_key.is_sensitive());
 }
+
+#[tokio::test]
+async fn session_actions_send_the_verified_user_once_and_keep_uncertain_failures_safe() {
+    use crate::domain::tool_actions::{SessionAction, SessionActionError, SessionActions};
+    let id = Uuid::now_v7();
+    let action_id = Uuid::now_v7();
+    let server = server(vec![
+        Reply::json(200, json!({"actionId":action_id,"status":"queued"})),
+        Reply::json(502, json!({"secret":"provider output"})),
+    ])
+    .await;
+    let client = CodingAgentsClient::new(&format!("{}/agent-harness", server.url), KEY).unwrap();
+    let result = client
+        .execute(
+            MacroUserIdStr::try_from(USER).unwrap(),
+            id,
+            SessionAction::Prompt {
+                prompt: "Continue".into(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(result.action_id, Some(action_id));
+    assert!(matches!(
+        result.status,
+        Some(crate::domain::tool_actions::SessionControlStatus::Queued)
+    ));
+    assert!(matches!(
+        client
+            .execute(
+                MacroUserIdStr::try_from(USER).unwrap(),
+                id,
+                SessionAction::Stop
+            )
+            .await,
+        Err(SessionActionError::Unconfirmed)
+    ));
+    let requests = server.requests.lock().unwrap();
+    assert_eq!(requests.len(), 2);
+    assert!(requests[0].head.contains(&format!(
+        "POST /agent-harness/internal/agent-sessions/{id}/control"
+    )));
+    assert!(requests[0].head.to_lowercase().contains(&format!(
+        "{}: {USER}",
+        macro_authorization::INTERNAL_MACRO_USER_ID_HEADER
+    )));
+    assert_eq!(
+        requests[0].body,
+        json!({"type":"prompt","prompt":"Continue"})
+    );
+}

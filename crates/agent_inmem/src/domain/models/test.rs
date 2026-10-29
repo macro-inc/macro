@@ -1,8 +1,8 @@
-use super::{ROUTED_MODELS, advertised_models, display_name};
+use super::{AUTO_MODEL, ROUTED_MODELS, advertised_models, display_name, resolve};
 use chat::domain::models::CHAT_MODELS;
 
 #[test]
-fn advertised_models_keep_chat_then_append_routed() {
+fn advertised_models_lead_with_auto_then_chat_then_routed() {
     let models = advertised_models();
     assert_eq!(
         models
@@ -11,24 +11,34 @@ fn advertised_models_keep_chat_then_append_routed() {
             .count(),
         1
     );
-    assert_eq!(&models[..CHAT_MODELS.len()], CHAT_MODELS);
+    assert_eq!(models[0], AUTO_MODEL);
+    assert_eq!(&models[1..=CHAT_MODELS.len()], CHAT_MODELS);
     assert_eq!(
-        &models[CHAT_MODELS.len()..],
+        &models[CHAT_MODELS.len() + 1..],
         ROUTED_MODELS
             .iter()
             .map(|(model, _)| *model)
-            .filter(|model| !CHAT_MODELS.contains(model))
+            .filter(|model| *model != AUTO_MODEL && !CHAT_MODELS.contains(model))
             .collect::<Vec<_>>()
             .as_slice()
     );
 }
 
 #[test]
+fn auto_defaults_to_gemini() {
+    assert_eq!(resolve(AUTO_MODEL), "google/gemini-3.8-flash");
+    assert_eq!(resolve("fireworks/glm-5p3"), "fireworks/glm-5p3");
+    assert_eq!(display_name(AUTO_MODEL), "Auto");
+    assert_eq!(super::supports_images(AUTO_MODEL), Some(true));
+    assert_eq!(super::context_window(AUTO_MODEL), Some(1_048_576));
+}
+
+#[test]
 fn routed_models_have_house_names() {
     assert_eq!(display_name("fireworks/kimi-k3"), "Kimi K3");
     assert_eq!(
-        display_name("fireworks/deepseek-v4-pro-0813"),
-        "DeepSeek V4 Pro"
+        display_name("fireworks/deepseek-v4p1-flash-1017"),
+        "DeepSeek V4.1 Flash"
     );
     assert_eq!(display_name("fireworks/muse-glimmer-30b"), "Muse Glimmer");
     assert_eq!(display_name("fireworks/glm-5p3"), "GLM 5.3");
@@ -52,6 +62,7 @@ fn routed_models_have_house_names() {
 #[test]
 fn routed_models_use_known_providers() {
     for (model, _) in ROUTED_MODELS {
+        let model = resolve(model);
         let provider = model.split('/').next().expect("a provider segment");
         assert!(
             matches!(provider, "cerebras" | "fireworks" | "google"),

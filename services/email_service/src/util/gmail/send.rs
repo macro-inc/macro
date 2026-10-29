@@ -1,12 +1,7 @@
-use anyhow::Context;
-use email::domain::forwarded_attachments::ForwardedAttachmentSource;
-use email_api_client::domain::{
-    ports::{MailboxAttachmentClient, ProviderRateLimiter, ProviderTokenSource},
-    service::EmailApiClientServiceImpl,
-};
-use models_email::service::attachment::{AttachmentDraft, AttachmentToSend};
-use models_email::service::link::Link;
-use models_email::service::message;
+/// Frozen attachment metadata and payload preparation for delivery.
+pub mod attachment_snapshot;
+
+use models_email::service::attachment::AttachmentDraft;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -59,146 +54,24 @@ pub async fn generate_email_threading_headers(
     }
 }
 
-/// Fetch any attachments the user previously added to the draft from s3 and attach them to the message
-/// being sent. Return the attachment metadata so we can use it to delete the attachments from s3
-/// after the message is sent.
-#[tracing::instrument(
-    skip(db, s3_client, message_to_send),
-    fields(message_db_id = ?message_to_send.db_id)
-)]
-pub async fn fetch_and_attach_draft_attachments(
-    db: &sqlx::PgPool,
-    s3_client: &s3_client::S3,
-    bucket: &str,
-    link: &Link,
-    message_to_send: &mut message::MessageToSend,
-) -> anyhow::Result<Option<Vec<AttachmentDraft>>> {
-    if let Some(db_id) = message_to_send.db_id {
-        let db_attachments =
-            email_db_client::attachments::draft::fetch_draft_attachments_by_draft_id(
-                db, link.id, db_id,
-            )
-            .await
-            .context("unable to fetch draft attachments from database")?;
-
-        if !db_attachments.is_empty() {
-            let fetch_futures = db_attachments.iter().map(|db_attachment| async move {
-                let attachment_data = s3_client
-                    .get(bucket, &db_attachment.s3_key)
-                    .await
-                    .with_context(|| {
-                        format!(
-                            "Failed to fetch attachment from S3 (key: {})",
-                            db_attachment.s3_key
-                        )
-                    })?;
-
-                Ok::<AttachmentToSend, anyhow::Error>(AttachmentToSend {
-                    file_name: db_attachment.file_name.clone(),
-                    content_type: db_attachment.content_type.clone(),
-                    data: attachment_data,
-                })
-            });
-
-            let attachments_to_send = futures::future::try_join_all(fetch_futures).await?;
-
-            message_to_send.attachments = Some(attachments_to_send);
-            return Ok(Some(db_attachments));
-        }
-    }
-    Ok(None)
-}
-
-/// Fetch forwarded attachments from Gmail and attach them to the message being sent.
-/// Forwarded attachments reference original Gmail attachments, so their data is fetched
-/// from Gmail at send time rather than from S3.
-#[tracing::instrument(
-    skip(email_api, sources, message_to_send),
-    fields(message_db_id = ?message_to_send.db_id, source_count = sources.len()), err
-)]
-pub async fn fetch_and_attach_forwarded_attachments<R, T, L>(
-    email_api: &EmailApiClientServiceImpl<R, T, L>,
-    sources: &[ForwardedAttachmentSource],
-    message_to_send: &mut message::MessageToSend,
-) -> anyhow::Result<()>
-where
-    R: MailboxAttachmentClient,
-    T: ProviderTokenSource,
-    L: ProviderRateLimiter,
-{
-    if sources.is_empty() {
-        return Ok(());
-    }
-
-    let fetch_futures = sources.iter().map(|source| async move {
-        let fwd_att = &source.attachment;
-        let provider_att_id = fwd_att.provider_attachment_id.as_deref().unwrap_or_default();
-
-        let data = email_api
-            .get_attachment(source.source_link_id, &fwd_att.message_provider_id, provider_att_id)
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to fetch forwarded attachment from Gmail (message: {}, attachment: {:?})",
-                    fwd_att.message_provider_id, fwd_att.provider_attachment_id
-                )
-            })?;
-
-        Ok::<AttachmentToSend, anyhow::Error>(AttachmentToSend {
-            file_name: fwd_att.filename.clone().unwrap_or_default(),
-            content_type: fwd_att.mime_type.clone().unwrap_or_else(|| "application/octet-stream".to_string()),
-            data,
-        })
-    });
-
-    let forwarded_to_send = futures::future::try_join_all(fetch_futures).await?;
-
-    match &mut message_to_send.attachments {
-        Some(existing) => existing.extend(forwarded_to_send),
-        None => message_to_send.attachments = Some(forwarded_to_send),
-    }
-
-    Ok(())
-}
-
-#[tracing::instrument(skip(db, s3_client))]
+/// Release upload references; the shared cleanup worker preserves every remaining draft or blob reference.
+#[tracing::instrument(skip_all)]
 pub async fn cleanup_draft_attachments(
     db: sqlx::PgPool,
-    s3_client: &s3_client::S3,
-    bucket: String,
     link_id: Uuid,
     draft_id: Uuid,
     attachments: Vec<AttachmentDraft>,
 ) {
-    for attachment in attachments {
-        // Delete from S3
-        if let Err(e) = s3_client.delete(&bucket, &attachment.s3_key).await {
-            tracing::error!(
-                error = ?e,
-                s3_key = %attachment.s3_key,
-                    "Failed to delete draft attachment from S3 during cleanup; skipping database deletion"
-            );
-            continue;
+    let result: anyhow::Result<()> = async {
+        let mut tx=db.begin().await?;
+        for attachment in attachments {
+            sqlx::query!("INSERT INTO email_draft_object_cleanup(object_key,available_at) VALUES($1,now()+interval '1 day') ON CONFLICT DO NOTHING",attachment.s3_key).execute(&mut *tx).await?;
+            sqlx::query!("DELETE FROM email_attachments_drafts WHERE id=$1 AND draft_id=$2 AND EXISTS(SELECT 1 FROM email_messages WHERE id=$2 AND link_id=$3)",attachment.id,draft_id,link_id).execute(&mut *tx).await?;
         }
-
-        // Delete from DB
-        if let Err(e) = email_db_client::attachments::draft::delete_draft_attachment(
-            &db,
-            link_id,
-            draft_id,
-            attachment.id,
-        )
-        .await
-        {
-            tracing::error!(
-                error = ?e,
-                attachment_id = attachment.id.to_string(),
-                draft_id = draft_id.to_string(),
-                "Failed to delete draft attachment from database during cleanup"
-            );
-        }
+        tx.commit().await?;
+        Ok(())
+    }.await;
+    if let Err(error) = result {
+        tracing::error!(?error, "Failed to release sent draft attachment references");
     }
 }
-
-#[cfg(test)]
-mod test;

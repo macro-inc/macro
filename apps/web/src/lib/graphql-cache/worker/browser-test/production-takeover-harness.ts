@@ -222,17 +222,15 @@ function expectHit(value: unknown, expected: string): void {
   );
 }
 
-void (async () => {
-  try {
-    const result = await run();
-    resultElement.dataset.status = 'passed';
-    resultElement.textContent = JSON.stringify(result, null, 2);
-  } catch (error) {
-    resultElement.dataset.status = 'failed';
-    // Firefox stacks leave out the message.
-    resultElement.textContent =
-      error instanceof Error
-        ? `${error.message}\n${error.stack ?? ''}`
-        : String(error);
-  }
-})();
+try {
+  const result = await run();
+  resultElement.dataset.status = 'passed';
+  resultElement.textContent = JSON.stringify(result, null, 2);
+} catch (error) {
+  resultElement.dataset.status = 'failed';
+  // Firefox stacks leave out the message.
+  resultElement.textContent =
+    error instanceof Error
+      ? `${error.message}\n${error.stack ?? ''}`
+      : String(error);
+}

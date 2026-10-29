@@ -4,7 +4,12 @@ import { useHasPaidAccess } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
 import { enableAiUsageBilling, LOCAL_ONLY } from '@core/constant/featureFlags';
 import { PERMISSION_IDS } from '@core/constant/permissions';
-import { usePermissions, useUserId } from '@core/context/user';
+import {
+  useLicenseStatus,
+  usePermissions,
+  useUserId,
+} from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
 import {
   useAiBillingSummaryQuery,
@@ -46,6 +51,7 @@ function LiveBilling(props: { controls?: JSX.Element }) {
   const permissions = usePermissions();
   const analytics = useAnalytics();
   const hasPaid = useHasPaidAccess();
+  const licenseStatus = useLicenseStatus();
   const userId = useUserId();
   const team = useCurrentTeamQuery();
   const summary = useAiBillingSummaryQuery();
@@ -111,6 +117,7 @@ function LiveBilling(props: { controls?: JSX.Element }) {
         trialEligibility.isSuccess && queryReadyGate(trialEligibility)
           ? trialEligibility.data.eligible
           : undefined,
+      trialing: licenseStatus() === 'trialing',
     });
 
   const handleCheckout = async (plan: PaidPlan) => {
@@ -178,15 +185,22 @@ function LiveBilling(props: { controls?: JSX.Element }) {
           : undefined
       }
       subscriptionStatusFailed={subscriptionStatus.isError}
-      onRefreshStatus={() => void subscriptionStatus.refetch()}
+      onRefreshStatus={() =>
+        fireAndForget(subscriptionStatus.refetch(), 'billing-settings')
+      }
       trialEligibilityFailed={!effectiveHasPaid() && trialEligibility.isError}
-      onRefreshTrialEligibility={() => void trialEligibility.refetch()}
-      onKeepPlan={(plan) => void handleChangePlan(plan)}
-      onManage={() => void handleManage()}
+      onRefreshTrialEligibility={() =>
+        fireAndForget(trialEligibility.refetch(), 'billing-settings')
+      }
+      onKeepPlan={(plan) =>
+        fireAndForget(handleChangePlan(plan), 'billing-settings')
+      }
+      onManage={() => fireAndForget(handleManage(), 'billing-settings')}
       onSelectPlan={(plan) =>
-        void (effectiveHasPaid()
-          ? handleChangePlan(plan)
-          : handleCheckout(plan))
+        fireAndForget(
+          effectiveHasPaid() ? handleChangePlan(plan) : handleCheckout(plan),
+          'billing-settings'
+        )
       }
     />
   );

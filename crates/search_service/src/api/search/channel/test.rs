@@ -928,3 +928,59 @@ fn test_construct_search_result_breaks_created_at_ties_by_message_id() {
         "tied: smaller uuidv7 last"
     );
 }
+
+#[test]
+fn name_hits_split_from_message_hits_and_never_become_message_items() {
+    let channel_id: Uuid = "550e8400-e29b-41d4-a716-446655440000".parse().unwrap();
+    let message_id: Uuid = "11111111-1111-1111-1111-111111111111".parse().unwrap();
+    let name_hit = opensearch_client::search::model::SearchHit {
+        entity_id: channel_id,
+        entity_type: SearchEntityType::Channels,
+        score: None,
+        highlight: Highlight {
+            name: Some("<macro_em>Gab</macro_em>riel Birman".to_string()),
+            ..Default::default()
+        },
+        goto: None,
+        updated_at: Some(Utc::now()),
+    };
+    let message_hit = opensearch_client::search::model::SearchHit {
+        entity_id: channel_id,
+        entity_type: SearchEntityType::Channels,
+        score: None,
+        highlight: Highlight::default(),
+        goto: Some(SearchGotoContent::Channels(
+            opensearch_client::search::model::SearchGotoChannel {
+                channel_message_id: message_id,
+                created_at: DateTime::from_timestamp(1234567890, 0).unwrap(),
+                updated_at: DateTime::from_timestamp(1234567891, 0).unwrap(),
+                thread_id: None,
+                sender_id: "user1".to_string(),
+            },
+        )),
+        updated_at: Some(Utc::now()),
+    };
+    let histories = HashMap::from([(channel_id, create_channel_history(&channel_id.to_string()))]);
+    let message_states = HashMap::from([(message_id, None)]);
+
+    let (message_hits, name_hits) = split_channel_hits(vec![name_hit.clone(), message_hit]);
+    assert_eq!(message_hits.len(), 1);
+    assert_eq!(name_hits.len(), 1);
+    assert!(name_hits[0].goto.is_none());
+
+    let skipped =
+        construct_channel_message_items(vec![name_hit], histories.clone(), message_states.clone());
+    assert!(skipped.is_empty(), "a name hit has no message to build");
+
+    let message_items =
+        construct_channel_message_items(message_hits, histories.clone(), message_states);
+    assert_eq!(message_items.len(), 1);
+    assert_eq!(message_items[0].message_id, message_id);
+
+    let name_items = construct_channel_name_items(name_hits, histories);
+    assert_eq!(name_items.len(), 1);
+    assert_eq!(
+        name_items[0].highlight.name.as_deref(),
+        Some("<macro_em>Gab</macro_em>riel Birman")
+    );
+}

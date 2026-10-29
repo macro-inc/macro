@@ -19,6 +19,7 @@ inline link to the document.
 
 | Property | Modifier | Type | Default value | Description | Overrides | Inherited from |
 | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
+| <a id="property-access"></a> `access` | `readonly` | [`EntityAccess`](../../../sharing/access/classes/EntityAccess.md) | `...` | Access requests and direct user grants. | - | - |
 | <a id="property-branchedfrom"></a> `branchedFrom` | `readonly` | () => `Promise`\<`Document` \| `undefined`\> | `...` | The document this one was branched from, if any. | - | - |
 | <a id="property-createdat"></a> `createdAt` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | `...` | When the document was created. | - | - |
 | <a id="property-deletedat"></a> `deletedAt` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | `...` | When the document was deleted, if it has been. | - | - |
@@ -32,6 +33,18 @@ inline link to the document.
 | <a id="property-search"></a> `search` | `static` | (`client`, `query`, `searchOpts?`) => `AsyncGenerator`\<`Document`\> | `...` | Search documents by name and content, most relevant first, auto-paginated. | - | - |
 
 ## Methods
+
+### anchors()
+
+> **anchors**(): `Promise`\<[`DocumentAnchor`](../../anchor/classes/DocumentAnchor.md)[]\>
+
+PDF annotations in this document.
+
+#### Returns
+
+`Promise`\<[`DocumentAnchor`](../../anchor/classes/DocumentAnchor.md)[]\>
+
+***
 
 ### branchName()
 
@@ -114,6 +127,24 @@ Returns a handle to the new document.
 
 ***
 
+### createHighlight()
+
+> **createHighlight**(`options`): `Promise`\<[`DocumentAnchor`](../../anchor/classes/DocumentAnchor.md)\>
+
+Create a standalone PDF highlight.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `options` | `Omit`\<[`PdfHighlightAnchorRequest`](../../../../../generated/storage/types.gen/type-aliases/PdfHighlightAnchorRequest.md), `"uuid"`\> |
+
+#### Returns
+
+`Promise`\<[`DocumentAnchor`](../../anchor/classes/DocumentAnchor.md)\>
+
+***
+
 ### delete()
 
 > **delete**(`opts?`): `Promise`\<`void`\>
@@ -186,6 +217,36 @@ GitHub pull requests associated with the document.
 
 ***
 
+### meetingNotes()
+
+> **meetingNotes**(): `Promise`\<\{ `eventTitle`: `string`; `note`: [`CalendarNote`](../../../calendar/note/classes/CalendarNote.md); \}[]\>
+
+Meeting links visible to the reader. Owners also receive unavailable grants and may unlink them to revoke meeting/team access.
+
+#### Returns
+
+`Promise`\<\{ `eventTitle`: `string`; `note`: [`CalendarNote`](../../../calendar/note/classes/CalendarNote.md); \}[]\>
+
+***
+
+### messageThreadById()
+
+> **messageThreadById**(`id`): [`MessageThread`](../../../messages/thread/classes/MessageThread.md)
+
+A shared message thread scoped to this resource.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `id` | `string` |
+
+#### Returns
+
+[`MessageThread`](../../../messages/thread/classes/MessageThread.md)
+
+***
+
 ### move()
 
 > **move**(`project`): `Promise`\<`void`\>
@@ -201,6 +262,52 @@ Move the document into a project (or out of one, with `null`).
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### permission()
+
+> **permission**(): `Promise`\<\{ `permission`: [`EntityPermission`](../../../../../generated/storage/types.gen/type-aliases/EntityPermission.md); `status`: `"access"`; \} \| \{ `status`: `"no_access"`; \}\>
+
+Read the caller's effective permission on this entity.
+
+#### Returns
+
+`Promise`\<\{ `permission`: [`EntityPermission`](../../../../../generated/storage/types.gen/type-aliases/EntityPermission.md); `status`: `"access"`; \} \| \{ `status`: `"no_access"`; \}\>
+
+#### Inherited from
+
+[`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`permission`](../../../entity/classes/PropertiedEntity.md#permission)
+
+***
+
+### permissionsToken()
+
+> **permissionsToken**(): `Promise`\<`string`\>
+
+Mint a scoped permissions token.
+
+#### Returns
+
+`Promise`\<`string`\>
+
+***
+
+### prepareSave()
+
+> **prepareSave**(`parts`): `Promise`\<[`PreSaveDocumentResponseData`](../../../../../generated/storage/types.gen/type-aliases/PreSaveDocumentResponseData.md)\>
+
+Prepare multipart content saving and return the service's upload instructions.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `parts` | [`SaveBomPart`](../../../../../generated/storage/types.gen/type-aliases/SaveBomPart.md)[] |
+
+#### Returns
+
+`Promise`\<[`PreSaveDocumentResponseData`](../../../../../generated/storage/types.gen/type-aliases/PreSaveDocumentResponseData.md)\>
 
 ***
 
@@ -273,6 +380,24 @@ Restore a soft-deleted document.
 
 ***
 
+### save()
+
+> **save**(`options`): `Promise`\<[`SaveDocumentResponseData`](../../../../../generated/storage/types.gen/type-aliases/SaveDocumentResponseData.md)\>
+
+Commit uploaded content. Does not retry uncertain writes.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `options` | [`SaveDocumentRequest`](../../../../../generated/storage/types.gen/type-aliases/SaveDocumentRequest.md) |
+
+#### Returns
+
+`Promise`\<[`SaveDocumentResponseData`](../../../../../generated/storage/types.gen/type-aliases/SaveDocumentResponseData.md)\>
+
+***
+
 ### setProperty()
 
 > **setProperty**(`property`, `value?`): `Promise`\<`void`\>
@@ -315,6 +440,18 @@ Share the document with the owner's team, or unshare it.
 
 ***
 
+### sharePermissions()
+
+> **sharePermissions**(): `Promise`\<[`SharePermissionV2`](../../../../../generated/storage/types.gen/type-aliases/SharePermissionV2.md)\>
+
+Sharing configuration.
+
+#### Returns
+
+`Promise`\<[`SharePermissionV2`](../../../../../generated/storage/types.gen/type-aliases/SharePermissionV2.md)\>
+
+***
+
 ### shortId()
 
 > **shortId**(): `Promise`\<`string`\>
@@ -327,6 +464,18 @@ The document's short id (used in compact links and branch names).
 
 ***
 
+### simpleSave()
+
+> **simpleSave**(): `Promise`\<[`SaveDocumentResponseData`](../../../../../generated/storage/types.gen/type-aliases/SaveDocumentResponseData.md)\>
+
+Commit a simple document save.
+
+#### Returns
+
+`Promise`\<[`SaveDocumentResponseData`](../../../../../generated/storage/types.gen/type-aliases/SaveDocumentResponseData.md)\>
+
+***
+
 ### teamShare()
 
 > **teamShare**(): `Promise`\<[`DocumentTeamShareResponse`](../../../../../generated/storage/types.gen/type-aliases/DocumentTeamShareResponse.md)\>
@@ -336,6 +485,24 @@ Whether the document is shared with the owner's team, and which team.
 #### Returns
 
 `Promise`\<[`DocumentTeamShareResponse`](../../../../../generated/storage/types.gen/type-aliases/DocumentTeamShareResponse.md)\>
+
+***
+
+### timelinePage()
+
+> **timelinePage**(`selection?`): `Promise`\<\{ `entries`: (\{ `activity`: \{ `action`: `string`; `actor`: [`User`](../../../users/user/classes/User.md); `actor_id`: `string`; `id`: `string`; `occurred_at`: `string`; `payload?`: `unknown`; \}; `message?`: `undefined`; `type`: `"activity"`; \} \| \{ `activity?`: `undefined`; `message`: [`Comment`](../../comment/classes/Comment.md); `type`: `"message"`; \})[]; `nextCursor`: [`MessageCursor`](../../../../../generated/storage/types.gen/type-aliases/MessageCursor.md) \| `undefined`; `previousCursor`: [`MessageCursor`](../../../../../generated/storage/types.gen/type-aliases/MessageCursor.md) \| `undefined`; \}\>
+
+A mixed message and activity timeline page.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `selection?` | [`TimelineOptions`](../../../messages/thread/interfaces/TimelineOptions.md)\<[`Comment`](../../comment/classes/Comment.md)\> |
+
+#### Returns
+
+`Promise`\<\{ `entries`: (\{ `activity`: \{ `action`: `string`; `actor`: [`User`](../../../users/user/classes/User.md); `actor_id`: `string`; `id`: `string`; `occurred_at`: `string`; `payload?`: `unknown`; \}; `message?`: `undefined`; `type`: `"activity"`; \} \| \{ `activity?`: `undefined`; `message`: [`Comment`](../../comment/classes/Comment.md); `type`: `"message"`; \})[]; `nextCursor`: [`MessageCursor`](../../../../../generated/storage/types.gen/type-aliases/MessageCursor.md) \| `undefined`; `previousCursor`: [`MessageCursor`](../../../../../generated/storage/types.gen/type-aliases/MessageCursor.md) \| `undefined`; \}\>
 
 ***
 
@@ -407,6 +574,24 @@ Apply multi-select option deltas atomically across this entity's properties.
 #### Inherited from
 
 [`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`updatePropertyOptions`](../../../entity/classes/PropertiedEntity.md#updatepropertyoptions)
+
+***
+
+### version()
+
+> **version**(`version`): [`DocumentVersion`](../../version/classes/DocumentVersion.md)
+
+A handle to an immutable version.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `version` | `number` |
+
+#### Returns
+
+[`DocumentVersion`](../../version/classes/DocumentVersion.md)
 
 ***
 

@@ -1,5 +1,7 @@
+import type { CalendarGuestInputBody } from '@service-calendar/generated/schemas/calendarGuestInputBody';
 import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
 import type { EventTime } from '@service-storage/generated/schemas/eventTime';
+import type { GuestPolicy } from '@service-storage/generated/schemas/guestPolicy';
 import type {
   CalendarAttendeeFieldsFragment,
   CalendarEventFieldsFragment,
@@ -99,12 +101,40 @@ export function withRsvp(
   );
 }
 
+/**
+ * The attendee list with invited guests appended as unanswered, skipping
+ * anyone already on it.
+ */
+export function withInvitedGuests(
+  attendees: readonly CalendarAttendeeFieldsFragment[],
+  guests: readonly CalendarGuestInputBody[]
+): CalendarAttendeeFieldsFragment[] {
+  const present = new Set(
+    attendees.map((attendee) => attendee.email.toLowerCase())
+  );
+  return [
+    ...attendees,
+    ...guests
+      .filter((guest) => !present.has(guest.email.toLowerCase()))
+      .map((guest) => ({
+        email: guest.email,
+        displayName: null,
+        responseStatus: 'NEEDS_ACTION' as const,
+        isOrganizer: false,
+        isOptional: guest.optional ?? false,
+        isSelf: false,
+        comment: null,
+      })),
+  ];
+}
+
 export interface EventFieldPatch {
   title?: string | null;
   description?: string | null;
   location?: string | null;
   reminders?: EventReminders | null;
   time?: EventTime | null;
+  guestPolicy?: GuestPolicy | null;
 }
 
 type CopyContent = Pick<
@@ -145,6 +175,9 @@ export function patchedEvent(
     copy.calendarId === target ? patchCopy(copy, patch) : copy
   );
   if (patch.time) next.time = graphqlTimeRecord(patch.time);
+  if (patch.guestPolicy && patchesCanonical) {
+    next.guestPolicy = { ...next.guestPolicy, ...patch.guestPolicy };
+  }
   return next;
 }
 

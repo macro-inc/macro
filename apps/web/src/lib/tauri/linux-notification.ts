@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Channel, invoke } from '@tauri-apps/api/core';
 import { MacOSNotificationUpdateRequiredError } from './notification-errors';
 
@@ -66,7 +67,7 @@ export async function showLinuxNotification(
       else if (!finished) dismissals.push(callback);
     },
     close() {
-      void close();
+      fireAndForget(close(), 'linux-notification');
     },
   };
 }

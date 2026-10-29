@@ -18,7 +18,7 @@ export const EMAIL_TAB_IDS = [
 
 export type EmailTab = (typeof EMAIL_TAB_IDS)[number];
 
-const EMAIL_TAB_LABELS = {
+export const EMAIL_TAB_LABELS = {
   important: 'Signal',
   noise: 'Noise',
   favorites: 'Favorites',

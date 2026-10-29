@@ -224,6 +224,21 @@ fn to_typed_row_github_pr_status_changed() {
 }
 
 #[test]
+fn to_typed_row_calendar_event_join_request() {
+    let metadata = serde_json::json!({
+        "requestId": "01a15f1b-801e-70d6-873d-689f42c0b0e9",
+        "eventId": "01a0d015-b785-7602-9dc8-db34ca69c29b",
+        "title": "Offsite"
+    });
+    let row = make_row("calendar_event_join_request", metadata);
+    let typed = to_typed_row(row).expect("should deserialize calendar_event_join_request");
+    assert!(matches!(
+        typed.notification_metadata,
+        NotifEvent::CalendarEventJoinRequest(_)
+    ));
+}
+
+#[test]
 fn to_typed_row_unknown_event_type_fails() {
     let metadata = serde_json::json!({"foo": "bar"});
     let row = make_row("unknown_event", metadata);

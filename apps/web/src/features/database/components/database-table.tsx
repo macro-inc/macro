@@ -1,8 +1,9 @@
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import TrashIcon from '@phosphor/trash.svg';
 import { Key } from '@solid-primitives/keyed';
 import { DragDropProvider, DragOverlay } from '@thisbeyond/solid-dnd';
 import { getHashedPaletteColor } from '@ui/utils/palette';
@@ -163,7 +164,10 @@ export function DatabaseTable(props: DatabaseTableProps) {
     indicatorLeft: (boundary) =>
       boundary - gridElement.getBoundingClientRect().left,
     onDrop: (columnId, targetId, edge) =>
-      void props.onReorderColumn?.(columnId, targetId, edge),
+      fireAndForget(
+        props.onReorderColumn?.(columnId, targetId, edge),
+        'database'
+      ),
   });
   const headerRenames = new Map<string, () => void>();
   let requestedHeader: string | undefined;
@@ -376,7 +380,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
       if (!row || !column || !canEditCell(column)) return;
       event.preventDefault();
       event.stopPropagation();
-      void props.onClearCells([row.id], [column.id]);
+      fireAndForget(props.onClearCells([row.id], [column.id]), 'database');
       return;
     }
     if (
@@ -878,7 +882,10 @@ export function DatabaseTable(props: DatabaseTableProps) {
                       disabled={props.pending}
                       onClick={() =>
                         deferAction(() => {
-                          void props.onDuplicate?.(contextRowId());
+                          fireAndForget(
+                            props.onDuplicate?.(contextRowId()),
+                            'database'
+                          );
                         })
                       }
                     />

@@ -1,4 +1,5 @@
-import Copy from '@phosphor/copy.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import Copy from '@icon/system/regular/copy.svg';
 import { CopyButton } from '@ui';
 import {
   createSignal,
@@ -26,6 +27,10 @@ export function OwnerSettingsSection(props: {
   onSearchChange?: (value: string) => void;
   dateRange?: JSX.Element;
   scheduleTopBarOwned?: boolean;
+  bookingsTitle?: JSX.Element;
+  pageTitle?: JSX.Element;
+  insightsTitle?: JSX.Element;
+  registerSearchFocus?: (focus: () => void) => void;
 }) {
   const capabilities = useScheduling();
   const owner = props.owner;
@@ -62,6 +67,23 @@ export function OwnerSettingsSection(props: {
     });
     return copied;
   }
+  const pageShare = () => (
+    <CopyButton
+      aria-label="Copy link"
+      variant="secondary"
+      size="md"
+      tooltip={
+        source.profile()?.revision
+          ? undefined
+          : 'Save your booking page before sharing'
+      }
+      disabled={!source.profile()?.revision}
+      onClick={copyPageLink}
+    >
+      <Copy aria-hidden="true" class="size-4" />
+      Copy link
+    </CopyButton>
+  );
   return (
     <Show when={source.profile()}>
       {(p) => (
@@ -151,26 +173,35 @@ export function OwnerSettingsSection(props: {
                 onDuplicate={duplicate}
                 link={(item) => capabilities.link(p(), item.slug)}
                 onCopy={(item) =>
-                  void action(() => capabilities.copyLink(p(), item.slug))
+                  fireAndForget(
+                    action(() => capabilities.copyLink(p(), item.slug)),
+                    'scheduling'
+                  )
                 }
                 onToggle={(item, enabled) =>
-                  void action(() =>
-                    save({
-                      ...p(),
-                      eventTypes: p().eventTypes.map((e) =>
-                        e.id === item.id ? { ...e, enabled } : e
-                      ),
-                    })
+                  fireAndForget(
+                    action(() =>
+                      save({
+                        ...p(),
+                        eventTypes: p().eventTypes.map((e) =>
+                          e.id === item.id ? { ...e, enabled } : e
+                        ),
+                      })
+                    ),
+                    'scheduling'
                   )
                 }
                 onDelete={(item) =>
-                  void action(() =>
-                    save({
-                      ...p(),
-                      eventTypes: p().eventTypes.filter(
-                        (e) => e.id !== item.id
-                      ),
-                    })
+                  fireAndForget(
+                    action(() =>
+                      save({
+                        ...p(),
+                        eventTypes: p().eventTypes.filter(
+                          (e) => e.id !== item.id
+                        ),
+                      })
+                    ),
+                    'scheduling'
                   )
                 }
               />
@@ -224,26 +255,32 @@ export function OwnerSettingsSection(props: {
                   saving={source.saving()}
                   onEdit={owner.editSchedule}
                   onDefault={(s) =>
-                    void action(() => save({ ...p(), defaultScheduleId: s.id }))
+                    fireAndForget(
+                      action(() => save({ ...p(), defaultScheduleId: s.id })),
+                      'scheduling'
+                    )
                   }
                   onDelete={(s) =>
-                    void action(async () => {
-                      if (p().eventTypes.some((e) => e.scheduleId === s.id))
-                        throw new Error(
-                          'Move event types to another schedule first.'
+                    fireAndForget(
+                      action(async () => {
+                        if (p().eventTypes.some((e) => e.scheduleId === s.id))
+                          throw new Error(
+                            'Move event types to another schedule first.'
+                          );
+                        const schedules = p().schedules.filter(
+                          (x) => x.id !== s.id
                         );
-                      const schedules = p().schedules.filter(
-                        (x) => x.id !== s.id
-                      );
-                      await save({
-                        ...p(),
-                        schedules,
-                        defaultScheduleId:
-                          p().defaultScheduleId === s.id
-                            ? (schedules[0]?.id ?? null)
-                            : p().defaultScheduleId,
-                      });
-                    })
+                        await save({
+                          ...p(),
+                          schedules,
+                          defaultScheduleId:
+                            p().defaultScheduleId === s.id
+                              ? (schedules[0]?.id ?? null)
+                              : p().defaultScheduleId,
+                        });
+                      }),
+                      'scheduling'
+                    )
                   }
                 />
               </div>
@@ -255,24 +292,14 @@ export function OwnerSettingsSection(props: {
               role="group"
               aria-label={`${scope().name} ${props.kind === 'page' ? 'booking page' : props.kind}`}
             >
-              <div class="mb-4 flex shrink-0 flex-wrap items-center justify-end gap-3">
-                <CopyButton
-                  variant="outline"
-                  size="md"
-                  label="Copy link"
-                  tooltip={
-                    p().revision
-                      ? undefined
-                      : 'Save your booking page before sharing'
-                  }
-                  disabled={!p().revision}
-                  onClick={copyPageLink}
-                >
-                  <Copy aria-hidden="true" class="size-4" />
-                  Copy link
-                </CopyButton>
-              </div>
+              <Show when={!props.pageTitle}>
+                <div class="mb-4 flex shrink-0 flex-wrap items-center justify-end gap-3">
+                  {pageShare()}
+                </div>
+              </Show>
               <BookingPageEditor
+                headerTitle={props.pageTitle}
+                shareAction={props.pageTitle ? pageShare() : undefined}
                 profile={{
                   id: p().id,
                   name: profileDraft()?.name ?? p().name,
@@ -295,7 +322,9 @@ export function OwnerSettingsSection(props: {
                   })
                 }
                 onRevert={owner.revertProfile}
-                onSave={() => void action(owner.saveProfile)}
+                onSave={() =>
+                  fireAndForget(action(owner.saveProfile), 'scheduling')
+                }
               />
             </div>
           </Match>
@@ -306,6 +335,8 @@ export function OwnerSettingsSection(props: {
               aria-label={`${scope().name} ${props.kind === 'page' ? 'booking page' : props.kind}`}
             >
               <BookingsView
+                headerTitle={props.bookingsTitle}
+                registerSearchFocus={props.registerSearchFocus}
                 search={props.search}
                 onSearchChange={props.onSearchChange}
                 dateRange={props.dateRange}
@@ -318,17 +349,29 @@ export function OwnerSettingsSection(props: {
                 canManageBookings={scope().canManageBookings}
                 busyId={busyBooking()}
                 onApprove={(id) =>
-                  void bookingAction(id, () => source.approve(id))
+                  fireAndForget(
+                    bookingAction(id, () => source.approve(id)),
+                    'scheduling'
+                  )
                 }
                 onCancel={(id) =>
-                  void bookingAction(id, () => source.cancel(id))
+                  fireAndForget(
+                    bookingAction(id, () => source.cancel(id)),
+                    'scheduling'
+                  )
                 }
                 onManage={(id) =>
-                  void bookingAction(id, () => capabilities.manageBooking(id))
+                  fireAndForget(
+                    bookingAction(id, () => capabilities.manageBooking(id)),
+                    'scheduling'
+                  )
                 }
                 onAttendance={(id, attendance) =>
-                  void bookingAction(id, () =>
-                    source.setAttendance(id, attendance)
+                  fireAndForget(
+                    bookingAction(id, () =>
+                      source.setAttendance(id, attendance)
+                    ),
+                    'scheduling'
                   )
                 }
               />
@@ -343,6 +386,7 @@ export function OwnerSettingsSection(props: {
               <Show when={scope().id} keyed>
                 {(_scopeId) => (
                   <InsightsView
+                    headerTitle={props.insightsTitle}
                     source={source}
                     events={p().eventTypes}
                     members={capabilities.members()}

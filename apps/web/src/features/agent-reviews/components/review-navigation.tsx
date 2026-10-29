@@ -1,7 +1,8 @@
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretLeft from '@phosphor/caret-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import Check from '@phosphor/check.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretLeft from '@icon/system/regular/caret-left.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Check from '@icon/system/regular/check.svg';
 import { Button } from '@ui/components/Button';
 import { Dialog } from '@ui/components/Dialog';
 import { Input } from '@ui/components/Input';
@@ -53,16 +54,22 @@ export function ReviewNavigation(props: {
           class="ml-auto flex shrink-0 items-center gap-0.5"
         >
           <Button
+            variant="ghost"
+            aria-label="Previous draft"
+            tooltip="Previous draft"
             size="icon-sm"
-            label="Previous draft"
             disabled={props.disabled || props.index === 0}
-            onClick={() => void props.onNavigate(props.index - 1)}
+            onClick={() =>
+              fireAndForget(props.onNavigate(props.index - 1), 'agent-reviews')
+            }
           >
-            <CaretLeft />
+            <CaretLeft class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
           <Button
+            variant="ghost"
+            aria-label={`Choose draft, ${props.index + 1} of ${props.items.length}`}
+            tooltip={`Choose draft, ${props.index + 1} of ${props.items.length}`}
             size="sm"
-            label={`Choose draft, ${props.index + 1} of ${props.items.length}`}
             aria-haspopup="dialog"
             aria-expanded={open()}
             disabled={props.disabled}
@@ -74,12 +81,16 @@ export function ReviewNavigation(props: {
             <CaretDown class="size-3" />
           </Button>
           <Button
+            variant="ghost"
+            aria-label="Next draft"
+            tooltip="Next draft"
             size="icon-sm"
-            label="Next draft"
             disabled={props.disabled || props.index === props.items.length - 1}
-            onClick={() => void props.onNavigate(props.index + 1)}
+            onClick={() =>
+              fireAndForget(props.onNavigate(props.index + 1), 'agent-reviews')
+            }
           >
-            <CaretRight />
+            <CaretRight class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </nav>
       </header>
@@ -116,13 +127,16 @@ export function ReviewNavigation(props: {
               >
                 {(item) => (
                   <Button
+                    variant="ghost"
                     fullWidth
                     class="h-auto min-h-14 justify-start gap-3 rounded-lg px-3 py-2 text-left whitespace-normal touch:min-h-14"
                     aria-current={
                       item.index === props.index ? 'true' : undefined
                     }
                     disabled={props.disabled}
-                    onClick={() => void choose(item.index)}
+                    onClick={() =>
+                      fireAndForget(choose(item.index), 'agent-reviews')
+                    }
                   >
                     <span class="w-4 shrink-0 text-xs tabular-nums text-ink-muted">
                       <Show
@@ -152,7 +166,7 @@ export function ReviewNavigation(props: {
             </div>
           </Panel.Body>
           <Panel.Footer class="justify-end p-3">
-            <Button size="sm" onClick={() => setOpen(false)}>
+            <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
               Done
             </Button>
           </Panel.Footer>

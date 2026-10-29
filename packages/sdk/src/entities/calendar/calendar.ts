@@ -11,6 +11,18 @@ import { MacroEntity } from '../entity';
  * handle loads its detail by listing the caller's calendars and matching on id.
  */
 export class Calendar extends MacroEntity<VisibleCalendar> {
+  /** Set whether this calendar contributes to the caller's availability. */
+  async setContributesToAvailability(
+    contributesToAvailability: boolean,
+  ): Promise<void> {
+    await this.mutate((c) =>
+      c.calendar.setAvailabilityCalendar({
+        path: { calendar_id: this.id },
+        body: { contributesToAvailability },
+      }),
+    );
+  }
+
   protected async fetch(): Promise<VisibleCalendar> {
     const { calendars } = unwrap(await this.client.calendar.listCalendars());
     const found = calendars.find((calendar) => calendar.id === this.id);

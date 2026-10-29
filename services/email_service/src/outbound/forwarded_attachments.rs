@@ -60,6 +60,7 @@ impl ForwardedAttachmentRepo for PgForwardedAttachmentRepo {
                 (
                     source_link_id,
                     MessageAttachment {
+                        reference_url: attachment.reference_url,
                         db_id: attachment.db_id,
                         provider_id: attachment.provider_id,
                         filename: attachment.filename,

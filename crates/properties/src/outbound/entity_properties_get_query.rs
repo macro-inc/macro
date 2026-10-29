@@ -823,6 +823,9 @@ fn flatten_property_for_index(
         PropertyValue::Bool(b) => property.values = vec![b.to_string()],
         PropertyValue::Num(n) => property.number_value = Some(n),
         PropertyValue::Date(d) => property.date_value = Some(d.timestamp_millis()),
+        PropertyValue::DateRange(range) => {
+            property.date_value = Some(range.start().timestamp_millis())
+        }
     }
     if property.is_empty() {
         return None;

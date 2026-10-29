@@ -26,7 +26,6 @@ export function materializeMailView(
   if (!preview) return undefined;
   return {
     ...record,
-    sortTs: timestamp,
     createdAt: timestamp,
     emailName: preview.subject,
     snippet: preview.snippet,

@@ -1,5 +1,7 @@
+import type { FoldedMessage } from '../../../generated/agent-fold';
 import type {
   AgentAction,
+  AgentMode,
   AgentSessionChangesResponse,
   AgentSessionLogResponse,
   AgentSessionResponse,
@@ -8,14 +10,32 @@ import type {
   PromptAttachment,
   PullRequestLinkSource,
   SandboxSize,
+  SessionBot,
 } from '../../../generated/agent-harness/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
+import { EntityAccess } from '../sharing/access';
+import {
+  type SharePermissionOptions,
+  sharePermissionBody,
+} from '../sharing/permissions';
 import { User } from '../users/user';
 import { CodeExecution } from './code-execution';
 import { QueuedAction } from './queued-action';
 import { type CreateReviewOptions, SessionReview } from './review';
+import { ToolApproval } from './tool-approval';
+
+/** A session's history folded into readable messages, oldest first. */
+export type FoldedAgentSessionLog = {
+  /** The agent that sent every agent message. */
+  bot: SessionBot;
+  /**
+   * Prompts and replies with their tool calls, results, plans, permission
+   * requests and how each turn ended.
+   */
+  messages: FoldedMessage[];
+};
 
 /** A GitHub pull request linked to a session. */
 export type SessionPullRequest = {
@@ -68,6 +88,33 @@ export type CreateManagedSessionOptions = {
 
 /** A managed or externally hosted coding-agent session. */
 export class AgentSession extends MacroEntity<AgentSessionResponse> {
+  /** Access requests and direct user grants. */
+  readonly access = new EntityAccess(this.client, 'agent_session', this);
+
+  /** Construct an approval handle scoped to this session. */
+  toolApprovalById(id: string): ToolApproval {
+    return ToolApproval.byId(this.client, this, id);
+  }
+
+  /** Sharing configuration. */
+  async sharePermissions() {
+    return unwrap(
+      await this.client.agentHarness.getAgentSessionPermissions({
+        path: { session_id: this.id },
+      }),
+    );
+  }
+
+  /** Replace sharing grants. */
+  async updateSharePermissions(options: SharePermissionOptions) {
+    return this.mutate((c) =>
+      c.agentHarness.updateAgentSessionPermissions({
+        path: { session_id: this.id },
+        body: sharePermissionBody(options),
+      }),
+    );
+  }
+
   /** A handle to an agent session by id. Details load on first access. */
   static byId(client: MacroClient, id: string): AgentSession {
     return new AgentSession(client, id);
@@ -126,6 +173,22 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
       }),
     );
     return branches;
+  }
+
+  /**
+   * Whether `prompt` needs a chat agent or a coding agent, as the app's Auto
+   * mode decides before starting a session. Rejects when Auto mode is not
+   * enabled for the caller, the classifier is unavailable or slow, or the
+   * caller is out of AI quota.
+   */
+  static async chooseMode(
+    client: MacroClient,
+    prompt: string,
+  ): Promise<AgentMode> {
+    const { mode } = unwrap(
+      await client.agentHarness.chooseAgentMode({ body: { prompt } }),
+    );
+    return mode;
   }
 
   protected async fetch(): Promise<AgentSessionResponse> {
@@ -384,6 +447,25 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
         path: { session_id: this.id },
       }),
     );
+  }
+
+  /**
+   * Read this session's whole history as the conversation the app renders:
+   * each user prompt and agent reply, oldest first, with tool calls and their
+   * results, plans, permission requests and how each turn ended. Works on any
+   * session the caller can view, live or finished, so it is the way to read
+   * what another agent session did. Prefer it to {@link log}, which returns
+   * raw protocol frames.
+   */
+  async foldedLog(): Promise<FoldedAgentSessionLog> {
+    const { bot, messages } = unwrap(
+      await this.client.agentHarness.getAgentSessionFoldedLog({
+        path: { session_id: this.id },
+      }),
+    );
+    // The schema is opaque: the server serializes the fold's `FoldedMessage`,
+    // whose TypeScript contract is generated from the same Rust type.
+    return { bot, messages: messages as FoldedMessage[] };
   }
 
   /** Read the complete raw protocol log for this session. */

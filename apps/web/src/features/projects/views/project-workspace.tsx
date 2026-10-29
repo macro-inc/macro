@@ -1,6 +1,7 @@
 import { SidePanel } from '@components/app/side-panel';
 import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { PropertyValuePill } from '@property/component/PropertyValuePill';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { EntityPropertiesSection } from '@property/side-panel/properties/EntityPropertiesSection';
@@ -35,7 +36,7 @@ export function ProjectWorkspace(props: {
   commands: ReturnType<ProjectsContext['createCommands']>;
   section: ProjectSection;
   onOpenTask: ProjectTasksListProps['onOpenTask'];
-  onCreateTask(dueDate?: Date): void;
+  onCreateTask: NonNullable<ProjectTasksListProps['onCreateTask']>;
   discussion: JSX.Element;
   description: JSX.Element;
 }) {
@@ -67,23 +68,25 @@ export function ProjectWorkspace(props: {
         title="Properties"
         defaultOpen
         order={1}
-      >
-        <Show when={props.project.id} keyed>
-          {(projectId) => (
-            <EntityPropertiesSection
-              entityId={projectId}
-              entityType="INITIATIVE"
-              canEdit={canEdit()}
-              documentName={props.project.name}
-              showTags={false}
-              defaultProperties={() => [...definitions.properties()]}
-              requiredPropertyDefinitionIds={PROJECT_PROPERTY_ORDER}
-              pinnedPropertyDefinitionOrder={PROJECT_PROPERTY_ORDER}
-              onPropertiesChanged={props.source.refresh}
-            />
-          )}
-        </Show>
-      </SidePanel.Section>
+        render={(renderSection) => (
+          <Show when={props.project.id} keyed>
+            {(projectId) => (
+              <EntityPropertiesSection
+                entityId={projectId}
+                entityType="INITIATIVE"
+                canEdit={canEdit()}
+                documentName={props.project.name}
+                showTags={false}
+                defaultProperties={() => [...definitions.properties()]}
+                requiredPropertyDefinitionIds={PROJECT_PROPERTY_ORDER}
+                pinnedPropertyDefinitionOrder={PROJECT_PROPERTY_ORDER}
+                onPropertiesChanged={props.source.refresh}
+                renderSection={renderSection}
+              />
+            )}
+          </Show>
+        )}
+      />
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
         <Show when={error()}>
           {(message) => (
@@ -116,19 +119,24 @@ export function ProjectWorkspace(props: {
                       ariaLabel="Project name"
                       class="w-full text-2xl"
                       onRename={(name) =>
-                        void run(() =>
-                          props.commands.rename(props.project.id, name)
+                        fireAndForget(
+                          run(() =>
+                            props.commands.rename(props.project.id, name)
+                          ),
+                          'projects'
                         )
                       }
                     />
                   </Show>
                   <div
-                    class="mb-6 mt-3 flex flex-wrap items-center gap-2"
+                    class="mb-6 mt-3 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden"
                     aria-label="Project properties"
                   >
                     <For each={props.source.properties()}>
                       {(property) => (
                         <PropertyValuePill
+                          variant="secondary"
+                          size="xs"
                           property={property}
                           canEdit={canEdit()}
                           onSave={(property, value) =>

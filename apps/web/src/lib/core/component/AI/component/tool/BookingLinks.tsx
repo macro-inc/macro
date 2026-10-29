@@ -1,5 +1,6 @@
 import { refreshBookingLinkResult } from '@app/features/scheduling/queries/agent-sync';
-import Link from '@phosphor-icons/core/regular/link.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import Link from '@icon/system/regular/link.svg';
 import type { BookingLinkResult } from '@service-cognition/generated/tools/types';
 import { createEffect, createSignal, For } from 'solid-js';
 import { BaseTool } from './BaseTool';
@@ -85,7 +86,8 @@ function mutationHandler(name: 'CreateBookingLink' | 'EditBookingLink') {
       // Synchronize the external query cache too; revision checks skip old history.
       createEffect(() => {
         const result = saved();
-        if (result) void refreshBookingLinkResult(result);
+        if (result)
+          fireAndForget(refreshBookingLinkResult(result), 'ai-booking-links');
       });
       return (
         <LinkCard

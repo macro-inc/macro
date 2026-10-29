@@ -9,6 +9,7 @@
 import type { ActionConfigurationTask } from './actionConfigurationTask';
 import type { ActionKind } from './actionKind';
 import type { ActionTrigger } from './actionTrigger';
+import type { RunVisibility } from './runVisibility';
 
 /**
  * Canonical client configuration. Ownership and execution state are server-owned.
@@ -17,6 +18,8 @@ export interface ActionConfiguration {
   enabled: boolean;
   kind: ActionKind;
   name: string;
+  /** Omitted by clients that predate the setting; runs then start unlisted. */
+  run_visibility?: RunVisibility;
   task: ActionConfigurationTask;
   trigger: ActionTrigger;
 }

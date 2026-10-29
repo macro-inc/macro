@@ -1,0 +1,36 @@
+[package]
+edition = "2024"
+name = "whatsapp_store_pg"
+publish = false
+version = "0.1.0"
+description = "Postgres implementation of the whatsmeow device stores, with per-account envelope encryption."
+
+[features]
+# The in-memory KMS stand-in, for tests of crates that open a store.
+fake-kms = []
+
+[dependencies]
+aes-gcm = { workspace = true }
+async-trait = { workspace = true }
+aws-sdk-kms = { workspace = true }
+chrono = { workspace = true }
+hex = { workspace = true }
+postcard = { workspace = true }
+prost = { workspace = true }
+rand = { workspace = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+sqlx = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+tracing = { workspace = true }
+uuid = { workspace = true }
+whatsmeow = { path = "../whatsmeow" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+zeroize = { workspace = true }
+
+[dev-dependencies]
+futures = { workspace = true }
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

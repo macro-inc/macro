@@ -26,7 +26,7 @@ depending on `attachment` directly.
 
 - Depends on: `macro_user_id`, `non_empty`; optional `attachment`,
   `model-entity` (feature `attachment`), `reqwest` (feature `outbound`).
-- Used by: `crates/ai_tools`, `crates/agent_trigger`, `services/document_cognition_service`,
+- Used by: `crates/ai_tools`, `crates/agent_trigger`, `services/agent_harness_service`,
   `services/agent_trigger_service`, `services/agent_harness_service`.
 
 ## Recipes

@@ -37,11 +37,15 @@ import { getDisplayName, tryMacroId } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
+import FileCsv from '@icon/system/regular/file-csv.svg';
+import FileXls from '@icon/system/regular/file-xls.svg';
 import { Badge } from '@ui';
-import { onMount, Show } from 'solid-js';
+import { onCleanup, onMount, Show } from 'solid-js';
 import { spreadsheetChatContext } from './core/chat-context';
 import { clipboardTargetInScope } from './core/clipboard-scope';
 import type { SpreadsheetData } from './definition';
+import { createSpreadsheetDownload } from './primitives/create-spreadsheet-download';
 import { createSpreadsheetStore } from './primitives/create-spreadsheet-store';
 import { useSpreadsheetAccess } from './primitives/use-spreadsheet-access';
 import { createSpreadsheetSession } from './queries/spreadsheet-session';
@@ -109,6 +113,7 @@ function SpreadsheetBlockContent(props: { share?: string }) {
       | undefined;
     return value?.__block === 'spreadsheet' ? value : undefined;
   };
+  const sheetDownload = createSpreadsheetDownload();
 
   return (
     <DocumentBlockContainer>
@@ -136,6 +141,23 @@ function SpreadsheetBlockContent(props: { share?: string }) {
             { op: 'rename' },
             { op: 'copy' },
             { op: 'moveToProject' },
+            {
+              group: 'file',
+              label: 'Download',
+              icon: DownloadSimple,
+              children: [
+                {
+                  label: 'Download as Excel (.xlsx)',
+                  icon: FileXls,
+                  action: () => sheetDownload.download('xlsx'),
+                },
+                {
+                  label: 'Download as CSV',
+                  icon: FileCsv,
+                  action: () => sheetDownload.download('csv'),
+                },
+              ],
+            },
             { op: 'delete' },
           ]}
           tools={[
@@ -151,6 +173,7 @@ function SpreadsheetBlockContent(props: { share?: string }) {
         />
         <Show when={data()?.syncSource} keyed>
           {(syncSource) => {
+            onCleanup(sheetDownload.clear);
             const source = createSpreadsheetSession({
               documentId,
               userId: userId(),
@@ -202,6 +225,7 @@ function SpreadsheetBlockContent(props: { share?: string }) {
                       mentions={spreadsheetMentions}
                       store={store}
                       name={name()}
+                      onDownloadReady={sheetDownload.register}
                       onExportXlsx={(bytes) =>
                         downloadFile(
                           new Blob([bytes.slice().buffer], {

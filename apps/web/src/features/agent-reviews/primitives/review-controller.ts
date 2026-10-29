@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { debounce } from '@solid-primitives/scheduled';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 import type { Review, ReviewActions, ReviewItem } from '../core/review';
@@ -78,7 +79,7 @@ export function createReviewController(
     }
   }
   const saveLater = debounce(() => {
-    void flush();
+    fireAndForget(flush(), 'agent-reviews');
   }, 300);
   function edit(item: string, draft: unknown) {
     if (busy() || error()) return;

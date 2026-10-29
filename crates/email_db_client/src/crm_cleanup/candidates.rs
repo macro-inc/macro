@@ -12,12 +12,15 @@ use sqlx::types::Uuid;
 /// clock expire while that populate is pending.
 ///
 /// Returns the number of rows recorded (inserted or refreshed).
-#[tracing::instrument(skip(pool, contact_emails), err)]
-pub async fn insert_candidates(
-    pool: &PgPool,
+#[tracing::instrument(skip(executor, contact_emails), err)]
+pub async fn insert_candidates<'e, E>(
+    executor: E,
     link_id: Uuid,
     contact_emails: &[String],
-) -> anyhow::Result<u64> {
+) -> anyhow::Result<u64>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
     if contact_emails.is_empty() {
         return Ok(0);
     }
@@ -31,7 +34,7 @@ pub async fn insert_candidates(
         link_id,
         contact_emails
     )
-    .execute(pool)
+    .execute(executor)
     .await?;
 
     Ok(result.rows_affected())

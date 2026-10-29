@@ -2,7 +2,9 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { OptimisticPostMessageAttachment } from '@channel/Input/message-payload';
 import { toast } from '@core/component/Toast/Toast';
 import type { DateValue } from '@core/util/date';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { markMessageSent } from '@core/util/message-send-motion';
+import { Telemetry } from '@macro-inc/observability';
 import {
   messageReferencesCrmRecord,
   refreshCrmAssociatedSoupQueries,
@@ -500,13 +502,15 @@ export function useSendMessageMutation(
           // this soup entity. Refresh root messages here so the channel moves to
           // its updated position in soup lists.
           if (threadId === undefined && variables.parent.type === 'channel') {
-            refetchSoupEntity(variables.parent.id, 'channel');
+            refetchSoupEntity(variables.parent.id, 'channel').catch((error) =>
+              Telemetry.error(error, { surface: 'messages' })
+            );
             invalidateSoupEntity(variables.parent.id);
           }
 
           // CRM record lists include messages that mention or attach the record.
           if (messageReferencesCrmRecord(variables.message))
-            void refreshCrmAssociatedSoupQueries();
+            fireAndForget(refreshCrmAssociatedSoupQueries(), 'messages');
 
           if (variables.parent.type === 'channel')
             analytics.track('channel_message_sent', {
@@ -596,7 +600,7 @@ export function useDeleteMessageMutation(
         onSuccess(data, _vars, context) {
           applyRootDeletion(data, context?.threadState);
           // The deleted message may have referenced a CRM record.
-          void refreshCrmAssociatedSoupQueries();
+          fireAndForget(refreshCrmAssociatedSoupQueries(), 'messages');
         },
         onError(error, vars, context) {
           console.error('failed to delete message', error);
@@ -688,7 +692,7 @@ export function usePatchMessageMutation(
         onSuccess(data) {
           applyMessage(data, 'edited');
           // An edit can add or remove a CRM record reference.
-          void refreshCrmAssociatedSoupQueries();
+          fireAndForget(refreshCrmAssociatedSoupQueries(), 'messages');
         },
         onError(error, vars, context) {
           console.error('failed to update message', error);

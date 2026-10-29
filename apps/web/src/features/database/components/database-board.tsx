@@ -1,9 +1,10 @@
-import OpenIcon from '@phosphor/arrows-out-simple.svg';
-import CheckIcon from '@phosphor/check.svg';
-import EmptyIcon from '@phosphor/circle-dashed.svg';
-import GripIcon from '@phosphor/dots-six-vertical.svg';
-import DotsIcon from '@phosphor/dots-three.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import OpenIcon from '@icon/system/regular/arrows-out-simple.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import EmptyIcon from '@icon/system/regular/circle-dashed.svg';
+import GripIcon from '@icon/system/regular/dots-six-vertical.svg';
+import DotsIcon from '@icon/system/regular/dots-three.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { TagDot } from '@property/tags/TagDot';
 import type { DatabaseOpsError } from '@service-storage/databases';
 import type { ViewLayout } from '@service-storage/generated/schemas/viewLayout';
@@ -327,7 +328,7 @@ export function DatabaseBoard(props: DatabaseBoardProps) {
                   onStartDraft={() => startDraft(group().key)}
                   onDraftInput={(id, title) => updateDraft(id, { title })}
                   onSubmitDraft={(id, submission) =>
-                    void submitDraft(id, submission)
+                    fireAndForget(submitDraft(id, submission), 'database')
                   }
                   onCancelDraft={cancelDraft}
                   draftRef={(id, element) => {
@@ -673,9 +674,10 @@ function BoardCard(props: {
           >
             <KanbanHandle label={`Drag ${title()}`}>
               <Button
+                variant="ghost"
+                aria-label={`Drag ${title()}`}
+                tooltip={{ content: `Drag ${title()}`, disabled: true }}
                 size="icon-xs"
-                label={`Drag ${title()}`}
-                tooltipDisabled
                 class="size-6 touch-none text-ink-muted"
                 title="Drag to another group, or use the Move menu"
                 tabindex={-1}
@@ -711,9 +713,10 @@ function BoardCard(props: {
           <KanbanBoard.CardActions>
             <Show when={props.renderCell}>
               <Button
+                variant="ghost"
+                aria-label={`Open ${title()}`}
+                tooltip={{ content: `Open ${title()}`, disabled: true }}
                 size="icon-xs"
-                label={`Open ${title()}`}
-                tooltipDisabled
                 title="Open record details"
                 onClick={() => props.onOpen(props.row.rowId)}
               >

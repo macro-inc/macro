@@ -9,7 +9,7 @@ import {
   select,
   update,
 } from '@graphql-cache/exchange/optimistic';
-import { getActiveGraphqlSoupRevalidations } from '@queries/soup/graphql/active-queries';
+import { getUnmaintainedGraphqlSoupRevalidations } from '@queries/soup/graphql/active-queries';
 import {
   DeleteEmailDraftDocument,
   type DeleteEmailDraftMutation,
@@ -193,13 +193,14 @@ function optimisticContact(
  * The cache binds the handle to the server identity atomically at settlement,
  * rebasing later queued edits and preserving reads through the old handle.
  */
-function optimisticDraftEntity(
+export function optimisticDraftEntity(
   args: GraphqlSaveEmailDraftArgs
 ): OptimisticDraftEntity {
   const now = new Date().toISOString();
   const existing = args.existingDraft;
   return {
     __typename: 'GraphqlSoupEmailMessage',
+    operationStatus: existing?.operationStatus ?? null,
     id: String(args.draftId),
     providerId: args.providerId ?? existing?.providerId ?? null,
     threadId: args.threadDbId,
@@ -213,8 +214,10 @@ function optimisticDraftEntity(
     isStarred: existing?.isStarred ?? false,
     isSent: false,
     isDraft: true,
+    draftGeneration: args.draftGeneration ?? 0,
     hasAttachments: existing?.hasAttachments ?? false,
     scheduledSendTime: args.sendTime ?? existing?.scheduledSendTime ?? null,
+    scheduledSendStatus: existing?.scheduledSendStatus ?? null,
     bodyText: args.bodyText ?? null,
     bodyHtmlSanitized: args.optimisticBodyHtml,
     bodyMacro: args.bodyMacro ?? null,
@@ -348,11 +351,12 @@ export async function executeGraphqlSaveEmailDraft(
             ),
           ]
         : [],
+      // The returned draft and thread records update every list the cache
+      // maintains; the rest are read again. Refetch the thread page only
+      // when a missing snapshot or an inbox move prevents the message-list
+      // patch; otherwise a save can reset the open thread.
       revalidations: [
-        ...getActiveGraphqlSoupRevalidations(),
-        // Ordinary autosaves already return the draft and thread records.
-        // Refetch only when a missing snapshot or inbox move prevents the
-        // message-list patch; otherwise a save can reset the open thread.
+        ...getUnmaintainedGraphqlSoupRevalidations(),
         ...(canPatchThread
           ? []
           : [
@@ -380,6 +384,7 @@ export async function executeGraphqlSaveEmailDraft(
 
 /** Input for a durable GraphQL draft delete. */
 export type GraphqlDeleteEmailDraftArgs = {
+  draftGeneration?: number;
   /** The draft to delete, by its client-generated id. */
   draftId: string;
   /** Thread the draft lives in — targets the optimistic removal from the
@@ -414,7 +419,10 @@ export async function executeGraphqlDeleteEmailDraft(
   args: GraphqlDeleteEmailDraftArgs
 ): Promise<DeleteEmailDraftOutcome> {
   const variables: DeleteEmailDraftMutationVariables = {
-    input: { draftId: args.draftId },
+    input: {
+      draftId: args.draftId,
+      draftGeneration: args.draftGeneration ?? 0,
+    },
   };
   const threadPageVariables: EmailThreadPageQueryVariables = {
     threadId: args.threadDbId,
@@ -481,7 +489,7 @@ export async function executeGraphqlDeleteEmailDraft(
         ),
       ],
       revalidations: [
-        ...getActiveGraphqlSoupRevalidations(),
+        ...getUnmaintainedGraphqlSoupRevalidations(),
         {
           document: EmailThreadPageDocument,
           variables: threadPageVariables,

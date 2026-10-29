@@ -209,6 +209,17 @@ export type AgentSessionEntity = EntityBase & {
   turnState?: string | null;
   bot?: { id: string; name: string; avatarUrl?: string | null } | null;
   threadId?: string | null;
+  /**
+   * Who started the session: a person, another agent that dispatched it, or a
+   * routine. Absent from older cached rows.
+   */
+  source?: 'user' | 'agent' | 'routine';
+  /**
+   * Where the session is shown: unlisted sessions (routine runs, unless the
+   * routine lists them) are left out of Home and the default Agents list, and
+   * hidden ones are returned only by id. Absent from older cached rows.
+   */
+  visibility?: 'listed' | 'unlisted' | 'hidden';
   status: string;
   properties?: SoupProperty[];
 };
@@ -302,6 +313,8 @@ export type EmailEntity = EntityBase & {
   linkId?: string;
   labels?: SoupLabel[] | ApiLabel[];
   hasIcsAttachment?: boolean;
+  /** A sent file, not an inline image or calendar invite, is on the thread. */
+  hasFileAttachment?: boolean;
   attachments?: EmailAttachment[];
   properties?: SoupProperty[];
   /** ISO 8601 time of the thread draft's confirmed scheduled send. */

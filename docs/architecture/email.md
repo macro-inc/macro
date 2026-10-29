@@ -154,10 +154,10 @@ The compose controllers now assemble these smaller responsibilities:
 | Module | Responsibility and boundary |
 | --- | --- |
 | `attachment-persistence.ts` | Upload/remove operations and completion tracking. Receives attachment state and three transport capabilities. A saved attachment ID does not mean its content upload has finished; every save waits for outstanding uploads. |
-| `email-send-schedule.ts` | Confirmed send time, pending changes, unscheduling and archive feedback. Scheduling saves the current draft and waits for its attachments even when a draft ID already exists; each operation retains its selected inbox. |
-| `draft-session.ts` / `draft-persistence.ts` | Shared draft identity, queued-write status, rejection policy, and save/delete ordering. Server identity and a committed latest save are separate facts; REST send, schedule, and uploads wait for a committed save. |
-| `send-readiness.ts` | Why an immediate send must be refused: offline, a draft the server cannot address yet (queued or unconfirmed handle), or an attachment whose upload never finished. Pure checks plus the one failure notice both controllers show. |
-| `draft-autosave.ts` | One debounce and serialized write queue used by reply and standalone compose. Captures editor values before queueing, flushes pending edits on disposal, and exposes cancellation and completion for send/discard. |
+| `email-send-schedule.ts` | Confirmed send time, pending changes, unscheduling and archive feedback. Send Later and schedule updates save the draft first, then schedule it through the REST endpoint. Cancellation only unlocks editing after confirmation. |
+| `draft-session.ts` / `draft-persistence.ts` | Shared draft identity, queued-write status, rejection policy, and save/delete ordering. Server identity and a committed latest save are separate facts; uploads and updates to existing legacy schedules wait for a committed save. |
+| `send-readiness.ts` | Outbox admission allows offline delivery with complete attachment references and rejects unfinished uploads. |
+| `draft-autosave.ts` | One debounce and serialized write queue used by reply and standalone compose. Captures editor values before queueing, flushes pending edits when visibility changes and on disposal, retries a failed local write on visibility changes and disposal unless cancelled, and exposes cancellation and completion for send/discard. |
 | `reply-recipient-fields.ts` | Recipient field expansion, drag/drop and outside interaction. Receives values, a setter and a change callback; it knows nothing about saving or sending. |
 | `reply-composer-focus.ts` | Deferred editor/recipient focus and the forward focus guard. Receives DOM accessors and an editor `focus()` capability. Its timers, animation frames and event listeners end with its owner. |
 | `views/reply-envelope.tsx` | Sender, recipients and subject presentation. One recipient input implementation supplies the desktop/mobile layouts while the parent keeps a single editor mounted. |
@@ -499,3 +499,106 @@ occurrence and invitation caches, including email-only views. Failed older reque
 cannot roll back a newer selection or replace its feedback. Settlement revalidates both
 projections. The on-demand local-day agenda shares occurrence queries and handles DST
 boundaries and exclusive all-day ends without mounting a calendar grid.
+
+## Independent send outbox
+
+All immediate composer sends use a device email journal for Gmail and Outlook,
+independent of GraphQL normalized-cache availability and read transport. Send
+Later schedules the saved draft through the REST schedule endpoint, so it stays a
+draft listed by `/email/drafts/scheduled`; outbox admission makes a message
+non-draft, which that list excludes.
+`send-queue.ts` freezes approval and reserves the draft in IndexedDB before
+returning local acceptance. `outbox-session.ts` runs dispatch and recovery from
+the authenticated app shell; mounted composers only observe them.
+The general GraphQL queue owns draft autosaves and other ordinary mutations only;
+it has no send catalog or Send/Cancel replacement protocol. The former cache-queue
+send format was used only in local development and tests, so there is no deployed
+format to migrate. Unsupported journal records retain their contents and
+recognizable draft reservations for recovery.
+
+`email-send-dispatcher.ts` submits immediately online through the fetch-only
+GraphQL client in `service-storage/email-send.ts`. Per-attempt database leases
+coordinate tabs, with bounded concurrency across unrelated messages. A lost
+response triggers a status read before resubmitting the identical attempt.
+Cancellation requested before any submission claim stays local; after a claim it
+requires authoritative server cancellation. The exception is a definitive inbox-access
+rejection of the first exclusive submission: the journal records local cancellation
+and permits restoration. Timeouts, mixed/nested errors, and later status rejections
+never provide that proof. Retry backoff and authentication
+pauses do not discard approval. `email-send-restoration.ts` restores content,
+fences the prior local lifetime, and retires send authority atomically. Newer
+local edits and file bytes survive restoration. Sign-out retains approved sends
+under their original account and stops dispatch; ordinary drafts retain their
+existing sign-out policy.
+
+The server accepts the frozen message, attachment set, send attempt, and delivery
+job in one Postgres transaction. The existing recovery scanner and Gmail/Outlook
+provider reconciliation continue delivery after browser closure. Attempt IDs
+provide idempotent admission, not a promise of exactly-once provider delivery:
+unknown provider outcomes remain locked and reconcile before any resend.
+Unrecognized GraphQL scheduled-delivery states map to `unconfirmed`, preserving
+the thread and its delivery lock when the server is newer than the client.
+Gmail submission checkpoints and Outlook coordinator revisions retain their
+provider-specific submission boundaries.
+
+Hard deletion of a message owned by a nonterminal send is deferred in
+`email_deferred_message_deletions` before any content compaction or attachment/job
+cascade. The retained provider ID and draft generation scope the deletion to that
+message lifetime. The recovery scanner also wakes terminal deferred deletions,
+even without a schedule. Workers discard markers superseded by Undo or a changed
+provider identity; matching terminal deletions use normal thread/CRM cleanup.
+Failed and unconfirmed attempts remain protected until cancellation or confirmed
+delivery. Explicit inbox removal revokes authority: links marked `deleting_at`
+permit batched purge, and direct inbox deletion permits its normal cascade.
+
+`email_messages.draft_generation` advances at acceptance and confirmed
+cancellation. Save, delete, schedule, transfer, and attachment edits compare the
+captured generation under the message lock. Stale autosaves return `DRAFT_VERSION_CONFLICT` and preserve local edits for recovery; they are not classified as an already-sent message. The attempt retains draft handles
+and source inbox namespaces after provider deletion, preventing old queued saves
+from recreating the submitted draft. Versioned approval fingerprints include the
+generation, frozen signature and Send Later deadline. An explicit new Send after
+Undo uses the returned generation and a fresh attempt ID. Draft reads prefer that
+newer working-copy generation over stale accepted cache records; an equal or newer
+server delivery generation still wins. REST parsed-message reads expose the same
+generation alongside message content; SDK draft actions carry that version, and
+attachment handles retain the generation captured at reservation.
+
+The status panel combines device intents with actor/inbox-authorized, cursor-paged
+`pendingEmailSends`, with batched message hydration. Server listing grants observation and cancellation authority,
+never automatic resubmission. Delivery state distinguishes local queueing,
+server acceptance, provider processing, sent, failed, and unconfirmed outcomes,
+but the panel stays silent for routine delivery: it lists a send only while it
+waits on this device, needs attention, or is scheduled. Thread surfaces project
+approved immediate sends from the journal as sent messages
+(`email-thread/primitives/optimistic-send.ts`) until the thread read shows them,
+and read the thread once when delivery is confirmed.
+
+Deploy schema/migrations and all generation-aware backend writers before
+releasing this frontend, including before applying `ios-update`: that workflow
+embeds the PR's frontend with production endpoints and releases automatically
+after Apple approval. See the [iOS release flow](../../apps/web/docs/ios-releases.md).
+The outbox is unconditional; there is no feature flag or
+legacy send fallback. Old deployed writers do not enforce the new generation
+precondition. Verify cache failure, offline/reload, lost HTTP response, concurrent
+tabs, sign-out, Undo, stale writes, Send Later,
+completed attachments, both providers, and server sends from other devices before
+release. The separate cache-bootstrap recovery hotfix remains useful
+for draft synchronization and does not determine send availability.
+
+iOS 2.0.11 build 190 was released with the production rollout on 2026-10-22.
+Its source is `04063d2bb35d7369eae93900c2692f3ecccf882b`.
+The subsequent main merge through `93900478fb` preserves its native/web and
+email interfaces. Build 190 keeps its compiled format-3 native cache; the new
+format-4 compression in cache version 0.6.52 belongs to the cache engine, and
+only JSON crosses the native/web boundary. Browser OPFS storage is separate.
+New native diagnostics are optional, and the agent runtime/Chromium additions
+are desktop-only. The `skip-ios-update` exception records this compatibility
+review, not identical build provenance.
+Older iOS builds therefore remain compatible with the outbox; the iOS floor is
+190 only so that the next production deploy prompts them to update from the
+App Store.
+
+The format-4 browser cache starts a separate physical database. Old nonempty
+general mutation queues are retained but are not imported into it; verify their
+recovery separately during the cache rollout. The email journal is independent
+of these cache files and retains its draft working copies and send attempts.

@@ -20,6 +20,40 @@ fn android_native_check_is_an_unconditional_required_merge_check() {
     assert!(android.contains("bun scripts/android-version-check.mjs"));
     assert!(android.contains("bun scripts/android-play-status.mjs --version-code"));
     assert!(android.contains("id-token: write"));
+    // skip-android-update bypasses the bump too, like skip-ios-update: the
+    // labels are read first, and the version check only runs without it.
+    let labels = android.find("id: labels").expect("labels step");
+    let version = android
+        .find("id: android-version")
+        .expect("version check step");
+    assert!(
+        labels < version,
+        "labels must be read before the version check: {android}"
+    );
+    let version_step = android[version..]
+        .split("\n    - ")
+        .next()
+        .expect("version check step body");
+    assert!(
+        version_step.contains("if: steps.labels.outputs.skip != 'true'"),
+        "the version check runs only without the skip label: {android}"
+    );
+    // A skipped PR never releases, so it may not raise the Android floor.
+    let floor = android
+        .find("--skip-release")
+        .expect("skip-label floor check step");
+    let floor_step = android[..floor]
+        .rsplit("\n    - ")
+        .next()
+        .expect("floor check step body");
+    assert!(
+        floor_step.contains("if: steps.labels.outputs.skip == 'true'"),
+        "the floor check runs only with the skip label: {android}"
+    );
+    assert!(
+        !android.contains("!steps.labels"),
+        "never negate a comparison with a leading `!`: {android}"
+    );
     let status = yaml
         .split("\n  status-check:\n")
         .nth(1)
@@ -75,6 +109,14 @@ fn status_check_requires_the_ios_native_check() {
     assert!(
         gate.contains("predicate-quantifier: every"),
         "negated path filters need the `every` quantifier: {gate}"
+    );
+    assert!(
+        gate.contains("!apps/web/tauri/**/*.md"),
+        "documentation must not trigger an iOS native release: {gate}"
+    );
+    assert!(
+        gate.contains("!apps/web/tauri/**/desktop-*/**"),
+        "macOS CEF files must not trigger an iOS native release: {gate}"
     );
     // `!` binds tighter than `==` in GitHub expressions: `!x == 'true'` is
     // always false, which silently skipped every gated step.
@@ -359,5 +401,122 @@ fn test_job_keeps_vitest_module_cache_on_the_cache_volume() {
             vars::VITEST_MODULE_CACHE_VOLUME_DIR
         )),
         "vitest writes its module cache to the mounted path: {test_job}"
+    );
+}
+
+/// Exercise Git's actual HTTP header handling with and without checkout's
+/// persisted credentials. The local endpoint records the request, then rejects
+/// it: fetching repository objects is irrelevant to this authentication test.
+#[test]
+fn native_tree_fetch_sends_one_authorization_header() {
+    use std::io::{BufRead, BufReader, Write};
+    use std::net::TcpListener;
+    use std::process::Command;
+
+    for persisted in [false, true] {
+        let repo = tempfile::tempdir().expect("temporary checkout");
+        let listener = TcpListener::bind("127.0.0.1:0").expect("local HTTP endpoint");
+        let url = format!(
+            "http://{}/",
+            listener.local_addr().expect("endpoint address")
+        );
+        let script =
+            include_str!("../scripts/ios_native_tree.sh").replace("https://github.com/", &url);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().expect("Git HTTP request");
+            socket
+                .set_read_timeout(Some(std::time::Duration::from_secs(10)))
+                .expect("request timeout");
+            let mut headers = Vec::new();
+            for line in BufReader::new(&socket).lines() {
+                let line = line.expect("HTTP request line");
+                if line.is_empty() {
+                    break;
+                }
+                if line.to_ascii_lowercase().starts_with("authorization:") {
+                    headers.push(line);
+                }
+            }
+            socket
+                .write_all(
+                    b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                )
+                .expect("reject request after capturing headers");
+            sender.send(headers).expect("send captured headers");
+        });
+        let output = Command::new("bash")
+            .arg("-c")
+            .arg(format!(
+                r#"set -euo pipefail
+git init -q
+git remote add origin "$TEST_URL"
+if [[ "$TEST_PERSISTED" == true ]]; then
+  git config "http.${{TEST_URL}}.extraheader" "AUTHORIZATION: basic checkout-token"
+fi
+{script}
+native_tree_fetch HEAD
+"#
+            ))
+            .current_dir(repo.path())
+            // CI's BASH_ENV reloads the Nix dev shell; its library path can
+            // make the runner's host git-remote-http fail before connecting.
+            .env_remove("BASH_ENV")
+            .env_remove("LD_LIBRARY_PATH")
+            .env("TEST_URL", &url)
+            .env("TEST_PERSISTED", persisted.to_string())
+            .env("GH_TOKEN", "test-token")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("NO_PROXY", "127.0.0.1")
+            .output()
+            .expect("run native tree fetch");
+        assert!(!output.status.success(), "fixture rejects the fetch");
+        assert_eq!(
+            receiver
+                .recv_timeout(std::time::Duration::from_secs(10))
+                .unwrap_or_else(|error| panic!(
+                    "Git must send an HTTP request: {error}; stderr: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                )),
+            ["AUTHORIZATION: basic eC1hY2Nlc3MtdG9rZW46dGVzdC10b2tlbg=="],
+            "persisted credentials: {persisted}"
+        );
+    }
+}
+
+#[test]
+fn ios_gate_comment_runs_after_failures_and_only_for_same_repo_prs() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let gate = job(&yaml, "ios-native-check", "status-check");
+    assert!(gate.contains("pull-requests: write"));
+    assert!(gate.contains(
+        "!cancelled() && github.event.pull_request.head.repo.full_name == github.repository"
+    ));
+    assert!(gate.contains("IOS_GATE_STEPS: ${{ toJSON(steps) }}"));
+    for id in ["checkout", "bun", "bump", "credentials", "live"] {
+        assert!(gate.contains(&format!("id: {id}")), "missing step id: {id}");
+    }
+}
+
+#[test]
+fn ios_gate_status_and_comment_scenarios() {
+    let output = std::process::Command::new("node")
+        .arg("--test")
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../../apps/web/scripts/ios-app-store.test.mjs"
+        ))
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/workflows/scripts/ios_native_check_comment.test.cjs"
+        ))
+        .output()
+        .expect("run iOS gate scenarios with Node");
+    assert!(
+        output.status.success(),
+        "iOS gate scenarios failed:\n{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
     );
 }

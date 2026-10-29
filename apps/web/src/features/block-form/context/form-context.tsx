@@ -196,7 +196,7 @@ export type MyResponse = {
   status: 'submitted' | 'stopped';
   submittedAt: string;
   answers: SubmittedAnswer[];
-  /** The booking step, while the saved answers still pass the form's screeners. */
+  /** The booking step, while the saved answers still pass the form's gates. */
   booking: UnlockedBooking | null;
 };
 

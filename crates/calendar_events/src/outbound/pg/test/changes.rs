@@ -287,7 +287,7 @@ async fn snapshot_tombstones_and_source_removal_log_deletions(pool: PgPool) {
     )
     .await
     .unwrap();
-    repo.remove_google_source(account_id, calendar_id, "provider-removed@example.com")
+    repo.remove_provider_source(account_id, calendar_id, "provider-removed@example.com")
         .await
         .unwrap();
 
@@ -383,7 +383,7 @@ async fn disconnecting_logs_every_calendar_and_event_removal(pool: PgPool) {
         connected_calendar(&pool, &repo, owner_id, link_id).await;
     let before = counter(&pool, link_id).await;
 
-    repo.disconnect_google_calendar(owner_id, link_id)
+    repo.disconnect_provider_calendar(owner_id, link_id)
         .await
         .unwrap()
         .expect("the owner's inbox is disconnectable");
@@ -722,6 +722,8 @@ async fn replaying_the_log_reproduces_what_the_viewer_reads(pool: PgPool) {
     let declined_start = Utc.with_ymd_and_hms(2026, 7, 25, 14, 0, 0).unwrap();
     series.occurrences[1].recurrence_id = Some(declined_start.to_rfc3339());
     series.overrides = vec![CalendarEventOverride {
+        reminders: None,
+        automatic_decline: None,
         visibility: None,
         transparency: None,
         sequence: None,
@@ -769,7 +771,7 @@ async fn replaying_the_log_reproduces_what_the_viewer_reads(pool: PgPool) {
     ))
     .await
     .unwrap();
-    repo.remove_google_source(account_id, primary, "provider-removed@example.com")
+    repo.remove_provider_source(account_id, primary, "provider-removed@example.com")
         .await
         .unwrap();
     repo.reconcile_google_calendar_list(key, lease_token, account_id, vec![primary])

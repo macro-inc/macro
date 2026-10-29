@@ -19,6 +19,7 @@ import {
   DEFAULT_CALENDAR_SOURCE,
 } from '@app/features/calendar/types';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
+import { GUEST_EDITS_RESTRICTED } from '@app/features/calendar/utils/event-guest-editing';
 import {
   type CalendarEventTimeChange,
   calendarEventTimeFromFullCalendar,
@@ -35,9 +36,13 @@ import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isMobile } from '@core/mobile/isMobile';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { DateSelectArg, DatesSetArg } from '@fullcalendar/core';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
-import { useUpdateCalendarEventMutation } from '@queries/calendar/mutations';
+import {
+  isGuestEditRefused,
+  useUpdateCalendarEventMutation,
+} from '@queries/calendar/mutations';
 import {
   type CalendarOccurrenceQueryRange,
   createCalendarOccurrenceQueryRange,
@@ -171,10 +176,16 @@ function CalendarPageDataStatus(props: {
               We couldn’t load your calendar events. Try again.
             </p>
             <Button
-              variant="accent"
+              aria-label="Retry loading calendar"
+              tooltip="Retry loading calendar"
+              variant="primary"
               size="sm"
-              label="Retry loading calendar"
-              onClick={() => void props.data.occurrencesQuery.refetch()}
+              onClick={() =>
+                fireAndForget(
+                  props.data.occurrencesQuery.refetch(),
+                  'calendar-view'
+                )
+              }
             >
               Retry
             </Button>
@@ -310,6 +321,10 @@ export function Page(props: {
       {
         onError: (error) => {
           change.revert();
+          if (isGuestEditRefused(error)) {
+            toast.failure(GUEST_EDITS_RESTRICTED);
+            return;
+          }
           toast.failure('Failed to update event', {
             subtext: error.message,
           });
@@ -436,7 +451,7 @@ function CalendarPageHost(props: {
         props.data.occurrencesQuery.isStale &&
         !props.data.occurrencesQuery.isFetching
       ) {
-        void props.data.occurrencesQuery.refetch();
+        fireAndForget(props.data.occurrencesQuery.refetch(), 'calendar-view');
       }
     })
   );

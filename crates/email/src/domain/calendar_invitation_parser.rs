@@ -91,6 +91,17 @@ pub fn parse_invitation_parts(parts: &[&[u8]]) -> Vec<CalendarInvitation> {
                     description,
                     start,
                     end,
+                    recurrence: Some(
+                        props
+                            .iter()
+                            .filter(|p| {
+                                ["RRULE", "RDATE", "EXDATE"]
+                                    .iter()
+                                    .any(|name| p.name.eq_ignore_ascii_case(name))
+                            })
+                            .map(raw_property)
+                            .collect(),
+                    ),
                     conference_url,
                 });
             }

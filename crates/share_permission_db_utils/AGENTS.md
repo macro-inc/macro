@@ -26,7 +26,7 @@ team-level link-share defaults and team sharing.
 
 - Depends on: `entity_access_db_utils`, `models_permissions`, `macro_user_id`,
   `macro_uuid`, `model_owner`.
-- Used by: `agent_session`, `call`, `channels`, `chat`, `documents`,
+- Used by: `agent_session`, `call`, `channels`, `chat`, `databases`, `documents`,
   `initiative`, `projects`.
 
 ## Recipes
@@ -38,6 +38,8 @@ team-level link-share defaults and team sharing.
 ## Checks
 
 - `cargo test -p share_permission_db_utils` (`SQLX_OFFLINE` unset).
+
+- `external_chat.share_permission_id` uses the standard permission lookup and canonical explicit team-sharing helpers.
 
 ## Related
 

@@ -54,6 +54,13 @@ pub enum EmailApiError {
         /// A sanitized diagnostic suitable for logs.
         message: String,
     },
+    /// The provider explicitly rejected message submission without accepting it.
+    /// Unlike a malformed success response, this permits cancelling and editing.
+    #[error("email provider rejected the message: {message}")]
+    SendRejected {
+        /// A sanitized diagnostic suitable for logs.
+        message: String,
+    },
 }
 
 impl EmailApiError {
@@ -65,15 +72,19 @@ impl EmailApiError {
 
 /// Where a rate-limit refusal originated.
 ///
-/// Callers use this to distinguish a local budget refusal (no provider quota
-/// was consumed; a drop-and-wait policy may be appropriate) from the provider
-/// itself throttling the request (retrying preserves delivery guarantees).
+/// Callers use this to distinguish a local refusal (no provider request was
+/// made, so the mailbox needs no cooldown) from the provider itself throttling
+/// the request. Both defer the work; neither drops it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RateLimitOrigin {
     /// Refused by local quota policy before any provider call was made.
     Local,
     /// The provider itself throttled the request.
-    Provider,
+    Provider {
+        /// The provider refused because the mailbox had too many requests in
+        /// flight at once, rather than for a quota.
+        concurrency: bool,
+    },
 }
 
 impl From<RateLimitRefusal> for EmailApiError {

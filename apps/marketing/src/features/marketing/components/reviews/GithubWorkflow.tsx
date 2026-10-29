@@ -47,6 +47,11 @@ export function GithubPrHero() {
 export function GithubConversationDemo(props: { agent?: boolean }) {
   const w = createGithubWorkspace(props.agent);
   const task = () => w.data.tasks.find((item) => item.id === GITHUB_TASK)!;
+  const initialTask = {
+    status: task().status,
+    steps: task().steps.map((step) => ({ ...step })),
+  };
+  const initialMessages = [...w.data.channels[0].messages];
   let root!: HTMLDivElement;
   let trigger: HTMLElement | undefined;
   const [share, setShare] = createSignal(false);
@@ -61,7 +66,14 @@ export function GithubConversationDemo(props: { agent?: boolean }) {
       const log = root?.querySelector<HTMLElement>(
         '.github-conversation [role="log"]'
       );
-      if (log) log.scrollTop = log.scrollHeight;
+      if (!log) return;
+      const issue = log.querySelector<HTMLElement>('[data-thread-id="bug"]');
+      if (props.agent && phase() === 0 && issue) {
+        log.scrollTop +=
+          issue.getBoundingClientRect().top -
+          log.getBoundingClientRect().top -
+          16;
+      } else log.scrollTop = log.scrollHeight;
     });
   });
   const reply = () => {
@@ -79,7 +91,7 @@ export function GithubConversationDemo(props: { agent?: boolean }) {
           person: 'cursor' as const,
           time: '10:14 AM',
           body: '',
-          replyTo: 'request',
+          replyTo: 'bug',
         },
       ]);
       queueMicrotask(() => {
@@ -91,10 +103,20 @@ export function GithubConversationDemo(props: { agent?: boolean }) {
   const playback = createProductWalkthrough({
     root: () => root,
     steps: props.agent ? 2 : 5,
-    reset: () => {},
+    loop: { hold: 8500 },
+    reset: () => {
+      w.updateTask(GITHUB_TASK, initialTask);
+      w.setData('channels', 0, 'messages', [...initialMessages]);
+      setPhase(0);
+      setDetail(undefined);
+      setChanges(false);
+      setShare(false);
+      setAutomatic(true);
+    },
     reduced: () => {
-      if (props.agent) reply();
-      else {
+      if (props.agent) {
+        reply();
+      } else {
         setDetail('pr');
         setChanges(true);
       }
@@ -102,7 +124,7 @@ export function GithubConversationDemo(props: { agent?: boolean }) {
     },
     delay: (step) =>
       props.agent
-        ? ([0, 3500, 1200][step] ?? 1000)
+        ? ([0, 4200, 1400][step] ?? 1000)
         : ([0, 2600, 1000, 1600, 900, 1000][step] ?? 1000),
     advance: (step) => {
       setPhase(step);
@@ -306,7 +328,11 @@ export function GithubConversationDemo(props: { agent?: boolean }) {
                   <AgentTurn>
                     <AgentToolGroup
                       calls={[
-                        { kind: 'read-channel', channel: 'website', count: 7 },
+                        {
+                          kind: 'read-channel',
+                          channel: 'website',
+                          count: initialMessages.length,
+                        },
                         { kind: 'read-document', title: 'Fix mobile sign-in' },
                         {
                           kind: 'action',
@@ -348,7 +374,6 @@ export function GithubConversationDemo(props: { agent?: boolean }) {
       <Show when={pointer()}>
         {(point) => (
           <DemoCursor
-            label="Julia"
             class="review-flow-pointer"
             clicking={phase() === 2 || phase() === 4}
             style={{ transform: `translate(${point().x}px, ${point().y}px)` }}
@@ -384,7 +409,18 @@ export function GithubTaskDemo() {
   const playback = createProductWalkthrough({
     root: () => root,
     steps: 8,
-    reset: () => {},
+    loop: { hold: 8000 },
+    reset: () => {
+      setLinked(false);
+      setMerged(false);
+      setPrOpen(false);
+      setConfirm(false);
+      setPhase(0);
+      setAutomatic(true);
+      setShare(false);
+      setSource(false);
+      w.updateTask(GITHUB_TASK, { status: 'In Progress' });
+    },
     reduced: () => {
       link();
       merge();
@@ -514,7 +550,6 @@ export function GithubTaskDemo() {
       <Show when={pointer()}>
         {(point) => (
           <DemoCursor
-            label="Julia"
             class="review-flow-pointer"
             clicking={[3, 5, 7].includes(phase())}
             style={{ transform: `translate(${point().x}px, ${point().y}px)` }}

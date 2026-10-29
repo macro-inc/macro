@@ -11,3 +11,6 @@ pub use axum_router::{
 
 #[cfg(feature = "ai_tools")]
 pub mod toolset;
+
+/// Internal system event ingress.
+pub mod notifications;

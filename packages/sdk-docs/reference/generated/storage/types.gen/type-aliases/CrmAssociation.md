@@ -1,6 +1,6 @@
 # Type Alias: CrmAssociation
 
-> **CrmAssociation** = \{ `company`: `string`; \} \| \{ `contact`: `string`; \}
+> **CrmAssociation** = \{ `company`: `string`; \} \| \{ `contact`: `string`; \} \| `"activity"`
 
 The CRM record an association filter names.
 
@@ -23,3 +23,7 @@ The CRM record an association filter names.
 | Name | Type | Description |
 | ------ | ------ | ------ |
 | `contact` | `string` | Items associated with the contact. |
+
+***
+
+`"activity"`

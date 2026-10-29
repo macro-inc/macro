@@ -1,3 +1,4 @@
+export { failedReadAccess } from './failed-read';
 export { defaultNameTransform } from './fetchers';
 export {
   getItemPreview,

@@ -2,6 +2,7 @@ import {
   type ParsedDuration,
   parsedDurationToMilliseconds,
 } from '@core/util/dateSearch/dateParser';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   notifyManager,
   type Query,
@@ -135,7 +136,7 @@ function clearQueryMemory(queryClient: QueryClient): void {
       }
       // Observers also retain the last query with data for keepPreviousData.
       // Empty that retired object, and fence its in-flight response first.
-      void query.cancel({ silent: true });
+      fireAndForget(query.cancel({ silent: true }), 'query-persistence');
       query.setState({
         data: undefined,
         dataUpdatedAt: 0,
@@ -242,7 +243,8 @@ export function setupQueryPersistence(
   };
 
   const onVisibilityChange = () => {
-    if (document.visibilityState === 'hidden') void flushAll();
+    if (document.visibilityState === 'hidden')
+      fireAndForget(flushAll(), 'query-persistence');
   };
   document.addEventListener('visibilitychange', onVisibilityChange);
 
@@ -257,7 +259,7 @@ export function setupQueryPersistence(
     if (disposed || clearing) return;
 
     if (type === 'added') {
-      void restore(query, scope);
+      fireAndForget(restore(query, scope), 'query-persistence');
     } else if (type === 'updated') {
       handleUpdate(scope, query);
     } else {

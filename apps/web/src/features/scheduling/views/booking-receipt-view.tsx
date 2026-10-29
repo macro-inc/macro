@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Button, cn } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { RescheduleForm } from '../components/reschedule-form';
@@ -7,7 +8,10 @@ export function BookingReceiptView(props: {
   receipt?: BookingReceipt;
   unavailable: boolean;
   cancel: () => Promise<void>;
-  loadSlots: (date: string) => Promise<{ startsAt: string; endsAt: string }[]>;
+  loadSlots: (
+    date: string,
+    timeZone: string
+  ) => Promise<{ startsAt: string; endsAt: string }[]>;
   reschedule: (start: string) => Promise<void>;
   /** Shown inside another Macro page, which already frames the receipt. */
   embedded?: boolean;
@@ -121,7 +125,7 @@ export function BookingReceiptView(props: {
               >
                 <div class="mt-6 flex flex-wrap gap-2 border-t border-edge-muted pt-6">
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     disabled={busy()}
                     onClick={() => {
                       setConfirm(false);
@@ -131,7 +135,7 @@ export function BookingReceiptView(props: {
                     Reschedule
                   </Button>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     disabled={busy()}
                     onClick={() => {
                       setRescheduling(false);
@@ -142,9 +146,9 @@ export function BookingReceiptView(props: {
                   </Button>
                   <Show when={confirm()}>
                     <Button
-                      variant="strong"
+                      variant="secondary"
                       disabled={busy()}
-                      onClick={() => void cancel()}
+                      onClick={() => fireAndForget(cancel(), 'scheduling')}
                     >
                       {busy() ? 'Cancelling…' : 'Confirm cancellation'}
                     </Button>
@@ -166,7 +170,6 @@ export function BookingReceiptView(props: {
                 }
               >
                 <RescheduleForm
-                  timeZone={r().scheduleTimeZone}
                   load={props.loadSlots}
                   submit={async (start) => {
                     setError('');

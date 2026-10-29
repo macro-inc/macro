@@ -33,9 +33,37 @@ and preserves already loaded pages.
 Newly loaded server rows join the retained display immediately, without duplicates or
 waiting for local recomputation to succeed. Removing pages from the server baseline
 invalidates overlays built from those pages.
-Changing filters or resetting the cache discards prior reconciliation evidence. Grouped
-lists, unsupported filters/sorts, and non-cache transports keep their existing
+Changing filters or resetting the cache discards prior reconciliation evidence.
+Unsupported filters/sorts and non-cache transports keep their existing
 network behavior.
+
+### Grouped views
+
+With maintained GraphQL cache queries, supported filters and a created/updated
+sort, loaded grouped rows also reconcile locally. Initial and per-group
+continuation pages share one owner; a group's next page loads when the end of
+that group scrolls into view. Property edits (including multiple assignees),
+project changes and UTC date rollover can move loaded rows between bins; proven
+filter nonmatches leave the view. Unknown evidence keeps the previous membership.
+If local selection is incomplete, normalized display-field updates from initial
+and continuation pages remain visible without changing counts or server cursors.
+This is not a complete offline grouping query: uncached/unloaded candidates are
+not added, and counts preserve unseen server rows rather than counting only the
+loaded page. Unsupported sorts/filters retain server membership.
+
+To verify, scroll to the end of a property group to load its second page, then
+edit a property on a row
+from that page. It should appear in its destination once, disappear from its old
+group, and reverse on rollback without a grouped-query network round trip. Check
+multi-value membership and group counts, then scroll to load another page: the request must
+use the server continuation cursor. Switch filters or reset the cache during a
+pending local read; its late result must not restore old rows. A server refresh
+rebuilds loaded continuation pages while retaining their rows until replacement
+pages are ready. Delay or fail a continuation response and confirm the list does
+not collapse to its first page; retry and verify fresh rows replace the old ones.
+An in-flight continuation page must remain covered by the replacement chain. Refreshes
+emit `graphql_cache.soup_grouped_refresh`; the local phase emits
+`graphql_cache.soup_grouped_local_evaluation`.
 
 For Documents (including Tasks), Projects, Chats, and participating Channels,
 exact `UNSEEN`/`SEEN` notification filters also reconcile locally with
@@ -64,7 +92,10 @@ reappear in its request nor be retried by Redo. Partial feedback keeps an Undo
 action. A reply with no matching notification IDs must release that target's
 optimistic hide and notification overrides immediately, even if Undo was never
 clicked and mounted readers remain stale. Do not wait for acknowledgement or a
-timer when there is no receipt. Accepted siblings keep their own display intent;
+timer when there is no receipt. The exception is an entity-wide Done with the
+normalized cache: the rows it left out were already done on the server, so they
+are written as done into the cache and the hide stays until readers acknowledge
+it; that target has nothing to undo. Accepted siblings keep their own display intent;
 a no-op target cannot borrow their IDs to restore its row. Mixed accepted/no-op
 results replace the optimistic full-count toast with the actual completed count
 and retain Undo for accepted writes. An empty notification receipt alone must not
@@ -103,11 +134,11 @@ editing: only moved or removed rows should be added or removed. Rename a row and
 then drag it: its drag label/payload must use the new fields without another
 registration/layout measurement.
 
-Desktop multi-select filter menus in Home, Tasks, Drive, Email, Reviews, Search,
-CRM, Calendar, and database option-value filters close after an ordinary click or
-Enter. Hold Shift while clicking or pressing Enter to toggle individual options
-and keep the menu open for further selections. Shift does not select a range.
-Single-select controls and mobile filter drawers retain their existing behavior.
+Shared list-filter menus in Home, Tasks, Drive, Email, Reviews, and CRM, plus
+searchable filter dropdowns, use the [multiselect dropdown pattern](ui-conventions.md#multiselect-dropdowns):
+checkbox toggles stay open, row activation adds and closes, and Shift/Only
+replaces the current group's selection without closing. Single-select controls,
+independent settings, and mobile filter drawers retain their existing behavior.
 
 Channels use the same general Soup reconciliation path, not a separate local page
 chain. Channel ID, type, team, organization, importance, and participant-scoped

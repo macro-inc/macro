@@ -8,8 +8,8 @@ vi.mock('@app/components/view-shell/ViewShell', () => ({
     TopBar: (props: ParentProps) => <div>{props.children}</div>,
   },
 }));
-vi.mock('@components/app/split-panel', () => ({
-  SplitPanel: { CloseButton: () => null },
+vi.mock('@app/components/view-shell/ViewSidebar', () => ({
+  ViewSidebar: { Title: (props: ParentProps) => <h1>{props.children}</h1> },
 }));
 afterEach(cleanup);
 
@@ -36,4 +36,9 @@ it('keeps the plain heading for the new conversation page', () => {
   ).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Share' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Side panel' })).toBeNull();
+});
+
+it('omits the heading on an untitled composer page', () => {
+  render(() => <Topbar />);
+  expect(screen.queryByRole('heading')).toBeNull();
 });

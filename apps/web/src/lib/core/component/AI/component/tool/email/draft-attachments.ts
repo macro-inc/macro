@@ -10,6 +10,7 @@
  */
 
 import type { DraftFormAttachment } from '@app/features/email-compose/primitives/email-form-state';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { EmailAttachment } from '@service-cognition/generated/tools/types';
 import { createSignal } from 'solid-js';
 
@@ -85,7 +86,8 @@ export function createDraftAttachments(options: DraftAttachmentsOptions) {
     );
   };
   for (const attachment of list()) {
-    if (attachment.type === 'document') void describe(attachment.documentId);
+    if (attachment.type === 'document')
+      fireAndForget(describe(attachment.documentId), 'ai-email-draft');
   }
 
   const removeUploading = (file: File) =>
@@ -170,7 +172,7 @@ export function createDraftAttachments(options: DraftAttachmentsOptions) {
       for (const entry of uploads) {
         const task = upload(entry);
         pending.add(task);
-        void forgetUpload(task);
+        fireAndForget(forgetUpload(task), 'ai-email-draft');
       }
     },
     remove: (removed: DraftFormAttachment) => {

@@ -1,4 +1,4 @@
-//! `Web App Pr Checks` — frontend PR checks for the web app.
+//! `Web App Pr Checks` — frontend and mobile PR checks.
 //! Generated into `web-app-check-main.yml`.
 
 use gh_workflow::{
@@ -74,6 +74,7 @@ fn path_check() -> Job {
             "codegen_changed",
             "${{ steps.filter.outputs.codegen_changed }}",
         )
+        .add_output("i18n_changed", "${{ steps.filter.outputs.i18n_changed }}")
         .add_step(checkout("Checkout Repo", false))
         .add_step(paths_filter())
 }
@@ -95,6 +96,7 @@ fn typescript() -> Job {
         .add_step(steps::setup_reqs_web("Setup Prereqs", false))
         .add_step(check_dynamic_ui_schema())
         .add_step(check_types())
+        .add_step(check_floating_promises())
         .add_step(check_functional_test_types())
         .add_step(check_collaboration_types())
         .add_step(check_lexical_service_types())
@@ -194,6 +196,7 @@ fn test() -> Job {
         .add_step(run_tests())
         .add_step(run_signup_browser_tests())
         .add_step(run_email_thread_browser_tests())
+        .add_step(run_i18n_browser_tests())
         .add_step(steps::teardown_nix())
 }
 
@@ -278,7 +281,9 @@ fn paths_filter() -> Step<Use> {
     // file do not change generated output, so they must not start that job.
     // The Nix dev-shell action is also omitted from `should_run` so Typecheck
     // stays off for a shell-only tweak. Workflow YAML drift is `check
-    // generated workflows`.
+    // generated workflows`. `i18n_changed` covers what the interface language
+    // browser tests render: translations, the menu primitives, and settings
+    // navigation.
     Step::new("Filter changed paths")
         .uses(
             "dorny",
@@ -289,7 +294,7 @@ fn paths_filter() -> Step<Use> {
         .add_with((
             "filters",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/code_execution/src/outbound/deno/*.mjs'\n  - 'crates/agent_code_mode/src/domain/documentation.json'\n  - 'crates/agent_code_mode/SKILL.md'\n  - 'crates/ai_tools/src/display_results/schema.generated.json'\n  - '.github/actions/setup-reqs-web/**'\ncodegen_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/code_execution/src/outbound/deno/*.mjs'\n  - 'crates/agent_code_mode/src/domain/documentation.json'\n  - 'crates/agent_code_mode/SKILL.md'\n  - 'crates/ai_tools/src/display_results/schema.generated.json'\n  - '.github/actions/setup-reqs-web/**'\ncodegen_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\n"
             ),
         ))
 }
@@ -368,6 +373,12 @@ fn check_types() -> Step<Run> {
     Step::new("Check Types")
         .run("bun run type-check")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+/// Type-aware oxlint over all of `apps/web`; `no-floating-promises` is an
+/// error and needs type information to run at all.
+fn check_floating_promises() -> Step<Run> {
+    Step::new("Check Floating Promises").run("bun run lint:oxlint --quiet")
 }
 
 fn check_functional_test_types() -> Step<Run> {
@@ -451,6 +462,19 @@ fn run_signup_browser_tests() -> Step<Run> {
 fn run_email_thread_browser_tests() -> Step<Run> {
     Step::new("Email Thread Browser Tests")
         .run("just test-email-thread-browser")
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+/// Menus in every interface language, failing on clipped labels. Only when
+/// translations or the surfaces they render on change. A cached browser skips
+/// `--with-deps`, which installs the Thai, CJK, and Devanagari fonts; without
+/// them Chromium draws each character as a box and long labels look clipped.
+fn run_i18n_browser_tests() -> Step<Run> {
+    Step::new("Interface Language Browser Tests")
+        .run("bunx playwright install-deps chromium\njust test-i18n-browser")
+        .if_condition(Expression::new(
+            "needs.path-check.outputs.i18n_changed == 'true'",
+        ))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 

@@ -7,6 +7,21 @@ query ChannelDetailSoup($input: SoupInput!) {
 		soup(input: $input) {
 			items {
 				...SoupItemPreviewFields
+				# Refresh the list/badge edge even when another device already read
+				# everything. A distinct alias keeps this a complete detail source.
+				... on GraphqlSoupChannel {
+					sidebarUnreadNotifications: notifications(
+						filter: {
+							states: [UNSEEN]
+							topLevelMessagesOnly: true
+						}
+						limit: 1
+					) {
+						id
+						state
+						createdAt
+					}
+				}
 				notifications(filter: { states: [UNSEEN] }) {
 					...SoupNotificationFields
 				}

@@ -29,6 +29,8 @@ import { refreshBookingLinkResult } from '../queries/agent-sync';
 import { schedulingKeys } from '../queries/keys';
 import { BookingWorkspaceView } from './booking-workspace-view';
 
+const editorSaves = vi.hoisted((): Promise<void>[] => []);
+
 vi.mock('./insights-view', () => ({ InsightsView: () => <div>Insights</div> }));
 vi.mock('./scheduling-mobile-header', () => ({
   SchedulingMobileHeader: () => null,
@@ -41,12 +43,14 @@ vi.mock('./event-editor-view', () => ({
   }) => (
     <div>
       <button
-        onClick={() =>
-          void props.onSave({
-            ...props.event,
-            title: `${props.event.title} edited`,
-          })
-        }
+        onClick={() => {
+          editorSaves.push(
+            props.onSave({
+              ...props.event,
+              title: `${props.event.title} edited`,
+            })
+          );
+        }}
       >
         Save test event
       </button>
@@ -90,6 +94,19 @@ vi.mock('@app/components/view-shell', async () => {
   };
 });
 
+vi.mock('@app/components/view-shell/ViewShell', () => ({
+  ViewShell: {
+    TopBar: (props: ParentProps) => <div>{props.children}</div>,
+  },
+}));
+
+vi.mock('@app/components/view-shell/ViewSidebar', () => ({
+  ViewSidebar: {
+    Icon: (props: ParentProps) => <span>{props.children}</span>,
+    Trailing: (props: ParentProps) => <span>{props.children}</span>,
+  },
+}));
+
 beforeEach(() => {
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
   vi.stubGlobal('CSS', { escape: (value: string) => value });
@@ -102,7 +119,8 @@ beforeEach(() => {
     }
   );
 });
-afterEach(() => {
+afterEach(async () => {
+  await Promise.all(editorSaves.splice(0));
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -511,6 +529,7 @@ it('searches the selected owner and preserves read-only team access', async () =
       within(team).getByRole('button', { name: 'Team planning' })
     );
   });
+  fireEvent.click(screen.getByRole('button', { name: 'Search booking links' }));
   const search = screen.getByRole('searchbox', {
     name: 'Search booking links',
   });
@@ -752,3 +771,21 @@ it.each([undefined, 4, 5, 6])(
     }
   }
 );
+
+it('consumes Calendar booking-link creation once and keeps it unsaved until Save', async () => {
+  const { setSearch, search, onSearchChange, saves } = fixture();
+  setSearch({ createBookingLink: true, tab: 'availability' });
+  expect(
+    await screen.findByRole('button', { name: 'Save test event' })
+  ).toBeTruthy();
+  expect(search.createBookingLink).toBe(false);
+  expect(search.tab).toBe('links');
+  expect(onSearchChange).toHaveBeenCalledWith({
+    createBookingLink: false,
+    tab: 'links',
+  });
+  expect(saves).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel test event' }));
+  expect(screen.queryByRole('button', { name: 'Save test event' })).toBeNull();
+  expect(saves).not.toHaveBeenCalled();
+});

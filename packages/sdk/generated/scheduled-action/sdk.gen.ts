@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, GetScheduledActionData, GetScheduledActionErrors, GetScheduledActionResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
+import type { ActivateScheduledActionTemplateData, ActivateScheduledActionTemplateErrors, ActivateScheduledActionTemplateResponses, CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, GetScheduledActionData, GetScheduledActionErrors, GetScheduledActionResponses, GetScheduledActionTemplateData, GetScheduledActionTemplateErrors, GetScheduledActionTemplateResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, ShareScheduledActionTemplateData, ShareScheduledActionTemplateErrors, ShareScheduledActionTemplateResponses, UnshareScheduledActionTemplateData, UnshareScheduledActionTemplateErrors, UnshareScheduledActionTemplateResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -112,5 +112,35 @@ export class Sdk extends HeyApiClient {
     
     public listScheduledActionHistory<ThrowOnError extends boolean = false>(options: Options<ListScheduledActionHistoryData, ThrowOnError>): RequestResult<ListScheduledActionHistoryResponses, ListScheduledActionHistoryErrors, ThrowOnError> {
         return (options.client ?? this.client).get<ListScheduledActionHistoryResponses, ListScheduledActionHistoryErrors, ThrowOnError>({ url: '/scheduled-actions/{id}/history', ...options });
+    }
+    
+    public unshareScheduledActionTemplate<ThrowOnError extends boolean = false>(options: Options<UnshareScheduledActionTemplateData, ThrowOnError>): RequestResult<UnshareScheduledActionTemplateResponses, UnshareScheduledActionTemplateErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<UnshareScheduledActionTemplateResponses, UnshareScheduledActionTemplateErrors, ThrowOnError>({ url: '/scheduled-actions/{id}/template', ...options });
+    }
+    
+    public getScheduledActionTemplate<ThrowOnError extends boolean = false>(options: Options<GetScheduledActionTemplateData, ThrowOnError>): RequestResult<GetScheduledActionTemplateResponses, GetScheduledActionTemplateErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetScheduledActionTemplateResponses, GetScheduledActionTemplateErrors, ThrowOnError>({ url: '/scheduled-actions/{id}/template', ...options });
+    }
+    
+    public shareScheduledActionTemplate<ThrowOnError extends boolean = false>(options: Options<ShareScheduledActionTemplateData, ThrowOnError>): RequestResult<ShareScheduledActionTemplateResponses, ShareScheduledActionTemplateErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<ShareScheduledActionTemplateResponses, ShareScheduledActionTemplateErrors, ThrowOnError>({
+            url: '/scheduled-actions/{id}/template',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    public activateScheduledActionTemplate<ThrowOnError extends boolean = false>(options: Options<ActivateScheduledActionTemplateData, ThrowOnError>): RequestResult<ActivateScheduledActionTemplateResponses, ActivateScheduledActionTemplateErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ActivateScheduledActionTemplateResponses, ActivateScheduledActionTemplateErrors, ThrowOnError>({
+            url: '/scheduled-actions/{id}/template/activate',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
 }

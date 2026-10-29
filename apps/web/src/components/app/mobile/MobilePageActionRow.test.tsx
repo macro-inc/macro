@@ -68,9 +68,6 @@ vi.mock('@components/app/mobile/use-mobile-nav', () => ({
 vi.mock('@components/app/mobile/mobile-dock-views', () => ({
   useMobileDockViews: () => () => [],
 }));
-vi.mock('@components/app/mobile/PillTabs', () => ({
-  PillTabs: () => <div role="tablist" aria-label="Search scopes" />,
-}));
 vi.mock('@components/app/mobile/MobileDockIsland', () => ({
   MobileDockIsland: (props: { children: import('solid-js').JSX.Element }) => (
     <div>{props.children}</div>
@@ -98,7 +95,6 @@ import type { CreatableBlock } from '@app/features/command/types';
 import { mountGlobalFocusListener } from '@app/signal/focus';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
-import { MobileViewsRow } from '@components/app/mobile/MobileViewsRow';
 import { mobilePageCreateBlock } from '@components/app/mobile/mobile-page-create-action';
 import { setVirtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { MobilePageActionRow } from './MobilePageActionRow';
@@ -225,7 +221,11 @@ describe('Mobile page action row', () => {
     // Mount the fallback last to ensure priority, rather than mount order, wins.
     render(() => (
       <>
-        <MobileViewsRow />
+        <FloatRegion
+          region="accessory"
+          priority={100}
+          active={SearchState.isOpen}
+        />
         <FloatRegion region="accessory" active={canComment}>
           <button>Leave a comment</button>
         </FloatRegion>
@@ -238,7 +238,7 @@ describe('Mobile page action row', () => {
     expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
 
     SearchState.open();
-    expect(screen.getByRole('tablist', { name: 'Search scopes' })).toBeTruthy();
+    expect(mount.textContent).toBe('');
     expect(
       screen.queryByRole('button', { name: 'Leave a comment' })
     ).toBeNull();
@@ -254,7 +254,7 @@ describe('Mobile page action row', () => {
     expect(screen.getByRole('button', { name: 'New email' })).toBeTruthy();
 
     SearchState.open();
-    expect(screen.getByRole('tablist', { name: 'Search scopes' })).toBeTruthy();
+    expect(mount.textContent).toBe('');
     expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
     SearchState.close();
     expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();

@@ -63,6 +63,19 @@ pub struct ContextPerson {
     pub email: Option<String>,
 }
 
+/// A file attached to a context message.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContextAttachment {
+    /// What was attached, such as `static/image`, `static/video`, or `document`.
+    pub entity_type: String,
+    /// Its id. For a static file, the file id used in `/file/{id}`.
+    pub entity_id: String,
+    /// Where the agent can fetch it. Only static files have one, filled in by
+    /// the harness from its static file service address.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+}
+
 /// A message the agent may read.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContextMessage {
@@ -74,6 +87,9 @@ pub struct ContextMessage {
     pub content: String,
     /// When it was posted.
     pub posted_at: DateTime<Utc>,
+    /// Files attached to this message. Empty is omitted on the wire.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<ContextAttachment>,
 }
 
 /// Messages of one discussion, oldest first.
@@ -107,6 +123,76 @@ pub struct DiscussionContext {
     /// with the message. Empty off channels.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub channel: Vec<ContextThread>,
+}
+
+impl DiscussionContext {
+    /// Files attached to the prompt's own thread, the prompting message first.
+    ///
+    /// Background channel activity is not included: those files are not what
+    /// the prompt is about.
+    #[must_use]
+    pub fn prompt_thread_attachments(&self) -> Vec<&ContextAttachment> {
+        let Some(thread) = &self.thread else {
+            return Vec::new();
+        };
+        let (prompt, rest): (Vec<&ContextMessage>, Vec<&ContextMessage>) = thread
+            .messages
+            .iter()
+            .partition(|message| message.id == self.prompt_message_id);
+        prompt
+            .into_iter()
+            .chain(rest)
+            .flat_map(|message| message.attachments.iter())
+            .collect()
+    }
+
+    /// Every attachment the agent will read about: the quoted message, the
+    /// prompt's thread, and background channel activity.
+    pub fn attachments_mut(&mut self) -> impl Iterator<Item = &mut ContextAttachment> {
+        let quoted = match &mut self.reply_target {
+            ReplyTarget::Quote {
+                message: Some(message),
+                ..
+            } => Some(message),
+            ReplyTarget::Quote { message: None, .. }
+            | ReplyTarget::Thread { .. }
+            | ReplyTarget::None => None,
+        };
+        quoted
+            .into_iter()
+            .chain(
+                self.thread
+                    .iter_mut()
+                    .chain(self.channel.iter_mut())
+                    .flat_map(|thread| thread.messages.iter_mut()),
+            )
+            .flat_map(|message| message.attachments.iter_mut())
+    }
+}
+
+impl TriggerContext {
+    /// The discussion this trigger was posted in, when it was one.
+    #[must_use]
+    pub fn discussion(&self) -> Option<&DiscussionContext> {
+        match self {
+            Self::Mentioned(discussion) | Self::Conversation(discussion) => Some(discussion),
+            Self::FollowUp(follow_up) => Some(&follow_up.discussion),
+            Self::TaskAssigned(_) | Self::Requested(_) | Self::Dispatched(_) | Self::Routine(_) => {
+                None
+            }
+        }
+    }
+
+    /// The discussion this trigger was posted in, mutably.
+    pub fn discussion_mut(&mut self) -> Option<&mut DiscussionContext> {
+        match self {
+            Self::Mentioned(discussion) | Self::Conversation(discussion) => Some(discussion),
+            Self::FollowUp(follow_up) => Some(&mut follow_up.discussion),
+            Self::TaskAssigned(_) | Self::Requested(_) | Self::Dispatched(_) | Self::Routine(_) => {
+                None
+            }
+        }
+    }
 }
 
 /// Where a discussion lives. Each carries its name, so the agent is never

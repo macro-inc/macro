@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE in_progress_user_link SET linked_email = $2 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "787ce0789153724b26d2b7c0f9c75f3a71e7d8e5437b0c93a688b47f2cf1f785"
+}

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createMachine,
   type MachineDef,
@@ -81,7 +82,7 @@ export function createTargetMessageNavigation(options: {
             dispatch({ t: 'finished' });
           }
         }
-        void loadTarget();
+        fireAndForget(loadTarget(), 'email-thread');
         return () => controller.abort();
       },
       positioning: ({ target }, dispatch) => {

@@ -23,23 +23,23 @@ const openSidebar = {
 export const calendarTour = defineViewTour({
   id: 'calendar',
   title: 'Calendar',
-  connector: { kind: 'email', label: 'Google' },
+  connector: { kind: 'email', label: 'account' },
   steps: [
     {
       // The Calendars list only appears with more than one calendar.
       target: [CALENDAR_TOUR.sources, VIEW_SHELL_TOUR.aside],
       ...openSidebar,
       missingHint:
-        'Connect another Google account to choose which calendars to show here.',
+        'Connect another account to choose which calendars to show here.',
       title: 'All your calendars, one schedule',
       description:
-        'Connect multiple Google accounts and see work, personal, and shared calendars together. Expand an account here to toggle individual calendars.',
+        'Connect multiple accounts and see work, personal, and shared calendars together. Expand an account here to toggle individual calendars.',
     },
     {
-      // Copy availability needs a connected Google calendar.
+      // Copy availability needs a connected calendar.
       target: [CALENDAR_TOUR.availability, CALENDAR_TOUR.upcoming],
       ...openSidebar,
-      missingHint: 'Connect a Google calendar to copy your availability.',
+      missingHint: 'Connect a calendar to copy your availability.',
       title: 'Copy your availability',
       description:
         'Choose a date range to copy your open times, then paste them into a message or email. Busy events across your connected calendars are taken into account.',

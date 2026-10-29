@@ -161,7 +161,7 @@ describe('setupQueryPersistence', () => {
 
     setupQueryPersistence({ queryClient, scopes: [scope] });
 
-    void queryClient.prefetchQuery({
+    queryClient.prefetchQuery({
       queryKey: messageQueryKey,
       queryFn: () => new Promise(() => {}),
     });
@@ -201,7 +201,7 @@ describe('setupQueryPersistence', () => {
     setupQueryPersistence({ queryClient, scopes: [scope] });
 
     // Trigger an 'added' event by fetching (prefetchQuery triggers added)
-    void queryClient.prefetchQuery({
+    queryClient.prefetchQuery({
       queryKey: ['channel', 'a'],
       queryFn: () => new Promise(() => {}), // never resolves
     });
@@ -231,7 +231,7 @@ describe('setupQueryPersistence', () => {
     setupQueryPersistence({ queryClient, scopes: [scope] });
 
     // Trigger added event
-    void queryClient.prefetchQuery({
+    queryClient.prefetchQuery({
       queryKey: ['channel', 'a'],
       queryFn: () => new Promise(() => {}),
     });
@@ -279,7 +279,7 @@ describe('setupQueryPersistence', () => {
     });
     setupQueryPersistence({ queryClient, scopes: [scope] });
 
-    void queryClient.prefetchQuery({
+    queryClient.prefetchQuery({
       queryKey: ['channel', 'old'],
       queryFn: () => new Promise(() => {}),
     });
@@ -308,7 +308,7 @@ describe('setupQueryPersistence', () => {
     const scope = createScope(['identity'], store, { maxAge: undefined });
     setupQueryPersistence({ queryClient, scopes: [scope] });
 
-    void queryClient.prefetchQuery({
+    queryClient.prefetchQuery({
       queryKey: ['identity', 'user'],
       queryFn: () => new Promise(() => {}),
     });
@@ -459,7 +459,7 @@ describe('setupQueryPersistence', () => {
     const scope = createScope(['channel'], store, { buster: 'new-buster' });
     setupQueryPersistence({ queryClient, scopes: [scope] });
 
-    void queryClient.prefetchQuery({
+    queryClient.prefetchQuery({
       queryKey: ['channel', 'v'],
       queryFn: () => new Promise(() => {}),
     });
@@ -504,7 +504,7 @@ describe('setupQueryPersistence', () => {
     const second = persistence.restoreQuery(queryKey);
     expect(first).toBe(second);
     expect(queryClient.getQueryState(queryKey)?.fetchStatus).toBe('idle');
-    void queryClient.prefetchQuery({
+    queryClient.prefetchQuery({
       queryKey,
       queryFn: () => new Promise(() => {}),
     });

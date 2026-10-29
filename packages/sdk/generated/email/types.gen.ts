@@ -25,6 +25,10 @@ export type AddDraftAttachmentRequest = {
      * The size of the file in bytes.
      */
     size: number;
+    /**
+     * Stable client upload identifier. Retry the same file with the same ID.
+     */
+    upload_id?: string | null;
 };
 
 export type AddDraftAttachmentResponse = {
@@ -83,13 +87,16 @@ export type ApiAttachment = {
  * API representation of a draft attachment on a message.
  */
 export type ApiAttachmentDraft = {
+    content_id?: string | null;
     content_type: string;
     draft_id: string;
     file_name: string;
     id: string;
+    is_inline: boolean;
     s3_key: string;
     sha: string;
     size: number;
+    upload_pending: boolean;
 };
 
 /**
@@ -168,6 +175,10 @@ export type ApiDraftInput = {
      * Existing message DB ID (for updating an existing draft).
      */
     db_id?: string | null;
+    /**
+     * Generation from the last loaded draft; legacy clients begin at zero.
+     */
+    draft_generation?: number;
     headers_json?: null | Value;
     /**
      * Per-message override for whether to include the signature on send:
@@ -229,6 +240,10 @@ export type ApiDraftOutput = {
      * Message DB ID.
      */
     db_id?: string | null;
+    /**
+     * Generation required for subsequent edits.
+     */
+    draft_generation: number;
     headers_json?: null | Value;
     /**
      * Link ID.
@@ -306,6 +321,10 @@ export type ApiMessage = {
     cc: Array<ApiContactInfo>;
     created_at: string;
     db_id: string;
+    /**
+     * Draft edit generation; changes at send and cancellation boundaries.
+     */
+    draft_generation: number;
     from?: null | ApiContactInfo;
     global_id?: string | null;
     has_attachments: boolean;
@@ -317,10 +336,12 @@ export type ApiMessage = {
     is_starred: boolean;
     labels: Array<ApiMessageLabel>;
     link_id: string;
+    operation_status?: null | ApiMessageOperation;
     provider_history_id?: string | null;
     provider_id?: string | null;
     provider_thread_id?: string | null;
     replying_to_id?: string | null;
+    scheduled_send_status?: null | ScheduledSendStatus;
     scheduled_send_time?: string | null;
     sent_at?: string | null;
     size_estimate?: number | null;
@@ -341,6 +362,7 @@ export type ApiMessageAttachment = {
     filename?: string | null;
     mime_type?: string | null;
     provider_id?: string | null;
+    reference_url?: string | null;
     sfs_id?: string | null;
     size_bytes?: number | null;
 };
@@ -360,6 +382,31 @@ export type ApiMessageLabel = {
 };
 
 export type ApiMessageListVisibility = 'Show' | 'Hide';
+
+/**
+ * Versions are opaque decimal strings so clients never truncate an i64.
+ */
+export type ApiMessageOperation = {
+    issue?: null | ApiMessageOperationIssue;
+    remote_version?: string | null;
+    revision: string;
+    state: ApiMessageOperationState;
+};
+
+/**
+ * Provider-neutral state exposed to clients.
+ */
+export type ApiMessageOperationIssue = 'ACCEPTING_REMOTE' | 'DRAFT_CONFLICT' | 'CREATION_UNKNOWN' | 'ATTACHMENT_UNKNOWN' | 'SEND_UNKNOWN' | 'SEND_REJECTED' | 'ACCESS_REVOKED' | 'INVALID_CONTENT' | 'MOVE_PENDING' | 'MOVE_CONFLICT' | 'MOVE_SOURCE_SENT' | 'MOVE_REAUTHORIZATION' | 'MOVE_ORIGINAL_REMAINS';
+
+/**
+ * Provider-neutral state exposed to clients.
+ */
+export type ApiMessageOperationState = 'PENDING' | 'SYNCHRONIZED' | 'CONFLICT' | 'UNCERTAIN' | 'SUBMITTING' | 'CONFIRMING' | 'SENT' | 'DELETED' | 'CANCELLED' | 'FAILED';
+
+/**
+ * A deliberate resolution of a particular observed operation version.
+ */
+export type ApiMessageResolutionAction = 'keep_local' | 'use_provider' | 'recheck' | 'retry_send' | 'keep_original';
 
 export type ApiPaginatedThreadCursor = {
     items: Array<ApiThreadPreviewCursor>;
@@ -421,6 +468,22 @@ export type ArchiveThreadRequest = {
     value: boolean;
 };
 
+export type ArchiveThreadsRequest = {
+    thread_ids: Array<string>;
+    value: boolean;
+};
+
+export type ArchiveThreadsResponse = {
+    /**
+     * Threads left unchanged because they could not be updated.
+     */
+    failed_thread_ids: Array<string>;
+    /**
+     * Threads whose archived status now matches the request.
+     */
+    updated_thread_ids: Array<string>;
+};
+
 /**
  * Attachments of a message, as sent to us by the provider.
  */
@@ -431,11 +494,19 @@ export type Attachment = {
     filename?: string | null;
     mime_type?: string | null;
     provider_id?: string | null;
+    /**
+     * Cloud reference: open this provider page instead of downloading bytes.
+     */
+    reference_url?: string | null;
     sfs_id?: string | null;
     size_bytes?: number | null;
 };
 
 export type AttachmentDraft = {
+    /**
+     * Original Content-ID retained when transferring a provider attachment.
+     */
+    content_id?: string | null;
     /**
      * MIME type of the attachment (e.g., "application/pdf", "image/png").
      */
@@ -453,6 +524,10 @@ export type AttachmentDraft = {
      */
     id: string;
     /**
+     * Whether the attachment is referenced inline by the message body.
+     */
+    is_inline?: boolean;
+    /**
      * S3 object key where the attachment content is stored.
      */
     s3_key: string;
@@ -464,6 +539,10 @@ export type AttachmentDraft = {
      * File size in bytes.
      */
     size: number;
+    /**
+     * Bytes have not yet been verified; sending must wait for completion.
+     */
+    upload_pending?: boolean;
 };
 
 /**
@@ -616,6 +695,11 @@ export type CalendarEvent = {
      */
     eventType?: EventType;
     /**
+     * What the organizer lets guests do: the canonical copy's values, or
+     * Google's defaults for an event synced before the policy was modeled.
+     */
+    guestPolicy: GuestPolicy;
+    /**
      * RFC 5545 UID used to reconcile provider and email sources.
      */
     icalUid: string;
@@ -627,6 +711,12 @@ export type CalendarEvent = {
      * Whether the canonical source's calendar prohibits editing it.
      */
     isReadOnly: boolean;
+    /**
+     * Whether this is a snapshot of a meeting shared with the owner, which
+     * Macro added to their calendar as a private copy: the meeting's changes
+     * never reach it, and nothing done to it reaches the meeting.
+     */
+    isSnapshot: boolean;
     /**
      * Optional physical or virtual location label.
      */
@@ -684,6 +774,12 @@ export type CalendarEvent = {
      * Entity update time.
      */
     updatedAt: string;
+    /**
+     * What the viewing requester may do with the event. Resolved only on
+     * the read path, alongside each attendee's `is_self`; nothing when no
+     * viewer is known. Source projections never store it.
+     */
+    viewerCan: ViewerCapabilities;
     /**
      * Event visibility.
      */
@@ -788,6 +884,12 @@ export type CalendarInvitation = {
      */
     method: InvitationMethod;
     organizer?: null | InvitationParticipant;
+    /**
+     * Raw `RRULE`, `RDATE` and `EXDATE` lines, empty for a single event.
+     * `None` on snapshots saved before recurrence was recorded, where a
+     * series cannot be told apart from a single event.
+     */
+    recurrence?: Array<string> | null;
     recurrence_id?: null | InvitationDateTime;
     /**
      * Original recurrence identifier spelling and parameters.
@@ -811,6 +913,25 @@ export type CalendarInvitation = {
      */
     uid: string;
 };
+
+/**
+ * HTTP error body returned by calendar mutation endpoints.
+ */
+export type CalendarMutationApiError = {
+    /**
+     * Machine-readable failure category.
+     */
+    code: CalendarMutationErrorCode;
+    /**
+     * Human-readable failure description.
+     */
+    message: string;
+};
+
+/**
+ * Machine-readable failure category for calendar mutations.
+ */
+export type CalendarMutationErrorCode = 'not_found' | 'occurrence_not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'not_organizer' | 'guests_cannot_invite' | 'guest_list_hidden' | 'guests_cannot_modify' | 'already_on_calendar' | 'join_request_open' | 'copy_refused' | 'snapshot' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed' | 'macro_call_failed' | 'copy_choice_required';
 
 /**
  * A materialized recurrence instance optimized for range queries.
@@ -845,18 +966,12 @@ export type CancelBackfillParams = {
 /**
  * The conferencing system backing an event's join URL.
  *
- * Macro generates only Google Meet conferences, so this distinguishes one it
- * created from a third party's — Zoom and friends arriving as `addOn`
- * conference data, or a legacy classic Hangout. Clients use it to label the
- * conference and to tell whether the Meet toggle reflects a Macro-managed
- * conference.
- *
- * It does not gate mutation. An explicit request replaces or detaches any
- * conference, third-party included, exactly as deleting the event would;
- * what protects a conference is that omitting the field leaves it untouched,
- * so an unrelated edit never disturbs it.
+ * Calendars can create Google Meet or Microsoft Teams according to their
+ * capabilities. Imported third-party conferences are labeled separately.
+ * Omitting a conference change preserves the current conference; explicit
+ * changes still require provider and calendar capability validation.
  */
-export type ConferenceProvider = 'google_meet' | 'other';
+export type ConferenceProvider = 'microsoft_teams' | 'google_meet' | 'other';
 
 export type Contact = {
     email_address?: string | null;
@@ -882,6 +997,17 @@ export type ContactInfoLegacy = {
 
 export type ContactInfoWithInteraction = ContactInfoLegacy & {
     last_interaction: string;
+};
+
+/**
+ * Request body adding a shared event to the requester's calendar.
+ */
+export type CopyCalendarEventRequest = {
+    /**
+     * Google calendar to add the copy to; defaults to the requester's
+     * primary inbox's primary calendar.
+     */
+    calendarId?: string | null;
 };
 
 /**
@@ -917,10 +1043,12 @@ export type CreateLabelRequest = {
  */
 export type CreateLabelResponse = {
     /**
-     * the thread, with messages inside
+     * Local label. Pending provider creation is reported by settings operations.
      */
     label: Label;
 };
+
+export type EmlFile = Blob | File;
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -1028,6 +1156,69 @@ export type EventType = 'default' | 'out_of_office' | 'focus_time' | 'working_lo
 export type EventVisibility = 'default' | 'public' | 'private' | 'confidential';
 
 /**
+ * A refused or failed forward.
+ */
+export type ForwardCalendarEventError = {
+    /**
+     * What went wrong.
+     */
+    code: ForwardCalendarEventErrorCode;
+    /**
+     * A message fit to show the user.
+     */
+    message: string;
+};
+
+/**
+ * Why a forward was not sent.
+ */
+export type ForwardCalendarEventErrorCode = 'not_found' | 'invalid_recipients' | 'inbox_unavailable' | 'send_failed';
+
+/**
+ * One person a forwarded invitation goes to.
+ */
+export type ForwardCalendarEventRecipient = {
+    /**
+     * Their email address.
+     */
+    email: string;
+    /**
+     * Their display name.
+     */
+    name?: string | null;
+};
+
+/**
+ * Who a forwarded invitation goes to, and what its email says.
+ */
+export type ForwardCalendarEventRequest = {
+    /**
+     * A plain-text summary of the event the email opens with; the title
+     * when absent. The email ends with a note saying what the recipient
+     * can do with the forward.
+     */
+    bodyText?: string | null;
+    /**
+     * The people it goes to, at most 50.
+     */
+    to: Array<ForwardCalendarEventRecipient>;
+};
+
+/**
+ * The email the forward queued.
+ */
+export type ForwardCalendarEventResponse = {
+    /**
+     * The sent message.
+     */
+    messageId: string;
+    /**
+     * Its thread.
+     */
+    threadId: string;
+};
+
+/**
  * The response returned from the get backfill job endpoint
  */
 export type GetActiveBackfillJobResponse = {
@@ -1076,6 +1267,25 @@ export type GetScheduledResponse = {
  */
 export type GetThreadResponse = {
     thread: ApiThread;
+};
+
+/**
+ * The switches an organizer sets on an event to bound what its guests may
+ * do. Google omits a switch from the payload while it holds its default.
+ */
+export type GuestPolicy = {
+    /**
+     * Whether guests may invite others.
+     */
+    canInviteOthers: boolean;
+    /**
+     * Whether guests may change the event, including its guest list.
+     */
+    canModify: boolean;
+    /**
+     * Whether guests may see the guest list.
+     */
+    canSeeOtherGuests: boolean;
 };
 
 /**
@@ -1320,6 +1530,75 @@ export type ListLinksResponse = {
     links: Array<Link>;
 };
 
+/**
+ * Desired organization state. Categories never stand in for folders or flags.
+ */
+export type MailboxAction = {
+    kind: 'read';
+    /**
+     * Mark correspondence read or unread.
+     */
+    value: boolean;
+} | {
+    kind: 'flagged';
+    /**
+     * Set the follow-up star.
+     */
+    value: boolean;
+} | {
+    kind: 'archived';
+    /**
+     * Archive inbox messages, or restore received correspondence to the inbox.
+     */
+    value: boolean;
+} | {
+    kind: 'trashed';
+    /**
+     * Move to recoverable trash, or restore correspondence to Inbox (drafts to Drafts).
+     */
+    value: boolean;
+} | {
+    kind: 'junk';
+    /**
+     * Move to junk, or restore to the inbox.
+     */
+    value: boolean;
+} | {
+    kind: 'category';
+    /**
+     * Add/remove a category while preserving other provider assignments.
+     */
+    value: {
+        name: string;
+        present: boolean;
+    };
+};
+
+/**
+ * Durable outcome of an accepted organization action.
+ */
+export type MailboxOperation = {
+    action: MailboxAction;
+    id: string;
+    state: MailboxOperationState;
+    updated_at: string;
+};
+
+export type MailboxOperationState = 'pending' | 'applied' | 'failed' | 'cancelled';
+
+export type MailboxSettingsChange = 'create_label' | 'delete_label' | 'sender_block';
+
+/**
+ * An accepted inbox configuration change awaiting provider confirmation.
+ */
+export type MailboxSettingsOperation = {
+    enabled: boolean;
+    id: string;
+    kind: MailboxSettingsChange;
+    needs_attention: boolean;
+    resource: string;
+};
+
 export type Message = {
     attachments: Array<Attachment>;
     /**
@@ -1368,11 +1647,22 @@ export type Message = {
 
 export type MessageListVisibility = 'Show' | 'Hide';
 
+/**
+ * Authorized polling response. Gmail has no asynchronous draft operation.
+ */
+export type MessageOperationResponse = {
+    operation?: null | ApiMessageOperation;
+};
+
 export type ParsedMessage = {
     bcc: Array<ContactInfo>;
     body_parsed?: string | null;
     cc: Array<ContactInfo>;
     db_id: string;
+    /**
+     * Draft edit generation captured with this message snapshot.
+     */
+    draft_generation?: number;
     from?: null | ContactInfo;
     internal_date_ts?: string | null;
     labels: Array<LabelInfo>;
@@ -1429,6 +1719,16 @@ export type RefreshEmailEvent = {
 };
 
 /**
+ * Stale versions fail without altering the current operation.
+ */
+export type ResolveMessageOperationRequest = {
+    accept_duplicate_risk?: boolean;
+    action: ApiMessageResolutionAction;
+    remote_version?: string | null;
+    revision: string;
+};
+
+/**
  * The response returned from the resync endpoint.
  */
 export type ResyncResponse = {
@@ -1437,11 +1737,16 @@ export type ResyncResponse = {
      */
     already_in_progress: boolean;
     /**
-     * The backfill job driving the (re-)sync. Either the freshly enqueued job or
+     * Opaque ID of the backfill job or provider sync stream driving the resync.
      * the one already in progress.
      */
     backfill_job_id: string;
 };
+
+/**
+ * The user-visible delivery state of an unsent scheduled message.
+ */
+export type ScheduledSendStatus = 'pending' | 'sending' | 'failed' | 'unconfirmed';
 
 /**
  * Request body for sending a message (backward-compatible with `{ message: MessageToSend }`).
@@ -1543,8 +1848,43 @@ export type ThreadPreviewCursor = {
     viewedAt?: string | null;
 };
 
+/**
+ * Semantic mailbox facts, independent of folder/category names.
+ */
+export type ThreadStateField = 'read' | 'starred' | 'trashed' | 'junk';
+
 export type ThreadSummary = {
     provider_id: string;
+};
+
+/**
+ * Reuse the same operation ID when retrying after a lost response.
+ */
+export type TransferDraftRequest = {
+    destination_link_id: string;
+    /**
+     * Generation captured with the source draft.
+     */
+    draft_generation?: number;
+    operation_id: string;
+};
+
+/**
+ * A new identity prevents delayed writes from mutating the moved copy.
+ */
+export type TransferDraftResponse = {
+    attachments: Array<ApiAttachmentDraft>;
+    message_id: string;
+    source_id: string;
+    source_thread_id: string;
+    thread_id: string;
+};
+
+/**
+ * A null result confirms that the move cannot commit, even if its request was delayed.
+ */
+export type TransferRecoveryResponse = {
+    committed?: null | TransferDraftResponse;
 };
 
 /**
@@ -1613,6 +1953,14 @@ export type UpdateThreadProjectResponse = {
 };
 
 /**
+ * Desired state for every applicable message in an authorized thread.
+ */
+export type UpdateThreadStateRequest = {
+    field: ThreadStateField;
+    value: boolean;
+};
+
+/**
  * Request body for creating or updating an email filter.
  */
 export type UpsertEmailFilterRequest = {
@@ -1653,9 +2001,40 @@ export type UpsertScheduledResponse = {
     send_time: string;
 };
 
-export type UserProvider = 'GMAIL';
+export type UserProvider = 'GMAIL' | 'OUTLOOK';
 
 export type Value = unknown;
+
+/**
+ * What the viewing requester may do with an event.
+ */
+export type ViewerCapabilities = {
+    /**
+     * Change the event's details (title, time, description, conference).
+     */
+    editDetails: boolean;
+    /**
+     * Add guests.
+     */
+    inviteGuests: boolean;
+    /**
+     * Act as the event's organizer: replace its whole guest list and manage
+     * its conferencing.
+     */
+    organize: boolean;
+    /**
+     * Remove guests.
+     */
+    removeGuests: boolean;
+    /**
+     * Answer the invitation.
+     */
+    rsvp: boolean;
+    /**
+     * Change the event's guest policy, which only Google calendars have.
+     */
+    setGuestPolicy: boolean;
+};
 
 export type GetAttachmentData = {
     body?: never;
@@ -1802,6 +2181,52 @@ export type GetBackfillGmailResponses = {
 
 export type GetBackfillGmailResponse = GetBackfillGmailResponses[keyof GetBackfillGmailResponses];
 
+export type ForwardCalendarEventData = {
+    body: ForwardCalendarEventRequest;
+    path: {
+        /**
+         * The viewer's copy of the event
+         */
+        event_id: string;
+    };
+    query?: never;
+    url: '/email/calendar-events/{event_id}/forward';
+};
+
+export type ForwardCalendarEventErrors = {
+    /**
+     * No, too many, or invalid recipients
+     */
+    400: ForwardCalendarEventError;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * The inbox holding the copy cannot send for the viewer
+     */
+    403: ForwardCalendarEventError;
+    /**
+     * No such event on one of the viewer's own inboxes
+     */
+    404: ForwardCalendarEventError;
+    /**
+     * The email could not be sent
+     */
+    502: ForwardCalendarEventError;
+};
+
+export type ForwardCalendarEventError2 = ForwardCalendarEventErrors[keyof ForwardCalendarEventErrors];
+
+export type ForwardCalendarEventResponses = {
+    /**
+     * The email is queued to send
+     */
+    202: ForwardCalendarEventResponse;
+};
+
+export type ForwardCalendarEventResponse2 = ForwardCalendarEventResponses[keyof ForwardCalendarEventResponses];
+
 export type ListContactsData = {
     body?: never;
     path?: never;
@@ -1886,6 +2311,26 @@ export type UnblockSenderResponses = {
 
 export type UnblockSenderResponse = UnblockSenderResponses[keyof UnblockSenderResponses];
 
+export type RecoverDraftTransferData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/email/draft-transfers/{id}/recover';
+};
+
+export type RecoverDraftTransferErrors = {
+    403: unknown;
+    500: unknown;
+};
+
+export type RecoverDraftTransferResponses = {
+    200: TransferRecoveryResponse;
+};
+
+export type RecoverDraftTransferResponse = RecoverDraftTransferResponses[keyof RecoverDraftTransferResponses];
+
 export type CreateDraftData = {
     body: CreateDraftRequest;
     path?: never;
@@ -1945,7 +2390,12 @@ export type UpsertScheduledMessageData = {
          */
         id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Generation from the last loaded draft. Legacy clients use zero.
+         */
+        draft_generation?: number;
+    };
     url: '/email/drafts/scheduled/{id}';
 };
 
@@ -1973,7 +2423,12 @@ export type DeleteScheduledDraftData = {
          */
         message_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Generation from the last loaded draft. Legacy clients use zero.
+         */
+        draft_generation?: number;
+    };
     url: '/email/drafts/scheduled/{message_id}';
 };
 
@@ -2004,7 +2459,12 @@ export type DeleteDraftData = {
          */
         id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Generation from the last loaded draft. Legacy clients use zero.
+         */
+        draft_generation?: number;
+    };
     url: '/email/drafts/{id}';
 };
 
@@ -2031,7 +2491,12 @@ export type AddDraftAttachmentData = {
          */
         id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Generation from the last loaded draft. Legacy clients use zero.
+         */
+        draft_generation?: number;
+    };
     url: '/email/drafts/{id}/attachments';
 };
 
@@ -2062,7 +2527,12 @@ export type RemoveDraftAttachmentData = {
          */
         attachment_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Generation from the last loaded draft. Legacy clients use zero.
+         */
+        draft_generation?: number;
+    };
     url: '/email/drafts/{id}/attachments/{attachment_id}';
 };
 
@@ -2081,6 +2551,35 @@ export type RemoveDraftAttachmentResponses = {
 
 export type RemoveDraftAttachmentResponse = RemoveDraftAttachmentResponses[keyof RemoveDraftAttachmentResponses];
 
+export type CompleteDraftAttachmentData = {
+    body?: never;
+    path: {
+        id: string;
+        attachment_id: string;
+    };
+    query?: {
+        /**
+         * Generation from the last loaded draft. Legacy clients use zero.
+         */
+        draft_generation?: number;
+    };
+    url: '/email/drafts/{id}/attachments/{attachment_id}/complete';
+};
+
+export type CompleteDraftAttachmentErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+    409: unknown;
+    500: unknown;
+};
+
+export type CompleteDraftAttachmentResponses = {
+    204: void;
+};
+
+export type CompleteDraftAttachmentResponse = CompleteDraftAttachmentResponses[keyof CompleteDraftAttachmentResponses];
+
 export type AddForwardedAttachmentData = {
     body: AddForwardedAttachmentRequest;
     path: {
@@ -2089,7 +2588,12 @@ export type AddForwardedAttachmentData = {
          */
         id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Generation from the last loaded draft. Legacy clients use zero.
+         */
+        draft_generation?: number;
+    };
     url: '/email/drafts/{id}/forwarded-attachments';
 };
 
@@ -2118,7 +2622,12 @@ export type RemoveForwardedAttachmentData = {
          */
         attachment_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Generation from the last loaded draft. Legacy clients use zero.
+         */
+        draft_generation?: number;
+    };
     url: '/email/drafts/{id}/forwarded-attachments/{attachment_id}';
 };
 
@@ -2134,6 +2643,80 @@ export type RemoveForwardedAttachmentResponses = {
 };
 
 export type RemoveForwardedAttachmentResponse = RemoveForwardedAttachmentResponses[keyof RemoveForwardedAttachmentResponses];
+
+export type MessageOperationStatusData = {
+    body?: never;
+    path: {
+        /**
+         * Message ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/email/drafts/{id}/operation';
+};
+
+export type MessageOperationStatusErrors = {
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MessageOperationStatusError = MessageOperationStatusErrors[keyof MessageOperationStatusErrors];
+
+export type MessageOperationStatusResponses = {
+    200: MessageOperationResponse;
+};
+
+export type MessageOperationStatusResponse = MessageOperationStatusResponses[keyof MessageOperationStatusResponses];
+
+export type ResolveMessageOperationData = {
+    body: ResolveMessageOperationRequest;
+    path: {
+        /**
+         * Message ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/email/drafts/{id}/resolve';
+};
+
+export type ResolveMessageOperationErrors = {
+    400: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type ResolveMessageOperationError = ResolveMessageOperationErrors[keyof ResolveMessageOperationErrors];
+
+export type ResolveMessageOperationResponses = {
+    204: void;
+};
+
+export type ResolveMessageOperationResponse = ResolveMessageOperationResponses[keyof ResolveMessageOperationResponses];
+
+export type TransferDraftData = {
+    body: TransferDraftRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/email/drafts/{id}/transfer';
+};
+
+export type TransferDraftErrors = {
+    403: unknown;
+    404: unknown;
+    409: unknown;
+    500: unknown;
+};
+
+export type TransferDraftResponses = {
+    200: TransferDraftResponse;
+};
+
+export type TransferDraftResponse2 = TransferDraftResponses[keyof TransferDraftResponses];
 
 export type ListEmailFiltersData = {
     body?: never;
@@ -2221,6 +2804,7 @@ export type InitUserData = {
 export type InitUserErrors = {
     400: InitErrorCodeResponse;
     401: ErrorResponse;
+    402: ErrorResponse;
     409: SharedInboxConflictResponse;
     429: ErrorResponse;
     500: ErrorResponse;
@@ -2520,6 +3104,35 @@ export type GetMessageResponses = {
 
 export type GetMessageResponse = GetMessageResponses[keyof GetMessageResponses];
 
+export type GetMessageEmlData = {
+    body?: never;
+    path: {
+        /**
+         * Message ID.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/email/messages/{id}/eml';
+};
+
+export type GetMessageEmlErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    429: ErrorResponse;
+    503: ErrorResponse;
+};
+
+export type GetMessageEmlError = GetMessageEmlErrors[keyof GetMessageEmlErrors];
+
+export type GetMessageEmlResponses = {
+    200: EmlFile;
+};
+
+export type GetMessageEmlResponse = GetMessageEmlResponses[keyof GetMessageEmlResponses];
+
 export type PatchSettingsData = {
     body: PatchSettingsRequest;
     path?: never;
@@ -2542,8 +3155,27 @@ export type PatchSettingsResponses = {
 
 export type PatchSettingsResponse2 = PatchSettingsResponses[keyof PatchSettingsResponses];
 
+export type MailboxSettingsOperationsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/email/settings/operations';
+};
+
+export type MailboxSettingsOperationsResponses = {
+    200: Array<MailboxSettingsOperation>;
+};
+
+export type MailboxSettingsOperationsResponse = MailboxSettingsOperationsResponses[keyof MailboxSettingsOperationsResponses];
+
 export type DisableSyncData = {
     body?: never;
+    headers?: {
+        /**
+         * Inbox link ID to act on instead of the caller's primary inbox; may name a delegated inbox.
+         */
+        'X-Email-Link-Id'?: string | null;
+    };
     path?: never;
     query?: never;
     url: '/email/sync';
@@ -2552,6 +3184,9 @@ export type DisableSyncData = {
 export type DisableSyncErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -2562,6 +3197,27 @@ export type DisableSyncResponses = {
 };
 
 export type DisableSyncResponse = DisableSyncResponses[keyof DisableSyncResponses];
+
+export type ArchiveThreadsData = {
+    body: ArchiveThreadsRequest;
+    path?: never;
+    query?: never;
+    url: '/email/threads/archived';
+};
+
+export type ArchiveThreadsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ArchiveThreadsError = ArchiveThreadsErrors[keyof ArchiveThreadsErrors];
+
+export type ArchiveThreadsResponses = {
+    200: ArchiveThreadsResponse;
+};
+
+export type ArchiveThreadsResponse2 = ArchiveThreadsResponses[keyof ArchiveThreadsResponses];
 
 export type PreviewsInboxCursorData = {
     body?: never;
@@ -2703,6 +3359,30 @@ export type GetThreadMessagesHandlerResponses = {
 
 export type GetThreadMessagesHandlerResponse = GetThreadMessagesHandlerResponses[keyof GetThreadMessagesHandlerResponses];
 
+export type ThreadOperationsData = {
+    body?: never;
+    path: {
+        /**
+         * Thread ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/email/threads/{id}/operations';
+};
+
+export type ThreadOperationsErrors = {
+    404: ErrorResponse;
+};
+
+export type ThreadOperationsError = ThreadOperationsErrors[keyof ThreadOperationsErrors];
+
+export type ThreadOperationsResponses = {
+    200: Array<MailboxOperation>;
+};
+
+export type ThreadOperationsResponse = ThreadOperationsResponses[keyof ThreadOperationsResponses];
+
 export type ThreadSeenData = {
     body?: never;
     path: {
@@ -2728,6 +3408,33 @@ export type ThreadSeenResponses = {
 };
 
 export type ThreadSeenResponse = ThreadSeenResponses[keyof ThreadSeenResponses];
+
+export type UpdateThreadStateData = {
+    body: UpdateThreadStateRequest;
+    path: {
+        /**
+         * Thread ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/email/threads/{id}/state';
+};
+
+export type UpdateThreadStateErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type UpdateThreadStateError = UpdateThreadStateErrors[keyof UpdateThreadStateErrors];
+
+export type UpdateThreadStateResponses = {
+    204: void;
+};
+
+export type UpdateThreadStateResponse = UpdateThreadStateResponses[keyof UpdateThreadStateResponses];
 
 export type GetThreadData = {
     body?: never;
@@ -2789,6 +3496,64 @@ export type GetThreadCalendarInvitationsResponses = {
 };
 
 export type GetThreadCalendarInvitationsResponse = GetThreadCalendarInvitationsResponses[keyof GetThreadCalendarInvitationsResponses];
+
+export type CopyThreadCalendarInvitationData = {
+    body: CopyCalendarEventRequest;
+    path: {
+        /**
+         * Authorized email thread
+         */
+        thread_id: string;
+        /**
+         * Message carrying the event
+         */
+        message_id: string;
+        /**
+         * Saved event within the message
+         */
+        invitation_id: string;
+    };
+    query?: never;
+    url: '/email/threads/{thread_id}/messages/{message_id}/calendar-invitations/{invitation_id}/copy';
+};
+
+export type CopyThreadCalendarInvitationErrors = {
+    /**
+     * The saved event cannot be added, or the calendar is not a Google calendar
+     */
+    400: CalendarMutationApiError;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Calendar is read-only or needs reauthorization
+     */
+    403: CalendarMutationApiError;
+    /**
+     * No such saved event in the thread
+     */
+    404: CalendarMutationApiError;
+    /**
+     * Already on the viewer's calendar, no writable calendar, or the provider refused the copy
+     */
+    409: CalendarMutationApiError;
+    /**
+     * Transient provider failure
+     */
+    503: CalendarMutationApiError;
+};
+
+export type CopyThreadCalendarInvitationError = CopyThreadCalendarInvitationErrors[keyof CopyThreadCalendarInvitationErrors];
+
+export type CopyThreadCalendarInvitationResponses = {
+    /**
+     * The copy on the viewer's calendar
+     */
+    201: CalendarEvent;
+};
+
+export type CopyThreadCalendarInvitationResponse = CopyThreadCalendarInvitationResponses[keyof CopyThreadCalendarInvitationResponses];
 
 export type UpdateThreadProjectData = {
     body: UpdateThreadProjectRequest;

@@ -144,6 +144,14 @@ type GraphqlMutationOptions = {
   ) => unknown;
 };
 
+const inFlightMutations = new Set<Promise<unknown>>();
+
+afterEach(async () => {
+  const pending = [...inFlightMutations];
+  inFlightMutations.clear();
+  await Promise.all(pending);
+});
+
 beforeEach(() => {
   graphqlCacheEnabledMock.mockReturnValue(true);
   graphqlSoupEnabledMock.mockReturnValue(true);
@@ -196,7 +204,7 @@ beforeEach(() => {
           return error;
         },
         mutate: (input: GraphqlMutationInput) => {
-          void mutateAsync(input);
+          inFlightMutations.add(mutateAsync(input));
         },
         mutateAsync,
       };

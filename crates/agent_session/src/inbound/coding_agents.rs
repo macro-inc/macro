@@ -65,6 +65,7 @@ pub fn coding_agents_router<Service: CodingAgentService, Auth: MacroAuthorizatio
         Router::new()
             .route("/list", post(list::<Service, Auth>))
             .route("/dispatch", post(dispatch::<Service, Auth>))
+            .route("/create-session", post(create::<Service, Auth>))
             .layer(DefaultBodyLimit::max(MAX_COMMAND_BYTES))
             .layer(middleware::from_fn(bound_request))
             .with_state(state),
@@ -113,7 +114,7 @@ impl IntoResponse for ApiError {
 }
 
 async fn bound_request(request: Request, next: Next) -> Response {
-    let is_dispatch = request.uri().path().ends_with("/dispatch");
+    let is_dispatch = !request.uri().path().ends_with("/list");
     let timeout = if is_dispatch {
         DISPATCH_TIMEOUT
     } else {
@@ -161,3 +162,11 @@ async fn dispatch<Service: CodingAgentService, Auth: MacroAuthorizationService>(
 
 #[cfg(test)]
 mod test;
+
+async fn create<Service: CodingAgentService, Auth: MacroAuthorizationService>(
+    State(state): State<CodingAgentsState<Service, Auth>>,
+    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
+    command: Result<Json<DispatchCodingAgentRequest>, JsonRejection>,
+) -> Result<Json<DispatchedCodingAgent>, ApiError> {
+    Ok(Json(state.service.create(command?.0).await?))
+}

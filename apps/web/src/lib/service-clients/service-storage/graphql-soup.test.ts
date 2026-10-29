@@ -20,6 +20,7 @@ it.each(['view', 'comment', 'edit'] as const)(
       id: 'access-notification',
       entityId: 'document',
       entityType: 'DOCUMENT' as const,
+      targetEntityType: 'DOCUMENT' as const,
       state: 'UNSEEN' as const,
       sent: true,
       senderId: 'owner',
@@ -62,6 +63,72 @@ it.each(['view', 'comment', 'edit'] as const)(
   }
 );
 
+describe('email thread sort keys', () => {
+  const thread = {
+    __typename: 'GraphqlSoupEmailThread',
+    id: 'thread',
+    entityType: 'EMAIL_THREAD',
+    displayName: 'Invite',
+    isFavorited: false,
+    frecencyScore: null,
+    cacheProjection: null,
+    ownerId: 'owner',
+    linkId: 'link',
+    inboxVisible: true,
+    isRead: false,
+    isDraft: false,
+    isImportant: false,
+    isSignal: true,
+    projectId: null,
+    createdAt: '2026-09-28T19:32:00+00:00',
+    updatedAt: '2026-10-07T00:00:00+00:00',
+    viewedAt: null,
+    latestInboundMessageTs: '2026-09-28T19:32:00+00:00',
+    reminderReturnedAt: '2026-10-06T21:14:00+00:00',
+    latestOutboundMessageTs: '2026-09-29T08:00:00+00:00',
+    latestNonSpamMessageTs: '2026-09-29T08:00:00+00:00',
+    participants: [],
+    attachments: [],
+    labels: [],
+    properties: [],
+    notifications: [],
+  } as unknown as SoupItemFieldsFragment;
+  const sortTs = (item: ReturnType<typeof mapGraphqlSoupItem>) =>
+    item?.tag === 'emailThread' ? item.data.sortTs : undefined;
+  let mapGraphqlSoupItem: typeof import('./graphql-soup').mapGraphqlSoupItem;
+  beforeEach(async () => {
+    ({ mapGraphqlSoupItem } = await import('./graphql-soup'));
+  });
+
+  it.each([
+    ['INBOX', '2026-10-06T21:14:00+00:00'],
+    [undefined, '2026-10-06T21:14:00+00:00'],
+    ['SENT', '2026-09-29T08:00:00+00:00'],
+    ['ALL', '2026-09-29T08:00:00+00:00'],
+    ['DRAFTS', '2026-09-29T08:00:00+00:00'],
+  ] as const)('dates a thread by the %s view key', (view, expected) => {
+    expect(sortTs(mapGraphqlSoupItem(thread, { emailView: view }))).toBe(
+      expected
+    );
+  });
+
+  it('falls back to the thread update time when the view has no key', () => {
+    const bare = {
+      ...thread,
+      latestInboundMessageTs: null,
+      reminderReturnedAt: null,
+      latestOutboundMessageTs: null,
+      latestNonSpamMessageTs: null,
+    } as SoupItemFieldsFragment;
+    expect(sortTs(mapGraphqlSoupItem(bare, { emailView: 'INBOX' }))).toBe(
+      '2026-10-07T00:00:00+00:00'
+    );
+    expect(sortTs(mapGraphqlSoupItem(bare, { emailView: 'SENT' }))).toBe(
+      '2026-10-07T00:00:00+00:00'
+    );
+  });
+});
+
 it('preserves initiative identity, properties, and metadata separately from folders', async () => {
   const { mapGraphqlSoupItem } = await import('./graphql-soup');
   expect(
@@ -98,6 +165,14 @@ it('preserves initiative identity, properties, and metadata separately from fold
   });
 });
 
+it('skips a Soup item type from a newer server', async () => {
+  const { mapGraphqlSoupItem } = await import('./graphql-soup');
+  const fromNewerServer = JSON.parse(
+    '{"__typename":"GraphqlSoupNewKind","id":"new-1","frecencyScore":null}'
+  );
+  expect(mapGraphqlSoupItem(fromNewerServer)).toBeNull();
+});
+
 it('preserves the scheduled occurrence identity on reminder notifications', async () => {
   const { mapGraphqlNotification } = await import('./graphql-soup');
   const mapped = mapGraphqlNotification({
@@ -105,6 +180,7 @@ it('preserves the scheduled occurrence identity on reminder notifications', asyn
     id: 'notification-1',
     entityId: 'thread-1',
     entityType: 'EMAIL_THREAD',
+    targetEntityType: 'EMAIL_THREAD',
     eventType: 'reminder',
     state: 'UNSEEN',
     sent: true,
@@ -156,6 +232,8 @@ it('maps agent sessions without discarding persona, favorites or notifications',
       avatarUrl: null,
     },
     threadId: null,
+    source: 'ROUTINE',
+    visibility: 'UNLISTED',
     status: 'acp_ready',
     createdAt: '2026-01-01',
     updatedAt: '2026-01-02',
@@ -182,6 +260,8 @@ it('maps agent sessions without discarding persona, favorites or notifications',
       pullRequestState: 'merged',
       pullRequestId: 'linked-pr',
       turnState: 'idle',
+      source: 'routine',
+      visibility: 'unlisted',
       status: 'acp_ready',
       notifications: [],
     },
@@ -205,6 +285,8 @@ const mocks = vi.hoisted(() => {
   const cleanupOrder: string[] = [];
   const host = {
     disabled: false,
+    currentRevision: vi.fn(async () => '1'),
+    inspectMutations: vi.fn(async () => []),
     dispose: vi.fn(() => cleanupOrder.push('host')),
     enqueueOptimisticMutation: vi.fn(async () => {
       queuedMutationCount += 1;
@@ -281,6 +363,8 @@ const mocks = vi.hoisted(() => {
     platformFetch,
     toastFailure,
     telemetryError: vi.fn(),
+    telemetryWarn: vi.fn(),
+    traceparent: '00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01',
     normalizedCacheExchange: vi.fn(
       (host: unknown, _options?: NormalizedCacheExchangeOptions) => ({
         kind: 'cache',
@@ -364,10 +448,14 @@ vi.mock('@graphql-cache/exchange/normalized-cache-exchange', () => ({
 vi.mock('@macro-inc/observability', () => ({
   Telemetry: {
     error: mocks.telemetryError,
+    warn: mocks.telemetryWarn,
     span: (_name: string, work: (span: unknown) => Promise<unknown>) =>
       work({
         event: vi.fn(),
         setAttr: vi.fn(),
+        injectTraceHeaders: (headers: Record<string, string>) => {
+          headers.traceparent = mocks.traceparent;
+        },
       }),
   },
 }));
@@ -382,7 +470,11 @@ vi.mock('./graphql/generated/graphql', () => ({
   GroupSoupDocument: {},
   SoupDocument: {},
 }));
+vi.mock('./graphql-notification-receipt', () => ({
+  notificationReceiptExchange: () => ({ kind: 'notification-receipt' }),
+}));
 vi.mock('./graphql-soup-websocket', () => ({
+  publishNotificationPatch: vi.fn(),
   SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS: 0,
   shouldRetryGraphqlSoupWebSocket: () => false,
   waitToRetryGraphqlSoupWebSocket: vi.fn(),
@@ -398,9 +490,21 @@ vi.mock('@urql/core', () => ({
   createClient: (options: {
     exchanges: Array<{ kind?: string; host?: typeof mocks.host }>;
   }) => {
-    const cacheExchange = options.exchanges.find(
+    const cacheIndex = options.exchanges.findIndex(
       ({ kind }) => kind === 'cache'
     );
+    const subscriptionIndex = options.exchanges.findIndex(
+      ({ kind }) => kind === 'subscription'
+    );
+    if (subscriptionIndex >= 0) {
+      const receiptIndex = options.exchanges.findIndex(
+        ({ kind }) => kind === 'notification-receipt'
+      );
+      expect(receiptIndex).toBeGreaterThanOrEqual(0);
+      expect(receiptIndex).toBeLessThan(subscriptionIndex);
+      if (cacheIndex >= 0) expect(receiptIndex).toBeGreaterThan(cacheIndex);
+    }
+    const cacheExchange = options.exchanges[cacheIndex];
     if (!cacheExchange?.host) {
       return options.exchanges.some(({ kind }) => kind === 'subscription')
         ? mocks.realtimeClient
@@ -468,6 +572,7 @@ describe('legacy channel list notifications', () => {
     eventType: 'channel_message_send',
     entityId: 'channel',
     entityType: 'CHANNEL',
+    targetEntityType: 'CHANNEL',
     state: 'UNSEEN',
     sent: true,
     senderId: 'sender',
@@ -674,7 +779,9 @@ describe('GraphQL Soup browser cache session gate', () => {
     mocks.telemetryError.mockReset();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    const soup = await import('./graphql-soup');
+    soup.setGraphqlSoupSessionActive(false);
     vi.unstubAllGlobals();
   });
 
@@ -730,6 +837,72 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(payload.query).toContain('cacheProjection');
     expect(payload.query).toContain('@include');
     expect(payload.variables).toEqual({ includeId: true });
+    expect(new Headers(transport.headers).get('traceparent')).toBe(
+      mocks.traceparent
+    );
+  });
+
+  it('reports the queued mutations a sign-out deletes', async () => {
+    const now = Date.now();
+    mocks.host.inspectMutations.mockResolvedValueOnce([
+      {
+        operationName: 'SaveEmailDraft',
+        variables: { body: 'secret' },
+        enqueuedAtMs: now - 5_000,
+      },
+      { operationName: 'SaveEmailDraft', variables: { body: 'secret' } },
+      {
+        operationName: 'SetEntityProperty',
+        variables: {},
+        enqueuedAtMs: now - 90_000,
+      },
+    ] as never);
+    const soup = await import('./graphql-soup');
+    soup.getGraphqlSoupClient();
+
+    await soup.recordGraphqlMutationQueueCleared('session-expired');
+
+    expect(mocks.telemetryWarn).toHaveBeenCalledWith(
+      'graphql.mutation_queue.cleared',
+      {
+        'mutation_queue.clear_cause': 'session-expired',
+        'mutation_queue.depth': 3,
+        'mutation_queue.operation_names': 'SaveEmailDraft,SetEntityProperty',
+        'mutation_queue.items': expect.stringMatching(
+          /^SetEntityProperty:9\d{4},SaveEmailDraft:\d+,SaveEmailDraft:unknown$/
+        ),
+        'mutation_queue.oldest_item_age_ms': expect.any(Number),
+        'mutation_queue.age_unknown_items': 1,
+      }
+    );
+    const exported = JSON.stringify(mocks.telemetryWarn.mock.calls);
+    expect(exported).not.toContain('secret');
+  });
+
+  it('never rejects or stalls sign-out when queue inspection fails', async () => {
+    const soup = await import('./graphql-soup');
+    soup.getGraphqlSoupClient();
+
+    mocks.host.inspectMutations.mockImplementationOnce(() => {
+      throw new Error('worker gone');
+    });
+    await expect(
+      soup.recordGraphqlMutationQueueCleared('logout')
+    ).resolves.toBeUndefined();
+
+    vi.useFakeTimers();
+    try {
+      mocks.host.inspectMutations.mockReturnValueOnce(new Promise(() => {}));
+      const pending = soup.recordGraphqlMutationQueueCleared('logout');
+      await vi.advanceTimersByTimeAsync(1000);
+      await expect(pending).resolves.toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(mocks.telemetryWarn).not.toHaveBeenCalledWith(
+      'graphql.mutation_queue.cleared',
+      expect.anything()
+    );
   });
 
   it.each([
@@ -1040,6 +1213,86 @@ describe('GraphQL Soup browser cache session gate', () => {
     }
   );
 
+  it('reopens the same scope and keeps draft writes blocked until queue inspection completes', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const soup = await import('./graphql-soup');
+    const { CacheBootstrapExhaustedError } = await import(
+      '@graphql-cache/worker/startup'
+    );
+    soup.getGraphqlSoupClient();
+    mocks.failInitialization(
+      new CacheBootstrapExhaustedError('Failed to fetch')
+    );
+    expect(soup.graphqlDraftQueueBlocked()).toBe(true);
+    const inspection = Promise.withResolvers<never[]>();
+    mocks.host.inspectMutations.mockImplementationOnce(
+      () => inspection.promise
+    );
+    const retry = soup.retryGraphqlCacheInitialization();
+    expect(soup.graphqlDraftQueueBlocked()).toBe(true);
+    inspection.resolve([]);
+    await retry;
+    expect(soup.graphqlDraftQueueBlocked()).toBe(false);
+    expect(soup.graphqlCacheEnabled()).toBe(true);
+    expect(mocks.createWorkerCacheHost).toHaveBeenCalledTimes(2);
+    for (const [options] of mocks.createWorkerCacheHost.mock.calls) {
+      expect(options).toMatchObject({ scope: 'anonymous-scope' });
+    }
+  });
+
+  it('rejects drafts from both retired and uncached transports after recovery', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const soup = await import('./graphql-soup');
+    const { CacheBootstrapExhaustedError } = await import(
+      '@graphql-cache/worker/startup'
+    );
+    soup.getGraphqlSoupClient();
+    const old = soup.getGraphqlCacheHost();
+    mocks.failInitialization(
+      new CacheBootstrapExhaustedError('Failed to fetch')
+    );
+    await soup.retryGraphqlCacheInitialization();
+    const request = {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'mutation { saveEmailDraft(input: {}) { __typename } }',
+      }),
+    };
+    await expect(
+      soup.dssGraphqlFetch('http://dss.test/graphql', request, old)
+    ).rejects.toThrow('client was replaced');
+    await expect(
+      soup.dssGraphqlFetch('http://dss.test/graphql', request)
+    ).rejects.toThrow('client was replaced');
+    expect(mocks.platformFetch).not.toHaveBeenCalled();
+  });
+
+  it('does not enable a replacement that finishes inspection after sign-out', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const soup = await import('./graphql-soup');
+    const { CacheBootstrapExhaustedError } = await import(
+      '@graphql-cache/worker/startup'
+    );
+    soup.getGraphqlSoupClient();
+    mocks.failInitialization(
+      new CacheBootstrapExhaustedError('Failed to fetch')
+    );
+    const inspected = Promise.withResolvers<void>();
+    const inspection = Promise.withResolvers<never[]>();
+    mocks.host.inspectMutations.mockImplementationOnce(() => {
+      inspected.resolve();
+      return inspection.promise;
+    });
+    const retry = soup.retryGraphqlCacheInitialization();
+    await inspected.promise;
+    soup.setGraphqlSoupSessionActive(false);
+    inspection.resolve([]);
+    await retry;
+    expect(soup.getGraphqlCacheHost()).toBeUndefined();
+    expect(soup.graphqlCacheEnabled()).toBe(false);
+    expect(soup.getGraphqlSoupClient()).toBe(mocks.plainClient);
+  });
+
   it('reports synchronous cache construction failures before falling back', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const error = new Error('cache worker construction failed');
@@ -1091,7 +1344,8 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(soup.graphqlCacheEnabled()).toBe(false);
     expect(mocks.cleanupOrder()).toEqual(['subscriptions', 'host']);
     expect(mocks.toastFailure).toHaveBeenCalledWith('Local cache unavailable', {
-      subtext: 'Macro will continue without local caching for this session.',
+      subtext:
+        'Queued changes are preserved. Update or reload Macro to recover local storage.',
     });
     expect(warn).toHaveBeenCalledWith(
       'graphql cache async init failed; using uncached client',
@@ -1212,7 +1466,7 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(mocks.toastFailure).not.toHaveBeenCalled();
     expect(mocks.telemetryError).not.toHaveBeenCalled();
     expect(info).toHaveBeenCalledExactlyOnceWith(
-      '[graphql-cache] owner lock is held by another context; using the network until reload'
+      '[graphql-cache] owner lock is held by another context; using the network while waiting to retry'
     );
     expect(mocks.host.dispose).toHaveBeenCalledOnce();
     expect(soup.graphqlCacheEnabled()).toBe(false);
@@ -1250,5 +1504,41 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(mocks.createTauriCacheHost).toHaveBeenCalledOnce();
     expect(mocks.createWorkerCacheHost).not.toHaveBeenCalled();
     expect(WorkerConstructor).not.toHaveBeenCalled();
+  });
+});
+
+it('preserves canonical external chat identity and notification metadata through GraphQL', async () => {
+  const { mapGraphqlNotification } = await import('./graphql-soup');
+  const mapped = mapGraphqlNotification({
+    __typename: 'GraphqlNotification',
+    id: 'notification',
+    eventType: 'external_chat_message',
+    entityId: 'chat-1',
+    entityType: 'DOCUMENT',
+    targetEntityType: 'EXTERNAL_CHAT',
+    state: 'UNSEEN',
+    sent: true,
+    senderId: null,
+    createdAt: '2026-10-21T10:00:00Z',
+    updatedAt: '2026-10-21T10:00:00Z',
+    viewedAt: null,
+    metadata: {
+      __typename: 'GraphqlExternalChatMessageMetadata',
+      externalChatProvider: 'whatsapp',
+      externalChatName: 'Design Crit',
+      externalChatMessageId: 'message-1',
+    },
+  });
+  expect(mapped).toMatchObject({
+    entity_type: 'external_chat',
+    entity_id: 'chat-1',
+    notification_metadata: {
+      tag: 'external_chat_message',
+      content: {
+        provider: 'whatsapp',
+        chatName: 'Design Crit',
+        messageId: 'message-1',
+      },
+    },
   });
 });

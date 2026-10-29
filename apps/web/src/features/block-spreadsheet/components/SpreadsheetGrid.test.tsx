@@ -51,6 +51,8 @@ function renderGrid(
     | 'onResizeColumn'
     | 'dropdowns'
     | 'ownsClipboard'
+    | 'tables'
+    | 'tableUi'
   > & {
     values?: ComponentProps<typeof SpreadsheetGrid>['values'];
     readonly?: boolean;
@@ -119,6 +121,8 @@ function renderGrid(
           onFill={options.onFill}
           onResizeColumn={options.onResizeColumn}
           dropdowns={options.dropdowns}
+          tables={options.tables}
+          tableUi={options.tableUi}
           onToggleCheckbox={(position) => {
             controller.select(position);
             controller.toggleCheckboxes();
@@ -1556,5 +1560,68 @@ describe('cell context menu', () => {
     fireEvent.keyDown(clear, { key: 'Enter' });
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     expect(onCellAction).not.toHaveBeenCalled();
+  });
+});
+
+describe('tables in the grid', () => {
+  const tables = [
+    {
+      name: 'Sales',
+      range: 'A1:B41',
+      totalsRow: true,
+      bandedRows: true,
+      style: 'TableStyleMedium2',
+    },
+  ];
+  const tableUi = {
+    columnMenu: (table: () => { name: string }, column: number) => (
+      <span data-testid="column-menu">{`${table().name} ${column}`}</span>
+    ),
+    tableMenu: (table: () => { name: string }) => (
+      <span data-testid="table-menu">{table().name}</span>
+    ),
+    mismatch: (row: number, column: number) =>
+      row === 2 && column === 1 ? 'Expected a number' : undefined,
+    totalLabel: (row: number, column: number) =>
+      row === 40 && column === 1 ? 'Sum' : undefined,
+    columnNames: () => ['Item', 'Amount'],
+    menuTable: () => undefined,
+  };
+  const cells = {
+    A1: { value: 'Item' },
+    B1: { value: 'Amount' },
+    B3: { value: 'n/a' },
+    B41: { value: '=SUBTOTAL(109,[Amount])' },
+  };
+
+  it('names the active table, marks mismatches and labels totals', () => {
+    const view = renderGrid(cells, { rowCount: 100, tables, tableUi });
+    view.controller.select({ row: 9, column: 4 });
+    expect(view.queryByTestId('table-menu')).toBeNull();
+    view.controller.select({ row: 2, column: 1 });
+    expect(view.getByTestId('table-menu').textContent).toBe('Sales');
+    expect(view.getAllByTestId('column-menu')).toHaveLength(2);
+    const mismatch = view.getByRole('gridcell', { name: 'B3: n/a' });
+    expect(mismatch.getAttribute('title')).toBe('Expected a number');
+    expect(mismatch.querySelector('[data-type-mismatch]')).not.toBeNull();
+    expect(
+      view.container.querySelector('[data-address="B41"] [data-total-label]')
+        ?.textContent
+    ).toBe('Sum');
+    view.controller.select({ row: 0, column: 0 });
+    expect(view.queryByTestId('table-menu')).not.toBeNull();
+  });
+
+  it('shows the column names in the column headers once the header row scrolls away', () => {
+    const view = renderGrid(cells, { rowCount: 100, tables, tableUi });
+    view.controller.select({ row: 20, column: 0 });
+    const header = () =>
+      view.getByRole('button', { name: 'Select column A' }).textContent;
+    expect(header()).toBe('A');
+    view.element.scrollTop = 200;
+    fireEvent.scroll(view.element);
+    expect(header()).toBe('Item');
+    view.controller.select({ row: 60, column: 0 });
+    expect(header()).toBe('A');
   });
 });

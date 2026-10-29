@@ -254,6 +254,73 @@ fn dropdown_operations_and_read_validations_match_the_worker_contract() {
 }
 
 #[test]
+fn table_operations_and_summaries_match_the_worker_contract() {
+    let operation: SpreadsheetOperation = serde_json::from_value(serde_json::json!({
+        "type": "create_table", "sheetId": "sheet1", "range": "A1:D20",
+        "name": "Sales", "totalsRow": true,
+        "columnTypes": [{"column": "Status", "type": "dropdown"}, {"column": "Price", "type": "currency"}]
+    }))
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(&operation).unwrap(),
+        serde_json::json!({
+            "type": "create_table", "sheetId": "sheet1", "range": "A1:D20",
+            "name": "Sales", "totalsRow": true,
+            "columnTypes": [{"column": "Status", "type": "dropdown"}, {"column": "Price", "type": "currency"}]
+        })
+    );
+    assert!(
+        serde_json::from_value::<SpreadsheetOperation>(serde_json::json!({
+            "type": "create_table", "sheetId": "sheet1", "range": "A1:D20",
+            "columnTypes": [{"column": "Price", "type": "money"}]
+        }))
+        .is_err()
+    );
+    assert_eq!(
+        serde_json::to_value(SpreadsheetOperation::CreateTable {
+            sheet_id: "sheet1".into(),
+            range: "A1:B5".into(),
+            name: None,
+            totals_row: None,
+            column_types: None,
+        })
+        .unwrap(),
+        serde_json::json!({"type": "create_table", "sheetId": "sheet1", "range": "A1:B5"})
+    );
+    let parsed: SpreadsheetResponse = serde_json::from_value(serde_json::json!({
+        "action":"read", "revision":"r", "warnings":[], "ranges":[],
+        "sheets":[
+            {"id":"sheet1","name":"Data","rowCount":200,"columnCount":26,"usedRange":"A1:D21",
+             "populatedCells":84,"formulaCells":21,"errorCells":0,
+             "tables":[{"name":"Sales","range":"A1:D21","columns":["Region","Qty","Price","Amount"],
+                "totalsRow":true,"filteredColumns":["Region"],
+                "columnTypes":[{"column":"Qty","type":"number"}]}]},
+            {"id":"other","name":"Notes","rowCount":200,"columnCount":26,"usedRange":null,
+             "populatedCells":0,"formulaCells":0,"errorCells":0}
+        ]
+    }))
+    .unwrap();
+    let SpreadsheetResponse::Read { sheets, .. } = parsed else {
+        panic!("expected a read response");
+    };
+    assert_eq!(sheets[0].tables[0].name, "Sales");
+    assert_eq!(sheets[0].tables[0].columns.len(), 4);
+    assert!(sheets[0].tables[0].totals_row);
+    assert_eq!(sheets[0].tables[0].filtered_columns, ["Region"]);
+    assert_eq!(
+        sheets[0].tables[0].column_types[0].column_type,
+        SpreadsheetColumnType::Number
+    );
+    assert!(sheets[1].tables.is_empty());
+    assert!(
+        serde_json::to_value(&sheets[1])
+            .unwrap()
+            .get("tables")
+            .is_none()
+    );
+}
+
+#[test]
 fn checkbox_operations_and_read_styles_match_the_worker_contract() {
     assert_eq!(
         serde_json::to_value(SpreadsheetOperation::InsertCheckboxes {

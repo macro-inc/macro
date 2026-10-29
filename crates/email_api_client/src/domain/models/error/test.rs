@@ -22,4 +22,10 @@ fn email_api_error_identifies_transient_failures() {
         .is_transient()
     );
     assert!(!EmailApiError::OutdatedCursor.is_transient());
+    assert!(
+        !EmailApiError::SendRejected {
+            message: "invalid message".to_string(),
+        }
+        .is_transient()
+    );
 }

@@ -1,14 +1,16 @@
 //! Session-scoped review persistence with optimistic revision checks.
 use crate::domain::{CodeModeError, ExecutionId, reviews::*};
 use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::notifications::{NotificationWriter, PendingNotification};
 use async_trait::async_trait;
-use sqlx::{PgPool, types::Json};
+use sqlx::{PgConnection, PgPool, types::Json};
+use std::sync::Arc;
 
 #[cfg(test)]
 mod test;
 
 /// PostgreSQL reviews; session and execution deletion cascade normally.
-pub struct PgReviewStore(pub PgPool);
+pub struct PgReviewStore(pub PgPool, pub Arc<dyn NotificationWriter<PgConnection>>);
 fn storage(error: sqlx::Error) -> CodeModeError {
     CodeModeError::Storage(rootcause::report!(error).into())
 }
@@ -61,11 +63,24 @@ impl ReviewStore for PgReviewStore {
     ) -> Result<Vec<ReviewRecord>, CodeModeError> {
         Ok(sqlx::query_scalar!(r#"SELECT record AS "record: Json<ReviewRecord>" FROM agent_session_review WHERE agent_session_id = $1 AND execution_id = $2 ORDER BY id LIMIT 100"#, session.as_uuid(), execution.as_uuid()).fetch_all(&self.0).await.map_err(storage)?.into_iter().map(|record| record.0).collect())
     }
-    async fn save(&self, expected: i64, record: &ReviewRecord) -> Result<(), CodeModeError> {
-        let result = sqlx::query!("UPDATE agent_session_review SET record = $4, revision = $5 WHERE id = $1 AND agent_session_id = $2 AND revision = $3", record.id.0, record.session_id.as_uuid(), expected, Json(record) as _, record.revision).execute(&self.0).await.map_err(storage)?;
+    async fn save(
+        &self,
+        expected: i64,
+        record: &ReviewRecord,
+        notification: Option<&PendingNotification>,
+    ) -> Result<(), CodeModeError> {
+        let mut transaction = self.0.begin().await.map_err(storage)?;
+        let result = sqlx::query!("UPDATE agent_session_review SET record = $4, revision = $5 WHERE id = $1 AND agent_session_id = $2 AND revision = $3", record.id.0, record.session_id.as_uuid(), expected, Json(record) as _, record.revision).execute(&mut *transaction).await.map_err(storage)?;
         if result.rows_affected() != 1 {
             return Err(CodeModeError::Conflict);
         }
+        if let Some(notification) = notification {
+            self.1
+                .produce(&mut *transaction, notification)
+                .await
+                .map_err(|error| CodeModeError::Storage(rootcause::report!(error).into()))?;
+        }
+        transaction.commit().await.map_err(storage)?;
         Ok(())
     }
 }

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { until } from '@solid-primitives/promise';
 import { Mutex } from 'async-mutex';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
@@ -167,10 +168,13 @@ export function createColumnLayout(options: {
           (direction === 'left' ? -1 : 1)
       ];
     if (target)
-      void reorderColumn(
-        columnId,
-        target.id,
-        direction === 'left' ? 'before' : 'after'
+      fireAndForget(
+        reorderColumn(
+          columnId,
+          target.id,
+          direction === 'left' ? 'before' : 'after'
+        ),
+        'database'
       );
   }
   return {

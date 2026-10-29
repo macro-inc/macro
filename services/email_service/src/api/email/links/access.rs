@@ -19,6 +19,8 @@ pub enum InboxAccess {
 /// `Display` so handlers can be instrumented with `err`.
 #[derive(Debug, Error)]
 pub enum InboxActionError {
+    #[error("inbox changed or is disconnecting; retry after it settles")]
+    Conflict,
     #[error("inbox not found")]
     NotFound,
 
@@ -32,6 +34,7 @@ pub enum InboxActionError {
 impl IntoResponse for InboxActionError {
     fn into_response(self) -> Response {
         let status = match &self {
+            InboxActionError::Conflict => StatusCode::CONFLICT,
             InboxActionError::NotFound => StatusCode::NOT_FOUND,
             InboxActionError::Forbidden => StatusCode::FORBIDDEN,
             InboxActionError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -49,6 +52,18 @@ impl IntoResponse for InboxActionError {
             }),
         )
             .into_response()
+    }
+}
+
+impl From<email::domain::mailbox::lifecycle::InboxLifecycleError> for InboxActionError {
+    fn from(error: email::domain::mailbox::lifecycle::InboxLifecycleError) -> Self {
+        use email::domain::mailbox::lifecycle::InboxLifecycleError;
+        match error {
+            InboxLifecycleError::NotFound => Self::NotFound,
+            InboxLifecycleError::Forbidden => Self::Forbidden,
+            InboxLifecycleError::Changed | InboxLifecycleError::Disconnecting => Self::Conflict,
+            InboxLifecycleError::Unavailable => Self::Internal(anyhow::Error::new(error)),
+        }
     }
 }
 

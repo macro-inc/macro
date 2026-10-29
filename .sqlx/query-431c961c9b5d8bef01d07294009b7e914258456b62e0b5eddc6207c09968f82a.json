@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_preview_lease l SET status = CASE WHEN l.expires_at <= now() THEN 'expired' ELSE 'offline' END WHERE status IN ('starting','ready') AND (l.expires_at <= now() OR (replica_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM agent_preview_replica r WHERE r.id = l.replica_id AND r.expires_at > now()))) RETURNING metadata AS \"metadata: Json<StoredPreview>\", replica_id, status",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "metadata: Json<StoredPreview>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "replica_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "status",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "431c961c9b5d8bef01d07294009b7e914258456b62e0b5eddc6207c09968f82a"
+}

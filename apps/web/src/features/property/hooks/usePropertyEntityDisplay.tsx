@@ -6,7 +6,7 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { enableProjects } from '@core/constant/featureFlags';
 import { useChannelName } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import ProjectIcon from '@phosphor/stack.svg';
+import ProjectIcon from '@icon/system/regular/stack.svg';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createLazyMemo } from '@solid-primitives/memo';
@@ -45,6 +45,8 @@ type PropertyEntityDisplayResult = {
   icon: Accessor<JSX.Element>;
   /** Whether preview data is still loading */
   isLoading: Accessor<boolean>;
+  /** Whether the current preview confirms access to the referenced entity. */
+  hasPreviewAccess: Accessor<boolean>;
   /** Block or file type for linking (null if not linkable) */
   blockOrFileType: Accessor<string | null>;
   /** URL params for navigation (e.g., message ID for threads) */
@@ -55,14 +57,14 @@ type PropertyEntityDisplayResult = {
  * Hook to resolve entity display information (name, icon) for property entity values.
  * Handles preview fetching, channel name resolution, and user display names.
  *
- * @param entityId - The entity's unique identifier
- * @param entityType - The type of entity (USER, CHANNEL, DOCUMENT, etc.)
+ * @param entityIdSource - The entity's unique identifier
+ * @param entityTypeSource - The type of entity (USER, CHANNEL, DOCUMENT, etc.)
  * @param options - Optional configuration
  * @returns Object with name, icon, isLoading, and blockOrFileType accessors
  */
 export function usePropertyEntityDisplay(
-  entityId: Accessor<string>,
-  entityType: Accessor<EntityType>,
+  entityIdSource: Accessor<string>,
+  entityTypeSource: Accessor<EntityType | undefined>,
   options?: {
     /** Custom fallback icon for unknown entity types (null to show nothing) */
     fallbackIcon?: JSX.Element | null;
@@ -70,6 +72,10 @@ export function usePropertyEntityDisplay(
     specificMessageId?: Accessor<string | null | undefined>;
   }
 ): PropertyEntityDisplayResult {
+  // Callers usually read these from a property value, which every properties
+  // emission replaces. Only a real change may rebuild or re-run the reads below.
+  const entityId = createMemo(entityIdSource);
+  const entityType = createMemo(entityTypeSource);
   const projectsFlag = createMemo(() =>
     entityType() === 'INITIATIVE' ? useFeatureFlag(enableProjects) : undefined
   );
@@ -87,12 +93,10 @@ export function usePropertyEntityDisplay(
       ? source.data?.id
       : undefined;
   };
-  const previewType = () => entityTypeToItemType(entityType());
-
   const previewSource = createMemo(() => {
     const eType = entityType();
-    const pType = previewType();
     if (isPreviewable(eType)) {
+      const pType = entityTypeToItemType(eType);
       return untrack(
         () =>
           useItemPreview(() => ({
@@ -105,6 +109,10 @@ export function usePropertyEntityDisplay(
   // Keep subscription ownership separate from its value: a live result must
   // not dispose and reacquire the preview that produced it.
   const preview = () => previewSource()?.();
+  const hasPreviewAccess = () => {
+    const item = preview();
+    return !!item && isAccessiblePreviewItem(item);
+  };
 
   const channelNameSource = createMemo(() => {
     const eType = entityType();
@@ -142,7 +150,7 @@ export function usePropertyEntityDisplay(
         if (isAccessiblePreviewItem(item)) {
           return item.name;
         }
-        return `Unknown ${entityType().toLowerCase()}`;
+        return `Unknown ${entityType()?.toLowerCase() ?? 'entity'}`;
       })
   );
 
@@ -219,6 +227,7 @@ export function usePropertyEntityDisplay(
     name,
     icon,
     isLoading,
+    hasPreviewAccess,
     blockOrFileType,
     nativeProjectId,
     linkParams,

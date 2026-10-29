@@ -56,3 +56,21 @@ actions; always inspect outcome and toolActivity, including interruptions.
 #### Returns
 
 `Promise`\<[`StructuredCompletionResponse`](../../../../../generated/cognition/types.gen/type-aliases/StructuredCompletionResponse.md)\>
+
+***
+
+### usage()
+
+> **usage**(`options?`): `Promise`\<[`UsageSummary`](../../../../../generated/cognition/types.gen/type-aliases/UsageSummary.md)\>
+
+Read AI usage over a time range, optionally restricting it to users.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `options?` | `Omit`\<[`UsageRequest`](../../../../../generated/cognition/types.gen/type-aliases/UsageRequest.md), `"include_users"`\> & \{ `users?`: [`User`](../../../users/user/classes/User.md)[]; \} |
+
+#### Returns
+
+`Promise`\<[`UsageSummary`](../../../../../generated/cognition/types.gen/type-aliases/UsageSummary.md)\>

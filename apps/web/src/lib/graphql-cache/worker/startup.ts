@@ -21,7 +21,13 @@ export const OWNER_LOCK_WAIT_TIMEOUT_MS =
   OWNER_LOCK_RETRY_DELAYS_MS.reduce((total, delay) => total + delay, 0) + 5_000;
 /** Lets the coordinator's phase timeout/retry reach a page before its guard fires. */
 export const STARTUP_RESPONSE_GRACE_MS = 5_000;
-export const COORDINATOR_CONNECT_ATTEMPTS = 3;
+/** Safari can briefly reuse a failed SharedWorker startup after its creator
+ * leaves during download. Let that entry retire before consuming another try. */
+export const COORDINATOR_CONNECT_RETRY_DELAYS_MS: readonly number[] = [
+  100, 200,
+];
+export const COORDINATOR_CONNECT_ATTEMPTS =
+  COORDINATOR_CONNECT_RETRY_DELAYS_MS.length + 1;
 
 /** Only the live coordinator can prove that every failed attempt stayed before
  * the open grant. A missing progress message is not proof of untouched storage.

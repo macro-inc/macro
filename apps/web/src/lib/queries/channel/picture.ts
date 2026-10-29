@@ -11,13 +11,13 @@ import { channelKeys } from './keys';
 
 /** Refresh active pictures after reconnecting, including changes missed offline. */
 export function invalidateChannelPictures() {
-  void queryClient.invalidateQueries({ queryKey: channelKeys.picture._def });
+  queryClient.invalidateQueries({ queryKey: channelKeys.picture._def });
 }
 
 /** Picture events carry only the channel ID; previews still enforce read access. */
 export function handleChannelPictureChanged(payload: { channel_id: string }) {
   if (!payload || typeof payload.channel_id !== 'string') return;
-  void queryClient.invalidateQueries({
+  queryClient.invalidateQueries({
     queryKey: channelKeys.picture(payload.channel_id).queryKey,
   });
 }
@@ -55,7 +55,7 @@ export function useChannelPicture(channelId: Accessor<string>) {
   const query = useQuery(() => channelPictureQueryOptions(channelId()));
 
   // The icon keeps its fallback while loading; it must never suspend its row.
-  const pictureId = () => (query.isSuccess ? query.data : null);
+  const pictureId = () => (query.isPending ? null : query.data);
   return {
     url: () => {
       const id = pictureId();

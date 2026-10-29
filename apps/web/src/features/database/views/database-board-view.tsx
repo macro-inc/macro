@@ -137,6 +137,7 @@ export function DatabaseBoardView(props: DatabaseBoardViewProps) {
             <Show when={props.onViewChange}>
               {(changeView) => (
                 <Button
+                  variant="ghost"
                   size="sm"
                   class="mt-3"
                   onClick={() =>
@@ -375,7 +376,9 @@ function GroupedBoard(
           <DatabaseLoadFailure
             title="This board could not be laid out"
             message="Refresh the table, then try again."
-            onRetry={() => void props.source.refresh()}
+            onRetry={() => {
+              props.source.refresh();
+            }}
           />
         </Match>
       </Switch>

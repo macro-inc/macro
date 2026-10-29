@@ -20,6 +20,7 @@ class CallReceiver : BroadcastReceiver() {
                     "com.macro.call.RESET" -> Calls.resetRecipient(context.applicationContext, intent.getStringExtra("previousRecipient"))
                     "answer" -> intent.getStringExtra("callId")?.let { Calls.answer(context.applicationContext, it) }
                     "end" -> intent.getStringExtra("callId")?.let { Calls.end(context.applicationContext, it) }
+                    "mute" -> if (intent.getStringExtra("callId") == Calls.offer?.callId) runCatching { Calls.microphone(Calls.muted) }
                 }
             } finally { pending.finish() }
         }

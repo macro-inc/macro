@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Notification cover bridge fixture</title>
+  </head>
+  <body style="margin: 0; padding: 64px 16px 16px; font: 16px system-ui">
+    <p style="position: fixed; z-index: 1; inset: 0 0 auto; margin: 0; padding: 12px; background: #ffe89a; color: #111; font-size: 13px">Simulated native cover — browser fixture, not the iOS app</p>
+    <button id="navigate" type="button">Open another page</button>
+    <output id="navigation">Ready</output>
+    <div id="cover" hidden style="position: fixed; inset: 56px 0 0; background: black"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

@@ -1,5 +1,6 @@
 import { useIsAuthenticated } from '@core/auth';
 import Unauthorized from '@core/component/AccessErrorViews/Unauthorized';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Button } from '@ui';
 import { type Accessor, createEffect, on, Show } from 'solid-js';
 import type { SharingSource } from './context/contracts';
@@ -31,7 +32,9 @@ export function AccessRequestError(props: { source: SharingSource }) {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => void props.source.refresh()}
+          onClick={() =>
+            fireAndForget(props.source.refresh(), 'access-requests')
+          }
         >
           Retry
         </Button>

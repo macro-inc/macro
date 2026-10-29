@@ -1,7 +1,6 @@
 import { analytics } from '@app/lib/analytics';
 import { compareTimelinePositions } from '@core/util/message-timeline';
 import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
-import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import type {
   Message as EntityMessage,
   MessageListItem,
@@ -22,7 +21,6 @@ import {
 } from '@tanstack/solid-query';
 import { type Accessor, createEffect, on } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
-import { channelKeys } from '../channel/keys';
 import { queryClient } from '../client';
 import { messageKeys } from './keys';
 import {
@@ -108,13 +106,10 @@ export function fetchResolvedChannelMessage(
 }
 
 export type MessageTimelineLoadReason =
-  | 'watermark'
-  | 'list_ahead'
   | 'no_cache'
   | 'cache_not_at_latest'
   | 'load_around'
-  | 'delta_overflow'
-  | 'catch_up_error';
+  | 'revalidate';
 
 export type MessageTimelineWatermark =
   | { kind: 'no_cache' }
@@ -123,7 +118,6 @@ export type MessageTimelineWatermark =
       kind: 'ready';
       after: MessageCursor;
       firstPage: MessageTimelinePage;
-      listAhead: boolean;
     };
 
 function newestRoot(items: MessageListItem[]): MessageListItem | null {
@@ -143,8 +137,8 @@ function newestRoot(items: MessageListItem[]): MessageListItem | null {
 }
 
 /**
- * Describes what a reconnecting timeline can reuse. A cache sitting at the
- * bottom of the conversation only needs the roots newer than its newest one.
+ * Describes the cached latest page. Channels revalidate it; other parents may
+ * use its newest root as a catch-up cursor.
  */
 export function readMessageTimelineWatermark(
   parent: MessageParent
@@ -164,20 +158,10 @@ export function readMessageTimelineWatermark(
   if (!newest) {
     return { kind: 'no_cache' };
   }
-  const cachedIds = new Set(messages.map((item) => item.id));
-  const list =
-    parent.type === 'channel'
-      ? queryClient.getQueryData<ApiChannelWithLatest[]>(
-          channelKeys.listChannels.queryKey
-        )
-      : undefined;
-  const latestId = list?.find((channel) => channel.id === parent.id)
-    ?.latest_non_thread_message?.message_id;
   return {
     kind: 'ready',
     after: { created_at: newest.created_at, id: newest.id },
     firstPage,
-    listAhead: latestId != null && !cachedIds.has(latestId),
   };
 }
 
@@ -195,9 +179,8 @@ export function mergeCatchUpPage(
 function trackMessageTimelineLoad(
   parent: MessageParent,
   payload: {
-    path: 'catch_up' | 'full';
+    path: 'full';
     reason: MessageTimelineLoadReason;
-    after?: string;
   }
 ) {
   if (parent.type !== 'channel') return;
@@ -232,9 +215,13 @@ export function messageTimelineQueryOptions(
     queryKey: messageKeys.messages(parent, loadAroundMessageId).queryKey,
     queryFn: async ({
       pageParam,
+      signal,
     }: {
       pageParam: MessageTimelinePageParam | null;
+      signal?: AbortSignal;
     }) => {
+      // Observe cancellation so a restarted refetch stops paging its old result.
+      signal?.throwIfAborted();
       if (pageParam) {
         return fetchMessageTimelinePage(parent, pageParam, null);
       }
@@ -264,6 +251,16 @@ export function messageTimelineQueryOptions(
         });
         return page;
       }
+      if (parent.type === 'channel') {
+        // Replies, reactions, edits and deletions do not advance a root's
+        // created-at cursor. Revalidate its preview even when no root is new.
+        const page = await fetchMessageTimelinePage(parent, null, null);
+        trackMessageTimelineLoad(parent, {
+          path: 'full',
+          reason: 'revalidate',
+        });
+        return page;
+      }
       try {
         const delta = normalizeMessageTimelinePageSenders(
           await entityMessagesClient.timeline(parent, {
@@ -275,11 +272,6 @@ export function messageTimelineQueryOptions(
         );
         if (delta.previous_cursor) {
           const page = await fetchMessageTimelinePage(parent, null, null);
-          trackMessageTimelineLoad(parent, {
-            path: 'full',
-            reason: 'delta_overflow',
-            after: watermark.after.created_at,
-          });
           return page;
         }
         const liveFirstPage = queryClient.getQueryData<MessageTimelineData>(
@@ -289,11 +281,6 @@ export function messageTimelineQueryOptions(
           delta,
           liveFirstPage ?? watermark.firstPage
         );
-        trackMessageTimelineLoad(parent, {
-          path: 'catch_up',
-          reason: watermark.listAhead ? 'list_ahead' : 'watermark',
-          after: watermark.after.created_at,
-        });
         return merged;
       } catch (error) {
         if (
@@ -303,11 +290,6 @@ export function messageTimelineQueryOptions(
           throw error;
         }
         const page = await fetchMessageTimelinePage(parent, null, null);
-        trackMessageTimelineLoad(parent, {
-          path: 'full',
-          reason: 'catch_up_error',
-          after: watermark.after.created_at,
-        });
         return page;
       }
     },
@@ -751,13 +733,26 @@ export function softInvalidateMessageTimelineByIds(parent: MessageParent) {
   });
 }
 
+/** Whether `next` joins the activity row that `previous`, just before it, ends. */
+export type ActivityMerge = (
+  previous: TimelineActivity,
+  next: TimelineActivity
+) => boolean;
+
 /**
  * Build a single oldest-first timeline index for display and lookup.
  * Pages arrive newest-first, entries within each page are newest-first,
  * so we reverse both layers in one pass.
  */
-/** The rows a timeline renders, oldest first, from its cached pages. */
-export function buildMessageIndex(pages: MessageTimelinePage[] | undefined) {
+/**
+ * The rows a timeline renders, oldest first, from its cached pages.
+ * Consecutive activity that `mergeActivity` accepts shares one row, keyed and
+ * dated by its newest activity.
+ */
+export function buildMessageIndex(
+  pages: MessageTimelinePage[] | undefined,
+  mergeActivity?: ActivityMerge
+) {
   /**
    * New objects carrying their row key as `id`, so `reconcile` pairs each
    * entry with its own previous copy. Without an `id` it pairs by position
@@ -770,9 +765,20 @@ export function buildMessageIndex(pages: MessageTimelinePage[] | undefined) {
   /** Message ids only: selection and navigation skip activity. */
   const keys: string[] = [];
   const byId = new Map<string, MessageListItem>();
+  /** Each activity row's newest activity. */
   const activityByKey = new Map<string, TimelineActivity>();
+  /** Every activity of a row that merged several, oldest first. */
+  const activityGroupByKey = new Map<string, TimelineActivity[]>();
 
-  if (!pages?.length) return { entries, entryKeys, keys, byId, activityByKey };
+  if (!pages?.length)
+    return {
+      entries,
+      entryKeys,
+      keys,
+      byId,
+      activityByKey,
+      activityGroupByKey,
+    };
 
   const seen = new Set<string>();
   for (let i = pages.length - 1; i >= 0; i--) {
@@ -782,26 +788,46 @@ export function buildMessageIndex(pages: MessageTimelinePage[] | undefined) {
       const key = timelineEntryKey(entry);
       if (seen.has(key)) continue;
       seen.add(key);
-      entries.push({ ...entry, id: key });
-      entryKeys.push(key);
       if (entry.type === 'activity') {
+        const lastKey = entryKeys.at(-1);
+        const previous =
+          lastKey === undefined ? undefined : activityByKey.get(lastKey);
+        if (
+          lastKey !== undefined &&
+          previous &&
+          mergeActivity?.(previous, entry.activity)
+        ) {
+          const group = activityGroupByKey.get(lastKey) ?? [previous];
+          activityByKey.delete(lastKey);
+          activityGroupByKey.delete(lastKey);
+          entries[entries.length - 1] = { ...entry, id: key };
+          entryKeys[entryKeys.length - 1] = key;
+          activityByKey.set(key, entry.activity);
+          activityGroupByKey.set(key, [...group, entry.activity]);
+          continue;
+        }
+        entries.push({ ...entry, id: key });
+        entryKeys.push(key);
         activityByKey.set(key, entry.activity);
         continue;
       }
+      entries.push({ ...entry, id: key });
+      entryKeys.push(key);
       keys.push(key);
       byId.set(key, entry.message);
     }
   }
 
-  return { entries, entryKeys, keys, byId, activityByKey };
+  return { entries, entryKeys, keys, byId, activityByKey, activityGroupByKey };
 }
 
 /** A reactive index over a timeline query's cached pages. */
 export function createMessageIndex(
-  data: Accessor<MessageTimelineData | undefined>
+  data: Accessor<MessageTimelineData | undefined>,
+  mergeActivity?: ActivityMerge
 ) {
   const [messageIndex, setMessageIndex] = createStore(
-    buildMessageIndex(data()?.pages)
+    buildMessageIndex(data()?.pages, mergeActivity)
   );
 
   createEffect(
@@ -810,7 +836,9 @@ export function createMessageIndex(
       if (!data()) {
         return;
       }
-      setMessageIndex(reconcile(buildMessageIndex(data()?.pages)));
+      setMessageIndex(
+        reconcile(buildMessageIndex(data()?.pages, mergeActivity))
+      );
     })
   );
 

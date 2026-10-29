@@ -1,8 +1,9 @@
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import GlobeIcon from '@phosphor/globe.svg';
-import TableIcon from '@phosphor/table.svg';
-import XIcon from '@phosphor/x.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import GlobeIcon from '@icon/system/regular/globe.svg';
+import TableIcon from '@icon/system/regular/table.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Key } from '@solid-primitives/keyed';
 import {
   Button,
@@ -169,7 +170,7 @@ export function AddPipelineRecordDialog(
     scopeId: hotkeyScope,
     description: submitLabel,
     keyDownHandler: () => {
-      void submit();
+      fireAndForget(submit(), 'crm');
       return true;
     },
     runWithInputFocused: true,
@@ -355,7 +356,7 @@ export function AddPipelineRecordDialog(
             aria-label={submitLabel}
             onSubmit={(event) => {
               event.preventDefault();
-              void submit();
+              fireAndForget(submit(), 'crm');
             }}
           >
             <EntityComposer.Root class="gap-0 p-0">
@@ -370,10 +371,10 @@ export function AddPipelineRecordDialog(
                 <Dialog.CloseButton
                   tabIndex={-1}
                   aria-label="Close"
-                  class={buttonClasses({ size: 'icon-composer' })}
+                  class={buttonClasses({ size: 'icon-md' })}
                   disabled={pending()}
                 >
-                  <XIcon />
+                  <XIcon class="size-4 shrink-0 touch:size-6" />
                 </Dialog.CloseButton>
               </EntityComposer.Header>
               <EntityComposer.Main class="gap-5 overflow-y-auto px-5 py-5">
@@ -403,7 +404,7 @@ export function AddPipelineRecordDialog(
               </EntityComposer.Main>
               <EntityComposer.Footer class="items-center justify-end border-t border-edge-muted/60 px-5 py-3">
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   class="gap-3 not-touch:h-[33.75px] not-touch:px-[15px]"
                   disabled={pending()}
                   onClick={close}

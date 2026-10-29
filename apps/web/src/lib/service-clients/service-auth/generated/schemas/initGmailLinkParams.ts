@@ -11,6 +11,10 @@ export type InitGmailLinkParams = {
    */
   original_url: string;
   /**
+   * Existing accessible Gmail inbox being reconnected; does not consume an additional inbox slot.
+   */
+  reconnect_link_id?: string;
+  /**
    * **OPTIONAL**. Which capabilities to request consent for: `gmail` (default), `gmail_and_calendar`, or `calendar`. The calendar variants are only honored when the deployment allows calendar scope requests.
    */
   scopes?: string;

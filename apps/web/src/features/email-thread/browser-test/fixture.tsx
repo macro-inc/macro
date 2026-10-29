@@ -69,7 +69,15 @@ function Thread(props: { onReturnToList: () => void }) {
         ['f', handlers.forwardFocusedMessage],
         ['arrowup', handlers.navigateToPreviousMessage],
         ['arrowdown', handlers.navigateToNextMessage],
-        ['escape', handlers.cancel],
+        // Like EmailDetailView: whatever the thread doesn't unwind returns
+        // to the list.
+        [
+          'escape',
+          () => {
+            if (!handlers.cancel()) props.onReturnToList();
+            return true;
+          },
+        ],
       ] as const) {
         registerHotkey({
           hotkey,

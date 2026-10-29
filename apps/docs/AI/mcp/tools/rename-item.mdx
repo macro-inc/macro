@@ -1,17 +1,17 @@
 ---
 title: RenameItem
 description: >-
-  Rename a project (shown as a folder in the app) or an AI chat.
+  Rename a project (shown as a folder in the app).
 ---
 
 # RenameItem
 
-Rename a project (shown as a folder in the app) or an AI chat. Renaming a project requires edit access; renaming an AI chat requires owning it. Use RenameDocument for documents and tasks, and RenameChannel for channels.
+Rename a project (shown as a folder in the app). Renaming a project requires edit access. Use RenameDocument for documents and tasks, and RenameChannel for channels.
 
 ## Parameters
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `entityType` | `"project"` \| `"chat"` | Yes | The kind of item to rename. |
+| `entityType` | `"project"` | Yes | The kind of item to rename. |
 | `entityId` | string | Yes | The id of the item to rename. |
 | `name` | string | Yes | The new name. |

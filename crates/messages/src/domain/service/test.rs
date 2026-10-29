@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 
 mod call_retries;
 mod event_posts;
+mod guest_chat;
 mod initiative;
 
 #[derive(Clone)]
@@ -149,6 +150,7 @@ impl MessageRepository for Repo {
         message.id = command.input.id.unwrap_or(message.id);
         message.parent = command.parent.clone();
         message.sender_id = command.actor.clone();
+        message.guest_name = command.guest_name.clone();
         message.content = command.input.content.clone();
         message.mentions = command.input.mentions.clone();
         message.triggered_by = command.triggered_by.clone();
@@ -248,9 +250,11 @@ fn fixture() -> Repo {
             sender_id: ChannelSender::try_from(user.to_owned()).unwrap(),
             bot_profile: None,
             mentions: vec![],
+            guest_name: None,
             imported_author: Some(ImportedAuthor {
                 name: "External PDF author".into(),
             }),
+            triggered_via: None,
             triggered_by: None,
             content: "root".into(),
             created_at: Utc::now(),
@@ -290,6 +294,7 @@ fn reply_from(root: &Message, id: u128, sender: &str) -> Message {
         id: Uuid::from_u128(id),
         thread_id: Some(root.id),
         sender_id: ChannelSender::try_from(sender.to_owned()).unwrap(),
+        guest_name: None,
         imported_author: None,
         content: "reply".into(),
         ..root.clone()
@@ -1136,12 +1141,26 @@ async fn bot_posts_and_edits_extract_mentions_and_preserve_trusted_attribution_a
         input.attribution = MessageAttribution::Unprompted;
         assert!(
             service
-                .post(receipt(), input)
+                .post(receipt(), input.clone())
                 .await
                 .unwrap()
                 .triggered_by
                 .is_none()
         );
+        input.attribution = MessageAttribution::ActingUserVia {
+            client: "Claude Code".into(),
+        };
+        service.post(receipt(), input).await.unwrap();
+        {
+            let creates = repo.creates.lock().unwrap();
+            let via = creates.last().unwrap();
+            assert_eq!(
+                via.triggered_by.as_deref(),
+                Some("macro|author@example.com")
+            );
+            assert_eq!(via.triggered_via.as_deref(), Some("Claude Code"));
+            assert!(creates[0].triggered_via.is_none());
+        }
         service
             .patch(
                 receipt(),
@@ -1165,7 +1184,7 @@ async fn bot_posts_and_edits_extract_mentions_and_preserve_trusted_attribution_a
             }
         ));
         assert!(matches!(
-            events[2].change,
+            events[3].change,
             MessageChange::Edited {
                 notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
                 ..

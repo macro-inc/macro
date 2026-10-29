@@ -6,7 +6,7 @@
  */
 
 /**
- * A review item never retries an ambiguous external result automatically.
+ * Review item state, shared with notification consumers.
  */
 export type ReviewItemStatus =
   (typeof ReviewItemStatus)[keyof typeof ReviewItemStatus];

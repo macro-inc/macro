@@ -43,7 +43,7 @@ describe('CopyButton', () => {
     const copy = vi.fn().mockResolvedValue(undefined);
     const view = render(() => (
       <div on:click={(event) => event.stopPropagation()}>
-        <CopyButton onClick={copy} label="Copy code">
+        <CopyButton aria-label="Copy code" tooltip="Copy code" onClick={copy}>
           <svg />
         </CopyButton>
       </div>
@@ -62,7 +62,11 @@ describe('CopyButton', () => {
     let forwardedRef: HTMLButtonElement | undefined;
     render(() => (
       <ButtonGroup variant="outline" size="md">
-        <CopyButton ref={(element) => (forwardedRef = element)} onClick={copy}>
+        <CopyButton
+          as={ButtonGroup.Button}
+          ref={(element) => (forwardedRef = element)}
+          onClick={copy}
+        >
           <svg aria-hidden="true" style={{ width: '18px', height: '18px' }} />
           Copy
         </CopyButton>

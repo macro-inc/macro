@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH input AS (\n                SELECT * FROM UNNEST($2::uuid[], $3::text[], $4::text[], $5::uuid[])\n                    AS input(import_id, kind, object, macro_id)\n            ),\n            inserted AS (\n                INSERT INTO import_entity_written (import_id, kind, object, macro_id)\n                SELECT input.import_id, input.kind, input.object, input.macro_id\n                FROM input\n                JOIN import_entity AS entity ON entity.id = input.import_id AND entity.user_id = $1\n                ON CONFLICT (import_id, kind, object) DO NOTHING\n                RETURNING import_id, kind, object, macro_id\n            )\n            SELECT import_id AS \"import_id!\", kind AS \"kind!\", object AS \"object!\",\n                   macro_id AS \"macro_id!\"\n            FROM inserted\n            UNION ALL\n            SELECT written.import_id, written.kind, written.object, written.macro_id\n            FROM import_entity_written AS written\n            JOIN input USING (import_id, kind, object)\n            JOIN import_entity AS entity ON entity.id = written.import_id AND entity.user_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "import_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "kind!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "object!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "macro_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray",
+        "TextArray",
+        "TextArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "b4e5da0493950b2287b5a485eb5aeb432a9224220af852809741ec5b2a650fec"
+}

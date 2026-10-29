@@ -1,3 +1,4 @@
+import { Telemetry } from '@macro-inc/observability';
 import { fetchCalendarMentionPreview } from '@queries/calendar/mention-preview';
 import { type Accessor, createSignal } from 'solid-js';
 import {
@@ -131,9 +132,13 @@ export function createCalendarTargetAim(options: {
       return;
     }
     if (typeof params.eventId === 'string' && params.eventId.length > 0) {
-      resolveFromPreview(params, requestId).then((resolved) => {
-        applyResolvedTarget(requestId, resolved);
-      });
+      resolveFromPreview(params, requestId)
+        .then((resolved) => {
+          applyResolvedTarget(requestId, resolved);
+        })
+        .catch((error) =>
+          Telemetry.error(error, { surface: 'calendar-target' })
+        );
       return;
     }
     applyResolvedTarget(requestId, undefined);

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH removed AS(DELETE FROM calendar_event_sources WHERE source_kind='outlook' AND calendar_id=$1 AND NOT(provider_event_id=ANY($2::text[])) RETURNING event_id)\n        SELECT DISTINCT event_id AS \"event_id!\" FROM removed",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "event_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "15919ebc9cad73dccf33f3615917f2643b982d7b90e57d8ba064e40e5e7e04f7"
+}
