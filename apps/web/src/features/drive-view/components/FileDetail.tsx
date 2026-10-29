@@ -140,8 +140,6 @@ export function FileDetailLoadGate<
         mutate(undefined);
         return;
       }
-      // A pending load brings its own level; a later confirmation reconciles it.
-      if (document.loading) return;
       const loaded = document.state === 'ready' ? document.latest : undefined;
       if (!matchesConfirmedAccess(loaded?.userAccessLevel, level)) reload();
     }

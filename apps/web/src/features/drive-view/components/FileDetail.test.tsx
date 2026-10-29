@@ -165,7 +165,7 @@ describe('file access errors', () => {
     expect(load).toHaveBeenCalledTimes(2);
   });
 
-  it('lets a pending load finish and reconciles it on a later confirmation', async () => {
+  it('restarts a pending load when access is confirmed during it', async () => {
     const pending = Promise.withResolvers<Loaded>();
     const load = vi
       .fn<() => Promise<Loaded>>()
@@ -177,12 +177,6 @@ describe('file access errors', () => {
 
     notifyAccess?.('view');
     pending.resolve({ userAccessLevel: 'edit' });
-    await vi.waitFor(() =>
-      expect(container.textContent).toContain('Document content: edit')
-    );
-    expect(load).toHaveBeenCalledTimes(1);
-
-    notifyAccess?.('view');
     await vi.waitFor(() =>
       expect(container.textContent).toContain('Document content: view')
     );
