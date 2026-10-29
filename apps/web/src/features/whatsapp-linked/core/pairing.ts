@@ -60,10 +60,3 @@ export function pairingStep(state: {
 export function secondsLeft(expiresAt: string, now: number): number {
   return Math.max(0, Math.ceil((Date.parse(expiresAt) - now) / 1000));
 }
-
-/** `52` → `0:52`, `125` → `2:05`. */
-export function formatCountdown(seconds: number): string {
-  const minutes = Math.floor(seconds / 60);
-  const rest = seconds % 60;
-  return `${minutes}:${rest.toString().padStart(2, '0')}`;
-}

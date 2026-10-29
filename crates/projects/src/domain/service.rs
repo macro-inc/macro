@@ -36,8 +36,8 @@ use super::events::{
     ProjectUploadedMetadata,
 };
 use super::models::{
-    CreateProjectArgs, EditProjectArgs, ProjectError, PurgedProjectTree, RevertDeleteResult,
-    SoftDeleteResult, UploadFolderRepoArgs,
+    CreateProjectArgs, EditProjectArgs, ProjectError, ProjectTree, PurgedProjectTree,
+    RevertDeleteResult, SoftDeleteResult, UploadFolderRepoArgs,
 };
 use super::ports::{
     BulkUploadRequestPort, ProjectRepo, ProjectSearchIndexer, ProjectService, ProjectUploadUrlPort,
@@ -147,6 +147,75 @@ where
                     "unable to update project modified date"
                 );
             });
+    }
+
+    /// Create a project. With `updated_at` it starts last edited then and
+    /// leaves its parent's last-edit time alone; otherwise both take now.
+    async fn insert_project(
+        &self,
+        principal: &CreationPrincipal,
+        args: CreateProjectRequest,
+        updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> Result<Project, ProjectError> {
+        validate_project_name(&args.name)?;
+
+        let owner = principal.owner();
+        // The owner's team default link-share preference decides the initial
+        // share permission; without a team, projects default to link sharing off.
+        let team_default = self
+            .repo
+            .get_team_default_link_share(&owner)
+            .await
+            .map_err(|error| internal_error(error, "unable to resolve team default link share"))?;
+
+        let parent_id = args.project_parent_id.map(|id| id.to_string());
+        let project = self
+            .repo
+            .create_project(CreateProjectArgs {
+                owner: owner.clone(),
+                name: args.name,
+                parent_id: parent_id.clone(),
+                share_permission: SharePermissionV2::new_project_share_permission(team_default),
+                updated_at,
+            })
+            .await
+            .map_err(|error| internal_error(error, "unable to create project"))?;
+
+        let entity_id = args
+            .project_parent_id
+            .map(|_| parse_internal_uuid(&project.id, "created project ID"))
+            .transpose()?;
+
+        if let Some((parent_id, entity_id)) = args.project_parent_id.zip(entity_id) {
+            let _ = self
+                .entity_access_management_service
+                .add_entity_to_project(&entity_id, EntityType::Project, &parent_id)
+                .await
+                .inspect_err(|error| {
+                    tracing::error!(
+                        error = ?error,
+                        %entity_id,
+                        project_id = %parent_id,
+                        "unable to update entity access for project"
+                    );
+                });
+            if updated_at.is_none() {
+                self.bump_project_modified(&parent_id.to_string()).await;
+            }
+        }
+
+        self.publish_project_event(&ProjectMacroEvent::created(
+            project.id.clone(),
+            ProjectCreatedMetadata {
+                project_id: project.id.clone(),
+                owner,
+                name: project.name.clone(),
+                parent_project_id: project.parent_id.clone(),
+                created_at: project.created_at,
+            },
+        ));
+
+        Ok(project)
     }
 
     async fn authorize_project_team_share(
@@ -337,6 +406,17 @@ where
             .collect())
     }
 
+    async fn get_project_tree(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        limit: usize,
+    ) -> Result<ProjectTree, ProjectError> {
+        self.repo
+            .get_project_tree(&receipt.entity().entity_id, limit)
+            .await
+            .map_err(|error| internal_error(error, "unable to get project tree"))
+    }
+
     async fn get_project_permissions(
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
@@ -359,62 +439,16 @@ where
         principal: &CreationPrincipal,
         args: CreateProjectRequest,
     ) -> Result<Project, ProjectError> {
-        validate_project_name(&args.name)?;
+        self.insert_project(principal, args, None).await
+    }
 
-        let owner = principal.owner();
-        // The owner's team default link-share preference decides the initial
-        // share permission; without a team, projects default to link sharing off.
-        let team_default = self
-            .repo
-            .get_team_default_link_share(&owner)
+    async fn create_project_dated_by_contents(
+        &self,
+        principal: &CreationPrincipal,
+        args: CreateProjectRequest,
+    ) -> Result<Project, ProjectError> {
+        self.insert_project(principal, args, Some(chrono::DateTime::UNIX_EPOCH))
             .await
-            .map_err(|error| internal_error(error, "unable to resolve team default link share"))?;
-
-        let parent_id = args.project_parent_id.map(|id| id.to_string());
-        let project = self
-            .repo
-            .create_project(CreateProjectArgs {
-                owner: owner.clone(),
-                name: args.name,
-                parent_id: parent_id.clone(),
-                share_permission: SharePermissionV2::new_project_share_permission(team_default),
-            })
-            .await
-            .map_err(|error| internal_error(error, "unable to create project"))?;
-
-        let entity_id = args
-            .project_parent_id
-            .map(|_| parse_internal_uuid(&project.id, "created project ID"))
-            .transpose()?;
-
-        if let Some((parent_id, entity_id)) = args.project_parent_id.zip(entity_id) {
-            let _ = self
-                .entity_access_management_service
-                .add_entity_to_project(&entity_id, EntityType::Project, &parent_id)
-                .await
-                .inspect_err(|error| {
-                    tracing::error!(
-                        error = ?error,
-                        %entity_id,
-                        project_id = %parent_id,
-                        "unable to update entity access for project"
-                    );
-                });
-            self.bump_project_modified(&parent_id.to_string()).await;
-        }
-
-        self.publish_project_event(&ProjectMacroEvent::created(
-            project.id.clone(),
-            ProjectCreatedMetadata {
-                project_id: project.id.clone(),
-                owner,
-                name: project.name.clone(),
-                parent_project_id: project.parent_id.clone(),
-                created_at: project.created_at,
-            },
-        ));
-
-        Ok(project)
     }
 
     async fn edit_project(

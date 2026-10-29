@@ -58,6 +58,8 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
+saved_views = { path = "../saved_views" }
+
 [dev-dependencies]
 bot_id = { path = "../bot_id" }
 crm = { path = "../crm", default-features = false, features = ["ports"] }

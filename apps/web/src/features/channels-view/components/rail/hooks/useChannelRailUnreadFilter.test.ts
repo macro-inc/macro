@@ -2,7 +2,7 @@ import type { ChannelEntity } from '@entity/types/entity';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import type { FavoriteEntityType } from '@service-storage/generated/schemas/favoriteEntityType';
 import { createRoot, createSignal } from 'solid-js';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ChannelsDataSource, ChannelsSources } from '../../../queries';
 import { useChannelRailUnreadFilter } from './useChannelRailUnreadFilter';
 
@@ -33,6 +33,7 @@ const favorite = (
   sortOrder: 0,
 });
 const sources: ChannelsSources = {
+  team_channels: source([row('team-read'), row('team-unread')]),
   channels: source([row('read'), row('unread'), row('open')]),
   direct_messages: source([row('dm-read'), row('dm-unread')]),
   recents: source([row('unread'), row('read')]),
@@ -58,7 +59,7 @@ describe('channel rail unread filter', () => {
           favorite('document', 'doc'),
         ],
         unreadOnly,
-        unreadChannelIds: () => new Set(['unread', 'dm-unread']),
+        unreadChannelIds: () => new Set(['unread', 'dm-unread', 'team-unread']),
         isSelected: (channelId) => channelId === 'open',
       });
     });
@@ -73,10 +74,37 @@ describe('channel rail unread filter', () => {
     setUnreadOnly(true);
 
     expect(ids(filter.sources.channels.items())).toEqual(['unread', 'open']);
+    expect(ids(filter.sources.team_channels.items())).toEqual(['team-unread']);
     expect(ids(filter.sources.direct_messages.items())).toEqual(['dm-unread']);
     expect(ids(filter.sources.recents.items())).toEqual(['unread']);
     expect(filter.sources.threads.items()).toEqual([]);
     expect(ids(filter.sources.search.items())).toEqual(['read', 'unread']);
     expect(filter.favorites().map((item) => item.entityId)).toEqual(['unread']);
+  });
+
+  it('pages a filtered list until it fills while the filter is on', () => {
+    const [unreadOnly, setUnreadOnly] = createSignal(false);
+    const loadMore = vi.fn(async () => {});
+    const paged = {
+      ...source([row('read'), row('unread')]),
+      hasMore: () => true,
+      loadMore,
+    };
+    createRoot((disposeRoot) => {
+      dispose = disposeRoot;
+      return useChannelRailUnreadFilter({
+        sources: { ...sources, channels: paged },
+        favorites: () => [],
+        unreadOnly,
+        unreadChannelIds: () => new Set(['unread']),
+        isSelected: () => false,
+      });
+    });
+
+    expect(loadMore).not.toHaveBeenCalled();
+
+    setUnreadOnly(true);
+
+    expect(loadMore).toHaveBeenCalledOnce();
   });
 });

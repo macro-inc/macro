@@ -1,9 +1,28 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { createMobileSearchState } from './mobileSearchState';
+import {
+  createMobileSearchSession,
+  createMobileSearchState,
+} from './mobileSearchState';
 
 const state = createMobileSearchState();
 afterEach(() => state.close());
 describe('mobile search session', () => {
+  it('shares composer promotion across the session until the input is cleared', () => {
+    state.open();
+    const session = state.session();
+    state.setQuery('short search');
+    expect(session.universalInputActive()).toBe(false);
+    state.setQuery('create a task');
+    expect(session.universalInputActive()).toBe(true);
+    state.setQuery('short');
+    expect(session.universalInputActive()).toBe(true);
+    const restored = createMobileSearchSession(session.snapshot());
+    expect(restored.universalInputActive()).toBe(true);
+    restored.setQuery('');
+    expect(restored.universalInputActive()).toBe(false);
+    state.setQuery('');
+    expect(session.universalInputActive()).toBe(false);
+  });
   it('keeps full text while editing and switching categories, then resets on whitespace', () => {
     state.open();
     state.setCategory('email');

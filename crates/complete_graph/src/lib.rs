@@ -9,6 +9,7 @@
 /// Cross-domain fields composed onto Soup entities.
 mod edges;
 mod realtime;
+mod saved_view;
 /// Complete schema types and construction helpers.
 mod schema;
 #[cfg(test)]

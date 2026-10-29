@@ -1,8 +1,7 @@
-import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
 import { calendarMentionOpen } from '@app/features/calendar-view/mention-open-target';
 import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
-import { whatsappGroupContent } from '@app/features/external-view/hosted-content';
-import { whatsappGroupApi } from '@app/features/whatsapp-group/queries/production-api';
+import { externalChatApi } from '@app/features/external-chat/queries/production-api';
+import { externalChatContent } from '@app/features/external-view/hosted-content';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -38,6 +37,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { canNestBlock } from '@core/orchestrator';
 import { formatDate } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { parseLocalDate } from '@core/util/local-date';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { ThrownResultError } from '@core/util/result';
@@ -51,6 +51,7 @@ import {
   DocumentCardNode,
   type DocumentMentionDecoratorProps,
 } from '@macro-inc/lexical-core';
+import { useExternalChatDetailQuery } from '@queries/external-chats';
 import {
   failedReadAccess,
   type ItemEntity,
@@ -62,7 +63,6 @@ import {
 import { useDatabaseDetailQuery } from '@queries/storage/databases';
 import { useFormDetailQuery } from '@queries/storage/forms';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
-import { useWhatsappGroupDetailQuery } from '@queries/whatsapp-groups';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, Tooltip } from '@ui';
@@ -259,7 +259,7 @@ function InlinePreview(props: {
                   data-document-name={props.documentName}
                   class="opacity-50"
                 >
-                  <Show when={props.documentName} fallback={'Loading...'}>
+                  <Show when={props.documentName} fallback="Loading...">
                     {(name) => name().replaceAll('\n', ' ').trim()}
                   </Show>
                   <MentionAccessories
@@ -305,7 +305,7 @@ function InlinePreview(props: {
                   data-block-name={props.blockName}
                   data-document-name={props.documentName}
                 >
-                  <Show when={props.documentName} fallback={'Unknown'}>
+                  <Show when={props.documentName} fallback="Unknown">
                     {(name) => name().replaceAll('\n', ' ').trim()}
                   </Show>
                   <MentionAccessories
@@ -440,8 +440,8 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
       <Match when={props.blockName === 'skill'}>
         <SkillDocumentMention {...props} />
       </Match>
-      <Match when={props.blockName === 'whatsapp_group'}>
-        <WhatsAppGroupMention {...props} />
+      <Match when={props.blockName === 'external_chat'}>
+        <ExternalChatMention {...props} />
       </Match>
     </Switch>
   );
@@ -735,7 +735,8 @@ function DatabaseMention(props: DocumentMentionDecoratorProps) {
             <Button
               variant="ghost"
               size="icon-xs"
-              label="Expand database"
+              aria-label="Expand database"
+              tooltip="Expand database"
               on:mousedown={(event) => event.preventDefault()}
               on:click={expand}
             >
@@ -807,15 +808,15 @@ function FormMention(props: DocumentMentionDecoratorProps) {
 }
 
 /**
- * A WhatsApp chat: not a previewable document, so it shows its name and opens
+ * An external chat: not a previewable document, so it shows its name and opens
  * inside External; a viewer the chat isn't shared with sees it as
  * unavailable.
  */
-function WhatsAppGroupMention(props: DocumentMentionDecoratorProps) {
+function ExternalChatMention(props: DocumentMentionDecoratorProps) {
   const { openWithSplit } = useSplitLayout();
   const userId = useUserId();
-  const detail = useWhatsappGroupDetailQuery(
-    whatsappGroupApi,
+  const detail = useExternalChatDetailQuery(
+    externalChatApi,
     () => userId() ?? '',
     () => props.documentId
   );
@@ -826,12 +827,18 @@ function WhatsAppGroupMention(props: DocumentMentionDecoratorProps) {
       fallback={
         <EntityMentionLink
           documentId={props.documentId}
-          blockName="whatsapp_group"
-          name={name() || 'WhatsApp chat'}
-          icon={<EntityIcon targetType="whatsapp_group" size="fill" />}
+          blockName="external_chat"
+          name={name() || 'External chat'}
+          icon={
+            <EntityIcon
+              targetType="external_chat"
+              provider={detail.isSuccess ? detail.data.provider : undefined}
+              size="fill"
+            />
+          }
           collapsed={props.collapsed}
           onOpen={(event) =>
-            openWithSplit(whatsappGroupContent(props.documentId), {
+            openWithSplit(externalChatContent(props.documentId), {
               preferNewSplit: openInNewSplitForMention(event.shiftKey, true),
             })
           }

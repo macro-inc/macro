@@ -6,31 +6,28 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { queryReadyGate } from '@queries/gate';
 import {
   refreshWhatsappLinkedAccount,
-  useAdoptWhatsappGroupMutation,
+  useAddWhatsappChatMutation,
   useCancelWhatsappPairingMutation,
   useConnectWhatsappMutation,
   useDisconnectWhatsappMutation,
   useSubmitWhatsappPasskeyMutation,
   useWhatsappLinkedAccountQuery,
   useWhatsappLinkedChatsQuery,
-  useWhatsappLinkedConfigurationQuery,
   useWhatsappLinkedPairingQuery,
 } from '@queries/whatsapp-linked';
-import {
-  traceWhatsappLoad,
-  type WhatsappLoadResult,
-} from '@queries/whatsapp-linked/operation';
+import { type LoadResult, traceLoad } from '@queries/whatsapp-linked/operation';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import { ResultAsync } from 'neverthrow';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import type {
+  OpenSections,
   PasskeyCapability,
   RequestFailure,
   SourceRead,
   WhatsAppLinkedCapabilities,
 } from '../context/whatsapp-linked-context';
 import { accountStatus, type WhatsAppAccount } from '../core/account';
-import type { AdoptFailure } from '../core/adopt';
+import type { AddFailure } from '../core/add';
 import type { WhatsAppChat } from '../core/chat';
 import {
   authenticateWhatsAppPasskey,
@@ -39,7 +36,7 @@ import {
 } from './authenticator';
 import {
   decodeAccount,
-  decodeAdoptRefusal,
+  decodeAddRefusal,
   decodeChats,
   decodePairing,
 } from './decode';
@@ -71,7 +68,7 @@ function sourceRead<Wire, Value>(
 function pageLoad(
   account: SourceRead<WhatsAppAccount | null>,
   chats: SourceRead<WhatsAppChat[]> | undefined
-): WhatsappLoadResult | undefined {
+): LoadResult | undefined {
   if (account.isError) return { outcome: 'error' };
   if (account.data === undefined) return;
   if (accountStatus(account.data).kind !== 'connected')
@@ -93,14 +90,15 @@ function pageLoad(
 
 /** The WhatsApp page's capabilities, from the shared linked-device queries. */
 export function createWhatsAppLinkedCapabilities(host: {
-  openGroup: (groupId: string) => void;
+  openChat: (chatId: string) => void;
+  sections: OpenSections;
 }): WhatsAppLinkedCapabilities {
   const user = useUserId();
   const currentUser = () => user() ?? '';
   const connect = useConnectWhatsappMutation();
   const disconnect = useDisconnectWhatsappMutation();
   const cancel = useCancelWhatsappPairingMutation();
-  const adopt = useAdoptWhatsappGroupMutation();
+  const add = useAddWhatsappChatMutation();
   const submitPasskey = useSubmitWhatsappPasskeyMutation();
   const passkey: PasskeyCapability = canAuthenticatePasskey()
     ? {
@@ -126,12 +124,9 @@ export function createWhatsAppLinkedCapabilities(host: {
     (view) => decodeAccount(view.account)
   );
   const [chatsRead, setChatsRead] = createSignal<SourceRead<WhatsAppChat[]>>();
-  traceWhatsappLoad('page.load', () => pageLoad(account, chatsRead()));
+  traceLoad('whatsapp.page.load', () => pageLoad(account, chatsRead()));
   return {
-    features: sourceRead(useWhatsappLinkedConfigurationQuery(), (features) => ({
-      pairing: features.pairing,
-      adoption: features.adoption,
-    })),
+    sections: host.sections,
     account,
     chats: (enabled: Accessor<boolean>) => {
       const read = sourceRead(
@@ -154,7 +149,7 @@ export function createWhatsAppLinkedCapabilities(host: {
       ),
     connect: () =>
       ResultAsync.fromPromise(connect.mutateAsync(), failure).map(
-        (pairing) => ({ pairingId: pairing.id, expiresAt: pairing.expires_at })
+        (pairing) => ({ pairingId: pairing.id, expiresAt: pairing.expiresAt })
       ),
     cancelPairing: (pairingId) =>
       ResultAsync.fromPromise(cancel.mutateAsync(pairingId), failure).map(
@@ -164,19 +159,19 @@ export function createWhatsAppLinkedCapabilities(host: {
     disconnect: (generation) =>
       ResultAsync.fromPromise(disconnect.mutateAsync(generation), failure).map(
         (result) => ({
-          remoteUnlinkRequested: result.remote_unlink_requested,
+          remoteUnlinkRequested: result.remoteUnlinkRequested,
         })
       ),
-    adopt: (groupJid) =>
+    add: (chat) =>
       ResultAsync.fromPromise(
-        adopt.mutateAsync({ group_jid: groupJid }),
-        (error): AdoptFailure => ({
-          kind: 'adopt-failed',
-          ...decodeAdoptRefusal(error),
+        add.mutateAsync({ jid: chat.jid, kind: chat.kind }),
+        (error): AddFailure => ({
+          kind: 'add-failed',
+          ...decodeAddRefusal(error),
         })
-      ).map((binding) => ({ groupId: binding.group_id })),
+      ).map((added) => ({ chatId: added.chatId })),
     isConnecting: () => connect.isPending,
     isDisconnecting: () => disconnect.isPending,
-    openGroup: host.openGroup,
+    openChat: host.openChat,
   };
 }

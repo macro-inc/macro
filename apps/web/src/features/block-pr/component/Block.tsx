@@ -4,8 +4,10 @@ import { SplitPanel } from '@components/app/split-panel';
 import { useBlockId } from '@core/block';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Show } from 'solid-js';
+import { createPrActions } from '../primitives/create-pr-actions';
 import { prDisplayName } from '../util/prKey';
 import { PrDetailActions, PrDetailBody, usePrDetail } from '../views/PrDetail';
+import { confirmMergePullRequest } from './MergePullRequestButton';
 import { PrSplitHeader } from './PrSplitHeader';
 import { PrStatusIcon } from './PrStatus';
 import { PrSidePanelSections } from './sidepanel/PrSidePanelSections';
@@ -14,6 +16,7 @@ import { PrSidePanelSections } from './sidepanel/PrSidePanelSections';
 export default function PrBlock() {
   const foreignEntityId = useBlockId();
   const detail = usePrDetail(() => foreignEntityId);
+  const actions = createPrActions(detail.data, confirmMergePullRequest);
   const name = () => {
     const data = detail.data();
     return (
@@ -35,16 +38,10 @@ export default function PrBlock() {
               {(status) => <PrStatusIcon status={status()} />}
             </Show>
             <span class="min-w-0 truncate text-sm font-semibold">{name()}</span>
-            <PrDetailActions detail={detail.data()} />
+            <PrDetailActions detail={detail.data()} actions={actions} />
           </ViewShell.TopBar>
           <Show when={detail.data()}>
-            {(data) => (
-              <PrSplitHeader
-                foreignEntityId={foreignEntityId}
-                prRef={data().prRef}
-                enrichment={data().pullRequest}
-              />
-            )}
+            {(data) => <PrSplitHeader detail={data()} actions={actions} />}
           </Show>
           <PrDetailBody
             foreignEntityId={foreignEntityId}

@@ -88,7 +88,7 @@ export function SidebarTagsSection(props: SidebarTagsSectionProps) {
         </CollapsibleSection.Trigger>
         <CollapsibleSection.Action
           type="button"
-          label="New tag"
+          aria-label="New tag"
           onClick={() => setCreating(true)}
         >
           <PlusIcon class="size-3.5" />

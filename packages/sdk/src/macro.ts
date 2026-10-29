@@ -13,6 +13,7 @@ import { DatabaseNamespace } from './entities/databases/namespace';
 import { DocumentNamespace } from './entities/documents/namespace';
 import { EmailNamespace } from './entities/email/namespace';
 import { EntityMentionNamespace } from './entities/entity-mentions/namespace';
+import { ExternalChatsNamespace } from './entities/external-chat/namespace';
 import { FavoritesNamespace } from './entities/favorites/namespace';
 import { ForeignEntityNamespace } from './entities/foreign/namespace';
 import { FormNamespace } from './entities/forms/namespace';
@@ -128,7 +129,10 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   readonly channels: ChannelNamespace;
 
-  /** Personal WhatsApp groups and shared group operations. */
+  /** Chats from external providers (WhatsApp) added to Macro: read, share and send. */
+  readonly externalChats: ExternalChatsNamespace;
+
+  /** The current user's WhatsApp account and chat list; add chats from it. */
   readonly whatsapp: WhatsAppNamespace;
 
   readonly chats: ChatNamespace;
@@ -196,6 +200,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.calendar = new CalendarNamespace(client);
     this.calls = new CallRecordNamespace(client);
     this.channels = new ChannelNamespace(client);
+    this.externalChats = new ExternalChatsNamespace(client);
     this.whatsapp = new WhatsAppNamespace(client);
     this.chats = new ChatNamespace(client);
     this.crm = new CrmNamespace(client);
@@ -277,6 +282,14 @@ export {
 export { EmailFilter, type EmailFilterOptions } from './entities/email/filter';
 export { EntityMention } from './entities/entity-mentions/mention';
 export {
+  ExternalChat,
+  type ExternalChatContent,
+} from './entities/external-chat/chat';
+export { ExternalChatMessage } from './entities/external-chat/message';
+export { ExternalChatParticipant } from './entities/external-chat/participant';
+export { ExternalChatSend } from './entities/external-chat/send';
+export { ExternalChatUpload } from './entities/external-chat/upload';
+export {
   GithubPullRequest,
   PullRequestChangeset,
 } from './entities/github-pull-requests/pull-request';
@@ -286,6 +299,7 @@ export {
   Initiative,
   type InitiativeOptions,
 } from './entities/initiatives/initiative';
+export type { InitiativeSummary } from './entities/initiatives/namespace';
 export { Meeting } from './entities/meetings/meeting';
 export type { TimelineOptions } from './entities/messages/thread';
 export { type MessageParent, MessageThread } from './entities/messages/thread';
@@ -302,16 +316,12 @@ export {
 } from './entities/routines/routine';
 export { AccessRequest, EntityAccess } from './entities/sharing/access';
 export type { SharePermissionOptions } from './entities/sharing/permissions';
+export type { TaskSummary } from './entities/tasks/task';
 export { WhatsAppAccount } from './entities/whatsapp/account';
-export { WhatsAppChat } from './entities/whatsapp/chat';
 export {
-  WhatsAppGroup,
-  type WhatsAppReply,
-} from './entities/whatsapp/group';
-export { WhatsAppMessage } from './entities/whatsapp/message';
-export { WhatsAppParticipant } from './entities/whatsapp/participant';
-export { WhatsAppSend } from './entities/whatsapp/send';
-export { WhatsAppUpload } from './entities/whatsapp/upload';
+  WhatsAppChat,
+  type WhatsAppCommunity,
+} from './entities/whatsapp/chat';
 export type {
   WorkspaceFilters,
   WorkspaceItem,

@@ -6,14 +6,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::mpsc;
-use tokio::task::{Id, JoinError, JoinSet};
+use tokio::task::{AbortHandle, Id, JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 use uuid::Uuid;
 
 use super::ports::{
     AccountControl, AccountDirectory, AccountExit, AccountLocks, AccountRunner, AccountSignal,
-    LeaseError,
+    LeaseError, Traced,
 };
 
 #[cfg(test)]
@@ -28,7 +28,7 @@ pub enum Signal {
     PairingRequested(Uuid),
     /// `whatsapp_send_requested`.
     SendRequested(Uuid),
-    /// `whatsapp_groups_requested`.
+    /// `whatsapp_roster_requested`.
     GroupsRequested(Uuid),
     /// `whatsapp_account_changed`.
     AccountChanged(Uuid),
@@ -71,9 +71,11 @@ pub enum SupervisorError {
 const ACCOUNT_SIGNAL_CAPACITY: usize = 8;
 
 struct Running {
-    signals: mpsc::Sender<AccountSignal>,
+    signals: mpsc::Sender<Traced<AccountSignal>>,
     release: CancellationToken,
     stop: CancellationToken,
+    /// Ends the runner's task when it ignores `stop` for `stop_timeout`.
+    abort: AbortHandle,
 }
 
 /// Runs the accounts this replica holds locks for.
@@ -115,7 +117,7 @@ where
     /// are lost (then stops every account and returns the error).
     pub async fn run(
         mut self,
-        signals: &mut mpsc::Receiver<Signal>,
+        signals: &mut mpsc::Receiver<Traced<Signal>>,
         shutdown: CancellationToken,
     ) -> Result<(), SupervisorError> {
         let lost = self.locks.lost();
@@ -134,7 +136,10 @@ where
                     self.finished(joined, false).await
                 }
                 signal = signals.recv() => match signal {
-                    Some(signal) => self.handle(signal).await,
+                    // The work a notification causes joins the sender's trace.
+                    Some(Traced { signal, span }) => {
+                        self.handle(signal, &span).instrument(span.clone()).await
+                    }
                     None => {
                         self.stop_all().await;
                         return Err(SupervisorError::SignalsClosed);
@@ -156,13 +161,13 @@ where
         }
     }
 
-    async fn handle(&mut self, signal: Signal) -> Result<(), LeaseError> {
+    async fn handle(&mut self, signal: Signal, span: &tracing::Span) -> Result<(), LeaseError> {
         match signal {
             Signal::AccountReleased(account) => self.take(account).await,
             Signal::PairingRequested(pairing) => {
                 match self.directory.pairing_account(pairing).await? {
                     Some(account) if self.accounts.contains_key(&account) => {
-                        self.forward(account, AccountSignal::Pairing(pairing));
+                        self.forward(account, AccountSignal::Pairing(pairing), span);
                         Ok(())
                     }
                     Some(account) => self.take(account).await,
@@ -170,31 +175,34 @@ where
                 }
             }
             Signal::SendRequested(account) => {
-                self.forward(account, AccountSignal::Send);
+                self.forward(account, AccountSignal::Send, span);
                 Ok(())
             }
             Signal::GroupsRequested(account) => {
-                self.forward(account, AccountSignal::Groups);
+                self.forward(account, AccountSignal::Groups, span);
                 Ok(())
             }
             Signal::AccountChanged(account) if self.accounts.contains_key(&account) => {
-                self.forward(account, AccountSignal::Changed);
+                self.forward(account, AccountSignal::Changed, span);
                 Ok(())
             }
             Signal::AccountChanged(account) => self.take(account).await,
             Signal::Resync => {
                 for running in self.accounts.values() {
-                    let _ = running.signals.try_send(AccountSignal::Resync);
+                    let _ = running.signals.try_send(AccountSignal::Resync.into());
                 }
                 self.rescan().await
             }
         }
     }
 
-    fn forward(&self, account: Uuid, signal: AccountSignal) {
+    fn forward(&self, account: Uuid, signal: AccountSignal, span: &tracing::Span) {
         if let Some(running) = self.accounts.get(&account) {
             // Full means the runner already has work queued; see the capacity.
-            let _ = running.signals.try_send(signal);
+            let _ = running.signals.try_send(Traced {
+                signal,
+                span: span.clone(),
+            });
         }
     }
 
@@ -231,20 +239,22 @@ where
         let stop = self.locks.lost().child_token();
         let control = AccountControl {
             signals: receiver,
+            cause: tracing::Span::current(),
             release: release.clone(),
             stop: stop.clone(),
         };
         let runner = Arc::clone(&self.runner);
-        let task = self
+        let abort = self
             .tasks
             .spawn(async move { runner.run(account, control).await });
-        self.task_accounts.insert(task.id(), account);
+        self.task_accounts.insert(abort.id(), account);
         self.accounts.insert(
             account,
             Running {
                 signals: sender,
                 release,
                 stop,
+                abort,
             },
         );
     }
@@ -258,6 +268,9 @@ where
     ) -> Result<(), LeaseError> {
         let (id, exit) = match joined {
             Ok((id, exit)) => (id, exit),
+            // Aborted by the drain after ignoring `stop`: it still needs a
+            // session, so it is announced like any stopped account.
+            Err(error) if error.is_cancelled() && draining => (error.id(), AccountExit::Stopped),
             Err(error) => {
                 tracing::error!(error = %error, "WhatsApp account task panicked");
                 (error.id(), AccountExit::Failed)
@@ -321,7 +334,9 @@ where
 
     /// Hands every account over in batches, so other replicas take them while
     /// the rest keep running. Accounts still running at `drain_deadline` are
-    /// stopped together, so the whole drain fits the platform's stop timeout.
+    /// stopped together, and a stopped account that has not returned within
+    /// `stop_timeout` is aborted, so the whole drain fits the platform's stop
+    /// timeout.
     async fn drain(mut self) -> Result<(), SupervisorError> {
         let started = tokio::time::Instant::now();
         let drain_end = started + self.config.drain_deadline;
@@ -359,11 +374,12 @@ where
                     }
                 }
             }
-            let deadline = tokio::time::sleep_until(
-                (tokio::time::Instant::now() + self.config.release_timeout).min(drain_end),
-            );
-            tokio::pin!(deadline);
-            let mut stopped = past_deadline;
+            let release_end =
+                (tokio::time::Instant::now() + self.config.release_timeout).min(drain_end);
+            // Set once the batch is stopped: when to abort what is still running.
+            let mut abort_at =
+                past_deadline.then(|| tokio::time::Instant::now() + self.config.stop_timeout);
+            let mut aborted = false;
             while !pending.is_empty() {
                 let step = tokio::select! {
                     biased;
@@ -383,12 +399,28 @@ where
                         }
                         result
                     }
-                    () = &mut deadline, if !stopped => {
-                        stopped = true;
+                    () = tokio::time::sleep_until(release_end), if abort_at.is_none() => {
+                        abort_at = Some(tokio::time::Instant::now() + self.config.stop_timeout);
                         timed_out += pending.len() as u32;
                         for account in &pending {
                             if let Some(running) = self.accounts.get(account) {
                                 running.stop.cancel();
+                            }
+                        }
+                        Ok(())
+                    }
+                    () = tokio::time::sleep_until(abort_at.unwrap_or(release_end)),
+                        if abort_at.is_some() && !aborted =>
+                    {
+                        aborted = true;
+                        tracing::error!(
+                            parent: &span,
+                            count = pending.len(),
+                            "WhatsApp accounts did not stop in time; aborting them"
+                        );
+                        for account in &pending {
+                            if let Some(running) = self.accounts.get(account) {
+                                running.abort.abort();
                             }
                         }
                         Ok(())

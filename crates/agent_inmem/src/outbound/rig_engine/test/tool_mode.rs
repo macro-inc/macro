@@ -47,6 +47,7 @@ async fn remote(
 
 fn request(mcp_tools: Option<RemoteMcpToolSet>) -> TurnRequest {
     TurnRequest {
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         purpose: TurnPurpose::Conversation,
         session_id: AgentSessionId::new(),
         awaiting: Arc::new(AwaitingUser::default()),
@@ -79,13 +80,18 @@ impl ToolModeSelector for RecordingSelector {
 }
 
 #[tokio::test]
-async fn requires_both_code_tools_and_loads_once_as_the_session_owner() {
+async fn requires_every_code_tool_and_loads_once_as_the_session_owner() {
     let selector = RecordingSelector::default();
     assert_eq!(
         select_tool_mode(&selector, &request(None)).await,
         Some(ToolMode::Standard)
     );
-    for names in [vec![], vec!["ExecuteCode"], vec!["DescribeCodeTools"]] {
+    for names in [
+        vec![],
+        vec!["ExecuteCode"],
+        vec!["DescribeCodeTools"],
+        vec!["ExecuteCode", "DescribeCodeTools"],
+    ] {
         let (server, tools) = remote(&names).await;
         assert_eq!(
             select_tool_mode(&selector, &request(Some(tools))).await,
@@ -94,7 +100,7 @@ async fn requires_both_code_tools_and_loads_once_as_the_session_owner() {
         server.cancel().await.unwrap();
     }
     assert!(selector.0.lock().unwrap().is_empty());
-    let (server, tools) = remote(&["ExecuteCode", "DescribeCodeTools"]).await;
+    let (server, tools) = remote(&["ExecuteCode", "DescribeCodeTools", "ReadCodeDocs"]).await;
     let mut turn = request(Some(tools));
     turn.purpose = TurnPurpose::Summary;
     assert_eq!(
@@ -127,7 +133,7 @@ impl ToolModeSelector for PendingSelector {
 
 #[tokio::test]
 async fn stopping_during_flag_loading_does_not_start_a_turn() {
-    let (server, tools) = remote(&["ExecuteCode", "DescribeCodeTools"]).await;
+    let (server, tools) = remote(&["ExecuteCode", "DescribeCodeTools", "ReadCodeDocs"]).await;
     let turn = request(Some(tools));
     let selector = PendingSelector(tokio::sync::Notify::new());
     let (selected, ()) = tokio::time::timeout(std::time::Duration::from_secs(1), async {

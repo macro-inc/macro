@@ -2467,7 +2467,7 @@ export function PptxEditor() {
         start={
           <Show when={!readonly()}>
             <RibbonButton
-              label="Undo"
+              aria-label="Undo"
               tooltip="Undo (⌘Z)"
               disabled={!session.history().canUndo}
               onClick={() => fireAndForget(undo(), 'pptx-editor')}
@@ -2475,7 +2475,7 @@ export function PptxEditor() {
               <ArrowCounterClockwise />
             </RibbonButton>
             <RibbonButton
-              label="Redo"
+              aria-label="Redo"
               tooltip="Redo (⇧⌘Z)"
               disabled={!session.history().canRedo}
               onClick={() => fireAndForget(redo(), 'pptx-editor')}
@@ -2507,7 +2507,7 @@ export function PptxEditor() {
               </button>
             </Show>
             <RibbonButton
-              label="Print"
+              aria-label="Print"
               tooltip="Print or save as PDF (⌘P)"
               data-testid="pptx-print-open"
               onClick={() => setPrinting(true)}
@@ -2515,7 +2515,7 @@ export function PptxEditor() {
               <Printer />
             </RibbonButton>
             <RibbonButton
-              label="Export"
+              aria-label="Export"
               tooltip="Export slides as pictures"
               data-testid="pptx-export-open"
               onClick={() => setExporting(true)}
@@ -2523,17 +2523,17 @@ export function PptxEditor() {
               <ImageSquare />
             </RibbonButton>
             <RibbonButton
-              label="Download"
+              aria-label="Download"
               tooltip="Download .pptx"
               onClick={() => fireAndForget(download(), 'pptx-download')}
             >
               <DownloadSimple />
             </RibbonButton>
             <Button
+              aria-label="Present"
               size="sm"
-              variant="accent"
+              variant="primary"
               class="h-6 gap-1 px-2 text-xs"
-              label="Present"
               tooltip="Present from current slide (⇧F5)"
               data-testid="pptx-present"
               onClick={() => present(true)}

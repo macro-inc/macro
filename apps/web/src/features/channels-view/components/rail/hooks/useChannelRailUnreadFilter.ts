@@ -1,6 +1,10 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
-import { type Accessor, createMemo } from 'solid-js';
+import { type Accessor, createEffect, createMemo } from 'solid-js';
 import type { ChannelsDataSource, ChannelsSources } from '../../../queries';
+
+/** Rows a filtered list should hold before paging waits for a scroll. */
+const UNREAD_PAGE_FILL = 20;
 
 /**
  * Narrow the rail's lists to conversations with unread activity while the
@@ -8,7 +12,8 @@ import type { ChannelsDataSource, ChannelsSources } from '../../../queries';
  * not pull it out from under the pointer. Search results are never filtered.
  *
  * Unread state comes from the rows the rail has loaded, the same evidence as
- * the unread dots and section counts.
+ * the unread dots and section counts, so a filtered list keeps paging until it
+ * fills or its source runs out.
  */
 export function useChannelRailUnreadFilter(options: {
   sources: ChannelsSources;
@@ -28,6 +33,17 @@ export function useChannelRailUnreadFilter(options: {
         ? source.items().filter((channel) => isChannelVisible(channel.id))
         : source.items()
     );
+    // A short filtered list never scrolls far enough to ask for more.
+    createEffect(() => {
+      if (
+        options.unreadOnly() &&
+        items().length < UNREAD_PAGE_FILL &&
+        source.hasMore() &&
+        !source.isLoadingMore() &&
+        !source.error()
+      )
+        fireAndForget(source.loadMore(), 'channels-view');
+    });
     return { ...source, items };
   };
 
@@ -44,6 +60,7 @@ export function useChannelRailUnreadFilter(options: {
   );
 
   const sources: ChannelsSources = {
+    team_channels: filterSource(options.sources.team_channels),
     channels: filterSource(options.sources.channels),
     direct_messages: filterSource(options.sources.direct_messages),
     recents: filterSource(options.sources.recents),

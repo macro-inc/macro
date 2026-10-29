@@ -2,8 +2,8 @@
 //! end: added, kept and sent to like any other group; the community itself
 //! can't be added.
 
+use external_chat::domain::models::{CannotAdd, CommunityReference, ExternalChatError, ReplyBlock};
 use whatsapp_fake_server::GroupChange;
-use whatsapp_linked::domain::models::{CannotAdd, CommunityReference, LinkedError, ReplyBlock};
 use whatsmeow::proto::wa_e2e::{ContextInfo, ExtendedTextMessage, FutureProofMessage, Message};
 
 use super::*;
@@ -30,12 +30,12 @@ async fn a_disappearing_group_is_kept_in_macro_and_macro_sends_disappear(pool: P
     let replica = world.replica().await;
     let (_, binding) = world.alice_adopted().await;
     let detail = world
-        .linked
-        .group_detail(&receipt::<ViewAccessLevel>(ALICE, binding.id))
+        .external
+        .detail(&receipt::<ViewAccessLevel>(ALICE, binding.id))
         .await
         .unwrap();
     assert_eq!(detail.disappearing_seconds, Some(WEEK));
-    assert!(detail.group.can_send);
+    assert!(detail.chat.can_send);
 
     // The customer's phone wraps its messages as disappearing.
     let gone = world
@@ -90,8 +90,8 @@ async fn a_disappearing_group_is_kept_in_macro_and_macro_sends_disappear(pool: P
     );
     let off = wait_for_rows(&world.pool, TIMEOUT, || async {
         let detail = world
-            .linked
-            .group_detail(&receipt::<ViewAccessLevel>(ALICE, binding.id))
+            .external
+            .detail(&receipt::<ViewAccessLevel>(ALICE, binding.id))
             .await
             .ok()?;
         detail.disappearing_seconds.is_none().then_some(())
@@ -125,7 +125,7 @@ async fn a_communitys_groups_are_added_and_used_but_not_the_community(pool: PgPo
 
     let garden_jid = garden.to_string();
     let chats = wait_for_rows(&world.pool, TIMEOUT, || async {
-        let chats = world.linked.chats(ALICE).await.ok()?.chats;
+        let chats = world.linked.chats(&person(ALICE)).await.ok()?.chats;
         chats
             .iter()
             .any(|chat| chat.jid == garden_jid)
@@ -153,26 +153,32 @@ async fn a_communitys_groups_are_added_and_used_but_not_the_community(pool: PgPo
     assert_eq!(listed(&announcements), (true, None, Some(neighbours(true))));
 
     let adopt = |jid: &Jid| {
-        let request = AdoptGroup {
-            group_jid: jid.to_string(),
+        let request = AddChat {
+            provider: ExternalChatProvider::WhatsApp,
+            remote_id: jid.to_string(),
+            kind: ExternalChatKind::Group,
         };
-        let linked = &world.linked;
-        async move { linked.adopt(ALICE, &request, SendAuthority::Human).await }
+        let external = &world.external;
+        async move {
+            external
+                .add(&person(ALICE), &request, SendAuthority::Human)
+                .await
+        }
     };
     assert!(matches!(
         adopt(&community).await.unwrap_err().current_context(),
-        LinkedError::CannotAdd(CannotAdd::Community)
+        ExternalChatError::CannotAdd(CannotAdd::Community)
     ));
 
     // A community's group works like any group, both ways.
     let binding = adopt(&garden).await.unwrap();
     let detail = world
-        .linked
-        .group_detail(&receipt::<ViewAccessLevel>(ALICE, binding.id))
+        .external
+        .detail(&receipt::<ViewAccessLevel>(ALICE, binding.id))
         .await
         .unwrap();
-    assert_eq!(detail.community, Some(neighbours(false)));
-    assert!(detail.group.can_send);
+    assert_eq!(detail.chat.community, Some(neighbours(false)));
+    assert!(detail.chat.can_send);
     let tomatoes = world
         .customer
         .send_text(&garden, "tomatoes are ready")
@@ -195,15 +201,12 @@ async fn a_communitys_groups_are_added_and_used_but_not_the_community(pool: PgPo
     // Everyone reads the announcement group; only its admins post.
     let notices = adopt(&announcements).await.unwrap();
     let detail = world
-        .linked
-        .group_detail(&receipt::<ViewAccessLevel>(ALICE, notices.id))
+        .external
+        .detail(&receipt::<ViewAccessLevel>(ALICE, notices.id))
         .await
         .unwrap();
-    assert_eq!(detail.community, Some(neighbours(true)));
-    assert_eq!(
-        detail.group.send_reason,
-        Some(ReplyBlock::NotAllowedInGroup)
-    );
+    assert_eq!(detail.chat.community, Some(neighbours(true)));
+    assert_eq!(detail.chat.send_reason, Some(ReplyBlock::NotAllowed));
     let notice = world
         .customer
         .send_text(&announcements, "street party on Sunday")

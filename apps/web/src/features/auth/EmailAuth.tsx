@@ -354,7 +354,7 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
               few minutes to sync after you return.
             </p>
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={() =>
                 navigateAfterLink(stringParam(searchParams.link_id))

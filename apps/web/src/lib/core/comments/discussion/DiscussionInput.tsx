@@ -86,7 +86,7 @@ function AttachImagesAction() {
         label="Attach images"
         onClick={() => fileInputRef?.click()}
       >
-        <PaperclipIcon />
+        <PaperclipIcon class="size-5 touch:size-6 shrink-0 pointer-events-none" />
       </InputActionButton>
     </>
   );

@@ -86,6 +86,8 @@ export interface LayoutProps {
   /** Supporting text after the title in the standard content slot. */
   titleTrailing?: JSX.Element;
   meta?: JSX.Element;
+  /** Stored reference values alongside the existing property pills. */
+  referenceProperties?: JSX.Element;
   checked?: boolean;
   authorDisplayName?: string;
   hideCheckbox?: boolean;

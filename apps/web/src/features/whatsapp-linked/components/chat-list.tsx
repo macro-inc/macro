@@ -1,30 +1,18 @@
-import { formatRelativeDate } from '@core/util/time';
-import CaretDownIcon from '@phosphor/caret-down.svg';
 import MegaphoneIcon from '@phosphor/megaphone-simple.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import UserIcon from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { Button, cn } from '@ui';
-import { CollapseTransition } from '@ui/components/CollapseTransition';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 import {
   cannotAddLabel,
   chatMetadata,
   communityTitle,
+  formatActivityDate,
+  nameInCommunity,
   type WhatsAppChat,
 } from '../core/chat';
-
-/** A list heading, on the same 16px rail as the rows' icons. */
-export function ChatSectionHeading(props: { id: string; children: string }) {
-  return (
-    <h2
-      id={props.id}
-      class="px-4 pt-4 pb-1 text-xs font-semibold tracking-tight text-ink-extra-muted"
-    >
-      {props.children}
-    </h2>
-  );
-}
+import { ConversationSection } from './conversation-sections';
 
 /**
  * One line per chat, like Macro's other lists: icon, name, muted kind and
@@ -33,6 +21,8 @@ export function ChatSectionHeading(props: { id: string; children: string }) {
  */
 function ChatRow(props: {
   chat: WhatsAppChat;
+  /** Under its community's heading a group goes by its own name. */
+  inCommunity?: boolean;
   actions?: JSX.Element;
   status?: JSX.Element;
   error?: string;
@@ -41,7 +31,7 @@ function ChatRow(props: {
 }) {
   return (
     <div
-      class="group/chat mx-2 flex min-h-9 min-w-0 items-center gap-2 rounded-xl px-2 text-sm hover:bg-list-hover focus-within:bg-list-hover touch:min-h-11"
+      class="group/chat mx-2 flex min-h-9 min-w-0 items-center gap-2 rounded-xl px-2 text-sm not-touch:hover:bg-list-hover focus-within:bg-list-hover touch:min-h-11"
       data-whatsapp-chat={props.chat.jid}
       data-whatsapp-chat-kind={props.chat.kind}
     >
@@ -56,7 +46,9 @@ function ChatRow(props: {
         </Switch>
       </span>
       <span class="ph-no-capture min-w-0 shrink truncate font-medium text-ink">
-        {communityTitle(props.chat.name, props.chat.community)}
+        {props.inCommunity
+          ? nameInCommunity(props.chat)
+          : communityTitle(props.chat.name, props.chat.community)}
       </span>
       <span class="min-w-0 shrink-[2] truncate text-xs text-ink-extra-muted">
         {chatMetadata(props.chat)}
@@ -75,7 +67,7 @@ function ChatRow(props: {
         <Show when={props.actions}>
           <span
             class={cn(
-              'flex items-center gap-1 opacity-0 group-hover/chat:opacity-100 group-focus-within/chat:opacity-100 touch:opacity-100',
+              'flex items-center gap-1 opacity-0 not-touch:group-hover/chat:opacity-100 group-focus-within/chat:opacity-100 touch:opacity-100',
               (props.pinActions || props.error) && 'opacity-100'
             )}
           >
@@ -86,9 +78,9 @@ function ChatRow(props: {
           {(at) => (
             <time
               dateTime={at()}
-              class="w-[8ch] shrink-0 text-right text-xs text-ink-extra-muted touch:hidden"
+              class="shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-ink-extra-muted touch:hidden"
             >
-              {formatRelativeDate(at())}
+              {formatActivityDate(at())}
             </time>
           )}
         </Show>
@@ -97,72 +89,34 @@ function ChatRow(props: {
   );
 }
 
-/** Chats this viewer already added; they also live in External's sidebar. */
-export function InMacroChatList(props: {
-  chats: WhatsAppChat[];
-  onOpenGroup: (groupId: string) => void;
-}) {
-  return (
-    <ul class="flex flex-col" aria-label="WhatsApp chats in Macro">
-      <For each={props.chats}>
-        {(chat) => (
-          <li>
-            <ChatRow
-              chat={chat}
-              actions={
-                <Show
-                  when={chat.inMacro?.kind === 'own' ? chat.inMacro : undefined}
-                >
-                  {(own) => (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => props.onOpenGroup(own().groupId)}
-                    >
-                      Open
-                    </Button>
-                  )}
-                </Show>
-              }
-            />
-          </li>
-        )}
-      </For>
-    </ul>
-  );
-}
-
 /**
- * Chats the viewer can bring into Macro with one click, and ones someone
- * already shared with them.
+ * One section's chats: ones to add with one click, ones someone shared with
+ * the viewer, and (while searching) the viewer's own added ones, each with
+ * the action that fits.
  */
-export function AddableChatList(props: {
+export function ChatList(props: {
+  label: string;
   chats: WhatsAppChat[];
-  canAdd: boolean;
+  inCommunity?: boolean;
   /** JIDs whose add is in flight. */
   adding: ReadonlySet<string>;
   errors: Readonly<Record<string, string>>;
-  /** Shown when nothing is left to add. */
-  empty: string;
   onAdd: (chat: WhatsAppChat) => void;
-  onOpenGroup: (groupId: string) => void;
+  onOpenChat: (chatId: string) => void;
 }) {
   return (
-    <ul class="flex flex-col" aria-label="Chats to add to Macro">
-      <For
-        each={props.chats}
-        fallback={
-          <li class="px-4 py-2 text-sm text-ink-extra-muted">{props.empty}</li>
-        }
-      >
+    <ul class="flex flex-col" aria-label={props.label}>
+      <For each={props.chats}>
         {(chat) => {
           const shared = () =>
             chat.inMacro?.kind === 'shared' ? chat.inMacro : undefined;
+          const own = () =>
+            chat.inMacro?.kind === 'own' ? chat.inMacro : undefined;
           return (
             <li>
               <ChatRow
                 chat={chat}
+                inCommunity={props.inCommunity}
                 error={props.errors[chat.jid]}
                 pinActions={props.adding.has(chat.jid)}
                 status={
@@ -175,22 +129,17 @@ export function AddableChatList(props: {
                     fallback={
                       <Button
                         type="button"
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         aria-label={
                           props.adding.has(chat.jid)
                             ? 'Adding…'
                             : 'Add to Macro'
                         }
-                        disabled={!props.canAdd || props.adding.has(chat.jid)}
-                        tooltip={
-                          props.canAdd
-                            ? undefined
-                            : 'Adding WhatsApp chats is turned off'
-                        }
+                        disabled={props.adding.has(chat.jid)}
                         onClick={() => props.onAdd(chat)}
                       >
-                        <PlusIcon />
+                        <PlusIcon class="size-3.5" />
                         {/* Phones keep every row's action visible, so just the + there. */}
                         <span class="mobile:hidden">
                           {props.adding.has(chat.jid)
@@ -200,6 +149,18 @@ export function AddableChatList(props: {
                       </Button>
                     }
                   >
+                    <Match when={own()}>
+                      {(mine) => (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => props.onOpenChat(mine().chatId)}
+                        >
+                          Open
+                        </Button>
+                      )}
+                    </Match>
                     <Match when={shared()}>
                       {(by) => (
                         <Button
@@ -207,7 +168,7 @@ export function AddableChatList(props: {
                           variant="ghost"
                           size="sm"
                           aria-label={`Open ${chat.name}, shared with you by ${by().ownerName}`}
-                          onClick={() => props.onOpenGroup(by().groupId)}
+                          onClick={() => props.onOpenChat(by().chatId)}
                         >
                           Open
                         </Button>
@@ -231,25 +192,13 @@ export function UnsupportedChatList(props: {
   forceOpen: boolean;
 }) {
   const [open, setOpen] = createSignal(false);
-  const expanded = () => open() || props.forceOpen;
   return (
-    <section class="flex flex-col">
-      <button
-        type="button"
-        aria-expanded={expanded()}
-        class="flex items-center gap-1 px-4 pt-4 pb-1 text-left text-xs font-semibold tracking-tight text-ink-extra-muted hover:text-ink"
-        onClick={() => setOpen((value) => !value)}
+    <div class="px-2 pt-3">
+      <ConversationSection
+        title={`Can't be added (${props.chats.length})`}
+        open={open() || props.forceOpen}
+        onOpenChange={setOpen}
       >
-        Can't be added ({props.chats.length})
-        <CaretDownIcon
-          aria-hidden="true"
-          class={cn(
-            'size-2.5 transition-transform',
-            !expanded() && '-rotate-90'
-          )}
-        />
-      </button>
-      <CollapseTransition open={expanded()}>
         <ul class="flex flex-col" aria-label="Can't be added">
           <For each={props.chats}>
             {(chat) => (
@@ -259,7 +208,7 @@ export function UnsupportedChatList(props: {
             )}
           </For>
         </ul>
-      </CollapseTransition>
-    </section>
+      </ConversationSection>
+    </div>
   );
 }

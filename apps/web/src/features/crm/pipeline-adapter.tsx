@@ -30,8 +30,13 @@ import { DatabaseToolbar } from '../database/components/database-toolbar';
 import { DatabaseProvider, useDatabase } from '../database/context/database';
 import type { CardMove } from '../database/core/board-moves';
 import type { DatabaseCellValue } from '../database/core/database-view';
+import { newViewNeedsColumn } from '../database/core/view-creation';
 import type { ViewChange } from '../database/core/view-state';
-import { allRecordsView, boardLayout } from '../database/core/views';
+import {
+  allRecordsView,
+  boardLayout,
+  timelineLayout,
+} from '../database/core/views';
 import {
   type DatabaseOpFailure,
   databaseOpMessage,
@@ -39,6 +44,7 @@ import {
 import type { BoardPositions } from '../database/views/database-board-view';
 import { DatabaseRecords } from '../database/views/database-records';
 import type { DatabaseRecordsActions } from '../database/views/database-records-view';
+import { CrmListSkeleton } from './components/list-state';
 import type { Pipeline } from './core/pipeline';
 import { createPipelineApi } from './queries/pipeline-data';
 import {
@@ -83,11 +89,7 @@ export function PipelineDatabaseEditor(props: {
       class="@container/database flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-canvas-base text-ink"
       style={{ '--database-title-column-width': '18rem' }}
     >
-      <Suspense
-        fallback={
-          <div class="p-4 text-sm text-ink-muted">Loading pipeline…</div>
-        }
-      >
+      <Suspense fallback={<CrmListSkeleton label="Loading pipeline" />}>
         <Show when={props.pipeline.id} keyed>
           {(_id) => (
             <PipelineRecords
@@ -252,11 +254,7 @@ function PipelineToolbar(props: {
       onCreateView={(created) =>
         props.views.create(props.view, created, columns()).map((view) => {
           props.onSelectView(view.id);
-          if (
-            created.layout === 'board' &&
-            created.groupBy.kind === 'new-status'
-          )
-            refreshColumns();
+          if (newViewNeedsColumn(created)) refreshColumns();
         })
       }
       onRenameView={(target, name) =>
@@ -281,6 +279,18 @@ function PipelineToolbar(props: {
               .showAsBoardWithStatusColumn(target, columns())
               .map(refreshColumns)
           )
+          .with({ kind: 'timeline', range: { kind: 'column' } }, ({ range }) =>
+            props.views
+              .update(target, {
+                layout: timelineLayout(range.columnId, columns()),
+              })
+              .map(() => undefined)
+          )
+          .with({ kind: 'timeline', range: { kind: 'new-column' } }, () =>
+            props.views
+              .showAsTimelineWithTimeRangeColumn(target, columns())
+              .map(refreshColumns)
+          )
           .exhaustive()
       }
       onDeleteView={(target) => {
@@ -290,7 +300,7 @@ function PipelineToolbar(props: {
       actions={
         <>
           <Show when={props.canEdit}>
-            <Button variant="outline" onClick={() => props.onCompose({})}>
+            <Button variant="secondary" onClick={() => props.onCompose({})}>
               <PlusIcon class="size-4" />
               {props.pipeline.recordType === 'company'
                 ? 'Add deal'

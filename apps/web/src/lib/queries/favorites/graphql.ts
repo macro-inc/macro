@@ -51,7 +51,7 @@ const activeFavoritesQueries = new Set<ActiveFavoritesQuery>();
 function selectFavorites(data: FavoritesQuery): FavoritesList {
   return {
     favorites: data.user.favorites
-      .map(mapGraphqlFavorite)
+      .flatMap((favorite) => mapGraphqlFavorite(favorite) ?? [])
       .sort((left, right) => left.sortOrder - right.sortOrder),
   };
 }

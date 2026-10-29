@@ -131,6 +131,7 @@ function ScheduleSummaryAction(props: {
   return (
     <Show when={props.summary.action}>
       <Button
+        variant="ghost"
         size="sm"
         aria-label={props.summary.accessibleActionLabel}
         tooltip={props.summary.accessibleActionLabel}

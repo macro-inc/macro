@@ -10,5 +10,5 @@
  */
 export interface MarkRead {
   /** Message in the addressed group. */
-  message_id: string;
+  messageId: string;
 }

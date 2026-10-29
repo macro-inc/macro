@@ -1,11 +1,11 @@
 import type {
-  LinkedChat,
-  LinkedCommunityReference,
+  ExternalChatCommunity,
+  WhatsAppChat as WhatsAppChatRecord,
 } from '../../../generated/storage/types.gen';
 import { MacroNotFoundError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
-import { WhatsAppGroup } from './group';
+import { ExternalChat } from '../external-chat/chat';
 
 /** The WhatsApp community a group belongs to. */
 export type WhatsAppCommunity = {
@@ -20,7 +20,7 @@ export type WhatsAppCommunity = {
 /** A community reference as a handle on the community's own chat. */
 export function communityOf(
   client: MacroClient,
-  record: LinkedCommunityReference,
+  record: ExternalChatCommunity,
 ): WhatsAppCommunity {
   return {
     chat: WhatsAppChat.byId(client, record.id),
@@ -30,19 +30,19 @@ export function communityOf(
 }
 
 /** One chat of the current user's WhatsApp chat list: a group or a direct chat. */
-export class WhatsAppChat extends MacroEntity<LinkedChat> {
+export class WhatsAppChat extends MacroEntity<WhatsAppChatRecord> {
   /** Reference a chat by its WhatsApp JID. */
   static byId(client: MacroClient, id: string): WhatsAppChat {
     return new WhatsAppChat(client, id);
   }
 
   /** Seed a chat handle from the chat list. */
-  static from(client: MacroClient, record: LinkedChat): WhatsAppChat {
+  static from(client: MacroClient, record: WhatsAppChatRecord): WhatsAppChat {
     return new WhatsAppChat(client, record.jid, record);
   }
 
-  protected async fetch(): Promise<LinkedChat> {
-    const { chats } = unwrap(await this.client.storage.linkedChats());
+  protected async fetch(): Promise<WhatsAppChatRecord> {
+    const { chats } = unwrap(await this.client.storage.whatsappChats());
     const chat = chats.find((record) => record.jid === this.id);
     if (!chat) throw new MacroNotFoundError('WhatsApp chat is not available');
     return chat;
@@ -74,26 +74,30 @@ export class WhatsAppChat extends MacroEntity<LinkedChat> {
     record ? communityOf(this.client, record) : undefined,
   );
 
-  /** The current user's own Macro group for this chat, once added. */
-  readonly group = this.mappedField('group', (record) =>
-    record ? WhatsAppGroup.byId(this.client, record.id) : undefined,
+  /** The current user's own external chat for this chat, once added. */
+  readonly added = this.mappedField('added', (record) =>
+    record ? ExternalChat.byId(this.client, record.id) : undefined,
   );
 
-  /** Someone else's Macro group for this chat, shared with the current user. */
+  /** Someone else's external chat for this chat, shared with the current user. */
   readonly shared = this.mappedField('shared', (record) =>
-    record ? WhatsAppGroup.byId(this.client, record.id) : undefined,
+    record ? ExternalChat.byId(this.client, record.id) : undefined,
   );
 
   /**
    * Add the chat (a group or a direct chat) to Macro as the current user's
-   * own; its earlier messages are imported from the phone. Adding it again
-   * returns the same chat. Only the owner sends in a direct chat.
+   * own external chat; its earlier messages are imported from the phone.
+   * Adding it again returns the same chat. Only the owner sends in a direct
+   * chat.
    */
-  async adopt(): Promise<WhatsAppGroup> {
+  async add(): Promise<ExternalChat> {
+    const kind = await this.kind();
     const result = await this.mutate((client) =>
-      client.storage.linkedAdopt({ body: { group_jid: this.id } }),
+      client.storage.externalChatAdd({
+        body: { provider: 'whatsapp', remoteId: this.id, kind },
+      }),
     );
-    return WhatsAppGroup.byId(this.client, result.group_id);
+    return ExternalChat.byId(this.client, result.chatId);
   }
 
   /** Reload the chat's list entry. */

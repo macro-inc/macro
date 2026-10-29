@@ -9,7 +9,17 @@ the message text, including link labels and mention names, once per preview.
 Verify wide and narrow rows and channel/thread cards; links and mentions remain
 interactive inside the opened conversation.
 
+Conversation headers and shared detail breadcrumbs use the same identity icon:
+the recipient for human DMs, the persona for agent DMs, and the channel picture
+or glyph for named channels. Message and thread breadcrumbs resolve identity
+from their parent channel rather than the message or thread ID.
+
 ## Message links
+
+A channel search namespace with `threadId` and no `messageId` targets the thread
+root. Home, Chat, and the full-screen touch conversation normalize this URL in
+the shared channel search schema; an explicit message continues to target its
+reply within that thread.
 
 Bare URLs, common bare domains, and email addresses are clickable in opened
 messages, including agent/API messages and older messages. Explicit Markdown
@@ -22,6 +32,16 @@ containing Markdown punctuation, and Remove link → send → reopen. Channel an
 Home previews remain display-only as described above. The backend-free browser
 check is in
 `apps/web/src/lib/core/component/LexicalMarkdown/component/core/browser-test/README.md`.
+
+## Block formatting
+
+Selecting several paragraphs and choosing Quote or a heading in the floating
+format toolbar applies it to the same paragraphs in either selection direction.
+Verify a selection from the last paragraph back to the start of the first:
+the first paragraph must receive the format too. A range ending at the start of
+the following paragraph leaves that following paragraph unchanged.
+The backend-free quote check is documented in the Markdown browser-test README
+linked above.
 
 ## Empty direct messages
 
@@ -267,15 +287,16 @@ verify that its tool response includes the matching attachment URLs.
 
 ## Message composer
 
-Channel messages and thread replies have a microphone next to Send, including
-the collapsed composer. It uses the same OpenAI Whisper dictation and scrolling
-volume timeline as AI chat. **Use dictation** appends text to the draft without
+Channel messages and thread replies have a microphone next to Send on pointer
+devices. It uses the same OpenAI Whisper dictation and scrolling volume
+timeline as AI chat. **Use dictation** appends text to the draft without
 sending; **Cancel dictation** or Escape preserves the existing draft. Sending
 is blocked during dictation, including keyboard and external send actions.
-When local recognition is unavailable, confirming uploads the in-memory audio
-to Whisper. This fallback is available on all plans without consuming chat credits.
-Browsers without microphone recording show a disabled button.
-The first click downloads a language pack when needed; click again to record.
+Confirming uploads the in-memory audio to Whisper, which is available on all
+plans without consuming chat credits. Browsers without microphone recording
+show a disabled button. Touch devices have no microphone in either the
+collapsed or the expanded composer — their keyboards already dictate — so Send
+is the only control on that edge.
 
 Composer and conversation body text use `text-base` (15px at the default root
 size) on desktop and mobile. The shared scale uses 14px for `text-sm` and 12px
@@ -412,6 +433,12 @@ bot asks before scheduling a specific clock time. Within the rollout, `@Macro` �
 `@cursor` / `@codex` when available — opens
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
+An agent mentioned in a thread reply gets, on its first turn, the images and
+videos on the mentioning message and then on the thread root and earlier
+replies (at most 8, no duplicates); follow-ups carry only their own files.
+Files elsewhere in the channel appear only as `<attachment>` entries in its
+context. To check, post an image on a thread root, mention an agent in a
+reply without attaching anything, and confirm it describes the image.
 Macro Coding Agent (`@coder`) is unavailable in mention suggestions, including
 when it appears among existing participants or bots. Check with the agents
 rollout both enabled and disabled.
@@ -503,10 +530,10 @@ new GitHub PR with their session. Macro Internal MCP is hosted by the harness
 service at `/mcp/internal` on its egress listener, separately from workspace MCP.
 Cursor, sandbox, and macrod sessions receive session-scoped credentials; the
 model supplies only the URL. The tool records the link, not the GitHub PR itself.
-The shared Macro system instructions ask agents to register PRs when
-`macro_internal.set_pull_request` is available, to open them ready for review
-rather than as drafts, and to get CI passing before handing off. Macro Internal
-MCP also advertises this guidance in its server instructions. It is not prepended
+Macro Internal MCP's server instructions ask coding agents to register PRs with
+it, to open them ready for review rather than as drafts, and to get CI passing
+before handing off. External MCP clients get the ready-for-review rule in
+Macro's MCP instructions, and in-app agents tell coding agents they dispatch. It is not prepended
 to individual user messages. Cursor
 enables automatic PR creation when a repository is selected. Its returned URL
 is also recorded because
@@ -617,14 +644,14 @@ Press `Escape` to clear selection; the parent Home shortcut is then available
 again. Typing `e` in the composer or inline editor should still enter text.
 Verify a message link in a fresh browser tab as well as inside an open channel:
 the initial page should center the requested message, including older history.
-On a cold notification open, the destination shows one conversation placeholder
+On a cold notification open, the destination shows the three-block Macro loader
 while channel metadata and the targeted message window load in parallel. It
 must not briefly fetch or display the latest messages before resolving an
 uncached message link. Explicit thread replies load their parent window and
 replies together; known root messages skip the message-kind lookup. Throttle
-these requests and verify the placeholder transitions directly to the target,
-without a blank body or Macro spinner. A newer link supersedes an unresolved
-one, while a jump inside an already-mounted conversation preserves its composer.
+these requests and verify the loader transitions directly to the target,
+without a blank body or message-shaped placeholders. A newer link supersedes an
+unresolved one, while a jump inside an already-mounted conversation preserves its composer.
 Returning through split navigation restores the saved message position and expanded
 threads. Switching channel tabs and returning restores the Messages position,
 expanded threads, and pending reply from when the tab was left. The `Scroll to bottom` control appears when scrolling down through history;
@@ -791,7 +818,11 @@ aligned with New. Choices use equal widths, a transparent outlined track with
 1px padding, and fully rounded pill shapes. The 32px selected state matches
 New's fill and border without an extra shadow. All contains an optional
 `Favorites` section and the
-independently paginated `Channels` and `DMs` sections. Favorites appears when
+independently paginated `Team channels`, `Channels`, and `DMs` sections, in
+that order. `Team channels` lists team channels; `Channels` lists every other
+non-DM channel (public and private). Each section collapses on its own and
+keeps its own sort; open sections split the column evenly, and the bottom-most
+open one takes any remaining height. Favorites appears when
 the user has channel favorites and only lists channels. Channel favorites open
 in the shared channel detail. Shift-clicking a favorite, channel, or DM opens that
 conversation in a new split instead. Shift-click refreshes the notification
@@ -810,7 +841,7 @@ like the section counts. An emptied tab shows **No unread conversations** with a
 `Show all` action. The toggle persists with the rail's other view state across
 reloads. The mobile Recent feed has no toggle.
 
-With GraphQL caching enabled, a current-query cached Channels or DMs page
+With GraphQL caching enabled, a current-query cached Team channels, Channels, or DMs page
 (including an empty page) remains quiet on a response-free refresh failure.
 Hold or fail the refresh before local filtering finishes: cached rows must not
 flash **Couldn’t load conversations** while awaiting reconciliation. Changing
@@ -859,7 +890,7 @@ until explicitly enabled, including in development. For a local frontend,
 `VITE_ENABLE_CHANNEL_TAGS=true` enables it and `VITE_ENABLE_CHANNEL_TAGS=false`
 forces it off; restart the frontend after changing the environment override.
 
-With the flag off, Channels remains a flat list in its selected sort order.
+With the flag off, Team channels remains a flat list in its selected sort order.
 The heading's `+` creates a channel directly. Label headings, creation dialogs,
 channel-menu label actions, and label drag targets are absent, and the app makes
 no channel-label list or smart-label preview requests. Existing saved labels
@@ -879,7 +910,8 @@ dialog and cancel to check the controls without changing shared data. The
 creation, assignment, and persistence checks below require the label backend
 and an account where those changes are safe.
 
-Labels group channels inside the `Channels` section. Team members share the
+Labels group channels inside the `Team channels` section; the `Channels`
+section's `+` only creates a channel. Team members share the
 same labels and can create, rename, delete, or move their channels between them.
 Users without a team have labels private to their account. The naming and delete
 dialogs explain which scope applies. Collapse/expand state is per user.
@@ -898,7 +930,7 @@ row has an unread count, a `···` menu (`Rename`, `Mark all as read`, `Delete 
 Clicking the row or pressing Enter toggles it; `h` / `l` on a label or one of its
 channels collapses or expands that label. `[` / `]` jump between section headings.
 
-Creating: use the `Channels` heading's `+` → `New label`, including when the
+Creating: use the `Team channels` heading's `+` → `New label`, including when the
 account has no team. The name field receives focus on opening and reopening.
 Enter or `Create label` saves; Escape or Cancel dismisses without saving.
 The dialog stays open while saving and shows a failure inline, preserving the
@@ -910,7 +942,7 @@ private ones. Channels remain accessible after deleting their label.
 Moving: right-click a team channel for `Add to label` / `Move to label`, including a
 `New label…` option, or use `Ungroup from “<label>”`. Drag a channel onto a label
 heading or one of its channels to move in. Drag a grouped channel onto a plain
-team channel, the Channels heading, or empty space below the list to ungroup it.
+team channel, the Team channels heading, or empty space below the list to ungroup it.
 Dragging one ungrouped team channel onto another opens a name dialog; saving creates
 the label with both channels atomically. A failed save changes neither channel.
 Dropping on the source channel or its current label does nothing; Escape from
@@ -1035,8 +1067,8 @@ Rows use the same touch highlight as Home and Email: taps retain feedback while
 opening, holds stay highlighted for the action menu, and scrolling or cancelling
 a touch clears the press highlight.
 The mobile dock Search button opens the independent Search route. Its Channels
-and People categories search cached channel names and people directly; the
-conversation list does not constrain results. Full-text search is explicit,
+and People categories search the complete channel list, cached channel names,
+and people directly; the conversation list does not constrain results. Full-text search is explicit,
 and People uses the existing channel-content scope. Closing search resets its
 session; the conversation list retains its browse pagination. See
 [Search](search.md) for mode, keyboard, and session-reset checks.
@@ -1129,6 +1161,10 @@ scroll position, and input focus. To check stale-cache recovery, mark notificati
 read/done in another tab, then repeat the action in a stale tab. Empty or partial
 changed-row responses must still reconcile mounted Soup and notification readers,
 without resetting loaded pages or starting an unused global notification feed.
+With the normalized cache, a Done writes the rows it left out as done
+(`confirmEntityNotificationsDone`), and a mark seen that left out a row the tab
+showed unseen reads every reader again; otherwise only readers the cache does not
+maintain are read again.
 Undo must use only the mutation's returned IDs, not IDs from the subsequent refresh.
 The backend must support the new edge arguments before deploying the frontend
 that requests them.
@@ -1360,8 +1396,8 @@ For mobile send regressions, keep the software keyboard open and send several
 short and multiline messages consecutively. The keyboard should remain open,
 the cleared composer should retain focus, and a pinned chat should remain at the
 bottom through composer resizing and server acknowledgement. Check that restoring
-the caret after send does not pan the page while the keyboard resizes. Repeat with dictation
-and check that sent text does not return. Scroll into history before an incoming
+the caret after send does not pan the page while the keyboard resizes. Repeat with the
+keyboard's own dictation and check that sent text does not return. Scroll into history before an incoming
 message or acknowledgement and verify that it does not pull you to latest.
 
 For composer cleanup, repeatedly open and leave channels and threads, then
@@ -1405,3 +1441,10 @@ If the metadata is unavailable, the fallback extension comes from the response
 MIME type. Linked video preview cards also offer Download, using the document's
 current version, name, and file type. See [Downloading files](files.md#downloading-files)
 for progress, cancellation, retries, and mobile save/share verification.
+
+## Pending message drafts
+
+Sending clears the composer immediately while delivery is pending. If delivery
+fails and the composer is still empty, its text, mentions, and attachments return.
+A new draft typed during delivery stays intact if the earlier send fails. Verify
+this with both the Send button on a phone and the desktop composer.

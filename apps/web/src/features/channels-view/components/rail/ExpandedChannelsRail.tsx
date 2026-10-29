@@ -78,6 +78,7 @@ import {
   useChannelsRail,
 } from './ChannelsRailContext';
 import {
+  COLLAPSED_SECTION_HEIGHT,
   CollapsibleSection,
   CreateRailAction,
   RailListError,
@@ -89,6 +90,7 @@ import {
   ChannelUnreadFilterToggle,
 } from './ChannelUnreadFilter';
 import {
+  CHANNEL_LIST_GROUPS,
   useChannelRailItemState,
   useChannelRailScopeState,
   useChannelRailSectionState,
@@ -127,6 +129,14 @@ type GroupConfig = {
 };
 
 const GROUPS: GroupConfig[] = [
+  {
+    group: 'team_channels',
+    label: 'Team channels',
+    emptyLabel: 'No team channels',
+    unreadEmptyLabel: 'No unread team channels',
+    createLabel: 'Create channel',
+    onCreate: openNewChannelModal,
+  },
   {
     group: 'channels',
     label: 'Channels',
@@ -167,10 +177,11 @@ function ChannelSortDropdown(props: {
   return (
     <Dropdown placement="bottom-end">
       <Dropdown.Trigger
+        aria-label={`Sort ${props.label.toLowerCase()}`}
+        tooltip={`Sort ${props.label.toLowerCase()}`}
         as={ViewSidebar.Control}
         variant="ghost"
         size="icon-sm"
-        label={`Sort ${props.label.toLowerCase()}`}
       >
         <SortIcon class="size-3.5" />
       </Dropdown.Trigger>
@@ -255,7 +266,7 @@ function ChannelOption(props: {
   rowId?: ChannelRailRow['id'];
   /** Nest under a label heading, with the branch rail. */
   labelId?: string;
-  /** Make a team-channel row draggable between labels (Channels section only). */
+  /** Make a team-channel row draggable between labels (Team channels section only). */
   draggable?: boolean;
 }) {
   const rail = useChannelsRail();
@@ -299,8 +310,9 @@ function ChannelOption(props: {
         dnd?.droppable.ref(element);
       }}
       {...(canLabelChannel(props.channel) ? dnd?.draggable.dragActivators : {})}
-      onPointerDown={() => {
+      onPointerDown={(event) => {
         didDrag = false;
+        rail.prefetchRow(rowId(), event);
       }}
       class={cn(
         'min-w-0',
@@ -440,7 +452,7 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
           />
           <Show when={isTouchDevice()}>
             <ViewSidebar.Control
-              label={
+              aria-label={
                 props.search.isOpen() ? 'Close search' : 'Search conversations'
               }
               aria-pressed={props.search.isOpen()}
@@ -578,7 +590,7 @@ const channelRowOf = (row: ChannelSectionRow) =>
   row.kind === 'conversation' ? row : undefined;
 
 /**
- * The Channels section body: an optional "new label" draft, then one
+ * The Team channels section body: an optional "new label" draft, then one
  * virtualized list of label headings and channels. Dropping a dragged channel
  * on the list itself, outside any row, takes it out of its label.
  */
@@ -691,7 +703,11 @@ function ChannelHeadingDropTarget(props: { element: HTMLElement }) {
   return null;
 }
 
-function ExpandedGroupSection(props: { config: GroupConfig }) {
+function ExpandedGroupSection(props: {
+  config: GroupConfig;
+  /** The share of the column this section may claim while open. */
+  maxHeight: string;
+}) {
   // A conditional expression as `ref` is dropped by the Solid compiler, so
   // the target is chosen inside the callback.
   const createTarget = tourTarget(CHANNELS_TOUR.create);
@@ -712,14 +728,15 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
   return (
     <CollapsibleSection.Root
       open={section().open}
-      sizing={section().fillAvailable ? 'fill' : 'half'}
+      sizing={section().fillAvailable ? 'fill' : 'share'}
+      maxHeight={props.maxHeight}
     >
       <CollapsibleSection.Header
         focused={section().focused}
         focusWithin={section().containsFocus}
         class={cn(
           rail.channelTagsEnabled() &&
-            props.config.group === 'channels' &&
+            props.config.group === 'team_channels' &&
             rail.activeDropTarget()?.kind === 'unlabelled' &&
             'bg-selected ring-1 ring-inset ring-accent'
         )}
@@ -728,7 +745,7 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
         <Show
           when={
             rail.channelTagsEnabled() &&
-            props.config.group === 'channels' &&
+            props.config.group === 'team_channels' &&
             headerElement()
           }
           keyed
@@ -773,7 +790,7 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
             label={props.config.label}
           />
           <Show
-            when={props.config.group === 'channels'}
+            when={props.config.group === 'team_channels'}
             fallback={
               <CreateRailAction
                 label={props.config.createLabel}
@@ -883,12 +900,20 @@ function ExpandedBrowse() {
   const hasItems = () =>
     rail.channelSectionRows().length > 0 ||
     rail.favorites().length > 0 ||
-    rail.sources.direct_messages.items().length > 0;
+    CHANNEL_LIST_GROUPS.some((group) => rail.sources[group].items().length > 0);
   const sourcesSettled = () =>
-    !rail.sources.channels.isLoading() &&
-    !rail.sources.direct_messages.isLoading() &&
-    !rail.sources.channels.error() &&
-    !rail.sources.direct_messages.error();
+    CHANNEL_LIST_GROUPS.every(
+      (group) =>
+        !rail.sources[group].isLoading() && !rail.sources[group].error()
+    );
+  // Open sections share the column evenly; the collapsed headers and the gaps
+  // come off the top first.
+  const sectionMaxHeight = () => {
+    const total = GROUPS.length;
+    const open = GROUPS.filter(({ group }) => rail.isGroupOpen(group)).length;
+    if (open === 0) return '100%';
+    return `calc((100% - ${total - open} * ${COLLAPSED_SECTION_HEIGHT}px - ${total - 1} * var(--sidebar-section-gap)) / ${open})`;
+  };
 
   return (
     <Switch>
@@ -909,11 +934,16 @@ function ExpandedBrowse() {
         <ViewSidebar.Content class="h-full overflow-hidden">
           <ChannelFavoritesSection />
           {/* The groups split the height left after favorites between them.
-              Their half-height caps resolve against this column, not the
-              whole sidebar, so favorites is never squeezed out. */}
+              Their caps resolve against this column, not the whole sidebar,
+              so favorites is never squeezed out. */}
           <div class="flex min-h-0 flex-1 flex-col gap-(--sidebar-section-gap)">
             <For each={GROUPS}>
-              {(config) => <ExpandedGroupSection config={config} />}
+              {(config) => (
+                <ExpandedGroupSection
+                  config={config}
+                  maxHeight={sectionMaxHeight()}
+                />
+              )}
             </For>
           </div>
         </ViewSidebar.Content>
@@ -950,6 +980,9 @@ function RecentConversationCard(props: { channel: ChannelEntity }) {
         focused={item().focused}
         onActivate={(event) =>
           rail.activateRow(rowKeyForChannel(props.channel.id), event)
+        }
+        onPress={(event) =>
+          rail.prefetchRow(rowKeyForChannel(props.channel.id), event)
         }
       />
     </ChannelRailItemContextMenu>

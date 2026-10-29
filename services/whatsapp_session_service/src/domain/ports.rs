@@ -78,7 +78,7 @@ pub enum AccountSignal {
     Pairing(Uuid),
     /// `whatsapp_send_requested`: claim pending sends.
     Send,
-    /// `whatsapp_groups_requested`: refresh the group list.
+    /// `whatsapp_roster_requested`: refresh the group list.
     Groups,
     /// `whatsapp_account_changed`: consent or adopted groups changed.
     Changed,
@@ -86,10 +86,33 @@ pub enum AccountSignal {
     Resync,
 }
 
+/// A signal and the span of the notification it came from, so the work it
+/// causes continues the sender's trace. Signals without one (rescans,
+/// resyncs) carry [`tracing::Span::none`].
+#[derive(Debug, Clone)]
+pub struct Traced<SignalKind> {
+    /// The signal.
+    pub signal: SignalKind,
+    /// `whatsapp.signal.receive` of the notification, or none.
+    pub span: tracing::Span,
+}
+
+impl<SignalKind> From<SignalKind> for Traced<SignalKind> {
+    fn from(signal: SignalKind) -> Self {
+        Traced {
+            signal,
+            span: tracing::Span::none(),
+        }
+    }
+}
+
 /// What a runner receives for its account.
 pub struct AccountControl {
     /// Signals for this account, coalesced when the runner is busy.
-    pub signals: mpsc::Receiver<AccountSignal>,
+    pub signals: mpsc::Receiver<Traced<AccountSignal>>,
+    /// The span that started the runner (a notification, a rescan); the
+    /// account's connect span links to it.
+    pub cause: tracing::Span,
     /// Graceful release (drain): stop taking sends, wait for in-flight
     /// acknowledgements, disconnect, then return [`AccountExit::Released`].
     pub release: CancellationToken,
@@ -135,7 +158,9 @@ pub enum SessionEvent {
         /// Verified phone-number JID of the linked account.
         identity_jid: String,
     },
-    /// Pairing failed or timed out.
+    /// WhatsApp's QR codes ran out before one was scanned.
+    PairExpired,
+    /// Pairing failed.
     PairFailed,
     /// WhatsApp asked for a passkey assertion; `challenge` is the WebAuthn
     /// request options to show the owner.
@@ -191,9 +216,14 @@ pub enum SessionError {
     /// Another replica took the account over.
     #[error("the account lease moved to another replica")]
     Fenced,
-    /// KMS refused to unwrap or generate the account's data key.
-    #[error("KMS refused the account's data key")]
-    Kms,
+    /// KMS could not be reached right now; opening again later can succeed.
+    #[error("KMS is unavailable for the account's data key")]
+    KmsUnavailable,
+    /// The stored device can never be read again (KMS refused its data key,
+    /// or it does not decrypt). Only a fresh device, and so a new pairing,
+    /// helps.
+    #[error("the account's stored WhatsApp device cannot be read")]
+    DeviceUnreadable,
     /// Any other failure.
     #[error("WhatsApp session failed: {0}")]
     Internal(rootcause::Report),

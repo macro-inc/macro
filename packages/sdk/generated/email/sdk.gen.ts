@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddDraftAttachmentData, AddDraftAttachmentErrors, AddDraftAttachmentResponses, AddForwardedAttachmentData, AddForwardedAttachmentErrors, AddForwardedAttachmentResponses, AddRemoveLabelData, AddRemoveLabelErrors, AddRemoveLabelResponses, AddRemoveThreadLabelData, AddRemoveThreadLabelErrors, AddRemoveThreadLabelResponses, ArchiveThreadData, ArchiveThreadErrors, ArchiveThreadResponses, BlockSenderData, BlockSenderErrors, BlockSenderResponses, CancelBackfillGmailData, CancelBackfillGmailErrors, CancelBackfillGmailResponses, CompleteDraftAttachmentData, CompleteDraftAttachmentErrors, CompleteDraftAttachmentResponses, CopyThreadCalendarInvitationData, CopyThreadCalendarInvitationErrors, CopyThreadCalendarInvitationResponses, CreateDraftData, CreateDraftErrors, CreateDraftResponses, CreateLabelData, CreateLabelErrors, CreateLabelResponses, DeleteDraftData, DeleteDraftErrors, DeleteDraftResponses, DeleteEmailFilterData, DeleteEmailFilterErrors, DeleteEmailFilterResponses, DeleteLabelData, DeleteLabelErrors, DeleteLabelResponses, DeleteLinkData, DeleteLinkErrors, DeleteLinkResponses, DeleteScheduledDraftData, DeleteScheduledDraftErrors, DeleteScheduledDraftResponses, DisableLinkCalendarData, DisableLinkCalendarErrors, DisableLinkCalendarResponses, DisableSyncData, DisableSyncErrors, DisableSyncResponses, GetAttachmentData, GetAttachmentDocumentIdData, GetAttachmentDocumentIdErrors, GetAttachmentDocumentIdResponses, GetAttachmentErrors, GetAttachmentResponses, GetBackfillGmailActiveData, GetBackfillGmailActiveErrors, GetBackfillGmailActiveResponses, GetBackfillGmailData, GetBackfillGmailErrors, GetBackfillGmailResponses, GetMessageData, GetMessageErrors, GetMessageResponses, GetMessagesBatchData, GetMessagesBatchErrors, GetMessagesBatchResponses, GetScheduledMessagesData, GetScheduledMessagesErrors, GetScheduledMessagesResponses, GetThreadCalendarInvitationsData, GetThreadCalendarInvitationsErrors, GetThreadCalendarInvitationsResponses, GetThreadData, GetThreadErrors, GetThreadMessagesHandlerData, GetThreadMessagesHandlerErrors, GetThreadMessagesHandlerResponses, GetThreadResponses, HealthCheckLinksData, HealthCheckLinksErrors, HealthCheckLinksResponses, HealthHandlerData, HealthHandlerResponses, InitUserData, InitUserErrors, InitUserResponses, ListBackfillGmailData, ListBackfillGmailErrors, ListBackfillGmailResponses, ListBlockedSendersData, ListBlockedSendersErrors, ListBlockedSendersResponses, ListContactsData, ListContactsErrors, ListContactsResponses, ListEmailFiltersData, ListEmailFiltersErrors, ListEmailFiltersResponses, ListLabelsData, ListLabelsErrors, ListLabelsResponses, ListLinksData, ListLinksErrors, ListLinksResponses, MailboxSettingsOperationsData, MailboxSettingsOperationsResponses, MessageOperationStatusData, MessageOperationStatusErrors, MessageOperationStatusResponses, PatchSettingsData, PatchSettingsErrors, PatchSettingsResponses, PreviewsInboxCursorData, PreviewsInboxCursorErrors, PreviewsInboxCursorResponses, RecoverDraftTransferData, RecoverDraftTransferErrors, RecoverDraftTransferResponses, RemoveDraftAttachmentData, RemoveDraftAttachmentErrors, RemoveDraftAttachmentResponses, RemoveForwardedAttachmentData, RemoveForwardedAttachmentErrors, RemoveForwardedAttachmentResponses, ResolveMessageOperationData, ResolveMessageOperationErrors, ResolveMessageOperationResponses, ResyncLinkData, ResyncLinkErrors, ResyncLinkResponses, SendMessageData, SendMessageErrors, SendMessageResponses, ThreadOperationsData, ThreadOperationsErrors, ThreadOperationsResponses, ThreadSeenData, ThreadSeenErrors, ThreadSeenResponses, TransferDraftData, TransferDraftErrors, TransferDraftResponses, UnblockSenderData, UnblockSenderErrors, UnblockSenderResponses, UpdateThreadProjectData, UpdateThreadProjectErrors, UpdateThreadProjectResponses, UpdateThreadStateData, UpdateThreadStateErrors, UpdateThreadStateResponses, UpsertEmailFilterData, UpsertEmailFilterErrors, UpsertEmailFilterResponses, UpsertScheduledMessageData, UpsertScheduledMessageErrors, UpsertScheduledMessageResponses } from './types.gen';
+import type { AddDraftAttachmentData, AddDraftAttachmentErrors, AddDraftAttachmentResponses, AddForwardedAttachmentData, AddForwardedAttachmentErrors, AddForwardedAttachmentResponses, AddRemoveLabelData, AddRemoveLabelErrors, AddRemoveLabelResponses, AddRemoveThreadLabelData, AddRemoveThreadLabelErrors, AddRemoveThreadLabelResponses, ArchiveThreadData, ArchiveThreadErrors, ArchiveThreadResponses, ArchiveThreadsData, ArchiveThreadsErrors, ArchiveThreadsResponses, BlockSenderData, BlockSenderErrors, BlockSenderResponses, CancelBackfillGmailData, CancelBackfillGmailErrors, CancelBackfillGmailResponses, CompleteDraftAttachmentData, CompleteDraftAttachmentErrors, CompleteDraftAttachmentResponses, CopyThreadCalendarInvitationData, CopyThreadCalendarInvitationErrors, CopyThreadCalendarInvitationResponses, CreateDraftData, CreateDraftErrors, CreateDraftResponses, CreateLabelData, CreateLabelErrors, CreateLabelResponses, DeleteDraftData, DeleteDraftErrors, DeleteDraftResponses, DeleteEmailFilterData, DeleteEmailFilterErrors, DeleteEmailFilterResponses, DeleteLabelData, DeleteLabelErrors, DeleteLabelResponses, DeleteLinkData, DeleteLinkErrors, DeleteLinkResponses, DeleteScheduledDraftData, DeleteScheduledDraftErrors, DeleteScheduledDraftResponses, DisableLinkCalendarData, DisableLinkCalendarErrors, DisableLinkCalendarResponses, DisableSyncData, DisableSyncErrors, DisableSyncResponses, ForwardCalendarEventData, ForwardCalendarEventErrors, ForwardCalendarEventResponses, GetAttachmentData, GetAttachmentDocumentIdData, GetAttachmentDocumentIdErrors, GetAttachmentDocumentIdResponses, GetAttachmentErrors, GetAttachmentResponses, GetBackfillGmailActiveData, GetBackfillGmailActiveErrors, GetBackfillGmailActiveResponses, GetBackfillGmailData, GetBackfillGmailErrors, GetBackfillGmailResponses, GetMessageData, GetMessageErrors, GetMessageResponses, GetMessagesBatchData, GetMessagesBatchErrors, GetMessagesBatchResponses, GetScheduledMessagesData, GetScheduledMessagesErrors, GetScheduledMessagesResponses, GetThreadCalendarInvitationsData, GetThreadCalendarInvitationsErrors, GetThreadCalendarInvitationsResponses, GetThreadData, GetThreadErrors, GetThreadMessagesHandlerData, GetThreadMessagesHandlerErrors, GetThreadMessagesHandlerResponses, GetThreadResponses, HealthCheckLinksData, HealthCheckLinksErrors, HealthCheckLinksResponses, HealthHandlerData, HealthHandlerResponses, InitUserData, InitUserErrors, InitUserResponses, ListBackfillGmailData, ListBackfillGmailErrors, ListBackfillGmailResponses, ListBlockedSendersData, ListBlockedSendersErrors, ListBlockedSendersResponses, ListContactsData, ListContactsErrors, ListContactsResponses, ListEmailFiltersData, ListEmailFiltersErrors, ListEmailFiltersResponses, ListLabelsData, ListLabelsErrors, ListLabelsResponses, ListLinksData, ListLinksErrors, ListLinksResponses, MailboxSettingsOperationsData, MailboxSettingsOperationsResponses, MessageOperationStatusData, MessageOperationStatusErrors, MessageOperationStatusResponses, PatchSettingsData, PatchSettingsErrors, PatchSettingsResponses, PreviewsInboxCursorData, PreviewsInboxCursorErrors, PreviewsInboxCursorResponses, RecoverDraftTransferData, RecoverDraftTransferErrors, RecoverDraftTransferResponses, RemoveDraftAttachmentData, RemoveDraftAttachmentErrors, RemoveDraftAttachmentResponses, RemoveForwardedAttachmentData, RemoveForwardedAttachmentErrors, RemoveForwardedAttachmentResponses, ResolveMessageOperationData, ResolveMessageOperationErrors, ResolveMessageOperationResponses, ResyncLinkData, ResyncLinkErrors, ResyncLinkResponses, SendMessageData, SendMessageErrors, SendMessageResponses, ThreadOperationsData, ThreadOperationsErrors, ThreadOperationsResponses, ThreadSeenData, ThreadSeenErrors, ThreadSeenResponses, TransferDraftData, TransferDraftErrors, TransferDraftResponses, UnblockSenderData, UnblockSenderErrors, UnblockSenderResponses, UpdateThreadProjectData, UpdateThreadProjectErrors, UpdateThreadProjectResponses, UpdateThreadStateData, UpdateThreadStateErrors, UpdateThreadStateResponses, UpsertEmailFilterData, UpsertEmailFilterErrors, UpsertEmailFilterResponses, UpsertScheduledMessageData, UpsertScheduledMessageErrors, UpsertScheduledMessageResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -106,6 +106,28 @@ export class Sdk extends HeyApiClient {
      */
     public getBackfillGmail<ThrowOnError extends boolean = false>(options: Options<GetBackfillGmailData, ThrowOnError>): RequestResult<GetBackfillGmailResponses, GetBackfillGmailErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetBackfillGmailResponses, GetBackfillGmailErrors, ThrowOnError>({ url: '/email/backfill/gmail/{id}', ...options });
+    }
+    
+    /**
+     * Email one of the viewer's events to people the organizer's guest list
+     * does not name, from the inbox that holds the viewer's copy, with the
+     * usual undo delay, carrying the copy's join link. When the copy is Google's
+     * private copy of an invitation from an organizer outside Google, it is a
+     * real invitation (`METHOD:REQUEST`) naming the recipients, who answer it to
+     * the organizer, who gets the email too. Otherwise it is the event's file
+     * (`METHOD:PUBLISH`, no attendees): recipients can add the event to their
+     * own calendar, are not added to the guest list, and the organizer is not
+     * told.
+     */
+    public forwardCalendarEvent<ThrowOnError extends boolean = false>(options: Options<ForwardCalendarEventData, ThrowOnError>): RequestResult<ForwardCalendarEventResponses, ForwardCalendarEventErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ForwardCalendarEventResponses, ForwardCalendarEventErrors, ThrowOnError>({
+            url: '/email/calendar-events/{event_id}/forward',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
     
     /**
@@ -481,6 +503,21 @@ export class Sdk extends HeyApiClient {
      */
     public disableSync<ThrowOnError extends boolean = false>(options?: Options<DisableSyncData, ThrowOnError>): RequestResult<DisableSyncResponses, DisableSyncErrors, ThrowOnError> {
         return (options?.client ?? this.client).delete<DisableSyncResponses, DisableSyncErrors, ThrowOnError>({ url: '/email/sync', ...options });
+    }
+    
+    /**
+     * Change the archived status of up to 100 threads, sending one provider
+     * write per inbox. A thread that can't change is reported, not fatal.
+     */
+    public archiveThreads<ThrowOnError extends boolean = false>(options: Options<ArchiveThreadsData, ThrowOnError>): RequestResult<ArchiveThreadsResponses, ArchiveThreadsErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<ArchiveThreadsResponses, ArchiveThreadsErrors, ThrowOnError>({
+            url: '/email/threads/archived',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
     
     /**

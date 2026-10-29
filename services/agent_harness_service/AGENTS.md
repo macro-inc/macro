@@ -24,7 +24,7 @@ Pulumi stacks; they do not host extra agent processes.
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
   reuses the harness tool context and retains bearer authentication. Users with
-  `ai-code-mode` get `ExecuteCode`/`DescribeCodeTools` in place of SDK-covered
+  `ai-code-mode` get `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` in place of SDK-covered
   tools (`tool_service.rs`); the flag is cached per user (`tool_mode_cache.rs`).
   `src/public_mcp/analytics.rs` sends PostHog `$mcp_initialize` /
   `$mcp_tool_call` events (PostHog MCP analytics schema) in the background,
@@ -35,6 +35,10 @@ Pulumi stacks; they do not host extra agent processes.
   `src/cognition/service/integration_analytics.rs` sends PostHog
   `integration_connected` / `integration_disconnected` for native MCP servers
   and Pipedream apps, from the router hooks wired in `src/cognition/server.rs`.
+- `crates/universal_input` owns Command K's authenticated `/universal_input/classify`
+  and `/universal_input/extract` routes, mounted directly by `src/api.rs`. The root
+  composes staged search type/field extraction and Clairic content extraction
+  with Nemotron temporal extraction and the shared admission/usage services.
 - `src/scheduling.rs`: routine HTTP routes and background scheduling;
   domain/adapters live in `crates/scheduled_action`.
 - `src/preview.rs` + `src/preview/`: preview control routes, public HTTP and SSH listeners;

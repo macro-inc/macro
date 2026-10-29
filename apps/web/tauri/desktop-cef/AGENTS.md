@@ -33,6 +33,12 @@ thin binary over `../src-tauri` (`app_lib::run_with`) that selects
 - Keep this a separate workspace. A `[patch]` applies to every target in its
   workspace, so moving the CEF Tauri patches into `../Cargo.toml` would rebuild
   iOS and Android against the CEF branch.
+- A dependency change in `../src-tauri` or a shared plugin updates both
+  lockfiles: run `cargo metadata --format-version 1 > /dev/null` here as well as
+  in `..`. A new git dependency also needs its `outputHashes` entry on both
+  vendor dirs in `nix/tauri-desktop.nix`. The `check tauri lockfiles` PR
+  workflow (`nix build .#checks.x86_64-linux.tauri-cargo-lockfiles`) fails
+  when either lockfile is stale; otherwise only the macOS release build would.
 - `../src-tauri` must resolve `tauri` through `[patch.crates-io]` (a version
   requirement, not a git dependency) so this workspace can repoint it.
 - The `cef` feature of `../src-tauri` adds no dependencies; it switches the

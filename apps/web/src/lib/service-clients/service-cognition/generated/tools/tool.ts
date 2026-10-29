@@ -47,6 +47,10 @@ type ToolParserMap = {
     call: types.ConfigureBot;
     response: types.ConfigureBotResponse;
   };
+  ConnectMcpServer: {
+    call: types.ConnectMcpServer;
+    response: types.ConnectMcpServerResponse;
+  };
   ContentSearch: {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
@@ -397,6 +401,7 @@ type ToolParserMap = {
     response: types.ReadChannelThreadResponse;
   };
   ReadChat: { call: types.ReadChat; response: types.ReadChatResponse };
+  ReadCodeDocs: { call: types.ReadCodeDocs; response: types.SymbolReferences };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
   ReadDesign: { call: types.ReadDesign; response: types.ReadDesignResponse };
   ReadDiscussion: {
@@ -587,6 +592,10 @@ const toolParserMap = {
   ConfigureBot: {
     call: schemas.ConfigureBot,
     response: schemas.ConfigureBotResponse,
+  },
+  ConnectMcpServer: {
+    call: schemas.ConnectMcpServer,
+    response: schemas.ConnectMcpServerResponse,
   },
   ContentSearch: {
     call: schemas.ContentSearch,
@@ -974,6 +983,10 @@ const toolParserMap = {
     response: schemas.ReadChannelThreadResponse,
   },
   ReadChat: { call: schemas.ReadChat, response: schemas.ReadChatResponse },
+  ReadCodeDocs: {
+    call: schemas.ReadCodeDocs,
+    response: schemas.SymbolReferences,
+  },
   ReadContent: {
     call: schemas.ReadContent,
     response: schemas.ReadContentResponse,
@@ -1196,6 +1209,10 @@ type ToolDataMap = {
   ConfigureBot: {
     call: types.ConfigureBot;
     response: types.ConfigureBotResponse;
+  };
+  ConnectMcpServer: {
+    call: types.ConnectMcpServer;
+    response: types.ConnectMcpServerResponse;
   };
   ContentSearch: {
     call: types.ContentSearch;
@@ -1547,6 +1564,7 @@ type ToolDataMap = {
     response: types.ReadChannelThreadResponse;
   };
   ReadChat: { call: types.ReadChat; response: types.ReadChatResponse };
+  ReadCodeDocs: { call: types.ReadCodeDocs; response: types.SymbolReferences };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
   ReadDesign: { call: types.ReadDesign; response: types.ReadDesignResponse };
   ReadDiscussion: {

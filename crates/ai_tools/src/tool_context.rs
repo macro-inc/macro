@@ -905,6 +905,10 @@ impl CallRtcClient for NoOpCallRtcClient {
         Ok(())
     }
 
+    async fn list_rooms(&self) -> anyhow::Result<Vec<call::domain::models::RtcRoom>> {
+        Ok(Vec::new())
+    }
+
     async fn generate_token<'a>(
         &self,
         _room_name: &str,
@@ -1557,11 +1561,17 @@ impl ToolEntityCreator {
         content: ImportedContent,
         subtype: documents::domain::create::MarkdownSubtype,
         folder: Option<uuid::Uuid>,
+        dates: Option<import::domain::ports::SourceDates>,
     ) -> anyhow::Result<String> {
         use std::str::FromStr as _;
         let mut metadata = documents::domain::create::NewDocumentMetadata::builder(name);
         if let Some(id) = id {
             metadata = metadata.id(id);
+        }
+        if let Some(dates) = dates {
+            metadata = metadata
+                .created_at(dates.created)
+                .updated_at(dates.last_edited);
         }
         if let Some(folder) = folder {
             self.authorize_folder(user, folder).await?;
@@ -1641,7 +1651,7 @@ impl ToolEntityCreator {
     /// `share_with_team`, then apply its properties best-effort.
     #[expect(
         clippy::too_many_arguments,
-        reason = "a task carries its id, content, properties, folder and sharing"
+        reason = "a task carries its id, content, properties, folder, dates and sharing"
     )]
     pub(crate) async fn create_imported_task(
         &self,
@@ -1651,6 +1661,7 @@ impl ToolEntityCreator {
         content: ImportedContent,
         properties: &import::domain::ports::ImportedTaskProperties,
         folder: Option<uuid::Uuid>,
+        dates: Option<import::domain::ports::SourceDates>,
         share_with_team: bool,
     ) -> anyhow::Result<String> {
         // Same team resolution as the CreateDocument tool, so imported tasks
@@ -1663,15 +1674,19 @@ impl ToolEntityCreator {
             team_id,
         };
         let task_id = self
-            .create_doc(user, id, name, content, subtype, folder)
+            .create_doc(user, id, name, content, subtype, folder, dates)
             .await?;
         self.apply_task_properties(user, &task_id, properties, &roster)
             .await;
         Ok(task_id)
     }
 
-    /// Create an imported markdown document, in `folder` when given, then
-    /// apply its properties best-effort.
+    /// Create an imported markdown document, in `folder` when given and with
+    /// its source's `dates` when known, then apply its properties best-effort.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "an imported document carries its id, name, content, properties, folder and dates"
+    )]
     pub(crate) async fn create_imported_document(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -1680,6 +1695,7 @@ impl ToolEntityCreator {
         notion: documents::domain::notion_markdown::NotionMarkdown,
         properties: &import::domain::ports::ImportedDocumentProperties,
         folder: Option<uuid::Uuid>,
+        dates: Option<import::domain::ports::SourceDates>,
     ) -> anyhow::Result<String> {
         let document_id = self
             .create_doc(
@@ -1689,6 +1705,7 @@ impl ToolEntityCreator {
                 ImportedContent::Notion(notion),
                 documents::domain::create::MarkdownSubtype::Note,
                 folder,
+                dates,
             )
             .await?;
         let access = match self
@@ -1839,6 +1856,7 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
             ImportedContent::Markdown(markdown.to_string()),
             properties,
             None,
+            None,
             // Single tracked tasks (Linear) are shared with the team, as
             // tasks the user makes are.
             true,
@@ -1860,6 +1878,7 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
             name,
             crate::import_workspace::notion_markdown(notion_markdown, links),
             properties,
+            None,
             None,
         )
         .await
@@ -1910,6 +1929,12 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
         pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
         pipedream_mcp::outbound::api::PipedreamClient,
     >,
+>;
+
+/// The custom MCP server tools, wired by hosts holding the MCP credentials
+/// key.
+pub type ToolMcpServerToolContext = mcp_client::inbound::toolset::McpServerToolContext<
+    mcp_client::outbound::pg_server_repo::PgServerRepo,
 >;
 
 /// Type alias for the import tool context, wired by hosts with connector access.
@@ -1989,6 +2014,9 @@ pub struct ToolServiceContext {
     /// Import staging/tracking tools. `unwired` in hosts that can't build
     /// the import service — calls there fail with a clear error.
     pub import_tool_context: ToolImportToolContext,
+    /// Custom MCP server tools. `unwired` in hosts without the MCP
+    /// credentials key — calls there fail with a clear error.
+    pub mcp_server_tool_context: ToolMcpServerToolContext,
     /// Built per-request via a manual `FromRef` below so it can carry the
     /// running chat's id — the derive's field-clone would freeze it at
     /// startup with no chat id set.
@@ -2034,18 +2062,24 @@ pub struct ToolServiceContext {
 pub type ToolConnectorToolContext = pipedream_mcp::inbound::toolset::ConnectorToolContext<
     pipedream_mcp::outbound::api::PipedreamClient,
     pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
+    mcp_select::NativeOverlayConnections<mcp_client::outbound::pg_server_repo::PgServerRepo>,
 >;
 
 /// Wire connector discovery at the composition boundary.
+///
+/// `native_servers` answers for overlaid apps, which connect through the
+/// native MCP stack; `None` where that stack has no encryption key.
 pub fn build_connector_tool_context(
     pool: sqlx::PgPool,
     client: Option<Arc<pipedream_mcp::outbound::api::PipedreamClient>>,
+    native_servers: Option<Arc<mcp_client::outbound::pg_server_repo::PgServerRepo>>,
 ) -> ToolConnectorToolContext {
     pipedream_mcp::inbound::toolset::ConnectorToolContext {
         service: Arc::new(
             pipedream_mcp::domain::service::discovery::ConnectorDiscovery::new(
                 client,
                 Arc::new(pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool)),
+                Arc::new(mcp_select::NativeOverlayConnections::new(native_servers)),
             ),
         ),
     }

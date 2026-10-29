@@ -136,7 +136,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                       disabled={props.isContext}
                     >
                       <Button variant="ghost" size="icon-md">
-                        <ExpandIcon />
+                        <ExpandIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                       </Button>
                     </Dialog.Trigger>
                     <Dropdown>
@@ -145,7 +145,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                         size="icon-md"
                         disabled={props.isContext}
                       >
-                        <ThreeDotsIcon />
+                        <ThreeDotsIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                       </Dropdown.Trigger>
                       <Dropdown.Content>
                         <Dropdown.Group>

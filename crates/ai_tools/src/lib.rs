@@ -50,6 +50,7 @@ use email::inbound::toolset::{email_toolset, mcp_toolset as email_mcp_toolset};
 use favorites::inbound::toolset::favorites_toolset;
 use import::inbound::toolset::import_toolset;
 use initiative::inbound::toolset::initiative_toolset;
+use mcp_client::inbound::toolset::mcp_server_toolset;
 use messages::inbound::toolset::message_toolset;
 use notification::inbound::ai_tool::{item_notification_preference_toolset, notification_toolset};
 use projects::inbound::toolset::project_toolset;
@@ -91,12 +92,13 @@ pub use tool_context::{
     ToolFavoritesService, ToolFavoritesToolContext, ToolForeignEntityService, ToolFormsToolContext,
     ToolFrecencyService, ToolGithubPullRequestService, ToolImageGenerationToolContext,
     ToolImportService, ToolImportToolContext, ToolInitiativeToolContext,
-    ToolItemNotificationPreferenceToolContext, ToolMcpSelector, ToolMessageToolContext,
-    ToolNotificationQueue, ToolNotificationService, ToolNotificationToolContext,
-    ToolPipedreamConnection, ToolPipelineService, ToolPipelineToolContext, ToolPipelineWorkflows,
-    ToolProjectService, ToolProjectToolContext, ToolPropertiesService, ToolPropertiesToolContext,
-    ToolReadAgentSessionContext, ToolServiceContext, ToolSkillService, ToolSkillToolContext,
-    ToolSoupService, ToolSystemPropertiesService, ToolTableEventPublisher, ToolTeamCalendarService,
+    ToolItemNotificationPreferenceToolContext, ToolMcpSelector, ToolMcpServerToolContext,
+    ToolMessageToolContext, ToolNotificationQueue, ToolNotificationService,
+    ToolNotificationToolContext, ToolPipedreamConnection, ToolPipelineService,
+    ToolPipelineToolContext, ToolPipelineWorkflows, ToolProjectService, ToolProjectToolContext,
+    ToolPropertiesService, ToolPropertiesToolContext, ToolReadAgentSessionContext,
+    ToolServiceContext, ToolSkillService, ToolSkillToolContext, ToolSoupService,
+    ToolSystemPropertiesService, ToolTableEventPublisher, ToolTeamCalendarService,
     ToolTeamCalendarToolContext, ToolTeamService, ToolTeamToolContext, ToolUserEmailService,
     ToolViewOnlyDatabasesSqlToolContext, build_activity_tool_context,
     build_booking_link_tool_context, build_booking_management_tool_context, build_bot_tool_context,
@@ -308,6 +310,15 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
         .add_subtoolset::<ToolImportToolContext>(import_toolset())
         .add_subtoolset::<ToolCodingAgentToolContext>(coding_agent_toolset())
         .add_tool::<Subagent, SubagentContext>();
+    // Only Macro's own agents connect servers for the user.
+    let toolset = match host {
+        AiHost::Chat | AiHost::AgentSession => {
+            toolset.add_subtoolset::<ToolMcpServerToolContext>(mcp_server_toolset::<
+                mcp_client::outbound::pg_server_repo::PgServerRepo,
+            >())
+        }
+        AiHost::ChannelBot | AiHost::Mcp => toolset,
+    };
     let toolset = match host {
         AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot => toolset
             .add_tool::<SearchTools, ToolServiceContext>()

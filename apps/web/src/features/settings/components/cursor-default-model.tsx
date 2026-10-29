@@ -92,7 +92,7 @@ export function CursorDefaultModel(props: { triggerClass?: string }) {
             <p class="text-xs text-negative">Could not load Cursor models.</p>
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={() =>
                 fireAndForget(cursorModels.refetch(), 'cursor-connect')

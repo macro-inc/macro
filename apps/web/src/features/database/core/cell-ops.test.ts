@@ -132,6 +132,93 @@ describe('grid values as cell values', () => {
   });
 });
 
+describe('grid values as time ranges', () => {
+  it('writes an interval, or one day as a one-day range', () => {
+    expect(
+      cellValue(
+        column('DATE_RANGE'),
+        '2026-03-01T00:00:00.000Z/2026-03-05T00:00:00.000Z'
+      )
+    ).toEqual(
+      ok({
+        type: 'date_range',
+        value: {
+          start: '2026-03-01T00:00:00.000Z',
+          end: '2026-03-05T00:00:00.000Z',
+        },
+      })
+    );
+    expect(cellValue(column('DATE_RANGE'), '2026-03-01 / 2026-03-05')).toEqual(
+      ok({
+        type: 'date_range',
+        value: {
+          start: '2026-03-01T00:00:00.000Z',
+          end: '2026-03-05T00:00:00.000Z',
+        },
+      })
+    );
+    expect(cellValue(column('DATE_RANGE'), '2026-03-01')).toEqual(
+      ok({
+        type: 'date_range',
+        value: {
+          start: '2026-03-01T00:00:00.000Z',
+          end: '2026-03-01T00:00:00.000Z',
+        },
+      })
+    );
+    expect(cellValue(column('DATE_RANGE'), '')).toEqual(ok({ type: 'clear' }));
+  });
+
+  it('writes a timed interval as its two instants in UTC', () => {
+    expect(
+      cellValue(
+        column('DATE_RANGE'),
+        '2026-03-01T14:00:00.000Z/2026-03-01T22:30:00.000Z'
+      )
+    ).toEqual(
+      ok({
+        type: 'date_range',
+        value: {
+          start: '2026-03-01T14:00:00.000Z',
+          end: '2026-03-01T22:30:00.000Z',
+        },
+      })
+    );
+    expect(
+      cellValue(
+        column('DATE_RANGE'),
+        '2026-03-01T09:00:00-05:00/2026-03-01T17:00:00-05:00'
+      )
+    ).toEqual(
+      ok({
+        type: 'date_range',
+        value: {
+          start: '2026-03-01T14:00:00.000Z',
+          end: '2026-03-01T22:00:00.000Z',
+        },
+      })
+    );
+    expect(
+      cellValue(
+        column('DATE_RANGE'),
+        '2026-03-01T17:00:00Z/2026-03-01T09:00:00Z'
+      )
+    ).toEqual(err({ kind: 'not-a-date-range' }));
+  });
+
+  it('refuses a range that ends before it starts, or is not dates', () => {
+    expect(cellValue(column('DATE_RANGE'), '2026-03-05/2026-03-01')).toEqual(
+      err({ kind: 'not-a-date-range' })
+    );
+    expect(cellValue(column('DATE_RANGE'), 'next week')).toEqual(
+      err({ kind: 'not-a-date-range' })
+    );
+    expect(
+      cellValue(column('DATE_RANGE'), '2026-03-01/2026-03-02/2026-03-03')
+    ).toEqual(err({ kind: 'not-a-date-range' }));
+  });
+});
+
 describe('grid values a column cannot take', () => {
   it('refuses references to rows outside a relation column', () => {
     const rows: DatabaseViewColumn = {

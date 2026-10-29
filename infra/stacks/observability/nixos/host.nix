@@ -16,11 +16,16 @@ let
     "alloy"
     "alloy-ingest"
     "nginx"
+    "postgresql"
+    "goalert"
+    "macro-alerts-relay"
   ];
   secretConsumers = [
     "grafana.service"
     "alloy-ingest.service"
     "nginx.service"
+    "goalert.service"
+    "macro-alerts-relay.service"
   ];
   dataUsers = {
     grafana = 20001;
@@ -29,6 +34,8 @@ let
     prometheus = 20004;
     alloy = 20005;
     alloy-ingest = 20006;
+    postgres = 20007;
+    goalert = 20008;
   };
 in
 {

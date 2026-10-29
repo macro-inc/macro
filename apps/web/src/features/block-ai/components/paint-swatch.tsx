@@ -97,7 +97,7 @@ export function PaintSwatch(props: {
               onChange={(hex, live) => props.onChange?.(hex.slice(0, 6), live)}
             />
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               data-testid={props.testId ? `${props.testId}-none` : undefined}
               onClick={() => props.onChange?.(null, false)}

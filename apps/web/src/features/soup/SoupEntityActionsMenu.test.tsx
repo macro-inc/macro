@@ -14,6 +14,9 @@ type TestGroup = {
 
 const actions = vi.hoisted(() => ({
   groups: [] as TestGroup[],
+  context: undefined as
+    | { viewedProjectId?: string; createActionNavigationHandler?: unknown }
+    | undefined,
   options: undefined as
     | { markDoneDelegate?: () => MarkDoneDelegate | undefined }
     | undefined,
@@ -27,7 +30,16 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
 vi.mock('./createSoupEntityActions', () => ({
   createSoupEntityActions: (options?: typeof actions.options) => {
     actions.options = options;
-    return { buildActionGroups: () => actions.groups };
+    return {
+      buildActionGroups: (
+        _list: unknown,
+        _entities: unknown,
+        context: typeof actions.context
+      ) => {
+        actions.context = context;
+        return actions.groups;
+      },
+    };
   },
   viewedProjectIdFromContent: () => undefined,
 }));
@@ -79,6 +91,23 @@ describe('SoupEntityActionsMenu mark done', () => {
     ));
 
     expect(actions.options?.markDoneDelegate?.()).toBe(delegate);
+  });
+});
+describe('SoupEntityActionsMenu view context', () => {
+  it("uses the host's folder when the split content doesn't name one", () => {
+    const navigate = () => undefined;
+    render(() => (
+      <SoupEntityActionsMenu
+        entities={[]}
+        list={{} as EntityActionListState}
+        viewContext={viewContext}
+        viewedProjectId="folder-1"
+        createActionNavigationHandler={navigate}
+      />
+    ));
+
+    expect(actions.context?.viewedProjectId).toBe('folder-1');
+    expect(actions.context?.createActionNavigationHandler).toBe(navigate);
   });
 });
 afterEach(cleanup);

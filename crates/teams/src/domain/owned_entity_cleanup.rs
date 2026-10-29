@@ -266,7 +266,7 @@ fn purge_rank(entity_type: RegisteredEntityType) -> u8 {
     match entity_type {
         RegisteredEntityType::ScheduledAction => 0,
         RegisteredEntityType::AgentSession => 1,
-        RegisteredEntityType::Chat | RegisteredEntityType::WhatsAppGroup => 2,
+        RegisteredEntityType::Chat | RegisteredEntityType::ExternalChat => 2,
         RegisteredEntityType::Document => 3,
         RegisteredEntityType::Project => 4,
     }

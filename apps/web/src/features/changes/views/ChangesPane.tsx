@@ -108,13 +108,14 @@ function ChangesTreeToggle(props: {
     </Dialog.Trigger>
   ) : (
     <Button
+      aria-label={label()}
+      tooltip={label()}
       variant="ghost"
       size="icon-sm"
-      label={label()}
       aria-expanded={open()}
       onClick={props.onToggle ?? layout.toggleTree}
     >
-      <SidebarIcon />
+      <SidebarIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
   );
 }
@@ -156,13 +157,19 @@ function ChangesControls(props: { narrow: boolean; drawerOpen: boolean }) {
       <span class="flex-1" />
       <DiffView.CollapseAll iconOnly />
       <Button
+        aria-label="Refresh pull request changes"
+        tooltip="Refresh pull request changes"
         variant="ghost"
         size="icon-sm"
-        label="Refresh pull request changes"
         disabled={refreshing()}
         onClick={() => fireAndForget(model.refresh(), 'changes')}
       >
-        <ArrowsClockwiseIcon class={cn(refreshing() && 'animate-spin')} />
+        <ArrowsClockwiseIcon
+          class={cn(
+            'size-3.5 shrink-0 touch:size-6',
+            refreshing() && 'animate-spin'
+          )}
+        />
       </Button>
     </div>
   );
@@ -377,7 +384,7 @@ function ChangesBodyContent(props: {
                         The diff could not be loaded
                       </p>
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         onClick={model.retryPatch}
                       >

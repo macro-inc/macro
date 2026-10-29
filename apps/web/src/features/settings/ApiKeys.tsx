@@ -59,12 +59,12 @@ export function ApiKeys() {
           disabled={!atLimit()}
         >
           <Button
-            variant="cta"
+            variant="neutral"
             size="sm"
             disabled={createDisabled()}
             onClick={openCreate}
           >
-            <PlusIcon />
+            <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
             Create key
           </Button>
         </Tooltip>
@@ -107,11 +107,11 @@ export function ApiKeys() {
                     </div>
                     <Button
                       class="mt-4"
-                      variant="cta"
+                      variant="neutral"
                       size="sm"
                       onClick={openCreate}
                     >
-                      <PlusIcon />
+                      <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
                       Create key
                     </Button>
                   </div>
@@ -203,9 +203,9 @@ function ApiKeyRow(props: {
         </div>
       </div>
       <Button
+        aria-label={`Delete ${props.keyInfo.name}`}
         variant="ghost"
         size="icon-sm"
-        label={`Delete ${props.keyInfo.name}`}
         tooltip="Delete key"
         disabled={props.deleting}
         onClick={props.onDelete}
@@ -214,7 +214,7 @@ function ApiKeyRow(props: {
           when={props.deleting}
           fallback={<TrashIcon class="size-3.5 touch:size-4" />}
         >
-          <SpinnerIcon class="animate-spin" />
+          <SpinnerIcon class="animate-spin size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Show>
       </Button>
     </div>
@@ -275,14 +275,14 @@ function CreateApiKeyDialog(props: {
           </Dialog.Title>
           <div class="ml-auto">
             <Button
+              tooltip="Close"
               variant="ghost"
               size="icon-sm"
-              label="Close"
               aria-label="Close"
               disabled={props.pending}
               onClick={close}
             >
-              <XIcon />
+              <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </div>
         </Panel.Header>
@@ -326,7 +326,7 @@ function CreateApiKeyDialog(props: {
                     Cancel
                   </Button>
                   <Button
-                    variant="strong"
+                    variant="primary"
                     size="sm"
                     disabled={props.pending}
                     onClick={() => fireAndForget(submit(), 'api-key-settings')}
@@ -349,7 +349,7 @@ function CreateApiKeyDialog(props: {
                   <code class="font-mono">{USER_API_KEY_HEADER}</code>.
                 </div>
                 <div class="flex justify-end border-t border-edge-muted pt-4">
-                  <Button variant="strong" size="sm" onClick={close}>
+                  <Button variant="secondary" size="sm" onClick={close}>
                     Done
                   </Button>
                 </div>
@@ -385,7 +385,7 @@ function ConfirmDialog(props: {
             size="icon-sm"
             disabled={props.pending}
           >
-            <XIcon />
+            <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
           <Dialog.Title as="span" class="m-0 p-0 text-sm font-medium">
             {props.title}
@@ -402,7 +402,7 @@ function ConfirmDialog(props: {
               Cancel
             </Button>
             <Button
-              variant="strong"
+              variant={props.danger ? 'danger' : 'primary'}
               disabled={props.pending}
               onClick={props.onConfirm}
             >

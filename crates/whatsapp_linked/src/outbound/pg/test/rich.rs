@@ -1,9 +1,9 @@
 use super::*;
-use crate::domain::rich::{
+use external_chat::domain::rich::{
     Location, Poll, PollOption, PollVote, RichContent, SystemAction, SystemLine,
 };
-use crate::domain::timeline::{
-    WhatsAppMessageKind, WhatsAppPersonRef, WhatsAppPollOption, WhatsAppRichContent,
+use external_chat::domain::timeline::{
+    ExternalChatMessageKind, ExternalChatPersonRef, ExternalChatPollOption, ExternalChatRichContent,
 };
 
 fn with(
@@ -20,8 +20,8 @@ fn with(
     event
 }
 
-fn person(name: &str, user: Option<&str>) -> WhatsAppPersonRef {
-    WhatsAppPersonRef {
+fn person(name: &str, user: Option<&str>) -> ExternalChatPersonRef {
+    ExternalChatPersonRef {
         name: name.to_owned(),
         user_id: user.map(str::to_owned),
     }
@@ -29,7 +29,7 @@ fn person(name: &str, user: Option<&str>) -> WhatsAppPersonRef {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_system_line_names_people_and_never_notifies_or_counts_as_unread(pool: PgPool) {
-    let (linked, session, repository, binding, alice, _) = adopted(&pool).await;
+    let (linked, session, _, binding, alice, _) = adopted(&pool).await;
     let added = with(
         text(30, CUSTOMER_JID, "SYSTEM-ADD", ""),
         MessageKind::System,
@@ -46,27 +46,29 @@ async fn a_system_line_names_people_and_never_notifies_or_counts_as_unread(pool:
     session.ingest_event(alice, &added).await.unwrap();
 
     let messages = linked
-        .messages(&receipt::<MessageView>(BOB, binding.id), None, 50)
+        .chats
+        .messages(&receipt::<MessageView>(BOB, binding.id), None, Some(50))
         .await
         .unwrap()
         .messages;
     assert_eq!(messages.len(), 1);
-    assert_eq!(messages[0].kind, WhatsAppMessageKind::System);
-    let Some(WhatsAppRichContent::System(line)) = &messages[0].rich else {
+    assert_eq!(messages[0].kind, ExternalChatMessageKind::System);
+    let Some(ExternalChatRichContent::System(line)) = &messages[0].rich else {
         panic!("expected a system line");
     };
     assert_eq!(line.action, SystemAction::ParticipantsAdded);
     assert_eq!(line.actor, Some(person("Customer", None)));
     assert_eq!(line.participants, vec![person("+15550000002", None)]);
     assert_eq!(
-        repository
-            .summary(binding.id, BOB)
+        linked
+            .store
+            .chat_facts(binding.id, BOB)
             .await
             .unwrap()
             .unread_count,
         0
     );
-    let effects = repository.pending_effects(10).await.unwrap();
+    let effects = linked.store.pending_effects(10).await.unwrap();
     assert_eq!(effects.len(), 1);
     assert!(effects[0].system);
     assert!(!effects[0].should_notify());
@@ -108,13 +110,14 @@ fn vote(event: u128, voter: &str, source: &str, revision: i64, selected: &[&str]
     event
 }
 
-async fn tallies(linked: &LinkedService, group: Uuid) -> Vec<WhatsAppPollOption> {
+async fn tallies(linked: &Linked, group: Uuid) -> Vec<ExternalChatPollOption> {
     let messages = linked
-        .messages(&receipt::<MessageView>(ALICE, group), None, 50)
+        .chats
+        .messages(&receipt::<MessageView>(ALICE, group), None, Some(50))
         .await
         .unwrap()
         .messages;
-    let Some(WhatsAppRichContent::Poll(poll)) = &messages[0].rich else {
+    let Some(ExternalChatRichContent::Poll(poll)) = &messages[0].rich else {
         panic!("expected a poll");
     };
     poll.options.clone()
@@ -213,12 +216,13 @@ async fn a_re_imported_placeholder_gains_its_content_and_mentions_read_as_names(
     session.ingest_event(alice, &mention).await.unwrap();
 
     let messages = linked
-        .messages(&receipt::<MessageView>(ALICE, binding.id), None, 50)
+        .chats
+        .messages(&receipt::<MessageView>(ALICE, binding.id), None, Some(50))
         .await
         .unwrap()
         .messages;
     let place = messages.iter().find(|m| m.body.is_empty()).unwrap();
-    let Some(WhatsAppRichContent::Location(location)) = &place.rich else {
+    let Some(ExternalChatRichContent::Location(location)) = &place.rich else {
         panic!("the placeholder became the location");
     };
     assert_eq!(location.name.as_deref(), Some("Office"));
@@ -258,12 +262,13 @@ async fn a_change_whatsapp_made_without_naming_anyone_is_the_groups_own_line(poo
     session.ingest_event(alice, &renamed).await.unwrap();
 
     let messages = linked
-        .messages(&receipt::<MessageView>(ALICE, binding.id), None, 50)
+        .chats
+        .messages(&receipt::<MessageView>(ALICE, binding.id), None, Some(50))
         .await
         .unwrap()
         .messages;
     assert_eq!(messages.len(), 1, "redelivery converges on one line");
-    let Some(WhatsAppRichContent::System(line)) = &messages[0].rich else {
+    let Some(ExternalChatRichContent::System(line)) = &messages[0].rich else {
         panic!("expected a system line");
     };
     assert_eq!(line.actor, None);

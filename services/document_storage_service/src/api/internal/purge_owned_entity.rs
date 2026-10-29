@@ -4,7 +4,7 @@
 //! DSS owns documents, chats, and projects. Agent sessions and scheduled
 //! actions belong to the agent harness and scheduled-action services, so this
 //! route refuses them instead of deleting rows those services own. Human-owned
-//! WhatsApp groups use their dedicated detach lifecycle and never team cleanup.
+//! External chats use their dedicated detach lifecycle and never team cleanup.
 
 #[cfg(test)]
 mod test;
@@ -80,7 +80,7 @@ where
         RegisteredEntityType::Project => state.projects.purge_owned(entity_id, &owner).await,
         RegisteredEntityType::AgentSession
         | RegisteredEntityType::ScheduledAction
-        | RegisteredEntityType::WhatsAppGroup => {
+        | RegisteredEntityType::ExternalChat => {
             tracing::warn!("this kind does not support DSS team cleanup");
             return StatusCode::BAD_REQUEST;
         }

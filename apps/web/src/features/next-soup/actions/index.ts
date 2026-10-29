@@ -5,12 +5,14 @@ export {
   type EntityActionNavigationHandler,
   type EntityActionSenderBucket,
   type EntityActionViewContext,
+  emailSenderBucket,
   resolveEntityActionViewContext,
   type ToEntityActionListStateOptions,
   toEntityActionListState,
   toSingleEntityActionListState,
 } from './entity-action-context';
 export { makeAddTagAction } from './make-add-tag-action';
+export { makeArchiveSessionAction } from './make-archive-session-action';
 export { makeBlockSenderAction } from './make-block-sender-action';
 export { makeChannelPictureAction } from './make-channel-picture-action';
 export { makeCopyAction } from './make-copy-action';
@@ -19,7 +21,9 @@ export { makeCopyEntityIdAction } from './make-copy-entity-id-action';
 export { makeCopyLinkAction } from './make-copy-link-action';
 export { makeCreateReminderAction } from './make-create-reminder-action';
 export { makeDeleteAction } from './make-delete-action';
+export { makeDownloadAction } from './make-download-action';
 export { makeFavoriteAction } from './make-favorite-action';
+export { makeGithubLinkAction } from './make-github-link-action';
 export { makeHideCompanyAction } from './make-hide-company-action';
 export { makeMarkDoneAction } from './make-mark-done-action';
 export { makeMarkNotDoneAction } from './make-mark-not-done-action';

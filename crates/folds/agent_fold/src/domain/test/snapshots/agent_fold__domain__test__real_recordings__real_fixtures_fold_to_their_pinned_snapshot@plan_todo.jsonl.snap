@@ -9,32 +9,6 @@ input_file: crates/folds/agent_fold/fixtures/real/plan_todo.jsonl
             0,
         ),
         author: User {
-            user_id: None,
-        },
-        request_id: Some(
-            AgentActionId(
-                826d1392-b8c8-4208-8f79-856aa3c17b0b,
-            ),
-        ),
-        parts: NonEmpty {
-            inner: [
-                Control {
-                    control: SetModel {
-                        model: "opus[1m]",
-                    },
-                    outcome: Accepted,
-                },
-            ],
-        },
-        stop: None,
-        pending: false,
-        posted_at: None,
-    },
-    FoldedMessage {
-        id: TurnId(
-            1,
-        ),
-        author: User {
             user_id: Some(
                 macro|eric@example.com,
             ),
@@ -57,7 +31,7 @@ input_file: crates/folds/agent_fold/fixtures/real/plan_todo.jsonl
     },
     FoldedMessage {
         id: TurnId(
-            1,
+            0,
         ),
         author: Agent,
         request_id: None,

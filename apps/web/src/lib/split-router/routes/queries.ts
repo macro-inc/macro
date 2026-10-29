@@ -184,7 +184,10 @@ function renderKeys(routes: SplitRoutesManifest, entry: Entry): string[] {
     const context = { entryId: entry.id };
     const remountKey = node.definition.remountKey?.(params, context);
 
-    return JSON.stringify([node.definition.id, remountKey ?? null]);
+    return JSON.stringify([
+      node.definition.mountKey ?? node.definition.id,
+      remountKey ?? null,
+    ]);
   });
 }
 

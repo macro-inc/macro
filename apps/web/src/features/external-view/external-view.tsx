@@ -1,27 +1,33 @@
 import { ViewShell, ViewSidebar } from '@app/components/view-shell';
 import { SplitRouter, useNavigate, useParams } from '@app/lib/split-router';
-import { externalRoute, externalWhatsappGroupRoute } from '@app/routes/routes';
+import { externalChatRoute, externalRoute } from '@app/routes/routes';
 import { useSplitDisplayName } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import WhatsappIcon from '@phosphor/whatsapp-logo.svg';
+import { useExternalChatsQuery } from '@queries/external-chats';
+import { useExternalChatListsSync } from '@queries/external-chats/sync';
 import { queryReadyGate } from '@queries/gate';
-import { useWhatsappGroupsQuery } from '@queries/whatsapp-groups';
-import { useWhatsappGroupListsSync } from '@queries/whatsapp-groups/sync';
-import { traceWhatsappLoad } from '@queries/whatsapp-linked/operation';
+import { traceLoad } from '@queries/whatsapp-linked/operation';
+import { ExternalChatProvider } from '@service-storage/generated/schemas/externalChatProvider';
 import { useSearchParams } from '@solidjs/router';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { z } from 'zod';
-import { whatsappGroupApi } from '../whatsapp-group/queries/production-api';
+import { providerIdentity } from '../external-chat/providers/identity';
+import { externalChatApi } from '../external-chat/queries/production-api';
+import { createOpenSections } from '../whatsapp-linked/primitives/open-sections';
 import { WhatsAppLinked } from '../whatsapp-linked/whatsapp-linked';
-import { InMacroGroups, UnreadCount } from './components/in-macro-section';
+import { InMacroChats, UnreadCount } from './components/in-macro-section';
+
+const PROVIDERS = Object.values(ExternalChatProvider);
 
 /**
  * External: accounts on outside messaging apps that bring conversations into
- * Macro. WhatsApp is the only one today. Groups in Macro open in the main pane
- * at `/external/whatsapp/:groupId`; on touch the list drills into the group.
+ * Macro, one sidebar entry per provider. Chats in Macro open in the main pane
+ * at `/external/chat/:chatId`; on touch the list drills into the chat.
+ * WhatsApp is the only provider today, so its account page is the default.
  */
 export function ExternalView() {
   useSplitDisplayName(() => 'External');
@@ -31,29 +37,30 @@ export function ExternalView() {
   if (search.whatsappPairing !== undefined)
     setSearch({ whatsappPairing: undefined }, { replace: true });
 
-  useWhatsappGroupListsSync();
+  useExternalChatListsSync();
   const userId = useUserId();
-  const groups = useWhatsappGroupsQuery(whatsappGroupApi, () => userId() ?? '');
-  const inMacro = () => (queryReadyGate(groups) ? groups.data : undefined);
-  traceWhatsappLoad('groups.load', () => {
-    if (groups.isError) return { outcome: 'error' };
+  const chats = useExternalChatsQuery(externalChatApi, () => userId() ?? '');
+  const inMacro = () => (queryReadyGate(chats) ? chats.data : undefined);
+  const providerChats = (provider: ExternalChatProvider) =>
+    inMacro()?.filter((chat) => chat.provider === provider);
+  traceLoad('external_chat.list.load', () => {
+    if (chats.isError) return { outcome: 'error' };
     const list = inMacro();
     if (!list) return;
     return {
       outcome: 'success',
       attrs: {
-        'whatsapp.groups.count': list.length,
-        'whatsapp.groups.unread': list.filter((group) => group.unreadCount)
-          .length,
+        'external_chat.count': list.length,
+        'external_chat.unread': list.filter((chat) => chat.unreadCount).length,
       },
     };
   });
 
-  const params = useParams<{ groupId?: string }>();
+  const params = useParams<{ chatId?: string }>();
   const navigate = useNavigate();
-  const openGroup = (groupId: string) =>
+  const openChat = (chatId: string) =>
     fireAndForget(
-      navigate({ route: externalWhatsappGroupRoute, params: { groupId } }),
+      navigate({ route: externalChatRoute, params: { chatId } }),
       'external-view'
     );
   const openWhatsApp = () =>
@@ -61,19 +68,35 @@ export function ExternalView() {
       navigate({ route: externalRoute, params: {} }),
       'external-view'
     );
-  const [groupsOpen, setGroupsOpen] = createSignal(true);
-  const inMacroGroups = () => (
-    <InMacroGroups
-      groups={inMacro()}
-      isPending={groups.isPending}
-      isError={groups.isError}
-      activeGroupId={params.groupId}
-      onOpenGroup={openGroup}
-      onRetry={() => fireAndForget(groups.refetch(), 'external-view')}
+  const [folded, setFolded] = createSignal<ExternalChatProvider[]>([]);
+  const toggleFolded = (provider: ExternalChatProvider) =>
+    setFolded((current) =>
+      current.includes(provider)
+        ? current.filter((item) => item !== provider)
+        : [...current, provider]
+    );
+  const sections = createOpenSections(
+    'macro:whatsapp:sidebar-sections:v2',
+    userId
+  );
+  const inMacroChats = (provider: ExternalChatProvider) => (
+    <InMacroChats
+      label={providerIdentity(provider).label}
+      chats={providerChats(provider)}
+      isPending={chats.isPending}
+      isError={chats.isError}
+      activeChatId={params.chatId}
+      isOpen={sections.isOpen}
+      onOpenChange={sections.setOpen}
+      onOpenChat={openChat}
+      onRetry={() => fireAndForget(chats.refetch(), 'external-view')}
     />
   );
-  const unread = () =>
-    (inMacro() ?? []).reduce((sum, group) => sum + group.unreadCount, 0);
+  const unread = (provider: ExternalChatProvider) =>
+    (providerChats(provider) ?? []).reduce(
+      (sum, chat) => sum + chat.unreadCount,
+      0
+    );
 
   const whatsappPage = () => (
     <>
@@ -87,16 +110,16 @@ export function ExternalView() {
         <h1 class="hidden px-4 pt-2 text-lg font-semibold text-ink touch:block">
           WhatsApp
         </h1>
-        {/* Touch has no sidebar: the groups in Macro lead the page. */}
+        {/* Touch has no sidebar: the chats in Macro lead the page. */}
         <Show when={isTouchDevice()}>
-          <section aria-labelledby="external-whatsapp-groups" class="px-2">
+          <section aria-labelledby="external-chats" class="px-2">
             <h2
-              id="external-whatsapp-groups"
+              id="external-chats"
               class="px-2 pt-4 pb-1 text-xs font-semibold tracking-tight text-ink-extra-muted"
             >
-              Groups
+              In Macro
             </h2>
-            {inMacroGroups()}
+            <For each={PROVIDERS}>{(provider) => inMacroChats(provider)}</For>
           </section>
         </Show>
         <WhatsAppLinked resumePairingId={handedOffPairing} />
@@ -122,24 +145,37 @@ export function ExternalView() {
               </ViewSidebar.Header>
               <ViewSidebar.Content>
                 <ViewSidebar.Nav aria-label="External apps">
-                  <ViewSidebar.TreeItem
-                    active={!params.groupId}
-                    label="WhatsApp"
-                    expanded={groupsOpen()}
-                    onToggle={() => setGroupsOpen((open) => !open)}
-                    onClick={openWhatsApp}
-                  >
-                    <ViewSidebar.Icon>
-                      <WhatsappIcon />
-                    </ViewSidebar.Icon>
-                    <span class="min-w-0 flex-1 truncate">WhatsApp</span>
-                    <Show when={!groupsOpen()}>
-                      <UnreadCount count={unread()} />
-                    </Show>
-                  </ViewSidebar.TreeItem>
-                  <ViewSidebar.Branch open={groupsOpen()}>
-                    {inMacroGroups()}
-                  </ViewSidebar.Branch>
+                  <For each={PROVIDERS}>
+                    {(provider) => {
+                      const open = () => !folded().includes(provider);
+                      return (
+                        <>
+                          <ViewSidebar.TreeItem
+                            active={!params.chatId}
+                            label={providerIdentity(provider).label}
+                            expanded={open()}
+                            onToggle={() => toggleFolded(provider)}
+                            onClick={openWhatsApp}
+                          >
+                            <ViewSidebar.Icon>
+                              <Dynamic
+                                component={providerIdentity(provider).icon}
+                              />
+                            </ViewSidebar.Icon>
+                            <span class="min-w-0 flex-1 truncate">
+                              {providerIdentity(provider).label}
+                            </span>
+                            <Show when={!open()}>
+                              <UnreadCount count={unread(provider)} />
+                            </Show>
+                          </ViewSidebar.TreeItem>
+                          <ViewSidebar.Branch open={open()}>
+                            {inMacroChats(provider)}
+                          </ViewSidebar.Branch>
+                        </>
+                      );
+                    }}
+                  </For>
                 </ViewSidebar.Nav>
               </ViewSidebar.Content>
             </ViewSidebar.Root>

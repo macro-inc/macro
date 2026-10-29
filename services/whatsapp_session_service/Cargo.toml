@@ -23,7 +23,6 @@ database_env_vars = { path = "../../crates/database_env_vars" }
 doppler-config = { workspace = true }
 macro_aws_config = { path = "../../crates/macro_aws_config" }
 macro_config = { path = "../../crates/macro_config" }
-macro_env_var = { path = "../../crates/macro_env_var" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_service_urls = { path = "../../crates/macro_service_urls" }
@@ -42,10 +41,12 @@ whatsapp_store_pg = { path = "../../crates/whatsapp_store_pg" }
 whatsmeow = { path = "../../crates/whatsmeow" }
 whatsmeow_signal = { path = "../../crates/whatsmeow_signal" }
 whatsapp_linked = { path = "../../crates/whatsapp_linked", features = ["outbound"] }
+external_chat = { path = "../../crates/external_chat", features = ["outbound"] }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }
 sha2 = { workspace = true }
+tracing-subscriber = { workspace = true }
 whatsapp_fake_server = { path = "../../crates/whatsapp_fake_server" }
 whatsapp_store_pg = { path = "../../crates/whatsapp_store_pg", features = ["fake-kms"] }
