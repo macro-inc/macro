@@ -1,10 +1,6 @@
 use super::*;
-use crate::domain::timeline::TimelineRepository;
 use crate::domain::{
-    events::*,
-    ports::{Authorizer, EffectsRepository, GroupEffect, GroupPublisher, Origin, SendRateLimiter},
-    service::LinkedService,
-    session::SessionService,
+    events::*, provider::WhatsAppProvider, service::WhatsAppService, session::SessionService,
 };
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
@@ -14,16 +10,29 @@ use entity_access::domain::models::{
 use entity_access::domain::models::{
     Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
 };
+use external_chat::domain::{
+    ports::{ChatEffect, ChatPublisher, EffectsRepository, Origin, SendRateLimiter},
+    service::ExternalChatService,
+    timeline::TimelineRepository,
+};
+use external_chat::outbound::pg::PgExternalChatRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use std::sync::Arc;
 
 mod changes;
 mod concurrency;
+mod deletion;
 mod media;
 mod pairing;
+mod rich;
 mod timeline;
 
 const GROUP: &str = "120363000000000001@g.us";
+/// A test user's id, typed.
+fn person(user: &str) -> macro_user_id::user_id::MacroUserIdStr<'static> {
+    user.to_owned().try_into().expect("test user ids are valid")
+}
+
 const ALICE: &str = "macro|alice@example.com";
 const BOB: &str = "macro|bob@example.com";
 const CAROL: &str = "macro|carol@example.com";
@@ -33,23 +42,28 @@ const CUSTOMER_JID: &str = "15558880001@s.whatsapp.net";
 
 struct Allow;
 
-#[async_trait]
-impl Authorizer for Allow {
-    async fn require_group_owner(&self, _: Uuid, _: &str) -> LinkedResult<()> {
-        Ok(())
-    }
+/// DSS's use cases over one pool: the WhatsApp account and chat list, and
+/// external chats with WhatsApp as their provider.
+struct Linked {
+    whatsapp: WhatsAppService,
+    chats: ExternalChatService<WhatsAppProvider>,
+    /// The external chat tables.
+    store: Arc<PgExternalChatRepository>,
 }
 
-const ALL_ON: Features = Features {
-    pairing: true,
-    adoption: true,
-    sending: true,
-};
-
-fn services(pool: &PgPool) -> (LinkedService, SessionService, Arc<PgLinkedRepository>) {
-    let repository = Arc::new(PgLinkedRepository::new(pool.clone()));
+fn services(pool: &PgPool) -> (Linked, SessionService, Arc<PgWhatsAppRepository>) {
+    let repository = Arc::new(PgWhatsAppRepository::new(pool.clone()));
+    let store = Arc::new(PgExternalChatRepository::new(pool.clone()));
     (
-        LinkedService::new(ALL_ON, repository.clone(), Arc::new(Allow), Arc::new(Allow)),
+        Linked {
+            whatsapp: WhatsAppService::new(repository.clone()),
+            chats: ExternalChatService::new(
+                Arc::new(WhatsAppProvider::new(repository.clone())),
+                store.clone(),
+                Arc::new(Allow),
+            ),
+            store,
+        },
         SessionService::new(repository.clone()),
         repository,
     )
@@ -107,14 +121,10 @@ async fn workspace(pool: &PgPool) -> Uuid {
 }
 
 /// Pair `user` as `jid` through the DSS and session-service paths.
-async fn pair(
-    linked: &LinkedService,
-    session: &SessionService,
-    user: &str,
-    jid: &str,
-) -> SessionScope {
+async fn pair(linked: &Linked, session: &SessionService, user: &str, jid: &str) -> SessionScope {
     let pairing = linked
-        .connect(user, false, SendAuthority::Human)
+        .whatsapp
+        .connect(&person(user), false, SendAuthority::Human)
         .await
         .unwrap();
     let lease = session.begin_lease(pairing.account_id).await.unwrap();
@@ -147,11 +157,11 @@ fn group(members: &[&str]) -> GroupInfo {
             })
             .collect(),
         announce: false,
-        disappearing: false,
-        community: false,
+        disappearing_seconds: None,
+        community_parent: false,
+        community_jid: None,
+        community_announcements: false,
         observed_at: Utc::now(),
-        group: None,
-        shared: None,
     }
 }
 
@@ -159,6 +169,7 @@ fn text(event: u128, sender: &str, source: &str, body: &str) -> InboundEvent {
     InboundEvent {
         event_id: Uuid::from_u128(event),
         group_jid: GROUP.into(),
+        chat_alternate_jid: None,
         source_at: Utc::now(),
         observed_at: Utc::now(),
         kind: InboundKind::Message(Message {
@@ -171,22 +182,27 @@ fn text(event: u128, sender: &str, source: &str, body: &str) -> InboundEvent {
             kind: MessageKind::Text,
             text: body.into(),
             history: false,
+            from_me: false,
             revision: 0,
             target: None,
             media: vec![],
+            mentions: vec![],
+            forwarded: false,
+            view_once: false,
+            rich: None,
         }),
     }
 }
 
 fn receipt<T: entity_access::domain::models::RequiredPermission>(
     user: &str,
-    group_id: Uuid,
+    chat_id: Uuid,
 ) -> EntityAccessReceipt<T> {
     EntityAccessReceipt::try_new(
         EntityAccessAuth::Authenticated(user.to_owned().try_into().unwrap()),
         Entity {
-            entity_id: group_id.to_string(),
-            entity_type: EntityType::WhatsAppGroup,
+            entity_id: chat_id.to_string(),
+            entity_type: EntityType::ExternalChat,
         },
         EntityPermission::AccessLevel {
             access_level: AccessLevel::View,
@@ -200,10 +216,10 @@ fn receipt<T: entity_access::domain::models::RequiredPermission>(
 async fn adopted(
     pool: &PgPool,
 ) -> (
-    LinkedService,
+    Linked,
     SessionService,
-    Arc<PgLinkedRepository>,
-    Binding,
+    Arc<PgWhatsAppRepository>,
+    ChatRef,
     SessionScope,
     SessionScope,
 ) {
@@ -221,10 +237,13 @@ async fn adopted(
         .await
         .unwrap();
     let binding = linked
-        .adopt(
-            ALICE,
-            &AdoptGroup {
-                group_jid: GROUP.into(),
+        .chats
+        .add(
+            &person(ALICE),
+            &AddChat {
+                provider: ExternalChatProvider::WhatsApp,
+                remote_id: GROUP.into(),
+                kind: ExternalChatKind::Group,
             },
             SendAuthority::Human,
         )
@@ -234,7 +253,7 @@ async fn adopted(
     entity_access_db_utils::direct_share::set(
         &mut tx,
         &binding.id,
-        EntityType::WhatsAppGroup,
+        EntityType::ExternalChat,
         &BOB.to_owned().try_into().unwrap(),
         Some(AccessLevel::View),
         false,
@@ -251,23 +270,23 @@ async fn adopted(
 async fn adoption_creates_a_shared_entity_and_leaving_whatsapp_keeps_view_access(pool: PgPool) {
     let (linked, session, _, binding, _, bob) = adopted(&pool).await;
     assert_eq!(binding.user_id, ALICE);
-    let mine = &linked.groups(ALICE).await.unwrap()[0];
+    let mine = &linked.whatsapp.chats(&person(ALICE)).await.unwrap().chats[0];
     assert_eq!(
-        (mine.group.clone(), mine.shared.clone()),
+        (mine.added.clone(), mine.shared.clone()),
         (
-            Some(GroupReference {
+            Some(ChatReference {
                 id: binding.id,
                 name: "Customer escalations".into()
             }),
             None
         )
     );
-    let shared = &linked.groups(BOB).await.unwrap()[0];
+    let shared = &linked.whatsapp.chats(&person(BOB)).await.unwrap().chats[0];
     assert_eq!(
-        (shared.group.clone(), shared.shared.clone()),
+        (shared.added.clone(), shared.shared.clone()),
         (
             None,
-            Some(SharedGroupReference {
+            Some(SharedChatReference {
                 id: binding.id,
                 name: "Customer escalations".into(),
                 owner_id: ALICE.into()
@@ -276,17 +295,18 @@ async fn adoption_creates_a_shared_entity_and_leaving_whatsapp_keeps_view_access
     );
     assert!(
         linked
-            .group_detail(&receipt::<MessageView>(BOB, binding.id))
+            .chats
+            .detail(&receipt::<MessageView>(BOB, binding.id))
             .await
             .unwrap()
-            .group
+            .chat
             .can_send,
         "a viewer whose own account is in the group can send"
     );
     for (viewer, expected) in [(ALICE, true), (BOB, true), (CAROL, false)] {
         assert_eq!(
             sqlx::query_scalar!(
-                r#"SELECT whatsapp_group_can_view($1,$2) AS "visible!""#,
+                r#"SELECT external_chat_can_view($1,$2) AS "visible!""#,
                 binding.id,
                 viewer
             )
@@ -299,13 +319,14 @@ async fn adoption_creates_a_shared_entity_and_leaving_whatsapp_keeps_view_access
     let mut left = text(9, BOB_JID, "unused", "");
     left.kind = InboundKind::Left;
     session.ingest_event(bob, &left).await.unwrap();
-    assert_eq!(linked.adopted_groups(BOB).await.unwrap().len(), 1);
+    assert_eq!(linked.chats.list(&person(BOB)).await.unwrap().len(), 1);
     assert!(
         !linked
-            .group_detail(&receipt::<MessageView>(BOB, binding.id))
+            .chats
+            .detail(&receipt::<MessageView>(BOB, binding.id))
             .await
             .unwrap()
-            .group
+            .chat
             .can_send
     );
 }
@@ -313,39 +334,44 @@ async fn adoption_creates_a_shared_entity_and_leaving_whatsapp_keeps_view_access
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn each_person_adds_their_own_group_once(pool: PgPool) {
     let (linked, _, _, binding, _, _) = adopted(&pool).await;
-    let request = AdoptGroup {
-        group_jid: GROUP.into(),
+    let request = AddChat {
+        provider: ExternalChatProvider::WhatsApp,
+        remote_id: GROUP.into(),
+        kind: ExternalChatKind::Group,
     };
     let again = linked
-        .adopt(ALICE, &request, SendAuthority::Human)
+        .chats
+        .add(&person(ALICE), &request, SendAuthority::Human)
         .await
         .unwrap();
     assert_eq!(again.id, binding.id, "adding twice returns the same group");
     let bobs = linked
-        .adopt(BOB, &request, SendAuthority::Human)
+        .chats
+        .add(&person(BOB), &request, SendAuthority::Human)
         .await
         .unwrap();
     assert_ne!(bobs.id, binding.id);
     assert_eq!(bobs.user_id, BOB);
-    let listed = &linked.groups(BOB).await.unwrap()[0];
+    let listed = &linked.whatsapp.chats(&person(BOB)).await.unwrap().chats[0];
     assert_eq!(
-        (listed.group.as_ref().map(|g| g.id), listed.shared.clone()),
+        (listed.added.as_ref().map(|g| g.id), listed.shared.clone()),
         (Some(bobs.id), None),
         "your own group wins over one shared with you"
     );
     assert!(matches!(
         linked
-            .adopt(CAROL, &request, SendAuthority::Human)
+            .chats
+            .add(&person(CAROL), &request, SendAuthority::Human)
             .await
             .unwrap_err()
             .current_context(),
-        LinkedError::Disconnected
+        ExternalChatError::Disconnected
     ));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn observers_converge_on_one_group_message_and_unadopted_groups_are_dropped(pool: PgPool) {
-    let (_, session, repository, binding, alice, bob) = adopted(&pool).await;
+    let (linked, session, _, binding, alice, bob) = adopted(&pool).await;
     assert_eq!(
         session.observed_groups(alice).await.unwrap(),
         vec![GROUP.to_owned()]
@@ -363,7 +389,7 @@ async fn observers_converge_on_one_group_message_and_unadopted_groups_are_droppe
     );
     session.ingest_event(alice, &message).await.unwrap();
     let rows = sqlx::query!(
-        "SELECT m.body AS content, p.display_name AS imported_author FROM whatsapp_group_message m JOIN whatsapp_external_person p ON p.id=m.person_id WHERE m.binding_id=$1 AND m.message_id IS NOT NULL",
+        "SELECT m.body AS content, p.display_name AS imported_author FROM external_chat_message m JOIN external_chat_person p ON p.id=m.person_id WHERE m.chat_id=$1 AND m.message_id IS NOT NULL",
         binding.id
     )
     .fetch_all(&pool)
@@ -373,22 +399,23 @@ async fn observers_converge_on_one_group_message_and_unadopted_groups_are_droppe
     assert_eq!(rows[0].content, "Can someone call me?");
     assert_eq!(rows[0].imported_author.as_deref(), Some("Customer"));
     let observations = sqlx::query_scalar!(
-        r#"SELECT count(*) AS "count!" FROM whatsapp_message_observation WHERE binding_id = $1"#,
+        r#"SELECT count(*) AS "count!" FROM whatsapp_message_observation WHERE chat_id = $1"#,
         binding.id
     )
     .fetch_one(&pool)
     .await
     .unwrap();
     assert_eq!(observations, 2);
-    let effects = repository.pending_effects(10).await.unwrap();
+    let effects = linked.store.pending_effects(10).await.unwrap();
     assert_eq!(effects.len(), 1);
     assert!(effects[0].first_publication);
-    assert_eq!(effects[0].origin, Origin::Whatsapp);
-    repository
+    assert_eq!(effects[0].origin, Origin::Remote);
+    linked
+        .store
         .published(effects[0].message_id, effects[0].revision)
         .await
         .unwrap();
-    assert!(repository.pending_effects(10).await.unwrap().is_empty());
+    assert!(linked.store.pending_effects(10).await.unwrap().is_empty());
 
     let mut elsewhere = text(3, CUSTOMER_JID, "3EB0BBBB", "private chat");
     elsewhere.group_jid = "120363999999999999@g.us".into();
@@ -416,9 +443,92 @@ async fn an_unverified_lid_is_quarantined_instead_of_guessed(pool: PgPool) {
     assert_eq!(state, "quarantined");
 }
 
+/// The person and Macro user each alias of the binding resolves to.
+async fn aliases(pool: &PgPool, binding: Uuid) -> Vec<(String, Uuid, Option<String>)> {
+    sqlx::query!(
+        "SELECT a.jid, a.person_id, p.user_id FROM whatsapp_identity_alias a JOIN external_chat_person p ON p.id = a.person_id WHERE a.chat_id = $1 ORDER BY a.jid",
+        binding
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap()
+    .into_iter()
+    .map(|row| (row.jid, row.person_id, row.user_id))
+    .collect()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_message_from_me_is_the_account_owner_even_when_addressed_by_lid(pool: PgPool) {
+    let (_, session, _, binding, alice, _) = adopted(&pool).await;
+    let by_phone = text(1, ALICE_JID, "3EB0D001", "from my phone number");
+    session.ingest_event(alice, &by_phone).await.unwrap();
+    let mut by_lid = text(2, "53949570789492@lid", "3EB0D002", "Hi there");
+    let InboundKind::Message(message) = &mut by_lid.kind else {
+        unreachable!()
+    };
+    message.from_me = true;
+
+    assert_eq!(
+        session.ingest_event(alice, &by_lid).await.unwrap(),
+        IngestOutcome::Applied
+    );
+    let aliases = aliases(&pool, binding.id).await;
+    assert_eq!(
+        aliases
+            .iter()
+            .map(|(jid, _, user)| (jid.as_str(), user.as_deref()))
+            .collect::<Vec<_>>(),
+        [
+            (ALICE_JID, Some(ALICE)),
+            ("53949570789492@lid", Some(ALICE))
+        ]
+    );
+    assert_eq!(aliases[0].1, aliases[1].1, "one person for both addresses");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_quarantined_lid_sender_ingests_once_the_roster_pairs_it(pool: PgPool) {
+    let (_, session, _, binding, alice, _) = adopted(&pool).await;
+    const CUSTOMER_LID: &str = "987654321@lid";
+    session
+        .ingest_event(alice, &text(1, CUSTOMER_JID, "3EB0E001", "by phone"))
+        .await
+        .unwrap();
+    let by_lid = text(2, CUSTOMER_LID, "3EB0E002", "by lid");
+    assert_eq!(
+        session.ingest_event(alice, &by_lid).await.unwrap(),
+        IngestOutcome::Quarantined
+    );
+
+    let mut info = group(&[ALICE_JID, BOB_JID, CUSTOMER_JID]);
+    info.participants[2].identity.alternate_jid = Some(CUSTOMER_LID.to_owned());
+    session.update_groups(alice, &[info], true).await.unwrap();
+    sqlx::query!("UPDATE whatsapp_inbound_event SET retry_at = now()")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    assert_eq!(session.replay_deferred(alice).await.unwrap(), 1);
+    let aliases = aliases(&pool, binding.id).await;
+    assert_eq!(
+        aliases
+            .iter()
+            .map(|(jid, _, _)| jid.as_str())
+            .collect::<Vec<_>>(),
+        [CUSTOMER_JID, CUSTOMER_LID]
+    );
+    assert_eq!(aliases[0].1, aliases[1].1, "one person for both addresses");
+    let remaining =
+        sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM whatsapp_inbound_event"#)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(remaining, 0);
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_reaction_before_its_message_is_deferred_and_replayed(pool: PgPool) {
-    let (_, session, repository, binding, alice, _) = adopted(&pool).await;
+    let (linked, session, _, binding, alice, _) = adopted(&pool).await;
     let reaction = InboundEvent {
         kind: InboundKind::Message(Message {
             source_id: "3EB0REACT".into(),
@@ -430,12 +540,17 @@ async fn a_reaction_before_its_message_is_deferred_and_replayed(pool: PgPool) {
             kind: MessageKind::Reaction,
             text: "👍".into(),
             history: false,
+            from_me: false,
             revision: 1,
             target: Some(Target {
                 source_id: "3EB0ORIG".into(),
                 sender_jid: CUSTOMER_JID.into(),
             }),
             media: vec![],
+            mentions: vec![],
+            forwarded: false,
+            view_once: false,
+            rich: None,
         }),
         ..text(1, BOB_JID, "unused", "")
     };
@@ -453,14 +568,15 @@ async fn a_reaction_before_its_message_is_deferred_and_replayed(pool: PgPool) {
         .unwrap();
     assert_eq!(session.replay_deferred(alice).await.unwrap(), 1);
     let message = sqlx::query_scalar!(
-        "SELECT id FROM whatsapp_group_message WHERE binding_id = $1 AND message_id IS NOT NULL",
+        "SELECT id FROM external_chat_message WHERE chat_id = $1 AND message_id IS NOT NULL",
         binding.id
     )
     .fetch_one(&pool)
     .await
     .unwrap();
-    let page = repository
-        .messages(binding.id, BOB, None, 50)
+    let page = linked
+        .store
+        .messages(&binding, BOB, None, 50)
         .await
         .unwrap();
     assert_eq!(page.messages[0].id, message);
@@ -486,12 +602,17 @@ async fn edits_apply_in_source_order_and_deletes_are_permanent(pool: PgPool) {
             kind: MessageKind::Edit,
             text: body.into(),
             history: false,
+            from_me: false,
             revision,
             target: Some(Target {
                 source_id: "3EB0EDIT".into(),
                 sender_jid: CUSTOMER_JID.into(),
             }),
             media: vec![],
+            mentions: vec![],
+            forwarded: false,
+            view_once: false,
+            rich: None,
         }),
         ..text(event, CUSTOMER_JID, "unused", "")
     };
@@ -504,7 +625,7 @@ async fn edits_apply_in_source_order_and_deletes_are_permanent(pool: PgPool) {
         .await
         .unwrap();
     let content = sqlx::query_scalar!(
-        "SELECT body AS content FROM whatsapp_group_message WHERE binding_id = $1 AND message_id IS NOT NULL",
+        "SELECT body AS content FROM external_chat_message WHERE chat_id = $1 AND message_id IS NOT NULL",
         binding.id
     )
     .fetch_one(&pool)
@@ -517,7 +638,7 @@ async fn edits_apply_in_source_order_and_deletes_are_permanent(pool: PgPool) {
     }
     session.ingest_event(alice, &delete).await.unwrap();
     let row = sqlx::query!(
-        "SELECT body AS content, deleted_at FROM whatsapp_group_message WHERE binding_id = $1 AND message_id IS NOT NULL",
+        "SELECT body AS content, deleted_at FROM external_chat_message WHERE chat_id = $1 AND message_id IS NOT NULL",
         binding.id
     )
     .fetch_one(&pool)
@@ -534,11 +655,13 @@ async fn a_dispatched_send_becomes_unknown_after_takeover_and_settles_from_its_e
         idempotency_key: Uuid::now_v7(),
         message: ReplyContent::Text {
             text: "On it".into(),
+            mentions: vec![],
         },
         reply_to: None,
     };
     assert!(matches!(
         linked
+            .chats
             .send_reply(
                 &receipt::<MessageWrite>(ALICE, binding.id),
                 &request,
@@ -548,7 +671,7 @@ async fn a_dispatched_send_becomes_unknown_after_takeover_and_settles_from_its_e
             .err()
             .unwrap()
             .current_context(),
-        LinkedError::Forbidden
+        ExternalChatError::Forbidden
     ));
     let bot_receipt = EntityAccessReceipt::<MessageWrite>::try_new(
         EntityAccessAuth::Bot(entity_access::domain::models::BotReceiptAuth::new(
@@ -562,7 +685,7 @@ async fn a_dispatched_send_becomes_unknown_after_takeover_and_settles_from_its_e
         )),
         Entity {
             entity_id: binding.id.to_string(),
-            entity_type: EntityType::WhatsAppGroup,
+            entity_type: EntityType::ExternalChat,
         },
         EntityPermission::AccessLevel {
             access_level: AccessLevel::View,
@@ -572,16 +695,18 @@ async fn a_dispatched_send_becomes_unknown_after_takeover_and_settles_from_its_e
     assert!(
         matches!(
             linked
+                .chats
                 .send_reply(&bot_receipt, &request, SendAuthority::UserApiToken)
                 .await
                 .err()
                 .unwrap()
                 .current_context(),
-            LinkedError::Forbidden
+            ExternalChatError::Forbidden
         ),
         "a bot acting for Alice still cannot send from her connection"
     );
     let progress = linked
+        .chats
         .send_reply(
             &receipt::<MessageWrite>(ALICE, binding.id),
             &request,
@@ -591,6 +716,7 @@ async fn a_dispatched_send_becomes_unknown_after_takeover_and_settles_from_its_e
         .unwrap();
     assert_eq!(progress.state, DeliveryState::Pending);
     let replay = linked
+        .chats
         .send_reply(
             &receipt::<MessageWrite>(ALICE, binding.id),
             &request,
@@ -608,7 +734,8 @@ async fn a_dispatched_send_becomes_unknown_after_takeover_and_settles_from_its_e
         claimed[0].content,
         OutgoingContent::Text {
             text: "On it".into(),
-            quote: None
+            quote: None,
+            mentions: vec![],
         }
     );
     session
@@ -627,6 +754,7 @@ async fn a_dispatched_send_becomes_unknown_after_takeover_and_settles_from_its_e
             .is_empty()
     );
     let state = linked
+        .chats
         .delivery(&receipt::<MessageView>(ALICE, binding.id), &[progress.id])
         .await
         .unwrap();
@@ -637,7 +765,7 @@ async fn a_dispatched_send_becomes_unknown_after_takeover_and_settles_from_its_e
     session.ingest_event(takeover.scope, &echo).await.unwrap();
     session.ingest_event(takeover.scope, &echo).await.unwrap();
     let rows = sqlx::query!(
-        "SELECT m.id, p.user_id AS sender_id FROM whatsapp_group_message m JOIN whatsapp_external_person p ON p.id=m.person_id WHERE m.binding_id=$1 AND m.message_id IS NOT NULL",
+        "SELECT m.id, p.user_id AS sender_id FROM external_chat_message m JOIN external_chat_person p ON p.id=m.person_id WHERE m.chat_id=$1 AND m.message_id IS NOT NULL",
         binding.id
     )
     .fetch_all(&pool)
@@ -647,6 +775,7 @@ async fn a_dispatched_send_becomes_unknown_after_takeover_and_settles_from_its_e
     assert_eq!(rows[0].id, progress.id);
     assert_eq!(rows[0].sender_id.as_deref(), Some(ALICE));
     let state = linked
+        .chats
         .delivery(&receipt::<MessageView>(ALICE, binding.id), &[progress.id])
         .await
         .unwrap();
@@ -661,19 +790,21 @@ async fn an_accepted_send_writes_the_group_message_and_its_echo_converges(pool: 
         .await
         .unwrap();
     let question = sqlx::query_scalar!(
-        "SELECT id FROM whatsapp_group_message WHERE binding_id = $1 AND message_id IS NOT NULL",
+        "SELECT id FROM external_chat_message WHERE chat_id = $1 AND message_id IS NOT NULL",
         binding.id
     )
     .fetch_one(&pool)
     .await
     .unwrap();
     let progress = linked
+        .chats
         .send_reply(
             &receipt::<MessageWrite>(BOB, binding.id),
             &SendReply {
                 idempotency_key: Uuid::now_v7(),
                 message: ReplyContent::Text {
                     text: "Answer".into(),
+                    mentions: vec![],
                 },
                 reply_to: Some(question),
             },
@@ -693,7 +824,8 @@ async fn an_accepted_send_writes_the_group_message_and_its_echo_converges(pool: 
             quote: Some(Target {
                 source_id: "3EB0Q".into(),
                 sender_jid: CUSTOMER_JID.into()
-            })
+            }),
+            mentions: vec![],
         }
     );
     session
@@ -719,7 +851,7 @@ async fn an_accepted_send_writes_the_group_message_and_its_echo_converges(pool: 
     }
     session.ingest_event(alice, &echo).await.unwrap();
     let rows = sqlx::query!(
-        "SELECT m.id, p.user_id AS sender_id, m.body AS content FROM whatsapp_group_message m JOIN whatsapp_external_person p ON p.id=m.person_id WHERE m.binding_id=$1 AND m.message_id IS NOT NULL ORDER BY m.source_at",
+        "SELECT m.id, p.user_id AS sender_id, m.body AS content FROM external_chat_message m JOIN external_chat_person p ON p.id=m.person_id WHERE m.chat_id=$1 AND m.message_id IS NOT NULL ORDER BY m.source_at",
         binding.id
     )
     .fetch_all(&pool)
@@ -732,6 +864,7 @@ async fn an_accepted_send_writes_the_group_message_and_its_echo_converges(pool: 
 
     // Bob may edit his own recent message but not the customer's.
     let edit_customer = linked
+        .chats
         .send_reply(
             &receipt::<MessageWrite>(BOB, binding.id),
             &SendReply {
@@ -749,9 +882,10 @@ async fn an_accepted_send_writes_the_group_message_and_its_echo_converges(pool: 
         .unwrap_err();
     assert!(matches!(
         edit_customer.current_context(),
-        LinkedError::Forbidden
+        ExternalChatError::Forbidden
     ));
     linked
+        .chats
         .send_reply(
             &receipt::<MessageWrite>(BOB, binding.id),
             &SendReply {
@@ -773,12 +907,14 @@ async fn an_accepted_send_writes_the_group_message_and_its_echo_converges(pool: 
 async fn disconnecting_fails_undispatched_sends_and_stops_observation(pool: PgPool) {
     let (linked, session, _, binding, alice, _) = adopted(&pool).await;
     let progress = linked
+        .chats
         .send_reply(
             &receipt::<MessageWrite>(ALICE, binding.id),
             &SendReply {
                 idempotency_key: Uuid::now_v7(),
                 message: ReplyContent::Text {
                     text: "later".into(),
+                    mentions: vec![],
                 },
                 reply_to: None,
             },
@@ -786,10 +922,16 @@ async fn disconnecting_fails_undispatched_sends_and_stops_observation(pool: PgPo
         )
         .await
         .unwrap();
-    let account = linked.account(ALICE).await.unwrap().unwrap();
+    let account = linked
+        .whatsapp
+        .account(&person(ALICE))
+        .await
+        .unwrap()
+        .unwrap();
     let result = linked
+        .whatsapp
         .disconnect(
-            ALICE,
+            &person(ALICE),
             account.authorization_generation,
             SendAuthority::Human,
         )
@@ -798,8 +940,9 @@ async fn disconnecting_fails_undispatched_sends_and_stops_observation(pool: PgPo
     assert!(result.remote_unlink_requested);
     assert!(
         !linked
+            .whatsapp
             .disconnect(
-                ALICE,
+                &person(ALICE),
                 account.authorization_generation,
                 SendAuthority::Human
             )
@@ -809,6 +952,7 @@ async fn disconnecting_fails_undispatched_sends_and_stops_observation(pool: PgPo
         "a retried disconnect is a no-op"
     );
     let state = linked
+        .chats
         .delivery(&receipt::<MessageView>(ALICE, binding.id), &[progress.id])
         .await
         .unwrap();
@@ -835,28 +979,36 @@ async fn stored_group_facts_authorize_adoption_and_sending_however_old(pool: PgP
         .update_groups(alice, std::slice::from_ref(&info), true)
         .await
         .unwrap();
-    let request = AdoptGroup {
-        group_jid: GROUP.into(),
+    let request = AddChat {
+        provider: ExternalChatProvider::WhatsApp,
+        remote_id: GROUP.into(),
+        kind: ExternalChatKind::Group,
     };
     let binding = linked
-        .adopt(ALICE, &request, SendAuthority::Human)
+        .chats
+        .add(&person(ALICE), &request, SendAuthority::Human)
         .await
         .unwrap();
     let detail = linked
-        .group_detail(&receipt::<MessageView>(ALICE, binding.id))
+        .chats
+        .detail(&receipt::<MessageView>(ALICE, binding.id))
         .await
         .unwrap();
-    assert!(detail.group.can_send);
+    assert!(detail.chat.can_send);
     assert_eq!(
-        detail.group.name, "+15558880001",
+        detail.chat.name, "+15558880001",
         "unnamed groups show members"
     );
     let progress = linked
+        .chats
         .send_reply(
             &receipt::<MessageWrite>(ALICE, binding.id),
             &SendReply {
                 idempotency_key: Uuid::now_v7(),
-                message: ReplyContent::Text { text: "hi".into() },
+                message: ReplyContent::Text {
+                    text: "hi".into(),
+                    mentions: vec![],
+                },
                 reply_to: None,
             },
             SendAuthority::Human,
@@ -871,24 +1023,27 @@ async fn stored_group_facts_authorize_adoption_and_sending_however_old(pool: PgP
         .unwrap();
     let mut community = group(&[ALICE_JID]);
     community.jid = "120363000000000002@g.us".into();
-    community.community = true;
+    community.community_parent = true;
     session
         .update_groups(alice, &[info, community], true)
         .await
         .unwrap();
     assert!(matches!(
         linked
-            .adopt(
-                ALICE,
-                &AdoptGroup {
-                    group_jid: "120363000000000002@g.us".into()
+            .chats
+            .add(
+                &person(ALICE),
+                &AddChat {
+                    provider: ExternalChatProvider::WhatsApp,
+                    remote_id: "120363000000000002@g.us".into(),
+                    kind: ExternalChatKind::Group
                 },
                 SendAuthority::Human
             )
             .await
             .unwrap_err()
             .current_context(),
-        LinkedError::Invalid(_)
+        ExternalChatError::CannotAdd(CannotAdd::Community)
     ));
 }
 
@@ -896,7 +1051,7 @@ async fn stored_group_facts_authorize_adoption_and_sending_however_old(pool: PgP
 async fn messages_stamped_around_adoption_follow_the_second_granular_boundary(pool: PgPool) {
     let (_, session, _, binding, alice, _) = adopted(&pool).await;
     let adopted_at = sqlx::query_scalar!(
-        "SELECT GREATEST(b.adopted_at, m.consent_at) AS \"at!\" FROM whatsapp_group b JOIN whatsapp_group_membership m ON m.binding_id = b.id WHERE b.id = $1 AND m.account_id = $2",
+        "SELECT GREATEST(b.adopted_at, m.consent_at) AS \"at!\" FROM external_chat b JOIN whatsapp_chat_membership m ON m.chat_id = b.id WHERE b.id = $1 AND m.account_id = $2",
         binding.id,
         alice.account_id
     )
@@ -923,7 +1078,10 @@ async fn messages_stamped_around_adoption_follow_the_second_granular_boundary(po
 
 #[async_trait]
 impl SendRateLimiter for Allow {
-    async fn check(&self, _: &str) -> LinkedResult<()> {
+    async fn check(
+        &self,
+        _: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> ExternalChatResult<()> {
         Ok(())
     }
 }
@@ -934,21 +1092,29 @@ async fn rate_limited_send_never_creates_a_dispatchable_intent(pool: PgPool) {
 
     #[async_trait]
     impl SendRateLimiter for Denied {
-        async fn check(&self, _: &str) -> LinkedResult<()> {
-            Err(LinkedError::RateLimited.into())
+        async fn check(
+            &self,
+            _: &macro_user_id::user_id::MacroUserIdStr<'_>,
+        ) -> ExternalChatResult<()> {
+            Err(ExternalChatError::RateLimited.into())
         }
     }
 
-    let (_, session, repository, binding, alice, _) = adopted(&pool).await;
-    let linked = LinkedService::new(ALL_ON, repository, Arc::new(Allow), Arc::new(Denied));
+    let (linked, session, repository, binding, alice, _) = adopted(&pool).await;
+    let chats = ExternalChatService::new(
+        Arc::new(WhatsAppProvider::new(repository)),
+        linked.store,
+        Arc::new(Denied),
+    );
     let request = SendReply {
         idempotency_key: Uuid::now_v7(),
         message: ReplyContent::Text {
             text: "Rate limited".into(),
+            mentions: vec![],
         },
         reply_to: None,
     };
-    let error = linked
+    let error = chats
         .send_reply(
             &receipt::<MessageWrite>(ALICE, binding.id),
             &request,
@@ -956,6 +1122,10 @@ async fn rate_limited_send_never_creates_a_dispatchable_intent(pool: PgPool) {
         )
         .await
         .unwrap_err();
-    assert_eq!(error.current_context(), &LinkedError::RateLimited);
+    assert_eq!(error.current_context(), &ExternalChatError::RateLimited);
     assert!(session.claim_sends(alice, 8).await.unwrap().is_empty());
 }
+
+mod chats;
+mod communities;
+mod direct;

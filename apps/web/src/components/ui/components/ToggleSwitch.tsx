@@ -1,40 +1,51 @@
-import { Switch as KobalteSwitch } from '@kobalte/core/switch';
-import type { JSX } from 'solid-js';
-import { createSignal, onCleanup, Show, splitProps } from 'solid-js';
+import type { PolymorphicProps } from '@kobalte/core/polymorphic';
+import {
+  Switch as KobalteSwitch,
+  type SwitchRootProps,
+} from '@kobalte/core/switch';
+import type { Component, JSX } from 'solid-js';
+import { Show, splitProps } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { cn } from '../utils/classname';
 
-export type ToggleSwitchProps = {
-  onChange?: (checked: boolean) => void;
-  defaultChecked?: boolean;
+export type ToggleSwitchSize = 'xs' | 'sm' | 'md';
+export type ToggleSwitchProps = Omit<
+  PolymorphicProps<'div', SwitchRootProps<'div'>>,
+  'children'
+> & {
   labelClass?: string;
   label?: JSX.Element;
-  disabled?: boolean;
-  checked?: boolean;
-  /** Visual size. `sm` (default) is the compact toolbar size; `md` is larger,
-   *  used in settings rows. */
-  size?: 'xs' | 'sm' | 'md';
-  class?: string;
+  /** Compact toolbar sizes are xs/sm; use md in settings rows. */
+  size?: ToggleSwitchSize;
   controlClass?: string;
+  /** A glyph in the track beside the thumb that says what the switch does. */
+  trackIcon?: Component<{ class?: string }>;
 };
 
 const SWITCH_SIZES = {
   xs: {
-    control: 'h-3.5 w-5.5',
-    thumb: 'top-0.5 left-0.5 h-2.5',
-    stretched: 'w-3 data-checked:translate-x-1.5',
-    normal: 'w-2.5 data-checked:translate-x-2',
+    control: 'h-3.5 w-7',
+    thumb: '-left-0.5 -top-px size-3.5 data-checked:translate-x-4',
+    trackIcon:
+      'right-0.5 size-2 group-data-checked/switch:right-auto group-data-checked/switch:left-0.5',
+    pressed:
+      'group-active/switch:w-4 data-checked:group-active/switch:translate-x-3.5',
   },
   sm: {
-    control: 'h-4 w-6',
-    thumb: 'top-0.5 left-0.5 h-3',
-    stretched: 'w-4 data-checked:translate-x-1',
-    normal: 'w-3 data-checked:translate-x-2',
+    control: 'h-4 w-8',
+    thumb: '-left-0.5 -top-px size-4 data-checked:translate-x-4.5',
+    trackIcon:
+      'right-1 size-2.5 group-data-checked/switch:right-auto group-data-checked/switch:left-1',
+    pressed:
+      'group-active/switch:w-5 data-checked:group-active/switch:translate-x-3.5',
   },
   md: {
-    control: 'h-5 w-9',
-    thumb: 'top-0.5 left-0.5 h-4',
-    stretched: 'w-5 data-checked:translate-x-3',
-    normal: 'w-4 data-checked:translate-x-4',
+    control: 'h-5 w-10',
+    thumb: '-left-0.5 -top-px size-5 data-checked:translate-x-5.5',
+    trackIcon:
+      'right-1.5 size-3 group-data-checked/switch:right-auto group-data-checked/switch:left-1.5',
+    pressed:
+      'group-active/switch:w-6 data-checked:group-active/switch:translate-x-4.5',
   },
 } as const;
 
@@ -61,21 +72,9 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
     'controlClass',
     'label',
     'size',
+    'trackIcon',
   ]);
   const sizing = () => SWITCH_SIZES[local.size ?? 'sm'];
-  const [isStretched, setIsStretched] = createSignal(false);
-  let stretchTimeout: ReturnType<typeof setTimeout> | undefined;
-
-  const triggerStretch = () => {
-    setIsStretched(true);
-    if (stretchTimeout) clearTimeout(stretchTimeout);
-    stretchTimeout = setTimeout(() => setIsStretched(false), 75);
-  };
-
-  const handleChange = (checked: boolean) => {
-    triggerStretch();
-    local.onChange?.(checked);
-  };
 
   // Kobalte's switch root is an inert div — only the control and the label
   // toggle. Forward clicks that land on the root itself (its padding/gap) to
@@ -85,36 +84,44 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
     (event.currentTarget as HTMLElement).querySelector('input')?.click();
   };
 
-  onCleanup(() => {
-    if (stretchTimeout) clearTimeout(stretchTimeout);
-  });
-
   return (
     <KobalteSwitch
       class={cn(
-        'relative inline-flex items-center gap-2 data-disabled:cursor-not-allowed data-disabled:opacity-50',
+        'group/switch relative inline-flex items-center gap-2 data-disabled:cursor-not-allowed data-disabled:opacity-50',
         local.class
       )}
       defaultChecked={local.defaultChecked}
-      onChange={handleChange}
+      onChange={local.onChange}
       disabled={local.disabled}
       checked={local.checked}
       onClick={handleRootClick}
       {...others}
     >
-      <KobalteSwitch.Input class="sr-only" />
+      <KobalteSwitch.Input class="peer sr-only" />
       <KobalteSwitch.Control
         class={cn(
-          'relative rounded-full bg-ink-muted/40 transition-colors duration-100 data-checked:bg-accent',
+          'relative shrink-0 rounded-full border border-border-secondary bg-border-tertiary transition-colors duration-150 ease-out data-checked:border-accent data-checked:bg-accent data-invalid:border-failure peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent motion-reduce:transition-none',
           sizing().control,
           local.controlClass
         )}
       >
+        <Show when={local.trackIcon}>
+          {(icon) => (
+            <Dynamic
+              component={icon()}
+              aria-hidden="true"
+              class={cn(
+                'pointer-events-none absolute top-1/2 -translate-y-1/2 text-ink-muted group-data-checked/switch:text-surface',
+                sizing().trackIcon
+              )}
+            />
+          )}
+        </Show>
         <KobalteSwitch.Thumb
           class={cn(
-            'absolute rounded-full bg-surface transition-all duration-100 ease-in-out',
+            'absolute rounded-full border border-border-secondary bg-[white] transition-[width,translate] duration-150 ease-out motion-reduce:transition-none',
             sizing().thumb,
-            isStretched() ? sizing().stretched : sizing().normal
+            !local.disabled && !others.readOnly && sizing().pressed
           )}
         />
       </KobalteSwitch.Control>

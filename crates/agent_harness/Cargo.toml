@@ -49,6 +49,8 @@ github = { path = "../github", default-features = false, features = [
   "ports",
   "sync",
 ] }
+feature_flags = { path = "../feature_flags" }
+jev = { path = "../jev" }
 kafka_util = { path = "../kafka_util" }
 macro_env_var = { path = "../macro_env_var" }
 # The owner's custom MCP server rows, listed so a sandbox can be told they exist.

@@ -316,13 +316,17 @@ impl CustomerRepositoryImpl {
         let subscription = stripe::Subscription::retrieve(&self.client, subscription_id, &[])
             .await
             .map_err(storage)?;
+        let end_trial = subscription.status == stripe::SubscriptionStatus::Trialing
+            && self.adds_first_max_seat(&subscription, &items)?;
         if let Some(schedule_id) = subscription.schedule.as_ref().map(|s| s.id()) {
             let schedule = stripe::SubscriptionSchedule::retrieve(&self.client, &schedule_id, &[])
                 .await
                 .map_err(storage)?;
             require_owned_schedule(&schedule)?;
             let pending = self.pending_changes(&schedule, &subscription).await?;
-            if pending.at > subscription.current_period_start {
+            // A Pro trial gaining Max ends now. With no Max seat before, no seat
+            // is waiting to downgrade, so release the schedule and bill directly.
+            if !end_trial && pending.at > subscription.current_period_start {
                 let current = current_phase(&schedule, &subscription)?;
                 let mut phase = phase_parameters(current)?;
                 let mut quantities = subscription
@@ -364,19 +368,78 @@ impl CustomerRepositoryImpl {
             // an immediate upgrade; acknowledging old metadata cannot undo it.
             self.release_schedule(&schedule.id).await?;
         }
-        let update_params = UpdateSubscription {
+        let mut update_params = UpdateSubscription {
             items: Some(items),
             proration_behavior: Some(
                 stripe::generated::billing::subscription::SubscriptionProrationBehavior::AlwaysInvoice,
             ),
             ..Default::default()
         };
+        if end_trial {
+            // A trial has no paid remainder to prorate. Reset the cycle so Max
+            // bills a full period today instead of inheriting the trial end.
+            update_params.trial_end = Some(stripe::Scheduled::now());
+            update_params.billing_cycle_anchor = Some(stripe::SubscriptionBillingCycleAnchor::Now);
+        }
 
         stripe::Subscription::update(&self.client, subscription_id, update_params)
             .await
             .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
 
         Ok(())
+    }
+
+    /// Whether the seat update gives a subscription without Max seats its first
+    /// one. A subscription already trialing on Max keeps its trial terms, and
+    /// its scheduled downgrades, through other seat changes.
+    fn adds_first_max_seat(
+        &self,
+        subscription: &stripe::Subscription,
+        items: &[UpdateSubscriptionItems],
+    ) -> Result<bool, CustomerError> {
+        let Ok(max) = self.seat_prices.price_id(SeatPlan::Max) else {
+            return Ok(false);
+        };
+        let max_items: Vec<_> = subscription
+            .items
+            .data
+            .iter()
+            .filter(|item| {
+                item.price
+                    .as_ref()
+                    .is_some_and(|price| price.id.as_str() == max)
+            })
+            .collect();
+        let mut quantity = max_items
+            .iter()
+            .map(|item| item.quantity.unwrap_or(1))
+            .sum::<u64>();
+        if quantity > 0 {
+            return Ok(false);
+        }
+        for update in items {
+            if let Some(price) = &update.price {
+                if price.as_str() == max {
+                    quantity = quantity.saturating_add(update.quantity.unwrap_or(1));
+                }
+                continue;
+            }
+            let Some(id) = &update.id else {
+                continue;
+            };
+            let Some(existing) = max_items.iter().find(|item| item.id.as_str() == id) else {
+                continue;
+            };
+            quantity = quantity.saturating_sub(existing.quantity.unwrap_or(1));
+            if update.deleted != Some(true) {
+                quantity = quantity.saturating_add(
+                    update
+                        .quantity
+                        .unwrap_or_else(|| existing.quantity.unwrap_or(1)),
+                );
+            }
+        }
+        Ok(quantity > 0)
     }
 }
 
@@ -569,6 +632,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         &self,
         id: &stripe::SubscriptionId,
         plan: SeatPlan,
+        end_trial: bool,
     ) -> Result<(), CustomerError> {
         let _billing = self.subscription_guard(id).await?;
         let subscription = stripe::Subscription::retrieve(&self.client, id, &[])
@@ -594,11 +658,16 @@ impl CustomerRepository for CustomerRepositoryImpl {
                     .is_some_and(|p| self.seat_prices.plan_for_price(p.id.as_str()).is_some())
             })
             .ok_or(CustomerError::NoMatchingLineItem)?;
-        let params = UpdateSubscription {
+        let end_trial = end_trial && subscription.status == stripe::SubscriptionStatus::Trialing;
+        let mut params = UpdateSubscription {
             items: Some(vec![UpdateSubscriptionItems { id: Some(item.id.to_string()), price: Some(self.seat_prices.price_id(plan)?.to_string()), ..Default::default() }]),
             metadata: Some(HashMap::from([("macro_plan_change_at".to_string(), chrono::Utc::now().to_rfc3339()), (APPLIED_KEY.to_string(), String::new())])),
             proration_behavior: Some(stripe::generated::billing::subscription::SubscriptionProrationBehavior::AlwaysInvoice), ..Default::default()
         };
+        if end_trial {
+            params.trial_end = Some(stripe::Scheduled::now());
+            params.billing_cycle_anchor = Some(stripe::SubscriptionBillingCycleAnchor::Now);
+        }
         stripe::Subscription::update(&self.client, id, params)
             .await
             .map_err(storage)?;

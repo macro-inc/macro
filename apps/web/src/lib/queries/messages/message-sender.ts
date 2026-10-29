@@ -16,6 +16,7 @@ type WithMaybeSender<
     sender?: MessageSender;
     bot_profile?: { name: string; avatar_url?: string | null } | null;
     triggered_by?: string | null;
+    triggered_via?: string | null;
   },
 > = Omit<T, 'sender'> & { sender?: MessageSender };
 
@@ -69,6 +70,7 @@ export function normalizeMessageSender<
     sender?: MessageSender;
     bot_profile?: { name: string; avatar_url?: string | null } | null;
     triggered_by?: string | null;
+    triggered_via?: string | null;
   },
 >(message: T): T & { sender: MessageSender } {
   return message.sender
@@ -79,6 +81,7 @@ export function normalizeMessageSender<
           ...senderFromStorageId(message.sender_id),
           ...message.bot_profile,
           triggered_by: message.triggered_by,
+          triggered_via: message.triggered_via,
         },
       };
 }

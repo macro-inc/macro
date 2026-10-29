@@ -1,4 +1,4 @@
-import { ViewShell } from '@app/components/view-shell';
+import { ViewShell, ViewSidebar } from '@app/components/view-shell';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/utils';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
@@ -122,6 +122,7 @@ function DesktopChannelThreads(props: { sources: ChannelsSources }) {
       new Map(
         deduplicateChannels([
           props.sources.threads.items(),
+          props.sources.team_channels.items(),
           props.sources.channels.items(),
           props.sources.direct_messages.items(),
           props.sources.recents.items(),
@@ -217,9 +218,9 @@ function ChannelsViewRoot() {
                               fallback={() => (
                                 <>
                                   <ViewShell.TopBar>
-                                    <span class="text-sm font-semibold">
+                                    <ViewSidebar.Title caret={false}>
                                       Chat
-                                    </span>
+                                    </ViewSidebar.Title>
                                   </ViewShell.TopBar>
                                   <div class="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
                                     <div class="flex max-w-sm flex-col gap-2">
@@ -288,6 +289,7 @@ function ChannelDetailRouteContent() {
       channelId(),
       sources
         ? deduplicateChannels([
+            sources.team_channels.items(),
             sources.channels.items(),
             sources.direct_messages.items(),
             sources.recents.items(),

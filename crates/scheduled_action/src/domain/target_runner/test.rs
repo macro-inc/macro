@@ -217,6 +217,7 @@ fn action() -> ScheduledAction {
         created_at: Utc::now(),
         updated_at: Utc::now(),
         run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     }
 }
 
@@ -882,6 +883,7 @@ async fn a_scheduled_run_tells_the_agent_which_routine_fired_and_on_what_schedul
         created_at: scheduled_for,
         updated_at: scheduled_for,
         run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     };
     let mut handle = ExecutionHandle::default();
     runner.prepare(&action, &mut handle).await.unwrap();
@@ -989,6 +991,7 @@ async fn a_task_status_change_hands_the_agent_the_task_instead_of_its_ids() {
         created_at: at,
         updated_at: at,
         run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     };
     let event: EventReference = serde_json::from_value(json!({
         "event_id": "01928f3e-6a2b-7c3d-8e4f-0123456789cd",
@@ -1097,6 +1100,7 @@ async fn a_manual_run_tells_the_agent_its_owner_started_it() {
         created_at: requested_at,
         updated_at: requested_at,
         run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     };
     let mut handle = ExecutionHandle::default();
     runner.prepare(&action, &mut handle).await.unwrap();

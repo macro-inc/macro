@@ -5,16 +5,20 @@ import {
   TasksViewProvider,
   useTasksView,
 } from '@app/features/tasks-view/tasks-view-context';
-import { createTaskWithProperties } from '@block-md/util/taskComposerProperties';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   enableCrmActivity,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
-import PlusIcon from '@icon/system/regular/plus.svg';
+import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
 import { TagSetsQueryProvider } from '@property/tags/tag-sets-context';
-import { Button } from '@ui';
 import { Show } from 'solid-js';
+import {
+  CrmListEmpty,
+  CrmListError,
+  CrmListSearchEmpty,
+  CrmListSkeleton,
+} from './components/list-state';
 import { RecordSection } from './components/record-section';
 import type { CrmRecordScope } from './core/record';
 import { crmTaskComposerContext } from './task-composer';
@@ -59,7 +63,7 @@ export function CrmRecordTasks(props: { scope: CrmRecordScope }) {
 }
 
 function RecordTasksBody(props: { scope: CrmRecordScope }) {
-  const { state, setState } = useTasksView();
+  const { state, setState, source } = useTasksView();
   const layout = useSplitLayout();
   let listElement: HTMLDivElement | undefined;
 
@@ -70,24 +74,11 @@ function RecordTasksBody(props: { scope: CrmRecordScope }) {
       type: 'component',
       id: 'task-compose',
       params: {
-        composerContext: adaptive ? context : undefined,
-        // Keep the existing record associations with the standard composer.
-        createTask: adaptive
-          ? undefined
-          : (
-              ...[title, content, properties, ...rest]: Parameters<
-                typeof createTaskWithProperties
-              >
-            ) =>
-              createTaskWithProperties(
-                title,
-                content,
-                [
-                  ...properties,
-                  ...Object.entries(context.initialPropertyValues ?? {}),
-                ],
-                ...rest
-              ),
+        // Record identity/associations must survive a restart even with the
+        // standard property row; they cannot live only in a create callback.
+        composerContext: adaptive
+          ? context
+          : { ...context, visiblePropertyIds: undefined },
       },
     });
   };
@@ -98,17 +89,35 @@ function RecordTasksBody(props: { scope: CrmRecordScope }) {
       search={state.search}
       onSearchChange={(search) => setState('search', search)}
       onSearchEscape={() => listElement?.focus()}
-      actions={
-        <>
-          <TasksControls />
-          <Button variant="outline" onClick={composeTask}>
-            <PlusIcon class="size-4" />
-            New task
-          </Button>
-        </>
-      }
+      actions={<TasksControls />}
+      createAction={{ label: 'New task', onClick: composeTask }}
+      toolbarCreate
     >
       <TaskList
+        loadingContent={<CrmListSkeleton label="Loading tasks" />}
+        errorContent={
+          <CrmListError
+            title="Tasks couldn’t be loaded."
+            onRetry={() => source.refresh()}
+          />
+        }
+        emptyContent={
+          state.search.trim() && source.hasMore() ? (
+            <span>Search more results to find matching tasks.</span>
+          ) : state.search.trim() ? (
+            <CrmListSearchEmpty
+              title="No tasks match this search"
+              onClearSearch={() => setState('search', '')}
+            />
+          ) : (
+            <CrmListEmpty
+              title="No tasks yet"
+              graphic={EmptyStateTasksGraphic}
+              description="Tasks associated with this record will appear here."
+              action={{ label: 'New task', onClick: composeTask }}
+            />
+          )
+        }
         ref={(element) => {
           listElement = element;
         }}

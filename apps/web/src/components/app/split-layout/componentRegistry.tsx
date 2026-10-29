@@ -4,7 +4,6 @@ import type { EventEditorInitialValues } from '@app/features/calendar/components
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { HomeRouteView } from '@app/features/home/route-views';
 import { parseProjectRoute } from '@app/features/projects/core/route';
-import { parseWhatsAppGroupComponentId } from '@app/features/whatsapp-group/core/route';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { NOT_FOUND_ROUTE_ID } from '@app/routes/app-route';
 import { LoadingBlock } from '@core/component/LoadingBlock';
@@ -102,10 +101,6 @@ const ProjectView = lazyNamed(
   () => import('@app/features/projects/project-view'),
   'ProjectView'
 );
-const WhatsAppGroup = lazyNamed(
-  () => import('@app/features/whatsapp-group/whatsapp-group-entry'),
-  'WhatsAppGroupEntry'
-);
 const ExternalRouteView = lazyNamed(
   () => import('@app/features/external-view/route-views'),
   'ExternalRouteView'
@@ -139,7 +134,7 @@ const ComposeSkill = lazyNamed(
   'ComposeSkill'
 );
 const ComposeTask = lazyNamed(
-  () => import('@block-md/component/ComposeTask'),
+  () => import('@app/features/task-composer/compose-task'),
   'ComposeTask'
 );
 const ComposeDocument = lazyNamed(
@@ -209,15 +204,6 @@ export function resolveComponent(
 ): ResolvedComponent {
   const registration = REGISTRY.get(name);
   if (!registration) {
-    const groupId = parseWhatsAppGroupComponentId(name);
-    if (groupId) {
-      const group = REGISTRY.get('whatsapp-group');
-      if (group)
-        return {
-          element: () => group.factory({ groupId }),
-          initialMeta: resolveInitialMeta('whatsapp-group', group.initialMeta),
-        };
-    }
     if (parseProjectRoute(name)) {
       const base = REGISTRY.get('initiative-view');
       if (base)
@@ -506,17 +492,6 @@ registerComponent(
   'booking-links',
   () => <BookingLinksRouteView />,
   () => composableLayout()
-);
-registerComponent(
-  'whatsapp-group',
-  withAuth((params) =>
-    typeof params.groupId === 'string' ? (
-      <WhatsAppGroup groupId={params.groupId} />
-    ) : (
-      <NotFound />
-    )
-  ),
-  { splitPanelLayout: 'composable' }
 );
 registerComponent(
   'external',

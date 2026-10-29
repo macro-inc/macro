@@ -216,6 +216,21 @@ async function handleCalendarEventMention(
 }
 
 /**
+ * Insert a WhatsApp group chip. Posting it in a channel shares the group with
+ * the channel's members; nothing else tracks or attaches it.
+ */
+async function handleExternalChatMention(
+  group: { id: string; name: string },
+  dependencies: HandlerDependencies
+): Promise<void> {
+  dependencies.editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+    documentId: group.id,
+    documentName: group.name,
+    blockName: 'external_chat',
+  });
+}
+
+/**
  * Creates a handler for MentionItem selection.
  */
 export function createItemHandler(dependencies: HandlerDependencies) {
@@ -243,6 +258,8 @@ export function createItemHandler(dependencies: HandlerDependencies) {
         return await handleCalendarEventMention(item, dependencies);
       case 'entity':
         return await handleEntityMention(item, dependencies);
+      case 'externalChat':
+        return await handleExternalChatMention(item.data, dependencies);
     }
   };
 }

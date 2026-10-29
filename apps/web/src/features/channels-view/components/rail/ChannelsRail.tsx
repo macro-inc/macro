@@ -19,6 +19,7 @@ import {
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { favoriteSplitContent } from '@app/util/favorites';
+import { prefetchLatestChannelMessages } from '@channel/queries/prefetch-channel-target';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -104,14 +105,20 @@ export { buildChannelRailRows } from './build-channel-rail-rows';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useChannelCalls } from './hooks/useChannelCalls';
 import { useChannelRailActivity } from './hooks/useChannelRailActivity';
+import { useChannelRailUnreadFilter } from './hooks/useChannelRailUnreadFilter';
 
 const CHANNEL_RAIL_SECTIONS: ChannelsRailSection[] = [
   'favorites',
+  'team_channels',
   'channels',
   'direct_messages',
 ];
 const LABEL_KEY_PREFIX = 'label:';
-const BROWSE_QUERY_SCOPES = ['channels', 'direct_messages'] as const;
+const BROWSE_QUERY_SCOPES = [
+  'team_channels',
+  'channels',
+  'direct_messages',
+] as const;
 const CHANNEL_TAB_IDS: ChannelsTab[] = ['browse', 'recents'];
 const CHANNEL_TAB_IDS_WITH_THREADS: ChannelsTab[] = [
   ...CHANNEL_TAB_IDS,
@@ -147,6 +154,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     threadsEnabled,
     threadsChannelId,
     setThreadsChannelId,
+    setUnreadOnly,
   } = useChannelsView();
 
   const panel = useSplitPanelOrThrow();
@@ -315,6 +323,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const channels = createMemo(() =>
     deduplicateChannels([
+      props.sources.team_channels.items(),
       props.sources.channels.items(),
       props.sources.direct_messages.items(),
       props.sources.recents.items(),
@@ -354,15 +363,15 @@ export function ChannelsRail(props: ChannelsRailProps) {
     return 'Channel labels are unavailable right now.';
   };
 
-  const favorites = createMemo(() => favoritesData()?.favorites ?? []);
+  const allFavorites = createMemo(() => favoritesData()?.favorites ?? []);
   const favoriteChannelIds = createMemo(() =>
-    favorites()
+    allFavorites()
       .filter((favorite) => favorite.entityType === 'channel')
       .map((favorite) => favorite.entityId)
   );
 
-  // A labelled or favorited channel has a row before the paginated Channels
-  // source reaches it, so fetch the ones the sources have not loaded: a label
+  // A labelled or favorited channel has a row before the paginated Team
+  // channels source reaches it, so fetch the ones the sources have not loaded: a label
   // needs them to list its channels, a favorite row to act on its channel.
   const referencedChannelIds = createMemo(() => [
     ...new Set([
@@ -405,6 +414,21 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const channelActivity = useChannelRailActivity(allChannels, channelCalls);
 
+  const unreadOnly = () => state.unreadOnly;
+  const unreadFilter = useChannelRailUnreadFilter({
+    sources: props.sources,
+    favorites: allFavorites,
+    unreadOnly,
+    unreadChannelIds: channelActivity.unreadChannelIds,
+    isSelected: (channelId) =>
+      tab() === 'threads'
+        ? threadsChannelId() === channelId
+        : selectedChannel()?.id === channelId,
+  });
+  // The rail lists these; unread state and label lookups use the full lists.
+  const sources = unreadFilter.sources;
+  const favorites = unreadFilter.favorites;
+
   const isLabelOpen = (labelId: string) =>
     !state.collapsedLabels.includes(labelId);
 
@@ -412,11 +436,14 @@ export function ChannelsRail(props: ChannelsRailProps) {
     buildChannelSectionRows({
       labels: labels(),
       channels: deduplicateChannels([
-        props.sources.channels.items(),
+        props.sources.team_channels.items(),
         labelledChannels(),
       ]),
       channelsById: channelsById(),
       isLabelOpen,
+      isChannelVisible: unreadOnly()
+        ? unreadFilter.isChannelVisible
+        : undefined,
     })
   );
 
@@ -445,10 +472,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
       state.expandedGroups,
       {
         favorites: favorites(),
-        channels: props.sources.channels.items(),
-        direct_messages: props.sources.direct_messages.items(),
-        recents: props.sources.recents.items(),
-        threads: props.sources.threads.items(),
+        team_channels: sources.team_channels.items(),
+        channels: sources.channels.items(),
+        direct_messages: sources.direct_messages.items(),
+        recents: sources.recents.items(),
+        threads: sources.threads.items(),
       },
       channelSectionRows()
     );
@@ -536,7 +564,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
       if (row.kind === 'conversation' || row.kind === 'label') {
         const virtualizer =
-          virtualizers()[row.kind === 'label' ? 'channels' : row.scope];
+          virtualizers()[row.kind === 'label' ? 'team_channels' : row.scope];
         if (virtualizer) {
           virtualizer.scrollToIndex(row.localIndex, options);
           return;
@@ -568,14 +596,14 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
 
   const scrollScopeToSelectedOrStart = (scope: ChannelsQueryScope) => {
-    // The Channels section renders label headings between channels, so its
-    // indexes come from the rendered rows rather than the source.
+    // The Team channels section renders label headings between channels, so
+    // its indexes come from the rendered rows rather than the source.
     const rendered =
-      scope === 'channels'
+      scope === 'team_channels'
         ? channelSectionRows().map((row) =>
             row.kind === 'conversation' ? row.channel.id : undefined
           )
-        : props.sources[scope].items().map((channel) => channel.id);
+        : sources[scope].items().map((channel) => channel.id);
 
     const selectedIndex = rendered.indexOf(selectedChannel()?.id ?? '');
 
@@ -595,7 +623,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
 
   const scrollThreadsToSelectedOrStart = () => {
-    const items = props.sources.threads.items();
+    const items = sources.threads.items();
     const selectedIndex = items.findIndex(
       (channel) => channel.id === threadsChannelId()
     );
@@ -654,12 +682,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
     const sourcesReady = searchOpen
       ? !props.sources.search.isLoading()
       : tab() === 'recents'
-        ? !props.sources.recents.isLoading()
+        ? !sources.recents.isLoading()
         : tab() === 'threads'
-          ? !props.sources.threads.isLoading()
-          : BROWSE_QUERY_SCOPES.every(
-              (scope) => !props.sources[scope].isLoading()
-            );
+          ? !sources.threads.isLoading()
+          : BROWSE_QUERY_SCOPES.every((scope) => !sources[scope].isLoading());
     if (!sourcesReady) return;
 
     const frame = requestAnimationFrame(() => {
@@ -720,9 +746,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
           const row = current?.item;
           if (direction !== 1 || row?.kind !== 'conversation') return true;
 
-          const source = props.sources[row.scope];
+          const source = sources[row.scope];
           const renderedCount =
-            row.scope === 'channels'
+            row.scope === 'team_channels'
               ? channelSectionRows().length
               : source.items().length;
           if (row.localIndex < renderedCount - 1) return true;
@@ -861,6 +887,24 @@ export function ChannelsRail(props: ChannelsRailProps) {
     });
   };
 
+  // A mouse press reaches the server before the click that opens its channel.
+  // Touch presses also start scrolls, which would fetch every row they cross.
+  const prefetchRow = (rowId: ChannelRailRow['id'], event: PointerEvent) => {
+    if (event.pointerType !== 'mouse' || event.button !== 0) return;
+    // Threads-tab rows filter the thread list in place.
+    if (tab() === 'threads') return;
+    const row = visibleRows().find((row) => row.id === rowId);
+    if (row?.kind === 'conversation') {
+      // A message target loads around that message instead.
+      if (!row.channel.target) prefetchLatestChannelMessages(row.channel.id);
+    } else if (
+      row?.kind === 'favorite' &&
+      row.favorite.entityType === 'channel'
+    ) {
+      prefetchLatestChannelMessages(row.favorite.entityId);
+    }
+  };
+
   // Explain shared versus private scope before creating or changing labels.
   const createLabelMutation = useCreateChannelLabelMutation();
   const renameLabelMutation = useRenameChannelLabelMutation();
@@ -925,7 +969,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
             name,
             channelIds,
           });
-          setGroupOpen('channels', true);
+          setGroupOpen('team_channels', true);
           setLabelOpen(created.id, true);
         },
       },
@@ -956,7 +1000,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
             rule,
             channelIds: [],
           });
-          setGroupOpen('channels', true);
+          setGroupOpen('team_channels', true);
           setLabelOpen(created.id, true);
           toast.success(`Created “${name}”`);
         },
@@ -1013,8 +1057,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
       : label.channelCount === 0
         ? 'It has no channels in it.'
         : label.channelCount === 1
-          ? 'Its 1 channel goes back to the main Channels list.'
-          : `Its ${label.channelCount} channels go back to the main Channels list.`;
+          ? 'Its 1 channel goes back to the Team channels list.'
+          : `Its ${label.channelCount} channels go back to the Team channels list.`;
     const confirmed = await confirmDialog(
       {
         title: `Delete “${label.name}”?`,
@@ -1187,8 +1231,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
     list,
     tab,
     selectTab,
-    sources: props.sources,
+    sources,
     favorites,
+    unreadOnly,
+    setUnreadOnly,
     channelById,
     selectedChannel,
     threadsEnabled,
@@ -1215,6 +1261,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     setSortBy,
     registerRootRef: setListRoot,
     activateRow,
+    prefetchRow,
     registerScrollRef: (group, element) => {
       setSectionScrollRoots((current) => ({
         ...current,

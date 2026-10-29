@@ -313,3 +313,29 @@ fn session_attribution_uses_the_verified_human_or_agent_identity() {
     );
     assert!(DocumentAttribution::from_session_claims(None, Some("x".repeat(1025))).is_err());
 }
+
+#[test]
+fn writing_peers_are_the_peers_with_operations_in_the_blob() {
+    let doc = LoroDoc::new();
+    doc.set_peer_id(11).unwrap();
+    doc.get_text("content").insert(0, "imported").unwrap();
+    doc.commit();
+    doc.set_peer_id(22).unwrap();
+    doc.get_text("content").insert(0, "edited ").unwrap();
+    doc.commit();
+    let snapshot = doc.export(ExportMode::Snapshot).unwrap();
+    assert_eq!(writing_peers(&snapshot).unwrap(), [11, 22]);
+
+    let seen = doc.oplog_vv();
+    doc.set_peer_id(33).unwrap();
+    doc.get_text("content").insert(0, "more ").unwrap();
+    doc.commit();
+    let update = doc
+        .export(ExportMode::Updates {
+            from: Cow::Owned(seen),
+        })
+        .unwrap();
+    assert_eq!(writing_peers(&update).unwrap(), [33]);
+
+    assert!(writing_peers(b"not a loro blob").is_err());
+}

@@ -70,6 +70,9 @@ export function QuestionPreview(props: {
       <Match when={props.type === 'date'}>
         <FauxField>Month, day, year</FauxField>
       </Match>
+      <Match when={props.type === 'date-range'}>
+        <FauxField>Start date – end date</FauxField>
+      </Match>
       <Match when={props.type === 'url'}>
         <FauxField>https://</FauxField>
       </Match>

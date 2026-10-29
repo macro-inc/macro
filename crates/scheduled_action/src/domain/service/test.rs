@@ -209,6 +209,10 @@ pub(crate) fn stored_owner(service: &TestService, id: Uuid) -> Option<Owner> {
         .map(|action| action.owner.clone())
 }
 
+pub(crate) fn stored_actions(service: &TestService) -> Vec<ScheduledAction> {
+    service.repo.actions.lock().unwrap().clone()
+}
+
 /// The same store behind a dispatcher that has stopped.
 pub(crate) fn with_stopped_dispatcher(service: &TestService) -> Arc<TestService> {
     let (tx, _) = tokio::sync::mpsc::channel(1);
@@ -931,6 +935,7 @@ fn claim_expiry_instant_still_blocks_replacement() {
         next_run_at: None,
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     };
     let expires_at = action
         .claim_expires_at()
@@ -1000,6 +1005,7 @@ fn seeded(
         next_run_at: None,
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     }
 }
 

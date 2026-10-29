@@ -741,3 +741,19 @@ async fn native_outlook_attachment_identity_survives_metadata_collisions_and_emp
         }
     }
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn message_claims_take_due_live_changes_before_imports_and_skip_backed_off_rows(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    sqlx::query!(r#"
+        INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import,available_at) VALUES
+            ($1,1,'live-later',false,now() + interval '1 hour'),
+            ($1,1,'import-due',true,now() - interval '2 minutes'),
+            ($1,1,'live-due',false,now() - interval '1 minute')
+    "#,link).execute(&db).await.unwrap();
+    let mut claimed = Vec::new();
+    while let Some(work) = repo.claim_message(Uuid::new_v4()).await.unwrap() {
+        claimed.push(work.provider_id.as_str().to_owned());
+    }
+    assert_eq!(claimed, ["live-due", "import-due"]);
+}

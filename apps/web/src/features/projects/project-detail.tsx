@@ -4,6 +4,7 @@ import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
 } from '@app/features/next-soup/actions';
+import type { ComposeTaskProps } from '@app/features/task-composer/core/types';
 import { useNavigate } from '@app/lib/split-router';
 import {
   projectDetailRoute,
@@ -11,7 +12,6 @@ import {
   tasksSplitRoute,
 } from '@app/routes/routes';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import type { ComposeTaskProps } from '@block-md/component/ComposeTask';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   useSplitDisplayName,
@@ -42,7 +42,7 @@ import {
   type ProjectDetail as ProjectDetailData,
   type ProjectSection,
 } from './core/project';
-import { type ProjectRoute, projectRouteId } from './core/route';
+import type { ProjectRoute } from './core/route';
 import { openProject } from './open-project';
 import { ProjectDiscussion } from './project-collaboration';
 import { ProjectDescription } from './project-description';
@@ -168,10 +168,7 @@ function ProjectTitleMenu(props: {
         }
         onCopyLink={(row) =>
           fireAndForget(
-            copyLink.executeByBlock(
-              projectRouteId({ id: row.project.id, section: 'overview' }),
-              'component'
-            ),
+            copyLink.executeByBlock(row.project.id, 'initiative'),
             'projects'
           )
         }
@@ -351,6 +348,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
                   longer have access.
                 </p>
                 <Button
+                  variant="ghost"
                   onClick={() => fireAndForget(source.refresh(), 'projects')}
                 >
                   Try again

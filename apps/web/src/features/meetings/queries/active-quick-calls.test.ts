@@ -72,6 +72,7 @@ it('retains live calls on a failed background refresh and clears its error after
   await vi.waitFor(() => expect(source.calls()).toHaveLength(1));
   expect(source.calls()[0]).toEqual({
     id: meeting.id,
+    callId: meeting.callId,
     createdBy: meeting.createdBy,
     title: meeting.title,
     url: `${window.location.origin}/app/meet/join/${meeting.shareToken}`,

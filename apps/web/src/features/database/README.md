@@ -2,8 +2,8 @@
 
 `DatabaseProvider` owns one editor controller. A host supplies `DatabaseApi` with a
 stable cache key, schema reads, paginated row reads, and atomic operation batches.
-`DatabaseRecords` supplies the standard column controls, grid, board and record
-panel. The host supplies presentation slots and navigation when needed.
+`DatabaseRecords` supplies the standard column controls, grid, board, timeline and
+record panel. The host supplies presentation slots and navigation when needed.
 
 ```tsx
 const [view, setView] = createSignal<DatabaseViewState>({

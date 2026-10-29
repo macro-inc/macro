@@ -626,11 +626,15 @@ export function createReplyComposer(
     operation: 'save' | 'delete'
   ) {
     props.notices.reportError(error);
+    const failureMessage =
+      operation === 'save' && props.drafts.saveLocalDraft
+        ? 'Draft could not be synced'
+        : `Failed to ${operation} draft`;
     if (!session.serverConfirmed()) {
       // A best-effort pre-send save may fail while delivery still succeeds.
       // Background saves and explicit draft actions report their own failure.
       if (schedule?.pending() || !submitting()) {
-        props.notices.feedback.failure(`Failed to ${operation} draft`);
+        props.notices.feedback.failure(failureMessage);
       }
       return;
     }
@@ -651,7 +655,7 @@ export function createReplyComposer(
       );
       return;
     }
-    props.notices.feedback.failure(`Failed to ${operation} draft`);
+    props.notices.feedback.failure(failureMessage);
   }
 
   // Reset notifications must not autosave the draft that was just discarded.
@@ -669,7 +673,6 @@ export function createReplyComposer(
   };
   function handleAlreadySent() {
     identityVersion += 1;
-    props.notices.feedback.alert('This reply was already sent');
     fireAndForget(
       withDeletionGuard(() => {
         resetState();
@@ -842,6 +845,7 @@ export function createReplyComposer(
     draftGeneration,
     onTransferred: () => setDraftGeneration(0),
     session,
+    persistence,
     drafts: props.drafts,
     attachments: form.attachments,
     save: () => executeSaveDraft(),
@@ -1451,17 +1455,12 @@ export function createReplyComposer(
       const draftId = savedDraftId();
       if (draftId) {
         try {
-          await deleteDraftForDiscard(
-            props.drafts,
-            {
-              draftId,
-              draftGeneration: draftGeneration(),
-              threadId: savedDraftThreadId(),
-              inboxId: activeInboxId(),
-            },
-            props.notices,
-            'This reply was already sent'
-          );
+          await deleteDraftForDiscard(props.drafts, {
+            draftId,
+            draftGeneration: draftGeneration(),
+            threadId: savedDraftThreadId(),
+            inboxId: activeInboxId(),
+          });
         } catch (error) {
           await reportPersistenceFailure(error, 'delete');
           setPendingDeletion(false);
@@ -1665,7 +1664,6 @@ export function createReplyComposer(
         if (state.type === 'sent') {
           if (wasScheduled)
             props.notices.feedback.success('Scheduled email sent');
-          else props.notices.feedback.alert('This email was already sent');
         } else {
           props.notices.feedback.alert('This draft is no longer available.');
         }

@@ -41,6 +41,8 @@ export type ChannelRailItemProps = {
   selected: boolean;
   focused: boolean;
   onActivate: (event: MouseEvent) => void;
+  /** The press before activation, for warming what the row opens. */
+  onPress?: (event: PointerEvent) => void;
 };
 
 /**
@@ -144,12 +146,12 @@ export function IncomingCallActions(props: {
           )}
         >
           <Button
+            aria-label="Decline incoming call"
+            tooltip={{ content: 'Decline incoming call', disabled: isWide() }}
             variant="danger"
             size={isWide() ? 'sm' : 'icon-xs'}
             fullWidth={isWide()}
             class={cn(isWide() && 'h-7 flex-1')}
-            label="Decline incoming call"
-            tooltipDisabled={isWide()}
             onPointerDown={(event) => event.stopPropagation()}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => {
@@ -162,12 +164,12 @@ export function IncomingCallActions(props: {
             <Show when={isWide()}>Decline</Show>
           </Button>
           <Button
+            aria-label="Accept incoming call"
+            tooltip={{ content: 'Accept incoming call', disabled: isWide() }}
             variant="success"
             size={isWide() ? 'sm' : 'icon-xs'}
             fullWidth={isWide()}
             class={cn(isWide() && 'h-7 flex-1')}
-            label="Accept incoming call"
-            tooltipDisabled={isWide()}
             onPointerDown={(event) => event.stopPropagation()}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => {
@@ -286,6 +288,7 @@ export function ConversationCard(props: ConversationCardProps) {
         props.class
       )}
       aria-current={props.selected ? 'page' : undefined}
+      onPointerDown={(event) => props.onPress?.(event)}
       onMouseDown={(event) => {
         if (isPrimaryMouseDown(event)) props.onActivate(event);
       }}

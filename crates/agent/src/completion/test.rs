@@ -148,6 +148,33 @@ fn image_user_message_rejects_bytes_that_are_not_an_image() {
 }
 
 #[tokio::test]
+async fn one_shot_history_preserves_provider_parameters_and_traces_the_response() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let telemetry = GenAiContext::new(None, "extract".to_owned(), ContentPolicy::enabled(), true);
+    let mock = MockCompletionModel::new([MockTurn::text(r#"{"body":"hello"}"#)]);
+    let model = TracedModel::new(mock.clone(), telemetry.clone());
+    let params = serde_json::json!({
+        "reasoning_effort": "none",
+        "response_format": {"type": "json_schema", "json_schema": {
+            "name": "Draft", "schema": {"type": "object"}
+        }}
+    });
+    let response = prompt_with_history(
+        model,
+        "extract JSON",
+        vec![Message::user("hello")],
+        telemetry,
+        Some(params.clone()),
+    )
+    .await
+    .expect("completion succeeds");
+    assert_eq!(response.output, r#"{"body":"hello"}"#);
+    assert_eq!(mock.requests()[0].additional_params, Some(params));
+    assert_eq!(mock.requests()[0].max_tokens, Some(ONE_SHOT_MAX_TOKENS));
+    assert_eq!(chat_spans(&finished(&exporter, &provider)).len(), 1);
+}
+
+#[tokio::test]
 async fn activated_one_shots_fail_before_routing_without_financial_capability() {
     use ai_usage::financial::{FinancialCapability, FinancialMode};
     use ai_usage::{AiFeature, NoOpUsageRecorder};
@@ -175,6 +202,17 @@ async fn activated_one_shots_fail_before_routing_without_financial_capability() 
                 "unknown/model",
                 "system",
                 vec![Message::user("hello")],
+                &NoOpUsageRecorder,
+                usage.clone(),
+            )
+            .await
+            .unwrap_err();
+            assert_eq!(error.to_string(), "financial capability unavailable");
+            let error = complete_with_history_and_params(
+                "unknown/model",
+                "system",
+                vec![Message::user("hello")],
+                Some(serde_json::json!({"reasoning_effort": "none"})),
                 &NoOpUsageRecorder,
                 usage,
             )

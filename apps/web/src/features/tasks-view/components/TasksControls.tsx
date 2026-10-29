@@ -10,7 +10,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import GanttIcon from '@icon/system/regular/chart-gantt.svg';
 import BoardIcon from '@icon/system/regular/kanban.svg';
 import ListIcon from '@icon/system/regular/list-bullets.svg';
-import { Button } from '@ui';
+import { ButtonGroup } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createSignal, Show } from 'solid-js';
 import { TASK_GROUP_OPTIONS, TASK_SORT_OPTIONS } from '../constants';
@@ -83,9 +83,11 @@ function DesktopTasksControls() {
 
   return (
     <>
-      <HeaderActionGroup label="Task filters">
+      <HeaderActionGroup label="Task filters" size="md">
         <div class="shrink-0" ref={tourTarget(TASKS_TOUR.filter)}>
           <ListFilterDropdown
+            grouped
+            size={filters.activeCount() ? 'md' : 'icon-md'}
             label="Filter tasks"
             activeCount={filters.activeCount()}
             groups={filters.groups()}
@@ -103,38 +105,41 @@ function DesktopTasksControls() {
           />
         </div>
       </HeaderActionGroup>
-      <HeaderActionGroup label="Task layout">
-        <Button
+      <HeaderActionGroup label="Task layout" size="md">
+        <ButtonGroup.Button
+          aria-label="List"
+          tooltip="List"
           variant="ghost"
           size="icon-md"
-          label="List"
           aria-pressed={state.layout === 'list'}
           onClick={() => setState('layout', 'list')}
         >
           <ListIcon class="size-4" />
-        </Button>
-        <Button
+        </ButtonGroup.Button>
+        <ButtonGroup.Button
+          aria-label="Board"
+          tooltip="Board"
           variant="ghost"
           size="icon-md"
-          label="Board"
           aria-pressed={state.layout === 'board'}
           onClick={() => setState('layout', 'board')}
         >
           <BoardIcon class="size-4" />
-        </Button>
+        </ButtonGroup.Button>
         <Show when={ganttEnabled()}>
-          <Button
+          <ButtonGroup.Button
+            aria-label="Gantt"
+            tooltip="Gantt"
             variant="ghost"
             size="icon-md"
-            label="Gantt"
             aria-pressed={state.layout === 'gantt'}
             onClick={() => setState('layout', 'gantt')}
           >
             <GanttIcon class="size-4" />
-          </Button>
+          </ButtonGroup.Button>
         </Show>
       </HeaderActionGroup>
-      <HeaderActionGroup label="Task view options">
+      <HeaderActionGroup label="Task view options" size="md">
         <Show
           when={!isBoardSearch()}
           fallback={
@@ -147,6 +152,8 @@ function DesktopTasksControls() {
           }
         >
           <ListSortDropdown
+            grouped
+            size="icon-md"
             label="Sort tasks"
             value={primarySort()}
             options={TASK_SORT_OPTIONS}
@@ -157,6 +164,8 @@ function DesktopTasksControls() {
           />
         </Show>
         <ListGroupDropdown
+          grouped
+          size="icon-md"
           label="Group by"
           value={state.groupBy}
           options={groupOptions()}

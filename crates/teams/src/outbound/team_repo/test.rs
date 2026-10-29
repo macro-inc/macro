@@ -1435,6 +1435,7 @@ async fn test_patch_team_normalizes_slug_to_screaming_snake_case(
         slug: Some("my-team  slug".to_string()),
         user_role_updates: None,
         default_link_share: None,
+        language: None,
     };
 
     team_repo.patch_team(&team_id, &req).await?;
@@ -1464,6 +1465,7 @@ async fn test_patch_team_rejects_invalid_slug_without_updating_name(
         slug: Some("bad.slug".to_string()),
         user_role_updates: None,
         default_link_share: None,
+        language: None,
     };
 
     let err = team_repo.patch_team(&team_id, &req).await.err().unwrap();
@@ -1492,6 +1494,7 @@ async fn test_patch_team_rejects_too_long_slug(pool: Pool<Postgres>) -> anyhow::
         slug: Some("THIS_SLUG_IS_WAY_TOO_LONG".to_string()),
         user_role_updates: None,
         default_link_share: None,
+        language: None,
     };
 
     let err = team_repo.patch_team(&team_id, &req).await.err().unwrap();
@@ -1519,6 +1522,7 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
         slug: None,
         user_role_updates: None,
         default_link_share: Some(Some(LinkShare::Public)),
+        language: None,
     };
     team_repo.patch_team(&team_id, &req).await?;
     let team = team_repo.get_team_by_id(&team_id).await?;
@@ -1530,6 +1534,7 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
         slug: None,
         user_role_updates: None,
         default_link_share: None,
+        language: None,
     };
     team_repo.patch_team(&team_id, &req).await?;
     let team = team_repo.get_team_by_id(&team_id).await?;
@@ -1541,6 +1546,7 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
         slug: None,
         user_role_updates: None,
         default_link_share: Some(None),
+        language: None,
     };
     team_repo.patch_team(&team_id, &req).await?;
     let team = team_repo.get_team_by_id(&team_id).await?;

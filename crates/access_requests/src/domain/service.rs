@@ -52,7 +52,7 @@ fn team_reviewers(facts: &SharingFacts) -> Vec<MacroUserIdStr<'static>> {
 pub fn supported_levels(kind: ShareEntityType, file_type: Option<&str>) -> Vec<AccessLevel> {
     use AccessLevel::{Comment, Edit, View};
     match kind {
-        ShareEntityType::WhatsAppGroup | ShareEntityType::EmailThread => vec![View],
+        ShareEntityType::ExternalChat | ShareEntityType::EmailThread => vec![View],
         ShareEntityType::Document => match file_type {
             Some("md" | "docx" | "spreadsheet" | "pptx") => vec![View, Comment, Edit],
             _ => vec![View, Comment],
@@ -122,6 +122,16 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
     ) -> Result<(R::Transaction, Option<AccessLevel>), RequestError> {
         let level = self.level(user, entity).await?;
         let tx = self.repository.begin(entity).await?;
+        // Document, chat, and folder reads grant their recorded owner Owner before
+        // consulting grants, so request state must agree even when the owner's
+        // grant row says less.
+        let level = match (&tx.facts().owner, entity.entity_type) {
+            (
+                Owner::User(owner),
+                ShareEntityType::Document | ShareEntityType::Chat | ShareEntityType::Project,
+            ) if owner == user => Some(AccessLevel::Owner),
+            _ => level,
+        };
         Ok((tx, level))
     }
     fn require_reviewer(

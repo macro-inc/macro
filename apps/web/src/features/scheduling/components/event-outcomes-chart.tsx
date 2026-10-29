@@ -1,6 +1,6 @@
 import HashIcon from '@icon/system/regular/hash.svg';
 import PercentIcon from '@icon/system/regular/percent.svg';
-import { Button, ButtonGroup } from '@ui';
+import { ButtonGroup } from '@ui';
 import { arc, type PieArcDatum, pie } from 'd3-shape';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import type {
@@ -92,25 +92,27 @@ export function EventOutcomesChart(props: { rows: InsightOutcomeRow[] }) {
       </div>
       <div class="min-w-0 w-full flex-1">
         <div class="mb-4 flex justify-end">
-          <ButtonGroup>
-            <Button
+          <ButtonGroup finish="raised" variant="secondary">
+            <ButtonGroup.Button
+              aria-label="Show counts"
+              tooltip="Show counts"
               type="button"
               size="icon-md"
-              label="Show counts"
               aria-pressed={display() === 'count'}
               onClick={() => setDisplay('count')}
             >
               <HashIcon class="size-4" />
-            </Button>
-            <Button
+            </ButtonGroup.Button>
+            <ButtonGroup.Button
+              aria-label="Show percentages"
+              tooltip="Show percentages"
               type="button"
               size="icon-md"
-              label="Show percentages"
               aria-pressed={display() === 'percent'}
               onClick={() => setDisplay('percent')}
             >
               <PercentIcon class="size-4" />
-            </Button>
+            </ButtonGroup.Button>
           </ButtonGroup>
         </div>
         <ul

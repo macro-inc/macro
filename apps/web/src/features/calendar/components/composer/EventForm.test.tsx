@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { type ComponentProps, createMemo } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -250,29 +250,24 @@ it('returns guest permissions to the stored ones when an edit targets one occurr
 it('moves the end with the start until the end is picked', async () => {
   const user = userEvent.setup();
   showForm();
-  const start = screen.getByRole('button', {
-    name: 'Edit event start date and time',
-  });
-  const end = screen.getByRole('button', {
-    name: 'Edit event end date and time',
-  });
-  const pickTime = async (
-    trigger: HTMLElement,
-    label: string,
-    value: string
-  ) => {
-    await user.click(trigger);
-    fireEvent.input(screen.getByLabelText(label), { target: { value } });
-    await user.keyboard('{Escape}');
+  const start = () =>
+    screen.getByRole<HTMLInputElement>('combobox', {
+      name: 'event start time',
+    });
+  const end = () =>
+    screen.getByRole<HTMLInputElement>('combobox', { name: 'event end time' });
+  const typeTime = async (field: HTMLElement, time: string) => {
+    await user.click(field);
+    await user.keyboard(`${time}{Enter}`);
   };
 
-  await pickTime(start, 'Start time', '14:00');
-  expect(start.textContent).toContain('2:00');
-  expect(end.textContent).toContain('3:00');
+  await typeTime(start(), '14:00');
+  expect(start().value).toBe('2:00 PM');
+  expect(end().value).toBe('3:00 PM');
 
-  await pickTime(end, 'End time', '17:00');
-  await pickTime(start, 'Start time', '15:00');
-  expect(end.textContent).toContain('5:00');
+  await typeTime(end(), '17:00');
+  await typeTime(start(), '15:00');
+  expect(end().value).toBe('5:00 PM');
   expect(
     screen.queryByText('End time must be after the start time.')
   ).toBeNull();

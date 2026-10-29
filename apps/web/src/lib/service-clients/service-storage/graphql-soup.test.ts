@@ -20,6 +20,7 @@ it.each(['view', 'comment', 'edit'] as const)(
       id: 'access-notification',
       entityId: 'document',
       entityType: 'DOCUMENT' as const,
+      targetEntityType: 'DOCUMENT' as const,
       state: 'UNSEEN' as const,
       sent: true,
       senderId: 'owner',
@@ -179,6 +180,7 @@ it('preserves the scheduled occurrence identity on reminder notifications', asyn
     id: 'notification-1',
     entityId: 'thread-1',
     entityType: 'EMAIL_THREAD',
+    targetEntityType: 'EMAIL_THREAD',
     eventType: 'reminder',
     state: 'UNSEEN',
     sent: true,
@@ -468,7 +470,11 @@ vi.mock('./graphql/generated/graphql', () => ({
   GroupSoupDocument: {},
   SoupDocument: {},
 }));
+vi.mock('./graphql-notification-receipt', () => ({
+  notificationReceiptExchange: () => ({ kind: 'notification-receipt' }),
+}));
 vi.mock('./graphql-soup-websocket', () => ({
+  publishNotificationPatch: vi.fn(),
   SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS: 0,
   shouldRetryGraphqlSoupWebSocket: () => false,
   waitToRetryGraphqlSoupWebSocket: vi.fn(),
@@ -484,9 +490,21 @@ vi.mock('@urql/core', () => ({
   createClient: (options: {
     exchanges: Array<{ kind?: string; host?: typeof mocks.host }>;
   }) => {
-    const cacheExchange = options.exchanges.find(
+    const cacheIndex = options.exchanges.findIndex(
       ({ kind }) => kind === 'cache'
     );
+    const subscriptionIndex = options.exchanges.findIndex(
+      ({ kind }) => kind === 'subscription'
+    );
+    if (subscriptionIndex >= 0) {
+      const receiptIndex = options.exchanges.findIndex(
+        ({ kind }) => kind === 'notification-receipt'
+      );
+      expect(receiptIndex).toBeGreaterThanOrEqual(0);
+      expect(receiptIndex).toBeLessThan(subscriptionIndex);
+      if (cacheIndex >= 0) expect(receiptIndex).toBeGreaterThan(cacheIndex);
+    }
+    const cacheExchange = options.exchanges[cacheIndex];
     if (!cacheExchange?.host) {
       return options.exchanges.some(({ kind }) => kind === 'subscription')
         ? mocks.realtimeClient
@@ -554,6 +572,7 @@ describe('legacy channel list notifications', () => {
     eventType: 'channel_message_send',
     entityId: 'channel',
     entityType: 'CHANNEL',
+    targetEntityType: 'CHANNEL',
     state: 'UNSEEN',
     sent: true,
     senderId: 'sender',
@@ -1488,14 +1507,15 @@ describe('GraphQL Soup browser cache session gate', () => {
   });
 });
 
-it('preserves canonical WhatsApp group identity and notification metadata through GraphQL', async () => {
+it('preserves canonical external chat identity and notification metadata through GraphQL', async () => {
   const { mapGraphqlNotification } = await import('./graphql-soup');
   const mapped = mapGraphqlNotification({
     __typename: 'GraphqlNotification',
     id: 'notification',
-    eventType: 'whatsapp_group_message',
-    entityId: 'group-1',
-    entityType: 'WHATSAPP_GROUP',
+    eventType: 'external_chat_message',
+    entityId: 'chat-1',
+    entityType: 'DOCUMENT',
+    targetEntityType: 'EXTERNAL_CHAT',
     state: 'UNSEEN',
     sent: true,
     senderId: null,
@@ -1503,17 +1523,22 @@ it('preserves canonical WhatsApp group identity and notification metadata throug
     updatedAt: '2026-10-21T10:00:00Z',
     viewedAt: null,
     metadata: {
-      __typename: 'GraphqlWhatsappGroupMessageMetadata',
-      whatsappGroupName: 'Design Crit',
-      whatsappMessageId: 'message-1',
+      __typename: 'GraphqlExternalChatMessageMetadata',
+      externalChatProvider: 'whatsapp',
+      externalChatName: 'Design Crit',
+      externalChatMessageId: 'message-1',
     },
   });
   expect(mapped).toMatchObject({
-    entity_type: 'whatsapp_group',
-    entity_id: 'group-1',
+    entity_type: 'external_chat',
+    entity_id: 'chat-1',
     notification_metadata: {
-      tag: 'whatsapp_group_message',
-      content: { groupName: 'Design Crit', messageId: 'message-1' },
+      tag: 'external_chat_message',
+      content: {
+        provider: 'whatsapp',
+        chatName: 'Design Crit',
+        messageId: 'message-1',
+      },
     },
   });
 });

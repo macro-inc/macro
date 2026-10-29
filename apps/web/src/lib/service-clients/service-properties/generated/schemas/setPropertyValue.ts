@@ -14,6 +14,7 @@ import type { SetPropertyValueOneOfOneseven } from './setPropertyValueOneOfOnese
 import type { SetPropertyValueOneOfOnethree } from './setPropertyValueOneOfOnethree';
 import type { SetPropertyValueOneOfSeven } from './setPropertyValueOneOfSeven';
 import type { SetPropertyValueOneOfThree } from './setPropertyValueOneOfThree';
+import type { SetPropertyValueOneOfTwoone } from './setPropertyValueOneOfTwoone';
 
 /**
  * Type-safe enum for setting entity property values - provides compile-time validation.
@@ -28,4 +29,5 @@ export type SetPropertyValue =
   | SetPropertyValueOneOfOnethree
   | SetPropertyValueOneOfOnefive
   | SetPropertyValueOneOfOneseven
-  | SetPropertyValueOneOfOnenine;
+  | SetPropertyValueOneOfOnenine
+  | SetPropertyValueOneOfTwoone;

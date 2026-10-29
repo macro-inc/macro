@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { accountStatus, phoneFromJid } from './account';
-import { groupInitials } from './group';
-import { formatCountdown, pairingStep, secondsLeft } from './pairing';
+import { pairingStep, secondsLeft } from './pairing';
 
 describe('pairingStep', () => {
   it('shows the QR only once the server has one', () => {
@@ -45,8 +44,6 @@ describe('countdown', () => {
     expect(secondsLeft(deadline, Date.parse('2026-10-20T12:01:00.000Z'))).toBe(
       0
     );
-    expect(formatCountdown(52)).toBe('0:52');
-    expect(formatCountdown(125)).toBe('2:05');
   });
 });
 
@@ -68,12 +65,5 @@ describe('account', () => {
     expect(
       accountStatus({ generation: 2, phone: undefined, health: 'pairing' })
     ).toEqual({ kind: 'not-connected', reconnect: false });
-  });
-});
-
-describe('group', () => {
-  it('uses at most two letter initials', () => {
-    expect(groupInitials('Launch War Room')).toBe('LW');
-    expect(groupInitials('🎉 Design Crit')).toBe('DC');
   });
 });

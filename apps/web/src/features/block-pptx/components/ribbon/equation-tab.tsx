@@ -167,7 +167,7 @@ export function EquationTab(props: {
           )}
         </RibbonPopover>
         <RibbonTextButton
-          label="Linear format"
+          aria-label="Linear format"
           tooltip="Edit the equation as linear (LaTeX) text"
           data-testid="pptx-equation-linear"
           disabled={props.readonly}
@@ -177,7 +177,7 @@ export function EquationTab(props: {
           Linear
         </RibbonTextButton>
         <RibbonTextButton
-          label="Display"
+          aria-label="Display"
           tooltip="Put the equation on its own line (display) or inline"
           aria-pressed={eq.display()}
           class={eq.display() ? 'bg-accent-bg text-accent' : undefined}

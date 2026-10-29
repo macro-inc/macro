@@ -46,6 +46,7 @@ import { localDraftQueueLifecycle } from '@queries/email/local-drafts';
 import { getMacroApiToken } from '@service-auth/fetch';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { ChannelType } from '@service-notification/generated/schemas/channelType';
+import type { ExternalChatProvider } from '@service-notification/generated/schemas/externalChatProvider';
 import type { GithubPrCheckRunState } from '@service-notification/generated/schemas/githubPrCheckRunState';
 import type { GithubPrCommentKind } from '@service-notification/generated/schemas/githubPrCommentKind';
 import type { GithubPrEventAction } from '@service-notification/generated/schemas/githubPrEventAction';
@@ -77,11 +78,12 @@ import {
   type Client as GraphqlWsClient,
 } from 'graphql-ws';
 import { batch, createSignal, untrack } from 'solid-js';
-import { match, P } from 'ts-pattern';
+import { match } from 'ts-pattern';
 import { delegateChannelNotificationRefresh } from '../../queries/channel/notification-refresh';
 import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
 import { createCacheRecovery } from './cache-recovery';
 import { emailCacheDeletionKeys } from './email-cache-deletions';
+import { emailThreadSortTs } from './email-thread-sort';
 import type { SoupApiItem } from './generated/schemas/soupApiItem';
 import type { SoupCalendarEventSoupPropertiesField } from './generated/schemas/soupCalendarEventSoupPropertiesField';
 import type { SoupCalendarEventTime } from './generated/schemas/soupCalendarEventTime';
@@ -105,13 +107,17 @@ import {
   type SoupQuery,
 } from './graphql/generated/graphql';
 import { shouldRetryGraphqlMutation } from './graphql-mutation-retry';
+import { notificationReceiptExchange } from './graphql-notification-receipt';
 import {
   createGraphqlSoupSubscriptionsLifecycle,
   createGraphqlSoupWebSocketUrlResolver,
+  publishNotificationPatch,
   SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
   shouldRetryGraphqlSoupWebSocket,
   waitToRetryGraphqlSoupWebSocket,
 } from './graphql-soup-websocket';
+
+export { emailThreadSortTs } from './email-thread-sort';
 
 const dssHost = SERVER_HOSTS['document-storage-service'];
 const QUEUE_CLEAR_INSPECTION_TIMEOUT_MS = 1000;
@@ -476,6 +482,7 @@ function getUncachedRealtimeClient(): Client {
     preferGetMethod: false,
     exchanges: [
       networkRevalidationExchange(),
+      notificationReceiptExchange(publishNotificationPatch),
       graphqlSoupSubscriptionExchange(websocketClient),
       fetchExchange,
     ],
@@ -645,6 +652,10 @@ export function getGraphqlCacheHost(): CacheHost | undefined {
   return cachedCacheHost?.disabled ? undefined : cachedCacheHost;
 }
 
+/** Cache writes reach readers of the normalized cache only while it runs. */
+export const hasGraphqlCacheHost = (): boolean =>
+  graphqlCacheEnabled() && getGraphqlCacheHost() !== undefined;
+
 /**
  * Resolves the urql client, lazily assembling the cached client on first
  * use. The cache scope is an anonymous client uuid — no identity lookup is
@@ -812,6 +823,7 @@ export function getGraphqlSoupClient(): Client {
             mutationQueueTelemetry,
             delegateRevalidation: delegateChannelNotificationRefresh,
           }),
+          notificationReceiptExchange(publishNotificationPatch),
           graphqlSoupSubscriptionExchange(graphqlWsClient),
           fetchExchange,
         ],
@@ -909,6 +921,13 @@ function mapGraphqlPropertyValue(
       type: 'Date' as const,
       value: dateValue,
     }))
+    .with(
+      { __typename: 'GraphqlDateRangePropertyValue' },
+      ({ rangeStart, rangeEnd }) => ({
+        type: 'DateRange' as const,
+        value: { start: rangeStart, end: rangeEnd },
+      })
+    )
     .with(
       { __typename: 'GraphqlSelectOptionPropertyValue' },
       ({ optionIds }) => ({
@@ -1054,15 +1073,17 @@ function mapGraphqlNotificationMetadata(
 ): NotifEvent {
   return match(metadata)
     .with(
-      { __typename: 'GraphqlWhatsappGroupMessageMetadata' },
+      { __typename: 'GraphqlExternalChatMessageMetadata' },
       (metadata) =>
         ({
-          tag: 'whatsapp_group_message',
+          tag: 'external_chat_message',
           content: {
-            groupName: metadata.whatsappGroupName,
-            messageId: metadata.whatsappMessageId,
+            // GraphQL types the provider as a string; DSS only writes known ones.
+            provider: metadata.externalChatProvider as ExternalChatProvider,
+            chatName: metadata.externalChatName,
+            messageId: metadata.externalChatMessageId,
           },
-        }) satisfies NotifEventMember<'whatsapp_group_message'>
+        }) satisfies NotifEventMember<'external_chat_message'>
     )
     .with(
       { __typename: 'GraphqlChannelMentionMetadata' },
@@ -1655,13 +1676,21 @@ function mapGraphqlNotificationMetadata(
           },
         }) satisfies NotifEventMember<'agent_session_mentioned'>
     )
-    .exhaustive(
-      () =>
-        ({
-          tag: 'reminder',
-          content: { description: '', reminderId: '' },
-        }) satisfies NotifEventMember<'reminder'>
-    );
+    .with(
+      { __typename: 'GraphqlWhatsappGroupMessageMetadata' },
+      unexpectedNotificationMetadata
+    )
+    .exhaustive(unexpectedNotificationMetadata);
+}
+
+/** Placeholder for metadata the server never returns: unknown members and the
+ * schema-only `GraphqlWhatsappGroupMessageMetadata` stub kept for released
+ * clients (remove that case with the stub after 2026-11-30). */
+function unexpectedNotificationMetadata(): NotifEventMember<'reminder'> {
+  return {
+    tag: 'reminder',
+    content: { description: '', reminderId: '' },
+  };
 }
 
 /**
@@ -1681,7 +1710,7 @@ export function mapGraphqlNotification(
     notification_metadata: mapGraphqlNotificationMetadata(record.metadata),
     entity_id: record.entityId,
     entity_type:
-      record.entityType.toLowerCase() as ApiUserNotification['entity_type'],
+      record.targetEntityType.toLowerCase() as ApiUserNotification['entity_type'],
     sent: record.sent,
     state: notificationStateFromGraphql(record.state),
     created_at: record.createdAt,
@@ -1695,42 +1724,6 @@ function mapGraphqlNotifications(
   notifications: GraphqlNotification[] | undefined
 ) {
   return notifications?.map(mapGraphqlNotification);
-}
-
-function latestTimestamp(
-  ...timestamps: (string | null | undefined)[]
-): string | undefined {
-  return timestamps.reduce<string | undefined>(
-    (latest, timestamp) =>
-      typeof timestamp === 'string' &&
-      (latest === undefined || Date.parse(timestamp) > Date.parse(latest))
-        ? timestamp
-        : latest,
-    undefined
-  );
-}
-
-/** The server's per-view sort key, recomputed from the thread's own facts so a
- * cache re-read never dates a row by the view that fetched the thread last.
- * Mirrors `get_sort_timestamp_field` in crates/email; INBOX is the server's
- * default view. */
-export function emailThreadSortTs(
-  thread: {
-    latestInboundMessageTs?: string | null;
-    reminderReturnedAt?: string | null;
-    latestOutboundMessageTs?: string | null;
-    latestNonSpamMessageTs?: string | null;
-    updatedAt: string;
-  },
-  emailView: GraphqlEmailView | null | undefined
-): string {
-  const key = match(emailView)
-    .with('SENT', () => thread.latestOutboundMessageTs)
-    .with('INBOX', P.nullish, () =>
-      latestTimestamp(thread.latestInboundMessageTs, thread.reminderReturnedAt)
-    )
-    .otherwise(() => thread.latestNonSpamMessageTs);
-  return key ?? thread.updatedAt;
 }
 
 /** An agent session's own row fields in the REST shape, without the

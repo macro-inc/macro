@@ -55,12 +55,13 @@ export function SourceControls(props: SourceControlsProps) {
             <li class="min-w-0">
               <div class="relative min-w-0">
                 <Checkbox
+                  size="sm"
                   checked={allVisible()}
                   indeterminate={someVisible()}
                   onChange={setGroupVisible}
                   class="flex h-(--sidebar-row-height) w-full min-w-0 gap-3 rounded-lg px-(--sidebar-item-inset) pr-9 text-sm text-ink-muted hover:bg-hover hover:text-ink touch:h-11"
                 >
-                  <Checkbox.Control class="size-3.5 [&_svg]:size-2.5" />
+                  <Checkbox.Control />
                   <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-2 font-medium">
                     <span
                       aria-hidden="true"
@@ -80,7 +81,7 @@ export function SourceControls(props: SourceControlsProps) {
                 </Checkbox>
                 <span class="absolute right-(--sidebar-action-inset) top-1/2 flex -translate-y-1/2">
                   <ViewSidebar.Control
-                    label={`${expanded() ? 'Collapse' : 'Expand'} ${group.emailAddress}`}
+                    aria-label={`${expanded() ? 'Collapse' : 'Expand'} ${group.emailAddress}`}
                     aria-expanded={expanded()}
                     onClick={() => toggleExpanded(group.key)}
                   >
@@ -96,13 +97,14 @@ export function SourceControls(props: SourceControlsProps) {
                   <For each={group.calendars}>
                     {(source) => (
                       <Checkbox
+                        size="sm"
                         checked={props.isVisible(source.id)}
                         onChange={(checked) =>
                           props.onVisibilityChange(source.id, checked)
                         }
                         class="flex h-(--sidebar-row-height) w-full min-w-0 gap-3 rounded-lg px-(--sidebar-item-inset) text-sm text-ink-muted hover:bg-hover hover:text-ink touch:h-11"
                       >
-                        <Checkbox.Control class="size-3.5 [&_svg]:size-2.5" />
+                        <Checkbox.Control />
                         <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-2">
                           <span
                             aria-hidden="true"

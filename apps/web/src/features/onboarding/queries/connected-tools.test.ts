@@ -12,7 +12,7 @@ describe('native onboarding connections', () => {
       'https://mcp.notion.com/mcp',
       'https://mcp.slack.com/mcp',
       'https://mcp.posthog.com/mcp',
-      'https://mcp.datadoghq.com/mcp',
+      'https://mcp.datadoghq.com/v1/mcp',
       'https://mcp.grafana.com/mcp',
     ].map((url) => ({
       url,

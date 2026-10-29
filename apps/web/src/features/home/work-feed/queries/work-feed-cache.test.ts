@@ -45,10 +45,12 @@ describe('placeWorkFeedPatches', () => {
     [at('p1-a', 50), at('p1-b', 40)],
     [at('p2-a', 30), at('p2-b', 20)],
   ];
+  // The last page's read stopped at its last row.
+  const more = { sortAt: '2026-02-01T10:20:00Z', entityId: 'p2-b' };
 
   it('removes an item from whichever page holds it', () => {
     expect(
-      ids(placeWorkFeedPatches(pages, [removedPatch('document:p2-a')], true))
+      ids(placeWorkFeedPatches(pages, [removedPatch('document:p2-a')], more))
     ).toEqual([['p1-a', 'p1-b'], ['p2-b']]);
   });
 
@@ -56,29 +58,48 @@ describe('placeWorkFeedPatches', () => {
     const placed = placeWorkFeedPatches(
       pages,
       [upsertedPatch(at('new', 45)), upsertedPatch(at('p2-b', 55))],
-      true
+      more
     );
     expect(ids(placed)).toEqual([['p2-b', 'p1-a', 'new', 'p1-b'], ['p2-a']]);
   });
 
   it('leaves an entry older than every loaded row to its page', () => {
     expect(
-      ids(placeWorkFeedPatches(pages, [upsertedPatch(at('old', 10))], true))
+      ids(placeWorkFeedPatches(pages, [upsertedPatch(at('old', 10))], more))
     ).toEqual([
       ['p1-a', 'p1-b'],
       ['p2-a', 'p2-b'],
     ]);
     expect(
-      ids(placeWorkFeedPatches(pages, [upsertedPatch(at('old', 10))], false))
+      ids(placeWorkFeedPatches(pages, [upsertedPatch(at('old', 10))], null))
     ).toEqual([
       ['p1-a', 'p1-b'],
       ['p2-a', 'p2-b', 'old'],
     ]);
   });
 
+  it('keeps an entry the last page read past its rows', () => {
+    // A filtered page read on to minute 5 after its last row at minute 20.
+    const readPast = { sortAt: '2026-02-01T10:05:00Z', entityId: 'skipped' };
+    expect(
+      ids(placeWorkFeedPatches(pages, [upsertedPatch(at('gap', 10))], readPast))
+    ).toEqual([
+      ['p1-a', 'p1-b'],
+      ['p2-a', 'p2-b', 'gap'],
+    ]);
+    expect(
+      ids(
+        placeWorkFeedPatches(pages, [upsertedPatch(at('later', 1))], readPast)
+      )
+    ).toEqual([
+      ['p1-a', 'p1-b'],
+      ['p2-a', 'p2-b'],
+    ]);
+  });
+
   it('drops an entry that moved below the loaded rows', () => {
     expect(
-      ids(placeWorkFeedPatches(pages, [upsertedPatch(at('p1-a', 10))], true))
+      ids(placeWorkFeedPatches(pages, [upsertedPatch(at('p1-a', 10))], more))
     ).toEqual([['p1-b'], ['p2-a', 'p2-b']]);
   });
 
@@ -87,7 +108,7 @@ describe('placeWorkFeedPatches', () => {
       placeWorkFeedPatches(
         pages,
         [upsertedPatch(at('new', 45)), invalidatedPatch()],
-        true
+        more
       )
     ).toBeUndefined();
   });
@@ -108,8 +129,7 @@ describe('writeWorkFeedPatches', () => {
     const placed = await writeWorkFeedPatches(
       fake.host,
       [firstPage, secondPage],
-      [upsertedPatch(at('new', 40))],
-      false
+      [upsertedPatch(at('new', 40))]
     );
 
     expect(placed).toBe(true);
@@ -121,14 +141,38 @@ describe('writeWorkFeedPatches', () => {
     );
   });
 
+  it('writes an entry the last cached page read past into it', async () => {
+    const fake = createFakeWorkFeedClient();
+    fake.client.executeQuery({ variables: firstPage } as never);
+    fake.queries[0].resolve(
+      workFeedPage([at('a', 50)], 'cursor-2', {
+        sortAt: '2026-02-01T10:05:00Z',
+        entityId: 'skipped',
+      })
+    );
+
+    expect(
+      await writeWorkFeedPatches(
+        fake.host,
+        [firstPage],
+        [upsertedPatch(at('gap', 20))]
+      )
+    ).toBe(true);
+    expect(fake.writes[0].data).toEqual(
+      workFeedPage([at('a', 50), at('gap', 20)], 'cursor-2', {
+        sortAt: '2026-02-01T10:05:00Z',
+        entityId: 'skipped',
+      })
+    );
+  });
+
   it('asks for a read when a page is not cached', async () => {
     const fake = createFakeWorkFeedClient();
     expect(
       await writeWorkFeedPatches(
         fake.host,
         [firstPage],
-        [upsertedPatch(at('new', 40))],
-        false
+        [upsertedPatch(at('new', 40))]
       )
     ).toBe(false);
     expect(fake.writes).toHaveLength(0);

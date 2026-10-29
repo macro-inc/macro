@@ -10,6 +10,7 @@ fn reply(seconds: i64) -> Message {
         parent: messages::domain::models::MessageParent::Channel(Uuid::nil()),
         thread_id: Some(Uuid::from_u128(1)),
         sender_id: "macro|reply@example.com".to_owned().try_into().unwrap(),
+        triggered_via: None,
         triggered_by: None,
         bot_profile: None,
         guest_name: None,

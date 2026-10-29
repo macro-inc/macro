@@ -9,9 +9,13 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import { type ChannelEntity, Entity } from '@entity';
+import ArrowBendUpLeftIcon from '@icon/system/regular/arrow-bend-up-left.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import ChatCircleTextIcon from '@icon/system/regular/chat-circle-text.svg';
 import ChatsCircleIcon from '@icon/system/regular/chats-circle.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import EyeSlashIcon from '@icon/system/regular/eye-slash.svg';
 import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import SortIcon from '@icon/system/regular/sort-ascending.svg';
 import XIcon from '@icon/system/regular/x.svg';
@@ -78,26 +82,30 @@ import {
   useChannelsRail,
 } from './ChannelsRailContext';
 import {
+  COLLAPSED_SECTION_HEIGHT,
   CollapsibleSection,
   CreateRailAction,
   RailListError,
   RailListLoading,
   RailListLoadingMore,
 } from './ChannelsRailSection';
+import { ChannelUnreadEmptyState } from './ChannelUnreadFilter';
 import {
+  CHANNEL_LIST_GROUPS,
   useChannelRailItemState,
   useChannelRailScopeState,
   useChannelRailSectionState,
   useChannelRailVirtualizer,
 } from './hooks/useChannelRailState';
 
+// Icons stand in for the labels when the rail is too narrow for them.
 const CHANNEL_TABS: TabOption<ChannelsTab>[] = [
-  { value: 'browse', label: 'All' },
-  { value: 'recents', label: 'Recent' },
+  { value: 'browse', label: 'All', icon: ChatCircleTextIcon },
+  { value: 'recents', label: 'Recent', icon: ClockIcon },
 ];
 const CHANNEL_TABS_WITH_THREADS: TabOption<ChannelsTab>[] = [
   ...CHANNEL_TABS,
-  { value: 'threads', label: 'Threads' },
+  { value: 'threads', label: 'Threads', icon: ArrowBendUpLeftIcon },
 ];
 
 type ChannelRailSearch = {
@@ -117,15 +125,25 @@ type GroupConfig = {
   group: ChannelsGroup;
   label: string;
   emptyLabel: string;
+  unreadEmptyLabel: string;
   createLabel: string;
   onCreate: () => void;
 };
 
 const GROUPS: GroupConfig[] = [
   {
+    group: 'team_channels',
+    label: 'Team channels',
+    emptyLabel: 'No team channels',
+    unreadEmptyLabel: 'No unread team channels',
+    createLabel: 'Create channel',
+    onCreate: openNewChannelModal,
+  },
+  {
     group: 'channels',
     label: 'Channels',
     emptyLabel: 'No channels',
+    unreadEmptyLabel: 'No unread channels',
     createLabel: 'Create channel',
     onCreate: openNewChannelModal,
   },
@@ -133,6 +151,7 @@ const GROUPS: GroupConfig[] = [
     group: 'direct_messages',
     label: 'DMs',
     emptyLabel: 'No direct messages',
+    unreadEmptyLabel: 'No unread direct messages',
     createLabel: 'Start direct message',
     onCreate: () => runCreateAction('channel'),
   },
@@ -160,10 +179,11 @@ function ChannelSortDropdown(props: {
   return (
     <Dropdown placement="bottom-end">
       <Dropdown.Trigger
+        aria-label={`Sort ${props.label.toLowerCase()}`}
+        tooltip={`Sort ${props.label.toLowerCase()}`}
         as={ViewSidebar.Control}
         variant="ghost"
         size="icon-sm"
-        label={`Sort ${props.label.toLowerCase()}`}
       >
         <SortIcon class="size-3.5" />
       </Dropdown.Trigger>
@@ -248,7 +268,7 @@ function ChannelOption(props: {
   rowId?: ChannelRailRow['id'];
   /** Nest under a label heading, with the branch rail. */
   labelId?: string;
-  /** Make a team-channel row draggable between labels (Channels section only). */
+  /** Make a team-channel row draggable between labels (Team channels section only). */
   draggable?: boolean;
 }) {
   const rail = useChannelsRail();
@@ -292,8 +312,9 @@ function ChannelOption(props: {
         dnd?.droppable.ref(element);
       }}
       {...(canLabelChannel(props.channel) ? dnd?.draggable.dragActivators : {})}
-      onPointerDown={() => {
+      onPointerDown={(event) => {
         didDrag = false;
+        rail.prefetchRow(rowId(), event);
       }}
       class={cn(
         'min-w-0',
@@ -423,16 +444,23 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
         <ViewSidebar.Toolbar class={!isTouchDevice() ? 'px-0' : undefined}>
           <Tabs
             aria-label="Chat sidebar views"
+            size="md"
             fullWidth={!isTouchDevice()}
             options={
               rail.threadsEnabled() ? CHANNEL_TABS_WITH_THREADS : CHANNEL_TABS
             }
             value={rail.tab()}
             onChange={selectTab}
+            toggle={{
+              label: 'Unread',
+              icon: EyeSlashIcon,
+              checked: rail.unreadOnly(),
+              onChange: rail.setUnreadOnly,
+            }}
           />
           <Show when={isTouchDevice()}>
             <ViewSidebar.Control
-              label={
+              aria-label={
                 props.search.isOpen() ? 'Close search' : 'Search conversations'
               }
               aria-pressed={props.search.isOpen()}
@@ -567,7 +595,7 @@ const channelRowOf = (row: ChannelSectionRow) =>
   row.kind === 'conversation' ? row : undefined;
 
 /**
- * The Channels section body: an optional "new label" draft, then one
+ * The Team channels section body: an optional "new label" draft, then one
  * virtualized list of label headings and channels. Dropping a dragged channel
  * on the list itself, outside any row, takes it out of its label.
  */
@@ -680,7 +708,11 @@ function ChannelHeadingDropTarget(props: { element: HTMLElement }) {
   return null;
 }
 
-function ExpandedGroupSection(props: { config: GroupConfig }) {
+function ExpandedGroupSection(props: {
+  config: GroupConfig;
+  /** The share of the column this section may claim while open. */
+  maxHeight: string;
+}) {
   // A conditional expression as `ref` is dropped by the Solid compiler, so
   // the target is chosen inside the callback.
   const createTarget = tourTarget(CHANNELS_TOUR.create);
@@ -691,6 +723,8 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
     () => props.config.group
   );
   const pagination = useChannelRailVirtualizer(() => props.config.group);
+  const emptyLabel = () =>
+    rail.unreadOnly() ? props.config.unreadEmptyLabel : props.config.emptyLabel;
   const registerScrollRef = (element: HTMLDivElement) => {
     setScrollRoot(element);
     rail.registerScrollRef(props.config.group, element);
@@ -699,14 +733,15 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
   return (
     <CollapsibleSection.Root
       open={section().open}
-      sizing={section().fillAvailable ? 'fill' : 'half'}
+      sizing={section().fillAvailable ? 'fill' : 'share'}
+      maxHeight={props.maxHeight}
     >
       <CollapsibleSection.Header
         focused={section().focused}
         focusWithin={section().containsFocus}
         class={cn(
           rail.channelTagsEnabled() &&
-            props.config.group === 'channels' &&
+            props.config.group === 'team_channels' &&
             rail.activeDropTarget()?.kind === 'unlabelled' &&
             'bg-selected ring-1 ring-inset ring-accent'
         )}
@@ -715,7 +750,7 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
         <Show
           when={
             rail.channelTagsEnabled() &&
-            props.config.group === 'channels' &&
+            props.config.group === 'team_channels' &&
             headerElement()
           }
           keyed
@@ -760,7 +795,7 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
             label={props.config.label}
           />
           <Show
-            when={props.config.group === 'channels'}
+            when={props.config.group === 'team_channels'}
             fallback={
               <CreateRailAction
                 label={props.config.createLabel}
@@ -806,7 +841,7 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
                 scrollRoot={scrollRoot()}
                 keepMounted={section().keepMounted}
                 onScroll={pagination.loadMoreNearEnd}
-                emptyLabel={props.config.emptyLabel}
+                emptyLabel={emptyLabel()}
               >
                 <Show when={section().source.isLoadingMore()}>
                   <RailListLoadingMore variant="channel" />
@@ -851,7 +886,7 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
           </Match>
           <Match when={true}>
             <div class="px-2 py-2 text-xs text-ink-extra-muted">
-              {props.config.emptyLabel}
+              {emptyLabel()}
             </div>
           </Match>
         </Switch>
@@ -865,19 +900,38 @@ function ExpandedBrowse() {
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
+  // Label headings and channels; the Unread filter leaves out labels without
+  // unread channels.
   const hasItems = () =>
-    rail.labels().length > 0 ||
+    rail.channelSectionRows().length > 0 ||
     rail.favorites().length > 0 ||
-    rail.sources.channels.items().length > 0 ||
-    rail.sources.direct_messages.items().length > 0;
+    CHANNEL_LIST_GROUPS.some((group) => rail.sources[group].items().length > 0);
   const sourcesSettled = () =>
-    !rail.sources.channels.isLoading() &&
-    !rail.sources.direct_messages.isLoading() &&
-    !rail.sources.channels.error() &&
-    !rail.sources.direct_messages.error();
+    CHANNEL_LIST_GROUPS.every(
+      (group) =>
+        !rail.sources[group].isLoading() && !rail.sources[group].error()
+    );
+  // Open sections share the column evenly; the collapsed headers and the gaps
+  // come off the top first.
+  const sectionMaxHeight = () => {
+    const total = GROUPS.length;
+    const open = GROUPS.filter(({ group }) => rail.isGroupOpen(group)).length;
+    if (open === 0) return '100%';
+    return `calc((100% - ${total - open} * ${COLLAPSED_SECTION_HEIGHT}px - ${total - 1} * var(--sidebar-section-gap)) / ${open})`;
+  };
 
   return (
     <Switch>
+      <Match
+        when={
+          !forceEmptyState() &&
+          rail.unreadOnly() &&
+          sourcesSettled() &&
+          !hasItems()
+        }
+      >
+        <ChannelUnreadEmptyState />
+      </Match>
       <Match when={forceEmptyState() || (sourcesSettled() && !hasItems())}>
         <ChannelsEmptyState scope="channels" topAligned />
       </Match>
@@ -885,11 +939,16 @@ function ExpandedBrowse() {
         <ViewSidebar.Content class="h-full overflow-hidden">
           <ChannelFavoritesSection />
           {/* The groups split the height left after favorites between them.
-              Their half-height caps resolve against this column, not the
-              whole sidebar, so favorites is never squeezed out. */}
+              Their caps resolve against this column, not the whole sidebar,
+              so favorites is never squeezed out. */}
           <div class="flex min-h-0 flex-1 flex-col gap-(--sidebar-section-gap)">
             <For each={GROUPS}>
-              {(config) => <ExpandedGroupSection config={config} />}
+              {(config) => (
+                <ExpandedGroupSection
+                  config={config}
+                  maxHeight={sectionMaxHeight()}
+                />
+              )}
             </For>
           </div>
         </ViewSidebar.Content>
@@ -927,12 +986,16 @@ function RecentConversationCard(props: { channel: ChannelEntity }) {
         onActivate={(event) =>
           rail.activateRow(rowKeyForChannel(props.channel.id), event)
         }
+        onPress={(event) =>
+          rail.prefetchRow(rowKeyForChannel(props.channel.id), event)
+        }
       />
     </ChannelRailItemContextMenu>
   );
 }
 
 function ExpandedRecents() {
+  const rail = useChannelsRail();
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
   createScrollTopFade(scrollRoot);
   const scope = useChannelRailScopeState(() => 'recents');
@@ -960,6 +1023,13 @@ function ExpandedRecents() {
         }
       >
         <RailListError retry={scope().source.refresh} />
+      </Match>
+      <Match
+        when={
+          !forceEmptyState() && rail.unreadOnly() && scope().items.length === 0
+        }
+      >
+        <ChannelUnreadEmptyState />
       </Match>
       <Match when={forceEmptyState() || scope().items.length === 0}>
         <ChannelsEmptyState scope="recents" topAligned />
@@ -1085,7 +1155,9 @@ function ExpandedThreads() {
             </Match>
             <Match when={true}>
               <div class="px-2 py-2 text-xs text-ink-extra-muted">
-                No conversations
+                {rail.unreadOnly()
+                  ? 'No unread conversations'
+                  : 'No conversations'}
               </div>
             </Match>
           </Switch>

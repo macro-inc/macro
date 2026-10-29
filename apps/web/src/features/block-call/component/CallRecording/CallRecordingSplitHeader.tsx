@@ -10,6 +10,7 @@ import {
   ResponsivePermissionsBadge,
 } from '@components/app/ResponsiveBlockToolbar';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
+import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
@@ -26,12 +27,16 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
+import { createFileDownload } from '@core/util/createFileDownload';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData } from '@entity';
 import IconShared from '@icon/share.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import type { CallRecord } from '@service-call/client';
-import { Button } from '@ui';
+import { ButtonGroup } from '@ui';
 import { Show } from 'solid-js';
+import { callRecordingDownloadSource } from '../../queries/recording-download';
 import { useCallAgain } from '../use-call-again';
 
 export function CallRecordingSplitHeaderLoading() {
@@ -68,6 +73,27 @@ export function CallRecordingSplitHeader(props: { record: CallRecord }) {
     () => record().callId,
     () => record().channelId
   );
+  const recordingDownload = createFileDownload(() =>
+    callRecordingDownloadSource(record(), callName())
+  );
+  const ops = (): FileOperation[] => [
+    { op: 'rename' },
+    ...(record().recordingUrl
+      ? [
+          {
+            group: 'file' as const,
+            label: 'Download',
+            icon: DownloadSimple,
+            action: () =>
+              fireAndForget(
+                recordingDownload.start(),
+                'call-recording-download'
+              ),
+          },
+        ]
+      : []),
+    { op: 'delete' },
+  ];
 
   const shareTool: BlockTool = {
     label: 'Share',
@@ -100,8 +126,9 @@ export function CallRecordingSplitHeader(props: { record: CallRecord }) {
           name: callName(),
           fileType: 'call',
         }),
-      buttonComponent: () => (
+      buttonComponent: (control) => (
         <ChatWithAgentButton
+          grouped={control.grouped}
           entity={{
             type: 'document',
             id: blockId,
@@ -152,16 +179,15 @@ export function CallRecordingSplitHeader(props: { record: CallRecord }) {
           <div class="order-[900] flex items-center">
             <HeaderActionGroup label="Call actions">
               <HeaderIsland>
-                <Button
-                  depth={2}
-                  variant="outline"
-                  size={isTouchDevice() ? 'icon-xs' : 'icon-md'}
+                <ButtonGroup.Button
+                  variant="secondary"
+                  size={isTouchDevice() ? 'icon-xs' : 'icon-sm'}
                   class={isTouchDevice() ? 'bg-surface' : undefined}
                   tooltip="Call Again"
                   onClick={callAgain}
                 >
                   <PhoneCallIcon class="size-4" />
-                </Button>
+                </ButtonGroup.Button>
               </HeaderIsland>
             </HeaderActionGroup>
           </div>
@@ -173,7 +199,7 @@ export function CallRecordingSplitHeader(props: { record: CallRecord }) {
       <ResponsiveBlockToolbar
         tools={tools}
         menuTools={menuTools}
-        ops={[{ op: 'copy' }]}
+        ops={ops()}
         id={blockId}
         itemType="call"
         name={callName()}

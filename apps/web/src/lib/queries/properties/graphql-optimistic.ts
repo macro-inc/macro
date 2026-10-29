@@ -5,6 +5,7 @@
  * property record referenced by soup query results.
  */
 
+import { timeRangeToInstants } from '@app/features/database/core/cell-date-range';
 import type {
   Property,
   PropertyApiValues,
@@ -54,6 +55,15 @@ export function apiValuesToGraphqlPropertyValue(
             dateValue: apiValues.value.toISOString(),
           }
         : null;
+    case 'DATE_RANGE': {
+      if (apiValues.value == null) return null;
+      const { start, end } = timeRangeToInstants(apiValues.value);
+      return {
+        __typename: 'GraphqlDateRangePropertyValue',
+        rangeStart: start,
+        rangeEnd: end,
+      };
+    }
     case 'SELECT_STRING':
     case 'SELECT_NUMBER':
       return apiValues.values != null && apiValues.values.length > 0

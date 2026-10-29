@@ -2,6 +2,26 @@
 
 ## Notifications
 
+Browser notifications must arrive while Macro is in a background tab, not just
+when it is visible. With browser permission and in-app delivery enabled, switch
+to an unrelated tab and trigger a notification from another session. Check that
+the alert arrives before returning to Macro and does not repeat on return. Try
+with one Macro tab and with several all hidden; only the elected notification
+leader should show the alert. This does not promise delivery after every Macro
+tab is closed or the browser suspends the page.
+
+GraphQL notification callbacks run on network receipt, independently of the local
+cache, which parks while all Macro tabs are hidden. Cache updates and channel
+reconciliation catch up afterward. The backend-free `parking.browser.e2e.ts`
+regression exercises that boundary with real storage and simulated visibility;
+OS banner presentation still needs the manual check above.
+
+For delayed cache catch-up, find `notification.receive` by `notification.id`.
+Its linked `graphql.subscription.cache_queue` and
+`graphql.subscription.cache_apply` phases distinguish waiting behind an earlier
+event from applying the event to storage. Receipt completes without waiting for
+these phases; listener errors mark receipt, while cache errors mark application.
+
 In the desktop app, **Settings → Notifications → Delivery → Desktop notifications**
 controls system notification delivery for this installation. The Notifications
 page is always present, in the same place on web, desktop, and mobile; Account
@@ -55,6 +75,17 @@ normal navigation without resetting the current page to the app root. Check
 both listener attachment and pending-intent reads, including a tap delivered
 before the pending read stalls. Receiving a push without tapping it must not
 navigate.
+
+For an iOS warm resume, leave the app running past its startup timeout before
+backgrounding it. Tap an uncached notification without a direct channel target
+and fail its notification lookup: the app must reveal the existing page and
+show **Failed to open notification.** A later tap must still open normally.
+Also stall navigation or its native acknowledgment: after eight seconds the
+frontend releases the cover without discarding the pending destination. Duplicate
+delivery must not restart that deadline; a newer tap must get its own deadline.
+`notification.cover_timeout` is recorded on the notification-open trace. This
+frontend recovery requires responsive JavaScript and native IPC; verify actual
+iOS presentation separately from browser bridge simulations.
 
 On iOS, Macro requests provisional authorization at launch, so
 **Settings → Apps → Macro → Notifications** exists before any prompt, and a

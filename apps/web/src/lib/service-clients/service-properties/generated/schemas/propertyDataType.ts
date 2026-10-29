@@ -7,8 +7,9 @@
 import type { PropertyDataTypeOneOf } from './propertyDataTypeOneOf';
 import type { PropertyDataTypeOneOfFive } from './propertyDataTypeOneOfFive';
 import type { PropertyDataTypeOneOfNine } from './propertyDataTypeOneOfNine';
+import type { PropertyDataTypeOneOfOneeight } from './propertyDataTypeOneOfOneeight';
+import type { PropertyDataTypeOneOfOnefive } from './propertyDataTypeOneOfOnefive';
 import type { PropertyDataTypeOneOfOneone } from './propertyDataTypeOneOfOneone';
-import type { PropertyDataTypeOneOfOnesix } from './propertyDataTypeOneOfOnesix';
 import type { PropertyDataTypeOneOfOnethree } from './propertyDataTypeOneOfOnethree';
 import type { PropertyDataTypeOneOfSeven } from './propertyDataTypeOneOfSeven';
 import type { PropertyDataTypeOneOfThree } from './propertyDataTypeOneOfThree';
@@ -24,4 +25,5 @@ export type PropertyDataType =
   | PropertyDataTypeOneOfNine
   | PropertyDataTypeOneOfOneone
   | PropertyDataTypeOneOfOnethree
-  | PropertyDataTypeOneOfOnesix;
+  | PropertyDataTypeOneOfOnefive
+  | PropertyDataTypeOneOfOneeight;

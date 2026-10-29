@@ -18,12 +18,14 @@ function ImagePlaceholder(props: {
   square?: boolean;
   /** Fill the parent's fixed box, so the placeholder matches the loaded image. */
   fill?: boolean;
+  class?: string;
 }) {
   return (
     <div
       class={cn(
         'flex items-center justify-center rounded-2xl border border-edge bg-surface',
-        props.fill && 'size-full'
+        props.fill && 'size-full',
+        props.class
       )}
       style={
         props.fill
@@ -61,12 +63,14 @@ function Fallback(props: {
   dims?: { width: number; height: number };
   square?: boolean;
   fill?: boolean;
+  class?: string;
 }) {
   return (
     <ImagePlaceholder
       dims={props.dims}
       square={props.square}
       fill={props.fill}
+      class={props.class}
     />
   );
 }
@@ -82,6 +86,8 @@ function Image(props: {
   style?: JSX.CSSProperties;
   loading?: 'eager' | 'lazy';
   fallback?: JSX.Element;
+  /** The file couldn't be loaded; the fallback otherwise stays up. */
+  onError?: () => void;
 }) {
   const [loaded, setLoaded] = createSignal(false);
   const hasDimensions = () => (props.width ?? 0) > 0 && (props.height ?? 0) > 0;
@@ -133,6 +139,7 @@ function Image(props: {
         loading={props.loading}
         onClick={() => props.onOpen?.()}
         onLoad={() => setLoaded(true)}
+        onError={() => props.onError?.()}
         use:internalDrag={true}
       />
     </>

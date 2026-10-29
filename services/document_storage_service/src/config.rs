@@ -170,16 +170,12 @@ pub struct Config {
     #[macro_config_default(false)]
     pub slack_import_enabled: bool,
 
-    /// Allow new personal WhatsApp pairing transactions.
+    /// Send Gmail label writes as `ModifyMessageLabelsBatch` queue messages.
+    /// Enable only after every email-service pubsub worker runs a release that
+    /// decodes them; older workers delete the batch form. Off, each message is
+    /// its own `ModifyMessageLabels`.
     #[macro_config_default(false)]
-    pub whatsapp_linked_pairing_enabled: bool,
-    /// Allow adopting existing WhatsApp groups and granting their audiences.
-    #[macro_config_default(false)]
-    pub whatsapp_linked_adoption_enabled: bool,
-    /// Allow new deliberate sends from personal WhatsApp accounts. Turn this
-    /// off first during an incident; pending sends stay recorded.
-    #[macro_config_default(false)]
-    pub whatsapp_linked_sending_enabled: bool,
+    pub gmail_label_write_batches_enabled: bool,
 
     /// Maximum number of SQS messages to receive per poll for the delete document worker
     #[macro_config_default(10)]

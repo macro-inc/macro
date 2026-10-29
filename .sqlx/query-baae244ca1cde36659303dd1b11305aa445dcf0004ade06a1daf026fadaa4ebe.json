@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE external_chat_attachment SET blob_id = $4, state = 'downloaded', retry_at = now()\n                            WHERE chat_id = $1 AND person_id = $2 AND source_id = $3 AND ordinal = 0 AND state = 'pending'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "baae244ca1cde36659303dd1b11305aa445dcf0004ade06a1daf026fadaa4ebe"
+}

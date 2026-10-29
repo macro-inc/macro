@@ -163,7 +163,7 @@ async fn throttling_respects_provider_retry_after() {
         error,
         EmailApiError::RateLimited {
             retry_after: Some(Duration::from_secs(17)),
-            origin: RateLimitOrigin::Provider
+            origin: RateLimitOrigin::Provider { concurrency: false }
         }
     );
 }
@@ -635,4 +635,22 @@ async fn cloud_reference_attachments_preserve_provider_open_without_download_byt
     assert_eq!(attachment.filename.as_deref(), Some("shared.pdf"));
     assert!(attachment.data_url.is_none());
     assert_eq!(server.received_requests().await.unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn message_mime_returns_the_original_bytes() {
+    let (server, api, token) = setup().await;
+    let mime = b"Subject: hi\r\n\r\nbody";
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/message-1/$value"))
+        .and(header("authorization", "Bearer test-bearer"))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(&mime[..]))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let bytes = api
+        .mime(&token, &ProviderId::new("message-1").unwrap())
+        .await
+        .unwrap();
+    assert_eq!(bytes, mime);
 }

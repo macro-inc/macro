@@ -1,22 +1,17 @@
 import { throwOnErr } from '@core/util/result';
-import type { LinkedAdoptGroup } from '@service-storage/generated/schemas/linkedAdoptGroup';
-import type { LinkedPasskeyBody } from '@service-storage/generated/schemas/linkedPasskeyBody';
+import { externalChatsClient } from '@service-storage/external-chats';
+import type { ExternalChatKind } from '@service-storage/generated/schemas/externalChatKind';
+import type { WhatsappPasskeyBody } from '@service-storage/generated/schemas/whatsappPasskeyBody';
 import { whatsappLinkedClient as client } from '@service-storage/whatsapp-linked';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
-import { invalidateWhatsappGroups } from '../whatsapp-groups';
+import { invalidateExternalChatList } from '../external-chats';
 import { whatsappLinkedKeys } from './keys';
 import { whatsappOperation } from './operation';
 
 /** How often an open pairing dialog asks for a rotated QR or a result. */
 export const PAIRING_POLL_MS = 1500;
-
-const configurationOptions = queryOptions({
-  queryKey: whatsappLinkedKeys.configuration.queryKey,
-  queryFn: () => throwOnErr(client.configuration),
-  staleTime: 30_000,
-});
 
 function accountOptions(userId: string) {
   return queryOptions({
@@ -35,23 +30,20 @@ function pairingOptions(userId: string, pairingId: string) {
     gcTime: 0,
     staleTime: 0,
     retry: false,
-    refetchInterval: PAIRING_POLL_MS,
+    // A pairing that can't be read (gone, or someone else's) never comes back.
+    refetchInterval: (query) =>
+      query.state.status === 'error' ? false : PAIRING_POLL_MS,
     refetchIntervalInBackground: false,
   });
 }
 
-function groupsOptions(userId: string, enabled: boolean) {
+function chatsOptions(userId: string, enabled: boolean) {
   return queryOptions({
-    queryKey: whatsappLinkedKeys.groups(userId).queryKey,
-    queryFn: () => throwOnErr(client.groups),
+    queryKey: whatsappLinkedKeys.chats(userId).queryKey,
+    queryFn: () => throwOnErr(client.chats),
     enabled: !!userId && enabled,
     staleTime: 10_000,
   });
-}
-
-/** Which linked-device operations the backend currently allows. */
-export function useWhatsappLinkedConfigurationQuery() {
-  return useQuery(() => configurationOptions);
 }
 
 /** The signed-in person's own linked account, or `account: null`. */
@@ -67,27 +59,25 @@ export function useWhatsappLinkedPairingQuery(
   return useQuery(() => pairingOptions(userId(), pairingId()));
 }
 
-/** Groups the connected account belongs to, with their adopted channel. */
-export function useWhatsappLinkedGroupsQuery(
+/** The connected account's chat list, newest activity first, with Macro state. */
+export function useWhatsappLinkedChatsQuery(
   userId: Accessor<string>,
   enabled: Accessor<boolean>
 ) {
-  return useQuery(() => groupsOptions(userId(), enabled()));
+  return useQuery(() => chatsOptions(userId(), enabled()));
 }
 
 const invalidateAccount = () =>
   queryClient.invalidateQueries({
     queryKey: whatsappLinkedKeys.account._def,
   });
-const invalidateGroups = () =>
-  queryClient.invalidateQueries({ queryKey: whatsappLinkedKeys.groups._def });
+const invalidateChats = () =>
+  queryClient.invalidateQueries({ queryKey: whatsappLinkedKeys.chats._def });
 
 export function useConnectWhatsappMutation() {
   return useMutation(() => ({
-    mutationFn: (replace: boolean) =>
-      whatsappOperation('connect', () =>
-        throwOnErr(() => client.connect(replace))
-      ),
+    mutationFn: () =>
+      whatsappOperation('connect', () => throwOnErr(() => client.connect())),
     onSuccess: invalidateAccount,
   }));
 }
@@ -98,7 +88,7 @@ export function useDisconnectWhatsappMutation() {
       whatsappOperation('disconnect', () =>
         throwOnErr(() => client.disconnect(authorizationGeneration))
       ),
-    onSuccess: () => Promise.all([invalidateAccount(), invalidateGroups()]),
+    onSuccess: () => Promise.all([invalidateAccount(), invalidateChats()]),
   }));
 }
 
@@ -112,27 +102,34 @@ export function useCancelWhatsappPairingMutation() {
   }));
 }
 
-/** Pairing finished: the account and its groups changed. */
+/** Pairing finished: the account and its chats changed. */
 export function refreshWhatsappLinkedAccount() {
-  return Promise.all([invalidateAccount(), invalidateGroups()]);
+  return Promise.all([invalidateAccount(), invalidateChats()]);
 }
 
 export function useSubmitWhatsappPasskeyMutation() {
   return useMutation(() => ({
-    mutationFn: (input: { pairingId: string; response: LinkedPasskeyBody }) =>
+    mutationFn: (input: { pairingId: string; response: WhatsappPasskeyBody }) =>
       whatsappOperation('submit_passkey', () =>
         throwOnErr(() => client.passkey(input.pairingId, input.response))
       ),
   }));
 }
 
-export function useAdoptWhatsappGroupMutation() {
+/** Adds one of the account's WhatsApp chats to Macro as an external chat. */
+export function useAddWhatsappChatMutation() {
   return useMutation(() => ({
-    mutationFn: (request: LinkedAdoptGroup) =>
-      whatsappOperation('adopt_group', () =>
-        throwOnErr(() => client.adopt(request))
+    mutationFn: (chat: { jid: string; kind: ExternalChatKind }) =>
+      whatsappOperation('add_chat', () =>
+        throwOnErr(() =>
+          externalChatsClient.add({
+            provider: 'whatsapp',
+            remoteId: chat.jid,
+            kind: chat.kind,
+          })
+        )
       ),
     onSuccess: () =>
-      Promise.all([invalidateGroups(), invalidateWhatsappGroups()]),
+      Promise.all([invalidateChats(), invalidateExternalChatList()]),
   }));
 }

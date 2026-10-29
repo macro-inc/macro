@@ -150,6 +150,13 @@ export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
 
+/** Browser-style tabs in the macOS desktop title bar; each tab holds a split layout. */
+export const enableDesktopTabs = defineFlag({
+  key: 'enable-desktop-tabs',
+  env: 'ENABLE_DESKTOP_TABS',
+  default: onInDev,
+});
+
 // Leave the production PostHog flag disabled until archive-import rollout.
 export const enableSlackArchiveImport = defineFlag({
   key: 'enable-slack-archive-import',
@@ -161,6 +168,16 @@ export const enableSlackArchiveImport = defineFlag({
 export const enableSidebarPromotions = defineFlag({
   key: 'enable-sidebar-promotions',
   env: 'ENABLE_SIDEBAR_PROMOTIONS',
+  default: onInDev,
+});
+
+/**
+ * Auto in the agent composer's mode switch: the agent harness picks Chat or
+ * Code per prompt. Macro employees only; the backend checks the same key.
+ */
+export const enableComposerAutoMode = defineFlag({
+  key: 'enable-composer-auto-mode',
+  env: 'ENABLE_COMPOSER_AUTO_MODE',
   default: onInDev,
 });
 
@@ -205,6 +222,13 @@ export const ENABLE_SCRIPTING = defineFlag({
   env: 'ENABLE_SCRIPTING',
   default: false,
 }).enabled;
+
+// Historical key retained at the deployed PostHog boundary. This selects the
+// dedicated DSS sync socket; deploy DSS before enabling. Local env override supported.
+export const syncViaGateway = defineFlag({
+  key: 'sync-via-gateway',
+  env: 'SYNC_VIA_GATEWAY',
+});
 
 export const ENABLE_PDF_MULTISPLIT = defineFlag({
   env: 'ENABLE_PDF_MULTISPLIT',
@@ -496,6 +520,15 @@ export const enableReminders = defineFlag({
   default: onInDev,
 });
 
+// The Focus tab in Mail: signal threads the email focus worker classified as
+// worth the owner's attention. Only allowlisted inboxes are classified, so the
+// tab is empty for everyone else.
+export const enableEmailFocus = defineFlag({
+  key: 'enable-email-focus',
+  env: 'ENABLE_EMAIL_FOCUS',
+  default: onInDev,
+});
+
 export const enableHistoryComponent = defineFlag({
   key: 'enable-history-component',
   env: 'ENABLE_HISTORY_COMPONENT',
@@ -697,6 +730,17 @@ export const enableCalendarGuestInvites = defineFlag({
   default: onInDev,
 });
 
+// Forwarding an invitation: event details' and the editor's "Forward
+// invitation", offered where a guest cannot add guests, which emails the
+// event's .ics from the inbox holding the viewer's copy. On in dev only until
+// a real send has passed on dev; there is no PostHog flag yet, so it stays off
+// in production. Override with VITE_ENABLE_CALENDAR_INVITATION_FORWARD.
+export const enableCalendarInvitationForward = defineFlag({
+  key: 'enable-calendar-invitation-forward',
+  env: 'ENABLE_CALENDAR_INVITATION_FORWARD',
+  default: onInDev,
+});
+
 // Adding a channel-shared event to your own calendar: the "Add to calendar"
 // action on a shared event's mention card. On in dev only until a real Google
 // import has passed on dev; there is no PostHog flag yet, so it stays off in
@@ -768,6 +812,13 @@ export const enableChatV3Agents = defineFlag({
   default: onInDev,
 });
 
+/** Enables Universal Input in Command K and mobile Search. */
+export const enableUniversalInput = defineFlag({
+  key: 'enable-universal-input',
+  env: 'ENABLE_UNIVERSAL_INPUT',
+  default: DEV_MODE_ENV || import.meta.env.DEV || undefined,
+});
+
 // Private conversations with agent personas. On in dev; there is no PostHog
 // flag. Override with VITE_ENABLE_AGENT_DMS.
 export const ENABLE_AGENT_DMS = defineFlag({
@@ -798,6 +849,13 @@ export const enableRoutineConditions = defineFlag({
   key: 'enable-routine-conditions',
   env: 'ENABLE_ROUTINE_CONDITIONS',
   default: onInDev,
+});
+
+// Templates are not ready for general use. Follow PostHog even in development
+// so the UI and the server's per-user rollout agree.
+export const enableRoutineSharing = defineFlag({
+  key: 'enable-routine-sharing',
+  env: 'ENABLE_ROUTINE_SHARING',
 });
 
 // The Recent view: the touched-by-me feed (everything the viewer mutated,
@@ -898,11 +956,10 @@ export const enableInAppTours = defineFlag({
 });
 
 /**
- * Personal WhatsApp linked devices: the External tab, pairing, group adoption
- * and linked-channel composing. Off in dev too: dev has no WhatsApp session
- * service, so the tab would only show errors. Override locally with
- * VITE_ENABLE_WHATSAPP_LINKED=true. Backend switches gate each operation
- * independently.
+ * Personal WhatsApp linked devices: the External tab, pairing, adding chats
+ * to Macro and sharing them by mention in channels. The only rollout gate;
+ * the backend always serves the routes. Follows PostHog everywhere; override
+ * locally with VITE_ENABLE_WHATSAPP_LINKED=true.
  */
 export const enableWhatsappLinked = defineFlag({
   key: 'enable-whatsapp-linked',

@@ -9,7 +9,6 @@ import {
 import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, Tooltip } from '@ui';
 import {
@@ -25,6 +24,7 @@ import {
   Suspense,
   untrack,
 } from 'solid-js';
+import { CrmListSkeleton } from '../components/list-state';
 import { RecordTabs } from '../components/record-tabs';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmCommentTarget } from '../context/workspace-context';
@@ -177,13 +177,13 @@ export function CrmRecordDetail(props: {
           tabindex={-1}
           class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
         >
-          <div class="flex h-12 min-w-0 shrink-0 items-center gap-2 px-3 touch:gap-3 touch:border-b touch:border-edge-muted touch:px-4 touch:h-auto touch:min-h-12 touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)] touch:pb-2">
+          <div class="flex h-12 min-w-0 shrink-0 items-center gap-2 px-3 touch:gap-3 touch:border-b touch:border-edge-muted touch:px-4 touch:h-auto touch:min-h-12 touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)] touch:pb-2 mobile:flex-wrap">
             {props.navigation}
             <ViewBreadcrumbs.Outlet
               aria-label="CRM record location"
-              class="min-w-0 shrink"
+              class="min-w-0 shrink mobile:flex-1"
             />
-            <div class="min-w-0 overflow-x-auto">
+            <div class="min-w-0 not-touch:overflow-x-auto mobile:order-last mobile:flex mobile:basis-full">
               <Show
                 when={current().type === 'contact'}
                 fallback={
@@ -205,7 +205,11 @@ export function CrmRecordDetail(props: {
             </div>
             <div class="ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
               <HeaderActionGroup label="Sharing">
-                <CrmCopyLinkButton type={current().type} id={current().id} />
+                <CrmCopyLinkButton
+                  grouped
+                  type={current().type}
+                  id={current().id}
+                />
               </HeaderActionGroup>
               <SidePanel.Toggle />
             </div>
@@ -307,15 +311,7 @@ function RecordContent(props: {
         fallback={error(() => fireAndForget(query.refetch(), 'crm'))}
       >
         <Suspense
-          fallback={
-            <div class="grid size-full place-items-center text-ink-muted">
-              <SpinnerIcon
-                aria-hidden={false}
-                aria-label={`Loading ${props.record.type}`}
-                class="size-5 animate-spin"
-              />
-            </div>
-          }
+          fallback={<CrmListSkeleton label={`Loading ${props.record.type}`} />}
         >
           <ParamsProvider state={params}>{props.children}</ParamsProvider>
         </Suspense>
@@ -334,7 +330,7 @@ function DetailError(props: {
     <div class="flex size-full flex-col items-center justify-center gap-3 text-sm text-ink-muted">
       <p>This {props.record} couldn’t be loaded.</p>
       <div class="flex gap-2">
-        <Button variant="outline" size="sm" onClick={props.onRetry}>
+        <Button variant="secondary" size="sm" onClick={props.onRetry}>
           Try again
         </Button>
         <Button variant="ghost" size="sm" onClick={props.onBack}>

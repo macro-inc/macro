@@ -13,6 +13,7 @@
     "postbuild:bundle-manifest": "bun ./scripts/write-bundle-manifest.mjs",
     "test": "bunx vitest run --fsModuleCache",
     "test:functional": "just test-functional",
+    "i18n:status": "bun scripts/i18n-status.ts",
     "native:e2e:build": "bash tests/native/build.sh",
     "native:e2e": "bash tests/native/run.sh",
     "native:e2e:smoke": "bash tests/native/run.sh --smoke",

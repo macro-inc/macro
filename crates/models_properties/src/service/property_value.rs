@@ -32,6 +32,9 @@ pub enum PropertyValue {
     /// Date/timestamp value
     /// Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}
     Date(DateTime<Utc>),
+    /// Date range value
+    /// Serializes as: {"type": "DateRange", "value": {"start": "2025-01-01T00:00:00Z", "end": "2025-01-31T00:00:00Z"}}
+    DateRange(crate::shared::DateRange),
     /// Select option(s) - always an array (check is_multi_select to determine if single or multi)
     /// Single-select: {"type": "SelectOption", "value": ["uuid"]} (length 0 or 1)
     /// Multi-select: {"type": "SelectOption", "value": ["uuid1", "uuid2", ...]} (length 0+)
@@ -56,6 +59,7 @@ impl From<PropertyValue> for crate::api::PropertyValue {
             PropertyValue::Num(v) => crate::api::PropertyValue::Num(v),
             PropertyValue::Str(v) => crate::api::PropertyValue::Str(v),
             PropertyValue::Date(v) => crate::api::PropertyValue::Date(v),
+            PropertyValue::DateRange(v) => crate::api::PropertyValue::DateRange(v),
             PropertyValue::SelectOption(v) => crate::api::PropertyValue::SelectOption(v),
             PropertyValue::EntityRef(v) => crate::api::PropertyValue::EntityRef(v),
             PropertyValue::Link(v) => crate::api::PropertyValue::Link(v),
@@ -70,6 +74,7 @@ impl From<crate::api::PropertyValue> for PropertyValue {
             crate::api::PropertyValue::Num(v) => PropertyValue::Num(v),
             crate::api::PropertyValue::Str(v) => PropertyValue::Str(v),
             crate::api::PropertyValue::Date(v) => PropertyValue::Date(v),
+            crate::api::PropertyValue::DateRange(v) => PropertyValue::DateRange(v),
             crate::api::PropertyValue::SelectOption(v) => PropertyValue::SelectOption(v),
             crate::api::PropertyValue::EntityRef(v) => PropertyValue::EntityRef(v),
             crate::api::PropertyValue::Link(v) => PropertyValue::Link(v),
@@ -87,6 +92,7 @@ pub fn convert_set_property_value_to_property_value(value: &SetPropertyValue) ->
         // Single primitive values
         SetPropertyValue::Boolean { value } => PropertyValue::Bool(*value),
         SetPropertyValue::Date { value } => PropertyValue::Date(*value),
+        SetPropertyValue::DateRange { value } => PropertyValue::DateRange(*value),
         SetPropertyValue::Number { value } => PropertyValue::Num(*value),
         SetPropertyValue::String { value } => PropertyValue::Str(value.clone()),
 

@@ -59,7 +59,7 @@ export function RoutinesList(props: {
                 class="max-w-md flex-1"
                 hotkey="cmd+f"
               />
-              <Button variant="outline" onClick={props.onCreate}>
+              <Button variant="secondary" onClick={props.onCreate}>
                 Create Routine
               </Button>
             </div>

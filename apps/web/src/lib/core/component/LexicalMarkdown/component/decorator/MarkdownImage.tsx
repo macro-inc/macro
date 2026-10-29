@@ -5,6 +5,7 @@ false && internalDrag;
 import { Lightbox } from '@core/component/Lightbox';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { displayImageUrl } from '@core/util/imageProxy';
 import ImageIcon from '@icon/system/regular/image-broken.svg';
 import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import { Dialog } from '@kobalte/core/dialog';
@@ -104,7 +105,10 @@ export function MarkdownImage(props: ImageDecoratorProps) {
       return;
     }
     if (props.srcType === 'url') {
-      setImageUrl(props.url);
+      // External hosts (GitHub blob screenshots, GIFs) need the image proxy
+      // under COEP; GitHub blob/`raw` links are rewritten to the raw file host
+      // first so the proxy fetches bytes, not an HTML redirect page.
+      setImageUrl(displayImageUrl(props.url));
       return;
     }
     fireAndForget(

@@ -1,4 +1,5 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
+import EyeSlashIcon from '@icon/system/regular/eye-slash.svg';
 import { createSignal, For } from 'solid-js';
 import { ToggleSwitch } from './ToggleSwitch';
 
@@ -30,11 +31,32 @@ function SizesDemo() {
         {(size) => (
           <div class="flex flex-col items-start gap-1.5">
             <span class="font-mono text-xs text-ink-subtle">{size}</span>
-            <ToggleSwitch size={size} defaultChecked />
+            <ToggleSwitch
+              size={size}
+              defaultChecked
+              label={`${size} switch`}
+              labelClass="sr-only"
+            />
           </div>
         )}
       </For>
     </div>
+  );
+}
+// #endregion
+
+// #region demo:track-icon
+function TrackIconDemo() {
+  const [unreadOnly, setUnreadOnly] = createSignal(false);
+
+  return (
+    <ToggleSwitch
+      trackIcon={EyeSlashIcon}
+      checked={unreadOnly()}
+      onChange={setUnreadOnly}
+      label="Unread only"
+      labelClass="text-sm text-ink"
+    />
   );
 }
 // #endregion
@@ -79,7 +101,12 @@ function SettingsRowDemo() {
               <span class="text-sm text-ink">{row.label}</span>
               <span class="text-xs text-ink-subtle">{row.description}</span>
             </div>
-            <ToggleSwitch size="md" defaultChecked={row.on} />
+            <ToggleSwitch
+              size="md"
+              defaultChecked={row.on}
+              label={row.label}
+              labelClass="sr-only"
+            />
           </div>
         )}
       </For>
@@ -88,6 +115,24 @@ function SettingsRowDemo() {
 }
 // #endregion
 
+// #region demo:form-state
+function FormStateDemo() {
+  return (
+    <div class="flex flex-col gap-3">
+      <ToggleSwitch
+        name="readonly-setting"
+        readOnly
+        defaultChecked
+        label="Read-only setting"
+      />
+      <ToggleSwitch validationState="invalid" label="Setting needs attention" />
+      <span class="text-xs text-failure">
+        This setting cannot be changed yet.
+      </span>
+    </div>
+  );
+}
+// #endregion
 export default defineDoc({
   name: 'Toggle Switch',
   category: 'Inputs',
@@ -108,8 +153,15 @@ export default defineDoc({
       id: 'sizes',
       title: 'Sizes',
       description:
-        '`sm` is the default toolbar size; `md` is for settings rows; `xs` is for dense inline chrome.',
+        '`sm` is the default toolbar size (32×16px); `md` is for settings rows (40×20px); `xs` is for dense inline chrome (28×14px).',
       render: SizesDemo,
+    },
+    {
+      id: 'track-icon',
+      title: 'Track icon',
+      description:
+        '`trackIcon` shows a glyph in the half of the track the thumb leaves free, so a compact switch says what it does even when its label is hidden.',
+      render: TrackIconDemo,
     },
     {
       id: 'disabled',
@@ -117,6 +169,13 @@ export default defineDoc({
       description:
         'A disabled switch dims, label included, and ignores clicks, like a disabled Checkbox.',
       render: DisabledDemo,
+    },
+    {
+      id: 'form-state',
+      title: 'Read-only and invalid',
+      description:
+        'Native form props and Kobalte state remain available. The thumb stays white across themes and states, and motion respects prefers-reduced-motion.',
+      render: FormStateDemo,
     },
     {
       id: 'settings-row',

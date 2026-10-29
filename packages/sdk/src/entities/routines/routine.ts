@@ -4,9 +4,11 @@ import type {
   AgentTask,
   EventFilter,
   RoutineModelId,
+  RoutineTemplate as RoutineTemplateRecord,
   RoutineTrigger,
   RunVisibility,
   ScheduledActionResponse,
+  TemplateVariable,
 } from '../../../generated/scheduled-action/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
@@ -126,6 +128,74 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
     User.byId(this.client, id),
   );
 
+  /** The shared routine whose template this routine was activated from. */
+  readonly sourceTemplate: () => Promise<Routine | undefined> =
+    this.mappedField('template_id', (id): Routine | undefined =>
+      id ? Routine.byId(this.client, id) : undefined,
+    );
+
+  /** This routine's shared template, or `undefined` when it isn't shared. */
+  async template(): Promise<RoutineTemplate | undefined> {
+    const result = await this.client.scheduledAction.getScheduledActionTemplate(
+      { path: { id: this.id } },
+    );
+    if (result.response?.status === 404) return undefined;
+    return this.toTemplate(unwrap(result));
+  }
+
+  /**
+   * Share this routine as a template, or update its shared snapshot. People
+   * get the template, never the routine, its runs or its results.
+   */
+  async shareAsTemplate(options: {
+    /** What the routine does for someone. */
+    description: string;
+    /** How each user-specific reference fills in when someone activates it. */
+    variables: TemplateVariable[];
+  }): Promise<RoutineTemplate> {
+    return this.toTemplate(
+      unwrap(
+        await this.client.scheduledAction.shareScheduledActionTemplate({
+          path: { id: this.id },
+          body: options,
+        }),
+      ),
+    );
+  }
+
+  /**
+   * Create the caller's own routine from this routine's shared template, with
+   * its references already filled in for them.
+   */
+  async activateTemplate(options: RoutineOptions): Promise<Routine> {
+    return Routine.from(
+      this.client,
+      unwrap(
+        await this.client.scheduledAction.activateScheduledActionTemplate({
+          path: { id: this.id },
+          body: { ...routineBody(options), enabled: options.enabled ?? true },
+        }),
+      ),
+    );
+  }
+
+  private toTemplate(record: RoutineTemplateRecord): RoutineTemplate {
+    return new RoutineTemplate(
+      this,
+      User.byId(this.client, record.author),
+      record,
+    );
+  }
+
+  /** Stop sharing this routine. Routines already activated keep running. */
+  async stopSharingTemplate(): Promise<void> {
+    unwrap(
+      await this.client.scheduledAction.unshareScheduledActionTemplate({
+        path: { id: this.id },
+      }),
+    );
+  }
+
   /** Replace the routine's task and trigger configuration. */
   async update(options: RoutineOptions): Promise<void> {
     await this.mutate((c) =>
@@ -179,6 +249,31 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
     await this.mutate((c) =>
       c.scheduledAction.deleteScheduledAction({ path: { id: this.id } }),
     );
+  }
+}
+
+/** A routine shared as a template, which people activate as their own routine. */
+export class RoutineTemplate {
+  constructor(
+    /** The shared routine. */
+    readonly routine: Routine,
+    /** Who shared it. */
+    readonly author: User,
+    /** Template snapshot. */
+    readonly record: RoutineTemplateRecord,
+  ) {}
+
+  /**
+   * Create the caller's own routine from this template, with its references
+   * already filled in for them.
+   */
+  activate(options: RoutineOptions): Promise<Routine> {
+    return this.routine.activateTemplate(options);
+  }
+
+  /** Serialize without the authenticated client. */
+  toJSON() {
+    return this.record;
   }
 }
 

@@ -1,27 +1,32 @@
 //! The account's WhatsApp connection: the encrypted Postgres device store,
 //! a whatsmeow [`Client`], and the mapping between whatsmeow and the domain.
 
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use external_chat::domain::models::{MediaKind, MediaShape};
 use sqlx::PgPool;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument;
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
-    ClaimedSend, MediaImport, OutboundMedia, OutgoingContent, SessionScope, Target,
+    ChatUpdate, ClaimedSend, InboundEvent, MediaImport, MessageAnchor, OutboundMedia,
+    OutgoingContent, SessionScope, Target,
 };
-use whatsapp_linked::domain::models::{GroupInfo, Identity, MediaKind, Participant};
+use whatsapp_linked::domain::models::{GroupInfo, Identity, Participant};
 use whatsapp_store_pg::kms::WhatsAppKms;
 use whatsapp_store_pg::{PgWhatsAppStore, WhatsAppStoreError};
 use whatsmeow::download::{DownloadError, MediaType};
 use whatsmeow::proto::wa_e2e;
+use whatsmeow::proto::wa_history_sync::Conversation;
+use whatsmeow::proto::wa_history_sync::history_sync::HistorySyncType;
 use whatsmeow::send::{SendRequestExtra, build_edit};
 use whatsmeow::signal::CurveSignatures;
 use whatsmeow::store::Device;
-use whatsmeow::types::{Jid, WebAuthnResponse};
+use whatsmeow::types::{Jid, MessageInfo, MessageSource, WebAuthnResponse};
 use whatsmeow::{
     Client, ClientConfig, ClientError, Dialer, Event, EventHandler, QrChannelItem, Signal,
 };
@@ -98,7 +103,8 @@ impl<Kms: WhatsAppKms + 'static> WhatsmeowConnector<Kms> {
 fn store_error(error: WhatsAppStoreError) -> SessionError {
     match error {
         WhatsAppStoreError::Fenced => SessionError::Fenced,
-        WhatsAppStoreError::Kms(_) => SessionError::Kms,
+        error if error.is_unreadable_device() => SessionError::DeviceUnreadable,
+        WhatsAppStoreError::Kms(_) => SessionError::KmsUnavailable,
         error => internal(error),
     }
 }
@@ -130,16 +136,16 @@ impl<Kms: WhatsAppKms + 'static> SessionConnector for WhatsmeowConnector<Kms> {
         fresh_device: bool,
         inbound: Arc<dyn InboundSink>,
     ) -> Result<(WhatsmeowSession, mpsc::UnboundedReceiver<SessionEvent>), SessionError> {
-        let store = self.open_store(scope).await?;
-        let mut device = self.load_device(&store).await?;
-        if fresh_device && device.id.is_some() {
-            // Deleting the device row drops its data key and every stored
-            // value; reopening generates both anew.
-            device.delete().await.map_err(internal)?;
-            let store = self.open_store(scope).await?;
-            device = self.load_device(&store).await?;
-            return self.start(scope, store, device, inbound);
+        if fresh_device {
+            // Deleted before opening, so a device whose data key KMS no longer
+            // unwraps is replaced too. Its data key and every stored value go
+            // with the row; opening generates both anew.
+            PgWhatsAppStore::reset_device(&self.pool, scope.account_id, scope.lease_epoch)
+                .await
+                .map_err(store_error)?;
         }
+        let store = self.open_store(scope).await?;
+        let device = self.load_device(&store).await?;
         self.start(scope, store, device, inbound)
     }
 }
@@ -167,6 +173,7 @@ impl<Kms: WhatsAppKms + 'static> WhatsmeowConnector<Kms> {
         let (sender, receiver) = mpsc::unbounded_channel();
         client.add_event_handler(Arc::new(Forwarder {
             account: scope.account_id,
+            client: Arc::downgrade(&client),
             store: Arc::clone(&store),
             events: sender.clone(),
             inbound,
@@ -189,42 +196,251 @@ impl<Kms: WhatsAppKms + 'static> WhatsmeowConnector<Kms> {
 /// runner, which may itself be waiting for a send's acknowledgement.
 struct Forwarder {
     account: Uuid,
+    /// The client this handler is registered on, to parse history messages.
+    client: Weak<Client>,
     store: Arc<PgWhatsAppStore>,
     events: mpsc::UnboundedSender<SessionEvent>,
     inbound: Arc<dyn InboundSink>,
+}
+
+impl Forwarder {
+    /// [`events::complete_addresses`]; `false` when the LID store failed, so
+    /// the event is left unacknowledged and WhatsApp redelivers it.
+    async fn complete_addresses(&self, event: &mut InboundEvent) -> bool {
+        match events::complete_addresses(self.store.as_ref(), event).await {
+            Ok(()) => true,
+            Err(error) => {
+                tracing::warn!(
+                    account_id = %self.account,
+                    error = %error,
+                    "Reading the WhatsApp LID store failed; leaving the event unacknowledged"
+                );
+                false
+            }
+        }
+    }
+
+    fn seal(&self, locator: &MediaLocator) -> Option<Vec<u8>> {
+        let plaintext = serde_json::to_vec(locator).ok()?;
+        self.store
+            .seal(LOCATOR_PURPOSE, &plaintext)
+            .inspect_err(|error| tracing::warn!(error = %error, "Sealing a media locator failed"))
+            .ok()
+    }
+
+    /// Chat-list updates go to the runner, by phone number and with
+    /// address-book names where the stores know them.
+    async fn chats(&self, mut chats: Vec<ChatUpdate>) {
+        if chats.is_empty() {
+            return;
+        }
+        events::complete_chats(self.store.as_ref(), self.store.as_ref(), &mut chats).await;
+        let _ = self.events.send(SessionEvent::Chats(chats));
+    }
+
+    /// A history-sync bundle: the chat list (initial, recent, full and
+    /// push-name syncs), or an answer to an on-demand request for a chat's
+    /// earlier messages.
+    async fn history_sync(&self, history: &whatsmeow::types::events::HistorySync) {
+        let data = &history.data;
+        let on_demand = data.sync_type == HistorySyncType::OnDemand as i32;
+        let span = tracing::info_span!(
+            "whatsapp.history.sync",
+            account_id = %self.account,
+            sync_type = data.sync_type,
+            conversations = data.conversations.len(),
+            chats = tracing::field::Empty,
+        );
+        async {
+            if on_demand {
+                for conversation in &data.conversations {
+                    Box::pin(self.history_page(conversation)).await;
+                }
+                return;
+            }
+            let chats = events::history_chats(data);
+            tracing::Span::current().record("chats", chats.len());
+            self.chats(chats).await;
+        }
+        .instrument(span)
+        .await;
+    }
+
+    /// Stores a page of a chat's earlier messages as history events, then
+    /// reports the page. A page whose messages could not all be stored is not
+    /// reported: the request times out and is asked again.
+    async fn history_page(&self, conversation: &Conversation) {
+        let Some(mut page) = events::history_page(conversation) else {
+            return;
+        };
+        // Messages are read in the chat as the page names it; the page is
+        // reported under the chat Macro knows (by phone number).
+        let phone_chat = page.chat_jid.clone();
+        page.chat_jid = events::macro_chat(self.store.as_ref(), &page.chat_jid).await;
+        let Some(client) = self.client.upgrade() else {
+            return;
+        };
+        let span = tracing::info_span!(
+            "whatsapp.history.page",
+            account_id = %self.account,
+            messages = page.messages,
+            complete = page.complete,
+            stored = tracing::field::Empty,
+            unreadable = tracing::field::Empty,
+            skipped = tracing::field::Empty,
+            skipped_stub_types = tracing::field::Empty,
+            outcome = tracing::field::Empty,
+        );
+        async {
+            let Ok(chat) = phone_chat.parse::<Jid>() else {
+                return;
+            };
+            let mut stored = 0usize;
+            let mut unreadable: Vec<i32> = vec![];
+            // Messages Macro does not import, by WhatsApp stub type (0: not
+            // a stub), so a page that stores less than it got is explained.
+            let mut skipped: Vec<i32> = vec![];
+            let mut kept = true;
+            for message in &conversation.messages {
+                let Some(web) = message.message.clone() else {
+                    continue;
+                };
+                let stub_type = web.message_stub_type.unwrap_or(0);
+                let parsed = match Box::pin(client.parse_web_message(&chat, web)).await {
+                    Ok(parsed) => parsed,
+                    Err(error) => {
+                        unreadable.push(stub_type);
+                        tracing::debug!(error = %error, stub_type, "Skipping an unreadable history message");
+                        continue;
+                    }
+                };
+                let now = Utc::now();
+                let Some(event) = events::map_history_message(
+                    self.account,
+                    &parsed,
+                    now,
+                    &|locator: &MediaLocator| self.seal(locator),
+                ) else {
+                    skipped.push(stub_type);
+                    continue;
+                };
+                // The phone sends a poll's votes with it, already decrypted;
+                // they apply after the poll.
+                let votes = events::history_poll_votes(self.account, &parsed, now);
+                let mut message_kept = true;
+                for mut event in std::iter::once(event).chain(votes) {
+                    message_kept &= self.complete_addresses(&mut event).await
+                        && Box::pin(self.inbound.accept(&event)).await;
+                }
+                if message_kept {
+                    stored += 1;
+                } else {
+                    kept = false;
+                }
+            }
+            let span = tracing::Span::current();
+            span.record("stored", stored);
+            span.record("unreadable", unreadable.len());
+            span.record("skipped", skipped.len());
+            span.record("skipped_stub_types", format!("{skipped:?}"));
+            tracing::info!(
+                stored,
+                unreadable = unreadable.len(),
+                unreadable_stub_types = ?unreadable,
+                skipped = skipped.len(),
+                skipped_stub_types = ?skipped,
+                "WhatsApp history page received"
+            );
+            if !kept {
+                tracing::Span::current().record("outcome", "not_stored");
+                tracing::warn!("A history page could not be stored; it will be requested again");
+                return;
+            }
+            tracing::Span::current().record("outcome", "stored");
+            let _ = self.events.send(SessionEvent::HistoryPage(page));
+        }
+        .instrument(span)
+        .await;
+    }
+}
+
+impl Forwarder {
+    /// A poll vote, decrypted with the poll's message secret. `None` when the
+    /// message is not a vote; a vote that cannot be decrypted (the poll was
+    /// sent before this device saw it) is acknowledged and dropped.
+    async fn poll_vote(&self, message: &whatsmeow::types::events::Message) -> Option<bool> {
+        message.message.as_ref()?.poll_update_message.as_ref()?;
+        let client = self.client.upgrade()?;
+        let selected = match client.decrypt_poll_vote(message).await {
+            Ok(vote) => vote.selected_options,
+            Err(error) => {
+                tracing::debug!(
+                    name: "whatsapp.inbound.skipped",
+                    account_id = %self.account,
+                    reason = "undecryptable_poll_vote",
+                    error = %error,
+                    "Acknowledged a WhatsApp poll vote without storing it"
+                );
+                return Some(true);
+            }
+        };
+        let Some(mut event) = events::map_poll_vote(self.account, message, &selected, Utc::now())
+        else {
+            return Some(true);
+        };
+        if !self.complete_addresses(&mut event).await {
+            return Some(false);
+        }
+        Some(self.inbound.accept(&event).await)
+    }
 }
 
 // Object safe (`Arc<dyn EventHandler>`), hence `async_trait`.
 #[async_trait]
 impl EventHandler for Forwarder {
     async fn handle(&self, event: &Event) -> bool {
-        let seal = |locator: &MediaLocator| {
-            let plaintext = serde_json::to_vec(locator).ok()?;
-            self.store
-                .seal(LOCATOR_PURPOSE, &plaintext)
-                .inspect_err(
-                    |error| tracing::warn!(error = %error, "Sealing a media locator failed"),
-                )
-                .ok()
-        };
-        match events::map_event(self.account, event, Utc::now(), &seal) {
-            Some(Mapped::Inbound(event)) => self.inbound.accept(&event).await,
-            Some(Mapped::Session(event)) => {
-                let _ = self.events.send(event);
-                true
+        match event {
+            // Boxed: these futures are large, and the handler runs nested
+            // in the client's node handling.
+            Event::HistorySync(history) => {
+                Box::pin(self.history_sync(history)).await;
+                return true;
             }
-            None => {
-                if matches!(event, Event::Message(_)) {
-                    tracing::debug!(
-                        name: "whatsapp.inbound.skipped",
-                        account_id = %self.account,
-                        reason = "not_group_content",
-                        "Acknowledged a WhatsApp message without storing it"
-                    );
-                }
-                true
+            Event::Message(message) => {
+                Box::pin(self.chats(events::message_chat(message).into_iter().collect())).await;
+            }
+            event => {
+                Box::pin(self.chats(events::chat_setting(event).into_iter().collect())).await;
             }
         }
+        if let Event::Message(message) = event
+            && let Some(vote) = Box::pin(self.poll_vote(message)).await
+        {
+            return vote;
+        }
+        let seal = |locator: &MediaLocator| self.seal(locator);
+        let mapped = events::map_event(self.account, event, Utc::now(), &seal);
+        if mapped.is_empty() && matches!(event, Event::Message(_)) {
+            tracing::debug!(
+                name: "whatsapp.inbound.skipped",
+                account_id = %self.account,
+                reason = "not_group_content",
+                "Acknowledged a WhatsApp message without storing it"
+            );
+        }
+        let mut stored = true;
+        for mapped in mapped {
+            match mapped {
+                Mapped::Inbound(mut event) => {
+                    stored &= self.complete_addresses(&mut event).await
+                        && self.inbound.accept(&event).await;
+                }
+                Mapped::Session(event) => {
+                    let _ = self.events.send(event);
+                }
+            }
+        }
+        stored
     }
 }
 
@@ -296,19 +512,21 @@ fn download_failure(error: &ClientError) -> DownloadFailure {
     }
 }
 
-fn quote_context(quote: Option<&Target>) -> Option<Box<wa_e2e::ContextInfo>> {
-    quote.map(
-        |Target {
-             source_id,
-             sender_jid,
-         }| {
-            Box::new(wa_e2e::ContextInfo {
-                stanza_id: Some(source_id.clone()),
-                participant: Some(sender_jid.clone()),
-                ..Default::default()
-            })
-        },
-    )
+/// The context a sent message carries: the quoted message, and the group's
+/// disappearing timer so members' phones treat it like their own messages.
+fn send_context(
+    quote: Option<&Target>,
+    expiration: Option<u32>,
+) -> Option<Box<wa_e2e::ContextInfo>> {
+    if quote.is_none() && expiration.is_none() {
+        return None;
+    }
+    Some(Box::new(wa_e2e::ContextInfo {
+        stanza_id: quote.map(|quote| quote.source_id.clone()),
+        participant: quote.map(|quote| quote.sender_jid.clone()),
+        expiration,
+        ..Default::default()
+    }))
 }
 
 /// The message part carrying an uploaded attachment.
@@ -317,11 +535,11 @@ fn media_message(
     mime: &str,
     filename: &str,
     caption: Option<&str>,
-    quote: Option<&Target>,
+    context_info: Option<Box<wa_e2e::ContextInfo>>,
+    shape: MediaShape,
     uploaded: &UploadedMedia,
 ) -> wa_e2e::Message {
     let caption = caption.map(str::to_owned);
-    let context_info = quote_context(quote);
     let url = Some(uploaded.url.clone());
     let direct_path = Some(uploaded.direct_path.clone());
     let media_key = Some(uploaded.media_key.clone());
@@ -340,6 +558,8 @@ fn media_message(
                 file_length,
                 mimetype,
                 caption,
+                width: shape.width,
+                height: shape.height,
                 context_info,
                 ..Default::default()
             })),
@@ -355,6 +575,9 @@ fn media_message(
                 file_length,
                 mimetype,
                 caption,
+                width: shape.width,
+                height: shape.height,
+                seconds: shape.duration_seconds,
                 context_info,
                 ..Default::default()
             })),
@@ -370,6 +593,7 @@ fn media_message(
                 file_sha256,
                 file_length,
                 mimetype,
+                seconds: shape.duration_seconds,
                 context_info,
                 ..Default::default()
             })),
@@ -400,30 +624,41 @@ impl WhatsmeowSession {
         &self,
         chat: &Jid,
         content: &OutgoingContent,
+        expiration: Option<u32>,
         media: Option<&UploadedMedia>,
     ) -> Result<wa_e2e::Message, SendFailure> {
         Ok(match content {
-            OutgoingContent::Text { text, quote: None } => wa_e2e::Message {
+            OutgoingContent::Text {
+                text,
+                quote: None,
+                mentions,
+            } if mentions.is_empty() && expiration.is_none() => wa_e2e::Message {
                 conversation: Some(text.clone()),
                 ..Default::default()
             },
             OutgoingContent::Text {
                 text,
-                quote: Some(quote),
-            } => wa_e2e::Message {
-                extended_text_message: Some(Box::new(wa_e2e::ExtendedTextMessage {
-                    text: Some(text.clone()),
-                    context_info: quote_context(Some(quote)),
+                quote,
+                mentions,
+            } => {
+                let mut context_info = send_context(quote.as_ref(), expiration).unwrap_or_default();
+                context_info.mentioned_jid = mentions.clone();
+                wa_e2e::Message {
+                    extended_text_message: Some(Box::new(wa_e2e::ExtendedTextMessage {
+                        text: Some(text.clone()),
+                        context_info: Some(context_info),
+                        ..Default::default()
+                    })),
                     ..Default::default()
-                })),
-                ..Default::default()
-            },
+                }
+            }
             OutgoingContent::Media {
                 kind,
                 mime,
                 filename,
                 caption,
                 quote,
+                shape,
             } => {
                 let uploaded = media.ok_or(SendFailure::Rejected("media_not_uploaded"))?;
                 media_message(
@@ -431,7 +666,8 @@ impl WhatsmeowSession {
                     mime,
                     filename,
                     caption.as_deref(),
-                    quote.as_ref(),
+                    send_context(quote.as_ref(), expiration),
+                    *shape,
                     uploaded,
                 )
             }
@@ -456,6 +692,30 @@ impl WhatsmeowSession {
             }
         })
     }
+}
+
+/// The message an anchor names, as whatsmeow's request builders take it. Our
+/// own messages have no sender (the key says from-me).
+fn anchor_info(chat_jid: &str, anchor: &MessageAnchor) -> Result<MessageInfo, SessionError> {
+    let invalid =
+        |what: &str| SessionError::Internal(rootcause::report!("invalid {what}").into_dynamic());
+    let chat: Jid = chat_jid.parse().map_err(|_| invalid("chat"))?;
+    let sender = match (&anchor.sender_jid, anchor.from_me) {
+        (Some(sender), false) => sender.parse().map_err(|_| invalid("sender"))?,
+        _ => Jid::default(),
+    };
+    Ok(MessageInfo {
+        source: MessageSource {
+            is_group: chat.server == whatsmeow::types::GROUP_SERVER,
+            chat,
+            sender,
+            is_from_me: anchor.from_me,
+            ..MessageSource::default()
+        },
+        id: anchor.id.clone(),
+        timestamp: Some(anchor.at),
+        ..MessageInfo::default()
+    })
 }
 
 fn group_info(group: whatsmeow::types::GroupInfo, observed_at: DateTime<Utc>) -> GroupInfo {
@@ -484,11 +744,25 @@ fn group_info(group: whatsmeow::types::GroupInfo, observed_at: DateTime<Utc>) ->
             })
             .collect(),
         announce: group.announce.is_announce,
-        disappearing: group.ephemeral.is_ephemeral,
-        community: group.parent.is_parent || !group.linked_parent.linked_parent_jid.is_empty(),
+        // WhatsApp lists a group that turned disappearing messages off as
+        // `<ephemeral expiration="0"/>`: only a timer means on.
+        disappearing_seconds: (group.ephemeral.is_ephemeral
+            && group.ephemeral.disappearing_timer > 0)
+            .then_some(group.ephemeral.disappearing_timer),
+        community_parent: group.parent.is_parent,
+        community_jid: (!group.parent.is_parent
+            && !group.linked_parent.linked_parent_jid.is_empty())
+        .then(|| {
+            group
+                .linked_parent
+                .linked_parent_jid
+                .to_non_ad()
+                .to_string()
+        }),
+        community_announcements: !group.parent.is_parent
+            && !group.linked_parent.linked_parent_jid.is_empty()
+            && group.is_default_sub.is_default_sub_group,
         observed_at,
-        group: None,
-        shared: None,
     }
 }
 
@@ -509,8 +783,8 @@ impl WhatsAppSession for WhatsmeowSession {
             while let Some(item) = codes.recv().await {
                 let event = match item {
                     QrChannelItem::Code { code, .. } => SessionEvent::Qr(code),
+                    QrChannelItem::Timeout => SessionEvent::PairExpired,
                     QrChannelItem::Error(_)
-                    | QrChannelItem::Timeout
                     | QrChannelItem::ErrUnexpectedEvent
                     | QrChannelItem::ClientOutdated
                     | QrChannelItem::ScannedWithoutMultidevice => SessionEvent::PairFailed,
@@ -574,7 +848,9 @@ impl WhatsAppSession for WhatsmeowSession {
         media: Option<&UploadedMedia>,
     ) -> Result<DateTime<Utc>, SendFailure> {
         let chat = parse_jid(&send.group_jid)?;
-        let message = self.outgoing(&chat, &send.content, media).await?;
+        let message = self
+            .outgoing(&chat, &send.content, send.disappearing_seconds, media)
+            .await?;
         let response = Box::pin(self.client.send_message(
             &chat,
             message,
@@ -628,14 +904,48 @@ impl WhatsAppSession for WhatsmeowSession {
     }
 
     async fn group(&self, group_jid: &str) -> Result<Option<GroupInfo>, SessionError> {
-        let jid: Jid = group_jid.parse().map_err(|error| {
-            SessionError::Internal(rootcause::report!("{error:?}").into_dynamic())
+        // The parse error repeats the JID; keep it out of logs.
+        let jid: Jid = group_jid.parse().map_err(|_| {
+            SessionError::Internal(rootcause::report!("invalid group JID").into_dynamic())
         })?;
         match self.client.get_group_info(&jid).await {
             Ok(group) => Ok(Some(group_info(group, Utc::now()))),
             Err(error) if not_a_member(&error) => Ok(None),
             Err(error) => Err(internal(error)),
         }
+    }
+
+    async fn request_history(
+        &self,
+        chat_jid: &str,
+        before: &MessageAnchor,
+        count: u32,
+    ) -> Result<(), SessionError> {
+        let mut info = anchor_info(chat_jid, before)?;
+        info.source.chat = events::phone_chat(self.store.as_ref(), info.source.chat.clone()).await;
+        let request = self
+            .client
+            .build_history_sync_request(&info, i32::try_from(count).unwrap_or(i32::MAX));
+        Box::pin(self.client.send_peer_message(request))
+            .await
+            .map(|_| ())
+            .map_err(internal)
+    }
+
+    async fn request_message(
+        &self,
+        chat_jid: &str,
+        message: &MessageAnchor,
+    ) -> Result<(), SessionError> {
+        let mut info = anchor_info(chat_jid, message)?;
+        info.source.chat = events::phone_chat(self.store.as_ref(), info.source.chat.clone()).await;
+        let request =
+            self.client
+                .build_unavailable_message_request(&info.chat, &info.sender, &info.id);
+        Box::pin(self.client.send_peer_message(request))
+            .await
+            .map(|_| ())
+            .map_err(internal)
     }
 
     async fn logout(&self) {

@@ -602,7 +602,7 @@ export const BulkMoveToProjectView = (props: {
                 />
                 <Button
                   size="sm"
-                  variant="outline"
+                  variant="secondary"
                   class="shrink-0"
                   disabled={!newFolderName().trim() || isSavingFolder()}
                   onClick={submitNewFolder}
@@ -616,7 +616,7 @@ export const BulkMoveToProjectView = (props: {
                   tooltip="Cancel"
                   onClick={cancelCreatingFolder}
                 >
-                  <CloseIcon />
+                  <CloseIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
               </div>
             </Show>
@@ -629,7 +629,7 @@ export const BulkMoveToProjectView = (props: {
         </Button>
         <Button
           type="button"
-          variant="strong"
+          variant="secondary"
           onClick={() => fireAndForget(finishEditing(), 'bulk-move-to-project')}
           disabled={!selectedProject()}
         >

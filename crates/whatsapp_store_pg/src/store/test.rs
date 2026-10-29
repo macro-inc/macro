@@ -362,6 +362,60 @@ async fn a_data_key_does_not_unwrap_for_another_owner_or_kms_key(pool: Pool<Post
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_device_whose_key_kms_lost_is_reset_without_unwrapping_it(pool: Pool<Postgres>) {
+    let account_id = insert_account(&pool, "macro|lost-key").await;
+    let lost = FakeWhatsAppKms::new(KMS_KEY_ID);
+    PgWhatsAppStore::open(pool.clone(), account_id, 0, &lost)
+        .await
+        .unwrap()
+        .put_session("111:0", b"session".to_vec())
+        .await
+        .unwrap();
+
+    // KMS lost the wrapping key (a new LocalStack, a deleted key): the stored
+    // data key never unwraps again, and the failure says so.
+    let kms = FakeWhatsAppKms::new(KMS_KEY_ID);
+    let error = PgWhatsAppStore::open(pool.clone(), account_id, 0, &kms)
+        .await
+        .unwrap_err();
+    assert!(error.is_unreadable_device(), "{error:?}");
+
+    // A replica that lost the lease cannot reset it.
+    let error = PgWhatsAppStore::reset_device(&pool, account_id, 1)
+        .await
+        .unwrap_err();
+    assert!(matches!(error, WhatsAppStoreError::Fenced), "{error:?}");
+
+    assert!(
+        PgWhatsAppStore::reset_device(&pool, account_id, 0)
+            .await
+            .unwrap()
+    );
+    assert!(
+        !PgWhatsAppStore::reset_device(&pool, account_id, 0)
+            .await
+            .unwrap(),
+        "nothing left to reset"
+    );
+    assert_eq!(kms.decrypt_calls(), 1, "resetting never calls KMS");
+    let fresh = PgWhatsAppStore::open(pool.clone(), account_id, 0, &kms)
+        .await
+        .unwrap();
+    assert_eq!(kms.generate_calls(), 1);
+    assert_eq!(fresh.get_session("111:0").await.unwrap(), None);
+}
+
+#[test]
+fn only_refusals_and_undecryptable_devices_are_unreadable() {
+    use crate::kms::WhatsAppKmsError;
+    assert!(WhatsAppStoreError::Kms(WhatsAppKmsError::refused()).is_unreadable_device());
+    assert!(!WhatsAppStoreError::Kms(WhatsAppKmsError::unavailable()).is_unreadable_device());
+    assert!(WhatsAppStoreError::Decrypt.is_unreadable_device());
+    assert!(WhatsAppStoreError::UnsupportedVersion(2).is_unreadable_device());
+    assert!(!WhatsAppStoreError::Fenced.is_unreadable_device());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn an_unknown_encryption_version_is_refused_before_calling_kms(pool: Pool<Postgres>) {
     let kms = FakeWhatsAppKms::new(KMS_KEY_ID);
     let account_id = insert_account(&pool, "macro|version").await;

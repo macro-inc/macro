@@ -207,7 +207,7 @@ async fn a_duration_becoming_a_point_is_an_upsert_with_the_same_provider_identit
 }
 
 #[tokio::test]
-async fn reversed_timed_and_nonpositive_all_day_events_still_reject_whole_batches() {
+async fn reversed_timed_and_all_day_events_still_reject_whole_batches() {
     let target = target();
     let client = GoogleCalendarClient::new(Client::new());
     let valid = timed_event(
@@ -223,7 +223,7 @@ async fn reversed_timed_and_nonpositive_all_day_events_still_reject_whole_batche
         }))
         .unwrap()
     };
-    for invalid in [reversed, all_day("2026-07-24"), all_day("2026-07-23")] {
+    for invalid in [reversed, all_day("2026-07-23")] {
         assert!(google_time(&invalid).is_err());
         assert!(
             map_snapshot(

@@ -2,6 +2,7 @@ use models_databases::position::Position;
 use models_databases::{DatabaseId, OptionId, RowId};
 use std::collections::HashMap;
 
+mod limits;
 mod projection;
 mod transcripts;
 
@@ -1050,6 +1051,17 @@ fn a_feed_of_the_wrong_kind_is_refused() {
     assert_eq!(
         engine.feed_ops(id, vec![]),
         Err(RunError::NothingOutstanding { fed: 0 })
+    );
+}
+
+#[test]
+fn a_select_resolved_against_another_catalog_is_refused() {
+    let Query::Select(select) = compile(&catalog(), "SELECT name FROM crm.deals").unwrap() else {
+        panic!("expected a select");
+    };
+    assert_eq!(
+        Engine::from_select(&issues_catalog(), select).map(|(_, step)| step),
+        Err(RunError::TableNotInCatalog { table: DEALS })
     );
 }
 

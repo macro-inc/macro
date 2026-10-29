@@ -1,8 +1,6 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
-import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
-import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -12,10 +10,11 @@ import XIcon from '@icon/system/regular/x.svg';
 import { InlineTagsPill } from '@property/tags';
 import type { PropertyApiValues } from '@property/types';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
-import { Button, EntityComposer, Scroll } from '@ui';
+import { Button, EntityComposer } from '@ui';
 import { createSignal, onMount, Show, Suspense } from 'solid-js';
-import type { ComposeTaskSuccess } from '../component/ComposeTask';
-import { ComposeTaskTitleEditor } from '../component/ComposeTask';
+import { DocumentFields } from '../../document-composer/components/document-fields';
+import { createDocumentEditor } from '../../document-composer/primitives/create-document-editor';
+import type { ComposeTaskSuccess } from '../../task-composer/core/types';
 import { createDocumentWithTags } from '../queries/create-document-with-tags';
 import { createDocumentComposerTags } from '../util/documentComposerProperties';
 
@@ -113,27 +112,11 @@ export function ComposeDocument(props: ComposeDocumentProps) {
   };
 
   let submitButton: HTMLButtonElement | undefined;
-  const editorConfig = buildConfig('markdown')
-    .withAppLinkResolver(useMacroMentionLinkResolver())
-    .withMentions()
-    .withTags({
-      applyTargetLabel: 'Document',
-      isApplied: (tag) => tags.composerTags.isApplied(tag.optionId),
-      onCreate: (tag) => {
-        fireAndForget(
-          tags.composerTags.applyTag(tag.scope, tag.optionId),
-          'compose-document'
-        );
-      },
-    })
-    .withEmojis()
-    .withActions()
-    .withCode()
-    .withMedia({ fileDrop: true })
-    .withSelectionData()
-    .withFloatingFormatMenu()
-    .withHistory()
-    .onChange(setContent)
+  const editorConfig = createDocumentEditor({
+    resolveAppLink: useMacroMentionLinkResolver(),
+    tags: tags.composerTags,
+    onChange: setContent,
+  })
     .onFocusLeave({
       onStart: () => titleRoot?.focus(),
       onEnd: () => submitButton?.focus(),
@@ -142,7 +125,6 @@ export function ComposeDocument(props: ComposeDocumentProps) {
       container()?.focus();
       return true;
     });
-  const editor = editorConfig.buildHandle().lexical;
   let titleRoot: HTMLDivElement | undefined;
 
   onMount(() => {
@@ -167,61 +149,47 @@ export function ComposeDocument(props: ComposeDocumentProps) {
         <div class="flex-1 flex items-center">
           <Show when={panel.handle.isPopover()}>
             <Button
+              variant="ghost"
               onMouseDown={() =>
                 fireAndForget(submit(true), 'compose-document')
               }
               disabled={isCreating()}
               tabIndex={-1}
               tooltip="Continue editing in split"
-              size="icon-composer"
+              size="icon-md"
             >
-              <ArrowsOutIcon />
+              <ArrowsOutIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </Show>
         </div>
         <Button
+          variant="ghost"
           onClick={() => panel.handle.close()}
           tabIndex={-1}
           tooltip="Close"
-          size="icon-composer"
+          size="icon-md"
         >
-          <XIcon />
+          <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </EntityComposer.Header>
-      <EntityComposer.Main>
-        <EntityComposer.Title>
-          <ComposeTaskTitleEditor
-            placeholder="New document"
-            value={title}
-            onChange={setTitle}
-            disabled={isCreating}
-            bodyEditor={() => editor}
-            containerRef={container}
-            onUserInput={() => {}}
-            onTagSelected={(tag) => {
-              fireAndForget(
-                tags.composerTags.applyTag(tag.scope, tag.optionId),
-                'compose-document'
-              );
-            }}
-            onDeleteTagsAtStart={() => false}
-            portalScope={portalScope()}
-            ref={(root) => {
-              titleRoot = root;
-            }}
-          />
-        </EntityComposer.Title>
-        <EntityComposer.Body>
-          <Scroll>
-            <MarkdownShell
-              config={editorConfig}
-              initialValue={props.initialContent || undefined}
-              placeholder="Add content..."
-              portalScope={portalScope()}
-            />
-          </Scroll>
-        </EntityComposer.Body>
-      </EntityComposer.Main>
+      <DocumentFields
+        title={title()}
+        onTitleChange={setTitle}
+        editor={editorConfig}
+        initialValue={props.initialContent || undefined}
+        disabled={isCreating()}
+        containerRef={container}
+        titleRef={(root) => {
+          titleRoot = root;
+        }}
+        onTagSelected={(tag) => {
+          fireAndForget(
+            tags.composerTags.applyTag(tag.scope, tag.optionId),
+            'compose-document'
+          );
+        }}
+        portalScope={portalScope()}
+      />
       <EntityComposer.Footer class="items-center">
         <Suspense fallback={<div class="h-7" />}>
           <InlineTagsPill docTags={tags.composerTags} showPlaceholder />
@@ -230,7 +198,7 @@ export function ComposeDocument(props: ComposeDocumentProps) {
           ref={(button) => {
             submitButton = button;
           }}
-          variant="strong"
+          variant="primary"
           onClick={() => fireAndForget(submit(), 'compose-document')}
           disabled={!title().trim() || isCreating()}
           hasContent={!!title().trim()}

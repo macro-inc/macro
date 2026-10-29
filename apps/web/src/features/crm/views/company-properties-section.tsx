@@ -1,4 +1,5 @@
 import { EntityPropertiesSection } from '@app/features/property/side-panel/properties/EntityPropertiesSection';
+import type { SidePanelSectionLayout } from '@components/app/side-panel/SidePanel';
 import { buildCompanyDefaultProperties } from '@entity/extractors-property';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useCrmPermissions, useDealStages } from './use-crm';
@@ -14,7 +15,10 @@ import { useCrmPermissions, useDealStages } from './use-crm';
  * customized stages, the panel edits the team Stage definition and the
  * fetched system Stage row is hidden.
  */
-export function CompanyPropertiesSection(props: { companyId: string }) {
+export function CompanyPropertiesSection(props: {
+  companyId: string;
+  renderSection: SidePanelSectionLayout;
+}) {
   const { canEditCrm } = useCrmPermissions();
   const dealStages = useDealStages();
 
@@ -39,6 +43,7 @@ export function CompanyPropertiesSection(props: { companyId: string }) {
       entityId={props.companyId}
       entityType="COMPANY"
       canEdit={canEditCrm()}
+      renderSection={props.renderSection}
       defaultProperties={defaultProperties}
       pinnedPropertyDefinitionOrder={pinnedOrder()}
       hidePropertyDefinitionIds={
