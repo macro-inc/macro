@@ -4,6 +4,9 @@
 mod query_database;
 mod save_database_query;
 
+/// The authoritative SELECT dialect reference for hosts that execute SQL themselves.
+pub const SQL_READ_GUIDE: &str = include_str!("toolset/sql_guide.md");
+
 #[cfg(test)]
 mod test;
 

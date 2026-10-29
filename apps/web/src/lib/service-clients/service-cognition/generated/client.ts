@@ -14,6 +14,8 @@ import type {
   ChatMessageError,
   CompleteOnboardingRequest,
   CreateChatRequest,
+  DatabaseQueryAnswer,
+  DatabaseQueryRequest,
   DecisionErrorBody,
   DecisionRequest,
   DecisionResponse,
@@ -1189,6 +1191,78 @@ export const getCitationHandler = async (
     status: res.status,
     headers: res.headers,
   } as getCitationHandlerResponse;
+};
+
+export type handlerResponse200 = {
+  data: DatabaseQueryAnswer;
+  status: 200;
+};
+
+export type handlerResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type handlerResponse402 = {
+  data: StructuredCompletionError;
+  status: 402;
+};
+
+export type handlerResponse403 = {
+  data: StructuredCompletionError;
+  status: 403;
+};
+
+export type handlerResponse500 = {
+  data: StructuredCompletionError;
+  status: 500;
+};
+
+export type handlerResponse503 = {
+  data: StructuredCompletionError;
+  status: 503;
+};
+
+export type handlerResponse504 = {
+  data: StructuredCompletionError;
+  status: 504;
+};
+
+export type handlerResponseSuccess = handlerResponse200 & {
+  headers: Headers;
+};
+export type handlerResponseError = (
+  | handlerResponse401
+  | handlerResponse402
+  | handlerResponse403
+  | handlerResponse500
+  | handlerResponse503
+  | handlerResponse504
+) & {
+  headers: Headers;
+};
+
+export type handlerResponse = handlerResponseSuccess | handlerResponseError;
+
+export const getHandlerUrl = () => {
+  return `/database-query`;
+};
+
+export const handler = async (
+  databaseQueryRequest: DatabaseQueryRequest,
+  options?: RequestInit
+): Promise<handlerResponse> => {
+  const res = await fetch(getHandlerUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(databaseQueryRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: handlerResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as handlerResponse;
 };
 
 export type decisionsResponse200 = {
