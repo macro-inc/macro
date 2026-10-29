@@ -823,10 +823,11 @@ suspended, **Auto-reload**:
   it charges the team owner's card, shows **Team monthly limit** (`$X of $Y
   left`), and disables packs over what is left. A declined card shows inline;
   the payer gets **Add payment method**, a member is told to ask the owner.
-  With no card on file (for example, removed in the billing portal) nothing is
-  charged: the payer is sent to Stripe Checkout for the same pack and returns
-  to the same page, and a member sees `Your team doesn't have a card on file.
-  Ask your team owner to add one.`
+  With no card on file (for example, removed in the billing portal), or a card
+  that needs 3-D Secure, nothing is charged: the payer is sent to Stripe
+  Checkout for the same pack and returns to the same page (Settings → Usage on
+  the web origin from the native app, which opens Stripe in the system
+  browser). A member is asked to have the owner add or update the card.
 - **Auto-reload** shows the reload (`$25 when below $5`), an editable
   **Monthly limit** prefilled with the plan default ($200 Pro, $1,000 Max; blank
   means no limit), and **Turn on auto-reload**, which enables it in one click.

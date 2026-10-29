@@ -8,6 +8,7 @@ import {
 } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { getWebOrigin } from '@core/util/webOrigin';
 import {
   useAiBillingPlansQuery,
   useAiBillingSummaryQuery,
@@ -47,7 +48,8 @@ export function Usage() {
   const available = () =>
     !usagePreview.beforeLaunch() &&
     isUsageAvailable(PROD_MODE_ENV && !LOCAL_ONLY, aiUsageBilling().enabled);
-  const returnUrl = `${window.location.origin}/app/settings/usage`;
+  // Stripe can't return to the native app's own origin.
+  const returnUrl = `${getWebOrigin()}/app/settings/usage`;
   const usageSummary = () => {
     const snapshot = usagePreview.withPreview(
       summary.isSuccess ? summary.data : undefined,

@@ -377,9 +377,9 @@ editing. **Usage Credits** shows the dollar balance and `Add more`, which opens
 **Need more usage?** with `$25` / `$50` / `$100` / `Other`. **Buy $25 in
 credits** charges the card on file right away (no Stripe Checkout redirect),
 shows an `Added $25 in credits.` toast, and reports a declined card inline;
-unsupported custom amounts are disabled. Without a card on file the payer is
-sent to Stripe Checkout for the same pack instead, and a team member is asked
-to have the owner add one. Free accounts see `View plans` instead
+unsupported custom amounts are disabled. Without a card on file, or with a card
+that needs 3-D Secure, the payer is sent to Stripe Checkout for the same pack
+instead, and a team member is asked to have the owner add or update the card. Free accounts see `View plans` instead
 of purchase or reload controls. Paid team members who are not the payer see the
 shared balance with `Add more`, described as “Shared team balance. You can add
 $X more this month, within your team's $Y limit.” Their purchases charge the

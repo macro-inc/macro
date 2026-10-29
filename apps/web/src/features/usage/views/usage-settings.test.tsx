@@ -270,3 +270,59 @@ it('asks a team member to have the owner add a card when the team has none', asy
   ).toBeTruthy();
   expect(checkout).not.toHaveBeenCalled();
 });
+
+it('sends a payer whose card needs authentication to checkout', async () => {
+  const lab = createBillingLab('pro');
+  const checkout = vi.fn(async () => 'https://checkout.stripe.test/session');
+  const navigateToPayment = vi.fn();
+  render(() => (
+    <UsageSettingsView
+      context={{
+        ...lab.usage,
+        creditPurchase: {
+          ...lab.usage.creditPurchase,
+          buy: async () => 'authentication_required',
+          checkout,
+        },
+        navigateToPayment,
+      }}
+    />
+  ));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add more' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Buy $25 in credits' }));
+
+  await waitFor(() =>
+    expect(navigateToPayment).toHaveBeenCalledWith(
+      'https://checkout.stripe.test/session'
+    )
+  );
+  expect(checkout).toHaveBeenCalledWith(2_500);
+});
+
+it('asks a team member to have the owner verify a card that needs authentication', async () => {
+  const lab = createBillingLab('team-member');
+  const checkout = vi.fn(async () => 'https://checkout.stripe.test/session');
+  render(() => (
+    <UsageSettingsView
+      context={{
+        ...lab.usage,
+        creditPurchase: {
+          ...lab.usage.creditPurchase,
+          buy: async () => 'authentication_required',
+          checkout,
+        },
+      }}
+    />
+  ));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add more' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Buy $25 in credits' }));
+
+  expect(
+    await screen.findByText(
+      "Your team's card needs verification. Ask your team owner to buy credits or update the card."
+    )
+  ).toBeTruthy();
+  expect(checkout).not.toHaveBeenCalled();
+});

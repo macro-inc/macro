@@ -185,9 +185,14 @@ only consider `kind = 'automatic'` rows. Before reserving, a purchase checks
 that Stripe has a card to charge (the subscription's or customer's default
 payment method, or a legacy default source); without one it reserves nothing
 and returns `payment_method_required`, and the app sends the payer to the Stripe
-Checkout credit endpoint (`/ai-billing/credits/checkout`) for the same pack.
-Checkout purchases are booked by the webhook and are not counted against the
-monthly limit. Each reload is one `ai_credit_reload` row reserved under the
+Checkout credit endpoint (`/ai-billing/credits/checkout`) for the same pack. A
+card that needs 3-D Secure can't be charged off-session: the purchase's invoice
+is voided and it returns `authentication_required`, with the same checkout
+fallback. Before either fallback, open invoices from declined purchases are
+voided (rows become `failed` with no invoice), so a card added later can't
+collect them on top of the checkout payment; one Stripe collected first is
+booked instead. Checkout purchases are booked by the webhook and are not
+counted against the monthly limit. Each reload is one `ai_credit_reload` row reserved under the
 payer lock and collected as a one-off Stripe invoice stamped
 `macro_purpose = ai_credit_reload`; a paid invoice books an `ai_credit_ledger`
 purchase, idempotent on the invoice id. A declined invoice stays pending, which

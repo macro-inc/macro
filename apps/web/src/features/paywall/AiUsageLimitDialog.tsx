@@ -8,7 +8,9 @@ import {
 } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { isTauri } from '@core/util/platform';
 import { ThrownResultError } from '@core/util/result';
+import { getWebOrigin } from '@core/util/webOrigin';
 import {
   useAiBillingPlansQuery,
   useAiBillingSummaryQuery,
@@ -143,16 +145,25 @@ export function AiUsageLimitDialog() {
       : (packs.find(fits) ?? packs[0]);
   };
 
-  /** No card on file: the payer pays this pack through Stripe Checkout. */
-  const checkoutCredits = async (amountCents: number) => {
+  /** The card on file can't be charged off-session (none on file, or it
+   * needs 3-D Secure): the payer pays this pack through Stripe Checkout. */
+  const checkoutCredits = async (
+    amountCents: number,
+    reason: 'payment_method_required' | 'authentication_required'
+  ) => {
     if (!usageSnapshot()?.can_manage_billing) {
       setOfferError(
-        "Your team doesn't have a card on file. Ask your team owner to add one."
+        reason === 'payment_method_required'
+          ? "Your team doesn't have a card on file. Ask your team owner to add one."
+          : "Your team's card needs verification. Ask your team owner to buy credits or update the card."
       );
       return;
     }
-    // Come back to this page so the user can resend from where they were.
-    const here = window.location.href;
+    // Come back to this page so the user can resend from where they were. The
+    // native app's own origin isn't a URL Stripe can return to.
+    const here = isTauri()
+      ? `${getWebOrigin()}/app/settings/usage`
+      : window.location.href;
     try {
       window.location.href = await checkout.mutateAsync({
         amountCents,
@@ -171,8 +182,11 @@ export function AiUsageLimitDialog() {
     setOfferError(undefined);
     try {
       const result = await purchase.mutateAsync({ amountCents });
-      if (result.status === 'payment_method_required') {
-        await checkoutCredits(amountCents);
+      if (
+        result.status === 'payment_method_required' ||
+        result.status === 'authentication_required'
+      ) {
+        await checkoutCredits(amountCents, result.status);
         return;
       }
       if (result.status === 'declined') {
@@ -238,7 +252,7 @@ export function AiUsageLimitDialog() {
     if (portal.isPending) return;
     try {
       window.location.href = await portal.mutateAsync({
-        returnUrl: `${window.location.origin}/app/settings/usage`,
+        returnUrl: `${getWebOrigin()}/app/settings/usage`,
       });
     } catch {
       setOfferError("Couldn't open payment methods. Please try again.");
