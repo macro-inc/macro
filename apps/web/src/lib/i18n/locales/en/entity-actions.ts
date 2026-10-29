@@ -42,6 +42,7 @@ export default {
   share: 'Share',
   downloadDocx: 'Download',
   downloadEml: 'Download .eml',
+  downloadEmlFailed: 'Failed to download email. Please try again.',
   senderToSignal: 'Sender → Signal',
   senderToNoise: 'Sender → Noise',
   blockSender: 'Block Sender',

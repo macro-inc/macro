@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { downloadFile } from '@filesystem/download';
 import { Telemetry } from '@macro-inc/observability';
@@ -29,7 +30,7 @@ export async function downloadEmailMessageEml(
     const result = await getEmailMessageEml(message.db_id);
     if (result.isErr()) {
       span.error('EML download failed');
-      toast.failure('Failed to download email. Please try again.');
+      toast.failure(t('entityActions.downloadEmlFailed'));
       return;
     }
     await downloadFile(

@@ -121,4 +121,27 @@ describe('thread message selection', () => {
     ).toBe('sent');
     expect(selectEmlMessage(thread([draft]))).toBeUndefined();
   });
+  it('downloads the newest message when timestamps are missing or mixed', () => {
+    const received = message('received', {
+      provider_id: 'p-received',
+      internal_date_ts: '2026-09-02T00:00:00Z',
+    });
+    const sent = message('sent', {
+      provider_id: 'p-sent',
+      internal_date_ts: null,
+      sent_at: '2026-09-03T00:00:00Z',
+    });
+    const synced = message('synced', {
+      provider_id: 'p-synced',
+      internal_date_ts: null,
+      created_at: '2026-09-01T00:00:00Z',
+    });
+    for (const order of [
+      [received, sent, synced],
+      [sent, synced, received],
+      [synced, received, sent],
+    ]) {
+      expect(selectEmlMessage(thread(order))?.db_id).toBe('sent');
+    }
+  });
 });

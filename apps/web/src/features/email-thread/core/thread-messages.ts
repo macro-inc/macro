@@ -16,8 +16,20 @@ export function selectThreadSender(thread: EmailThread, viewerEmail?: string) {
  * way have no provider copy yet.
  */
 export function selectEmlMessage(thread: EmailThread) {
-  return selectThreadMessages(thread).messages.findLast(
-    (message) => !message.is_draft && !!message.provider_id
+  let newest: EmailMessage | undefined;
+  for (const message of selectThreadMessages(thread).messages) {
+    if (message.is_draft || !message.provider_id) continue;
+    if (!newest || messageTime(message) >= messageTime(newest)) {
+      newest = message;
+    }
+  }
+  return newest;
+}
+
+/** When a message happened, falling back to when Macro first saw it. */
+function messageTime(message: EmailMessage) {
+  return Date.parse(
+    message.internal_date_ts ?? message.sent_at ?? message.created_at
   );
 }
 
