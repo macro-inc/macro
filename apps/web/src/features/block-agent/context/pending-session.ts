@@ -24,16 +24,16 @@
 
 import { handleAiUsageLimitError } from '@app/features/paywall/ai-usage-limit-handling';
 import { analytics } from '@app/lib/analytics';
-import {
-  enableFirstPromptOnCreate,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { AgentSession } from '@core/agent-session/AgentSession';
 import {
   type PromptSubmitSurface,
   PromptTrace,
 } from '@core/agent-session/prompt-telemetry';
 import { markSessionCreated } from '@core/agent-session/recently-created';
+import {
+  enableFirstPromptOnCreate,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   replenishWarmAgentSession,
