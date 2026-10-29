@@ -289,18 +289,23 @@ or stop.
 
 **Ask AI** in desktop search (including Tab) and the command menu opens
 an agent session. A nonempty search query is sent as the first prompt once the
-session is ready; an empty search opens an empty composer. Desktop search replaces
-its current split into the Agents workspace, while command-menu actions open a new split.
+session is ready. With the Agents workspace enabled, an empty search replaces its
+split with the Agents workspace's new-conversation composer; otherwise it opens an
+empty session there. Command-menu actions open a new split.
 
 **Ask Macro** and **Chat with Agent** on documents, tasks, PDFs, DOCX files,
-code files, images, canvases, spreadsheets, email, channels, calls, and projects
-also open agent sessions. Like command-menu Ask AI, they open the bare session in
-a new split, without the Agents workspace's conversation sidebar. Their entity mention stays
-in the composer as an unsent draft. Spreadsheet mentions retain the current sheet
-and selected range; channel-message actions retain the referenced message. On
+code files, images, canvases, spreadsheets, email, channels, calls, and projects,
+and the channel message hover menu, open the Agents workspace's new-conversation
+composer in a new split, the same centered composer as Home and **Create → Agent**,
+with its Auto/Chat/Code switch and agent, model, and effort pickers. Their entity
+mention fills the composer as an unsent draft; an Agents split that is already open
+returns to its composer with that draft. Spreadsheet mentions retain the current
+sheet and selected range; channel-message actions retain the referenced message. On
 phones, the channel message long-press drawer offers the same action as **Ask Macro**.
-Add a question and press Send to submit that context. These actions do not create
-legacy cognition chats, regardless of the Agents workspace feature flag.
+Add a question and press Send to start the conversation. Handoffs that carry hidden
+instructions or a fixed model (database chat, booking-link setup, connector import)
+still open a bare session directly, as does every action while the Agents workspace
+flag is off. These actions do not create legacy cognition chats.
 
 ## Dispatching coding agents from chat
 
