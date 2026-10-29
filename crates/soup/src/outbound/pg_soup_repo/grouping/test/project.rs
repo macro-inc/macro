@@ -14,7 +14,12 @@ use uuid::{Uuid, uuid};
     migrator = "MACRO_DB_MIGRATIONS"
 )]
 async fn tasks_group_by_their_project_property(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com")?;
+    let owner = sqlx::query_scalar!(
+        r#"SELECT owner FROM "Document" WHERE id = '11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa'"#
+    )
+    .fetch_one(&pool)
+    .await?;
+    let user_id = MacroUserIdStr::parse_from_str(&owner)?;
     let filter = EntityFilterAst {
         document_filter: Some(Arc::new(Expr::val(DocumentLiteral::SubType(
             DocumentSubType::Task,
