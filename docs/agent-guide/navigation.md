@@ -377,8 +377,10 @@ in rail order, then the More apps, with a check on the current one. Choosing one
 replaces the view in that split, not the active split; Shift opens it in a new
 split. The navigation panel's title shows the name with a caret, sharing one
 hover background. Short names stay whole; long names ellipsize without shrinking
-the caret. Saved-view icons stay beside their labels on one line. Main headers
-show the name alone, with the same hover: `ViewSidebar.Title caret={false}` for
+the caret. Saved-view icons stay beside their labels on one line. List headers
+reserve the title's natural width and scroll the controls beside it when space
+runs out; the switcher trigger stays inside the header's clipping boundary.
+Main headers show the name alone, with the same hover: `ViewSidebar.Title caret={false}` for
 plain titles, and the first breadcrumb
 (Drive, Email, Tasks, Reviews) while it is the current page; deeper, that crumb
 returns to the list. Titles that name content rather than the view (Calendar's

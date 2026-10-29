@@ -8,9 +8,16 @@ import {
   type SplitPanelContextType,
 } from '@components/app/split-layout/context';
 import BookmarkIcon from '@phosphor/bookmark-simple.svg';
-import { createSignal, Show } from 'solid-js';
+import { Button } from '@ui';
+import { createSignal, For, Show } from 'solid-js';
 import { render } from 'solid-js/web';
-import { ViewSidebar, ViewSwitcherContext } from '../ViewSidebar';
+import { ListHeader } from '../ListHeader';
+import { ViewBreadcrumbs } from '../ViewBreadcrumbs';
+import {
+  ViewSidebar,
+  ViewSwitcherContext,
+  ViewSwitchTrigger,
+} from '../ViewSidebar';
 
 function Fixture() {
   const search = new URLSearchParams(window.location.search);
@@ -26,6 +33,12 @@ function Fixture() {
       isPopover: () => false,
     },
   } as unknown as SplitPanelContextType;
+  const label = () => (
+    <Show when={search.has('saved')} fallback={title}>
+      <BookmarkIcon class="size-4 shrink-0" aria-hidden="true" />
+      <span class="truncate">{title}</span>
+    </Show>
+  );
 
   return (
     <AnalyticsContextProvider>
@@ -38,24 +51,55 @@ function Fixture() {
                   class="rounded-xl border border-edge-muted bg-panel"
                   style={{ width: `${search.get('width') ?? 280}px` }}
                 >
-                  <ViewSidebar.Header
-                    searchLabel="Search conversations"
-                    search={() => (
-                      <input aria-label="Search conversations" class="w-full" />
-                    )}
-                  >
-                    <div class="flex min-w-0 items-center gap-1">
-                      <ViewSidebar.Title>
-                        <Show when={search.has('saved')} fallback={title}>
-                          <BookmarkIcon
-                            class="size-4 shrink-0"
-                            aria-hidden="true"
+                  <Show
+                    when={search.has('list')}
+                    fallback={
+                      <ViewSidebar.Header
+                        searchLabel="Search conversations"
+                        search={() => (
+                          <input
+                            aria-label="Search conversations"
+                            class="w-full"
                           />
-                          <span class="truncate">{title}</span>
-                        </Show>
-                      </ViewSidebar.Title>
-                    </div>
-                  </ViewSidebar.Header>
+                        )}
+                      >
+                        <div class="flex min-w-0 items-center gap-1">
+                          <ViewSidebar.Title>{label()}</ViewSidebar.Title>
+                        </div>
+                      </ViewSidebar.Header>
+                    }
+                  >
+                    <ViewBreadcrumbs.Root
+                      value="tasks-view"
+                      onChange={() => {}}
+                    >
+                      <ViewBreadcrumbs.Item value="tasks-view" metadata={{}}>
+                        <ViewSwitchTrigger>{label()}</ViewSwitchTrigger>
+                      </ViewBreadcrumbs.Item>
+                      <ListHeader
+                        title={
+                          <div class="flex min-w-0 items-center gap-1">
+                            <ViewBreadcrumbs.Outlet />
+                          </div>
+                        }
+                      >
+                        <For
+                          each={[
+                            'Filters',
+                            'Layout',
+                            'Sort',
+                            'Group',
+                            'New',
+                            'Search',
+                          ]}
+                        >
+                          {(name) => (
+                            <Button variant="secondary">{name}</Button>
+                          )}
+                        </For>
+                      </ListHeader>
+                    </ViewBreadcrumbs.Root>
+                  </Show>
                 </aside>
               </div>
             </ViewSwitcherContext.Provider>

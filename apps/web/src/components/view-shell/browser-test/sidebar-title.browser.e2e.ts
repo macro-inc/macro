@@ -84,3 +84,36 @@ test('keeps long text titles bounded without shrinking the caret', async ({
   expect(bounds.right).toBeLessThan(bounds.headerRight);
   expect(bounds.overflow).toBeLessThanOrEqual(1);
 });
+
+for (const saved of [false, true]) {
+  test(`keeps the ${saved ? 'saved' : 'built-in'} list title whole beside scrolling controls`, async ({
+    page,
+  }) => {
+    const title = saved ? 'Follow-up tasks' : 'My tasks';
+    await page.goto(
+      `${fixture}?list&${saved ? 'saved&' : ''}title=${encodeURIComponent(title)}&width=480`
+    );
+    const trigger = page.getByRole('button', { name: title, exact: true });
+    await expect(trigger).toBeVisible();
+    const label = trigger.locator('span').last();
+    expect(
+      await label.evaluate((el) => el.scrollWidth - el.clientWidth)
+    ).toBeLessThanOrEqual(1);
+    const bounds = await trigger.evaluate((el) => ({
+      left: el.getBoundingClientRect().left,
+      clipLeft: el
+        .closest('nav')!
+        .parentElement!.parentElement!.getBoundingClientRect().left,
+      right: el.getBoundingClientRect().right,
+      headerRight: el
+        .closest('[data-view-shell-top-bar]')!
+        .getBoundingClientRect().right,
+    }));
+    expect(bounds.left).toBeGreaterThanOrEqual(bounds.clipLeft);
+    expect(bounds.right).toBeLessThan(bounds.headerRight);
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    expect(
+      await label.evaluate((el) => el.scrollWidth - el.clientWidth)
+    ).toBeLessThanOrEqual(1);
+  });
+}

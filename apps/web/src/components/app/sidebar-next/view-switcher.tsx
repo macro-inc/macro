@@ -99,7 +99,7 @@ export function ViewSwitcher(props: ViewSwitcherProps) {
       <Dropdown.Trigger
         variant="ghost"
         size="sm"
-        class="-ml-2 w-max min-w-0 max-w-full"
+        class="w-max min-w-0 max-w-full"
         data-view-switcher=""
       >
         <span class="flex min-w-0 items-center gap-2 text-sm font-semibold tracking-[-0.03em] text-ink">
