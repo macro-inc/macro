@@ -40,7 +40,6 @@ it('scopes tasks to the Project property and disables the shared source immediat
         updatedAt: '',
       });
       const refresh = vi.fn(async () => {});
-      const [board, setBoard] = createSignal(false);
       const source = createProjectTasksDataSource(
         'project',
         {
@@ -62,7 +61,6 @@ it('scopes tasks to the Project property and disables the shared source immediat
           tagSets: () => [],
           tagSetsReady: () => true,
           isGroupExpanded: () => true,
-          board,
         }
       );
       expect(mock.options?.reference?.()).toEqual({
@@ -71,13 +69,6 @@ it('scopes tasks to the Project property and disables the shared source immediat
       });
       expect(mock.options?.enabled?.()).toBe(true);
       expect(mock.options?.loadAll).toBe(true);
-      expect(mock.options?.board?.()).toBe(false);
-      setBoard(true);
-      expect(mock.options?.board?.()).toBe(true);
-      expect(mock.options?.reference?.()).toEqual({
-        propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
-        entityId: 'project',
-      });
       setProject(undefined);
       expect(mock.options?.enabled?.()).toBe(false);
       source
