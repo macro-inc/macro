@@ -237,11 +237,15 @@ function IntegrationsOverview(
     leftover.kind === 'native-mcp' && queryReadyGate(overlays)
       ? overlaidAppSlug(overlays.data, leftover.url)
       : undefined;
+  // Until overlays load, a native server can't be told apart from a custom one;
+  // hold those rows back so an overlaid app doesn't flash at the top.
   const leftovers = () =>
     props
       .model()
-      .leftovers.filter((row) =>
-        leftoverMatches(row, overlaidSlugFor(row), query())
+      .leftovers.filter(
+        (row) =>
+          !(row.kind === 'native-mcp' && overlays.isPlaceholderData) &&
+          leftoverMatches(row, overlaidSlugFor(row), query())
       );
   // Servers the user added themselves lead the list.
   const isCustom = (leftover: Leftover) =>

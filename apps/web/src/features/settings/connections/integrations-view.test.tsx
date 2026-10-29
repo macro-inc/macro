@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   failure: vi.fn(),
   granolaConnected: false,
   leftovers: [] as Leftover[],
+  overlaysLoading: false,
 }));
 const [state, setState] = createSignal<ImportState>({ runs: [], entities: [] });
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'me' }));
@@ -43,7 +44,13 @@ vi.mock('@service-connection/websocket', () => ({
 vi.mock('@queries/pipedream-connectors', () => ({
   connectPipedreamApp: mocks.connect,
   usePipedreamConnectedSlugs: () => ({ slugs: () => new Set<string>() }),
-  usePipedreamOverlaysQuery: () => ({ isPending: false, data: [] }),
+  usePipedreamOverlaysQuery: () => ({
+    isPending: false,
+    data: [],
+    get isPlaceholderData() {
+      return mocks.overlaysLoading;
+    },
+  }),
   overlaidAppSlug: () => undefined,
 }));
 vi.mock('./use-connections-model', () => ({
@@ -182,12 +189,23 @@ vi.mock('../primitives', () => ({
   ),
 }));
 
+const CUSTOM_SERVER: Leftover = {
+  kind: 'native-mcp',
+  id: 'mcp:https://tools.example.com/mcp',
+  title: 'Team tools',
+  subtitle: 'tools.example.com',
+  url: 'https://tools.example.com/mcp',
+  enabled: true,
+  authenticated: true,
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   clearPendingConnectApp();
   mocks.connected = false;
   mocks.granolaConnected = false;
   mocks.leftovers = [];
+  mocks.overlaysLoading = false;
   setState({ runs: [], entities: [] });
 });
 afterEach(cleanup);
@@ -329,17 +347,7 @@ describe('unified Integrations page', () => {
   });
   it('lists custom servers first, then connected integrations, the rest and the catalog', () => {
     mocks.granolaConnected = true;
-    mocks.leftovers = [
-      {
-        kind: 'native-mcp',
-        id: 'mcp:https://tools.example.com/mcp',
-        title: 'Team tools',
-        subtitle: 'tools.example.com',
-        url: 'https://tools.example.com/mcp',
-        enabled: true,
-        authenticated: true,
-      },
-    ];
+    mocks.leftovers = [CUSTOM_SERVER];
     render(() => (
       <IntegrationsView
         onOpenEmailSettings={() => {}}
@@ -353,6 +361,19 @@ describe('unified Integrations page', () => {
     expect(names.slice(0, 2)).toEqual(['Team tools', 'Granola']);
     expect(names).toContain('GitHub');
     expect(screen.getByText('Integration catalog')).toBeTruthy();
+  });
+
+  it('holds native servers back until overlays load', () => {
+    mocks.leftovers = [CUSTOM_SERVER];
+    mocks.overlaysLoading = true;
+    render(() => (
+      <IntegrationsView
+        onOpenEmailSettings={() => {}}
+        onOpenMacroMcp={() => {}}
+      />
+    ));
+    expect(screen.queryByText('Team tools')).toBeNull();
+    expect(screen.getByText('Granola')).toBeTruthy();
   });
 
   it('filters every row by search', () => {

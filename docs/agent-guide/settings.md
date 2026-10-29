@@ -609,7 +609,10 @@ Overlaid catalog apps (the `mcp_overlays` table, served at
 `GET /pipedream/mcp/overlays`) look the same in the catalog but never open
 Pipedream: their Connect action opens the vendor's own MCP OAuth consent in a new
 tab (system browser on native) and the row turns connected once that server is
-authorized, after which the app appears with the custom MCP servers at the top. Verify with an overlaid app such as Sentry or Asana; completing a
+authorized, after which it lists as that catalog app (its icon, Agent tools
+category) among the integrations in use, not with the custom MCP servers at
+the top; native servers wait for the overlay list before rendering so one never
+jumps. Verify with an overlaid app such as Sentry or Asana; completing a
 Pipedream connection for one answers 409.
 The Agents workspace opens this same Integrations page. The list includes featured providers, a searchable catalog,
 and `Add Custom`. Pipedream Slack OAuth is available in production and
