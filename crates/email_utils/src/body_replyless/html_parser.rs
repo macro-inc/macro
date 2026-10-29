@@ -177,8 +177,10 @@ fn find_on_wrote_text_splitter(document: &Html) -> Option<Cut> {
     }
 
     let start = ON_WROTE_RE.find(&text)?.start();
-    let index = spans.partition_point(|(node_start, _)| *node_start <= start) - 1;
-    let (node_start, node) = spans[index];
+    let index = spans
+        .partition_point(|(node_start, _)| *node_start <= start)
+        .checked_sub(1)?;
+    let (node_start, node) = *spans.get(index)?;
     let text_offset = start - node_start;
     Some(Cut {
         node,
@@ -298,8 +300,10 @@ fn get_previous_html_recursively(current_element: ElementRef, cut: Cut) -> Strin
         // First, check if the child node IS the splitter itself.
         if child.id() == cut.node {
             // Keep the part of a text node before the attribution.
-            if let (Some(offset), Some(text)) = (cut.text_offset, child.value().as_text()) {
-                reply_html_parts.push(escape_text(&text[..offset]));
+            if let (Some(offset), Some(text)) = (cut.text_offset, child.value().as_text())
+                && let Some(before) = text.get(..offset)
+            {
+                reply_html_parts.push(escape_text(before));
             }
             break;
         }
