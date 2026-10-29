@@ -164,6 +164,10 @@ async function authorizedDssGraphqlFetch(
 
   const tokenResult = await parent.run(() => fetchToken(init?.signal));
   if (tokenResult.isErr()) {
+    if (init?.signal?.aborted)
+      throw (
+        init.signal.reason ?? new DOMException('Request aborted', 'AbortError')
+      );
     if (tokenResult.error.some((error) => error.code === 'UNAUTHORIZED'))
       return response;
     // A stalled refresh is a retryable transport failure, not proof that the
