@@ -58,3 +58,5 @@ Soup entity's filterable facts, shared by server and client-side cache code.
 ## Related
 
 - Rules: `.agents/rules/web/data.md`
+
+- Use `mail_legacy_v2` only for unadvertised clients at the server transport boundary; keep the frozen v2 golden wire payload compatible with deployed native engines.

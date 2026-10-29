@@ -847,3 +847,5 @@ The backend-free browser regression is
 Use `features/channel/channel-icon.tsx` for conversation identity in rows,
 favorites, and headers: channel pictures or hashtags, human/self-DM avatars,
 and bot personas share one renderer; keep surface sizing in the caller.
+
+- Advertise Mail v5 capsules only for the current browser engine or a verified supported installed native build; OTA bundle version alone cannot establish native capability.

@@ -135,6 +135,15 @@ impl SoupCacheProjectionSupplement {
         }
     }
 
+    /// Preserve the deployed Mail contract for clients that have not opted into v5.
+    /// These capsules never establish completeness in a current-profile client.
+    pub fn mail_legacy_v2(record_key: RecordKey, facts: MailCacheProjectionFacts) -> Self {
+        Self {
+            target_profile: Profile::new(Token::new("soup-mail-v2").expect("static profile")),
+            ..Self::mail(record_key, facts)
+        }
+    }
+
     /// Read the normalized record binding.
     pub fn record_key(&self) -> &RecordKey {
         &self.record_key

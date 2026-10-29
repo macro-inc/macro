@@ -49,8 +49,9 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
 - Pass the existing entity-filter `baseline` to Mail pagination too; `retainedKeys`
   tells the frontend which server rows still lack canonical local metadata.
 
-- Mail profile v5/v6 updates require a native cache release before the server
-  emits v5 capsules; older binaries fall back to network-only draft admission.
+- Mail profiles v5/v6 require the corresponding native engine for offline behavior.
+  The server emits v5 only after explicit HTTP/WS capability negotiation; unadvertised
+  clients receive v2 so old engines retain durable offline draft admission.
 
 - Email send persistence and cancellation belong to the frontend email journal, not the normalized cache or its mutation queue.
 

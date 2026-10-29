@@ -116,6 +116,7 @@ import {
   shouldRetryGraphqlSoupWebSocket,
   waitToRetryGraphqlSoupWebSocket,
 } from './graphql-soup-websocket';
+import { mailCacheProfile } from './mail-cache-profile';
 
 export { emailThreadSortTs } from './email-thread-sort';
 
@@ -335,7 +336,9 @@ export async function dssGraphqlFetch(
       // server's request and `graphql.execute` spans.
       const transportInit: RequestInit = {
         ...requestInit,
-        headers: mergeHeaders(requestInit?.headers, traceHeaders),
+        headers: mergeHeaders(requestInit?.headers, traceHeaders, {
+          'x-macro-mail-cache-profile': await mailCacheProfile(),
+        }),
       };
       span.event('request_dispatch');
       const response = await authorizedDssGraphqlFetch(input, transportInit);
@@ -417,6 +420,9 @@ function createGraphqlSoupWebSocketClient(
   });
   return createGraphqlWsClient({
     url: resolveWebSocketUrl,
+    connectionParams: async () => ({
+      mailCacheProfile: await mailCacheProfile(),
+    }),
     // Session cookies live in the native HTTP client's jar, which the WebView's
     // own WebSocket cannot send; the native socket forwards them.
     webSocketImpl:

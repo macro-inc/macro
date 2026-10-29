@@ -396,9 +396,14 @@ non-draft baseline after draft edits. Mixed threads show the latest message outs
 spam and trash; excluded messages must not consume a page slot. Drafts and Sent
 keep their own canonical preview membership. Mail profiles v5/v6 require fresh
 server metadata after upgrading, so older spam-inclusive cache entries cannot
-reappear. Native offline behavior requires a native cache update, not only OTA; older
-native engines fall back to the network for new capsules, including draft queue
-admission. Ship the native cache update before relying on offline draft writes.
+reappear. HTTP and WebSocket clients explicitly negotiate the Mail capsule profile.
+Absent/unknown capabilities receive legacy v2 capsules, preserving old native draft
+queue admission. Browsers advertise v5; native clients do so only after verifying
+installed iOS build 192 or Android build 20 (unknown/desktop builds retain v2).
+Current engines treat v2 capsules as incomplete and use the network for Mail lists.
+Deploy the backend (including its CORS capability header) before the new frontend.
+The backend can deploy before store releases; native v5 offline behavior still
+requires the corresponding native cache update.
 Verify Gmail labels and Outlook
 folder state. Calendar uses the authoritative thread calendar-attachment flag.
 
