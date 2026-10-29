@@ -13,6 +13,7 @@ aes-gcm = "0.10"
 agent = { path = "../agent" }
 ai_toolset = { path = "../ai_toolset" }
 anyhow.workspace = true
+authentication_service_client = { path = "../authentication_service_client" }
 async-trait.workspace = true
 oauth2 = { version = "5.0", default-features = false }
 base64.workspace = true

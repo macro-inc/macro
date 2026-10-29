@@ -1,3 +1,4 @@
+import { linkGithubAccount } from '@core/auth/authorize-github';
 import {
   openPipedreamConnectUI,
   type PipedreamConnectEvent,
@@ -291,6 +292,8 @@ let pipedreamUnsupported = false;
  * An overlaid app (see {@link usePipedreamOverlaysQuery}) never goes through
  * Pipedream: it authorizes its own MCP server with the native MCP OAuth flow
  * in a new tab instead, and is connected once that server is authorized.
+ * GitHub's server is authorized by the Macro GitHub account link, so GitHub
+ * links the account instead.
  *
  * Resolves `'connected'` on success (connections cache already refreshed),
  * `'closed'` when the user dismissed the UI without finishing, and
@@ -311,7 +314,8 @@ export async function connectPipedreamApp(args: {
   const cachedOverlay = queryClient
     .getQueryData<PipedreamOverlayResponse[]>(KEYS.overlays)
     ?.find((overlay) => overlay.app_slug === args.appSlug);
-  const popup = cachedOverlay ? reserveOauthPopup() : null;
+  const popup =
+    cachedOverlay && !linksGithub(cachedOverlay) ? reserveOauthPopup() : null;
   return Telemetry.span('pipedream.connect', async (span) => {
     span.setAttr('connector.app_slug', args.appSlug);
     span.setAttr('connector.native', isTauri());
@@ -319,9 +323,11 @@ export async function connectPipedreamApp(args: {
       const overlay =
         cachedOverlay ?? (await lookUpOverlay(args.appSlug, span));
       span.setAttr('connector.overlaid', overlay !== undefined);
-      const outcome = overlay
-        ? await connectOverlaidApp(overlay, args, popup, span)
-        : await connectPipedreamAccount(args, span);
+      const outcome = !overlay
+        ? await connectPipedreamAccount(args, span)
+        : linksGithub(overlay)
+          ? await connectGithubLink(span)
+          : await connectOverlaidApp(overlay, args, popup, span);
       span.setAttr('connector.outcome', outcome);
       return outcome;
     } catch (error) {
@@ -351,6 +357,30 @@ async function lookUpOverlay(
     return undefined;
   }
   return overlays.value.find((overlay) => overlay.app_slug === appSlug);
+}
+
+const GITHUB_APP_SLUG = 'github';
+
+/** Whether `overlay` is GitHub, which the account link authorizes. */
+function linksGithub(overlay: PipedreamOverlayResponse) {
+  return overlay.app_slug === GITHUB_APP_SLUG;
+}
+
+/**
+ * Link the user's GitHub account, which the backend reads to authorize
+ * GitHub's MCP server. On the web the page leaves for GitHub and returns
+ * after the link, so this resolves `'closed'`; on native mobile it resolves
+ * once the link is made.
+ */
+async function connectGithubLink(span: Span): Promise<PipedreamConnectOutcome> {
+  const linked = await span.span('github.link', async () =>
+    linkGithubAccount('Failed to connect GitHub')
+  );
+  if (!linked) return 'closed';
+  await queryClient.invalidateQueries({
+    queryKey: mcpServersQueryOptions().queryKey,
+  });
+  return 'connected';
 }
 
 const OVERLAY_AUTH_POLL_MS = 2000;

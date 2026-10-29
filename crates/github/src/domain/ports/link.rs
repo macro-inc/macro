@@ -258,6 +258,14 @@ pub trait GithubLinkService: Send + Sync + 'static {
         user_id: &MacroUserId<Lowercase<'static>>,
     ) -> impl Future<Output = Result<GithubLinkStatus, GithubError>> + Send;
 
+    /// The user's GitHub token from their account link, checked against
+    /// GitHub. [`GithubError::NoLinkFound`] when they never linked,
+    /// [`GithubError::ReauthenticationRequired`] when the token no longer works.
+    fn get_user_access_token(
+        &self,
+        user_id: &MacroUserId<Lowercase<'static>>,
+    ) -> impl Future<Output = Result<GithubAccessToken, GithubError>> + Send;
+
     /// Enriches GitHub pull request references with details from the GitHub API.
     fn enrich_pull_requests(
         &self,

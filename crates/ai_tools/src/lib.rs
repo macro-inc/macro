@@ -314,7 +314,7 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
     let toolset = match host {
         AiHost::Chat | AiHost::AgentSession => {
             toolset.add_subtoolset::<ToolMcpServerToolContext>(mcp_server_toolset::<
-                mcp_client::outbound::pg_server_repo::PgServerRepo,
+                mcp_client::outbound::NativeServerStore,
             >())
         }
         AiHost::ChannelBot | AiHost::Mcp => toolset,

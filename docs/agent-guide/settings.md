@@ -606,6 +606,13 @@ tab (system browser on native) and the card turns connected once that server is
 authorized, after which the app appears with the custom MCP servers under
 Installed. Verify with an overlaid app such as Sentry or Asana; completing a
 Pipedream connection for one answers 409.
+GitHub is overlaid onto `api.githubcopilot.com/mcp`, but its server is
+authorized by the GitHub account link (the same GitHub App), so connecting
+GitHub anywhere (catalog, chat connect card, import dialog, the GitHub AI
+provider page) runs the account link, and a linked account shows GitHub
+connected for Macro AI with no second consent. Disconnecting GitHub on its AI
+provider page unlinks the account. Verify by linking GitHub under Core
+Integrations and checking the GitHub catalog card reads connected.
 Featured and catalog cards use two columns on wide screens and one on narrow
 screens, with a plus action for available apps. Featured cards show app names
 without descriptions, and catalog descriptions

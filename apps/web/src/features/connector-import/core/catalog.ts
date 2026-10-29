@@ -111,8 +111,7 @@ export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
         name: 'GitHub',
         detail: 'Issues',
         icon: IconGithub as ImportIcon,
-        // Macro's GitHub preset in `QUICK_CONNECT_SERVERS`.
-        mcpUrl: 'https://api.githubcopilot.com/mcp',
+        // Connects through the GitHub account link (an overlaid app).
       },
       {
         appSlug: 'trello',

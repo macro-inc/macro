@@ -1914,7 +1914,7 @@ pub type ToolPipedreamConnection =
 /// server store and the Pipedream connection store. Picks which stack
 /// serves a user's tools (Pipedream connectors win; see `mcp_select`).
 pub type ToolMcpSelector = mcp_select::McpToolSelector<
-    mcp_client::outbound::pg_server_repo::PgServerRepo,
+    mcp_client::outbound::NativeServerStore,
     pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
     ToolPipedreamConnection,
 >;
@@ -1933,9 +1933,8 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
 
 /// The custom MCP server tools, wired by hosts holding the MCP credentials
 /// key.
-pub type ToolMcpServerToolContext = mcp_client::inbound::toolset::McpServerToolContext<
-    mcp_client::outbound::pg_server_repo::PgServerRepo,
->;
+pub type ToolMcpServerToolContext =
+    mcp_client::inbound::toolset::McpServerToolContext<mcp_client::outbound::NativeServerStore>;
 
 /// Type alias for the import tool context, wired by hosts with connector access.
 pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<ToolImportService>;
@@ -2062,7 +2061,7 @@ pub struct ToolServiceContext {
 pub type ToolConnectorToolContext = pipedream_mcp::inbound::toolset::ConnectorToolContext<
     pipedream_mcp::outbound::api::PipedreamClient,
     pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
-    mcp_select::NativeOverlayConnections<mcp_client::outbound::pg_server_repo::PgServerRepo>,
+    mcp_select::NativeOverlayConnections<mcp_client::outbound::NativeServerStore>,
 >;
 
 /// Wire connector discovery at the composition boundary.
@@ -2072,7 +2071,7 @@ pub type ToolConnectorToolContext = pipedream_mcp::inbound::toolset::ConnectorTo
 pub fn build_connector_tool_context(
     pool: sqlx::PgPool,
     client: Option<Arc<pipedream_mcp::outbound::api::PipedreamClient>>,
-    native_servers: Option<Arc<mcp_client::outbound::pg_server_repo::PgServerRepo>>,
+    native_servers: Option<Arc<mcp_client::outbound::NativeServerStore>>,
 ) -> ToolConnectorToolContext {
     pipedream_mcp::inbound::toolset::ConnectorToolContext {
         service: Arc::new(

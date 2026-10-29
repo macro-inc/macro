@@ -1,7 +1,10 @@
 import { createNativeAuthSession } from '@core/auth/native-auth';
 import { toast } from '@core/component/Toast/Toast';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { invalidateGithubLinkStatus } from '@queries/auth';
+import {
+  githubLinkAuthorizationUrl,
+  invalidateGithubLinkStatus,
+} from '@queries/auth';
 
 /**
  * Run a GitHub OAuth grant. On the web the browser navigates to GitHub and the
@@ -32,4 +35,15 @@ export async function authorizeGithub(
   // A canceled browser is a deliberate user action, not a failure.
   if (result.error !== 'User canceled login') toast.failure(failureMessage);
   return false;
+}
+
+/**
+ * Link the user's GitHub account, or relink one whose token stopped working.
+ * The link also authorizes GitHub for Macro AI. Resolves as
+ * {@link authorizeGithub} does.
+ */
+export async function linkGithubAccount(
+  failureMessage: string
+): Promise<boolean> {
+  return await authorizeGithub(githubLinkAuthorizationUrl, failureMessage);
 }
