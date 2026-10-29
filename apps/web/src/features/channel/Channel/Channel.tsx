@@ -546,6 +546,9 @@ export function Channel(props: ChannelProps) {
     cancelLatestNavigation();
     if (replyId) {
       clearSelection();
+      // The reply lands inline; a narrow pane hides the timeline while a
+      // thread panel is open.
+      threadPanel?.close();
       prepareTargetReply(messageId);
     } else {
       selectMessage(messageId);
