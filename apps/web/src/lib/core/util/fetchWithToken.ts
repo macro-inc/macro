@@ -5,6 +5,8 @@ import { Telemetry } from '@macro-inc/observability';
 
 import { fetchWithAuth } from '@service-auth/fetch';
 import { err, ok, type Result } from 'neverthrow';
+import { getNativeNetworkAbortSignal } from '../mobile/native-network-status';
+import { fireAndForget } from './fireAndForget';
 import type { ObjectLike, ResultError } from './result';
 import {
   type BaseFetchErrorCode,
@@ -68,6 +70,47 @@ let tokenPromise: Promise<TokenResult> | null = null;
 let refreshUnavailable: TokenResult | null = null;
 let refreshUnavailableAt = 0;
 const REFRESH_UNAVAILABLE_TTL_MS = 60_000;
+const REFRESH_TIMEOUT_MS = 12_000;
+
+/** A caller can stop waiting without cancelling refresh for other requests. */
+function waitForToken(
+  promise: Promise<TokenResult>,
+  signal?: AbortSignal | null
+): Promise<TokenResult> {
+  if (!signal) return promise;
+  return new Promise((resolve, reject) => {
+    const abort = () => {
+      signal.removeEventListener('abort', abort);
+      resolve(
+        err([
+          {
+            code: 'NETWORK_ERROR',
+            message:
+              signal.reason instanceof DOMException &&
+              signal.reason.name === 'TimeoutError'
+                ? 'Authentication refresh timed out'
+                : 'Authentication refresh cancelled',
+          },
+        ])
+      );
+    };
+    fireAndForget(
+      promise.then(
+        (result) => {
+          signal.removeEventListener('abort', abort);
+          resolve(result);
+        },
+        (error) => {
+          signal.removeEventListener('abort', abort);
+          reject(error);
+        }
+      ),
+      'auth-refresh-wait'
+    );
+    if (signal.aborted) abort();
+    else signal.addEventListener('abort', abort, { once: true });
+  });
+}
 
 // Bumped on every reset. A refresh started before a reset carries the older
 // generation, so once the session has moved on (e.g. a login) it can neither
@@ -111,7 +154,11 @@ const classifyRefreshError: ErrorResponseHandler<never> = async (response) => {
   };
 };
 
-export async function fetchToken(): Promise<TokenResult> {
+export async function fetchToken(
+  signal?: AbortSignal | null
+): Promise<TokenResult> {
+  if (signal?.aborted)
+    return waitForToken(Promise.resolve(ok(undefined)), signal);
   if (refreshUnavailable != null) {
     if (Date.now() - refreshUnavailableAt < REFRESH_UNAVAILABLE_TTL_MS) {
       return refreshUnavailable;
@@ -120,24 +167,48 @@ export async function fetchToken(): Promise<TokenResult> {
   }
   if (tokenPromise == null) {
     const generation = refreshGeneration;
-    tokenPromise = (async () => {
-      perfMark('auth.refresh-start');
+    tokenPromise = Telemetry.span('auth.refresh', async (span) => {
+      const controller = new AbortController();
+      const refreshSignal = controller.signal;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let nativeSignal: AbortSignal | undefined;
+      const abortOffline = () => controller.abort(nativeSignal?.reason);
       try {
-        const result = await fetchWithCredentials(
-          `${SERVER_HOSTS['auth-service']}/jwt/refresh`,
-          {
+        timer = setTimeout(
+          () =>
+            controller.abort(
+              new DOMException('Refresh deadline expired', 'TimeoutError')
+            ),
+          REFRESH_TIMEOUT_MS
+        );
+        nativeSignal = getNativeNetworkAbortSignal();
+        if (nativeSignal.aborted) abortOffline();
+        else
+          nativeSignal.addEventListener('abort', abortOffline, { once: true });
+        perfMark('auth.refresh-start');
+        const result = await waitForToken(
+          fetchWithCredentials(`${SERVER_HOSTS['auth-service']}/jwt/refresh`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               Accept: 'application/json',
             },
             cache: 'no-store',
+            signal: refreshSignal,
             errorResponseHandler: classifyRefreshError,
-          }
+          }).then((result) => result.map(() => undefined)),
+          refreshSignal
         );
 
         perfMark('auth.refresh-end', { ok: result.isOk() });
+        span.setAttr('auth.refresh.aborted', refreshSignal.aborted);
+        span.setAttr('auth.refresh.ok', result.isOk());
         if (result.isErr()) {
+          span.setAttr(
+            'auth.refresh.error_code',
+            result.error[0]?.code ?? 'UNKNOWN_ERROR'
+          );
+          span.error('Authentication refresh failed');
           const failure = err(result.error);
           if (
             generation === refreshGeneration &&
@@ -151,13 +222,16 @@ export async function fetchToken(): Promise<TokenResult> {
 
         return ok(undefined);
       } finally {
-        if (generation === refreshGeneration) {
-          tokenPromise = null;
-        }
+        if (timer !== undefined) clearTimeout(timer);
+        nativeSignal?.removeEventListener('abort', abortOffline);
       }
-    })();
+    }).finally(() => {
+      // Settlement runs after tokenPromise is assigned, including when setup
+      // fails before the first await. A failed setup must not poison the cache.
+      if (generation === refreshGeneration) tokenPromise = null;
+    });
   }
-  return tokenPromise;
+  return waitForToken(tokenPromise, signal);
 }
 
 /**
@@ -222,7 +296,7 @@ export async function fetchWithToken<
     result.isErr() &&
     result.error.some((error) => error.code === 'UNAUTHORIZED')
   ) {
-    const tokenResult = await fetchToken();
+    const tokenResult = await fetchToken(init?.signal);
     if (tokenResult.isErr()) {
       // A definitive rejection already carries UNAUTHORIZED; transient refresh
       // failures surface as-is so callers don't treat an outage as a dead

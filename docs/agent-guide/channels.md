@@ -1457,3 +1457,10 @@ Sending clears the composer immediately while delivery is pending. If delivery
 fails and the composer is still empty, its text, mentions, and attachments return.
 A new draft typed during delivery stays intact if the earlier send fails. Verify
 this with both the Send button on a phone and the desktop composer.
+
+## Authentication recovery
+
+If an expired session triggers cookie-auth refresh, a stalled refresh settles
+after 12 seconds as a retryable network failure. Cancelling one view stops only
+its wait; other requests may finish the shared refresh. Retry can start a fresh
+refresh after timeout, without reloading or treating a timeout as sign-out.

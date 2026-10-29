@@ -322,6 +322,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   hint never checks identity, so the returning user sees sign-in again.
 - Disable GraphQL cache sessions and clear login hints on confirmed auth 401s,
   even with retained user data; preserve session state on transient failures.
+- Bound shared cookie-auth refresh to 12 seconds and native network availability;
+  let each caller cancel its wait independently, and keep refresh timeouts retryable.
 - Treat a repeated worker-ready frame as a coordinator restart: retire the old
   engine and re-register in place, preserving durable storage and never replaying
   uncertain enqueues. Space failed coordinator registrations with bounded,
