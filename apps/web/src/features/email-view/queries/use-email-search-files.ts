@@ -36,8 +36,10 @@ export function useEmailSearchFiles(input: {
     { equals: arrayEquals }
   );
 
+  // The search already decided which threads belong to the tab; the lookup
+  // only reads their attachments, so it asks in the All view.
   const lookup = useSoupAstItemsQuery(
-    () => buildEmailQuery(input.context(), threadIds()),
+    () => buildEmailQuery({ ...input.context(), tab: 'all' }, threadIds()),
     () => ({ enabled: threadIds().length > 0, keepPreviousData: false })
   );
 

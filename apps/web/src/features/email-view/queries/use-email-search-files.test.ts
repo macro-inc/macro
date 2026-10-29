@@ -53,7 +53,7 @@ const withFiles = (id: string, ...filenames: string[]): EmailEntity => ({
 });
 
 const context: EmailQueryContext = {
-  tab: 'all',
+  tab: 'important',
   inboxIds: undefined,
   facets: {},
   facetContext: createTagFacetContext([]),
@@ -106,7 +106,7 @@ describe('useEmailSearchFiles', () => {
     expect(root.files.rows()).toEqual([]);
   });
 
-  it('looks up the top matched threads by ID in the current mailbox scope', () => {
+  it('looks up the top matched threads by ID in the All view of the current mailbox scope', () => {
     const threads = Array.from({ length: 30 }, (_, index) =>
       thread(`t${index}`)
     );
@@ -119,7 +119,9 @@ describe('useEmailSearchFiles', () => {
       enabled: true,
       keepPreviousData: false,
     });
-    expect(root.args()).toEqual(buildEmailQuery(context, topIds));
+    expect(root.args()).toEqual(
+      buildEmailQuery({ ...context, tab: 'all' }, topIds)
+    );
   });
 
   it('lists no files until the lookup resolves, then the files of matched threads', () => {
