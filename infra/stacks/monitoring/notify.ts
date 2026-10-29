@@ -30,7 +30,15 @@ export const RENOTIFY_MINUTES = 60;
  * have warned before it alerted, or recovered from no data; closing an alert
  * GoAlert does not have open does nothing.
  */
-export function notify({ pages }: { pages: boolean }): string {
+export function notify({
+  pages,
+  environment = 'prod',
+}: {
+  pages: boolean;
+  /** Dev and staging monitors stay visible in Datadog but notify no one: on-call is for prod. */
+  environment?: 'prod' | 'dev' | 'staging';
+}): string {
+  if (environment !== 'prod') return '';
   const critical = pages
     ? `{{#is_alert}}Paging on-call. ${GOALERT}{{/is_alert}}`
     : `{{#is_alert}}${GOALERT_NOTIFY}{{/is_alert}}`;

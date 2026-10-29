@@ -75,7 +75,7 @@ adopted('document-text-extractor-dev', {
     'sum(last_4h):(sum:aws.lambda.errors{resource:document-text-extractor-dev}.as_count() / sum:aws.lambda.invocations{resource:document-text-extractor-dev}.as_count()) * 100 > 80',
   message: `Document text extractor failing: {{value}}% of invocations errored over 4 hours.
 
-${notify({ pages: false })}`,
+${notify({ pages: false, environment: 'dev' })}`,
   monitorThresholds: {
     critical: '80',
     warning: '50',

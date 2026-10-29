@@ -28,6 +28,8 @@ and has two services, each with its pair of webhooks declared in `goalert.ts`:
   hourly (`RENOTIFY_MINUTES`); the repeat dedups into the open GoAlert alert
   (`$ALERT_CYCLE_KEY`) and reopens it if someone closed it while the monitor
   still fires.
+- **Dev and staging monitors notify no one** (`notify({ pages, environment })`).
+  They stay visible in Datadog; on-call is for prod.
 - **Datadog never posts to the channel itself**, so each alert appears once.
   The only exception is the GoAlert health check (`goalert-health`), which
   posts straight to `@webhook-macro-alert-hook` (a webhook integration
