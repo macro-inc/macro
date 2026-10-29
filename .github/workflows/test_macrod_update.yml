@@ -133,3 +133,6 @@ jobs:
     - name: Launcher layout and install.ps1
       run: '& ./crates/coding_agent_worker/e2e/windows_test.ps1 -Releases "$env:RUNNER_TEMP/releases" -V1 v2000.1.1.1 -V2 v2000.1.1.2'
       shell: pwsh
+    - name: Self-update end to end
+      run: '& ./crates/coding_agent_worker/e2e/windows_update_test.ps1 -Releases "$env:RUNNER_TEMP/releases" -V1 v2000.1.1.1 -V2 v2000.1.1.2'
+      shell: pwsh

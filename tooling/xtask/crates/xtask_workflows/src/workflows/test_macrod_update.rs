@@ -105,6 +105,13 @@ fn windows_job() -> Job {
                 ))
                 .shell("pwsh"),
         )
+        .add_step(
+            Step::new("Self-update end to end")
+                .run(format!(
+                    "& ./{E2E}/windows_update_test.ps1 -Releases \"$env:RUNNER_TEMP/releases\" -V1 {V1} -V2 {V2}"
+                ))
+                .shell("pwsh"),
+        )
 }
 
 fn build_step() -> Step<Run> {
