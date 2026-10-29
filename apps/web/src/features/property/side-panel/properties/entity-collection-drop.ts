@@ -42,7 +42,7 @@ export function createEntityCollectionDropTarget(options: {
   selfId: Accessor<string>;
   selfType: Accessor<EntityType>;
   disabled: Accessor<boolean>;
-  onDrop: (reference: EntityReference) => Promise<void>;
+  onDrop: (reference: EntityReference, name: string) => Promise<void>;
 }) {
   const context = useDragDropContext();
   if (!context) return;
@@ -73,9 +73,10 @@ export function createEntityCollectionDropTarget(options: {
 
   actions.onDragEnd(({ draggable, droppable: target }) => {
     if (target?.id !== id || options.disabled()) return;
+    if (!isEntityDragData(draggable.data)) return;
     const reference = referenceFor(draggable.data);
     if (!reference) return;
-    fireAndForget(options.onDrop(reference), 'property-collection-drop');
+    fireAndForget(options.onDrop(reference, draggable.data.name), 'property-collection-drop');
   });
 
   return {

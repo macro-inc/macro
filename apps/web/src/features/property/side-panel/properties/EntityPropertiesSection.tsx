@@ -565,7 +565,7 @@ function SidePanelPropertyRow(props: {
   return (
     <div class="contents group/property-row">
       <span
-        class={cn('text-ink-muted truncate', {
+        class={cn('min-w-0 whitespace-normal break-words text-ink-muted', {
           'self-start pt-[0.3125rem]': isMultilineRow(),
           'self-center': !isMultilineRow(),
         })}

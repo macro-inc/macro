@@ -11,12 +11,9 @@ import Plus from '@icon/system/regular/plus.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import DeleteIcon from '@icon/system/regular/x.svg';
 import { Property as PropertyNS, useProperty } from '@property';
-import {
-  type PropertySaveHandler,
-  usePropertiesContext,
-} from '@property/context/PropertiesContext';
+import { usePropertiesContext } from '@property/context/PropertiesContext';
 import { usePropertyEntityDisplay } from '@property/hooks';
-import type { Property } from '@property/types';
+import type { Property, PropertyApiValues } from '@property/types';
 import { getEntityValues } from '@property/utils';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
@@ -26,6 +23,7 @@ import { cn } from '@ui/utils/classname';
 import { createSignal, For, type JSX, Show, type Signal } from 'solid-js';
 import { createEntityCollectionDropTarget } from './entity-collection-drop';
 
+type PendingEntityReference = EntityReference & { displayName?: string };
 export function EntityCollectionProperty(props: {
   entityId: string;
   loading?: boolean;
@@ -36,30 +34,31 @@ export function EntityCollectionProperty(props: {
   const ctx = usePropertiesContext();
   const saving = createSignal(false);
   const [isSaving, setIsSaving] = saving;
-  const [isAdding, setIsAdding] = createSignal(false);
-  const saveProperty: PropertySaveHandler['saveProperty'] = async (
-    property,
-    values
+  const [pendingReferences, setPendingReferences] =
+    createSignal<PendingEntityReference[]>([]);
+  const saveProperty = async (
+    property: Property,
+    values: PropertyApiValues,
+    displayName?: string
   ) => {
     if (!ctx.canEdit || property.isMetadata || props.loading || isSaving()) return;
     const currentRefs = getEntityValues(property);
-    setIsAdding(
-      values.valueType === 'ENTITY' &&
-        Boolean(
-          values.refs?.some((reference) =>
+    setPendingReferences(
+      values.valueType === 'ENTITY'
+        ? (values.refs ?? []).filter((reference) =>
             !currentRefs.some((current) =>
               current.entity_id === reference.entity_id &&
               current.entity_type === reference.entity_type
             )
-          )
-        )
+          ).map((reference) => ({ ...reference, displayName }))
+        : []
     );
     setIsSaving(true);
     try {
       await ctx.saveHandler.saveProperty(property, values);
       await props.onRefresh();
     } finally {
-      setIsAdding(false);
+      setPendingReferences([]);
       setIsSaving(false);
     }
   };
@@ -73,7 +72,7 @@ export function EntityCollectionProperty(props: {
       <EntityCollectionPropertyBody
         entityId={props.entityId}
         loading={props.loading}
-        adding={isAdding()}
+        pendingReferences={pendingReferences()}
         onSave={saveProperty}
         property={props.property}
         saving={saving}
@@ -92,8 +91,12 @@ export function EntityCollectionProperty(props: {
 function EntityCollectionPropertyBody(props: {
   entityId: string;
   loading?: boolean;
-  adding: boolean;
-  onSave: PropertySaveHandler['saveProperty'];
+  pendingReferences: PendingEntityReference[];
+  onSave: (
+    property: Property,
+    values: PropertyApiValues,
+    displayName?: string
+  ) => Promise<void>;
   property: Property;
   saving: Signal<boolean>;
   actions: JSX.Element;
@@ -101,6 +104,17 @@ function EntityCollectionPropertyBody(props: {
   const ctx = usePropertiesContext();
   const propertyCtx = useProperty();
   const entities = () => getEntityValues(props.property);
+  const pendingReference = (reference: EntityReference) =>
+    props.pendingReferences.find((pending) =>
+      pending.entity_id === reference.entity_id &&
+      pending.entity_type === reference.entity_type
+    );
+  const isPending = (reference: EntityReference) =>
+    Boolean(pendingReference(reference));
+  const displayedEntities = () => [
+    ...entities().filter((reference) => !isPending(reference)),
+    ...props.pendingReferences,
+  ];
   const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
   const [isSaving] = props.saving;
   const dropTarget = createEntityCollectionDropTarget({
@@ -111,22 +125,27 @@ function EntityCollectionPropertyBody(props: {
       Boolean(
         isReadOnly() || props.loading || isSaving() || propertyCtx.editorOpen()
       ),
-    onDrop: (reference) => saveReferences([...entities(), reference]),
+    onDrop: (reference, name) => saveReferences([...entities(), reference], name),
   });
   const isDraggingOver = () => dropTarget?.isOver() ?? false;
   const canDrop = () => dropTarget?.canDrop() ?? false;
-  const showDropZone = () => isDraggingOver() || props.adding;
+  const isDragging = () => dropTarget?.isDragging() ?? false;
+  const showDropZone = () => isDraggingOver();
   const handleAdd: JSX.EventHandler<HTMLButtonElement, MouseEvent> = (event) => {
     event.stopPropagation();
     if (isReadOnly() || props.loading || isSaving()) return;
     propertyCtx.openEditor(event.currentTarget);
   };
 
-  const saveReferences = (refs: EntityReference[]) =>
-    props.onSave(props.property, {
-      valueType: 'ENTITY',
-      refs: refs.length > 0 ? refs : null,
-    });
+  const saveReferences = (refs: EntityReference[], displayName?: string) =>
+    props.onSave(
+      props.property,
+      {
+        valueType: 'ENTITY',
+        refs: refs.length > 0 ? refs : null,
+      },
+      displayName
+    );
 
   const handleRemoveEntity = (entityId: string) =>
     saveReferences(entities().filter((entity) => entity.entity_id !== entityId));
@@ -145,7 +164,7 @@ function EntityCollectionPropertyBody(props: {
         )}
         title={props.property.displayName}
       >
-        <span class="min-w-0 truncate">{props.property.displayName}</span>
+        <span class="min-w-0 whitespace-normal break-words">{props.property.displayName}</span>
         <Show when={canDrop()}>
           <ArrowDownIcon
             class="size-3.5 shrink-0"
@@ -160,9 +179,12 @@ function EntityCollectionPropertyBody(props: {
             type="button"
             variant="ghost"
             size="xs"
-            class="text-ink-extra-muted not-data-disabled:focus-visible:text-ink"
+            class={cn(
+              'text-ink-extra-muted not-data-disabled:focus-visible:text-ink',
+              isDragging() && 'invisible'
+            )}
             aria-label={`Add ${props.property.displayName}`}
-            disabled={props.loading || isSaving()}
+            disabled={props.loading || isSaving() || isDragging()}
             onClick={handleAdd}
           >
             <Plus class="size-4" />
@@ -173,16 +195,18 @@ function EntityCollectionPropertyBody(props: {
       </div>
       <div class="col-span-2 min-w-0">
         <div
-          class={cn('flex flex-wrap gap-1.5', entities().length > 0 && 'mt-1')}
+          class={cn('flex flex-wrap gap-1.5', displayedEntities().length > 0 && 'mt-1')}
           aria-busy={isSaving()}
         >
-          <For each={entities()}>
+          <For each={displayedEntities()}>
             {(entityRef) => (
               <NonUserEntityChip
                 property={props.property}
                 entityId={entityRef.entity_id}
                 entityType={entityRef.entity_type}
                 specificMessageId={entityRef.specific_message_id}
+                pending={isPending(entityRef)}
+                pendingLabel={pendingReference(entityRef)?.displayName}
                 canEdit={!isReadOnly() && !props.loading && !isSaving()}
                 onRemove={() =>
                   fireAndForget(
@@ -199,7 +223,7 @@ function EntityCollectionPropertyBody(props: {
           </For>
         </div>
         <span class="sr-only" role="status" aria-live="polite" aria-atomic="true">
-          {props.adding ? t('common.addingItem') : ''}
+          {props.pendingReferences.length > 0 ? t('common.addingItem') : ''}
         </span>
         <div
           aria-hidden={!showDropZone()}
@@ -211,33 +235,13 @@ function EntityCollectionPropertyBody(props: {
           )}
         >
           <div class="min-h-0 overflow-hidden">
-            <div
-              class={cn(
-                'flex h-12 items-center justify-center gap-2 rounded-lg border text-xs',
-                entities().length > 0 ? 'mt-2' : 'mt-1',
-                props.adding
-                  ? 'border-edge-muted bg-surface text-ink-muted'
-                  : 'border-dashed border-accent bg-accent/10 text-accent'
-              )}
-            >
-              <Show
-                when={props.adding}
-                fallback={
-                  <ArrowDownIcon
-                    class="size-4 shrink-0"
-                    aria-hidden="true"
-                    data-icon-motion="none"
-                  />
-                }
-              >
-                <SpinnerIcon
-                  class="size-4 shrink-0 animate-spin motion-reduce:animate-none"
-                  aria-hidden="true"
-                />
-              </Show>
-              <span aria-hidden={props.adding}>
-                {props.adding ? t('common.addingItem') : t('common.dropToAdd')}
-              </span>
+            <div class="mt-1 flex h-12 items-center justify-center gap-2 rounded-lg border border-dashed border-accent bg-accent/10 text-xs text-accent">
+              <ArrowDownIcon
+                class="size-4 shrink-0"
+                aria-hidden="true"
+                data-icon-motion="none"
+              />
+              <span>{t('common.dropToAdd')}</span>
             </div>
           </div>
         </div>
@@ -251,7 +255,9 @@ export function NonUserEntityChip(props: {
   entityId: string;
   entityType: EntityType;
   specificMessageId?: string | null;
+  pending?: boolean;
   canEdit?: boolean;
+  pendingLabel?: string;
   onRemove?: () => void;
   onEdit?: (anchor?: HTMLElement) => void;
 }) {
@@ -279,43 +285,58 @@ export function NonUserEntityChip(props: {
       <div
         ref={containerRef}
         class="inline-flex min-w-0 max-w-full border h-7 items-stretch border-edge-muted rounded-md bg-surface text-ink overflow-clip"
+        aria-busy={props.pending || undefined}
       >
         <Show
-          when={isDocumentPreviewEntity()}
+          when={!props.pending}
           fallback={
-            <button
-              type="button"
-              class="flex min-w-0 max-w-full items-center gap-1.5 px-2 text-left"
-              onClick={openEditor}
-              disabled={!props.canEdit}
-            >
+            <span class="flex min-w-0 items-center gap-1.5 px-2 text-ink-muted">
               <span class="shrink-0 flex items-center">{icon()}</span>
-              <span class="min-w-0 truncate">{name()}</span>
-            </button>
+              <span class="min-w-0 truncate">{props.pendingLabel ?? name()}</span>
+              <SpinnerIcon
+                class="size-3.5 shrink-0 animate-spin motion-reduce:animate-none"
+                aria-hidden="true"
+              />
+            </span>
           }
         >
-          <DocumentEntityChipButton
-            entityId={props.entityId}
-            fallbackBlockType={previewBlockType()}
-            icon={icon()}
-            name={name()}
-          />
-        </Show>
-        <Show when={props.canEdit && props.onRemove}>
-          <div class="border-l border-edge-muted" />
-          <Button
-            variant="ghost"
-            type="button"
-            size="icon-sm"
-            class="flex w-6 p-1 h-full shrink-0 rounded-none text-ink-muted not-disabled:hover:text-failure-ink"
-            onClick={(event) => {
-              event.stopPropagation();
-              props.onRemove?.();
-            }}
-            aria-label={`Remove ${name()}`}
+          <Show
+            when={isDocumentPreviewEntity()}
+            fallback={
+              <button
+                type="button"
+                class="flex min-w-0 max-w-full items-center gap-1.5 px-2 text-left"
+                onClick={openEditor}
+                disabled={!props.canEdit}
+              >
+                <span class="shrink-0 flex items-center">{icon()}</span>
+                <span class="min-w-0 truncate">{name()}</span>
+              </button>
+            }
           >
-            <DeleteIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-          </Button>
+            <DocumentEntityChipButton
+              entityId={props.entityId}
+              fallbackBlockType={previewBlockType()}
+              icon={icon()}
+              name={name()}
+            />
+          </Show>
+          <Show when={props.canEdit && props.onRemove}>
+            <div class="border-l border-edge-muted" />
+            <Button
+              variant="ghost"
+              type="button"
+              size="icon-sm"
+              class="flex w-6 p-1 h-full shrink-0 rounded-none text-ink-muted not-disabled:hover:text-failure-ink"
+              onClick={(event) => {
+                event.stopPropagation();
+                props.onRemove?.();
+              }}
+              aria-label={`Remove ${name()}`}
+            >
+              <DeleteIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+            </Button>
+          </Show>
         </Show>
       </div>
     </Layer>

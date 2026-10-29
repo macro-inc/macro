@@ -14,6 +14,7 @@ Debug page: `/props-debug` (LOCAL_ONLY).
 Property rows use a 4px vertical gap, including inline Tags and the boundary
 between regular fields and collection fields.
 Keep 16px between the property list and the bottom Add property action.
+Property names wrap within the shared label column rather than truncating.
 
 `side-panel/properties/EntityCollectionProperty.tsx` renders non-user, multi-entity
 properties. Empty collections show only the property header, with no placeholder
@@ -24,16 +25,19 @@ app-item drags, the property name uses accent ink and a small downward arrow
 while the row stays compact. Hovering anywhere on that property reveals its
 full-width dashed dropzone over 300ms; reduced motion disables the transition.
 Other properties do not expand. This first pass uses direct hover, not pointer proximity.
-Incompatible collections keep their Add actions visible and retain their height.
-Incompatible or unavailable collections show no rejection feedback. One target
-covers the name, values, and expanded dropzone, with bounds refreshed as it resizes.
+During app-item drags, collection Add buttons are hidden with their layout
+space preserved. Incompatible or unavailable collections show no rejection
+feedback. One target covers the name, values, and expanded dropzone, with
+bounds refreshed as it resizes.
 Drops append a reference using the same entity-type conversion as the picker,
 ignore duplicate references and the owning entity's type-and-ID pair, and retain
 existing values. Picker saves, drops, chip removal, and row removal share a pending
-state until refresh completes. While adding references, the dropzone remains
-visible with a spinner and “Adding item…” until saving and refresh finish;
-existing values remain visible. Collection rows retain their definition identity
-through query updates so loading state survives refreshed property objects.
+state until refresh completes. New references appear immediately as pending
+chips with an inline spinner until saving and refresh finish; existing values
+remain visible. Failed saves clear the pending chips through the existing error
+flow. Pending chips cannot be opened or removed. Collection rows retain their
+definition identity through query updates so loading state survives refreshed
+property objects. Dropped items use the drag label while preview metadata loads.
 Read-only, metadata, loading, saving, and open-editor states reject drops.
 Add and value edits stay disabled until the initial collection finishes loading.
 The accessible loading-status region stays mounted outside the collapsing drop

@@ -157,6 +157,7 @@ confirmation drawers use the same action hierarchy.
 Use a 4px vertical gap between all property rows, including inline Tags and
 transitions between regular fields and collection fields.
 Separate the bottom Add property action from the list by 16px.
+Wrap property names within the shared label column instead of truncating them.
 
 Empty multi-entity collections show only their property header, without a
 placeholder or reserved content area. Align the labeled ghost Add button with
@@ -167,9 +168,9 @@ name and show a small downward arrow without expanding the row. Reveal the
 full-width dashed dropzone only while hovering that property, including its
 name and existing values. Use a gentle 300ms reveal with reduced-motion support;
 this first pass does not use pointer proximity. Empty-state and dropzone content
-keep the same spacing below the field label. Incompatible or unavailable
-collections retain their height, keep eligible Add actions visible, and show no
-rejection feedback. Existing values stay visible. Dropping adds a reference
+keep the same spacing below the field label. Hide collection Add buttons during
+app-item drags while preserving their layout space. Incompatible or unavailable
+collections retain their height and show no rejection feedback. Dropping adds a reference
 without moving the original item.
 Existing references stay in place. Duplicate references, the owning entity's
 matching type-and-ID pair, unsupported item types, and types outside the property's
@@ -177,11 +178,13 @@ restriction are ignored. Read-only, metadata, loading, saving, and open-editor
 states reject drops. Picker saves, drops, chip removal, and row removal share a
 busy state through save and refresh, preventing stale references from replacing
 newly selected values.
-While adding a reference, the dropzone stays visible with an “Adding item…”
-spinner until save and refresh finish. A persistently mounted status region
-announces additions, including picker saves. Existing values remain visible;
-further edits and drops stay locked during that operation. Add and value edits
-also remain disabled while the initial collection loads.
+New references appear immediately in the collection as pending chips with an
+inline spinner through saving and refresh. Use the dragged item's label while
+its preview metadata loads. Failed saves clear pending chips through the existing
+error flow. Pending chips cannot be opened or removed. A persistently
+mounted status region announces additions, including picker saves. Existing values
+remain visible; further edits and drops stay locked during that operation. Add and
+value edits also remain disabled while the initial collection loads.
 
 The empty dedicated Tags section uses a single quiet, tag-icon Add tags prompt,
 without a separate message, card, title, or description. Keep the prompt
