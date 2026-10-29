@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Client,
   CombinedError,
@@ -6,7 +7,12 @@ import {
   type OperationContext,
   type OperationResult,
 } from '@urql/core';
-import { createComputed, createRoot, createSignal } from 'solid-js';
+import {
+  createComputed,
+  createEffect,
+  createRoot,
+  createSignal,
+} from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeSubject } from 'wonka';
 import { createNoopCacheHost } from '../../../graphql-cache/host/noop-host';
@@ -222,18 +228,14 @@ describe('grouped Soup live ownership', () => {
     const state = setup();
     createRoot((dispose) => {
       cleanups.push(dispose);
-      createAutomaticTaskPagination({
-        enabled: () => true,
-        scope: () => 'project',
-        sources: () => [
-          {
-            id: 'todo',
-            hasMore: state.query.paging.hasNextPage('todo'),
-            pending: state.query.paging.isFetchingNextPage('todo'),
-            load: () => state.query.paging.fetchNextPage('todo'),
-            error: () => state.query.paging.error('todo'),
-          },
-        ],
+      // A reader that requests the next page as soon as one is reported, as a
+      // group whose end is already on screen does.
+      createEffect(() => {
+        if (
+          state.query.paging.hasNextPage('todo') &&
+          !state.query.paging.isFetchingNextPage('todo')
+        )
+          fireAndForget(state.query.paging.fetchNextPage('todo'), 'test');
       });
     });
     state.executions[0].publish(page([groupedDocument('a')]));
@@ -615,5 +617,3 @@ describe('grouped Soup live ownership', () => {
     expect(state.query.paging.hasNextPage('todo')).toBe(true);
   });
 });
-
-import { createAutomaticTaskPagination } from '@app/features/tasks-view/queries/automatic-task-pagination';
