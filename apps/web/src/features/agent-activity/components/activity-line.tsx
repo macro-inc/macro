@@ -43,7 +43,7 @@ export function ActivityLine(props: { rows: readonly ActivityRowView[] }) {
   };
   return (
     <div
-      class="my-1 flex min-h-6 min-w-0 items-center gap-2 overflow-hidden text-sm text-ink-extra-muted"
+      class="my-1 flex min-h-6 min-w-0 items-center gap-2 overflow-hidden text-ink-extra-muted"
       role="status"
     >
       <WorkingDots />

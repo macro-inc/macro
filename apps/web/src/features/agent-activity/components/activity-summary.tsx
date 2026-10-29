@@ -17,7 +17,7 @@ export function ActivitySummary(props: { rows: readonly ActivityRowView[] }) {
   const running = () => props.rows.some((row) => row.status === 'running');
   return (
     <Show when={count() > 0}>
-      <div class="my-1 min-w-0 text-sm">
+      <div class="my-1 min-w-0">
         <button
           type="button"
           aria-expanded={open()}
