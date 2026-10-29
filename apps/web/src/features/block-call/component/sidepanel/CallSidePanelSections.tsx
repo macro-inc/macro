@@ -11,9 +11,6 @@ import { References } from '@core/component/References';
 import { useUserId } from '@core/context/user';
 import { type DateValue, formatDate } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ClockIcon from '@icon/system/regular/clock.svg';
-import InfoIcon from '@icon/system/regular/info.svg';
-import TimerIcon from '@icon/system/regular/timer.svg';
 import {
   isCallSharedWithTeam,
   useSetCallRecordTeamShareMutation,
@@ -74,26 +71,26 @@ function DetailsSectionContent(props: { record: CallRecord }) {
     <EntityMetadata ownerId={record().createdBy}>
       <Show when={startedAt()}>
         {(value) => (
-          <EntityMetadataRow icon={<ClockIcon class="size-3.5" />} label="Started">
+          <EntityMetadataRow label="Started">
             {formatDate(value(), { showTime: true })}
           </EntityMetadataRow>
         )}
       </Show>
       <Show when={endedAt()}>
         {(value) => (
-          <EntityMetadataRow icon={<ClockIcon class="size-3.5" />} label="Ended">
+          <EntityMetadataRow label="Ended">
             {formatDate(value(), { showTime: true })}
           </EntityMetadataRow>
         )}
       </Show>
       <Show when={durationMs()}>
         {(ms) => (
-          <EntityMetadataRow icon={<TimerIcon class="size-3.5" />} label="Duration">
+          <EntityMetadataRow label="Duration">
             {formatCallDuration(ms())}
           </EntityMetadataRow>
         )}
       </Show>
-      <EntityMetadataRow icon={<InfoIcon class="size-3.5" />} label="Status">
+      <EntityMetadataRow label="Status">
         {record().isActive ? 'In progress' : 'Ended'}
       </EntityMetadataRow>
     </EntityMetadata>

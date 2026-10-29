@@ -1,19 +1,11 @@
 import { type DateValue, formatDate } from '@core/util/date';
 import { OwnerLabel } from '@entity/owner/owner-display';
-import CalendarIcon from '@icon/system/regular/calendar-dots.svg';
-import ClockIcon from '@icon/system/regular/clock.svg';
-import UserIcon from '@icon/system/regular/user.svg';
-import { type JSX, type ParentProps, Show } from 'solid-js';
+import { type ParentProps, Show } from 'solid-js';
 
-export function EntityMetadataRow(
-  props: ParentProps<{ icon: JSX.Element; label: string }>
-) {
+export function EntityMetadataRow(props: ParentProps<{ label: string }>) {
   return (
     <div class="flex min-w-0 items-center gap-3">
-      <span class="flex w-28 shrink-0 items-center gap-2 whitespace-nowrap">
-        {props.icon}
-        {props.label}
-      </span>
+      <span class="w-28 shrink-0 whitespace-nowrap">{props.label}</span>
       <div class="min-w-0 flex-1 wrap-break-word">{props.children}</div>
     </div>
   );
@@ -31,27 +23,21 @@ export function EntityMetadata(
     <div class="flex flex-col gap-2">
       <Show when={props.ownerId}>
         {(owner) => (
-          <EntityMetadataRow icon={<UserIcon class="size-3.5" />} label="Owner">
+          <EntityMetadataRow label="Owner">
             <OwnerLabel ownerId={owner()} textOnly suppressClick />
           </EntityMetadataRow>
         )}
       </Show>
       <Show when={props.createdAt}>
         {(created) => (
-          <EntityMetadataRow
-            icon={<CalendarIcon class="size-3.5" />}
-            label="Created"
-          >
+          <EntityMetadataRow label="Created">
             {formatDate(created(), { showTime: true })}
           </EntityMetadataRow>
         )}
       </Show>
       <Show when={props.updatedAt}>
         {(updated) => (
-          <EntityMetadataRow
-            icon={<ClockIcon class="size-3.5" />}
-            label="Last updated"
-          >
+          <EntityMetadataRow label="Last updated">
             {formatDate(updated(), { showTime: true })}
           </EntityMetadataRow>
         )}

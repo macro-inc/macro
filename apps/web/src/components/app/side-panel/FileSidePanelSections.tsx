@@ -9,7 +9,6 @@ import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { type DateValue, formatDate } from '@core/util/date';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { OwnerLabel } from '@entity/owner/owner-display';
-import FolderIcon from '@icon/system/regular/folder.svg';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { createCallback } from '@solid-primitives/rootless';
 import { createMemo, Show } from 'solid-js';
@@ -169,7 +168,7 @@ function DetailsSectionContent(props: { documentId: string }) {
         })()}
       >
         {(folder) => (
-          <EntityMetadataRow icon={<FolderIcon class="size-3.5" />} label="Folder">
+          <EntityMetadataRow label="Folder">
             <FolderLink projectId={folder().id} projectName={folder().name} />
           </EntityMetadataRow>
         )}

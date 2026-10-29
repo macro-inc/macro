@@ -11,7 +11,6 @@ import {
 } from '@components/app/side-panel/EntityMetadata';
 import { useBlockId } from '@core/block';
 import { useCanEdit } from '@core/signal/permissions';
-import FolderIcon from '@icon/system/regular/folder.svg';
 import { useChatDataQuery } from '@queries/cognition/chat-data';
 import { useProjectDataQuery } from '@queries/storage/project-data';
 import { createMemo, Show, Suspense } from 'solid-js';
@@ -76,7 +75,7 @@ function ChatDetailsContent(props: { chatId: string }) {
         })()}
       >
         {(folder) => (
-          <EntityMetadataRow icon={<FolderIcon class="size-3.5" />} label="Folder">
+          <EntityMetadataRow label="Folder">
             <FolderLink projectId={folder().id} projectName={folder().name} />
           </EntityMetadataRow>
         )}

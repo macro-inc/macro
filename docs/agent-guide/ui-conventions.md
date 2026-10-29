@@ -204,8 +204,8 @@ includes Ask Macro and Create task; PDF and calls include Ask Macro. Native
 projects put Delete in the `Project actions` menu after the project title.
 
 Standard metadata appears at the top of each panel, before the interactive
-sections and separated by a muted divider. Each row places an icon and label in
-a fixed-width left column, followed by a nearby left-aligned value; owner,
+sections and separated by a muted divider. Each row places its label without an
+icon in a fixed-width left column, followed by a nearby left-aligned value; owner,
 timestamps, folder, and document counts share this alignment and 8px row gaps.
 Word and character counts appear last. There is no standard Details or Stats
 disclosure. Agent runtime information remains in its dedicated Session section.

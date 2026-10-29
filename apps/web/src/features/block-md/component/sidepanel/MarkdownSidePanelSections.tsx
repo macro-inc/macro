@@ -30,9 +30,6 @@ import type { DateValue } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { buildTaskProjectDefaultProperty } from '@entity/extractors-property';
-import FolderIcon from '@icon/system/regular/folder.svg';
-import TextAaIcon from '@icon/system/regular/text-aa.svg';
-import TextTIcon from '@icon/system/regular/text-t.svg';
 import { useNotificationsForEntity } from '@notifications';
 import {
   getBuiltinPropertyIds,
@@ -166,7 +163,7 @@ function DetailsGrid(props: {
     >
       <Show when={props.folder()}>
         {(folder) => (
-          <EntityMetadataRow icon={<FolderIcon class="size-3.5" />} label="Folder">
+          <EntityMetadataRow label="Folder">
             <FolderLink projectId={folder().id} projectName={folder().name} />
           </EntityMetadataRow>
         )}
@@ -273,13 +270,10 @@ function StatsSectionContent() {
       {(stats) => (
         <Wordcount.Root stats={stats()}>
           <div class="mt-2 flex flex-col gap-2">
-            <EntityMetadataRow icon={<TextTIcon class="size-3.5" />} label="Words">
+            <EntityMetadataRow label="Words">
               <Wordcount.Words />
             </EntityMetadataRow>
-            <EntityMetadataRow
-              icon={<TextAaIcon class="size-3.5" />}
-              label="Characters"
-            >
+            <EntityMetadataRow label="Characters">
               <Wordcount.Characters />
             </EntityMetadataRow>
           </div>
