@@ -27,9 +27,11 @@ state until refresh completes. While adding references, the dropzone remains
 visible with a spinner and “Adding item…” until saving and refresh finish;
 existing values remain visible. Collection rows retain their definition identity
 through query updates so loading state survives refreshed property objects.
-Read-only, metadata, loading, saving, and
-open-editor states reject drops. Native file uploads are not supported here;
-the Add action remains available for keyboard and touch.
+Read-only, metadata, loading, saving, and open-editor states reject drops.
+Add and value edits stay disabled until the initial collection finishes loading.
+The accessible loading-status region stays mounted outside the collapsing drop
+feedback. Native file uploads are not supported here; the Add action remains
+available for keyboard and touch.
 
 `component/CollectionEmptyState.tsx` is local to this feature and shared by
 property collections and Tags. Drop handling and save callbacks stay in callers.

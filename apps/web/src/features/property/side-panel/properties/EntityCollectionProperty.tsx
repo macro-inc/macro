@@ -42,7 +42,7 @@ export function EntityCollectionProperty(props: {
     property,
     values
   ) => {
-    if (!ctx.canEdit || property.isMetadata || isSaving()) return;
+    if (!ctx.canEdit || property.isMetadata || props.loading || isSaving()) return;
     const currentRefs = getEntityValues(property);
     setIsAdding(
       values.valueType === 'ENTITY' &&
@@ -120,7 +120,7 @@ function EntityCollectionPropertyBody(props: {
   const showDropZone = () => canDrop() || props.adding;
   const handleAdd: JSX.EventHandler<HTMLButtonElement, MouseEvent> = (event) => {
     event.stopPropagation();
-    if (isReadOnly() || isSaving()) return;
+    if (isReadOnly() || props.loading || isSaving()) return;
     propertyCtx.openEditor(event.currentTarget);
   };
 
@@ -149,7 +149,7 @@ function EntityCollectionPropertyBody(props: {
             size="icon-xs"
             class="text-ink-extra-muted"
             aria-label={`Add ${props.property.displayName}`}
-            disabled={isSaving()}
+            disabled={props.loading || isSaving()}
             onClick={handleAdd}
           >
             <Plus class="size-4" />
@@ -178,7 +178,7 @@ function EntityCollectionPropertyBody(props: {
                 entityId={entityRef.entity_id}
                 entityType={entityRef.entity_type}
                 specificMessageId={entityRef.specific_message_id}
-                canEdit={!isReadOnly() && !isSaving()}
+                canEdit={!isReadOnly() && !props.loading && !isSaving()}
                 onRemove={() =>
                   fireAndForget(
                     handleRemoveEntity(entityRef.entity_id),
@@ -186,13 +186,16 @@ function EntityCollectionPropertyBody(props: {
                   )
                 }
                 onEdit={(anchor) => {
-                  if (isReadOnly() || isSaving()) return;
+                  if (isReadOnly() || props.loading || isSaving()) return;
                   propertyCtx.openEditor(anchor);
                 }}
               />
             )}
           </For>
         </div>
+        <span class="sr-only" role="status" aria-live="polite" aria-atomic="true">
+          {props.adding ? t('common.addingItem') : ''}
+        </span>
         <div
           aria-hidden={!showDropZone()}
           class={cn(
@@ -219,7 +222,7 @@ function EntityCollectionPropertyBody(props: {
                 aria-hidden="true"
               />
             </Show>
-            <span role="status" aria-live="polite" aria-atomic="true">
+            <span aria-hidden={props.adding}>
               {props.adding ? t('common.addingItem') : t('common.dropToAdd')}
             </span>
           </div>

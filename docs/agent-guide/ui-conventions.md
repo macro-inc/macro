@@ -171,8 +171,10 @@ states reject drops. Picker saves, drops, chip removal, and row removal share a
 busy state through save and refresh, preventing stale references from replacing
 newly selected values.
 While adding a reference, the dropzone stays visible with an “Adding item…”
-spinner until save and refresh finish. Existing values remain visible; further
-edits and drops stay locked during that operation.
+spinner until save and refresh finish. A persistently mounted status region
+announces additions, including picker saves. Existing values remain visible;
+further edits and drops stay locked during that operation. Add and value edits
+also remain disabled while the initial collection loads.
 
 The **Add** action remains the keyboard/touch alternative. This target does not
 upload files dragged from the computer. A persisted drop changes property data;
