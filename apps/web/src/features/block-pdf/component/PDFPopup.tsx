@@ -89,7 +89,7 @@ export function PDFPopup(props: PDFPopupProps) {
                     props.highlightProps.highlight();
                   }}
                 >
-                  <HighlightIcon class="size-4" />
+                  <HighlightIcon />
                 </Button>
               </Show>
             </Match>

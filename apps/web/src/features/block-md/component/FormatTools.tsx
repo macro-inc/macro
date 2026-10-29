@@ -92,7 +92,7 @@ function VerticalBar() {
 
 type DropdownItemProps = {
   label: string;
-  icon: Component;
+  icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   show: boolean;
   themeClass?: string;
   before?: JSX.Element;
@@ -335,12 +335,7 @@ const ElementFormatMenuItem = (
     >
       <Show when={icon()}>
         {(IconComp) => (
-          <Dynamic
-            component={
-              IconComp() as Component<JSX.SvgSVGAttributes<SVGSVGElement>>
-            }
-            class="size-4 shrink-0"
-          />
+          <Dynamic component={IconComp()} class="size-4 shrink-0" />
         )}
       </Show>
       <span class="flex-1 truncate">{inner()}</span>
