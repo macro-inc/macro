@@ -2,17 +2,38 @@
 
 ## Feature grid graphics
 
-The ten SVGs in `features/` illustrate each block in the top README grid.
-They use fictional product scenes and are separate from the live screenshots
-below. The visual reference is the website refresh worktree's
-`apps/marketing/src/app/components/featureGraphics/` and
-`graphics/PreviewWindow.tsx`: dark rounded panels, fine borders, overlapping
-message cards, subtle dot grids, and colored Macro icons.
+The ten JPEGs in `features/` are browser-rendered product graphics, exported at
+2400 × 1600. They use the website refresh's existing components, fonts, avatars,
+menus, and controls, with dark angled panels and message overlays. These are
+staged marketing scenes, separate from the six signed-in screenshots below.
 
-Run `python3 .github/readme/feature-graphics.py` from the repository root to
-regenerate them. The script embeds the marketing app's SVG icons so the
-output has no external image, font, or script dependencies. Keep all ten
-feature categories and their documentation links in the README grid.
+`feature-graphics.mjs` renders components from a supplied marketing checkout:
+
+```sh
+bun .github/readme/feature-graphics.mjs /path/to/refresh/apps/marketing
+```
+
+The checkout needs its installed dependencies and Google Chrome. The exporter
+uses port 4188, temporarily creates three `.readme-capture.*` files in that
+checkout (refusing to overwrite existing files), and removes them on completion.
+It waits for fonts and images, uses reduced motion, and captures at 2× density.
+Review all ten exports before committing; retain all categories and docs links.
+
+Source reference: the `b6a3` website refresh worktree on October 29, 2026
+(base commit `9bacc0f5de367be1dc4c3598db501ac212a495a8`, including its working
+changes). The exporter imports these existing presentations:
+
+- Email: `MultiInboxSpotlight`; messages: `ChannelPreviewGraphic`.
+- Tasks: `TaskGithubDemo`; docs: `HeroDocWindow`.
+- Agents: `AgentThreadGraphic`; calls: `CallStageGraphic`.
+- Files: `FolderComposerMockup`; pull requests: `DemoPrDocument`.
+- CRM: `CompanyKanbanColumn` and `CompanyKanbanCardSurface`, with nine fictional
+  sample companies and deal values.
+- Canvas: a staged canvas composition using the site's button components and
+  the drawing tools/order from `apps/web/src/features/block-canvas/views/canvas-toolbars.tsx`.
+
+The exporter adds framing and `HomepageConversation` overlays; it does not alter
+the reference component files. It replaces the earlier simplified SVG generator.
 
 ## Product screenshots
 

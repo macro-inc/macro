@@ -48,13 +48,13 @@ Each surface is purpose-built for its job rather than composed from a generic bl
 <table>
   <tr>
     <td width="50%" valign="top">
-      <a href="https://docs.macro.com/product/email"><img src=".github/readme/features/email.svg" alt="Email: All your inboxes, with shared context." width="100%" /></a>
+      <a href="https://docs.macro.com/product/email"><img src=".github/readme/features/email.jpg" alt="Email: All your inboxes, with shared context." width="100%" /></a>
       <h3>Email</h3>
       <p>All your inboxes, with shared context.</p>
       <a href="https://docs.macro.com/product/email">Explore email &rarr;</a>
     </td>
     <td width="50%" valign="top">
-      <a href="https://docs.macro.com/product/channels"><img src=".github/readme/features/messages.svg" alt="Messages: Channels and DMs that connect your work." width="100%" /></a>
+      <a href="https://docs.macro.com/product/channels"><img src=".github/readme/features/messages.jpg" alt="Messages: Channels and DMs that connect your work." width="100%" /></a>
       <h3>Messages</h3>
       <p>Channels and DMs that connect your work.</p>
       <a href="https://docs.macro.com/product/channels">Explore messages &rarr;</a>
@@ -62,13 +62,13 @@ Each surface is purpose-built for its job rather than composed from a generic bl
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <a href="https://docs.macro.com/product/tasks"><img src=".github/readme/features/tasks.svg" alt="Tasks: Capture, assign, and track the next step." width="100%" /></a>
+      <a href="https://docs.macro.com/product/tasks"><img src=".github/readme/features/tasks.jpg" alt="Tasks: Capture, assign, and track the next step." width="100%" /></a>
       <h3>Tasks</h3>
       <p>Capture, assign, and track the next step.</p>
       <a href="https://docs.macro.com/product/tasks">Explore tasks &rarr;</a>
     </td>
     <td width="50%" valign="top">
-      <a href="https://docs.macro.com/product/docs"><img src=".github/readme/features/docs.svg" alt="Docs: Collaborative documents with live @links." width="100%" /></a>
+      <a href="https://docs.macro.com/product/docs"><img src=".github/readme/features/docs.jpg" alt="Docs: Collaborative documents with live @links." width="100%" /></a>
       <h3>Docs</h3>
       <p>Collaborative documents with live @links.</p>
       <a href="https://docs.macro.com/product/docs">Explore docs &rarr;</a>
@@ -76,13 +76,13 @@ Each surface is purpose-built for its job rather than composed from a generic bl
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <a href="https://docs.macro.com/product/canvas"><img src=".github/readme/features/canvas.svg" alt="Canvas: Map ideas across tasks, files, and emails." width="100%" /></a>
+      <a href="https://docs.macro.com/product/canvas"><img src=".github/readme/features/canvas.jpg" alt="Canvas: Map ideas across tasks, files, and emails." width="100%" /></a>
       <h3>Canvas</h3>
       <p>Map ideas across tasks, files, and emails.</p>
       <a href="https://docs.macro.com/product/canvas">Explore canvas &rarr;</a>
     </td>
     <td width="50%" valign="top">
-      <a href="https://docs.macro.com/product/agents"><img src=".github/readme/features/agents.svg" alt="Agents: Team memory and tools to take action." width="100%" /></a>
+      <a href="https://docs.macro.com/product/agents"><img src=".github/readme/features/agents.jpg" alt="Agents: Team memory and tools to take action." width="100%" /></a>
       <h3>Agents</h3>
       <p>Team memory and tools to take action.</p>
       <a href="https://docs.macro.com/product/agents">Explore agents &rarr;</a>
@@ -90,13 +90,13 @@ Each surface is purpose-built for its job rather than composed from a generic bl
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <a href="https://docs.macro.com/product/calls"><img src=".github/readme/features/calls.svg" alt="Calls: Recordings and transcripts your team can use." width="100%" /></a>
+      <a href="https://docs.macro.com/product/calls"><img src=".github/readme/features/calls.jpg" alt="Calls: Recordings and transcripts your team can use." width="100%" /></a>
       <h3>Calls</h3>
       <p>Recordings and transcripts your team can use.</p>
       <a href="https://docs.macro.com/product/calls">Explore calls &rarr;</a>
     </td>
     <td width="50%" valign="top">
-      <a href="https://docs.macro.com/product/folders"><img src=".github/readme/features/files.svg" alt="File storage: Imported, organized, and searchable." width="100%" /></a>
+      <a href="https://docs.macro.com/product/folders"><img src=".github/readme/features/files.jpg" alt="File storage: Imported, organized, and searchable." width="100%" /></a>
       <h3>File storage</h3>
       <p>Imported, organized, and searchable.</p>
       <a href="https://docs.macro.com/product/folders">Explore file storage &rarr;</a>
@@ -104,13 +104,13 @@ Each surface is purpose-built for its job rather than composed from a generic bl
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <a href="https://docs.macro.com/integrations/github"><img src=".github/readme/features/pull-requests.svg" alt="Pull requests: Code reviews linked to the conversation." width="100%" /></a>
+      <a href="https://docs.macro.com/integrations/github"><img src=".github/readme/features/pull-requests.jpg" alt="Pull requests: Code reviews linked to the conversation." width="100%" /></a>
       <h3>Pull requests</h3>
       <p>Code reviews linked to the conversation.</p>
       <a href="https://docs.macro.com/integrations/github">Explore pull requests &rarr;</a>
     </td>
     <td width="50%" valign="top">
-      <a href="https://docs.macro.com/product/crm"><img src=".github/readme/features/crm.svg" alt="CRM: Companies, contacts, and your sales pipeline." width="100%" /></a>
+      <a href="https://docs.macro.com/product/crm"><img src=".github/readme/features/crm.jpg" alt="CRM: Companies, contacts, and your sales pipeline." width="100%" /></a>
       <h3>CRM</h3>
       <p>Companies, contacts, and your sales pipeline.</p>
       <a href="https://docs.macro.com/product/crm">Explore crm &rarr;</a>
