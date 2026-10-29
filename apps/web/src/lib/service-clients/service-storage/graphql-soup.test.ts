@@ -804,6 +804,33 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(mocks.platformFetch).toHaveBeenCalledTimes(2);
   });
 
+  it('preserves the caller cancellation reason while waiting for refresh', async () => {
+    const controller = new AbortController();
+    const reason = new DOMException('Request aborted', 'AbortError');
+    mocks.platformFetch.mockResolvedValueOnce(
+      new Response('{}', { status: 401 })
+    );
+    vi.mocked(fetchToken).mockImplementationOnce(() => {
+      controller.abort(reason);
+      return Promise.resolve(
+        err([
+          {
+            code: 'NETWORK_ERROR',
+            message: 'Authentication refresh cancelled',
+          },
+        ])
+      );
+    });
+    const soup = await import('./graphql-soup');
+
+    await expect(
+      soup.dssGraphqlFetch('http://dss.test/graphql', {
+        signal: controller.signal,
+      })
+    ).rejects.toBe(reason);
+    expect(mocks.platformFetch).toHaveBeenCalledOnce();
+  });
+
   it('surfaces a refresh timeout as a retryable transport failure', async () => {
     mocks.platformFetch.mockResolvedValueOnce(
       new Response('{}', { status: 401 })
