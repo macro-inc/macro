@@ -2,7 +2,7 @@
 
 ## Surface
 
-`Go to Tasks` → `/app/component/tasks`. Tabs: `My tasks`, `Created by me`, `Team tasks`, and `Projects`.
+`Go to Tasks` → `/app/component/tasks`. Task views: `My tasks`, `All tasks`, and `Created by me`.
 The single-row desktop header contains the title, `Filter`, a separate
 `Task layout` single-select icon group for `List`, `Board`, and enabled `Gantt`,
 `Sort`, `Group`, `New`, and an expandable Search icon
@@ -29,22 +29,19 @@ The desktop sidebar and toolbar `New` menus offer `Task`, `Subtask`, `Project` (
 Projects is enabled), and `Tag`. Task and Project open their existing composers;
 Tag opens the tag editor, with personal scope selected and team sharing available
 when the user has a team. The Projects list uses the same menu. Mobile creation
-controls are unchanged. With Projects enabled, `My projects` appears below the
-tabs and favorites. It lists
-accessible projects by most recently updated, with a capped height and its own scroll
-area. Click a project to open its overview within the current Tasks view, keeping
-the sidebar mounted, or Shift-click to open it in a new split.
-The current project is highlighted. Collapse the heading to hide the list; this
-preference persists. `Load more projects` fetches the next page when available.
-The plus button beside `My projects` opens the project composer, even while the
-section is collapsed or loading. Its rows use the shared project query/cache and
-load inside a local Suspense boundary, leaving sidebar controls available.
-Once a current-query project page is cached, an offline/background refresh failure
-must not show **Could not load projects** beside those rows (or a cached empty
-result). Retrying a refresh must not reintroduce that warning merely because the
-refresh promise rejects; the cached project links remain available. Cache misses,
-server/permission errors, and failed **Load more projects** requests still show
-failure and retry controls. Verify both background refresh and manual retry.
+controls are unchanged. With Projects enabled, the collapsible `Projects` section
+appears above `Saved views`. It contains `My projects` (assigned to the viewer),
+`All projects` (all accessible projects), and `Created by me` (owned by the viewer).
+These replace the old Projects tab and individual-project shortcut list. The plus
+beside the section opens the project composer even while collapsed.
+On mobile, one `Projects` pill opens a drawer with the same three views; the
+active pill shows the selected view's name. Selecting a task or saved view clears
+the project pill's active state. Project scoping applies before pagination and
+cannot be removed by clearing editable filters. Opening a project and returning
+through its breadcrumb retains the selected project view.
+Cached project rows remain available through offline/background refresh failures.
+Cache misses, server/permission errors, and failed continuation requests retain
+failure and retry controls.
 Opening a project shows a content-shaped skeleton while its data loads: title,
 wrapping property pills, description, and discussion for Overview; toolbar and
 rows for Tasks. The mobile skeleton uses the same compact insets as the content.
@@ -137,6 +134,7 @@ Saved views are available on main Tasks, not inside Project or CRM task lists.
 - Mobile: the **Saved views** pill sits after **Filters** and before the built-in task tabs, using the same mobile pill component. It shows the selected view's name and active styling, and opens a drawer of saved-view rows with selection and management menus, without a duplicate section heading or a header create button. Create views from changed filters, layout, grouping, or sort in the filter drawer.
 - The empty sidebar and mobile picker show **Your go-to views**, the muted description **Save your setup for next time.**, and a secondary **Create view** button with a leading plus icon in a rounded container with a subtle border, 12px padding, the surrounding background, and no shadow or illustration. It starts the same unsaved draft as desktop **+**; on mobile, the picker closes first. Configure the draft in Filters, then choose **Save view**.
 - Desktop **+** starts an unsaved view without person restrictions and with explicit open-status filters. It expands the section and adds a selected, italic **New view** row labeled **Draft** in the sidebar and mobile picker. Configure filters, then choose **Save view**; the name defaults to **New view** and can be edited before saving. A confirmed save replaces the draft with the named view; **Cancel** in the desktop toolbar or mobile filter drawer, another selection, or leaving Tasks removes the unsaved row. Canceling only the name dialog keeps the draft for later.
+- Desktop **Save view** and draft **Cancel** are separate standalone buttons with a gap, not segments of a button group.
 - When filters, layout, grouping, or sort differ from the built-in tab defaults, the filled **Save view** button appears immediately left of Filters on desktop and in an edge-to-edge mobile banner above the filter drawer footer. The borderless banner overlays content on a drawer-colored backing and has a leading bookmark icon on its button. Base settings and search alone do not show the banner. It captures current filters, layout, grouping, and ordered sort directions, but excludes text search and scroll state. My Tasks adds **Me** to Assignee; Created by me adds it to Created by. Additional people in the same filter use OR matching.
 - Saved views use the normal Assignee and Created by filters, not a separate Scope control. **Me** stays relative; its tooltip says “Matches whoever opens this saved view.” A named person stays fixed. Removing Me removes that restriction.
 - Temporary filter, layout, grouping, or sort edits show a filled **Save changes** button and **Reset**. Opening or resetting a saved view restores all four. Mobile still displays a list without replacing the stored desktop layout. Right-click a sidebar view or use its **…** button for **Edit**, **Duplicate**, **Copy link**, and confirmed **Delete view**. On desktop, the selected view's topbar shows a bookmark icon before its name and an unframed ghost overflow button immediately after it. On mobile, the picker shows the name and contains row menus; creation and draft cancellation appear in the filter drawer's overlay banner above the footer; Save changes and Reset sit on the footer's right, opposite Clear all, not below the tabs. Non-owners cannot rename, share, overwrite, or delete a shared view.
@@ -681,11 +679,15 @@ tasks** card at the bottom of the Tasks sidebar; see
 
 Projects are enabled by default in development. Production rollout is gated by
 PostHog `enable-projects`; `VITE_ENABLE_PROJECTS` overrides either environment.
-When off, Tasks hides
-the Projects tab, project column, and assignment actions. A saved Projects tab
-temporarily shows My Tasks without overwriting the saved selection.
+When off, Tasks hides the Projects section and mobile picker, project column,
+and assignment actions. A saved project view temporarily shows My tasks without
+overwriting the saved selection.
 
-Choose the `Projects` tab in Tasks, or open `/app/component/tasks-projects`.
+Choose a view in the `Projects` section in Tasks, or open
+`/app/component/tasks-projects` for All projects. Project view links use the Tasks
+search namespace: `tasks.tab=my-projects`, `projects`, or `created-projects`.
+Desktop project-view titles open the same view switcher as Tasks; individual
+project names remain content titles. Mobile keeps the Projects picker.
 Projects use the same list rows, property cells, selection, group headers, and
 keyboard navigation as Tasks. Search (`Cmd/Ctrl+F`), `Sort projects`,
 `Group projects`, and `Filter projects` sit above the list. Groups default to

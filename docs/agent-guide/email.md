@@ -39,17 +39,18 @@ and its `New tag` action creates a personal tag with no Team sharing option.
 
 Full email client. Desktop groups `Signal` and `Noise` under one `Inbox` sidebar
 item, with pill tabs beside the Inbox title in the content header, matching the
-Chat sidebar tabs. Selecting Inbox
-from another mailbox opens Signal; selecting it while in Noise keeps Noise.
+Chat sidebar tabs; with the Focus flags on, a `Focus` tab leads them. Selecting
+Inbox from another mailbox opens Signal; selecting it while in Focus or Noise
+keeps that tab.
 The desktop sidebar continues with `Favorites`, `Drafts`, `Sent`, `Scheduled`,
 and `Reminders` (when reminders are enabled), followed by a **Library** section containing `All mail`,
 `Archived`, and `Shared`, then **Tags**. Sidebar number shortcuts follow that
-order; `Tab` and `Shift+Tab` toggle between Signal and Noise (from another
-mailbox, `Tab` opens Signal and `Shift+Tab` Noise). While the email list itself
-has focus, `Tab` moves browser focus instead; use `g i` or `g o`. Calendar
-mail remains available through the calendar filter and existing Calendar route.
-Mobile keeps its original tabs and order, including separate Signal, Noise, and
-Calendar tabs.
+order; `Tab` and `Shift+Tab` move between the Inbox tabs (from another mailbox,
+`Tab` opens the first, Focus when it shows, else Signal, and `Shift+Tab` Noise).
+While the email list itself has focus, `Tab` moves browser focus instead; use
+`g i` or `g o`. Calendar mail remains available through the calendar filter and
+existing Calendar route. Mobile keeps its original tabs and order, including
+separate Signal, Noise, and Calendar tabs, with `Focus` (flagged) first.
 Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email`; Gmail/Google Workspace and enabled Outlook connections
 use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` or `/` within the surface.
@@ -125,6 +126,27 @@ the paginated GraphQL Soup query uses `favoritesOnly: true`. With the flag off,
 REST Soup uses `favorites_only: true`. Starring changes membership without
 changing the list query. Text search still resolves favorite IDs for the search
 service. An empty favorites list shows `No favorite emails`.
+
+With `enable-email-focus` and `enable-graphql-soup` on, a `Focus` tab leads the
+desktop Inbox tabs (with an `Experimental` badge beside them while it is open)
+and the mobile pills (`Focus · Experimental`). It lists signal
+threads from the last 30 days that the email focus worker
+(`services/email_focus_worker`) classified as worth attention, including inboxes
+linked to the account, by priority: the importance score halved for every 2 days
+since the thread's latest inbound mail. Rows at least 32rem wide show the 0-100
+importance score with a five-bar meter just before the date, and from 56rem also
+`Reply needed` and `Follow up` tag pills ahead of it. Narrower rows drop both;
+without a touch screen the score moves before the subject, and touch screens
+show neither. The desktop header's sort dropdown (`Sort Focus`, among the view
+options) switches between **Priority**,
+**Importance** and **Most recent**; touch layouts have no dropdown and keep the
+saved order (Priority by default). The filter menu adds a Focus group (Reply
+needed, Follow up) on this tab only and has no Status or Done group there. The
+list is one `user.emailFocus` GraphQL read filtered on the client; it refreshes
+on open, not live. Mark Done hides the row at once and archives the thread; Undo
+brings it back. The worker classifies only inboxes on its
+`FOCUS_ENABLED_EMAIL_DOMAINS` allowlist, so other accounts see the empty state
+`Nothing needs you`.
 
 `Archived`, between All mail and Shared in the desktop Library section, lists
 your own archived (Mail Done) threads: the

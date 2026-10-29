@@ -55,6 +55,7 @@ const channelsEntryStateSchemaWithDefaults = z.object({
   }),
   collapsedLabels: z.array(z.string()).default([]),
   threadsChannelId: z.string().optional(),
+  unreadOnly: z.boolean().default(false),
 });
 
 type ChannelsEntryState = z.infer<typeof channelsEntryStateSchemaWithDefaults>;
@@ -70,6 +71,7 @@ const DEFAULT_CHANNELS_ENTRY_STATE = {
   },
   collapsedLabels: [],
   threadsChannelId: undefined,
+  unreadOnly: false,
 } satisfies ChannelsEntryState;
 
 const channelsPreferencesSchema = z.object({
@@ -112,6 +114,7 @@ function selectEntryState(state: ChannelsViewState): ChannelsEntryState {
     expandedGroups: state.expandedGroups,
     collapsedLabels: state.collapsedLabels,
     threadsChannelId: state.threadsChannelId,
+    unreadOnly: state.unreadOnly,
   };
 }
 
@@ -128,6 +131,7 @@ function restoreChannelsEntryState(
     expandedGroups: restored.expandedGroups,
     collapsedLabels: restored.collapsedLabels,
     threadsChannelId: restored.threadsChannelId,
+    unreadOnly: restored.unreadOnly,
   };
 }
 
