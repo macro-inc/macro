@@ -24,6 +24,8 @@ vi.mock('./queries/live-session', () => ({
 }));
 vi.mock('@app/features/block-agent/ui', () => ({
   TextShimmer: (props: { text: string }) => <>{props.text}</>,
+  WorkingDots: () => null,
+  DisclosureCaret: () => null,
 }));
 
 import type { AgentActivityData } from '@macro-inc/lexical-core';

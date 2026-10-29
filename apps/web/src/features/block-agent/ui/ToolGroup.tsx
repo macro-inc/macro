@@ -6,7 +6,6 @@
  * because the cards themselves appear once it opens.
  */
 
-import CaretRight from '@icon/system/regular/caret-right.svg';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import {
@@ -17,6 +16,7 @@ import {
   on,
   onMount,
 } from 'solid-js';
+import { DisclosureCaret } from './DisclosureCaret';
 import { TextShimmer } from './TextShimmer';
 
 export interface ToolGroupProps {
@@ -152,11 +152,7 @@ export function ToolGroup(props: ToolGroupProps) {
         onClick={() => setExpanded(!expanded())}
       >
         <TextShimmer text={title()} active={props.active} />
-        <CaretRight
-          aria-hidden="true"
-          class="size-4 shrink-0 opacity-0 transition-transform group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none"
-          classList={{ 'rotate-90': expanded() }}
-        />
+        <DisclosureCaret open={expanded()} />
       </button>
       <CollapseTransition open={expanded()}>
         <div>
