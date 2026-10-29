@@ -1221,9 +1221,9 @@ search cached entities without waiting for a server search. Background hydration
 updates an already-open menu only when a bucket it uses changes. Email/body/tag-only
 hydration must not reread History or the cached channel list; a newly hydrated note
 refreshes History and matching menus, and a channel/DM refreshes channel consumers.
-Ordinary query responses use the same bucket scoping. A project-search response
-that only caches another viewer Soup page must not refresh History, channel lists,
-or unrelated active query pages. Renames, ownership/recency changes, and moves
+Ordinary query responses use the same bucket scoping. A Projects list response
+changes only the `initiative` bucket, so it refreshes menus searching projects but
+not History, channel lists, or unrelated active query pages. Renames, ownership/recency changes, and moves
 between buckets must still appear without retyping in every affected view.
 Older cache runtimes without bucket metadata, mutations, and identity resets
 refresh conservatively. For an empty search, scroll toward the end (or use
