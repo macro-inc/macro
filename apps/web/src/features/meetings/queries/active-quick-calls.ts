@@ -17,6 +17,7 @@ export function useActiveQuickCallsSource(
       userId() && !query.isPending && !accessDenied()
         ? (query.data ?? []).map((meeting) => ({
             id: meeting.id,
+            callId: meeting.callId ?? undefined,
             createdBy: meeting.createdBy,
             title: meeting.title,
             url: getMeetingUrl(meeting.shareToken),

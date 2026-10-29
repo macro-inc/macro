@@ -9,36 +9,81 @@ use non_empty::NonEmpty;
 use super::state::{Changed, FoldState};
 
 impl FoldState {
-    /// Show that the agent summarized its own context. Nothing answers it,
-    /// and it is no turn: it lands between turns, or beside one running.
+    /// Show that the agent summarized its own context. Nothing answers it.
+    ///
+    /// Between turns it is a message of its own. Within one it is a part of
+    /// the turn's agent message, after whatever the agent had produced when
+    /// the summary landed: as a message of its own it would sort after the
+    /// whole turn, below calls that started after it.
     pub(super) fn record_compaction(&mut self) -> Option<Changed> {
+        let part = MessagePart::Control {
+            control: Control::Compact,
+            outcome: ControlOutcome::Accepted,
+        };
+        // Still consumes a turn id in a turn, so every later turn keeps the
+        // id a comms placeholder may have stored.
         let id = TurnId(self.turns_opened);
         self.turns_opened += 1;
         let message = self.messages.len();
+        match self.turn.as_ref().map(|turn| (turn.id, turn.agent)) {
+            Some((_, Some(agent))) => {
+                self.messages.get_mut(agent)?.parts.push(part);
+                Some(Changed::updated(agent))
+            }
+            Some((turn_id, None)) => {
+                self.push_agent_message(turn_id, part);
+                self.open_turn().agent = Some(message);
+                Some(Changed::new(message))
+            }
+            None => {
+                self.push_agent_message(id, part);
+                Some(Changed::new(message))
+            }
+        }
+    }
+
+    fn push_agent_message(&mut self, id: TurnId, part: MessagePart) {
         self.messages.push(FoldedMessage {
             id,
             author: Author::Agent,
             request_id: None,
-            parts: NonEmpty::one(MessagePart::Control {
-                control: Control::Compact,
-                outcome: ControlOutcome::Accepted,
-            }),
+            parts: NonEmpty::one(part),
             stop: None,
             pending: self.speculative,
             posted_at: None,
         });
-        Some(Changed::new(message))
     }
 
     /// Emit a standalone control message. A request-backed control starts
     /// pending and is resolved by its response; one with no request to answer
     /// (a stop notification) is accepted outright.
+    ///
+    /// A model change is punctuation *between* turns. If one lands while a
+    /// turn is open — the user switched models after sending, or a speculated
+    /// prompt raced the selection — later agent output must not keep the open
+    /// turn's id. The transcript sorts by turn, so that leftover id put every
+    /// later chunk *above* the line.
+    ///
+    /// A set-model with no user is the session applying its own model
+    /// (create, resume, reconnect). That is not a user action and must not
+    /// draw a line, or a resumed transcript grows a "Model set to" under
+    /// the history it just loaded.
     pub(super) fn record_control(
         &mut self,
         control: Control,
         request_id: Option<&RequestId>,
         user_id: Option<MacroUserIdStr<'static>>,
     ) -> Option<Changed> {
+        if matches!(control, Control::SetModel { .. }) && user_id.is_none() {
+            return None;
+        }
+        if matches!(control, Control::SetModel { .. }) && self.turn.is_some() {
+            // Nothing to stamp: the runtime has not ended the turn. Dropping
+            // it is enough for the next agent part to open a new one after
+            // this line. In-flight tool patches still find their parts by
+            // session-wide tool id.
+            let _ = self.close_turn(None);
+        }
         let id = TurnId(self.turns_opened);
         self.turns_opened += 1;
         let message = self.messages.len();

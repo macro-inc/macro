@@ -19,17 +19,47 @@ export async function verifyProductPages(browser: Browser, origin: string) {
       reducedMotion: 'reduce',
       colorScheme: 'dark',
     });
+    let releaseScripts!: () => void;
+    const scriptsReady = new Promise<void>((resolve) => {
+      releaseScripts = resolve;
+    });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.route('**/*', async (request) => {
       if (new URL(request.request().url()).origin !== origin)
         await request.abort();
-      else await request.continue();
+      else {
+        if (request.request().resourceType() === 'script') await scriptsReady;
+        await request.continue();
+      }
     });
     try {
-      await page.goto(`${origin}${route}`, { waitUntil: 'load' });
+      await page.goto(`${origin}${route}`, { waitUntil: 'commit' });
       const heading = page.locator('.feature-page-hero h1');
       await expect(heading).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      // These must hold before route JavaScript can repair missing CSS. A
+      // stale prerender asset entry previously painted a 1000px brand SVG.
+      const brand = page.locator('.product-home-link > svg');
+      const initialBrand = await brand.boundingBox();
+      expect(initialBrand?.width, `${route}: first-paint logo width`).toBe(20);
+      expect(initialBrand?.height, `${route}: first-paint logo height`).toBe(
+        20
+      );
+      await expect(heading).toHaveCSS('font-family', /Roboto Slab/);
+      const padding = await page
+        .locator('.email-page-hero')
+        .evaluate((element) =>
+          Number.parseFloat(getComputedStyle(element).paddingTop)
+        );
+      expect(
+        padding,
+        `${route}: hero styled before JavaScript`
+      ).toBeGreaterThan(100);
+      releaseScripts();
+      await page.waitForLoadState('load');
+      await expect(brand).toHaveAttribute('width', '20');
+      await expect(brand).toHaveAttribute('height', '20');
       const demos = page.locator('.demo-interaction-boundary').filter({
         has: page.locator(':scope > .demo-interaction-activate'),
       });
@@ -117,6 +147,7 @@ export async function verifyProductPages(browser: Browser, origin: string) {
         `[prerender] ${route}: ${count} mobile demos accept touch entry and return to page scrolling`
       );
     } finally {
+      releaseScripts();
       await page.close();
     }
   }

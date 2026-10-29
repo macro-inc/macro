@@ -228,10 +228,137 @@ fn folds_session_controls_as_typed_parts() {
     assert_eq!(messages[2].id, TurnId(2));
 }
 
+/// A model change is punctuation between turns. If it is logged after the
+/// prompt — the user switched models while waiting, or a startup selection
+/// lands after a speculated prompt — later agent output must not keep the
+/// prompt's turn id. The transcript sorts by turn, so that leftover id put
+/// every later chunk above the "Model set to" line.
+#[test]
+fn a_model_change_puts_later_output_below_the_line() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"look around"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Before the switch."}}}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"m","method":"session/set_config_option","params":{"sessionId":"s","configId":"model","value":"opus"}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"After the switch."}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","result":{"stopReason":"end_turn"}}}"#,
+    ));
+
+    let messages = fold(log);
+    assert_eq!(
+        messages.len(),
+        4,
+        "prompt, pre-change reply, model line, post-change reply"
+    );
+    assert_eq!(
+        messages[0].parts.as_slice(),
+        &[MessagePart::Text {
+            text: "look around".to_owned()
+        }]
+    );
+    assert_eq!(
+        messages[1].parts.as_slice(),
+        &[MessagePart::Text {
+            text: "Before the switch.".to_owned()
+        }]
+    );
+    assert_eq!(messages[1].author, Author::Agent);
+    assert_eq!(messages[1].id, TurnId(0));
+    assert_eq!(
+        messages[2].parts.as_slice(),
+        &[MessagePart::Control {
+            control: Control::SetModel {
+                model: "opus".to_owned()
+            },
+            outcome: ControlOutcome::Pending,
+        }]
+    );
+    assert_eq!(
+        messages[3].parts.as_slice(),
+        &[MessagePart::Text {
+            text: "After the switch.".to_owned()
+        }]
+    );
+    assert_eq!(messages[3].author, Author::Agent);
+    assert!(
+        messages[3].id > messages[2].id,
+        "post-change output sorts after the line, not with the prompt"
+    );
+    assert_eq!(messages[3].stop, Some(StopReason::EndTurn));
+}
+
+/// Same boundary when the model is chosen before the agent has spoken: the
+/// reply must not inherit the prompt's turn and sort above the line.
+#[test]
+fn a_model_change_before_the_reply_keeps_the_reply_below_the_line() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"look around"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"m","method":"session/set_config_option","params":{"sessionId":"s","configId":"model","value":"opus"}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Working on opus."}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","result":{"stopReason":"end_turn"}}}"#,
+    ));
+
+    let messages = fold(log);
+    assert_eq!(messages.len(), 3, "prompt, model line, reply");
+    assert_eq!(
+        messages[1].parts.as_slice(),
+        &[MessagePart::Control {
+            control: Control::SetModel {
+                model: "opus".to_owned()
+            },
+            outcome: ControlOutcome::Pending,
+        }]
+    );
+    assert_eq!(
+        messages[2].parts.as_slice(),
+        &[MessagePart::Text {
+            text: "Working on opus.".to_owned()
+        }]
+    );
+    assert_eq!(messages[2].author, Author::Agent);
+    assert!(
+        messages[2].id > messages[1].id,
+        "the reply sorts after the model line"
+    );
+    assert_eq!(messages[2].stop, Some(StopReason::EndTurn));
+}
+
+/// Create, resume, and reconnect apply the session's model with no user on
+/// the frame. That is not a switch the reader made, so it must not draw a
+/// line under the history that just loaded.
+#[test]
+fn a_session_applied_model_does_not_draw_a_line() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"look around"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Looking."}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","result":{"stopReason":"end_turn"}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"m","method":"session/set_config_option","params":{"sessionId":"s","configId":"model","value":"opus"}}}"#,
+    ));
+
+    let messages = fold(log);
+    assert_eq!(messages.len(), 2, "prompt and reply; no model line");
+    assert!(
+        messages
+            .iter()
+            .flat_map(|message| message.parts.iter())
+            .all(|part| !matches!(part, MessagePart::Control { .. })),
+        "a session-applied model is not a control line"
+    );
+}
+
 /// `/compact` is a message to every harness: the transcript shows what the
 /// agent did, not what someone asked for. A compaction shows when the agent
-/// reports one, as a line of its own beside the turn it landed in, which
-/// carries on and ends as usual.
+/// reports one, at the point in the turn it landed, which carries on after it
+/// and ends as usual.
 #[test]
 fn compaction_shows_when_the_agent_reports_one_not_when_asked() {
     let log = parse_log(concat!(
@@ -244,14 +371,12 @@ fn compaction_shows_when_the_agent_reports_one_not_when_asked() {
         r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" Nothing yet."}}}}}"#,
         "\n",
         r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"c","result":{"stopReason":"end_turn"}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"n","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"next"}]}}}"#,
     ));
 
     let messages = fold(log);
-    assert_eq!(
-        messages.len(),
-        3,
-        "the message, its reply and the compaction"
-    );
+    assert_eq!(messages.len(), 3, "the message, its reply and the next");
     assert_eq!(
         messages[0].parts.as_slice(),
         &[MessagePart::Text {
@@ -261,21 +386,55 @@ fn compaction_shows_when_the_agent_reports_one_not_when_asked() {
     assert!(matches!(messages[0].author, Author::User { .. }));
     assert_eq!(
         messages[1].parts.as_slice(),
-        &[MessagePart::Text {
-            text: "What should I compact? Nothing yet.".to_owned()
-        }]
+        &[
+            MessagePart::Text {
+                text: "What should I compact?".to_owned()
+            },
+            MessagePart::Control {
+                control: Control::Compact,
+                outcome: ControlOutcome::Accepted,
+            },
+            MessagePart::Text {
+                text: " Nothing yet.".to_owned()
+            },
+        ]
     );
     assert_eq!(messages[1].author, Author::Agent);
     assert_eq!(messages[1].stop, Some(StopReason::EndTurn));
+    // The compaction still takes a turn id, so later turns keep theirs.
+    assert_eq!(messages[2].id, TurnId(2));
+}
+
+/// A summary the agent waited for lands before it says anything: the divider
+/// opens the reply rather than trailing it.
+#[test]
+fn a_compaction_before_the_agent_speaks_opens_the_reply() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"c","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"a long paste"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"_macro/context_summary","params":{"sessionId":"s","text":"Earlier work.","through":"c","replaces":2}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Read it."}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"c","result":{"stopReason":"end_turn"}}}"#,
+    ));
+
+    let messages = fold(log);
+    assert_eq!(messages.len(), 2, "the paste and its reply");
+    assert_eq!(messages[1].id, TurnId(0));
     assert_eq!(
-        messages[2].parts.as_slice(),
-        &[MessagePart::Control {
-            control: Control::Compact,
-            outcome: ControlOutcome::Accepted,
-        }]
+        messages[1].parts.as_slice(),
+        &[
+            MessagePart::Control {
+                control: Control::Compact,
+                outcome: ControlOutcome::Accepted,
+            },
+            MessagePart::Text {
+                text: "Read it.".to_owned()
+            },
+        ]
     );
-    assert_eq!(messages[2].author, Author::Agent);
-    assert_eq!(messages[2].stop, None);
+    assert_eq!(messages[1].stop, Some(StopReason::EndTurn));
 }
 
 /// A stop pressed before the agent's first chunk - a window over ten seconds
@@ -344,7 +503,7 @@ fn a_stop_after_the_agent_speaks_stamps_the_message_it_has() {
 #[test]
 fn a_rejected_control_reports_the_runtime_error() {
     let log = parse_log(concat!(
-        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"01920000-0000-7000-8000-0000000000a1","method":"session/set_config_option","params":{"sessionId":"s","configId":"model","value":"claude-fable-5"}}}"#,
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"01920000-0000-7000-8000-0000000000a1","method":"session/set_config_option","params":{"sessionId":"s","configId":"model","value":"claude-fable-5"}}}"#,
         "\n",
         r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"01920000-0000-7000-8000-0000000000a1","error":{"code":-32602,"message":"Invalid params: model not found: claude-fable-5"}}}"#,
     ));
@@ -370,7 +529,7 @@ fn a_rejected_control_reports_the_runtime_error() {
 #[test]
 fn an_accepted_control_resolves_and_the_same_frame_moves_the_metadata() {
     let log = parse_log(concat!(
-        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"01920000-0000-7000-8000-0000000000a1","method":"session/set_config_option","params":{"sessionId":"s","configId":"model","value":"opus"}}}"#,
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"01920000-0000-7000-8000-0000000000a1","method":"session/set_config_option","params":{"sessionId":"s","configId":"model","value":"opus"}}}"#,
         "\n",
         r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"01920000-0000-7000-8000-0000000000a1","result":{"configOptions":[{"id":"model","name":"Model","type":"select","currentValue":"opus","options":[{"value":"opus","name":"Opus"}]}]}}}"#,
     ));
@@ -927,4 +1086,64 @@ fn replayed_user_chunks_keep_attached_files() {
             text: "a cat".to_owned()
         }]
     );
+}
+
+/// An ACP image frame folds to the picture's URL, not its bytes.
+#[test]
+fn an_image_frame_folds_to_an_attachment() {
+    let log = parse_log(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"look"},{"type":"image","data":"aW1n","mimeType":"image/png","uri":"https://cdn.example/cat.png"}]}}}"#,
+    );
+    let messages = fold(log);
+    assert_eq!(
+        messages[0].parts.as_slice(),
+        &[
+            MessagePart::Text {
+                text: "look".to_owned()
+            },
+            MessagePart::Attachment {
+                uri: "https://cdn.example/cat.png".to_owned(),
+                name: "cat.png".to_owned(),
+                mime_type: Some("image/png".to_owned()),
+                size: None,
+            },
+        ]
+    );
+}
+
+/// A link fetched after the prompt was sent still lands on that prompt.
+#[test]
+fn an_image_chunk_after_the_prompt_is_part_of_the_prompt() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"https://cdn.example/cat.png"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"user_message_chunk","content":{"type":"image","data":"aW1n","mimeType":"image/jpeg","uri":"https://cdn.example/cat.png"}}}}}"#,
+    ));
+    let messages = fold(log);
+    assert_eq!(messages.len(), 1);
+    assert_eq!(
+        messages[0].parts.as_slice(),
+        &[
+            MessagePart::Text {
+                text: "https://cdn.example/cat.png".to_owned()
+            },
+            MessagePart::Attachment {
+                uri: "https://cdn.example/cat.png".to_owned(),
+                name: "cat.png".to_owned(),
+                mime_type: Some("image/jpeg".to_owned()),
+                size: None,
+            },
+        ]
+    );
+}
+
+#[test]
+fn replay_deduplicates_a_resource_link_and_its_fetched_image() {
+    let frames = vec![
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"user_message_chunk","content":{"type":"resource_link","uri":"https://cdn.example/photo.png","name":"photo.png","mimeType":"image/png"}}}}}"#,
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"user_message_chunk","content":{"type":"image","data":"aW1n","mimeType":"image/png","uri":"https://cdn.example/photo.png"}}}}}"#,
+    ];
+    let messages = fold(parse_log(&frames.join("\n")));
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].parts.len(), 1);
 }

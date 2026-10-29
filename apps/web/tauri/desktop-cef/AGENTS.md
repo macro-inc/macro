@@ -1,6 +1,7 @@
 # desktop-cef
 
-Status: experimental; not built by CI or the release pipeline yet.
+Status: shipped macOS desktop app. The desktop release workflow builds it,
+packages it as a signed DMG, and publishes the release.
 
 ## What it is
 
@@ -18,6 +19,9 @@ thin binary over `../src-tauri` (`app_lib::run_with`) that selects
 ## Checks
 
 - `RUSTUP_TOOLCHAIN=1.95.0 cargo check --target aarch64-apple-darwin`
+- From the repository root on macOS, `nix build --option sandbox false
+  .#tauri-desktop-cef-app` builds the unsigned app. Release builds use
+  `.#tauri-desktop-dmg` and sign, notarize, and publish that app.
 - Bundle: build the frontend inside `nix develop` (`just build-tauri` in
   `apps/web`), then from here run the Tauri CLI built from the `macro-cef`
   branch of `macro-inc/tauri`:
@@ -29,13 +33,33 @@ thin binary over `../src-tauri` (`app_lib::run_with`) that selects
 - Keep this a separate workspace. A `[patch]` applies to every target in its
   workspace, so moving the CEF Tauri patches into `../Cargo.toml` would rebuild
   iOS and Android against the CEF branch.
+- A dependency change in `../src-tauri` or a shared plugin updates both
+  lockfiles: run `cargo metadata --format-version 1 > /dev/null` here as well as
+  in `..`. A new git dependency also needs its `outputHashes` entry on both
+  vendor dirs in `nix/tauri-desktop.nix`. The `check tauri lockfiles` PR
+  workflow (`nix build .#checks.x86_64-linux.tauri-cargo-lockfiles`) fails
+  when either lockfile is stale; otherwise only the macOS release build would.
 - `../src-tauri` must resolve `tauri` through `[patch.crates-io]` (a version
   requirement, not a git dependency) so this workspace can repoint it.
 - The `cef` feature of `../src-tauri` adds no dependencies; it switches the
   served origin to `http://tauri.localhost` and the `AppRuntime` alias to
   `tauri::DynRuntime`. It only compiles in this workspace.
+- The CEF Tauri fork's `on_web_content_process_terminate` callback takes a
+  webview and termination details; the regular fork takes only a webview.
+  Check both workspaces when changing shared callback registration.
 - Needs Rust 1.95 (the repo pins 1.94), `cmake`, and `ninja`; the first build
   downloads about 1 GB of CEF into `~/Library/Caches/tauri-cef`.
+- Nix pins Rust 1.95 and the `macro-cef` Tauri CLI separately for macOS. Keep
+  `nix/tauri-desktop.nix` on this workspace and CLI; the stock CLI omits the CEF
+  framework and helper apps from macOS bundles.
+- Keep `entitlements.plist` on the CEF config and the Nix DMG signing step. The
+  release signs the unsigned Nix app after bundling, and Chromium needs the JIT
+  entitlements under the hardened runtime. Calls and dictation need its camera
+  and audio-input entitlements, plus the usage descriptions in
+  `../src-tauri/icons/macos/Info.plist`; without either, macOS refuses capture.
+- Keep the HTTP/WebSocket fork revision and Nix source hash aligned with the
+  shared native workspace; native cookies use Application Support as documented
+  in `../src-tauri/README.md#native-authentication-cookies`.
 - Keep `tauri.conf.json` aligned with `../src-tauri/tauri.conf.json` and
   `tauri.macos.conf.json`: the CLI bundles from this file, while the app's
   runtime config still comes from `../src-tauri`.

@@ -8,7 +8,7 @@ import {
   isValidTime,
   parseCron as parseCronParts,
 } from '@core/util/cron';
-import type { ScheduleDraft } from './draft';
+import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from './draft';
 import { routineTargetSchema } from './routine-target';
 import { describeTriggers, validateTriggers } from './routine-triggers';
 
@@ -74,6 +74,8 @@ export function createEmptyDraft(model: string): ScheduleDraft {
     daysOfWeek: [...DEFAULT_WEEKDAYS],
     dayOfMonth: '1',
     target: { kind: 'model', model },
+    runVisibility: DEFAULT_RUN_VISIBILITY,
+    apps: [],
   };
 }
 
@@ -121,6 +123,17 @@ export function validateRoutineDraft(
     return 'Choose a valid time zone, such as America/New_York.';
   }
   return null;
+}
+
+/** Null until the owner's connections load; the server checks again on save. */
+export function validateRoutineApps(
+  apps: readonly { app_slug: string }[],
+  connectedSlugs: ReadonlySet<string> | undefined
+): string | null {
+  if (!connectedSlugs) return null;
+  return apps.every((app) => connectedSlugs.has(app.app_slug))
+    ? null
+    : 'Connect every app this routine requires.';
 }
 
 export function getErrorMessage(error: unknown): string {

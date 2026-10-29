@@ -209,7 +209,104 @@ SharedWorker still runs. The coordinator probes the physical owner Web Lock
 without waiting or stealing it; a held lock (or a failed probe) retries the
 heartbeat without changing epochs or touching storage. A released lock confirms
 silent worker termination and triggers the usual fenced recovery. Read deadlines
-still bound callers waiting on an unresponsive engine.
+still bound callers waiting on an unresponsive engine outside a visibility handoff.
+
+Protocol v10 reports tab visibility and epoch-fenced read states: `ready`,
+`waiting`, and `blocked`. A visible owner stays put even if another visible window
+gets focus. When its page hides, stop routing new work into that engine and ask it
+to drain immediately, without waiting for another visible consumer. An engine
+already loading/opening first finishes startup before draining. The runtime waits
+for admitted work and closes OPFS before acknowledging. Only then may another
+eligible visible page acquire the owner lock and open the existing database.
+Clients and their subscribers stay connected; an explicit page disposal can join
+the same drain and retire that page normally.
+
+If no eligible tab is visible, the coordinator enters `parked` with no engine.
+Background cache work queues until a visible page resumes ownership; it never
+starts a replacement in a hidden tab. A first-ever hidden registration also parks
+without touching storage. If an in-progress startup becomes all-hidden, pause its
+phase watchdog rather than misclassifying browser suspension as failure; resume
+the phase budget when a visible consumer returns. Parking retains the required
+open/reset action: it does not erase a reset requirement established by a real
+failure. Storage identity and version are unchanged. A ready recovery epoch
+publishes its storage outcome before immediately draining or parking, so hosts
+invalidate reset data/leases even if the next owner only opens existing storage.
+Reset completion accounting likewise follows accepted readiness, not whether
+that epoch remains active; its read pause stays in force during the drain.
+
+Catch-up writes keep their individual transactions and replies, but the
+coordinator coalesces broad `cache-changed` and `cache-hydrated` hints across its
+accepted in-flight backlog. The engine's local queue is insufficient: separate
+MessagePort deliveries can make it look idle between queued commits. Each channel
+keeps its latest revision and the union of search buckets; an unscoped hint stays
+unscoped, and hydration never becomes an authoritative invalidation. Publish when
+the last outstanding commit sends its hint or the remaining replies drain,
+including failed/no-op tails. A batch also flushes after 64 completed requests so
+continuous traffic cannot starve subscribers. Single-request updates, reset fences,
+query dependency pushes, and mutation settlements remain immediate. Flush accepted
+hints on owner departure/failure and when the last waiting caller leaves; never
+carry them into another engine's revision space. `graphql_cache.change_batch`
+records how many hints each coalesced broadcast replaced, without payloads.
+
+While parked or transitioning, `waiting` pauses read/init deadlines without
+creating a second page-side request queue. Reads, writes, and teardown retain
+coordinator admission order. A visible consumer starts a one-second read budget
+covering drain/startup/resume; changes of candidate do not extend it. If everyone
+hides again, cancel that budget. On expiry, `blocked` allows ordinary query network
+fallback (`cache-only` still never forwards) without repeatedly paying ten seconds.
+Only read callers are canceled, not admitted engine work or writes. Readiness
+restores deadlines and refreshes dependency registrations with preserved-storage
+semantics, including when startup finishes on its original owner.
+
+A replacement also invalidates document-read cursors and in-flight snapshots.
+The exchange retries a still-current read once against the new generation instead
+of dropping its only result: urql deduplicates a reexecution while that operation
+is still pending. Teardown, remount, and newer cache/network results still fence
+old reads. This applies to initial queries and affected watched rereads; continued
+churn uses normal request-policy handling. Cache-and-network never forwards a
+second request for this retry, and cache-only/replacement-registration-only reads
+never gain a network fallback. The anonymous page-side `graphql_cache.read_retry`
+span times the extra read without exporting query contents or identities.
+
+Live notification receipt must not wait for this storage pause. The
+`notificationReceiptExchange`, placed between the normalized-cache exchange and
+the subscription transport, publishes notification callbacks before persistence
+in both cached and uncached clients. The normalized-cache exchange still applies
+subscription effects serially before cache-dependent channel reconciliation.
+Resuming storage never republishes the notification callback. `notification.receive`
+spans record the notification ID, patch type, and page visibility without content;
+listener failures mark this span while remaining listeners still run. Result-local
+weak context links `graphql.subscription.cache_queue` (the wait behind earlier
+subscription effects) and `graphql.subscription.cache_apply` (cache application,
+including parked-storage waits) to that receipt, even after its immediate span
+ends. Cache failures mark the application phase without recording payloads or
+replaying delivery. This context never enters GraphQL extensions or the wire.
+
+Already-sent HTTP mutations may finish while parked. Their local commit, rollback,
+or defer requests wait for storage and retain their position ahead of later
+claims. Accepted settlement requests survive their caller disconnecting; their
+orphaned replies are dropped, not their known outcomes. This queue is still
+coordinator memory, not durable storage: loss before acceptance or loss of all
+contexts/coordinator still needs the existing uncertain-outcome and server-side
+idempotency protections. Parking never reports an unpersisted enqueue as durable.
+
+The read budget never kills an owner, steals a lock, wipes storage, or replays a
+write. If a drain itself stalls, writes wait until it can finish or existing
+failure/navigation recovery applies. Owner telemetry adds `park-started`, `parked`,
+`unpark-started`, and `unpark-completed` alongside the `visibility-handoff-*` events.
+The backend-free `parking.browser.e2e.ts` exercises physical release, retained
+clients/storage, a query admitted while parked completing across replacement
+without network fallback, a response settled after parking, and notification
+receipt while parked without duplicate delivery when persistence resumes, and
+five queued catch-up commits producing one visible-cache refresh on return.
+
+Every departure rejects already-routed optimistic enqueues whose replies were
+lost as `admitted-enqueue-uncertain`, including requests from surviving tabs.
+An engine epoch fence does not undo a committed queue entry, and a planned
+recovery wipe has not erased it yet. The exchange must neither retry those
+enqueues nor forward them directly to the API. Requests queued at the coordinator
+but not yet routed remain eligible for one dispatch to the replacement engine;
+late old-epoch responses cannot settle the rejected requests.
 
 Safari can recreate the SharedWorker global while retaining a page's MessagePort,
 including when another tab closes. A second Effect ready frame is a transport
@@ -236,11 +333,26 @@ Startup phase budgets are relayed to every page, including late joiners: asset
 loading gets five minutes, taking the lock gets the retry window plus five
 seconds, and database opening gets twenty seconds, plus a five-second page
 response grace. Ordinary read deadlines remain ten seconds. Coordinator
-registration gets sixty seconds per attempt, with three attempts; engine recovery
-retains its bounded five retries. Exhausted bootstrap retries preserve the cache
+registration gets sixty seconds per attempt, with three attempts separated by
+100 ms and 200 ms waits. Safari can abort a shared worker's download when its
+creating page leaves, then briefly reuse that failed startup for immediate
+retries. These waits let the browser retire it without changing the worker name,
+URL, or storage scope. Navigation and disposal cancel the wait; no new adapter
+is created by a canceled initialization, even if its timer already fired.
+`graphql_cache.registration_retry` reports the wait duration, retry number,
+triggering error class, and whether the wait completed or was canceled. This is
+separate from a repeated-ready restart and does not make generic transport
+failures storage-safe. Engine recovery retains its bounded five retries.
+Exhausted bootstrap retries preserve the cache
 scope only when the coordinator explicitly proves storage was untouched, not from
 a page's last-seen phase. Missing/broken transports remain conservatively
-uncertain.
+uncertain. Pages retry proven untouched bootstrap and owner-lock failures on reconnect,
+foregrounding, or explicit draft Retry, with jittered exponential backoff capped
+at thirty seconds. A newly registered host restarts an exhausted untouched
+coordinator at a new owner epoch with `open-existing`; failed hosts remain
+excluded. Draft writes stay blocked until the replacement opens and inspects
+the preserved mutation queue. Unknown storage failures still require explicit
+recovery or an update; retry never rotates the scope or clears persisted data.
 
 A build's coordinator has its build time in the SharedWorker name, so builds
 use separate coordinators even when their coordinator script URL is identical.
@@ -322,7 +434,15 @@ paths remain behind the same `CacheHost` interface.
 | Turso over filesystem IO | Tauri native | records, search projection, mutation queue, optimistic layers, and metadata; WAL mode |
 | Turso over OPFS | browser | the same frozen schema behind the OPFS IO adapter and coordinated worker lifecycle |
 
-Normalized records are serialized with `postcard` into `records.value`.
+Normalized records are serialized with `postcard` into `records.value`, behind a
+one-byte encoding tag: records of 256 bytes or more are stored deflated when that
+is smaller, and everything else stays raw. Other persisted payloads (queued
+mutations, optimistic layers, projections) remain plain postcard. A format bump
+that only changes the record encoding carries the previous database forward by
+dropping records, search projections, index facts, and calendar ranges — all
+refetchable — while keeping queued mutations, optimistic layers, and their
+projections. Native storage then compacts the migrated file with `VACUUM INTO`, so
+the upgrade reclaims the space instead of leaving freed pages behind.
 Both hosts use the same `Storage` implementation and compound entity keys.
 Wasm futures are not `Send`, so the `Storage` trait's futures are bound by
 `MaybeSend` (`crates/maybe_send`): `Send` on native targets, where Tauri drives
@@ -596,7 +716,9 @@ const accounts = () => accountQuery.data?.user.emailLinks ?? [];
 identity. `refetch`, request policies, loading/error state and selection functions
 retain the existing urql-solid contract. Existing `createUrqlQuery` and
 `createUrqlInfiniteQuery` consumers use the same live projection path without
-being rewritten; every loaded infinite-query page stays subscribed.
+being rewritten; every loaded infinite-query page stays subscribed. A failed
+refetch reports its error but leaves mounted live data as it was: its partial
+nulls are neither persisted nor reconciled into the objects readers hold.
 
 Mutation predictions are keyed by mutation field and registered once per field,
 alongside domain query definitions. A representative generated document names
@@ -632,6 +754,11 @@ Fields that document does not select are ignored, and selected fields missing
 from the prediction keep their cached values on existing entities. Nested
 response keys come from the representative, so a document that selects a field
 under a different alias does not receive that field's predicted value.
+
+Email sends use the independent email working-copy database and fetch-only
+GraphQL client. The cache queue holds draft autosaves and ordinary mutations;
+it does not persist, dispatch, or cancel sends. The email dispatcher owns send
+leases and recovery, including when no composer is mounted.
 
 The durable optimistic queue owns ordering, retries, commit and rollback. The
 query author supplies no optimistic callbacks, result traversal or cache writes.
@@ -740,13 +867,30 @@ use `createSoupLiveQuery`: it adds Soup's local membership, ordering, pagination
 and Mail policy through its predicate adapter. That policy remains outside
 generic cache-core.
 
+Mail list pages carry same-query server membership in the existing `baseline`
+field. The Mail adapter reconciles only baseline rows outside the indexed window,
+retaining unknown rows and rejecting confirmed nonmembers. Known read, archive,
+and signal flags can disprove an incomplete row's membership through the compiled
+predicate; missing facts never prove a new match. Optimistic and committed flags
+are read from the same engine revision as the page.
+
+Fallbacks preserve the server's query-dependent preview fields while selecting
+live flags independently of canonical preview hydration. Lists with retained rows,
+or older native hosts without `retainedKeys`, remain eligible for mutation-driven
+server revalidation. Indexed cursors do not move to retained rows; continuation
+publishes an ordered through-read of the union instead of appending across them.
+New server membership triggers evaluation even when the local list is already
+longer. A baseline beyond the 5,000-row cap discards the local projection and uses
+the live server list; indexed rows do not count against that baseline cap.
+
 Grouped Soup uses `graphql/create-grouped-soup-live-query.ts` to own the initial
 request and every loaded per-bin continuation. With maintained cache queries and
 a supported filter plus created/updated sort, their combined server membership
 is the baseline for the same predicate adapter used by flat Soup. Selected
 normalized rows then derive date, project and property memberships (including
 multi-value and scoped property joins); entity-type bins retain their invariant
-server keys. Missing grouping evidence retains the old membership. When local selection is
+server keys. Missing grouping evidence or an unrecognized grouping field retains
+the old membership. When local selection is
 incomplete, display fields come from current merged server pages before falling
 back to the original evidence; current page fields do not rebase membership or
 count evidence. Unsupported
@@ -756,7 +900,13 @@ separate date-grouping policy.
 Server membership evidence is captured separately from normalized field/link
 updates, and local evaluation waits for network persistence. Filter/account/cache
 generation changes discard old local evidence and continuation owners. Initial
-network refreshes restart continuation coverage. Group readers delegate paging
+network refreshes rebuild each loaded continuation chain from its new cursor,
+retaining the previous owner until all previously loaded pages are ready (or the
+server ends the chain). Failed replacements leave the old rows available and
+report the paging error; explicit refresh waits for these replacements. A group
+whose fresh initial page has no cursor drops obsolete continuations immediately.
+The `graphql_cache.soup_grouped_refresh` span records the loaded page count and
+replacement outcome. Group readers delegate paging
 to this owner, so moving a continuation row cannot leave a second copy behind.
 The initial cursor remains baseline metadata; paging follows the last loaded
 server continuation, never a locally fabricated cursor.
@@ -820,18 +970,46 @@ Background hydration retains its existing opt-in notification contract. Soup's
 local collection source opts in; ordinary foreground queries refresh on their
 normal affected-operation notifications.
 
+## Authoritative Mail membership repair
+
+The shared Soup adapter reconciles supported `UPDATED_AT` Mail first pages
+inside `properties::augment_authoritative`, under the same engine lock and
+transaction as their normalized write. It compares up to 500 local matches
+against returned IDs, bounded by the last canonical view timestamp and ID when
+`nextCursor` exists. Exhausted/empty first pages cover the whole matching slice.
+Missing matches become durable incomplete projections, not deleted records or
+invented archive/signal facts. Mail retention excludes explicitly invalidated
+(`Dirty`) baseline rows in the same projection scope unless an optimistic shadow
+takes precedence; an older open view cannot restore the revoked evidence.
+This differs from missing metadata, which still retains same-query membership.
+Full canonical snapshots restore their proof;
+partial patches cannot. Backfills, cursor pages, incomplete responses,
+unsupported predicates, identity switches, and pending optimistic rows do not
+supply this negative evidence. The existing authoritative-write telemetry covers
+this preparation/write path; no new worker command or database migration is needed.
+See [cached Mail verification](../../../docs/agent-guide/email.md#cached-mail-filtering).
+
 ## Cached email Quick Access
 
-The disposable Quick Access projection is version 3. Email rows index the thread
+The disposable Quick Access projection is version 4; version 4 added task
+projects (`GraphqlSoupInitiative`, bucket `initiative`), searched on their display
+name with viewed-first recency read from their embedded `metadata`. Email rows index the thread
 subject, latest sender name/address, and embedded `senders` names/addresses, so an
 earlier sender remains searchable after another participant replies. Snippets and
 message bodies are excluded. The frontend materializes only matched thread keys
 with `EmailQuickAccessFields` and uses the projection text for ranking and pending
 query filtering; cache hydration, visibility, and deletion changes refresh rows.
 Desktop Command K explicitly excludes the email bucket; mobile Search includes it.
+Unsynced email working copies merge into that bucket before any normalized
+thread exists, using the same account-scoped recovery source as Drafts. Local
+subjects take precedence over stale cached copies; sync retires the recovery row.
+The backfill leader also warms `MailAccounts` concurrently with paged hydration
+so first-use offline composition can resolve sender ownership and aliases.
 
-Email Quick Access requires the existing `enable-graphql-soup` rollout and a healthy
-normalized cache; the legacy REST sources do not supply email Quick Access rows.
+Normalized email Quick Access results require the existing `enable-graphql-soup`
+rollout and a healthy normalized cache; local recovery rows remain available while
+that rollout is enabled even if the cache host is unavailable. The legacy REST
+sources do not supply email Quick Access rows.
 Quick Access observes flag loading reactively so a cold launch can attach the cache
 after PostHog responds. For a local native preview without PostHog configuration,
 build with `VITE_ENABLE_GRAPHQL_SOUP=true` to exercise this path; do not change the

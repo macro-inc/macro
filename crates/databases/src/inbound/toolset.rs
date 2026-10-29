@@ -297,6 +297,9 @@ pub enum ColumnType {
     Boolean,
     /// An ISO-8601 date-time.
     Date,
+    /// A span between two ISO-8601 date-times; SQL writes it as an interval,
+    /// `'2026-09-01/2026-09-05'`.
+    DateRange,
     /// A URL.
     Link,
     /// One of a fixed set of text labels. SQL reads and writes the label.
@@ -316,6 +319,7 @@ impl From<ColumnType> for DataType {
             ColumnType::Number => DataType::Number,
             ColumnType::Boolean => DataType::Boolean,
             ColumnType::Date => DataType::Date,
+            ColumnType::DateRange => DataType::DateRange,
             ColumnType::Link => DataType::Link,
             ColumnType::Select => DataType::SelectString,
             ColumnType::SelectNumber => DataType::SelectNumber,
@@ -332,6 +336,7 @@ impl From<DataType> for ColumnType {
             DataType::Number => ColumnType::Number,
             DataType::Boolean => ColumnType::Boolean,
             DataType::Date => ColumnType::Date,
+            DataType::DateRange => ColumnType::DateRange,
             DataType::Link => ColumnType::Link,
             DataType::SelectString => ColumnType::Select,
             DataType::SelectNumber => ColumnType::SelectNumber,

@@ -12,12 +12,12 @@ At a glance, here's what maps to what:
 
 | Coming from | The Macro equivalent |
 | :-- | :-- |
-| Superhuman | [Email](/product/email) and the [inbox](/product/inbox) (both are Gmail clients) |
+| Superhuman | [Email](/product/email) and [Home](/product/home) (both are Gmail clients) |
 | Notion | [Docs](/product/docs), plus built-in [tasks](/product/tasks) and [CRM](/product/crm) |
 | Slack | [Channels](/product/channels) |
 | Linear | [Tasks](/product/tasks) |
 | ClickUp | [Tasks](/product/tasks), with [docs](/product/docs), [CRM](/product/crm), and [channels](/product/channels) replacing the rest of the suite |
-| Google Drive / Dropbox | [File storage](/product/folders) |
+| Google Drive / Dropbox | [Drive](/product/drive) |
 | Zoom / Meet | [Calls](/product/calls) |
 
 ## From Superhuman
@@ -73,7 +73,7 @@ In Macro, tasks, CRM, email, channels, and files are each their own best-in-clas
 
 The docs import is clean because both sides are markdown-native:
 
-1. Go to **Settings → Connectors** and connect Notion.
+1. Go to **Settings → Agent connections** and connect Notion.
 2. Open an agent chat (<kbd>c</kbd> \+ <kbd>a</kbd>) and ask it to import. For example:
 
 ```text
@@ -93,7 +93,7 @@ The main thing Macro improves on versus Slack is making channels/DM's less noisy
   ![The Slack app icon with an arrow pointing to the Macro app icon](/images/switch-from-slack.svg)
 </Frame>
 
-Channels also share a single unified inbox with your email, split into [Signal vs. Noise](/product/email#signal-vs-noise).
+Channel messages and @mentions appear on [Home](/product/home) with your email.
 
 The other big thing is [channel-based sharing](/permissions): [@mention](/concepts/mentions) a doc or task in a channel and every member gets access to it automatically. This avoids the Slack\+Notion footgun where people need to ask "hey can you share \_\_ with me?"
 
@@ -103,21 +103,21 @@ The other big thing is [channel-based sharing](/permissions): [@mention](/concep
 | Inline thread replies (forum-style reading) | X | ✓ |
 | One inbox shared with your email | X | ✓ |
 | @mention a doc or task to share it automatically | X | ✓ |
-| External channels with customers (Slack Connect) | ✓ | Keep Slack connected as an MCP connector |
+| External channels with customers (Slack Connect) | ✓ | Keep Slack connected as an agent connection |
 
 <iframe src="https://www.youtube.com/embed/1gDOXUxHo0U" title="What Macro learned from Slack/Superhuman" frameborder="0" className="w-full aspect-video rounded-xl" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen />
 
 To switch:
 
-1. Create a channel per team or project (<kbd>c</kbd> \+ <kbd>m</kbd>).
+1. Create a channel per team or project (<kbd>c</kbd> \+ <kbd>g</kbd>).
 2. Add people by email. They don't need a Macro account yet to be included.
 3. Use @mentions to share docs and tasks as you discuss them.
 
-If you're not ready to leave Slack (archives, Slack Connect with customers), connect it under **Settings → Connectors** as an MCP connector so agents in Macro can still search it. Many teams run Macro for internal communication and keep Slack only for external channels during the transition.
+If you're not ready to leave Slack (archives, Slack Connect with customers), connect it under **Settings → Agent connections** as an agent connection so agents in Macro can still search it. Many teams run Macro for internal communication and keep Slack only for external channels during the transition.
 
 ## From Linear
 
-In building Macro Tasks we were heavily inspired by Linear: status, priority, assignee, keyboard-first, and a [GitHub integration](/integrations/github) that covers the workflow you're used to. Copy a branch name from a task and it moves through "In Progress," "In Review," and "Done" as you branch, open the PR, and merge.
+In building Macro Tasks we were heavily inspired by Linear: status, priority, assignee, keyboard-first, and a [GitHub integration](/integrations/github) that covers the workflow you're used to. Copy a branch name from a task and it moves through "In Progress," "In Review," and "Completed" as you branch, open the PR, and merge.
 
 <Frame>
   ![The Linear app icon with an arrow pointing to the Macro app icon](/images/switch-from-linear.svg)
@@ -136,7 +136,7 @@ The difference between Macro and Linear is that on Macro, tasks live in the same
 
 <iframe src="https://www.youtube.com/embed/nHxqE2mVKrA" title="What We Learned from Linear" frameborder="0" className="w-full aspect-video rounded-xl" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen />
 
-For migration, most teams just recreate their open work; finished issues rarely justify carrying over. If you do want history, connect Linear under **Settings → Connectors** and have an agent bring open issues across.
+For migration, most teams just recreate their open work; finished issues rarely justify carrying over. If you do want history, connect Linear under **Settings → Agent connections** and have an agent bring open issues across.
 
 ## From ClickUp
 
@@ -164,7 +164,7 @@ The biggest day-to-day change is that tasks live in the same app as your email, 
 To switch:
 
 1. Recreate your active lists as Macro tasks. Most teams skip closed work.
-2. If you want history or a gradual cutover, connect ClickUp under **Settings → Connectors** as an MCP connector and ask an agent to bring open tasks across.
+2. If you want history or a gradual cutover, connect ClickUp under **Settings → Agent connections** as an agent connection and ask an agent to bring open tasks across.
 3. Move ClickUp Docs over too: they're markdown-native, so an agent can recreate them as [Macro documents](/product/docs). Open an agent chat (<kbd>c</kbd> \+ <kbd>a</kbd>) and ask it to import. For example:
 
 ```text
@@ -174,7 +174,7 @@ Keep the folder structure and skip anything archived.
 
 ## Everything else
 
-Any tool with an MCP server can be connected under **Settings → Connectors**, which makes it readable to your agents. That works as a migration path (ask an agent to copy content over) or as a permanent bridge for tools you keep. Files mostly migrate themselves: email attachments are extracted into [file storage](/product/folders) automatically, and anything you drag into a channel or doc is imported and searchable.
+Any tool with an MCP server can be connected under **Settings → Agent connections**, which makes it readable to your agents. That works as a migration path (ask an agent to copy content over) or as a permanent bridge for tools you keep. Files mostly migrate themselves: email attachments are extracted into [Drive](/product/drive) automatically, and anything you drag into a channel or doc is imported and searchable.
 
 ## Macro vs. the world
 
@@ -187,10 +187,10 @@ Here's the full picture side by side of how Macro compares to the rest of the to
 | [Tasks](/product/tasks) | ✓ | X | Via databases | X | ✓ | ✓ |
 | [Docs](/product/docs) | ✓ | X | ✓ | X | X | ✓ |
 | [CRM](/product/crm) | ✓ | X | Via databases | X | X | Via setup |
-| [File storage](/product/folders) | ✓ | X | Attachments | Attachments | X | Attachments |
+| [Drive](/product/drive) | ✓ | X | Attachments | Attachments | X | Attachments |
 | [Calls](/product/calls) | ✓ | X | X | Huddles | X | X |
 | [Agents](/product/agents) | ✓ | X | ✓ | X | ✓ | ✓ |
-| [Unified Inbox](/product/inbox) | ✓ | X | X | X | X | X |
+| [Home feed](/product/home) | ✓ | X | X | X | X | X |
 | [Unified Search](/product/search) | ✓ | X | X | X | X | X |
 | [Unified Memory](/product/unified-memory) | ✓ | X | X | X | X | X |
 

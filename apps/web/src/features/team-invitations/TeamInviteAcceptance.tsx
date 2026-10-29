@@ -1,9 +1,9 @@
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { getDisplayName, tryMacroId } from '@core/user';
 import LogoIcon from '@icon/macro-logo.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import { useUserInfo } from '@queries/auth';
 import {
   useJoinTeamMutation,
@@ -163,7 +163,7 @@ function NoInviteId() {
         This invite link appears to be invalid or incomplete.
       </p>
       <Button
-        variant="outline"
+        variant="secondary"
         size="md"
         class="w-full"
         onClick={() => navigate('/')}
@@ -185,7 +185,7 @@ function UnauthenticatedView(props: { onLogin: () => void }) {
         Sign in or create an account to view and accept this team invitation.
       </p>
       <Button
-        variant="outline"
+        variant="secondary"
         size="md"
         class="w-full"
         onClick={props.onLogin}
@@ -210,7 +210,7 @@ function AlreadyOnTeam(props: { teamName: string }) {
         to do here.
       </p>
       <Button
-        variant="outline"
+        variant="secondary"
         size="md"
         class="w-full"
         onClick={() => navigate('/')}
@@ -231,7 +231,7 @@ function InviteNotFound() {
         a different email address.
       </p>
       <Button
-        variant="outline"
+        variant="secondary"
         size="md"
         class="w-full"
         onClick={() => navigate('/')}
@@ -275,7 +275,7 @@ function InviteDetails(props: {
 
       <div class="flex flex-col gap-2 w-full">
         <Button
-          variant="outline"
+          variant="secondary"
           size="md"
           class="w-full"
           onClick={props.onAccept}

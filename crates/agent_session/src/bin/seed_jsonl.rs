@@ -17,7 +17,7 @@
 //! that is ignored here.
 //!
 //! ```text
-//! {"ts": "...", "direction": "to_server" | "to_runtime", "content": <envelope>}
+//! {"ts": "...", "direction": "to_server" | "to_runtime" | "notification", "content": <envelope>}
 //! ```
 //!
 //! ```sh
@@ -155,6 +155,7 @@ struct RecordedLine {
 enum Direction {
     ToServer,
     ToRuntime,
+    Notification,
 }
 
 /// Read a recording into log entries for `session`, in file order.
@@ -184,6 +185,9 @@ fn parse_line(
     let content = match recorded.direction {
         Direction::ToServer => {
             Message::ToServer(serde_json::from_value(recorded.content).map_err(frame)?)
+        }
+        Direction::Notification => {
+            Message::Notification(serde_json::from_value(recorded.content).map_err(frame)?)
         }
         Direction::ToRuntime => {
             Message::ToRuntime(serde_json::from_value(recorded.content).map_err(frame)?)

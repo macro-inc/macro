@@ -7,12 +7,15 @@ const host = vi.hoisted(() => ({
   enabled: true,
   admin: true,
   openHistory: vi.fn(),
+  openNewChannel: vi.fn(),
   promotion: undefined as
     | undefined
     | {
         category: string;
         applies: boolean | undefined;
         alternatives: { label: string; onSelect(opener?: unknown): void }[];
+        actionLabel?: string;
+        secondaryAction?: { label: string; onClick(trigger: unknown): void };
       },
   slackImport: undefined as undefined | { historyOnly?: boolean },
 }));
@@ -22,6 +25,9 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 vi.mock('@queries/team/teams', () => ({
   useIsTeamAdmin: () => () => host.admin,
   useCurrentTeamQuery: () => ({ isSuccess: true, data: { team: { id: 't' } } }),
+}));
+vi.mock('@channel/CreateChannelModal', () => ({
+  openNewChannelModal: host.openNewChannel,
 }));
 vi.mock('./slack-import', () => ({
   SlackImport: (props: {
@@ -45,6 +51,7 @@ beforeEach(() => {
   host.promotion = undefined;
   host.slackImport = undefined;
   host.openHistory.mockReset();
+  host.openNewChannel.mockReset();
 });
 afterEach(cleanup);
 
@@ -59,6 +66,14 @@ describe('Slack import sidebar', () => {
     const opener = document.createElement('button');
     host.promotion?.alternatives[0]?.onSelect(opener);
     expect(host.openHistory).toHaveBeenCalledWith(opener);
+  });
+
+  it('offers creating a channel beside the import', () => {
+    render(() => <SlackImportSidebar />);
+    expect(host.promotion?.actionLabel).toBe('Import Slack');
+    expect(host.promotion?.secondaryAction?.label).toBe('New channel');
+    host.promotion?.secondaryAction?.onClick(document.createElement('button'));
+    expect(host.openNewChannel).toHaveBeenCalledOnce();
   });
 
   it.each([

@@ -4,6 +4,7 @@
 pub mod agent_prompt_composer;
 pub mod channel_announcer;
 pub mod channel_prompt_context;
+pub mod connected_apps;
 pub mod containers;
 /// Durable agent conversation turn journal.
 pub mod conversation_turns;
@@ -30,6 +31,3 @@ pub mod tool_approvals;
 pub mod acp_pipe;
 /// Per-owner Codex cloud runtime.
 pub mod codex;
-
-/// Claude cloud container and model adapters.
-pub mod claude;

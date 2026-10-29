@@ -9,7 +9,8 @@ export type ShareEntity = {
     | 'database'
     | 'call'
     | 'email_thread'
-    | 'agent_session';
+    | 'agent_session'
+    | 'external_chat';
   entityId: string;
 };
 export type AccessRequest = {
@@ -55,8 +56,21 @@ export function shareEntity(
     case 'call':
     case 'email_thread':
     case 'agent_session':
+    case 'external_chat':
       return { entityType: itemType, entityId: id };
   }
+}
+
+/**
+ * Whether confirmed request-state access still matches the level a document
+ * loaded with. Request state can report an owner as edit, so a loaded owner
+ * matches a confirmed edit.
+ */
+export function matchesConfirmedAccess(
+  loaded: AccessLevel | undefined,
+  confirmed: AccessLevel
+): boolean {
+  return loaded === confirmed || (loaded === 'owner' && confirmed === 'edit');
 }
 
 export function requestLevels(state: RequestState | undefined): RequestLevel[] {

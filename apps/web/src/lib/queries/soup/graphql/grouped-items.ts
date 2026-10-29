@@ -13,7 +13,6 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { isTransientRequestError } from '@core/util/request-error';
 import { Telemetry } from '@macro-inc/observability';
 import type { GroupByField } from '@queries/soup/grouped/types';
-import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { GroupSoupDocument } from '@service-storage/graphql/generated/graphql';
 import type { CombinedError } from '@urql/core';
 import {
@@ -57,7 +56,6 @@ export function createGraphqlGroupedSoupAstItemsQuery(
   args: Accessor<GraphqlGroupedSoupAstItemsQueryArgs>,
   options: Accessor<GraphqlGroupedSoupAstItemsQueryOptions>
 ): GraphqlSoupAstItemsQuery {
-  const instructionsIdQuery = useInstructionsMdIdQuery();
   const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
   const pendingDone = usePendingGraphqlSoupDone();
   const projectDone = createGraphqlSoupDoneProjection();
@@ -148,7 +146,6 @@ export function createGraphqlGroupedSoupAstItemsQuery(
     grouped.data,
     () => args().groupBy,
     () => ({
-      instructionsIdQuery,
       showSupportedForeignEntities: options().showSupportedForeignEntities,
     })
   );
@@ -239,10 +236,7 @@ export function createGraphqlGroupedSoupAstItemsQuery(
     resetToInitialPage: grouped.paging.resetToInitialPage,
     refresh: async () => {
       if (input() === undefined) return;
-      await query.refetch({
-        requestPolicy: 'network-only',
-        throwOnError: true,
-      });
+      await grouped.refresh();
     },
   };
 }

@@ -22,7 +22,7 @@ use entity_access::domain::models::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, PaginateOn, Query};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -961,6 +961,20 @@ where
             .map_err(anyhow::Error::from)?;
 
         Ok(participants)
+    }
+
+    #[tracing::instrument(err, skip_all, fields(user_count = user_ids.len()))]
+    async fn get_user_display_names(
+        &self,
+        user_ids: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<HashMap<MacroUserIdStr<'static>, String>, ChannelMessagesErr> {
+        let names = self
+            .repo
+            .get_user_display_names(&user_ids)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        Ok(names)
     }
 
     #[tracing::instrument(err, skip(self))]

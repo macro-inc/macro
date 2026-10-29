@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_session SET visibility = 'hidden', for_warming = FALSE\n            WHERE id IN (\n                SELECT s.id FROM agent_session s\n                JOIN agent_conversation_sessions c ON c.session_id = s.id\n                JOIN comms_channel_agents a ON a.channel_id = c.channel_id\n                    AND a.bot_id = c.bot_id AND a.kind = 'direct'\n                WHERE s.visibility <> 'hidden' OR s.for_warming\n                ORDER BY s.id LIMIT $1 FOR UPDATE OF s SKIP LOCKED\n            )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7afccede7b000a5744b9d131fd4120f6a756fc830f4365d4a5967c2d76ca89d0"
+}

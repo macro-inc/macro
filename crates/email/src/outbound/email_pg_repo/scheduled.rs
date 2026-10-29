@@ -14,8 +14,19 @@ impl EmailSchedulingRepo for EmailPgRepo {
         actor: &MacroUserIdStr<'_>,
         change: ScheduleChange,
         signature: Option<&SignaturePreparation>,
+
+        expected_generation: i32,
     ) -> Result<Option<Uuid>, EmailErr> {
-        change_schedule(&self.pool, link_id, message_id, actor, change, signature).await
+        change_schedule(
+            &self.pool,
+            link_id,
+            message_id,
+            actor,
+            change,
+            signature,
+            expected_generation,
+        )
+        .await
     }
 }
 
@@ -26,6 +37,8 @@ async fn change_schedule(
     actor: &MacroUserIdStr<'_>,
     change: ScheduleChange,
     signature: Option<&SignaturePreparation>,
+
+    expected_generation: i32,
 ) -> Result<Option<Uuid>, EmailErr> {
     let mut tx = pool.begin().await.map_err(anyhow::Error::from)?;
     let outlook = sqlx::query!(r#"
@@ -37,18 +50,27 @@ async fn change_schedule(
     }
     // Every mutator locks message before schedule; no locks cross provider work.
     let message = sqlx::query!(
-        "SELECT thread_id, is_draft, is_sent, replying_to_id, body_html_sanitized, body_text FROM email_messages WHERE id = $1 AND link_id = $2 FOR UPDATE",
+        "SELECT thread_id, draft_generation, is_draft, is_sent, replying_to_id, body_html_sanitized, body_text FROM email_messages WHERE id = $1 AND link_id = $2 FOR UPDATE",
         message_id, link_id,
     ).fetch_optional(&mut *tx).await.map_err(anyhow::Error::from)?
         .ok_or(EmailErr::MessageNotFound(message_id))?;
     let schedule = sqlx::query!(
-        "SELECT sent, processing FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2 FOR UPDATE",
+        "SELECT sent, processing, delivery_status, delivery_started_at, delivery_claim_id FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2 FOR UPDATE",
         message_id, link_id,
     ).fetch_optional(&mut *tx).await.map_err(anyhow::Error::from)?;
+    let protected = sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM email_send_attempts WHERE message_id=$1 AND link_id=$2 AND NOT cancelled AND NOT sent) AS "protected!""#, message_id, link_id).fetch_one(&mut *tx).await.map_err(anyhow::Error::from)?;
     if message.is_sent
-        || schedule
-            .as_ref()
-            .is_some_and(|row| row.sent || row.processing)
+        || protected
+        || message.draft_generation != expected_generation
+        || schedule.as_ref().is_some_and(|row| {
+            row.sent
+                || (row.delivery_status != "failed"
+                    && ((row.processing
+                        && (row.delivery_claim_id.is_none()
+                            || matches!(change, ScheduleChange::Set(_))))
+                        || row.delivery_started_at.is_some()
+                        || row.delivery_status == "unconfirmed"))
+        })
     {
         return Err(EmailErr::MessageDeliveryConflict(message_id));
     }
@@ -94,13 +116,23 @@ async fn change_schedule(
                     Err(EmailErr::MessageDeliveryConflict(message_id))
                 };
             }
+            // The schedule lock serializes this revocation with begin_submission.
+            // A preparing worker's token no longer authorizes provider I/O once
+            // the row is deleted, including during retry backoff or lease expiry.
             let deleted = sqlx::query!(
-                "DELETE FROM email_scheduled_messages WHERE link_id = $1 AND message_id = $2 AND NOT sent AND NOT processing",
-                link_id, message_id,
-            ).execute(&mut *tx).await.map_err(anyhow::Error::from)?;
+                "DELETE FROM email_scheduled_messages WHERE link_id = $1 AND message_id = $2",
+                link_id,
+                message_id,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(anyhow::Error::from)?;
             if deleted.rows_affected() != 1 {
                 return Err(EmailErr::MessageDeliveryConflict(message_id));
             }
+            super::send_attempt::cancel_revoked_attempts(&mut tx, &[message_id], link_id)
+                .await
+                .map_err(anyhow::Error::from)?;
             sqlx::query!(
                 "UPDATE email_messages SET is_draft = true, updated_at = NOW() WHERE id = $1 AND link_id = $2 AND NOT is_sent",
                 message_id, link_id,

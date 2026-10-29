@@ -45,12 +45,12 @@ async fn schedule_update_cancel_is_atomic_and_idempotent(
     let repo = EmailPgRepo::new(pool.clone());
     let (link, message) = identity();
     assert!(
-        repo.change_schedule(link, message, &actor(), future(), None)
+        repo.change_schedule(link, message, &actor(), future(), None, 0)
             .await?
             .is_some()
     );
     let later = Utc::now() + chrono::Duration::hours(2);
-    repo.change_schedule(link, message, &actor(), ScheduleChange::Set(later), None)
+    repo.change_schedule(link, message, &actor(), ScheduleChange::Set(later), None, 0)
         .await?;
     let schedule = sqlx::query!(
         "SELECT send_time, sent, processing FROM email_scheduled_messages WHERE message_id = $1",
@@ -64,19 +64,26 @@ async fn schedule_update_cancel_is_atomic_and_idempotent(
     );
     assert!(!schedule.sent && !schedule.processing);
     assert!(
-        repo.change_schedule(link, message, &actor(), ScheduleChange::Cancel, None)
+        repo.change_schedule(link, message, &actor(), ScheduleChange::Cancel, None, 0)
             .await?
             .is_some()
     );
     assert!(
-        repo.change_schedule(link, message, &actor(), ScheduleChange::Cancel, None)
+        repo.change_schedule(link, message, &actor(), ScheduleChange::Cancel, None, 0)
             .await?
             .is_none()
     );
     let wrong_link = Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc")?;
     assert!(matches!(
-        repo.change_schedule(wrong_link, message, &actor(), ScheduleChange::Cancel, None)
-            .await,
+        repo.change_schedule(
+            wrong_link,
+            message,
+            &actor(),
+            ScheduleChange::Cancel,
+            None,
+            0
+        )
+        .await,
         Err(EmailErr::MessageNotFound(_))
     ));
     Ok(())
@@ -91,7 +98,7 @@ async fn sent_or_claimed_delivery_rejects_update_cancel_and_migration(
 ) -> anyhow::Result<()> {
     let repo = EmailPgRepo::new(pool.clone());
     let (link, message) = identity();
-    repo.change_schedule(link, message, &actor(), future(), None)
+    repo.change_schedule(link, message, &actor(), future(), None, 0)
         .await?;
     sqlx::query!(
         "UPDATE email_scheduled_messages SET processing = true WHERE message_id = $1",
@@ -101,7 +108,7 @@ async fn sent_or_claimed_delivery_rejects_update_cancel_and_migration(
     .await?;
     for change in [future(), ScheduleChange::Cancel] {
         assert!(matches!(
-            repo.change_schedule(link, message, &actor(), change, None)
+            repo.change_schedule(link, message, &actor(), change, None, 0)
                 .await,
             Err(EmailErr::MessageDeliveryConflict(_))
         ));
@@ -111,7 +118,8 @@ async fn sent_or_claimed_delivery_rejects_update_cancel_and_migration(
             message,
             Uuid::parse_str("11111111-1111-1111-1111-111111111111")?,
             &[link],
-            None
+            None,
+            0
         )
         .await?
         .is_none()
@@ -123,13 +131,13 @@ async fn sent_or_claimed_delivery_rejects_update_cancel_and_migration(
     .execute(&pool)
     .await?;
     assert!(matches!(
-        repo.change_schedule(link, message, &actor(), future(), None)
+        repo.change_schedule(link, message, &actor(), future(), None, 0)
             .await,
         Err(EmailErr::MessageDeliveryConflict(_))
     ));
     let sent_message = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
     assert!(matches!(
-        repo.change_schedule(link, sent_message, &actor(), future(), None)
+        repo.change_schedule(link, sent_message, &actor(), future(), None, 0)
             .await,
         Err(EmailErr::MessageDeliveryConflict(_))
     ));
@@ -159,7 +167,7 @@ async fn service_authorizes_actor_and_validates_future_time(
     let stranger = MacroUserIdStr::parse_from_str("macro|stranger@test.com")?;
     assert!(matches!(
         service
-            .change_schedule(stranger, link, message, future(), None)
+            .change_schedule(stranger, link, message, future(), None, 0)
             .await,
         Err(EmailErr::Unauthorized)
     ));
@@ -170,16 +178,17 @@ async fn service_authorizes_actor_and_validates_future_time(
                 link,
                 message,
                 ScheduleChange::Set(Utc::now()),
-                None
+                None,
+                0
             )
             .await,
         Err(EmailErr::InvalidScheduleTime)
     ));
     service
-        .change_schedule(actor(), link, message, future(), None)
+        .change_schedule(actor(), link, message, future(), None, 0)
         .await?;
     service
-        .change_schedule(actor(), link, message, ScheduleChange::Cancel, None)
+        .change_schedule(actor(), link, message, ScheduleChange::Cancel, None, 0)
         .await?;
     Ok(())
 }
@@ -212,15 +221,17 @@ async fn scheduled_source_rejects_delete_and_migration_into_existing_reply(
     };
     let (link, message) = identity();
     service
-        .change_schedule(actor(), link, message, future(), None)
+        .change_schedule(actor(), link, message, future(), None, 0)
         .await?;
     assert!(matches!(
-        service.delete_draft_for_user_impl(actor(), message).await,
+        service.delete_draft_for_user_impl(actor(), message, 0).await,
         Err(EmailErr::MessageDeliveryConflict(id)) if id == message
     ));
     let target_link = Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc")?;
     let target_draft = Uuid::parse_str("ee000005-0000-0000-0000-000000000005")?;
     let input = CreateDraftInput {
+        frozen_signature_html: None,
+        draft_generation: 0,
         sender_email: None,
         db_id: Some(message),
         provider_id: None,
@@ -245,7 +256,7 @@ async fn scheduled_source_rejects_delete_and_migration_into_existing_reply(
         service
             .save_draft_for_user_impl(actor(), Some(target_link), input)
             .await,
-        Err(EmailErr::InvalidDraft(_))
+        Err(EmailErr::MessageDeliveryConflict(id)) if id == message
     ));
     let subject = sqlx::query_scalar!(
         "SELECT subject FROM email_messages WHERE id = $1",
@@ -271,7 +282,7 @@ async fn scheduled_source_rejects_delete_and_migration_into_existing_reply(
 async fn waiting_transition_observes_committed_claim(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = EmailPgRepo::new(pool.clone());
     let (link, message) = identity();
-    repo.change_schedule(link, message, &actor(), future(), None)
+    repo.change_schedule(link, message, &actor(), future(), None, 0)
         .await?;
     let mut tx = pool.begin().await?;
     let blocker = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
@@ -290,7 +301,7 @@ async fn waiting_transition_observes_committed_claim(pool: Pool<Postgres>) -> an
     .execute(&mut *tx)
     .await?;
     let cancel = tokio::spawn(async move {
-        repo.change_schedule(link, message, &actor(), ScheduleChange::Cancel, None)
+        repo.change_schedule(link, message, &actor(), ScheduleChange::Cancel, None, 0)
             .await
     });
     wait_for_transaction_waiter(&pool, blocker).await?;
@@ -304,6 +315,7 @@ async fn waiting_transition_observes_committed_claim(pool: Pool<Postgres>) -> an
 
 fn stale_input(message: Uuid) -> ResolvedDraftInput {
     ResolvedDraftInput {
+        draft_generation: 0,
         db_id: message,
         provider_id: None,
         replying_to_id: None,
@@ -338,7 +350,7 @@ async fn stale_autosave_cannot_mutate_confirmed_claimed_or_sent_message(
         from_contact_id: None,
         recipients: vec![],
     };
-    repo.change_schedule(link, message, &actor(), future(), None)
+    repo.change_schedule(link, message, &actor(), future(), None, 0)
         .await?;
     assert!(matches!(
         repo.insert_message(&input, &contacts, link, None, true)
@@ -452,24 +464,24 @@ async fn update_or_cancel_before_claim_prevents_stale_queue_delivery(
 ) -> anyhow::Result<()> {
     let repo = EmailPgRepo::new(pool.clone());
     let (link, message) = identity();
-    repo.change_schedule(link, message, &actor(), future(), None)
+    repo.change_schedule(link, message, &actor(), future(), None, 0)
         .await?;
     sqlx::query!("UPDATE email_scheduled_messages SET send_time = NOW() - INTERVAL '1 minute' WHERE message_id = $1", message).execute(&pool).await?;
-    repo.change_schedule(link, message, &actor(), future(), None)
+    repo.change_schedule(link, message, &actor(), future(), None, 0)
         .await?;
     assert!(
         get_and_start_processing_scheduled_message(&pool, link, message)
             .await?
             .is_none()
     );
-    repo.change_schedule(link, message, &actor(), ScheduleChange::Cancel, None)
+    repo.change_schedule(link, message, &actor(), ScheduleChange::Cancel, None, 0)
         .await?;
     assert!(
         get_and_start_processing_scheduled_message(&pool, link, message)
             .await?
             .is_none()
     );
-    repo.change_schedule(link, message, &actor(), future(), None)
+    repo.change_schedule(link, message, &actor(), future(), None, 0)
         .await?;
     sqlx::query!("UPDATE email_scheduled_messages SET send_time = NOW() - INTERVAL '1 minute' WHERE message_id = $1", message).execute(&pool).await?;
     assert!(
@@ -479,7 +491,7 @@ async fn update_or_cancel_before_claim_prevents_stale_queue_delivery(
     );
     for change in [future(), ScheduleChange::Cancel] {
         assert!(matches!(
-            repo.change_schedule(link, message, &actor(), change, None)
+            repo.change_schedule(link, message, &actor(), change, None, 0)
                 .await,
             Err(EmailErr::MessageDeliveryConflict(_))
         ));
@@ -512,7 +524,7 @@ async fn initial_schedule_prepares_signature_but_time_updates_preserve_content(
         sent_undo_delay_secs: 5,
     };
     service
-        .change_schedule(actor(), link, message, future(), None)
+        .change_schedule(actor(), link, message, future(), None, 0)
         .await?;
     let original = sqlx::query!(
         "SELECT body_html_sanitized, body_text FROM email_messages WHERE id = $1",
@@ -531,7 +543,7 @@ async fn initial_schedule_prepares_signature_but_time_updates_preserve_content(
     .execute(&pool)
     .await?;
     service
-        .change_schedule(actor(), link, message, future(), None)
+        .change_schedule(actor(), link, message, future(), None, 0)
         .await?;
     let updated = sqlx::query!(
         "SELECT body_html_sanitized FROM email_messages WHERE id = $1",
@@ -541,10 +553,10 @@ async fn initial_schedule_prepares_signature_but_time_updates_preserve_content(
     .await?;
     assert_eq!(updated.body_html_sanitized, original.body_html_sanitized);
     service
-        .change_schedule(actor(), link, message, ScheduleChange::Cancel, None)
+        .change_schedule(actor(), link, message, ScheduleChange::Cancel, None, 0)
         .await?;
     service
-        .change_schedule(actor(), link, message, future(), Some(false))
+        .change_schedule(actor(), link, message, future(), Some(false), 0)
         .await?;
     let excluded = sqlx::query!(
         "SELECT body_html_sanitized FROM email_messages WHERE id = $1",
@@ -564,20 +576,41 @@ async fn initial_schedule_prepares_signature_but_time_updates_preserve_content(
 struct ClaimRepo(Pool<Postgres>);
 
 impl crate::domain::scheduled_delivery::ScheduledDeliveryRepo for ClaimRepo {
+    async fn reconcile_deletion(&self, _: Uuid, _: Uuid) -> anyhow::Result<()> {
+        Ok(())
+    }
     type Claim = (Uuid, Uuid);
     type Sent = ();
 
-    async fn try_claim(&self, link: Uuid, message: Uuid) -> anyhow::Result<Option<Self::Claim>> {
+    async fn try_claim(
+        &self,
+        link: Uuid,
+        message: Uuid,
+    ) -> anyhow::Result<Option<crate::domain::scheduled_delivery::ClaimedDelivery<Self::Claim>>>
+    {
         Ok(
             get_and_start_processing_scheduled_message(&self.0, link, message)
                 .await?
-                .map(|_| (link, message)),
+                .map(|_| crate::domain::scheduled_delivery::ClaimedDelivery {
+                    claim: (link, message),
+                    mode: crate::domain::scheduled_delivery::DeliveryMode::Send,
+                }),
         )
     }
     async fn complete(&self, _: &Self::Claim, _: ()) -> anyhow::Result<()> {
         Ok(())
     }
-    async fn release(&self, claim: Self::Claim) -> anyhow::Result<()> {
+    async fn begin_send(&self, _: &Self::Claim) -> anyhow::Result<bool> {
+        Ok(true)
+    }
+    async fn pause(
+        &self,
+        _: &Self::Claim,
+        _: crate::domain::scheduled_delivery::DeliveryPause,
+    ) -> anyhow::Result<()> {
+        panic!("unexpected pause")
+    }
+    async fn release(&self, claim: &Self::Claim) -> anyhow::Result<()> {
         email_db_client::messages::scheduled::upsert::clear_scheduled_message_processing(
             &self.0, claim.0, claim.1,
         )
@@ -595,7 +628,21 @@ struct PendingProvider {
 impl crate::domain::scheduled_delivery::ScheduledMessageSender<(Uuid, Uuid), ()>
     for PendingProvider
 {
-    async fn send_claimed(&self, _: &(Uuid, Uuid)) -> anyhow::Result<()> {
+    type Prepared = ();
+    async fn prepare(
+        &self,
+        _: &(Uuid, Uuid),
+    ) -> Result<(), crate::domain::scheduled_delivery::PreparationError> {
+        Ok(())
+    }
+    async fn reconcile(&self, _: &(Uuid, Uuid)) -> anyhow::Result<Option<()>> {
+        panic!("unexpected reconciliation")
+    }
+    async fn send_prepared(
+        &self,
+        _: &(Uuid, Uuid),
+        _: (),
+    ) -> Result<(), crate::domain::scheduled_delivery::SubmissionError> {
         self.entered.notify_one();
         self.finish.notified().await;
         Ok(())
@@ -612,7 +659,7 @@ async fn pending_provider_holds_no_locks_and_duplicate_cannot_release_claim(
     use crate::domain::scheduled_delivery::deliver_scheduled;
     let repo = EmailPgRepo::new(pool.clone());
     let (link, message) = identity();
-    repo.change_schedule(link, message, &actor(), future(), None)
+    repo.change_schedule(link, message, &actor(), future(), None, 0)
         .await?;
     sqlx::query!("UPDATE email_scheduled_messages SET send_time = NOW() - INTERVAL '1 minute' WHERE message_id = $1", message).execute(&pool).await?;
     let claims = ClaimRepo(pool.clone());
@@ -627,7 +674,7 @@ async fn pending_provider_holds_no_locks_and_duplicate_cannot_release_claim(
         let caller = actor();
         let result = tokio::time::timeout(
             std::time::Duration::from_secs(5),
-            repo.change_schedule(link, message, &caller, change, None),
+            repo.change_schedule(link, message, &caller, change, None, 0),
         )
         .await?;
         assert!(matches!(result, Err(EmailErr::MessageDeliveryConflict(_))));
@@ -645,5 +692,96 @@ async fn pending_provider_holds_no_locks_and_duplicate_cannot_release_claim(
     );
     provider.finish.notify_one();
     delivery.await?;
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn legacy_cancel_cannot_change_durable_or_historical_delivery_facts(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+    let (link, message) = identity();
+    let actor = actor();
+    repo.change_schedule(link, message, &actor, future(), None, 0)
+        .await?;
+    for (sent, unconfirmed) in [(true, false), (false, true), (false, false)] {
+        sqlx::query!("INSERT INTO email_send_attempts (user_id, link_id, attempt_id, message_id, sent, delivery_unconfirmed) VALUES ($1, $2, $3, $4, $5, $6)", actor.as_ref(), link, Uuid::now_v7(), message, sent, unconfirmed).execute(&pool).await?;
+    }
+    assert!(matches!(
+        repo.change_schedule(link, message, &actor, ScheduleChange::Cancel, None, 0)
+            .await,
+        Err(EmailErr::MessageDeliveryConflict(_))
+    ));
+    let rows = sqlx::query!("SELECT sent, delivery_unconfirmed, cancelled FROM email_send_attempts WHERE message_id = $1", message).fetch_all(&pool).await?;
+    assert_eq!(rows.len(), 3);
+    for row in rows {
+        assert!(!row.cancelled);
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn late_provider_upload_cannot_change_a_committed_schedule(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::domain::draft_attachments::{
+        AttachmentChange, AttachmentError, DraftAttachmentRepository,
+    };
+    let (link, draft) = identity();
+    let file = Uuid::now_v7();
+    let mut admission = pool.begin().await?;
+    sqlx::query!(
+        "SELECT id FROM email_messages WHERE id=$1 FOR UPDATE",
+        draft
+    )
+    .fetch_one(&mut *admission)
+    .await?;
+    let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *admission)
+        .await?
+        .unwrap();
+    let repo = EmailPgRepo::new(pool.clone());
+    let upload = tokio::spawn(async move {
+        repo.commit_attachment_change(
+            actor().as_ref(),
+            link,
+            draft,
+            AttachmentChange::Upload(crate::domain::models::AttachmentDraft {
+                id: file,
+                draft_id: draft,
+                file_name: "late.txt".into(),
+                content_type: "text/plain".into(),
+                sha: "a".repeat(64),
+                size: 4,
+                s3_key: format!("audit/{file}"),
+                upload_pending: false,
+                content_id: None,
+                is_inline: false,
+            }),
+            0,
+        )
+        .await
+    });
+    wait_for_transaction_waiter(&pool, blocker).await?;
+    sqlx::query!("INSERT INTO email_scheduled_messages(link_id,message_id,send_time,sent) VALUES($1,$2,NOW()+INTERVAL '1 hour',false)",link,draft).execute(&mut *admission).await?;
+    admission.commit().await?;
+    assert!(matches!(
+        upload.await?,
+        Err(AttachmentError::DeliveryConflict)
+    ));
+    assert!(
+        !sqlx::query_scalar!(
+            "SELECT EXISTS(SELECT 1 FROM email_attachments_drafts WHERE id=$1) AS \"exists!\"",
+            file
+        )
+        .fetch_one(&pool)
+        .await?
+    );
     Ok(())
 }

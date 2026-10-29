@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::models::CalendarProvider;
 
 const ORGANIZER: &str = "olivia@example.com";
 
@@ -254,7 +255,7 @@ async fn a_guests_update_adds_through_the_invite_path_and_keeps_its_other_fields
         Uuid::now_v7(),
         None,
         CalendarEventPatch {
-            title: Some("Planning".to_string()),
+            transparency: Some(EventTransparency::Transparent),
             // The editor leaves the viewer's own row out of the list.
             attendees: Some(vec![guest(ORGANIZER), guest("ada@example.com")]),
             ..CalendarEventPatch::default()
@@ -277,7 +278,7 @@ async fn a_guests_update_adds_through_the_invite_path_and_keeps_its_other_fields
         sent[0].attendees, None,
         "the replacement list never reaches Google"
     );
-    assert_eq!(sent[0].title.as_deref(), Some("Planning"));
+    assert_eq!(sent[0].transparency, Some(EventTransparency::Transparent));
 }
 
 #[tokio::test]
@@ -370,5 +371,122 @@ async fn an_occurrence_with_its_own_guest_list_is_judged_by_that_list() {
         invited.lock().unwrap().as_slice(),
         [vec![guest("bo@example.com")]],
         "re-inviting Bo to this occurrence is an addition, not a no-op"
+    );
+}
+
+const OTHER_LINK: Uuid = Uuid::from_u128(0x0e);
+
+#[tokio::test]
+async fn a_guest_copy_is_judged_as_its_own_inbox_while_another_inbox_organizes() {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let calls = provider.calls.clone();
+    let mut repo = guest_repo(NO_INVITES);
+    // The actor also connected Olivia's inbox, which organizes the meeting.
+    repo.mutation_target.as_mut().unwrap().actor = ActorInboxes::from_owned(vec![
+        owned(SELF_LINK, "self@example.com"),
+        owned(OTHER_LINK, ORGANIZER),
+    ]);
+
+    let error = service(repo, provider, FakeTokens::ok())
+        .invite_guests(
+            "macro|user",
+            Uuid::now_v7(),
+            None,
+            vec![guest("ada@example.com")],
+            CalendarUpdateScope::All,
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, CalendarMutationError::GuestsCannotInvite));
+    assert!(
+        calls.lock().unwrap().is_empty(),
+        "this copy is written through the guest's grant, which the organizer's inbox does not lend rights to"
+    );
+}
+
+#[tokio::test]
+async fn the_provider_hears_only_the_copys_inbox() {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let invited_as = provider.invited_as.clone();
+    let mut repo = guest_repo(GuestPolicy::default());
+    repo.mutation_target.as_mut().unwrap().actor = ActorInboxes::from_owned(vec![
+        owned(SELF_LINK, "self@example.com"),
+        owned(OTHER_LINK, ORGANIZER),
+    ]);
+
+    service(repo, provider, FakeTokens::ok())
+        .invite_guests(
+            "macro|user",
+            Uuid::now_v7(),
+            None,
+            vec![guest("ada@example.com")],
+            CalendarUpdateScope::All,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        invited_as.lock().unwrap().as_slice(),
+        [vec!["self@example.com".to_string()]]
+    );
+}
+
+fn outlook_repo(organizer: &str) -> FakeRepo {
+    let mut repo = guest_repo(GuestPolicy::default());
+    let target = repo.mutation_target.as_mut().unwrap();
+    target.organizer_email = Some(organizer.to_string());
+    target.token_identity.provider = CalendarProvider::Outlook;
+    target.actor = ActorInboxes::from_owned(vec![OwnedInbox {
+        link_id: SELF_LINK,
+        email: "self@example.com".to_string(),
+        provider: CalendarProvider::Outlook,
+        writable_calendar_ids: Vec::new(),
+    }]);
+    repo
+}
+
+#[tokio::test]
+async fn an_outlook_guest_is_refused_before_the_provider() {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let calls = provider.calls.clone();
+
+    let error = service(outlook_repo(ORGANIZER), provider, FakeTokens::ok())
+        .invite_guests(
+            "macro|user",
+            Uuid::now_v7(),
+            None,
+            vec![guest("ada@example.com")],
+            CalendarUpdateScope::All,
+        )
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(error, CalendarMutationError::GuestsCannotInvite),
+        "{error:?}"
+    );
+    assert!(calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn an_outlook_organizer_adds_guests_through_the_provider() {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let invited = provider.invited_guests.clone();
+
+    service(outlook_repo("self@example.com"), provider, FakeTokens::ok())
+        .invite_guests(
+            "macro|user",
+            Uuid::now_v7(),
+            None,
+            vec![guest("ada@example.com")],
+            CalendarUpdateScope::All,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        invited.lock().unwrap().as_slice(),
+        [vec![guest("ada@example.com")]]
     );
 }

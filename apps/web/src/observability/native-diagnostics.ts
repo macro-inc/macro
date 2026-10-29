@@ -2,6 +2,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { isTauri } from '@core/util/platform';
 import { invoke } from '@tauri-apps/api/core';
 import type { DesktopSnapshot } from './desktop';
+import { clearDocumentLifecycle } from './document-lifecycle';
 import { frontendInstanceId } from './frontend-instance';
 import type { FrontendEvent } from './generated/native-diagnostics';
 
@@ -76,6 +77,7 @@ export function recordNativeDiagnostic(event: FrontendEvent): void {
 
 /** Await before clearing auth, then reject late callbacks from the old account. */
 export async function clearNativeDiagnostics(): Promise<void> {
+  clearDocumentLifecycle();
   previousFrontend = undefined;
   try {
     sessionStorage.removeItem(LEASE);

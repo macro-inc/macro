@@ -271,6 +271,270 @@ async fn is_participant_filter_inside_not_widens_candidates(pool: Pool<Postgres>
     assert!(!channels[0].is_participant);
 }
 
+fn channel_state(state: item_filters::NotificationState) -> Expr<ChannelLiteral> {
+    Expr::val(ChannelLiteral::NotificationState(state))
+}
+
+async fn channel_ids_matching(
+    repo: &PgChannelsRepo,
+    user_id: &str,
+    filter: Expr<ChannelLiteral>,
+) -> HashSet<Uuid> {
+    repo.get_user_channels_with_participants(channels_params(user_id, Some(Arc::new(filter))))
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|c| c.channel.id)
+        .collect()
+}
+
+/// left-user participates in c11, c13 and c21, and can see c12 (left Team A
+/// channel) only through `IsParticipant(false)`. Their notifications:
+/// c11 unseen, c13 seen + unseen, c21 done, c12 unseen.
+async fn seed_channel_list_notifications(pool: &Pool<Postgres>) -> anyhow::Result<()> {
+    insert_channel_message_notification(pool, LEFT_USER, TEAM_A_AUTO_ACTIVE, MSG1, false, false)
+        .await?;
+    insert_channel_message_notification(pool, LEFT_USER, TEAM_A_MANUAL, MSG1, false, true).await?;
+    insert_channel_message_notification(pool, LEFT_USER, TEAM_A_MANUAL, MSG2, false, false).await?;
+    insert_channel_message_notification(pool, LEFT_USER, TEAM_B_AUTO, MSG1, true, false).await?;
+    insert_channel_message_notification(pool, LEFT_USER, TEAM_A_AUTO_LEFT, MSG1, false, false)
+        .await?;
+
+    // Rows that must never match left-user's filters: another user's unseen
+    // notification, a soft-deleted unseen one, and an unseen notification of a
+    // different entity type whose item id collides with a channel id.
+    insert_channel_message_notification(pool, USER_A, TEAM_B_AUTO, MSG1, false, false).await?;
+    insert_channel_message_notification(pool, LEFT_USER, TEAM_B_AUTO, MSG2, false, false).await?;
+    sqlx::query(
+        r#"
+        UPDATE user_notification un
+        SET deleted_at = NOW()
+        FROM notification n
+        WHERE n.id = un.notification_id
+          AND un.user_id = $1
+          AND n.event_item_id = $2
+          AND n.metadata->>'messageId' = $3
+        "#,
+    )
+    .bind(LEFT_USER)
+    .bind(TEAM_B_AUTO.to_string())
+    .bind(MSG2.to_string())
+    .execute(pool)
+    .await?;
+
+    let document_notification = Uuid::new_v4();
+    sqlx::query(
+        r#"
+        INSERT INTO notification (
+            id, notification_event_type, event_item_id, event_item_type, service_sender, metadata
+        )
+        VALUES ($1, 'document_mention', $2, 'document', 'channels-test', '{}'::jsonb)
+        "#,
+    )
+    .bind(document_notification)
+    .bind(TEAM_B_AUTO.to_string())
+    .execute(pool)
+    .await?;
+    insert_user_notification(pool, LEFT_USER, document_notification, false, false).await
+}
+
+#[test]
+fn channel_list_pending_states_read_the_user_notifications_once() {
+    use item_filters::NotificationState::{Done, Seen, Unseen};
+
+    for state in [Unseen, Seen] {
+        let sql = super::build_channel_notification_state_clause(state);
+        assert!(sql.contains("= ANY(ARRAY("), "{sql}");
+        assert!(!sql.contains("n.event_item_id = (c.id)"), "{sql}");
+    }
+    let done = super::build_channel_notification_state_clause(Done);
+    assert!(done.contains("n.event_item_id = (c.id)::text"), "{done}");
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_list_filters_by_notification_state(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    use item_filters::NotificationState::{Done, Seen, Unseen};
+
+    seed_channel_list_notifications(&pool).await?;
+    let repo = repo(pool);
+
+    assert_eq!(
+        channel_ids_matching(&repo, LEFT_USER, channel_state(Unseen)).await,
+        HashSet::from([TEAM_A_AUTO_ACTIVE, TEAM_A_MANUAL])
+    );
+    assert_eq!(
+        channel_ids_matching(&repo, LEFT_USER, channel_state(Seen)).await,
+        HashSet::from([TEAM_A_MANUAL])
+    );
+    assert_eq!(
+        channel_ids_matching(&repo, LEFT_USER, channel_state(Done)).await,
+        HashSet::from([TEAM_B_AUTO])
+    );
+    // Another user's notification state never leaks into left-user's list.
+    assert!(
+        channel_ids_matching(&repo, USER_A, channel_state(Unseen))
+            .await
+            .is_empty()
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_list_notification_state_boolean_semantics(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use item_filters::NotificationState::{Done, Seen, Unseen};
+
+    seed_channel_list_notifications(&pool).await?;
+    let repo = repo(pool);
+
+    // NOT is evaluated per channel: c21 has no live unseen notification.
+    assert_eq!(
+        channel_ids_matching(&repo, LEFT_USER, Expr::is_not(channel_state(Unseen))).await,
+        HashSet::from([TEAM_B_AUTO])
+    );
+    assert_eq!(
+        channel_ids_matching(&repo, LEFT_USER, Expr::is_not(channel_state(Done))).await,
+        HashSet::from([TEAM_A_AUTO_ACTIVE, TEAM_A_MANUAL])
+    );
+    assert_eq!(
+        channel_ids_matching(
+            &repo,
+            LEFT_USER,
+            Expr::or(channel_state(Unseen), channel_state(Done))
+        )
+        .await,
+        HashSet::from([TEAM_A_AUTO_ACTIVE, TEAM_A_MANUAL, TEAM_B_AUTO])
+    );
+    // AND may be satisfied by different notifications of the same channel.
+    assert_eq!(
+        channel_ids_matching(
+            &repo,
+            LEFT_USER,
+            Expr::and(channel_state(Unseen), channel_state(Seen))
+        )
+        .await,
+        HashSet::from([TEAM_A_MANUAL])
+    );
+    assert!(
+        channel_ids_matching(
+            &repo,
+            LEFT_USER,
+            Expr::and(channel_state(Seen), channel_state(Done))
+        )
+        .await
+        .is_empty()
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_list_unseen_or_seen_stays_on_joined_channels(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use item_filters::NotificationState::{Seen, Unseen};
+
+    seed_channel_list_notifications(&pool).await?;
+    let repo = repo(pool);
+    let not_done = Expr::or(channel_state(Unseen), channel_state(Seen));
+
+    // The sidebar Inbox presets send `channelDone: false` without a
+    // participation literal, so the candidates are joined channels only.
+    let sql = super::build_channel_list_query(&Some(Arc::new(not_done.clone())))
+        .sql()
+        .to_owned();
+    assert!(!sql.contains("team_user"), "{sql}");
+
+    // c12 has an unseen notification but left-user left it; c21 has only a
+    // done and a soft-deleted unseen notification.
+    assert_eq!(
+        channel_ids_matching(&repo, LEFT_USER, not_done).await,
+        HashSet::from([TEAM_A_AUTO_ACTIVE, TEAM_A_MANUAL])
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_list_notification_state_with_participation(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use item_filters::NotificationState::{Done, Seen, Unseen};
+
+    seed_channel_list_notifications(&pool).await?;
+    let repo = repo(pool);
+    let participant = |is_participant| Expr::val(ChannelLiteral::IsParticipant(is_participant));
+
+    // The inbox signal filter: (unseen OR seen) AND participant.
+    assert_eq!(
+        channel_ids_matching(
+            &repo,
+            LEFT_USER,
+            Expr::and(
+                Expr::or(channel_state(Unseen), channel_state(Seen)),
+                participant(true),
+            )
+        )
+        .await,
+        HashSet::from([TEAM_A_AUTO_ACTIVE, TEAM_A_MANUAL])
+    );
+    assert_eq!(
+        channel_ids_matching(
+            &repo,
+            LEFT_USER,
+            Expr::and(Expr::is_not(channel_state(Done)), participant(true))
+        )
+        .await,
+        HashSet::from([TEAM_A_AUTO_ACTIVE, TEAM_A_MANUAL])
+    );
+    assert_eq!(
+        channel_ids_matching(
+            &repo,
+            LEFT_USER,
+            Expr::and(channel_state(Unseen), participant(false))
+        )
+        .await,
+        HashSet::from([TEAM_A_AUTO_LEFT])
+    );
+    // OR with participation widens to the team candidates: c12 only matches by
+    // its own unseen notification.
+    assert_eq!(
+        channel_ids_matching(
+            &repo,
+            LEFT_USER,
+            Expr::or(channel_state(Unseen), participant(true))
+        )
+        .await,
+        HashSet::from([
+            TEAM_A_AUTO_ACTIVE,
+            TEAM_A_AUTO_LEFT,
+            TEAM_A_MANUAL,
+            TEAM_B_AUTO
+        ])
+    );
+    assert_eq!(
+        channel_ids_matching(
+            &repo,
+            LEFT_USER,
+            Expr::or(channel_state(Done), participant(false))
+        )
+        .await,
+        HashSet::from([TEAM_A_AUTO_LEFT, TEAM_B_AUTO])
+    );
+    Ok(())
+}
+
 #[sqlx::test(
     fixtures(
         path = "../../../fixtures",

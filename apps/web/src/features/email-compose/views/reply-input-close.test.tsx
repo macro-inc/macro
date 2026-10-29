@@ -16,7 +16,10 @@ import { createComposeContext } from '../tests/capabilities';
 import { createEmailEditor } from '../tests/editor';
 import { ReplyInputView } from './reply-input';
 
-const fixture = vi.hoisted(() => ({ text: '' }));
+const fixture = vi.hoisted(() => ({
+  text: '',
+  onChange: (_value: string) => {},
+}));
 
 // Keep the real view, form, draft controller and deletion lifecycle. Stub only
 // app-owned editor plugins and presentation unrelated to closing the reply.
@@ -42,7 +45,10 @@ vi.mock(
         withSelectionData: () => config,
         withFloatingFormatMenu: () => config,
         use: () => config,
-        onChange: () => config,
+        onChange: (handler: (value: string) => void) => {
+          fixture.onChange = handler;
+          return config;
+        },
         withFilePaste: () => config,
         buildHandle: () => ({ lexical: createEmailEditor(fixture.text) }),
       };
@@ -102,9 +108,8 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function mount(draftId?: string, text = '') {
+function mount(draftId?: string, text = '', context = createComposeContext()) {
   fixture.text = text;
-  const context = createComposeContext();
   context.presentation.isTouch = () => true;
   context.presentation.scheduleEnabled = false;
   const draft = draftId
@@ -168,6 +173,34 @@ it('routes the composer Escape hotkey through the mobile draft choices', () => {
   shortcut?.keyDownHandler?.(new KeyboardEvent('keydown', { key: 'Escape' }));
   expect(screen.queryByRole('button', { name: 'Save Draft' })).toBeNull();
   expect(state.onClose).not.toHaveBeenCalled();
+});
+
+it('keeps the mobile reply open when saving its working copy fails', async () => {
+  const context = createComposeContext();
+  const failure = new Error('Local storage is unavailable');
+  context.drafts.saveLocalDraft = vi.fn(async () => {
+    throw failure;
+  });
+  const state = mount('draft', 'Keep this unsent reply', context);
+  // The real editor emits its initial value before subsequent user edits.
+  fixture.onChange('Original reply');
+  fixture.onChange('Keep this unsent reply');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Go Back' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+
+  await waitFor(() =>
+    expect(context.notices.reportError).toHaveBeenCalledWith(failure)
+  );
+  expect(context.drafts.saveLocalDraft).toHaveBeenCalledWith(
+    expect.objectContaining({
+      draft: expect.objectContaining({ db_id: 'draft' }),
+    })
+  );
+  expect(screen.getByRole('button', { name: 'Save Draft' })).toBeTruthy();
+  expect(state.onClose).not.toHaveBeenCalled();
+  expect(state.setShowReply).not.toHaveBeenCalled();
+  expect(context.drafts.deleteDraft).not.toHaveBeenCalled();
 });
 
 it.each([undefined, 'saved-draft'])(

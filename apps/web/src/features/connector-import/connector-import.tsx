@@ -1,6 +1,7 @@
 import {
   allOf,
   flagVerdict,
+  type PromoAction,
   SidebarPromotion,
   type Verdict,
 } from '@app/features/sidebar-promotion/sidebar-promotion';
@@ -62,6 +63,10 @@ export function ConnectorImportPromotion(props: {
   /** See `SidebarPromotion`: `undefined` while the host's gates load. */
   applies: Verdict;
   alternatives?: readonly ImportAlternative[];
+  /** A shorter card button label, for when a second action shares the row. */
+  actionLabel?: string;
+  /** A second button beside the import action, e.g. to start from scratch. */
+  secondaryAction?: PromoAction;
   class?: string;
 }): JSX.Element {
   const pipedream = usePipedreamMcpFlag();
@@ -104,7 +109,7 @@ export function ConnectorImportPromotion(props: {
           pitch={config().pitch}
           class={props.class}
           action={{
-            label: config().action,
+            label: props.actionLabel ?? config().action,
             onClick: (trigger) => {
               setOpener(trigger);
               const [direct, ...others] = alternatives();
@@ -113,6 +118,8 @@ export function ConnectorImportPromotion(props: {
               else openDialog(true);
             },
           }}
+          secondaryAction={props.secondaryAction}
+          dismissLabel={`Dismiss ${config().action.toLowerCase()}`}
         />
       </div>
       {/* Beside the card, so the dialog outlives the card's own gates. */}

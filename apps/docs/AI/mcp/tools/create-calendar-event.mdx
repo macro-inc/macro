@@ -31,3 +31,4 @@ Set `eventType` to "out_of_office" to mark the user as out of office (e.g. "mark
 | `addConference` | boolean | No | Attach a conference supported by this calendar: Google Meet or Microsoft Teams. Check ListCalendars capabilities first. |
 | `eventType` | `"default"` \| `"out_of_office"` | No | The kind of event a create tool call makes. |
 | `outOfOffice` | OutOfOfficeInput | No | Out-of-office decline behavior, used only when eventType is "out_of_office". Omit to just block the time; set `autoDeclineMode` to "decline_all" or "decline_new_only" to have the calendar integration decline conflicting meetings, optionally with a `declineMessage`. |
+| `guestPolicy` | GuestPolicy | No | What guests may do: `canModify` (change the event; implies `canInviteOthers`), `canInviteOthers` and `canSeeOtherGuests`. Omit for the defaults: guests may invite others and see the guest list but not modify the event. Google calendars only; an Outlook calendar refuses it. |

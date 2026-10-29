@@ -285,15 +285,18 @@ pub async fn enqueue_populate_crm_contacts(
 /// The unique `(link_id, contact_email)` index collapses bulk deletes into a
 /// single pending row; the nightly cleanup job sweeps the table and
 /// depopulates contacts whose links no longer have messages with them.
-pub async fn insert_crm_cleanup_candidates(
-    ctx: &PubSubContext,
+pub async fn insert_crm_cleanup_candidates<'e, E>(
+    executor: E,
     link_id: Uuid,
     self_email: &str,
     contact_emails: impl IntoIterator<Item = String>,
-) -> Result<(), ProcessingError> {
+) -> Result<(), ProcessingError>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
     let emails = normalized_non_self_contact_emails(self_email, contact_emails);
 
-    email_db_client::crm_cleanup::candidates::insert_candidates(&ctx.db, link_id, &emails)
+    email_db_client::crm_cleanup::candidates::insert_candidates(executor, link_id, &emails)
         .await
         .map_err(|e| {
             ProcessingError::Retryable(DetailedError {

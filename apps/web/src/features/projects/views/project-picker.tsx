@@ -2,9 +2,9 @@ import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
-import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
-import StackIcon from '@phosphor/stack.svg';
+import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
+import StackIcon from '@icon/system/regular/stack.svg';
 import {
   DropdownSearchInput,
   DropdownSelectableRow,

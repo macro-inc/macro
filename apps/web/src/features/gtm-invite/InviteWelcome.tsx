@@ -1,8 +1,9 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { NoiseBackground } from '@core/component/NoiseBackground';
 import { useIsAuthenticated } from '@core/context/user';
 import LogoIcon from '@icon/macro-logo.svg';
-import ArrowRight from '@phosphor/arrow-right.svg';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
 import {
   usePublicGtmInviteLinkQuery,
   useRedeemGtmInviteLinkMutation,
@@ -140,8 +141,8 @@ export function InviteWelcome() {
           <Switch>
             <Match when={view().kind === 'loading'}>
               <div class="flex flex-col gap-3">
-                <div class="h-8 w-56 animate-pulse rounded-md bg-ink/10" />
-                <div class="h-4 w-80 max-w-full animate-pulse rounded-md bg-ink/10" />
+                <ListSkeleton.Bar class="h-8 w-56 rounded-lg" />
+                <ListSkeleton.Bar class="h-4 w-80 max-w-full" />
               </div>
             </Match>
 
@@ -163,7 +164,7 @@ export function InviteWelcome() {
                   </div>
                   <div class="flex flex-col gap-3">
                     <Button
-                      variant="cta"
+                      variant="primary"
                       size="xl"
                       disabled={redeem.isPending}
                       onClick={onContinue}
@@ -238,7 +239,11 @@ function UnavailableInvite(props: { title: string; body: string }) {
         </p>
       </div>
       <div class="flex gap-3">
-        <Button variant="outline" size="lg" onClick={() => navigate('/login')}>
+        <Button
+          variant="secondary"
+          size="lg"
+          onClick={() => navigate('/login')}
+        >
           Log in
         </Button>
       </div>

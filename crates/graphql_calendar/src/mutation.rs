@@ -223,13 +223,41 @@ pub(crate) fn mutation_error(error: CalendarMutationError) -> async_graphql::Err
             "not_attendee",
             "the connected account is not an attendee of this event".into(),
         ),
+        CalendarMutationError::NotOrganizer => (
+            "not_organizer",
+            "Only the organizer can change guest permissions.".into(),
+        ),
         CalendarMutationError::GuestsCannotInvite => (
             "guests_cannot_invite",
-            "The organizer doesn't let guests invite others.".into(),
+            "Only the organizer can invite guests to this event.".into(),
         ),
         CalendarMutationError::GuestListHidden => (
             "guest_list_hidden",
             "Guests cannot be added while the organizer hides the guest list.".into(),
+        ),
+        CalendarMutationError::GuestsCannotModify => (
+            "guests_cannot_modify",
+            "The organizer doesn't let guests change this event.".into(),
+        ),
+        CalendarMutationError::AlreadyOnCalendar => (
+            "already_on_calendar",
+            "This meeting is already on one of your calendars, so it can't be added to another \
+             one."
+                .into(),
+        ),
+        CalendarMutationError::JoinRequestOpen => (
+            "join_request_open",
+            "You've asked to join this event, so it reaches your calendar as an invitation once \
+             you're added as a guest."
+                .into(),
+        ),
+        CalendarMutationError::CopyRefused(_) => (
+            "copy_refused",
+            "Google Calendar won't add a copy of this event to that calendar.".into(),
+        ),
+        CalendarMutationError::Snapshot => (
+            "snapshot",
+            "This is your own copy of a shared event, so answers and guests won't reach its organizer.".into(),
         ),
         CalendarMutationError::InvalidInput(message) => ("invalid_input", message.clone()),
         CalendarMutationError::ReauthRequired(_) => (

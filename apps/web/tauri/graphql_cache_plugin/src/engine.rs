@@ -607,7 +607,7 @@ impl EngineHandle {
             .map_err(|error| error.to_string())
     }
 
-    /// Evaluates a Soup predicate or a revision-bound cached Mail page.
+    /// Evaluates a Soup predicate or a cached Mail page.
     pub async fn entity_filter(
         &self,
         request: EntityFilterRequest,

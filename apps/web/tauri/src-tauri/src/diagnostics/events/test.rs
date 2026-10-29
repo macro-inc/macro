@@ -140,6 +140,45 @@ fn native_events_and_previous_heartbeat_survive_until_next_document_reads_them()
     assert!(buffer.snapshot().heartbeat.is_none());
 }
 
+#[test]
+fn navigation_breadcrumbs_accept_only_code_defined_names() {
+    let accepted: FrontendEvent = serde_json::from_value(serde_json::json!({
+        "kind": "navigated",
+        "cause": "external",
+        "route": "legacy-content",
+        "from_route": "view-search",
+        "entity_type": "channel",
+    }))
+    .expect("code-defined navigation");
+    assert!(matches!(
+        accepted,
+        FrontendEvent::Navigated {
+            entity_type: Some(_),
+            ..
+        }
+    ));
+
+    for (field, value) in [
+        ("route", "/search/~/channel/hello world"),
+        ("entity_type", "Julia's DM"),
+        ("from_route", ""),
+        ("route", "0196a706-e489-7f6f-92ed-1a1440c62fd1"),
+    ] {
+        let mut event = serde_json::json!({
+            "kind": "navigated",
+            "cause": "navigate",
+            "route": "view-search",
+            "from_route": null,
+            "entity_type": null,
+        });
+        event[field] = serde_json::Value::from(value);
+        assert!(
+            serde_json::from_value::<FrontendEvent>(event).is_err(),
+            "{field} accepted {value:?}"
+        );
+    }
+}
+
 /// UPDATE_NATIVE_DIAGNOSTIC_TYPES=1 cargo test ... diagnostic_wire_types
 #[test]
 fn diagnostic_wire_types() {

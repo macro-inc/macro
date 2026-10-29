@@ -9,8 +9,8 @@ export const PLAN_COMPARISON = [
     guest: '“Sent with Macro” footer',
     pro: 'No watermark',
   },
-  { feature: 'AI models', guest: 'Haiku', pro: 'All models' },
-  { feature: 'Storage', guest: '5 GB', pro: '1 TB' },
+  { feature: 'AI models', guest: 'Gemini Flash', pro: 'All models' },
+  { feature: 'Storage', guest: '5 GB', pro: '100 GB' },
   {
     feature: 'Calls, recording & transcription',
     guest: 'Not included',

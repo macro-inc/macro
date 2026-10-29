@@ -1,9 +1,9 @@
 import { TOKENS } from '@core/hotkey/tokens';
-import ArrowCounterClockwiseIcon from '@phosphor/arrow-counter-clockwise.svg';
-import CheckIcon from '@phosphor/check.svg';
-import LightningIcon from '@phosphor/lightning.svg';
-import StarIcon from '@phosphor/star.svg';
-import StarFillIcon from '@phosphor-icons/core/fill/star-fill.svg?component-solid';
+import StarFillIcon from '@icon/system/fill/star-fill.svg?component-solid';
+import ArrowCounterClockwiseIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import LightningIcon from '@icon/system/regular/lightning.svg';
+import StarIcon from '@icon/system/regular/star.svg';
 import { Button, cn } from '@ui';
 import { type ParentProps, Show } from 'solid-js';
 
@@ -46,11 +46,14 @@ export function EmailStarAction(props: {
       )}
     >
       <Button
+        aria-label={props.starred ? 'Unstar email' : 'Star email'}
         variant="ghost"
         size="icon-sm"
-        label={props.starred ? 'Unstar email' : 'Star email'}
         class={props.starred ? 'text-ink-muted' : 'text-ink-extra-muted'}
-        tooltip={props.starred ? 'Remove from favorites' : 'Add to favorites'}
+        tooltip={{
+          content: props.starred ? 'Remove from favorites' : 'Add to favorites',
+          hotkey: TOKENS.email.star,
+        }}
         aria-pressed={props.starred}
         disabled={props.pending}
         onClick={props.onStar}
@@ -74,14 +77,15 @@ export function EmailRowActions(props: {
   return (
     <EmailActionGroup onFocus={props.onFocus}>
       <Button
+        aria-label={props.archived ? 'Unarchive email' : 'Archive email'}
+        tooltip={{
+          content: props.archived ? 'Unarchive email' : 'Archive email',
+          hotkey: props.archived
+            ? TOKENS.entity.action.markNotDone
+            : TOKENS.entity.action.markDone,
+        }}
         variant="ghost"
         size="icon-sm"
-        label={props.archived ? 'Unarchive email' : 'Archive email'}
-        hotkey={
-          props.archived
-            ? TOKENS.entity.action.markNotDone
-            : TOKENS.entity.action.markDone
-        }
         class="text-ink-extra-muted"
         disabled={!props.canArchive || props.pending}
         onClick={props.onArchive}
@@ -91,10 +95,13 @@ export function EmailRowActions(props: {
         </Show>
       </Button>
       <Button
+        aria-label="Open command menu"
+        tooltip={{
+          content: 'Open command menu',
+          hotkey: TOKENS.global.commandMenu,
+        }}
         variant="ghost"
         size="icon-sm"
-        label="Open command menu"
-        hotkey={TOKENS.global.commandMenu}
         class="text-ink-extra-muted"
         onClick={props.onCommands}
       >

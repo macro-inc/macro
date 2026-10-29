@@ -1,11 +1,11 @@
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ClipboardIcon from '@icon/system/regular/clipboard.svg';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
-import ClipboardIcon from '@phosphor/clipboard.svg';
-import DownloadIcon from '@phosphor/download-simple.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import TrashIcon from '@phosphor/trash.svg';
 import { ThemeChipPill } from '@theme/components/ThemeChipPill';
 import { ThemeChips } from '@theme/components/ThemeChips';
 import { ThemeEditor } from '@theme/components/ThemeEditor';
@@ -35,7 +35,7 @@ import {
   saveTheme,
   updateTheme,
 } from '@theme/utils/themeUtils';
-import { Dropdown, Layer, ToggleSwitch, Tooltip } from '@ui';
+import { Button, cn, Dropdown, Layer, ToggleSwitch } from '@ui';
 import {
   monochromeIcons,
   setMonochromeIcons,
@@ -44,6 +44,7 @@ import {
 } from '@ui/signals/signals';
 import { createSignal, For, Show } from 'solid-js';
 import { AppearanceModePicker } from './components/appearance-mode-picker';
+import { LanguageSettings } from './LanguageSettings';
 import {
   SettingsCard,
   SettingsPage,
@@ -52,44 +53,51 @@ import {
 } from './primitives';
 
 /** Copies a theme's JSON to the clipboard (for sharing / importing elsewhere). */
-function CopyThemeButton(props: { themeId: string; name: string }) {
+function CopyThemeButton(props: {
+  themeId: string;
+  name: string;
+  size: 'icon-xs' | 'icon-md';
+}) {
   return (
-    <Tooltip as="span" label="Copy theme">
-      <button
-        type="button"
-        aria-label={`Copy ${props.name}`}
-        class="inline-flex items-center justify-center rounded-lg p-0.5 hover:bg-ink/5 hover:text-ink focus-visible:outline-2 focus-visible:outline-accent touch:p-1.5"
-        onPointerDown={(e) => e.stopPropagation()}
-        onPointerUp={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          fireAndForget(exportTheme(props.themeId), 'theme-export');
-        }}
-      >
-        <ClipboardIcon class="size-3.5 mobile:size-5" />
-      </button>
-    </Tooltip>
+    <Button
+      aria-label={`Copy ${props.name}`}
+      variant="ghost"
+      size={props.size}
+      tooltip="Copy theme"
+      onPointerDown={(e) => e.stopPropagation()}
+      onPointerUp={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        fireAndForget(exportTheme(props.themeId), 'theme-export');
+      }}
+    >
+      <ClipboardIcon
+        class={cn(
+          props.size === 'icon-xs' ? 'size-3' : 'size-4',
+          'touch:size-4'
+        )}
+      />
+    </Button>
   );
 }
 
 /** Edits a theme in the inline editor (custom → in place, default → forked). */
 function EditThemeButton(props: { name: string; onEdit: () => void }) {
   return (
-    <Tooltip as="span" label="Edit theme">
-      <button
-        type="button"
-        aria-label={`Edit ${props.name}`}
-        class="inline-flex items-center justify-center rounded-lg p-0.5 hover:bg-ink/5 hover:text-ink focus-visible:outline-2 focus-visible:outline-accent touch:p-1.5"
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          props.onEdit();
-        }}
-      >
-        <PencilIcon class="size-3.5 mobile:size-5" />
-      </button>
-    </Tooltip>
+    <Button
+      aria-label={`Edit ${props.name}`}
+      variant="ghost"
+      size="icon-md"
+      tooltip="Edit theme"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        props.onEdit();
+      }}
+    >
+      <PencilIcon class="size-4" />
+    </Button>
   );
 }
 
@@ -104,9 +112,13 @@ function ThemePillActions(props: {
   onEdit: () => void;
 }) {
   return (
-    <span class="flex shrink-0 items-center text-ink/50 [&_button]:size-8 [&_svg]:size-4">
+    <span class="flex shrink-0 items-center">
       <EditThemeButton name={props.name} onEdit={props.onEdit} />
-      <CopyThemeButton themeId={props.themeId} name={props.name} />
+      <CopyThemeButton
+        themeId={props.themeId}
+        name={props.name}
+        size="icon-md"
+      />
     </span>
   );
 }
@@ -309,12 +321,13 @@ function InterfaceThemeSelect(props: {
         <span class="truncate">{theme.name}</span>
       </span>
       <span class="ml-2 flex shrink-0 items-center gap-0.5 text-ink-extra-muted opacity-0 group-hover:opacity-100 touch:opacity-100">
-        <CopyThemeButton themeId={theme.id} name={theme.name} />
+        <CopyThemeButton themeId={theme.id} name={theme.name} size="icon-xs" />
         <Show when={editable}>
-          <button
-            type="button"
+          <Button
             aria-label={`Edit ${theme.name}`}
-            class="rounded p-0.5 hover:text-ink"
+            tooltip={`Edit ${theme.name}`}
+            variant="ghost"
+            size="icon-xs"
             onPointerDown={(e) => e.stopPropagation()}
             onPointerUp={(e) => e.stopPropagation()}
             onClick={(e) => {
@@ -324,12 +337,13 @@ function InterfaceThemeSelect(props: {
               props.onEdit(theme.id);
             }}
           >
-            <PencilIcon class="size-3.5" />
-          </button>
-          <button
-            type="button"
+            <PencilIcon class="size-3 touch:size-3.5" />
+          </Button>
+          <Button
             aria-label={`Delete ${theme.name}`}
-            class="rounded p-0.5 hover:text-failure"
+            tooltip={`Delete ${theme.name}`}
+            variant="ghost"
+            size="icon-xs"
             onPointerDown={(e) => e.stopPropagation()}
             onPointerUp={(e) => e.stopPropagation()}
             onClick={(e) => {
@@ -339,8 +353,8 @@ function InterfaceThemeSelect(props: {
               props.onDelete(theme);
             }}
           >
-            <TrashIcon class="size-3.5" />
-          </button>
+            <TrashIcon class="size-3 touch:size-3.5" />
+          </Button>
         </Show>
       </span>
     </Dropdown.Item>
@@ -372,7 +386,7 @@ function InterfaceThemeSelect(props: {
           // Render as a plain div (not Surface) so the edge is a faint ink
           // hairline like the settings cards, rather than the heavier b4 border.
           as="div"
-          class="w-60 overflow-hidden border border-ink/[0.05] bg-surface shadow-menu"
+          class="w-60 overflow-hidden"
           onMouseLeave={clearThemePreview}
           onOpenAutoFocus={(e: Event) => {
             // Focus the filter input instead of the first item.
@@ -561,6 +575,8 @@ export function Appearance() {
             </SettingsRow>
           </SettingsCard>
         </SettingsSection>
+
+        <LanguageSettings />
       </SettingsPage>
     </div>
   );

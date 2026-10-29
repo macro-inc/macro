@@ -18,6 +18,9 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DraftTransferRequest {
+    /// Source edit generation captured with the transfer request.
+    #[serde(default)]
+    pub draft_generation: i32,
     pub id: Uuid,
     pub source_id: Uuid,
     pub source_link_id: Uuid,

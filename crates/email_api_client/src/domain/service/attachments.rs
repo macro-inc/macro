@@ -1,17 +1,17 @@
 use uuid::Uuid;
 
 use super::super::models::EmailApiError;
-use super::super::ports::{MailboxAttachmentClient, ProviderRateLimiter, ProviderTokenSource};
+use super::super::ports::{MailboxAttachmentClient, ProviderRequestGate, ProviderTokenSource};
 use super::{ApiOperationKind, EmailApiClientServiceImpl};
 
 impl<R, T, L> EmailApiClientServiceImpl<R, T, L>
 where
     R: MailboxAttachmentClient,
     T: ProviderTokenSource,
-    L: ProviderRateLimiter,
+    L: ProviderRequestGate,
 {
     /// Downloads an attachment from a provider message.
-    #[tracing::instrument(skip(self), fields(retry_count = 0))]
+    #[tracing::instrument(skip(self), fields(retry_count = 0, gate_in_flight = tracing::field::Empty, gate_cap = tracing::field::Empty))]
     pub async fn get_attachment(
         &self,
         link_id: Uuid,

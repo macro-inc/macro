@@ -293,7 +293,7 @@ async fn resolve_channel_display_name(
 /// Display name for a participant principal: users resolve through the name
 /// lookup, bots through the bot-name lookup (Macro AI is code-defined).
 /// Unrecognized principals yield `None`.
-fn principal_display_name(
+pub(super) fn principal_display_name(
     principal: &str,
     name_lookup: &NameLookup,
     bot_name_lookup: &HashMap<BotId, String>,
@@ -332,10 +332,10 @@ async fn load_active_participant_principals(
     Ok(rows.into_iter().map(|row| row.user_id).collect())
 }
 
-async fn load_bot_display_names(
+pub(super) async fn load_bot_display_names(
     pool: &PgPool,
     bot_ids: &[BotId],
-) -> anyhow::Result<HashMap<BotId, String>> {
+) -> Result<HashMap<BotId, String>, sqlx::Error> {
     if bot_ids.is_empty() {
         return Ok(HashMap::new());
     }
@@ -369,10 +369,10 @@ async fn load_bot_display_names(
     Ok(names)
 }
 
-async fn load_user_display_names(
+pub(super) async fn load_user_display_names(
     pool: &PgPool,
     user_ids: &[MacroUserIdStr<'static>],
-) -> anyhow::Result<NameLookup> {
+) -> Result<NameLookup, sqlx::Error> {
     if user_ids.is_empty() {
         return Ok(NameLookup::new());
     }
@@ -540,24 +540,45 @@ static CHANNEL_LIST_SELECT: &str = r#"
     END) DESC, pc.id::text DESC
 "#;
 
+/// Matches channels where the user has a live notification in `state`.
+///
+/// Unseen and seen rows are few per user and usually the newest of a channel,
+/// so a per-channel `EXISTS` walks the channel's whole notification history
+/// before finding them. Those states read the user's own notifications once
+/// instead. `= ANY(ARRAY(...))` keeps that set an InitPlan; a plain `IN` is
+/// pulled up into a semi-join that probes every channel's history again.
+/// Done rows accumulate without bound and the oldest one usually matches, so
+/// the per-channel `EXISTS` stays cheaper for them.
 #[cfg(feature = "list")]
-fn build_channel_notification_exists_clause(
-    entity_id_sql: &str,
-    entity_type: &str,
-    predicate_sql: &str,
-) -> String {
-    format!(
-        r#"EXISTS (
+fn build_channel_notification_state_clause(state: item_filters::NotificationState) -> String {
+    let predicate = notification_state_predicate(state);
+    match state {
+        item_filters::NotificationState::Unseen | item_filters::NotificationState::Seen => {
+            format!(
+                r#"(c.id)::text = ANY(ARRAY(
+            SELECT DISTINCT n.event_item_id
+            FROM user_notification un
+            JOIN notification n ON n.id = un.notification_id
+            WHERE un.user_id = $1
+              AND un.deleted_at IS NULL
+              AND {predicate}
+              AND n.event_item_type = 'channel'
+        ))"#
+            )
+        }
+        item_filters::NotificationState::Done => format!(
+            r#"EXISTS (
             SELECT 1
             FROM notification n
             JOIN user_notification un ON un.notification_id = n.id
             WHERE un.user_id = $1
               AND un.deleted_at IS NULL
-              AND n.event_item_type = '{entity_type}'
-              AND n.event_item_id = ({entity_id_sql})::text
-              AND {predicate_sql}
+              AND n.event_item_type = 'channel'
+              AND n.event_item_id = (c.id)::text
+              AND {predicate}
         )"#
-    )
+        ),
+    }
 }
 
 #[cfg(feature = "list")]
@@ -613,15 +634,7 @@ fn build_channel_list_filter(ast: Option<&Expr<ChannelLiteral>>) -> String {
             )
         }
         filter_ast::ExprFrame::Literal(ChannelLiteral::NotificationState(state)) => {
-            build_channel_notification_exists_clause(
-                "c.id",
-                "channel",
-                match state {
-                    item_filters::NotificationState::Unseen => "un.state = 'unseen'",
-                    item_filters::NotificationState::Seen => "un.state = 'seen'",
-                    item_filters::NotificationState::Done => "un.state = 'done'",
-                },
-            )
+            build_channel_notification_state_clause(state)
         }
     });
     if formatting.is_empty() {
@@ -1489,6 +1502,10 @@ impl ChannelListRepo for PgChannelsRepo {
             .bind(query_limit)
             .bind(cursor_timestamp)
             .bind(cursor_id_str)
+            // Unnamed statement: a generic plan cannot see how many notifications
+            // the user has and nested-loops a large backlog row by row, several
+            // times slower than the hash join a custom plan picks.
+            .persistent(false)
             .try_map(|row: PgRow| {
                 ChannelListRow {
                     id: row.try_get("id")?,
@@ -2371,6 +2388,13 @@ impl ChannelRepo for PgChannelsRepo {
         viewer_user_id: MacroUserIdStr<'static>,
     ) -> Result<String, Self::Err> {
         resolve_channel_display_name(&self.pool, info, viewer_user_id).await
+    }
+
+    async fn get_user_display_names(
+        &self,
+        user_ids: &[MacroUserIdStr<'static>],
+    ) -> Result<NameLookup, Self::Err> {
+        Ok(load_user_display_names(&self.pool, user_ids).await?)
     }
 
     async fn user_has_team(&self, user_id: String, team_id: Uuid) -> Result<bool, Self::Err> {

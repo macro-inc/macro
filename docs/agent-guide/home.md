@@ -53,11 +53,16 @@ also worked on stays, read, at the time of your own work. **Undo** brings a done
 row back in place. A new comment on a months-old document appears at the top. With
 two sessions of the same account, marking a row done in one removes it from the
 other without reloading. A channel thread and its channel remain separate rows, and
-completing the channel leaves the thread.
+completing the channel leaves the thread. The server applies **Status** and the
+**Documents**/**Tasks** split, so with **Unread** on, a feed that is mostly read own
+work still fills the first screen from one request; a row read while shown stays
+until the feed is fetched again.
 The menu shares the legacy compact submenus: **Status** offers **Unread**, **Read**,
 and **All** as single-select radio items with a checkmark on the right of the selected
 option, and **Type** contains the entity checkboxes. Status closes the menu
-after selection; type selections leave it open. Press **f** to open the menu.
+after selection. Type uses the [shared multiselect dropdown pattern](ui-conventions.md#multiselect-dropdowns):
+checkboxes toggle without closing, rows add and close, and Shift/Only selects just
+one type without closing. Press **f** to open the menu.
 Entity type checkboxes start checked. Unchecking **Email** hides received
 and sent mail. **Channels** controls
 both channels and reply threads; **Chats** and **Agents** have separate toggles.
@@ -66,9 +71,10 @@ both read states again. A badge counts hidden types plus an active status filter
 Read status and type selections persist.
 There are no desktop Signal/Noise tabs. A **Home** heading
 labels the top left of the block, matching the **Email**, **Tasks**, **Chat**, and
-**Agents** sidebar headings. The full-width **New chat** plus pill below the heading clears the preview and returns to the Home
-starting pane; it does not create a chat. Email and Tasks have matching top pills
-for **New email** and **New task**.
+**Agents** sidebar headings. The full-width **New** plus pill below the heading
+clears the preview and returns to the Home starting pane; it does not create a
+chat. It uses the shared desktop creation styling described in
+[navigation](navigation.md).
 
 The Home provider honors an explicit initial tab, search, grouping, and facet
 selection. Filters persist per user across reloads and fresh Home navigation;
@@ -79,12 +85,25 @@ Channel thread replies remain separate Home entries from their parent channel,
 using single-line rows and a reply arrow icon on desktop, labeled
 with the sender and channel (for example, **Peter in #battlefield**). Replies and
 mentions name the latest notification's sender, including bots, even after the
-notification is read. To verify, mention yourself from a second account in a
+notification is read. Document-mention and reaction notifications also name
+their sender, never the thread's original author. Verify a reply containing a
+document chip in your own thread: the row must keep the replier's name when
+the document-mention notification arrives, including after it is marked done.
+To verify user mentions, mention yourself from a second account in a
 thread started by someone else: the row must name the mentioner and open their
 message. Channel names
 prefer the current channel cache, then a matching thread notification's name,
 then **Unknown channel** if neither source has a name. Selecting a
 thread opens that thread in the channel preview; Shift-click opens it in a split.
+If the channel is already open in another split or preview, clicking a message
+or reply notification focuses that view and jumps to the specific message,
+without a **Content already open** warning. Verify with two splits and a reply
+in a different thread from the one currently displayed; repeat on touch.
+A Home URL containing only the channel `threadId` opens that thread's root,
+not the latest message. Reloading or opening the same URL on touch retains the
+target; an explicit reply `messageId` still takes precedence.
+
+![Thread-only Home URL targeting its root message](images/conversation-thread-target.png)
 
 Items in the 256px desktop rail use single-line pills with 16px icons: profile photos for
 DMs and model logos for AI chats (Claude sunburst or ChatGPT knot). Other items
@@ -106,9 +125,10 @@ explicitly saved favorites still open their context. Verify this alongside an
 ordinary standalone session, which remains listed.
 
 The Agents workspace uses a single left dot for activity and unread state in
-place of the sparkle. Opening a loaded session from Home or Agents marks its
-notifications read after the viewing delay, including notifications arriving
-while that session remains active.
+place of the sparkle. Clicking a session row in Home or the Agents sidebar
+clears the row's loaded unread dot immediately; a failed read write restores
+it. The opened session also marks its notifications read after the viewing
+delay, including notifications arriving while that session remains active.
 Other Home items have no title tooltips, and their timestamps are
 visible only while hovering the row. An unread
 dot remains visible. Click a row to preview it; `j`/`k` navigate and update the
@@ -146,6 +166,19 @@ arrow-key browsing keeps it open. Preview headers start with **Home >**. Clickin
 **Home** clears the preview and returns to the starting pane without changing
 sidebar visibility. Use the hamburger to reopen the feed. Mobile continues to
 show the activity list alone.
+
+Desktop previews use the same header controls as their standalone views, with
+the **Home >** return breadcrumb added. Calendar shares its date, search,
+navigation, view, and New controls; email shares its action, navigation, AI/task,
+and Share groups. Touch previews retain their existing compact headers.
+
+Conversation breadcrumbs preserve identity: human DMs show the other participant's
+avatar, agent DMs show the persona avatar, and named channels show their picture
+or the channel glyph. Verify switching between these entries without reloading,
+including a reply-thread entry and a direct Home URL reload. Clicking an avatar
+inside a breadcrumb must select that breadcrumb, not open another DM.
+
+![Home DM breadcrumb with its participant avatar](images/home-conversation-identity.png)
 
 Document previews opened from Home expose **Share** and **Copy Share Link** before
 the details toggle, including tasks, snippets, skills, canvases, PDFs, images,

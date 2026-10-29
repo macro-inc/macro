@@ -1,11 +1,12 @@
 use super::attachment_error::AttachmentApiError;
 use crate::api::context::{ApiContext, AuthorizationService, EmailSvc};
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
 };
 use axum_extra::extract::Cached;
+use email::inbound::axum::api_types::DraftEditPrecondition;
 use email::inbound::axum::axum_impls::EmailLinkExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::EmptyResponse;
@@ -26,7 +27,7 @@ pub struct PathParams {
     tag = "Drafts",
     path = "/email/drafts/{id}/attachments/{attachment_id}",
     operation_id = "remove_draft_attachment",
-    params(PathParams),
+    params(PathParams, DraftEditPrecondition),
     responses(
         (status = 201, body = EmptyResponse),
         (status = 400, body = ErrorResponse),
@@ -37,6 +38,7 @@ pub struct PathParams {
 )]
 #[tracing::instrument(skip_all, err)]
 pub async fn handler(
+    Query(precondition): Query<DraftEditPrecondition>,
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<EmailSvc, AuthorizationService>>,
@@ -53,6 +55,7 @@ pub async fn handler(
             draft_id,
             attachment_id,
             email::domain::draft_attachments::RemovalKind::UploadedOrNative,
+            precondition.draft_generation,
         )
         .await?;
     Ok(StatusCode::NO_CONTENT)

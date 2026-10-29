@@ -14,6 +14,10 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   `config.example.toml`, `default.macrod.toml`).
 - `src/daemon.rs` + `src/runtime.rs`: the serving core — persistent harness
   service connection, ACP process bridge, start/stop/restart on re-pair.
+- `src/self_knowledge.rs`: the `<macrod-runtime>` section the bridge
+  (`src/harness.rs`) prefixes to each new session's first prompt — macrod
+  version, workspace, forwarded MCP servers, permission bypass, listing only
+  what the session has. General Macro guidance stays in the `SelfKnowledge` tool.
 - `src/trigger.rs` + `src/dispatch.rs`: agent-trigger broker events → session
   create/dial/prompt against the live harness service.
 - `src/tui.rs` (`src/tui/`): the control panel itself (registration, agents,

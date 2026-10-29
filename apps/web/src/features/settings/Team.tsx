@@ -1,10 +1,11 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
-import UsersIcon from '@phosphor/users.svg';
-import XIcon from '@phosphor/x.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import {
   useJoinTeamMutation,
   useRejectInvitationMutation,
@@ -65,7 +66,7 @@ function InviteEntryRow(props: {
         <Show when={props.showRemove}>
           <Tooltip label="Remove">
             <Button
-              variant="outline"
+              variant="secondary"
               size="icon-sm"
               class="shrink-0 focus:border-accent"
               tabIndex={0}
@@ -183,7 +184,7 @@ function InviteEmailsInput(props: {
         </div>
       </Show>
       <Button
-        variant="outline"
+        variant="secondary"
         class="w-full justify-center focus:border-accent"
         tabIndex={0}
         disabled={!canAddRow()}
@@ -224,7 +225,7 @@ function UserInviteRow(props: {
       </div>
       <div class="flex items-center gap-2 shrink-0">
         <Button
-          variant="outline"
+          variant="secondary"
           class="px-2 py-1"
           disabled={props.isAccepting || props.isDeclining}
           onClick={props.onDecline}
@@ -234,7 +235,7 @@ function UserInviteRow(props: {
           </Show>
         </Button>
         <Button
-          variant="accent"
+          variant="primary"
           class="px-2 py-1"
           disabled={props.isAccepting || props.isDeclining}
           onClick={props.onAccept}
@@ -383,7 +384,7 @@ export function CreateTeamDialog(props: {
       <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
         <Panel.Header class="px-2 gap-1">
           <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-            <XIcon />
+            <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
           <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
             Create Team
@@ -431,7 +432,7 @@ export function CreateTeamDialog(props: {
               Cancel
             </Button>
             <Button
-              variant="strong"
+              variant="secondary"
               disabled={
                 createTeamMutation.isPending ||
                 !!teamNameError() ||
@@ -502,7 +503,7 @@ export function InviteToTeamDialog(props: {
       <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
         <Panel.Header class="px-2 gap-1">
           <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-            <XIcon />
+            <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
           <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
             Invite to Team
@@ -531,7 +532,7 @@ export function InviteToTeamDialog(props: {
               Cancel
             </Button>
             <Button
-              variant="strong"
+              variant="secondary"
               disabled={!hasValidInvites() || inviteToTeamMutation.isPending}
               onClick={handleInvite}
             >
@@ -569,7 +570,7 @@ function EmptyTeamState() {
               Create a team to collaborate with others and manage access
               together.
             </p>
-            <Button variant="accent" onClick={() => setShowCreateModal(true)}>
+            <Button variant="primary" onClick={() => setShowCreateModal(true)}>
               <PlusIcon class="size-4" />
               Create Team
             </Button>
@@ -649,9 +650,7 @@ export function TeamPage(props: {
   return (
     // Each state renders its own SettingsPage (scrolling, centered column) so
     // Team matches the Account/Appearance layout.
-    <Suspense
-      fallback={<div class="animate-pulse bg-skeleton rounded h-4 w-32 m-6" />}
-    >
+    <Suspense fallback={<ListSkeleton.Bar class="m-6 h-4 w-32" />}>
       <TeamContent>{props.children}</TeamContent>
     </Suspense>
   );

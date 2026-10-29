@@ -29,6 +29,7 @@ export type SearchSoupQueryArgs = {
 
 interface SearchQueryOptions {
   enabled?: boolean;
+  staleTime?: number;
 }
 
 /** Search service won't accept text less than 3 characters */
@@ -40,7 +41,8 @@ export const validateSearchServiceText = (text: string) => {
 function searchSoupQueryOptions(
   args: SearchSoupQueryArgs,
   channels: ReadonlyArray<{ id: string; name?: string | null }>,
-  enabled: boolean
+  enabled: boolean,
+  staleTime: number | undefined
 ) {
   const mapSearchResponseItem = createSearchResponseItemMapper(channels);
   return infiniteQueryOptions({
@@ -78,6 +80,8 @@ function searchSoupQueryOptions(
       });
     },
     enabled: enabled,
+    // An undefined staleTime would replace the client default, not inherit it.
+    ...(staleTime === undefined ? {} : { staleTime }),
     placeholderData: keepPreviousData,
     meta: { normalize: false },
   });
@@ -114,7 +118,8 @@ export const useSearchSoupQuery = (
     searchSoupQueryOptions(
       { params: args().params, body: request() },
       channelNames(),
-      enabled()
+      enabled(),
+      options?.().staleTime
     )
   );
 };

@@ -62,6 +62,7 @@
       "../src-tauri/icons/macos/Macro.icns"
     ],
     "macOS": {
+      "entitlements": "entitlements.plist",
       "files": {
         "Resources/Assets.car": "../src-tauri/icons/macos/Assets.car"
       },

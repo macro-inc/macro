@@ -148,7 +148,7 @@ export function TextEditor(props: {
 
   return (
     <div
-      class="absolute z-20 w-72 rounded-lg border border-edge-muted bg-menu p-2 shadow-lg"
+      class="menu-surface absolute z-20 w-72 p-2"
       style={{
         left: `${Math.max(8, at().x)}px`,
         top: `${Math.max(8, at().y + 8)}px`,

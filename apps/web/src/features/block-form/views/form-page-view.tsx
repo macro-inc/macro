@@ -1,3 +1,4 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Button } from '@ui';
 import {
@@ -52,7 +53,7 @@ export function FormLoadFailureView(props: {
         </Match>
         <Match when={props.failure.kind === 'failed'}>
           <p class="font-medium text-ink">This form couldn’t be opened</p>
-          <Button variant="outline" onClick={props.onRetry}>
+          <Button variant="secondary" onClick={props.onRetry}>
             Try again
           </Button>
         </Match>
@@ -68,9 +69,9 @@ export function FormSkeleton() {
       aria-busy="true"
       aria-label="Loading form"
     >
-      <div class="h-32 animate-pulse rounded-xl bg-hover" />
-      <div class="h-48 animate-pulse rounded-xl bg-hover" />
-      <div class="h-24 animate-pulse rounded-xl bg-hover" />
+      <ListSkeleton.Bar class="h-32 w-full rounded-xl" />
+      <ListSkeleton.Bar class="h-48 w-full rounded-xl" />
+      <ListSkeleton.Bar class="h-24 w-full rounded-xl" />
     </div>
   );
 }

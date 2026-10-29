@@ -35,23 +35,41 @@ vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => <span /> }));
 vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
     isLoading: () => false,
-    useList: () => ({
-      items: () => [
-        {
-          kind: 'user',
-          id: 'macro|alice@example.com',
-          data: {
-            id: 'macro|alice@example.com',
-            name: 'Alice',
-            email: 'alice@example.com',
-          },
-        },
-      ],
+    useList: (...buckets: string[]) => ({
+      items: () =>
+        buckets.includes('initiative')
+          ? [
+              {
+                kind: 'initiative',
+                id: 'project-launch',
+                data: {
+                  type: 'initiative',
+                  id: 'project-launch',
+                  name: 'Launch',
+                },
+              },
+            ]
+          : [
+              {
+                kind: 'user',
+                id: 'macro|alice@example.com',
+                data: {
+                  id: 'macro|alice@example.com',
+                  name: 'Alice',
+                  email: 'alice@example.com',
+                },
+              },
+            ],
     }),
   }),
 }));
 vi.mock('@entity', () => ({
-  Entity: {},
+  Entity: {
+    Icon: () => <span />,
+    Title: (props: { entity: { name: string } }) => (
+      <span>{props.entity.name}</span>
+    ),
+  },
   isTaskEntity: () => false,
   createEmailsInfiniteQuery: () => ({
     data: [],
@@ -212,5 +230,27 @@ describe('assigning an agent through task and project properties', () => {
         'Agents assigned to this project automatically take on tasks created in or moved into it. Use a shared team agent for tasks added by teammates.'
       )
     ).toBeNull();
+  });
+});
+
+describe('the Project property', () => {
+  it('clears the project when the selected project is clicked again', async () => {
+    const project: EntityProperty = {
+      ...property,
+      propertyId: 'project-property',
+      propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+      displayName: 'Project',
+      isMultiSelect: false,
+      specificEntityType: 'INITIATIVE',
+      value: [{ entity_id: 'project-launch', entity_type: 'INITIATIVE' }],
+    };
+    const onSave = setup({ entityType: 'TASK', blockId: 'task-id' }, project);
+    fireEvent.click(screen.getByText('Launch'));
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(project, {
+        valueType: 'ENTITY',
+        refs: null,
+      })
+    );
   });
 });

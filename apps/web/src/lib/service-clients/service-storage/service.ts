@@ -283,22 +283,6 @@ const CollabSurfacesSvc = new Svc('Collab Surfaces Service')
     throws: withFetchErrors(),
   });
 
-const InstructionsSvc = new Svc('Instructions Service')
-  .use('fetchErrors', fetchErrorsSvc)
-  .fn('create', {
-    description: schemas.createInstructionsHandlerResponse.description!,
-    args: {},
-    result: schemas.createInstructionsHandlerResponse.shape,
-    modifies: true,
-    throws: withFetchErrors(),
-  })
-  .fn('get', {
-    description: schemas.getInstructionsHandlerResponse.description!,
-    args: {},
-    result: schemas.getInstructionsHandlerResponse.shape,
-    throws: withFetchErrors(),
-  });
-
 export type GetDocumentPermissionsTokenResponse = z.infer<
   typeof schemas.getDocumentPermissionsTokenResponse
 >;
@@ -740,7 +724,6 @@ export const StorageService = new Svc('Document++ Storage Service API')
   .use('projects', ProjectsSvc)
   .use('permissionsTokens', PermissionsTokensSvc)
   .use('collabSurfaces', CollabSurfacesSvc)
-  .use('instructions', InstructionsSvc)
   .use('views', ViewsSvc)
   .use('favorites', FavoritesSvc);
 

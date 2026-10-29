@@ -18,9 +18,15 @@ search-service = []
 bebop-owned-all = ["sync_service_bebop_schema/bebop-owned-all"]
 create-default-state = []
 alarm-keep-alive = []
+openapi = ["dep:utoipa"]
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "sync_service_openapi"
+path = "src/bins/openapi.rs"
+required-features = ["openapi"]
 
 [package.metadata.release]
 release = false
@@ -30,7 +36,7 @@ release = false
 wasm-opt = true
 
 [dependencies]
-worker = { workspace = true, features = ['d1'] }
+worker = { workspace = true, features = ['d1', 'http', 'axum'] }
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = [
   'time',
@@ -48,9 +54,20 @@ wasm-bindgen.workspace = true
 uuid = { workspace = true, features = ["js"] }
 loro.workspace = true
 macro_sync_service_jwt = { path = "../../crates/macro_sync_service_jwt" }
-matchit =  "0.8.4"
 worker-rs-otel = { path = "../../crates/worker-rs-otel" }
 subtle = { workspace = true }
 base64.workspace = true
 futures.workspace = true
 thiserror.workspace = true
+
+# Workers cannot enable the workspace's native Tokio/compression features.
+[target.'cfg(target_family = "wasm")'.dependencies]
+axum = { version = "0.8", default-features = false, features = ["json", "query"] }
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+axum = { workspace = true }
+# Keep native-only schema generation out of the worker build.
+utoipa = { version = "5.4.0", optional = true }
+
+[dependencies.tower-service]
+workspace = true

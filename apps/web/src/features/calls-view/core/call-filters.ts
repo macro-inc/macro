@@ -1,10 +1,4 @@
-import type { TabItem } from '@core/component/Tabs';
 import type { EntityData } from '@entity';
-
-/** A Calls tab's text label; tab items may carry rich labels elsewhere. */
-export function callViewLabel(tab: TabItem): string {
-  return typeof tab.label === 'string' ? tab.label : tab.value;
-}
 
 /** Client predicate ids that narrow the Calls list by who attended. */
 export const CALL_AUDIENCES = [

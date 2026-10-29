@@ -72,7 +72,10 @@ export async function duplicateEntity(
     if (
       (entity.type === 'DOCUMENT' &&
         effect.item.__typename === 'GraphqlSoupDocument') ||
-      (entity.type === 'CHAT' && effect.item.__typename === 'GraphqlSoupChat')
+      (entity.type === 'CHAT' &&
+        effect.item.__typename === 'GraphqlSoupChat') ||
+      (entity.type === 'PROJECT' &&
+        effect.item.__typename === 'GraphqlSoupProject')
     )
       return effect.item.id;
   }

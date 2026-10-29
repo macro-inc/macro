@@ -81,12 +81,14 @@ fragment CalendarEventFields on GraphqlCalendarEvent {
 		canInviteOthers
 		canSeeOtherGuests
 	}
+	isSnapshot
 	viewerCan {
 		editDetails
 		inviteGuests
 		removeGuests
 		setGuestPolicy
 		rsvp
+		organize
 	}
 	createdAt
 	updatedAt
@@ -128,6 +130,7 @@ fragment CalendarFields on GraphqlCalendar {
 		emailReminders
 		removeConference
 		resetRsvp
+		guestPolicy
 	}
 	name
 	color

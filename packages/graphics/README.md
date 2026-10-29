@@ -9,7 +9,7 @@ Status reviewed 2026-09-28. The [parity plan](../../docs/design/graphics-parity.
 progress/next-checkpoint index. Canvas Next now includes rich text/mentions,
 shape labels, connectors, media, document cards and full embeds as the default
 canvas editor. Versioned JSON persistence is wired at the Canvas host boundary.
-The Loro adapter remains experimental; production collaboration is not wired.
+Canvas Next binds the Loro adapter to its production shared collaboration runtime.
 The next product checkpoint is a
 [legacy bridge and color policy](../../docs/architecture/canvas-legacy-bridge.md), kept outside
 the pure core. Expanding peer support is deferred.
@@ -236,7 +236,7 @@ queries are deliberate prototype limits. Text,
 connectors and embedded item contracts are implemented. Frames/clipping, layout,
 multi-surface documents, per-host core registries and runtime plugin loading are not.
 Affine reflection/shear compose correctly, but have no dedicated UI controls.
-SyncService integration remains separate work. The two-peer Loro experiment uses
+The Canvas host owns SyncService integration and persistence. Loro uses
 native local undo; never apply local item-delta undo to a shared document.
 
 The [scene foundation specification](../../docs/architecture/graphics-scene-foundation.md)
@@ -359,7 +359,9 @@ restores the previous selection. Solid keeps original keyed mounts intact.
 
 ## Loro adapter
 
-The in-memory peer harness gives tests two real Loro replicas with independent
+`createLoroGraphicsBackendFromDoc` binds to a host-owned Loro document without
+freeing it on disposal. Host bookkeeping tagged `GRAPHICS_METADATA_ORIGIN` is
+excluded from scene undo. The in-memory peer harness gives tests two real Loro replicas with independent
 selection, camera and local undo. See [the adapter notes](src/loro/README.md) for
 its ordered tree mapping, geometry conflict policy, limitations and validation cases.
 
@@ -475,3 +477,20 @@ in the same transform, selection, connector, clipboard, grouping and Loro paths 
 other shapes. `insertShapesCommand` inserts an ordered batch in one undo step.
 Default Solid renderers show placeholders; hosts provide asset and preview views.
 No upload, storage-service, player or application preview dependency enters core.
+
+
+### Host-measured text fitting
+
+Canvas loads Inter Variable, Playfair Display Variable and Roboto Mono Variable
+for the shared sans/serif/mono map, keeping browser and headless glyphs consistent.
+Other hosts can use the declared system fallbacks when those fonts are unavailable.
+
+`fitTextLayout(document, requests, textMeasurer)` uses the host's actual text
+renderer and returns an immutable candidate plus measured effects. The persistent
+`fitText` policy on text/labels is `grow` (preserve font and increase height),
+`contain` (explicit fixed geometry and scaling), or `error` (reject overflow).
+Shape labels reuse `measureShapeLabel` and `shapeLabelLayout`, including the safe
+ellipse interior. Hosts must remeasure text/font/wrapping-width changes and
+revalidate asynchronous measurements against concurrent edits before committing.
+AI awareness previews may carry bounded validated geometry/text and per-target
+preconditions; human previews retain their document-clock guard.

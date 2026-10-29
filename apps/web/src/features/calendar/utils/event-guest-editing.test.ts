@@ -3,9 +3,14 @@ import { describe, expect, it } from 'vitest';
 import type { CalendarEvent } from '../types';
 import {
   addedGuestEmails,
+  canForwardInvitation,
   eventGuestEditing,
+  GUEST_INVITES_RESTRICTED,
+  GUEST_LIST_HIDDEN,
   guestInvitesRestricted,
+  guestInvitesRestrictedReason,
   guestListChanged,
+  guestListHidden,
 } from './event-guest-editing';
 
 function attendee(overrides: Partial<CalendarAttendee>): CalendarAttendee {
@@ -25,6 +30,7 @@ const ORGANIZER = {
   removeGuests: true,
   setGuestPolicy: true,
   rsvp: true,
+  organize: true,
 };
 const MODIFYING_GUEST = {
   editDetails: true,
@@ -32,6 +38,7 @@ const MODIFYING_GUEST = {
   removeGuests: true,
   setGuestPolicy: false,
   rsvp: true,
+  organize: false,
 };
 const INVITING_GUEST = {
   editDetails: false,
@@ -39,6 +46,7 @@ const INVITING_GUEST = {
   removeGuests: false,
   setGuestPolicy: false,
   rsvp: true,
+  organize: false,
 };
 const GUEST = {
   editDetails: false,
@@ -46,6 +54,7 @@ const GUEST = {
   removeGuests: false,
   setGuestPolicy: false,
   rsvp: true,
+  organize: false,
 };
 
 function event(overrides: Partial<CalendarEvent>): CalendarEvent {
@@ -93,6 +102,15 @@ describe('eventGuestEditing', () => {
     );
   });
 
+  it('lets an Outlook organizer replace the guest list without a guest policy to set', () => {
+    expect(
+      eventGuestEditing(
+        event({ viewerCan: { ...ORGANIZER, setGuestPolicy: false } }),
+        true
+      )
+    ).toBe('replace');
+  });
+
   it('lets a guest who may invite add guests only while invites are enabled', () => {
     expect(eventGuestEditing(invited(INVITING_GUEST), true)).toBe('add');
     expect(eventGuestEditing(invited(INVITING_GUEST), false)).toBe('none');
@@ -138,6 +156,130 @@ describe('guestInvitesRestricted', () => {
     ).toBe(false);
     expect(
       guestInvitesRestricted({ ...invited(GUEST), isReadOnly: true })
+    ).toBe(false);
+  });
+
+  it('stays quiet on a snapshot, whose only guest is the viewer', () => {
+    expect(
+      guestInvitesRestricted({
+        ...invited({ ...GUEST, rsvp: false }),
+        isSnapshot: true,
+      })
+    ).toBe(false);
+  });
+});
+
+describe('canForwardInvitation', () => {
+  it('lets a guest who cannot invite forward instead, hidden list or not', () => {
+    expect(canForwardInvitation(invited(GUEST))).toBe(true);
+    expect(
+      canForwardInvitation({
+        ...invited(GUEST),
+        guestPolicy: {
+          canModify: false,
+          canInviteOthers: true,
+          canSeeOtherGuests: false,
+        },
+      })
+    ).toBe(true);
+  });
+
+  it('is not offered to someone who can invite, or on a copy that cannot change', () => {
+    expect(canForwardInvitation(invited(INVITING_GUEST))).toBe(false);
+    expect(canForwardInvitation(invited(ORGANIZER))).toBe(false);
+    expect(canForwardInvitation({ ...invited(GUEST), isCancelled: true })).toBe(
+      false
+    );
+    expect(canForwardInvitation({ ...invited(GUEST), isReadOnly: true })).toBe(
+      false
+    );
+    expect(
+      canForwardInvitation({
+        ...invited({ ...GUEST, rsvp: false }),
+        isSnapshot: true,
+      })
+    ).toBe(false);
+  });
+});
+
+describe('guestInvitesRestrictedReason', () => {
+  const policy = (
+    canSeeOtherGuests: boolean,
+    canInviteOthers: boolean,
+    canModify = false
+  ) => ({ canModify, canInviteOthers, canSeeOtherGuests });
+  // Google gives a guest's copy of a hidden list only the guest, and the
+  // server lets no guest add to it.
+  const hiddenFrom = (guestPolicy: CalendarEvent['guestPolicy']) =>
+    event({
+      guestPolicy,
+      viewerCan: GUEST,
+      attendees: [attendee({ email: 'me@example.com', isSelf: true })],
+    });
+
+  it('blames the hidden guest list when the organizer lets guests invite or modify', () => {
+    expect(guestInvitesRestrictedReason(hiddenFrom(policy(false, true)))).toBe(
+      GUEST_LIST_HIDDEN
+    );
+    expect(
+      guestInvitesRestrictedReason(hiddenFrom(policy(false, true, true)))
+    ).toBe(GUEST_LIST_HIDDEN);
+  });
+
+  it('names the organizer when guests may not invite, hidden list or not', () => {
+    expect(guestInvitesRestrictedReason(hiddenFrom(policy(false, false)))).toBe(
+      GUEST_INVITES_RESTRICTED
+    );
+    expect(
+      guestInvitesRestrictedReason({
+        ...invited(GUEST),
+        guestPolicy: policy(true, false),
+      })
+    ).toBe(GUEST_INVITES_RESTRICTED);
+  });
+
+  it('says nothing to a guest who may invite', () => {
+    expect(guestInvitesRestrictedReason(invited(INVITING_GUEST))).toBe(
+      undefined
+    );
+  });
+});
+
+describe('guestListHidden', () => {
+  const hidden = {
+    canModify: false,
+    canInviteOthers: true,
+    canSeeOtherGuests: false,
+  };
+
+  it('holds for a guest on their own copy of a hidden list', () => {
+    expect(guestListHidden({ ...invited(GUEST), guestPolicy: hidden })).toBe(
+      true
+    );
+  });
+
+  it('does not hold for the organizer, who sees every guest', () => {
+    expect(
+      guestListHidden({ ...invited(ORGANIZER), guestPolicy: hidden })
+    ).toBe(false);
+  });
+
+  it('does not hold for someone else’s copy or a snapshot', () => {
+    expect(
+      guestListHidden(
+        event({
+          viewerCan: GUEST,
+          guestPolicy: hidden,
+          attendees: [attendee({ email: 'sharer@example.com' })],
+        })
+      )
+    ).toBe(false);
+    expect(
+      guestListHidden({
+        ...invited({ ...GUEST, rsvp: false }),
+        guestPolicy: hidden,
+        isSnapshot: true,
+      })
     ).toBe(false);
   });
 });

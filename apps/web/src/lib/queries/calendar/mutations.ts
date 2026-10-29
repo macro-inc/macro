@@ -1,3 +1,4 @@
+import { analytics } from '@app/lib/analytics';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
@@ -329,6 +330,12 @@ export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
             },
           };
         },
+        onSuccess: (_data, args) => {
+          analytics.track('calendar_event_rsvp', {
+            response: args.response,
+            scope: args.scope ?? (args.recurrenceId ? 'this_event' : 'all'),
+          });
+        },
         onError: (_error, _args, context) => context?.rollback(),
         onSettled: (_data, _error, args, context) => {
           context?.release();
@@ -388,15 +395,37 @@ function withInvitedGuests(
   };
 }
 
+function hasCalendarMutationCode(
+  error: unknown,
+  code: CalendarMutationErrorCode
+): boolean {
+  return (
+    thrownResultErrorHasCode(error, code) ||
+    (error instanceof CalendarMutationError && error.code === code)
+  );
+}
+
 /** Whether a write failed because the organizer does not let the viewer invite guests. */
 export function isGuestInviteRefused(error: unknown): boolean {
-  return (
-    thrownResultErrorHasCode(
-      error,
-      CalendarMutationErrorCode.guests_cannot_invite
-    ) ||
-    (error instanceof CalendarMutationError &&
-      error.code === CalendarMutationErrorCode.guests_cannot_invite)
+  return hasCalendarMutationCode(
+    error,
+    CalendarMutationErrorCode.guests_cannot_invite
+  );
+}
+
+/** Whether an invitation failed because the organizer hides the guest list from the viewer. */
+export function isGuestListHiddenRefusal(error: unknown): boolean {
+  return hasCalendarMutationCode(
+    error,
+    CalendarMutationErrorCode.guest_list_hidden
+  );
+}
+
+/** Whether a write failed because the organizer does not let the viewer change the event. */
+export function isGuestEditRefused(error: unknown): boolean {
+  return hasCalendarMutationCode(
+    error,
+    CalendarMutationErrorCode.guests_cannot_modify
   );
 }
 
@@ -444,7 +473,8 @@ async function inviteCalendarEventGuests(
       span.setAttr('calendar.invite.outcome', 'sent');
       return 'sent';
     } catch (error) {
-      const refused = isGuestInviteRefused(error);
+      const refused =
+        isGuestInviteRefused(error) || isGuestListHiddenRefusal(error);
       span.setAttr('calendar.invite.outcome', refused ? 'refused' : 'failed');
       // Provider messages can quote addresses; record only the category.
       span.error(
@@ -692,6 +722,9 @@ function applyEventPatch(
   const event = patchesCanonical
     ? applyCopyPatch(item.event, patch)
     : { ...item.event };
+  if (patch.guestPolicy && patchesCanonical) {
+    event.guestPolicy = patch.guestPolicy;
+  }
   if (sources.length > 0) {
     event.sources = sources.map((copy) =>
       copy.calendarId === targetCalendarId ? applyCopyPatch(copy, patch) : copy
@@ -786,6 +819,15 @@ export function useCreateCalendarEventMutation(callbacks?: CreateCallbacks) {
     },
     ...withCallbacks<CalendarEventEntity, Error, CreateCalendarEventRequest>(
       {
+        onSuccess: (event, args) => {
+          analytics.track('calendar_event_created', {
+            eventId: event.id,
+            attendees: args.attendees?.length ?? 0,
+            recurring: (args.recurrenceLines?.length ?? 0) > 0,
+            macroCall: args.macroCall === true,
+            conference: args.conference != null,
+          });
+        },
         onSettled: () => invalidateCalendarOccurrences(),
       },
       callbacks

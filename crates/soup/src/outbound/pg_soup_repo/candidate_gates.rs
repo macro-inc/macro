@@ -48,7 +48,7 @@ fn exact_subtree_sql<T>(expr: &Expr<T>, fold: &impl Fn(&T) -> Option<String>) ->
 /// against every candidate the outer scan could produce rather than the
 /// page's `LIMIT`. For these gates that hash is the user's whole accessible
 /// set. An `OFFSET` keeps the subquery per candidate.
-const PER_CANDIDATE: &str = "OFFSET 0";
+pub(super) const PER_CANDIDATE: &str = "OFFSET 0";
 
 /// Renders the implied conjuncts of `tree` that `fold` knows how to express
 /// as ` AND ...` clauses, in tree order.
@@ -153,14 +153,16 @@ pub(super) fn project_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> St
     )
 }
 
+/// Regex a `notification.event_item_id` must match before it is cast to uuid.
+pub(super) const UUID_PATTERN: &str =
+    "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
+
 /// Guards a gate whose body casts `{id_sql}::uuid`: a malformed id in the
 /// unconstrained TEXT column must drop that one row, not abort the whole
 /// page with a cast error. Nested CASE because SQL `AND` does not guarantee
 /// evaluation order, but CASE arms do.
 pub(super) fn uuid_guarded(id_sql: &str, gate: String) -> String {
-    format!(
-        "CASE WHEN {id_sql} ~ '^[0-9a-fA-F]{{8}}-[0-9a-fA-F]{{4}}-[0-9a-fA-F]{{4}}-[0-9a-fA-F]{{4}}-[0-9a-fA-F]{{12}}$' THEN {gate} ELSE FALSE END"
-    )
+    format!("CASE WHEN {id_sql} ~ '{UUID_PATTERN}' THEN {gate} ELSE FALSE END")
 }
 
 /// Channels are participant-gated, not `entity_access` rows, are never

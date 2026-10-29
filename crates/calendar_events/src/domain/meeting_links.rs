@@ -3,8 +3,9 @@
 //! A Macro call is not provider conferencing: Google knows nothing about it,
 //! so the link travels in the event's ordinary location and description
 //! fields, in the exact shape the calendar UI recognizes and can later
-//! strip or replace. This module owns that shape and the create flow that
-//! mints a meeting and writes the event carrying it.
+//! strip or replace. This module owns that shape, finding and stripping it
+//! again, and the create flow that mints a meeting and writes the event
+//! carrying it.
 
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
@@ -114,6 +115,56 @@ pub fn attach_macro_call(
         _ => url.to_string(),
     };
     (description, location)
+}
+
+/// The join link already written into an event, including inside the
+/// generated HTML paragraph.
+pub fn first_macro_call_url(location: Option<&str>, description: Option<&str>) -> Option<String> {
+    for text in [location, description].into_iter().flatten() {
+        for token in text.split(|character: char| {
+            character.is_whitespace() || matches!(character, '"' | '\'' | '<' | '>' | '&')
+        }) {
+            let token = token.trim_end_matches(|character: char| {
+                matches!(character, '.' | ',' | ')' | ']' | ';')
+            });
+            if token.starts_with("http") && token.contains("/meet/join/") {
+                return Some(token.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Take back out what [`attach_macro_call`] wrote, as the calendar UI does
+/// before showing an event: the join line of a description already reduced
+/// to plain text, whichever call it names, and a location that is only the
+/// event's call link `url`. Everything the user wrote stays, including a
+/// link written anywhere else. The text may show the link in brackets, as
+/// html2text writes links.
+pub fn strip_macro_call(description_text: &str, location: &str, url: &str) -> (String, String) {
+    let description = description_text
+        .lines()
+        .filter(|line| !is_join_line(&line.trim().replace(['[', ']'], "")))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let location = if location.trim() == url {
+        String::new()
+    } else {
+        location.to_string()
+    };
+    (description.trim().to_string(), location)
+}
+
+/// Whether `line` is the generated join line: the label alone, or the label
+/// followed by a Macro call link.
+fn is_join_line(line: &str) -> bool {
+    match line.strip_prefix(JOIN_LINE_LABEL) {
+        Some("") => true,
+        Some(rest) => rest
+            .strip_prefix(": ")
+            .is_some_and(|link| first_macro_call_url(Some(link), None).as_deref() == Some(link)),
+        None => false,
+    }
 }
 
 /// Create an event that carries a Macro call.

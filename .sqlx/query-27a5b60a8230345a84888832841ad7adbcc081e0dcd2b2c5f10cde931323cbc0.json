@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_messages SET replying_to_id = $1 WHERE replying_to_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "27a5b60a8230345a84888832841ad7adbcc081e0dcd2b2c5f10cde931323cbc0"
+}

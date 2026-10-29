@@ -88,6 +88,7 @@ fn source(user_id: &str, uid: &str, time: EventTime) -> TeamSourceOccurrence {
         attendees: vec![],
         reminders: EventReminders::default(),
         guest_policy: GuestPolicy::default(),
+        is_snapshot: false,
         viewer_can: ViewerCapabilities::NONE,
         created_at: instant("2026-10-01T00:00:00Z"),
         updated_at: instant("2026-10-01T00:00:00Z"),

@@ -4,6 +4,41 @@ import type { CalendarEvent } from '../types';
 /** Shown where a guest would add guests when the organizer does not allow it. */
 export const GUEST_INVITES_RESTRICTED = 'Only the organizer can invite guests.';
 
+/**
+ * Shown where a guest would add guests when the organizer allows inviting
+ * but hides the guest list; the server refuses with the same words.
+ */
+export const GUEST_LIST_HIDDEN =
+  'Guests cannot be added while the organizer hides the guest list.';
+
+/**
+ * Follows why a guest cannot add guests, where they may forward the
+ * invitation instead: forwarded people get the event by email and stay off
+ * the guest list, as Google says of its own forward. The server decides
+ * whether that is an invitation they answer to an organizer outside Google
+ * or a file they add to their calendar, so this says only what both share.
+ */
+export const FORWARD_INVITATION_INSTEAD =
+  "You can forward the invitation instead. The people you send it to get the event by email but won't be on the guest list.";
+
+/** Shown where a guest would change the event when the organizer does not allow it. */
+export const GUEST_EDITS_RESTRICTED =
+  'Only the organizer can change this event.';
+
+/**
+ * Whether the viewer is a guest the organizer does not let modify the event,
+ * or holds a snapshot of a shared meeting, so its title, time, description,
+ * location, recurrence and conferencing stay as the organizer set them.
+ * Reminders stay the viewer's own. Someone neither organizing nor invited
+ * keeps what their calendar access allows, as on the server.
+ */
+export function guestEditsRestricted(event: CalendarEvent): boolean {
+  return (
+    event.isSnapshot === true ||
+    (event.viewerCan.rsvp && !event.viewerCan.editDetails)
+  );
+}
+
 function normalizeGuestEmail(email: string) {
   return email.trim().toLowerCase();
 }
@@ -31,18 +66,12 @@ function emailListsEqual(first: readonly string[], second: readonly string[]) {
 export type EventGuestEditing = 'replace' | 'add' | 'none';
 
 /**
- * Whether the viewer may replace the event's guest list. Only the organizer,
- * the one viewer who may also set the guest policy, does: the editor's list
- * omits a guest's own entry, so a guest's replacement would drop them, and
- * guests add but never remove.
+ * Whether the viewer may replace the event's guest list. Only the organizer
+ * does: the editor's list omits a guest's own entry, so a guest's
+ * replacement would drop them, and guests add but never remove.
  */
 export function viewerReplacesGuests(event: CalendarEvent): boolean {
-  return (
-    !event.isReadOnly &&
-    !event.teamProjection &&
-    event.viewerCan.removeGuests &&
-    event.viewerCan.setGuestPolicy
-  );
+  return !event.isReadOnly && !event.teamProjection && event.viewerCan.organize;
 }
 
 /**
@@ -68,15 +97,57 @@ export function eventGuestEditing(
 
 /**
  * Whether the viewer is a guest on a writable event whose organizer does not
- * let guests invite others, so the guest list explains why it cannot grow.
+ * let guests invite others, so the guest list explains why it cannot grow. A
+ * snapshot lists the viewer only so Google would take it; the details
+ * already say it is a copy.
  */
 export function guestInvitesRestricted(event: CalendarEvent): boolean {
   return (
     !event.isReadOnly &&
     !event.teamProjection &&
+    !event.isSnapshot &&
     !event.viewerCan.inviteGuests &&
     event.attendees.some((attendee) => attendee.isSelf)
   );
+}
+
+/**
+ * Whether the viewer may forward the invitation instead of inviting: a
+ * guest whose guest list cannot grow, on a live copy of their own. The
+ * forward emails the event's file from the copy's inbox, so it needs no
+ * provider support and reaches nobody on the guest list.
+ */
+export function canForwardInvitation(event: CalendarEvent): boolean {
+  return !event.isCancelled && guestInvitesRestricted(event);
+}
+
+/**
+ * Whether the organizer hides the guest list from the viewer, a guest on
+ * their own copy. Google then gives that copy only the viewer and perhaps the
+ * organizer, so its attendees are not the real guest list.
+ */
+export function guestListHidden(event: CalendarEvent): boolean {
+  return (
+    !event.isSnapshot &&
+    !event.viewerCan.organize &&
+    !event.guestPolicy.canSeeOtherGuests &&
+    event.attendees.some((attendee) => attendee.isSelf)
+  );
+}
+
+/**
+ * Why the viewer's guest list cannot grow, when it is worth saying. Google
+ * would let a guest the organizer lets invite add guests to a hidden list,
+ * but Macro cannot, since a guest's copy of that list is incomplete.
+ */
+export function guestInvitesRestrictedReason(
+  event: CalendarEvent
+): string | undefined {
+  if (!guestInvitesRestricted(event)) return undefined;
+  const policy = event.guestPolicy;
+  return guestListHidden(event) && (policy.canInviteOthers || policy.canModify)
+    ? GUEST_LIST_HIDDEN
+    : GUEST_INVITES_RESTRICTED;
 }
 
 /**

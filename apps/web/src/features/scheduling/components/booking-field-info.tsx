@@ -1,5 +1,5 @@
+import Info from '@icon/system/regular/info.svg';
 import { Popover } from '@kobalte/core/popover';
-import Info from '@phosphor/info.svg';
 import { Button } from '@ui';
 import { createSignal, type JSX } from 'solid-js';
 

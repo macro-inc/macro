@@ -7,10 +7,10 @@ import { createTheme } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
 import { MessageThreadById } from '@core/messages/MessageThread';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import Check from '@icon/system/regular/check.svg';
+import CheckCircle from '@icon/system/regular/check-circle.svg';
 import { markdownToPlainText } from '@macro-inc/lexical-core';
-import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
-import Check from '@phosphor/check.svg';
-import CheckCircle from '@phosphor/check-circle.svg';
 import { usePatchThreadMutation } from '@queries/messages/mutations';
 import { Button, Layer } from '@ui';
 import type { EditorThemeClasses } from 'lexical';
@@ -134,6 +134,7 @@ export function ThreadBody(props: ThreadBodyProps) {
             flat={props.flatComposer}
             input={{ mode: 'reply', placeholder: 'Leave a comment...' }}
             onClose={() => context.setActiveThread(null)}
+            onEscape={() => context.setActiveThread(null)}
             onSend={async (snapshot) => {
               const { thread_id: _threadId, ...message } =
                 buildPostMessageSendPayload({ snapshot }).message;
@@ -163,6 +164,7 @@ export function ThreadBody(props: ThreadBodyProps) {
             canWrite={context.canComment()}
             canModerate={context.isDocumentOwner()}
             monorail
+            keyboardActive={props.isActive}
             hideReplyInput={props.hideReplyInput}
             onEditingChange={context.setMessageEditing}
             targetId={targetId()}
@@ -184,7 +186,7 @@ export function ThreadBody(props: ThreadBodyProps) {
                   variant="ghost"
                   onClick={() => setResolved(false)}
                 >
-                  <ArrowCounterClockwise />
+                  <ArrowCounterClockwise class="size-3 touch:size-6 shrink-0 pointer-events-none" />
                   Reopen
                 </Button>
               </Show>
@@ -202,7 +204,7 @@ export function ThreadBody(props: ThreadBodyProps) {
                   context.setActiveThread(null);
                 }}
               >
-                <Check />
+                <Check class="size-3 touch:size-6 shrink-0 pointer-events-none" />
                 Resolve
               </Button>
             </div>
@@ -294,6 +296,7 @@ export function ThreadCard(props: {
   /** Nudge the active card toward the text it annotates. */
   shifted?: boolean;
 }) {
+  const context = useContext(CommentsContext);
   return (
     <Layer depth={2}>
       <div
@@ -307,6 +310,11 @@ export function ThreadCard(props: {
         }}
         style={{
           width: props.width ? `${props.width}px` : 'auto',
+        }}
+        onKeyDown={(e) => {
+          if (e.key !== 'Escape' || e.defaultPrevented) return;
+          e.preventDefault();
+          context.setActiveThread(null);
         }}
       >
         {/* The card is narrow, so long comments fold behind "Show more". */}

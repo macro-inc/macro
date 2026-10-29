@@ -2888,10 +2888,13 @@ async fn touched_soup_full_page_builds_keyset_cursor() {
     assert_eq!(decoded.val.last_val, last_touch);
 }
 
+/// One email hydration request: the view, the thread ids and the limit.
+type EmailPreviewRequest = (PreviewView, Vec<Uuid>, Option<u32>);
+
 /// Records each email hydration request and returns no threads.
 #[derive(Clone, Default)]
 struct RecordingEmailPreviewService {
-    requests: Arc<Mutex<Vec<(PreviewView, Vec<Uuid>, Option<u32>)>>>,
+    requests: Arc<Mutex<Vec<EmailPreviewRequest>>>,
     filters: Arc<Mutex<Vec<String>>>,
 }
 

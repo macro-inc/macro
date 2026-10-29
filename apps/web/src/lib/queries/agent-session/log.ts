@@ -112,6 +112,7 @@ export function canFollowAgentSessionLog(): boolean {
 const DIRECTIONS: ReadonlySet<string> = new Set<LogDirectionDto>([
   'to_server',
   'to_runtime',
+  'notification',
 ]);
 
 function isDirection(value: string): value is LogDirectionDto {

@@ -28,7 +28,7 @@ on stock OpenSSH reverse forwarding.
 ## Boundaries
 
 - Depends on: `agent_egress` (shares the sandbox's egress credential path).
-- Used by: `preview_gateway` (its sole host).
+- Used by: `agent_harness_service` (its sole host).
 
 ## Recipes
 

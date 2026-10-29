@@ -27,6 +27,7 @@ import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { listTagOptions } from '@property/tags/list-tag-options';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { warmThread } from '@queries/email/thread';
@@ -98,6 +99,8 @@ export type EmailViewContext = {
    * "filter by tag" button on entity rows.
    */
   filterByTag: (optionId: string) => void;
+  /** The selected tags' names on All, where they alone scope the list. */
+  tagViewTitle: Accessor<string | undefined>;
   source: EmailDataSource;
   list: EmailListController;
   registerListActivationHandler: (
@@ -426,6 +429,15 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     );
   };
 
+  const tagViewTitle = () => {
+    const tagIds = state.facets.tags ?? [];
+    if (state.tab !== 'all' || tagIds.length === 0) return undefined;
+    const labels = listTagOptions(tagSets())
+      .filter((tag) => tagIds.includes(tag.id))
+      .map((tag) => tag.label);
+    return labels.length > 0 ? labels.join(', ') : undefined;
+  };
+
   const [readingPane, setReadingPane] = usePreference(
     'macro:pref:email:reading-pane',
     { default: false }
@@ -451,6 +463,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     setFacets,
     showTags,
     filterByTag,
+    tagViewTitle,
     source,
     list,
     registerListActivationHandler,
