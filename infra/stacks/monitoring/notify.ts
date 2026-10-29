@@ -1,3 +1,5 @@
+import * as pulumi from '@pulumi/pulumi';
+
 // Where every monitor in this stack notifies.
 //
 // All monitors post to the Macro Alerts channel. Paging monitors also open a
@@ -24,6 +26,9 @@ export function notify({ pages }: { pages: boolean }): string {
 ${MACRO_ALERTS}`;
 }
 
+// Datadog's site: dashboard `url`s are paths under it.
+export const DATADOG_SITE = 'https://us5.datadoghq.com';
+
 /**
  * A monitor message: the state and value against its threshold, what it
  * means, where to start, and the notification handles.
@@ -31,17 +36,26 @@ ${MACRO_ALERTS}`;
 export function alertMessage({
   description,
   runbook,
+  dashboard,
   pages,
 }: {
   description: string;
   runbook: string;
+  /** A dashboard's `url`, a path such as `/dashboard/abc-def-ghi/title`. */
+  dashboard?: pulumi.Input<string>;
   pages: boolean;
-}): string {
-  return `{{#is_alert}}🔴 CRITICAL: {{value}} (threshold {{threshold}}){{/is_alert}}{{#is_warning}}🟠 WARNING: {{value}} (warning threshold {{warn_threshold}}){{/is_warning}}{{#is_recovery}}✅ RECOVERED: {{value}}{{/is_recovery}}
+}): pulumi.Output<string> {
+  return pulumi.output(dashboard).apply((path) => {
+    const links = [
+      `Runbook: https://github.com/macro-inc/macro/blob/main/${runbook}`,
+    ];
+    if (path !== undefined) links.push(`Dashboard: ${DATADOG_SITE}${path}`);
+    return `{{#is_alert}}🔴 CRITICAL: {{value}} (threshold {{threshold}}){{/is_alert}}{{#is_warning}}🟠 WARNING: {{value}} (warning threshold {{warn_threshold}}){{/is_warning}}{{#is_recovery}}✅ RECOVERED: {{value}}{{/is_recovery}}
 
 ${description}
 
-Runbook: https://github.com/macro-inc/macro/blob/main/${runbook}
+${links.join('\n')}
 
 ${notify({ pages })}`;
+  });
 }

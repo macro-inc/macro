@@ -5,7 +5,8 @@
 Org-global Datadog monitors, synthetics, and rollout dashboards. This stack is
 manual and has only a prod stack, even for monitors covering both environments.
 Prod threshold and anomaly monitors are in `monitors/{macrodb,redis,queues,regressions}.ts`
-(`prodMonitor()` in `prod-monitor.ts`); every monitor notifies through `notify.ts`.
+(`prodMonitor()` in `prod-monitor.ts`), each file with a dashboard graphing its
+monitors that their messages link to; every monitor notifies through `notify.ts`.
 
 ## Checks
 
@@ -29,6 +30,8 @@ From `infra/`:
   to avoid duplicate alerts. Never deploy without explicit approval.
 - Deploying needs the `goalertIntegrationKey` secret in stack config, and
   GoAlert (infra/stacks/observability) reachable at oncall.macro-internal.com.
+- A prod monitor's graph on its file's dashboard repeats its metric and
+  thresholds by hand; change both. `routing.test.ts` matches them by title.
 - Never mention a Slack handle or email address in a monitor message; end it
   with `notify({ pages })`. `routing.test.ts` enforces it.
 - Notification retention adds nine monitors and one dashboard. Deploy DSS health

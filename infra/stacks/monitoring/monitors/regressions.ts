@@ -4,7 +4,7 @@
 // Datadog only: prod traces and logs don't reach Grafana, and Grafana alerting
 // has no anomaly detection.
 import * as datadog from '@pulumi/datadog';
-import { prodMonitor } from '../prod-monitor';
+import { graphGroup, prodMonitor, thresholdGraph } from '../prod-monitor';
 
 // Datadog has no anomaly function for log monitors, so the error-logs anomaly
 // monitor reads this log-based metric instead. Counts every prod error log
@@ -14,6 +14,46 @@ new datadog.LogsMetric('macro-logs-errors', {
   compute: { aggregationType: 'count' },
   filter: { query: 'env:prod status:error' },
   groupBies: [{ path: 'service', tagName: 'service' }],
+});
+
+// One graph per monitor below, titled like it, with the anomaly band each
+// monitor alerts outside of.
+const dashboard = new datadog.Dashboard('regression-alerts', {
+  title: 'Regression alerts',
+  description:
+    'Every prod error and latency anomaly monitor with its band. Declared in infra/stacks/monitoring/monitors/regressions.ts; see docs/runbooks/regressions.md.',
+  layoutType: 'ordered',
+  widgets: [
+    graphGroup('Errors', [
+      thresholdGraph({
+        title: 'HTTP server errors abnormally high',
+        query:
+          "anomalies(sum:trace.http.server.request.errors{env:prod} by {service}.as_count(), 'agile', 3)",
+      }),
+      thresholdGraph({
+        title: 'Internal span errors abnormally high',
+        query:
+          "anomalies(sum:trace.Internal.errors{env:prod} by {service}.as_count(), 'agile', 3)",
+      }),
+      thresholdGraph({
+        title: 'Queue consumer errors abnormally high',
+        query:
+          "anomalies(sum:trace.Consumer.errors{env:prod} by {service}.as_count(), 'agile', 3)",
+      }),
+      thresholdGraph({
+        title: 'Error logs abnormally high',
+        query:
+          "anomalies(sum:macro.logs.errors{*} by {service}.as_count(), 'agile', 3)",
+      }),
+    ]),
+    graphGroup('Latency', [
+      thresholdGraph({
+        title: 'HTTP latency abnormally high',
+        query:
+          "anomalies(p95:trace.http.server.request{env:prod AND (service:cloud-storage-service OR service:authentication-service)} by {service}, 'agile', 3)",
+      }),
+    ]),
+  ],
 });
 
 // An anomaly monitor recovers once no point in its window is outside the band.
@@ -33,6 +73,7 @@ prodMonitor('apm-server-error-anomaly', {
   pages: false,
   description:
     '{{service.name}} is returning more HTTP server errors than its usual band. Check the latest deploy of that service first.',
+  dashboard: dashboard.url,
   runbook: 'docs/runbooks/regressions.md#errors',
 });
 
@@ -46,6 +87,7 @@ prodMonitor('apm-internal-error-anomaly', {
   pages: false,
   description:
     '{{service.name}} is recording more failed internal spans (background jobs, workers, browser operations) than its usual band. Check the latest deploy of that service first.',
+  dashboard: dashboard.url,
   runbook: 'docs/runbooks/regressions.md#errors',
 });
 
@@ -59,6 +101,7 @@ prodMonitor('apm-consumer-error-anomaly', {
   pages: false,
   description:
     '{{service.name}} is failing more queue and Kafka messages than its usual band.',
+  dashboard: dashboard.url,
   runbook: 'docs/runbooks/regressions.md#errors',
 });
 
@@ -71,6 +114,7 @@ prodMonitor('apm-latency-anomaly', {
   monitorThresholdWindows: ANOMALY_WINDOWS,
   pages: false,
   description: '{{service.name}} p95 HTTP latency is above its usual band.',
+  dashboard: dashboard.url,
   runbook: 'docs/runbooks/regressions.md#latency',
 });
 
@@ -84,5 +128,6 @@ prodMonitor('error-logs-anomaly', {
   pages: false,
   description:
     '{{service.name}} is logging more errors than its usual band. Check the latest deploy of that service first.',
+  dashboard: dashboard.url,
   runbook: 'docs/runbooks/regressions.md#errors',
 });

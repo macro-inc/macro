@@ -6,7 +6,7 @@ Datadog monitors and synthetic tests as code.
 Datadog. This stack **adopts** them — it does not recreate them. `import.json`
 lists every one by id. Everything else is declared here first and is created
 on deploy: the prod threshold and anomaly monitors (`monitors/macrodb.ts`,
-`redis.ts`, `queues.ts`, `regressions.ts`), the rollout monitors, the GoAlert webhooks and health check, and one log-based metric.
+`redis.ts`, `queues.ts`, `regressions.ts`) and their dashboards, the rollout monitors, the GoAlert webhooks and health check, and one log-based metric.
 
 ## Routing
 
@@ -45,6 +45,13 @@ the critical ones through GoAlert. Their Datadog copies only notify, so one
 incident pages once. Keep thresholds and windows in sync by hand. The error-logs
 anomaly monitor reads `macro.logs.errors`, a log-based metric declared in
 `regressions.ts`, because log monitors have no anomaly function.
+
+Each of those files also declares a dashboard (MacroDB, Redis, Queue and
+Regression alerts) with one graph per monitor, titled like the monitor, its
+critical and warning thresholds drawn as markers; anomaly graphs show the band
+instead. Every prod monitor's message links to its dashboard. Change a query or
+threshold in the graph too; `routing.test.ts` checks that each monitor has a
+graph with matching markers.
 
 ## Read this before deploying
 
@@ -88,10 +95,10 @@ The gate is that preview:
 - **35 monitors + 1 synthetic test updated, in `message` and
   `renotifyInterval` only** — the routing move. The two AI-editing monitors,
   already deployed from this stack, update the same way.
-- **69 resources to create**: 64 monitors (25 prod threshold and anomaly, 19 GraphQL soup, 9
+- **73 resources to create**: 64 monitors (25 prod threshold and anomaly, 19 GraphQL soup, 9
   notification retention, 10 WhatsApp session, 1 native call push), 2 webhooks,
-  1 log-based metric, the GoAlert synthetic test, and the notification
-  retention dashboard.
+  1 log-based metric, the GoAlert synthetic test, the four prod alert
+  dashboards, and the notification retention dashboard.
 - **Any other update, a replace, or a delete** — the hand-written code in
   `monitors/*.ts` drifted from the live monitor. Reconcile against
   `imported.generated.ts` before deploying.
@@ -158,7 +165,7 @@ is applied. Reach for `restrictedRoles` if convention stops being enough.
 ## Adding a monitor
 
 Add a prod threshold or anomaly monitor with `prodMonitor()` in the matching
-`monitors/*.ts`, and its Grafana copy in `alerting.nix` when the metric is in
+`monitors/*.ts`, a `thresholdGraph()` for it on that file's dashboard, and its Grafana copy in `alerting.nix` when the metric is in
 CloudWatch. Declare anything else with `new datadog.Monitor(...)`, ending its
 message with `notify({ pages })` and setting `renotifyInterval: RENOTIFY_MINUTES`. Use the `adopted()` helper only
 for monitors that already exist in Datadog — it sets `protect`, which is there
