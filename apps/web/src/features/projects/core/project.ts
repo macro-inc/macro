@@ -4,6 +4,7 @@ export type Project = {
   name: string;
   updatedAt: string;
   createdAt?: string;
+  viewedAt?: string;
   access?: ProjectAccess;
   taskCount?: number;
   completedTaskCount?: number;

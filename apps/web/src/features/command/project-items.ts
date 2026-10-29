@@ -56,10 +56,10 @@ export function useProjectCommandItems(
             bucket: 'initiative',
             name: project.name,
             searchText: project.name,
-            sortTimestamp: Date.parse(project.updatedAt),
+            sortTimestamp: Date.parse(project.viewedAt ?? project.updatedAt),
             timestamps: {
               updatedAt: project.updatedAt,
-              viewedAt: undefined,
+              viewedAt: project.viewedAt,
             },
           })) ?? [])
         : [],
