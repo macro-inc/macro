@@ -56,8 +56,9 @@ export function HistoryOverlay(props: {
       previewState,
       (state) => {
         const span = Telemetry.span('doc.history.render');
-        span.setAttr('history.block_count', state?.root.children.length ?? 0);
-        if (state && state.root.children.length > 0) {
+        const blockCount = state?.root.children?.length ?? 0;
+        span.setAttr('history.block_count', blockCount);
+        if (state && blockCount > 0) {
           initializeEditorWithState(editor, state);
         } else {
           initializeEditorEmpty(editor);

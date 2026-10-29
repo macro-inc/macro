@@ -206,6 +206,9 @@ export function HistoryProvider(props: {
   );
   const sessionsFiltered = () =>
     unchangedSessions.state === 'ready' && unchangedSessions.latest !== null;
+  // The filter only hides sessions; when it fails, the full list still shows.
+  const filterSettled = () =>
+    sessionsFiltered() || unchangedSessions.state === 'errored';
 
   const sessions = createMemo<readonly HistorySession[]>(() => {
     const list = allSessions();
@@ -274,7 +277,7 @@ export function HistoryProvider(props: {
         error() == null &&
         (loadedDoc() == null ||
           peerMap.isPending ||
-          (allSessions().length > 0 && !sessionsFiltered())),
+          (allSessions().length > 0 && !filterSettled())),
       doc: () => error() == null && loadedDoc() == null,
     },
     error,

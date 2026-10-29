@@ -39,6 +39,8 @@ test('opens, diffs, and scrubs a long history within budget', async ({
 
   const graph = await timeline.locator('div').first().boundingBox();
   if (!graph) throw new Error('timeline graph is not laid out');
+  const preview = page.getByRole('region', { name: 'Version preview' });
+  const previewTexts: string[] = [];
   for (const fraction of [0.1, 0.7, 0.3, 0.5]) {
     const elapsed = await timeUntilPainted(page, () =>
       page.mouse.click(
@@ -47,6 +49,13 @@ test('opens, diffs, and scrubs a long history within budget', async ({
       )
     );
     expect(elapsed).toBeLessThan(SCRUB_CLICK_BUDGET_MS);
+    previewTexts.push(await preview.innerText());
   }
+  // Each position shows its own version: the history only adds text, so an
+  // earlier position shows less of it.
+  const [at10, at70, at30, at50] = previewTexts.map((text) => text.length);
+  expect(at10).toBeLessThan(at30);
+  expect(at30).toBeLessThan(at50);
+  expect(at50).toBeLessThan(at70);
   expect(errors).toEqual([]);
 });
