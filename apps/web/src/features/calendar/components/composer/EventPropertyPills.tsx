@@ -247,6 +247,8 @@ function GuestsEditor(props: {
   options: Accessor<EventEditorGuestOption[]>;
   onChange: (selected: SelectedEventEditorGuest[]) => void;
   onClose: () => void;
+  /** Fill a sized container, such as a sheet, rather than a popover's height. */
+  fillHeight?: boolean;
 }) {
   return (
     <Show
@@ -257,6 +259,7 @@ function GuestsEditor(props: {
           selected={props.selected}
           onChange={props.onChange}
           onClose={props.onClose}
+          fillHeight={props.fillHeight}
         />
       }
     >
@@ -317,7 +320,8 @@ function GuestsSheetEditor(props: {
     >
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />
-        <MobileDrawer.Content maxHeight={92}>
+        {/* Opens as tall as the event sheet beneath it. */}
+        <MobileDrawer.Content targetHeight={92}>
           <MobileDrawer.Handle />
           <div class="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 pb-2">
             <Button variant="ghost" class="justify-self-start" onClick={cancel}>
@@ -330,15 +334,17 @@ function GuestsSheetEditor(props: {
               Done
             </Button>
           </div>
-          <MobileDrawer.ScrollBody>
+          {/* The picker scrolls its own list, filling the sheet below the header. */}
+          <div class="flex min-h-0 flex-auto flex-col">
             <GuestsEditor
               selected={shown()}
               currentGuests={props.currentGuests}
               options={props.options}
               onChange={setDraft}
               onClose={cancel}
+              fillHeight
             />
-          </MobileDrawer.ScrollBody>
+          </div>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>
     </MobileDrawer>

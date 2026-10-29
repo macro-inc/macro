@@ -17,6 +17,7 @@ import { useSearchInputFocus } from '@property/utils';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';
+import { cn } from '@ui';
 import * as EmailValidator from 'email-validator';
 import {
   createEffect,
@@ -454,9 +455,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   useSearchInputFocus(() => searchInputRef);
 
+  const fills = () => props.config.fillHeight === true;
+
   return (
-    <div>
-      <div class="relative">
+    <div class={cn(fills() && 'flex min-h-0 flex-1 flex-col')}>
+      <div class="relative shrink-0">
         <div class="flex w-full items-center py-2 gap-2 px-2 border-b border-edge-muted">
           <SearchIcon class="size-4 text-ink-muted" />
           <input
@@ -480,7 +483,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       </div>
 
       <Show when={totalCount() > 0}>
-        <div class="p-1.5">
+        <div class={cn('p-1.5', fills() && 'flex min-h-0 flex-1 flex-col')}>
           <For each={visiblePinnedOptions()}>
             {(option, i) => {
               const isSelected = () => props.selectedOptions().has(option.id);
@@ -519,9 +522,12 @@ export function PropertyEntitySelector(props: EntityInputProps) {
             <div
               ref={scrollContainerRef}
               style={{
-                'max-height': `${MAX_LIST_HEIGHT}px`,
+                'max-height': fills() ? undefined : `${MAX_LIST_HEIGHT}px`,
               }}
-              class="overflow-y-auto overflow-x-hidden scrollbar-hidden"
+              class={cn(
+                'overflow-y-auto overflow-x-hidden scrollbar-hidden',
+                fills() && 'min-h-0 flex-1'
+              )}
             >
               <For each={sortedEntities()}>
                 {(entity, index) => {

@@ -237,9 +237,9 @@ reach while the form scrolls. The title and description come first, then
 All-day (switch on the right), Starts and Ends (date and time), and Repeat; a
 second has one row each for Calendar, Guests, Call, Location, and Reminders
 (Declines and Message for out-of-office events). Guest permissions follow, one
-per row. Guests opens its own sheet over the composer, with Cancel, the
-`Guests` title, and Done: picks apply only on Done, and Cancel or dismissing
-the guest sheet drops them. The title sits directly below the pinned chrome.
+per row. Guests opens its own sheet over the composer, as tall as the event
+sheet, with Cancel, the `Guests` title, and Done; its list fills the sheet.
+Picks apply only on Done, and Cancel or dismissing the guest sheet drops them. The title sits directly below the pinned chrome.
 The sheet has no Cancel: drag, the backdrop, or Escape dismiss it.
 `This event`/`All events` sits at the bottom when editing a recurring event.
 Desktop retains the centered dialog with inline dates, wrapping pills, and its
