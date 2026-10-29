@@ -145,9 +145,13 @@ export function Company(props: {
         title="Properties"
         order={15}
         defaultOpen
-      >
-        <CompanyPropertiesSection companyId={props.companyId} />
-      </SidePanel.Section>
+        render={(renderSection) => (
+          <CompanyPropertiesSection
+            companyId={props.companyId}
+            renderSection={renderSection}
+          />
+        )}
+      />
       <Show when={listsEnabled()}>
         <Suspense>
           <CompanyListsSection companyId={props.companyId} />
