@@ -74,5 +74,7 @@ tools/HTTP/GraphQL surfaces over them.
 
 ## Related
 
+- [Company merge proposal](../../docs/design/crm-company-merge.md): preservation,
+  access, old-ID aliases and implementation dependencies; not shipped behavior.
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md` ·
   Skill: `database-core`
