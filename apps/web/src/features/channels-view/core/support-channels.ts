@@ -4,7 +4,7 @@ import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 /** Signup support conversations are named this way on the server. */
 export const SUPPORT_CHANNEL_NAME_PREFIX = 'Macro Support x ';
 
-export function isSupportChannelName(name: string | undefined): boolean {
+export function isSupportChannelName(name: string | null | undefined): boolean {
   if (!name) return false;
   return name
     .replace(/^#+/, '')
@@ -12,7 +12,7 @@ export function isSupportChannelName(name: string | undefined): boolean {
     .startsWith(SUPPORT_CHANNEL_NAME_PREFIX);
 }
 
-export function isSupportChannel(channel: { name?: string }): boolean {
+export function isSupportChannel(channel: { name?: string | null }): boolean {
   return isSupportChannelName(channel.name);
 }
 

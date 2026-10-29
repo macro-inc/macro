@@ -32,6 +32,7 @@ describe('isSupportChannelName', () => {
     expect(isSupportChannelName('Engineering')).toBe(false);
     expect(isSupportChannelName('Macro Support')).toBe(false);
     expect(isSupportChannelName(undefined)).toBe(false);
+    expect(isSupportChannelName(null)).toBe(false);
   });
 });
 
