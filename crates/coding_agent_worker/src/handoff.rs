@@ -149,12 +149,18 @@ impl HandedOffAgent {
     }
 }
 
+impl HandedOffAgent {
+    /// Kill the agent, as any agent whose relay ended. Joining the returned
+    /// reaper gives its exit status.
+    fn stop(&mut self) -> Option<Reaper> {
+        self.parts.take().map(|parts| kill_and_reap(parts.pid))
+    }
+}
+
 /// Without a taker, the agent is killed like any agent whose relay ended.
 impl Drop for HandedOffAgent {
     fn drop(&mut self) {
-        if let Some(parts) = self.parts.take() {
-            kill_and_reap(parts.pid);
-        }
+        let _ = self.stop();
     }
 }
 
@@ -188,7 +194,7 @@ pub fn take_inherited() -> Option<HandedOffAgent> {
         }
         Err((error, fallback)) => {
             tracing::warn!(error = %error, "could not pick up the running agent; starting a new one");
-            fallback.kill();
+            let _ = fallback.kill();
             None
         }
     }
@@ -219,10 +225,10 @@ impl Fallback {
         }
     }
 
-    fn kill(self) {
-        if let Some(pid) = self.pid.and_then(Pid::from_raw) {
-            kill_and_reap(pid);
-        }
+    /// Kill the named agent and close its pipes. Joining the returned
+    /// reaper gives the agent's exit status.
+    fn kill(self) -> Option<Reaper> {
+        let reaper = self.pid.and_then(Pid::from_raw).map(kill_and_reap);
         for fd in self.fds {
             // SAFETY: these descriptors were inherited for the handoff and
             // nothing in this image uses them; closing them is the cleanup.
@@ -230,6 +236,7 @@ impl Fallback {
                 drop(unsafe { OwnedFd::from_raw_fd(fd) });
             }
         }
+        reaper
     }
 }
 
@@ -307,10 +314,16 @@ fn state_file(state: &[u8]) -> std::io::Result<std::fs::File> {
     Ok(file)
 }
 
-fn kill_and_reap(pid: Pid) {
+/// The thread reaping a killed agent; it yields the agent's exit status.
+type Reaper = std::thread::JoinHandle<Option<rustix::process::WaitStatus>>;
+
+fn kill_and_reap(pid: Pid) -> Reaper {
     let _ = rustix::process::kill_process_group(pid, rustix::process::Signal::KILL);
     // Reap it off-thread; a SIGKILLed child exits promptly.
     std::thread::spawn(move || {
-        let _ = rustix::process::waitpid(Some(pid), rustix::process::WaitOptions::empty());
-    });
+        rustix::process::waitpid(Some(pid), rustix::process::WaitOptions::empty())
+            .ok()
+            .flatten()
+            .map(|(_, status)| status)
+    })
 }

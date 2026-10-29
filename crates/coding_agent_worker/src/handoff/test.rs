@@ -132,21 +132,21 @@ fn a_pid_that_is_not_a_running_child_is_refused() {
 }
 
 #[test]
-fn dropping_an_untaken_handoff_stops_the_agent() {
-    let (mut child, agent) = spawn_child();
+fn an_untaken_handoff_stops_the_agent() {
+    // The reaper owns the child's exit status; this test must not wait too.
+    let (_child, mut agent) = spawn_child();
     let pid = agent.parts().pid;
     assert!(is_running(pid));
 
-    drop(agent);
+    let reaper = agent.stop().expect("the agent was not taken");
 
-    let status = child.wait().unwrap();
-    use std::os::unix::process::ExitStatusExt as _;
-    assert_eq!(status.signal(), Some(9));
+    let status = reaper.join().unwrap().expect("the agent was reaped");
+    assert_eq!(status.terminating_signal(), Some(9));
 }
 
 #[test]
 fn the_fallback_stops_the_agent_it_names() {
-    let (mut child, agent) = spawn_child();
+    let (_child, agent) = spawn_child();
     let parts = agent.into_parts();
     let raw = serde_json::to_vec(&serde_json::json!({
         "version": 99,
@@ -154,8 +154,11 @@ fn the_fallback_stops_the_agent_it_names() {
     }))
     .unwrap();
 
-    Fallback::from_raw(&raw).kill();
+    let reaper = Fallback::from_raw(&raw)
+        .kill()
+        .expect("the state names a pid");
 
-    use std::os::unix::process::ExitStatusExt as _;
-    assert_eq!(child.wait().unwrap().signal(), Some(9));
+    // The reaper owns the child's exit status; this test must not wait too.
+    let status = reaper.join().unwrap().expect("the agent was reaped");
+    assert_eq!(status.terminating_signal(), Some(9));
 }
