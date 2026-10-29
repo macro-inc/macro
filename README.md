@@ -193,7 +193,14 @@ See [MCP setup](https://docs.macro.com/AI/mcp/overview) and [agent recipes](http
 
 # Calls
 
-[Placeholder]
+Since Macro already has your CRM, chats, DMs, booking links, and calendar, calls can happen where you already are. We run standups in our engineering channel, which allows us to keep the context of our calls connected to our work.
+
+- Call teammates directly or start a call in a channel, with video and screen sharing.
+- Send meeting links to customers, people outside your team, and people without Macro accounts.
+- Calls are automatically recorded and transcribed, with speaker labels and AI summaries.
+- Agents can use the call context to write follow-ups, create tasks, and update documents.
+
+[Calls docs &rarr;](https://docs.macro.com/product/calls)
 
 <br />
 
