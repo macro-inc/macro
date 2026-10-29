@@ -1,7 +1,7 @@
 # Database profiling
 
 Run the isolated stack with browser telemetry enabled, following
-[Running locally](../../../../docs/RUNNING_LOCALLY.md). Keep the instance running
+[Running locally](../../../../docs/development/running-locally.md). Keep the instance running
 throughout the audit; `run_local` startup and its quit command rebuild/remove
 instance data. Use the `r` hotkey to rebuild services without replacing data.
 
