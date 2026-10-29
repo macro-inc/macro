@@ -35,7 +35,7 @@ We built Macro because we wanted a single operating system for our startup. Ther
 
 Macro is a complete redesign of work software from the ground up as a single system.
 
-Designed by us in NYC and Toronto, dogfooded by our team of ~15 for two years. Built in SolidJS and Rust for speed and reliability. We're focused on building something that any small company or team at a larger company can use as their "operating system".
+Designed by us in NYC and Toronto, dogfooded by our team of ~15 for two years. Built in SolidJS and Rust for speed and reliability. We're focused on building something that teams can use as their "operating system".
 
 <br />
 
