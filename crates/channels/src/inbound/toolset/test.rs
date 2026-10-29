@@ -80,6 +80,7 @@ impl RecordingMessages {
         reactions: Vec<messages::domain::models::CountedReaction>,
     ) -> messages::domain::models::Message {
         messages::domain::models::Message {
+            visibility: Default::default(),
             id,
             parent: messages::domain::models::MessageParent::parse("channel", channel_id).unwrap(),
             thread_id: None,
@@ -149,6 +150,7 @@ impl messages::domain::api::MessageCommands for RecordingMessages {
             _ => Sender::new_from_user(user_id()),
         };
         let message = messages::domain::models::Message {
+            visibility: Default::default(),
             id: Uuid::new_v4(),
             parent,
             thread_id: input.thread_id,
@@ -1842,6 +1844,7 @@ fn channel_message(
     };
     messages::domain::models::MessageListItem {
         state: messages::domain::models::ThreadState {
+            visibility: Default::default(),
             root_id: message.id,
             user_id: message.sender_id.as_ref().into(),
             created_at: message.created_at,

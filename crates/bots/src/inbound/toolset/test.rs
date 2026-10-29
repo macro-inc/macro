@@ -78,6 +78,7 @@ fn sample_token(bot_id: BotId, label: Option<String>) -> BotToken {
 
 fn sample_agent(handle: &str) -> Agent {
     Agent {
+        is_ephemeral: false,
         bot: sample_bot(handle),
         instructions: "Fix the root cause and add tests.".to_string(),
         harness: "cursor".to_string(),

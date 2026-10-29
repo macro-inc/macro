@@ -74,6 +74,8 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 parent,
                 MessageTimelineQuery {
                     around: Some(anchor),
+                    viewer: query.viewer.clone(),
+                    viewer_user: query.viewer_user.clone(),
                     limit: Some(1),
                     include_deleted_threads: query.include_deleted_threads,
                     ..Default::default()

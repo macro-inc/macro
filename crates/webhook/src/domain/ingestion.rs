@@ -441,6 +441,19 @@ impl TriggerAudience {
         }
     }
 
+    fn message(
+        message: &messages::domain::events::MessagePostedMetadata,
+    ) -> Result<Self, WebhookEventIngestionError> {
+        match &message.visibility {
+            messages::domain::models::MessageVisibility::Public => {
+                Ok(Self::parent(&message.parent))
+            }
+            messages::domain::models::MessageVisibility::Private { user_id, .. } => {
+                Self::requester(user_id)
+            }
+        }
+    }
+
     /// The one person who asked for a session from the composer: nothing was
     /// posted, so nobody else's access is in question. Their runtime, or
     /// their team's, is who serves it.
@@ -473,22 +486,21 @@ pub(crate) fn normalized_agent_trigger_event(
             agent_trigger::domain::broker_events::NewAgentSessionEvent::AssignedToTask(assigned),
         ) => Some((assigned.bot_id, TriggerAudience::parent(&assigned.parent))),
         AgentTriggerTopicEvent::New(new) => match (new.mention(), new.requested()) {
-            (Some(mention), _) => Some((
-                mention.bot_id,
-                TriggerAudience::parent(&mention.message.parent),
-            )),
+            (Some(mention), _) => {
+                Some((mention.bot_id, TriggerAudience::message(&mention.message)?))
+            }
             (None, Some(requested)) => Some((
                 requested.bot_id,
                 TriggerAudience::requester(&requested.owner)?,
             )),
             (None, None) => None,
         },
-        AgentTriggerTopicEvent::Existing(existing) => existing.session_message().map(|message| {
-            (
-                message.bot_id,
-                TriggerAudience::parent(&message.message.parent),
-            )
-        }),
+        AgentTriggerTopicEvent::Existing(existing) => existing
+            .session_message()
+            .map(|message| -> Result<_, WebhookEventIngestionError> {
+                Ok((message.bot_id, TriggerAudience::message(&message.message)?))
+            })
+            .transpose()?,
     }
     // Both trigger enums are non-exhaustive on purpose; an unknown shape
     // has no bot to route to. Permanent, so the consumer skips it.
@@ -607,6 +619,10 @@ where
         &self,
         event: Event<MessageTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
+        if matches!(&event.event, MessageTopicEvent::Posted(posted) if !posted.visibility.is_public())
+        {
+            return Ok(());
+        }
         let (event, entity_type) = normalized_message_event(&event)?;
         self.resolve_entity_access_and_enqueue(event, entity_type)
             .await

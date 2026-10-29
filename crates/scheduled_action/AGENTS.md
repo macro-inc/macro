@@ -90,3 +90,5 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/guardrails.md`
+
+Do not dispatch ordinary message event routines from private thread posts.

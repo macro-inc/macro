@@ -540,7 +540,14 @@ async fn quote(
                 tracing::warn!(error = ?error, %message_id, "quoted message is unreadable");
             })
             .ok()
-            .filter(|message| message.parent == *parent && readable(message))
+            .filter(|message| {
+                message.parent == *parent
+                    && readable(message)
+                    && (message.visibility.is_public()
+                        || (message.visibility == prompt.visibility
+                            && message.thread_id.unwrap_or(message.id)
+                                == prompt.thread_id.unwrap_or(prompt.id)))
+            })
     } else {
         None
     };

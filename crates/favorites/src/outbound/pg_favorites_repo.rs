@@ -173,6 +173,7 @@ impl FavoritesRepo for PgFavoritesRepo {
             -- deletion check that `deletedAt` is for the item tables.
             LEFT JOIN agent_session ags ON f.entity_type = 'agent_session' AND ags.id = fid.entity_uuid
             WHERE f.user_id = $1
+                AND (f.entity_type <> 'channel_message' OR cm.visibility->>'type' = 'public' OR cm.visibility->>'user_id' = $1)
                 AND ($2::text[] IS NULL OR f.entity_type = ANY($2))
                 AND ($3::text[] IS NULL OR f.entity_id = ANY($3))
                 AND (f.entity_type <> 'document' OR (d.id IS NOT NULL AND d."deletedAt" IS NULL))

@@ -73,6 +73,7 @@ fn create_channel_scoped_req(handle: &str) -> CreateChannelScopedBotRequest {
 
 fn create_agent_req(handle: &str, channel_scope: AgentChannelScope) -> CreateAgentRequest {
     CreateAgentRequest {
+        is_ephemeral: false,
         team_id: None,
         name: "Bug fixer".to_string(),
         handle: handle.to_string(),
@@ -92,6 +93,7 @@ fn create_agent_req(handle: &str, channel_scope: AgentChannelScope) -> CreateAge
 
 fn update_agent_req(handle: &str, channel_scope: AgentChannelScope) -> UpdateAgentRequest {
     UpdateAgentRequest {
+        is_ephemeral: None,
         team_id: None,
         name: "Updated bug fixer".to_string(),
         handle: handle.to_string(),
@@ -2260,5 +2262,36 @@ async fn persona_create_and_update_cannot_bypass_a_prompt_only_harness(
             .auto_accept_permissions,
         Some(false)
     );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn ephemeral_agent_setting_survives_an_older_clients_update(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let mut request = create_agent_req("ephemeral-agent", AgentChannelScope::All);
+    request.is_ephemeral = true;
+    let created = service.create_agent(user_id(USER_OWNER), request).await?;
+    assert!(created.is_ephemeral);
+    let updated = service
+        .update_agent(
+            user_id(USER_OWNER),
+            created.bot.id,
+            update_agent_req("ephemeral-agent", AgentChannelScope::All),
+        )
+        .await?;
+    assert!(updated.is_ephemeral);
+    let saved = PgBotsRepo::new(pool)
+        .get_agent(created.bot.id)
+        .await?
+        .unwrap();
+    assert!(saved.is_ephemeral);
+    let mut disable = update_agent_req("ephemeral-agent", AgentChannelScope::All);
+    disable.is_ephemeral = Some(false);
+    let disabled = service
+        .update_agent(user_id(USER_OWNER), created.bot.id, disable)
+        .await?;
+    assert!(!disabled.is_ephemeral);
     Ok(())
 }

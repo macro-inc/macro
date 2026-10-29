@@ -60,6 +60,7 @@ pub(super) fn parent() -> MessageParent {
 }
 pub(crate) fn message(id: u128, thread: Option<Uuid>, body: &str) -> Message {
     Message {
+        visibility: Default::default(),
         id: Uuid::from_u128(id),
         parent: parent(),
         thread_id: thread,
@@ -85,6 +86,7 @@ pub(super) fn event(message: &Message) -> MessagePostedMetadata {
 pub(super) fn thread(root: Message, replies: Vec<Message>) -> MessageThread {
     MessageThread {
         state: ThreadState {
+            visibility: Default::default(),
             root_id: root.id,
             user_id: user().to_string(),
             anchor: None,

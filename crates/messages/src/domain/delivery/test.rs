@@ -71,6 +71,7 @@ fn event() -> MessageEvent {
     let actor = "macro|author@example.com".to_owned();
     let parent = MessageParent::parse("document", "legacy-document").unwrap();
     let message = Message {
+        visibility: Default::default(),
         id: Uuid::from_u128(3),
         parent: parent.clone(),
         thread_id: Some(Uuid::from_u128(2)),

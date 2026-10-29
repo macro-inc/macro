@@ -63,3 +63,5 @@ tasks itself.
 ## Related
 
 - `README.md` (same content as above, kept for non-agent readers)
+
+Ignore private message facts when generating shared channel/thread patches; their content and existence are not a channel-wide event.

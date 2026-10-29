@@ -156,3 +156,5 @@ listener failure shuts down the process so ECS can replace the task.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/config-and-service-urls.md`
+
+Session and scheduling message writers resolve ephemeral agent settings through the same bots-owned reader as DSS. Private source threads must not share their sessions with the channel.

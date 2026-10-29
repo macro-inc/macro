@@ -676,6 +676,9 @@ impl IncomingEvent {
             },
             EventPayload::Message(fact) => match fact {
                 MessageFact::Posted(data) => {
+                    if !data.visibility.is_public() {
+                        return Err(EventRejection::UnsupportedEvent);
+                    }
                     let channel_id = channel_parent(&data.parent)?;
                     require_human(Some(&data.sender), data.triggered_by.is_some())?;
                     (

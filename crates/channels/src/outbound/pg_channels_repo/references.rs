@@ -53,7 +53,7 @@ impl PgChannelsRepo {
             LEFT JOIN comms_messages m
                 ON m.id = CASE WHEN e.source_type = 'message' THEN e.source_id::uuid END
                AND m.deleted_at IS NULL
-            WHERE e.source_type = 'document' OR m.id IS NOT NULL
+            WHERE e.source_type = 'document' OR (m.visibility->>'type' = 'public' AND m.id IS NOT NULL)
             "#,
             &entity_types,
             &entity_ids,

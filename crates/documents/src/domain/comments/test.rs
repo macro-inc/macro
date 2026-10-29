@@ -44,6 +44,7 @@ fn id(n: u128) -> Uuid {
 
 fn message(n: u128, root: Option<u128>, content: &str) -> Message {
     Message {
+        visibility: Default::default(),
         id: id(n),
         parent: MessageParent::parse("document", DOCUMENT).unwrap(),
         thread_id: root.map(id),
@@ -67,6 +68,7 @@ fn message(n: u128, root: Option<u128>, content: &str) -> Message {
 fn item(root: Message, anchor: Option<ThreadAnchor>, replies: Vec<Message>) -> MessageListItem {
     MessageListItem {
         state: ThreadState {
+            visibility: Default::default(),
             root_id: root.id,
             user_id: user().as_ref().to_owned(),
             resolved: false,

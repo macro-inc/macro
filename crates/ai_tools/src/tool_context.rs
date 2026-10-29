@@ -284,6 +284,7 @@ pub fn shared_message_service<E: messages::domain::ports::MessageEventPublisher>
             .with_crm(crm::outbound::lookup::PgCrmParentReader::new(pool.clone())),
         effects,
     )
+    .with_ephemeral_agents(bots::outbound::pg_bots_repo::PgBotsRepo::new(pool.clone()))
     .with_group_recipients(channels::domain::group_mentions::ChannelGroupRecipients(
         PgChannelsRepo::new(pool.clone()),
     ))

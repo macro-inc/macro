@@ -123,6 +123,7 @@ fn posted(
     minute: i64,
 ) -> Message {
     Message {
+        visibility: Default::default(),
         id: Uuid::from_u128(id),
         parent: parent.clone(),
         thread_id: thread.map(Uuid::from_u128),
@@ -166,6 +167,7 @@ fn entry(message: &Message) -> ContextMessage {
 fn discussion(root: Message, replies: Vec<Message>, anchor: Option<ThreadAnchor>) -> MessageThread {
     MessageThread {
         state: ThreadState {
+            visibility: Default::default(),
             root_id: root.id,
             user_id: actor().as_ref().to_owned(),
             resolved: false,
@@ -1180,4 +1182,58 @@ async fn design_discussions_reach_the_agent_unanchored() {
         }
     );
     assert!(context.thread.is_some());
+}
+
+#[tokio::test]
+async fn a_public_prompt_never_expands_a_private_quote() {
+    let parent = channel();
+    let prompt = posted(&parent, 70, None, "wolf@example.com", "Quoted preview", 30);
+    let mut private = posted(
+        &parent,
+        60,
+        None,
+        "wolf@example.com",
+        "Private secret omitted from preview",
+        0,
+    );
+    private.visibility = messages::domain::models::MessageVisibility::Private {
+        user_id: "macro|wolf@example.com".into(),
+        bot_ids: vec![],
+    };
+    let mut source = MockMessageReader::new();
+    source
+        .expect_get()
+        .once()
+        .return_once(move |_, _| Ok(private));
+    let lexical = Lexical {
+        quote: Ok(Some(ExtractedExplicitReply {
+            parent: parent.clone(),
+            target_message_id: Uuid::from_u128(60).to_string(),
+            target_thread_id: Uuid::from_u128(60).to_string(),
+            display_text: "Quoted preview".into(),
+            sender_id: "macro|wolf@example.com".into(),
+        })),
+        ..Lexical::none()
+    };
+    let result = quote(
+        &source,
+        &lexical,
+        &parent,
+        &prompt,
+        EntityAccessReceipt::try_new_authenticated_user(
+            MacroUserIdStr::try_from_email("wolf@example.com").unwrap(),
+            Entity {
+                entity_type: parent.access_entity_type(),
+                entity_id: parent.entity_id(),
+            },
+            EntityPermission::AccessLevel {
+                access_level: AccessLevel::View,
+            },
+        )
+        .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert!(result.message.is_none());
+    assert_eq!(result.preview, "Quoted preview");
 }

@@ -667,3 +667,13 @@ fn email_receipts_keep_only_ids_and_exclude_spam_and_backfills() {
     ));
     assert_eq!(event.normalize(), Err(EventRejection::UnsupportedEvent));
 }
+
+#[test]
+fn private_channel_posts_never_trigger_shared_routines() {
+    let mut data = metadata();
+    data["visibility"] = json!({"type": "private", "user_id": HUMAN, "bot_ids": []});
+    assert_eq!(
+        incoming("channel.message_posted", data).normalize(),
+        Err(EventRejection::UnsupportedEvent)
+    );
+}

@@ -76,6 +76,10 @@ impl MessageEventPublisher for LocalBotPublisher {
             message, mentions, ..
         } = &event.change
             && message.sender_id.as_user().is_some()
+            && (message.visibility.is_public()
+                || message
+                    .visibility
+                    .permits(bot_id::MACRO_AI_BOT_ID.into_storage_id().as_ref()))
         {
             self.triggers
                 .send(MessagePostedMetadata::from_message(

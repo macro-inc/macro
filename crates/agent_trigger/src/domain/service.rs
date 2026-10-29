@@ -241,6 +241,11 @@ where
         posted: &MessagePostedMetadata,
         bot_id: BotId,
     ) -> Result<bool> {
+        if !posted.visibility.is_public()
+            && !posted.visibility.permits(bot_id.into_storage_id().as_ref())
+        {
+            return Ok(false);
+        }
         let Some(caller) = posted.sender.as_user().cloned().map(CowLike::into_owned) else {
             return Ok(false);
         };
@@ -387,7 +392,9 @@ where
         else {
             return Ok(Vec::new());
         };
-        if let Some(router) = &self.conversations {
+        if posted.visibility.is_public()
+            && let Some(router) = &self.conversations
+        {
             match router.evaluate(posted).await? {
                 ConversationDecision::NotConversation => {}
                 ConversationDecision::Unavailable => return Ok(Vec::new()),

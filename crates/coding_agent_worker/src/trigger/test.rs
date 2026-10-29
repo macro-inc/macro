@@ -57,6 +57,7 @@ fn document() -> MessageParent {
 
 fn document_message(content: &str, thread_id: Option<Uuid>) -> MessagePostedMetadata {
     MessagePostedMetadata {
+        visibility: Default::default(),
         parent: document(),
         message_id: Uuid::from_u128(2),
         thread_id,

@@ -446,7 +446,9 @@ impl AgentSessionMacroEvent {
                     context,
                 },
             )),
-            TriggerDecision::Open { bot_id, message } => match channel {
+            TriggerDecision::Open { bot_id, message } => match channel
+                .filter(|_| message.visibility.is_public())
+            {
                 Some((channel_id, channel_type)) => Self::new_session(
                     NewAgentSessionEvent::TopLevelMentioned(AgentBotMentionedEvent {
                         bot_id,
@@ -465,7 +467,7 @@ impl AgentSessionMacroEvent {
                 session_id,
                 kind,
                 message,
-            } => match channel {
+            } => match channel.filter(|_| message.visibility.is_public()) {
                 Some((channel_id, channel_type)) => Self::existing_event(
                     ExistingAgentSessionEvent::Channel(ChannelEventMetadata {
                         bot_id,
@@ -551,6 +553,7 @@ impl MacroEvent for AgentSessionMacroEvent {
 #[must_use]
 pub fn posted_from_channel_event(posted: &ChannelMessagePostedMetadata) -> MessagePostedMetadata {
     MessagePostedMetadata {
+        visibility: Default::default(),
         parent: MessageParent::Channel(posted.channel_id),
         message_id: posted.message_id,
         thread_id: posted.thread_id,

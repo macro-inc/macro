@@ -75,6 +75,14 @@ pub struct MessageTimelineQuery {
     pub activity_before: Option<DateTime<Utc>>,
     /// Page size, clamped by the application to 1..=100.
     pub limit: Option<u16>,
+    /// Verified reader principal, filled by the domain service, never the client.
+    #[serde(skip)]
+    #[cfg_attr(feature = "schema", schema(ignore))]
+    pub viewer: Option<String>,
+    /// Acting user bound to a bot reader, when present.
+    #[serde(skip)]
+    #[cfg_attr(feature = "schema", schema(ignore))]
+    pub viewer_user: Option<String>,
 }
 
 pub use super::models::{MessageListItem, MessageThreadPreview};
@@ -159,6 +167,8 @@ pub struct CreateMessage {
     /// Append to this canonical thread, creating its first message atomically when absent.
     /// Its root identity is server-owned and overrides the first message's client id.
     pub canonical_root_id: Option<Uuid>,
+    /// Server-selected audience for a new root; replies inherit their root's audience.
+    pub visibility: MessageVisibility,
     /// Parent with verified actor access.
     pub parent: MessageParent,
     /// Verified actor.
@@ -289,6 +299,9 @@ pub enum MessageChange {
     },
     /// Transient typing indication.
     Typing {
+        /// Audience inherited from the target thread.
+        #[serde(default)]
+        visibility: MessageVisibility,
         /// Root being replied to, or no root for the parent composer.
         thread_id: Option<Uuid>,
         /// Whether the user is currently typing.
@@ -381,6 +394,7 @@ pub trait MessageRepository: Send + Sync + 'static {
         parent: &MessageParent,
         message_id: Uuid,
         limit: u16,
+        viewer: Option<&str>,
     ) -> impl Future<Output = Result<Vec<Message>, MessageError>> + Send;
     /// Read a bounded root page with reply previews under indexable parent predicates.
     fn timeline(
@@ -634,4 +648,27 @@ pub trait CrmParentReader: Send + Sync + 'static {
                 + '_,
         >,
     >;
+}
+
+/// Bot-owned facts used to decide whether a mention starts a private exchange.
+pub trait EphemeralAgentReader: Send + Sync + 'static {
+    /// Return the mentioned bot principals currently configured as ephemeral.
+    fn ephemeral_agents<'a>(
+        &'a self,
+        bots: &'a [bot_id::BotId],
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<Vec<String>, MessageError>> + Send + 'a>>;
+}
+
+impl MessageEvent {
+    /// Audience of the committed change, independent of its delivery transport.
+    pub fn visibility(&self) -> &MessageVisibility {
+        match &self.change {
+            MessageChange::Posted { message, .. }
+            | MessageChange::Edited { message, .. }
+            | MessageChange::MessageDeleted { message }
+            | MessageChange::ReactionChanged { message, .. } => &message.visibility,
+            MessageChange::ThreadUpdated { state } => &state.visibility,
+            MessageChange::Typing { visibility, .. } => visibility,
+        }
+    }
 }

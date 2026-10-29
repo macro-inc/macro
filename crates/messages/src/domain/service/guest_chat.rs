@@ -158,6 +158,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
             .messages
             .repo
             .create(CreateMessage {
+                visibility: Default::default(),
                 canonical_root_id: Some(call_id),
                 parent: parent.clone(),
                 actor: actor.clone(),
@@ -165,6 +166,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
                 triggered_via: None,
                 triggered_by: None,
                 input: PostMessage {
+                    ephemeral: false,
                     id: Some(input.id),
                     content: input.content,
                     thread_id: None,

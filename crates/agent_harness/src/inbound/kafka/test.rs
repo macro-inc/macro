@@ -83,6 +83,7 @@ fn document() -> MessageParent {
 /// A document discussion post, which only the parent-aware shape carries.
 fn document_message(sender: ChannelSender<'static>) -> MessagePostedMetadata {
     MessagePostedMetadata {
+        visibility: Default::default(),
         parent: document(),
         message_id: Uuid::from_u128(2),
         thread_id: None,

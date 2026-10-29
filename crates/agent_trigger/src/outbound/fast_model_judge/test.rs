@@ -18,6 +18,7 @@ async fn a_non_user_sender_is_not_replaced_with_system_billing_identity() {
     let judge =
         FastModelTriggerJudge::new(Arc::new(ai_usage::NoOpUsageRecorder), UnexpectedCaptioner);
     let posted = MessagePostedMetadata {
+        visibility: Default::default(),
         parent: MessageParent::Channel(Uuid::from_u128(1)),
         message_id: Uuid::from_u128(2),
         thread_id: Some(Uuid::from_u128(3)),

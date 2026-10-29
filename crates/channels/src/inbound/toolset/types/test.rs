@@ -6,6 +6,7 @@ fn dt(seconds: i64) -> DateTime<Utc> {
 
 fn reply(seconds: i64) -> Message {
     Message {
+        visibility: Default::default(),
         id: Uuid::new_v4(),
         parent: messages::domain::models::MessageParent::Channel(Uuid::nil()),
         thread_id: Some(Uuid::from_u128(1)),
@@ -29,6 +30,7 @@ fn message_with_thread(reply_count: i64, preview: Vec<Message>) -> MessageListIt
     let mut message = reply(1);
     message.thread_id = None;
     let state = messages::domain::models::ThreadState {
+        visibility: Default::default(),
         root_id: message.id,
         user_id: message.sender_id.as_ref().into(),
         created_at: dt(1),

@@ -24,6 +24,7 @@ const CHANNEL_ID: Uuid = Uuid::from_u128(7);
 
 fn posted(parent: MessageParent, created_at: chrono::DateTime<Utc>) -> MessagePostedMetadata {
     MessagePostedMetadata {
+        visibility: Default::default(),
         parent,
         message_id: Uuid::from_u128(8),
         thread_id: None,

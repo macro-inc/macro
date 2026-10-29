@@ -46,7 +46,11 @@ fn upsert(parent: &MessageParent, message_id: Uuid) -> MessageIndexAction {
 pub(super) fn describe_message_event(event: &MessageTopicEvent) -> MessageEventDescription {
     match event {
         MessageTopicEvent::Posted(metadata) => MessageEventDescription {
-            action: upsert(&metadata.parent, metadata.message_id),
+            action: if metadata.visibility.is_public() {
+                upsert(&metadata.parent, metadata.message_id)
+            } else {
+                MessageIndexAction::Ignore
+            },
             parent: metadata.parent.clone(),
             event_type: "message.posted",
         },

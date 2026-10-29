@@ -16,6 +16,7 @@ fn message(id: u128) -> MessageListItem {
     let id = Uuid::from_u128(id);
     MessageListItem {
         message: Message {
+            visibility: Default::default(),
             guest_name: None,
             id,
             parent: MessageParent::Channel(Uuid::from_u128(100)),
@@ -35,6 +36,7 @@ fn message(id: u128) -> MessageListItem {
             reactions: vec![],
         },
         state: ThreadState {
+            visibility: Default::default(),
             root_id: id,
             user_id: "macro|author@example.com".into(),
             resolved: false,

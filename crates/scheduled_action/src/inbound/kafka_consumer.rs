@@ -121,6 +121,7 @@ fn incoming_event(event: DeclaredMacroEvent) -> IncomingEvent {
 
 fn message_fact(event: &MessageTopicEvent) -> MessageFact {
     match event {
+        MessageTopicEvent::Posted(data) if !data.visibility.is_public() => MessageFact::Other,
         MessageTopicEvent::Posted(data) => MessageFact::Posted(data.clone()),
         MessageTopicEvent::Mentioned(data) => MessageFact::Mentioned(data.clone()),
         MessageTopicEvent::Patched(data) => MessageFact::Patched(data.clone()),

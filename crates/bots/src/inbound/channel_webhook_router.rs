@@ -284,6 +284,7 @@ where
         .post(
             access,
             PostMessage {
+                ephemeral: false,
                 id: None,
                 // External webhook bot posting on its own; no triggering user.
                 attribution: MessageAttribution::Unprompted,

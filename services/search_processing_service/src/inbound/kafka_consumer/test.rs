@@ -746,6 +746,7 @@ fn message_event_cases() -> Vec<(MessageTopicEvent, MessageEventDescription)> {
     let channel = MessageParent::Channel(CHANNEL_ID);
     let document = MessageParent::parse("document", "doc-1").unwrap();
     let posted = |parent: MessageParent| MessagePostedMetadata {
+        visibility: Default::default(),
         parent,
         message_id: MESSAGE_ID,
         thread_id: None,

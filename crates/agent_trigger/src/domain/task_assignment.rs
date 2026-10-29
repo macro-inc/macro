@@ -343,6 +343,7 @@ async fn assignment_discussion(
             access,
             discussion_id,
             PostMessage {
+                ephemeral: false,
                 id: None,
                 attribution: MessageAttribution::ActingUser,
                 notification_policy: PostMessageNotificationPolicy::Silent,

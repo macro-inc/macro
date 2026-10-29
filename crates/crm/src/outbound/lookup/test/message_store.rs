@@ -35,6 +35,7 @@ async fn setup(pool: &PgPool) {
 
 fn input(content: &str, root: Option<Uuid>) -> PostMessage {
     PostMessage {
+        ephemeral: false,
         id: None,
         attribution: Default::default(),
         notification_policy: Default::default(),
@@ -224,6 +225,7 @@ async fn crm_discussion_lifecycle_cascades_on_company_deletion(pool: PgPool) {
             && !residual.mentions
     );
     let late = CreateMessage {
+        visibility: Default::default(),
         guest_name: None,
         canonical_root_id: None,
         parent: company,

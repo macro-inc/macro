@@ -53,3 +53,5 @@ hexagonal architecture pattern.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
+
+A channel-message favorite may expose a private message parent only to that message audience’s initiating user.

@@ -92,3 +92,5 @@ threads, pins, recents, notifications, folders, activity.
 ## Related
 
 - Rules: `.agents/rules/rust/db.md`, `.agents/rules/observability.md`
+
+Every shared message writer supplies the bots-owned ephemeral settings reader; private thread delivery and reads follow `docs/architecture/private-message-threads.md`.

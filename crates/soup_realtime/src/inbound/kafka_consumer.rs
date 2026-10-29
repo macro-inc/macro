@@ -425,6 +425,9 @@ fn patches_from_message_event(event: &MessageTopicEvent) -> Vec<SoupRealtimePatc
     };
     match event {
         MessageTopicEvent::Posted(metadata) => {
+            if !metadata.visibility.is_public() {
+                return Vec::new();
+            }
             let Some(channel_id) = channel(&metadata.parent) else {
                 return Vec::new();
             };

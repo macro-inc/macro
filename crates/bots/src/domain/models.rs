@@ -358,6 +358,9 @@ pub struct Agent {
     /// session, a chat agent replies in the thread. Chosen in the agent's
     /// settings; the persona's word, not the runtime's.
     pub is_coding: bool,
+    /// Mentions start a durable thread visible only to the invoking user.
+    #[serde(default)]
+    pub is_ephemeral: bool,
 }
 
 /// Request to create a persisted AI agent.
@@ -399,6 +402,9 @@ pub struct CreateAgentRequest {
     /// Whether the agent is a coding agent: a mention is answered with a magic
     /// chip into its live session (`true`) or a reply in the thread (`false`).
     pub is_coding: bool,
+    /// Mentions start a durable thread visible only to the invoking user.
+    #[serde(default)]
+    pub is_ephemeral: bool,
 }
 
 /// Request to replace the editable configuration of a persisted AI agent.
@@ -440,6 +446,9 @@ pub struct UpdateAgentRequest {
     /// Whether the agent is a coding agent: a mention is answered with a magic
     /// chip into its live session (`true`) or a reply in the thread (`false`).
     pub is_coding: bool,
+    /// New mention privacy. Omit to preserve the saved setting.
+    #[serde(default)]
+    pub is_ephemeral: Option<bool>,
 }
 
 #[cfg(test)]
@@ -509,6 +518,7 @@ impl PatchAgentRequest {
             None => (current.channel_scope, current.channel_ids.clone()),
         };
         UpdateAgentRequest {
+            is_ephemeral: Some(current.is_ephemeral),
             team_id: match &current.bot.owner {
                 Some(BotOwner::Team { team_id }) => Some(*team_id),
                 Some(BotOwner::User { .. }) | None => None,

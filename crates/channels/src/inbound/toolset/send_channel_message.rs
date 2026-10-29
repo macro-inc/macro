@@ -78,6 +78,7 @@ where
             .post(
                 access,
                 PostMessage {
+                    ephemeral: false,
                     id: None,
                     attribution: service_context.attribution(),
                     notification_policy: PostMessageNotificationPolicy::Default,

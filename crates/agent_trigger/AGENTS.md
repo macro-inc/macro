@@ -55,3 +55,5 @@ session that results.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
+
+Private posts bypass the shared agent-DM conversation router, target only invited bots, and retain audience metadata through parent-aware events. Keep agent context inside the target private thread plus public history.

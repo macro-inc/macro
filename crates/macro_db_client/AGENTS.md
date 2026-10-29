@@ -113,3 +113,5 @@ draft generation so Undo/resend cannot inherit an old deletion.
 The import ledger accepts Jira Cloud sources with `jira_issue`, `jira_project`
 and `jira_epic` kinds. Jira has its own concurrent partial team-claim index; source
 and kind constraints expand without rewriting existing rows and validate separately.
+
+Private message visibility is additive and immutable. Deploy all audience-aware readers/consumers before enabling private writes; see `docs/architecture/private-message-threads.md`.

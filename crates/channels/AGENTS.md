@@ -74,3 +74,5 @@ DMs, and the shared message store other domains discuss things on.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
+
+Private message delivery targets only its initiating user and skips channel sharing, activity, notifications, and public projections. Keep legacy list/reference reads public-only; viewer-scoped private history belongs to `messages`.

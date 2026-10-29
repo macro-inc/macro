@@ -49,3 +49,5 @@ OpenSearch, and exposes backfill HTTP routes for each.
 ## Related
 
 - Docs: this directory's `README.md` · Rules: `.agents/rules/rust/architecture.md`
+
+Private message posts are never indexed; the search backfill readers also exclude them. Keep both paths aligned with `docs/architecture/private-message-threads.md`.

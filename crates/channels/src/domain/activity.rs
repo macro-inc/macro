@@ -149,6 +149,9 @@ pub fn ingest_message_event(event_id: Uuid, event: &MessageTopicEvent) -> Ingest
     };
     match event {
         MessageTopicEvent::Posted(m) => {
+            if !m.visibility.is_public() {
+                return Ingest::Ignore;
+            }
             let Some(channel_id) = channel(&m.parent) else {
                 return Ingest::Ignore;
             };

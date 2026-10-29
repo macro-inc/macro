@@ -28,6 +28,7 @@ async fn standalone_highlight_remains_unthreaded_until_a_message_attaches_it(poo
     let repo = messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone());
     let root = repo
         .create(CreateMessage {
+            visibility: Default::default(),
             guest_name: None,
             canonical_root_id: None,
             parent: MessageParent::parse("document", "document-with-comments").unwrap(),
@@ -35,6 +36,7 @@ async fn standalone_highlight_remains_unthreaded_until_a_message_attaches_it(poo
             triggered_via: None,
             triggered_by: None,
             input: PostMessage {
+                ephemeral: false,
                 id: None,
                 notification_policy: Default::default(),
                 attribution: Default::default(),

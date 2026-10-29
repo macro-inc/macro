@@ -107,6 +107,7 @@ fn repo() -> MockChannelRepo {
 
 fn message() -> Message {
     Message {
+        visibility: Default::default(),
         id: Uuid::from_u128(1),
         parent: MessageParent::Channel(CHANNEL),
         thread_id: None,
@@ -250,6 +251,7 @@ async fn plain_edits_deletions_reactions_and_typing_only_send_the_common_payload
             added: true,
         },
         MessageChange::Typing {
+            visibility: Default::default(),
             thread_id: Some(Uuid::from_u128(9)),
             active: false,
             agent: None,
@@ -315,6 +317,7 @@ async fn thread_updates_stay_off_the_channel_side_effect_path() {
     delivery
         .publish(event(MessageChange::ThreadUpdated {
             state: messages::domain::models::ThreadState {
+                visibility: Default::default(),
                 root_id: Uuid::from_u128(1),
                 user_id: SENDER.into(),
                 resolved: true,
@@ -352,5 +355,29 @@ async fn document_events_are_rejected() {
     let mut event = event(MessageChange::MessageDeleted { message: message() });
     event.parent = MessageParent::parse("document", "doc").unwrap();
     assert!(delivery.publish(event).await.is_err());
+    assert!(log.events.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn private_messages_reach_only_the_initiator_without_shared_channel_effects() {
+    let log = Log::default();
+    let mut private = message();
+    private.visibility = messages::domain::models::MessageVisibility::Private {
+        user_id: SENDER.into(),
+        bot_ids: vec![],
+    };
+    let delivery = ChannelMessageDelivery::new(repo(), log.clone(), log.clone(), log.clone());
+    delivery
+        .publish(event(MessageChange::Posted {
+            message: private,
+            mentions: vec![],
+            notification_policy: Default::default(),
+        }))
+        .await
+        .unwrap();
+    let live = log.live.lock().unwrap();
+    assert_eq!(live.len(), 1);
+    assert_eq!(live[0].1, HashSet::from([SENDER.to_owned()]));
+    assert_eq!(*log.shares.lock().unwrap(), 0);
     assert!(log.events.lock().unwrap().is_empty());
 }

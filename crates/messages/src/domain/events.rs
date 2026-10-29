@@ -50,6 +50,9 @@ pub struct MessagePostedMetadata {
     pub root_id: Uuid,
     /// Author, including bot principals.
     pub sender: ChannelSender<'static>,
+    /// Immutable audience of the originating thread.
+    #[serde(default)]
+    pub visibility: super::models::MessageVisibility,
     /// User whose invocation produced a bot response.
     pub triggered_by: Option<String>,
     /// Macro Markdown body.
@@ -71,6 +74,7 @@ impl MessagePostedMetadata {
             thread_id: message.thread_id,
             root_id: message.root_id(),
             sender: message.sender_id.clone(),
+            visibility: message.visibility.clone(),
             triggered_by: message.triggered_by.clone(),
             content: message.content.clone(),
             mentions,

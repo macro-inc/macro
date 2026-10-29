@@ -114,3 +114,5 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 
 - Rules: `.agents/rules/config-and-service-urls.md`,
   `.agents/rules/rust/security.md` · Skill: `new-service`
+
+The shared welcome-message writer supplies the bots-owned ephemeral settings reader, matching the other production message compositions.

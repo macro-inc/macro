@@ -342,7 +342,8 @@ fn event_content(
         messages::domain::service::MessageService::new(
             messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
             messages::domain::ports::NoMessageEventPublisher,
-        ),
+        )
+        .with_ephemeral_agents(bots::outbound::pg_bots_repo::PgBotsRepo::new(db.clone())),
         channels::domain::service::ChannelServiceImpl::new(
             channels::outbound::pg_channels_repo::PgChannelsRepo::new(db.clone()),
         ),

@@ -7,6 +7,7 @@ mod call_retries;
 mod event_posts;
 mod guest_chat;
 mod initiative;
+mod privacy;
 
 #[derive(Clone)]
 struct Repo {
@@ -41,6 +42,7 @@ impl MessageRepository for Repo {
         _: &MessageParent,
         _: Uuid,
         _: u16,
+        _: Option<&str>,
     ) -> Result<Vec<Message>, MessageError> {
         unimplemented!()
     }
@@ -111,7 +113,12 @@ impl MessageRepository for Repo {
         parent: &MessageParent,
         query: MessageTimelineQuery,
     ) -> Result<MessagePage, MessageError> {
-        let included = self.message.parent == *parent
+        let included = (self.message.visibility.is_public()
+            || query
+                .viewer
+                .as_deref()
+                .is_some_and(|viewer| self.message.visibility.permits(viewer)))
+            && self.message.parent == *parent
             && (query.ids.is_empty() || query.ids.contains(&self.message.id))
             && query.cursor.as_ref().is_none_or(|cursor| {
                 let key = (self.message.created_at, self.message.id);
@@ -151,6 +158,7 @@ impl MessageRepository for Repo {
         message.parent = command.parent.clone();
         message.sender_id = command.actor.clone();
         message.guest_name = command.guest_name.clone();
+        message.visibility = command.visibility.clone();
         message.content = command.input.content.clone();
         message.mentions = command.input.mentions.clone();
         message.triggered_by = command.triggered_by.clone();
@@ -244,6 +252,7 @@ fn fixture() -> Repo {
     let user = "macro|author@example.com";
     Repo {
         message: Message {
+            visibility: Default::default(),
             id,
             parent: MessageParent::parse("document", "doc").unwrap(),
             thread_id: None,
@@ -265,6 +274,7 @@ fn fixture() -> Repo {
             reactions: vec![],
         },
         state: ThreadState {
+            visibility: Default::default(),
             root_id: id,
             user_id: user.into(),
             resolved: false,
@@ -628,6 +638,7 @@ fn view_access_cannot_mint_a_write_receipt() {
 #[test]
 fn only_root_document_messages_can_have_anchors() {
     let mut input = PostMessage {
+        ephemeral: false,
         id: None,
         attribution: Default::default(),
         notification_policy: Default::default(),
@@ -658,6 +669,7 @@ async fn inaccessible_references_are_rejected_before_persistence() {
         height: None,
     };
     let input = PostMessage {
+        ephemeral: false,
         id: None,
         attribution: Default::default(),
         notification_policy: Default::default(),
@@ -730,6 +742,7 @@ async fn user_mentions_do_not_require_or_grant_parent_sharing() {
 
 fn post_input() -> PostMessage {
     PostMessage {
+        ephemeral: false,
         id: None,
         attribution: Default::default(),
         notification_policy: Default::default(),
@@ -1265,7 +1278,7 @@ async fn an_agent_types_through_its_bot_naming_the_session() {
             published.as_slice(),
             [MessageEvent {
                 actor,
-                change: MessageChange::Typing { thread_id: None, active: true, agent: Some(sent) },
+                change: MessageChange::Typing { visibility: MessageVisibility::Public, thread_id: None, active: true, agent: Some(sent) },
                 ..
             }] if actor.starts_with("bot|") && *sent == agent
         ),
@@ -1309,8 +1322,9 @@ impl MessageRepository for StrictRepo {
         parent: &MessageParent,
         id: Uuid,
         limit: u16,
+        viewer: Option<&str>,
     ) -> Result<Vec<Message>, MessageError> {
-        self.inner.preceding(parent, id, limit).await
+        self.inner.preceding(parent, id, limit, viewer).await
     }
     async fn replies(
         &self,

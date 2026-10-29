@@ -109,6 +109,18 @@ where
             .get_participants(channel_id)
             .await
             .map_err(repo_error)?;
+        // Private exchanges do not share attachments, advance shared channel
+        // activity, notify participants, or publish the public channel event.
+        if let messages::domain::models::MessageVisibility::Private { user_id, .. } =
+            event.visibility()
+        {
+            let viewers = participants
+                .iter()
+                .filter(|p| p.user_id == *user_id)
+                .map(|p| p.user_id.clone())
+                .collect();
+            return self.realtime.send(&event, viewers).await;
+        }
         let live_users = participants
             .iter()
             .map(|participant| participant.user_id.clone())

@@ -272,7 +272,7 @@ impl AccessRepository for PgAccessRepository {
                JOIN comms_messages m ON m.id = s.thread_id
                JOIN comms_message_threads t ON t.root_id = m.id
                WHERE s.id = $1 AND m.parent_entity_type IN ('document', 'call')
-               AND t.deleted_at IS NULL"#,
+               AND t.deleted_at IS NULL AND m.visibility->>'type' = 'public'"#,
             session,
         )
         .fetch_optional(&self.pool)

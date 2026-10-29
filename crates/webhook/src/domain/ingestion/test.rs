@@ -666,6 +666,7 @@ fn message_event_cases() -> Vec<EventCase> {
     let channel = MessageParent::Channel(channel_id);
     let document = MessageParent::parse("document", DOCUMENT_ID).unwrap();
     let posted = |parent: MessageParent| MessagePostedMetadata {
+        visibility: Default::default(),
         parent,
         message_id,
         thread_id: None,
@@ -1416,6 +1417,7 @@ fn agent_trigger_document_event()
         NewAgentSessionEvent::Mentioned(AgentMentionedEvent {
             bot_id: bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)),
             message: messages::domain::events::MessagePostedMetadata {
+                visibility: Default::default(),
                 parent: messages::domain::models::MessageParent::parse("document", "doc-1")
                     .unwrap(),
                 message_id: uuid::Uuid::from_u128(2),
@@ -1902,4 +1904,33 @@ fn a_deleted_session_streams_to_both_its_owner_and_origin_parent() {
             },
         ]),
     );
+}
+
+#[tokio::test]
+async fn private_trigger_delivery_never_uses_the_parents_shared_audience() {
+    use agent_trigger::domain::broker_events::{AgentTriggerTopicEvent, NewAgentSessionEvent};
+    let access = MockAccessService::with_users(vec![user_id("macro|other@example.com")]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_owned()],
+        vec![webhook("wh_private", PERSONAL_WORKSPACE_ID)],
+    );
+    let enqueuer = MockEnqueuer::default();
+    let service = service(access.clone(), repository.clone(), enqueuer.clone());
+    let mut event = agent_trigger_document_event();
+    let AgentTriggerTopicEvent::New(NewAgentSessionEvent::Mentioned(mention)) = &mut event.event
+    else {
+        panic!("expected mention fixture")
+    };
+    mention.message.visibility = messages::domain::models::MessageVisibility::Private {
+        user_id: PERSONAL_WORKSPACE_ID.into(),
+        bot_ids: vec![mention.bot_id.into_storage_id().to_string()],
+    };
+    mention.message.sender = sender(PERSONAL_WORKSPACE_ID);
+    service.ingest_agent_trigger_event(event).await.unwrap();
+    assert!(lock(&access.calls).is_empty());
+    assert_eq!(
+        lock(&repository.state).workspace_calls,
+        vec![vec![user_id(PERSONAL_WORKSPACE_ID)]]
+    );
+    assert_eq!(lock(&enqueuer.state).attempted_messages.len(), 1);
 }

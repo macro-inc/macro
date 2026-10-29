@@ -3,6 +3,7 @@ use super::*;
 fn agent(owner: BotOwner) -> Agent {
     let now = Utc::now();
     Agent {
+        is_ephemeral: false,
         bot: Bot {
             id: BotId::new_from_uuid(Uuid::new_v4()),
             kind: BotKind::Owned,
@@ -111,4 +112,18 @@ fn named_fields_replace_and_travel_with_their_partners() {
     assert_eq!(update.auto_accept_permissions, Some(false));
     assert!(!update.is_coding);
     assert_eq!(update.instructions, current.instructions);
+}
+
+#[test]
+fn patching_an_ephemeral_agent_preserves_its_privacy_setting() {
+    let mut current = agent(BotOwner::User {
+        user_id: "macro|owner@example.com".into(),
+    });
+    current.is_ephemeral = true;
+    let update = PatchAgentRequest {
+        instructions: Some("New instructions".into()),
+        ..Default::default()
+    }
+    .apply_to(&current);
+    assert_eq!(update.is_ephemeral, Some(true));
 }

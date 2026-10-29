@@ -612,6 +612,7 @@ where
             .post(
                 access,
                 PostMessage {
+                    ephemeral: false,
                     id: None,
                     attribution: MessageAttribution::ActingUser,
                     notification_policy,

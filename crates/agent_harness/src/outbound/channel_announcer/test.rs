@@ -376,6 +376,7 @@ async fn an_answer_the_thread_may_not_carry_points_at_the_session() {
     let mut messages = messages::domain::api::MockMessageCommands::new();
     let seen = Arc::clone(&patched);
     let replied = Message {
+        visibility: Default::default(),
         id: reply_id,
         parent: parent.clone(),
         thread_id: Some(Uuid::from_u128(2)),
@@ -492,6 +493,7 @@ async fn shared_thread_and_dm_snapshots_omit_raw_tool_details() {
                 assert_eq!(post.thread_id, thread);
                 assert_eq!(post.content, "safe activity");
                 Ok(Message {
+                    visibility: Default::default(),
                     id,
                     parent: message_parent.clone(),
                     thread_id: thread,
