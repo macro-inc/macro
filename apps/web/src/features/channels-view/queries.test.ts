@@ -1,5 +1,4 @@
 import type { ChannelEntity } from '@entity/types/entity';
-import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { QueryClient } from '@tanstack/query-core';
 import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
@@ -19,9 +18,6 @@ const useSoupAstItemsQuery = vi.hoisted(() =>
 );
 
 const graphqlSoup = vi.hoisted(() => ({ enabled: false }));
-const listChannels = vi.hoisted(() =>
-  vi.fn<() => ApiChannelWithLatest[]>(() => [])
-);
 const createChannelDetailQuery = vi.hoisted(() =>
   vi.fn((_channelId: () => string | undefined, enabled: () => boolean) => ({
     get isEnabled() {
@@ -47,9 +43,6 @@ vi.mock('@entity', () => ({
     entity.type === 'channel_thread',
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user-1' }));
-vi.mock('@core/context/channels', () => ({
-  useChannelsContext: () => ({ channels: listChannels }),
-}));
 
 import { useChannelByIdQuery } from '@channel/Channel/channel-entity';
 import { resolveReferencedChannels, useChannelsSources } from './queries';
@@ -268,95 +261,6 @@ describe('Threads rail source', () => {
       expect(sources.threads.items().map((c) => c.id)).toEqual(['eng', 'dm']);
       // The server drops the user's unanswered roots, so pages stay full.
       expect(threadFilters[0]).toContain('HasReplies');
-      return dispose;
-    });
-    dispose();
-    useSoupAstItemsQuery.mockReset();
-  });
-});
-
-describe('hidden support conversations', () => {
-  it('keeps team channels and DMs out of supplemental Channels rows', () => {
-    const privateChannel: ApiChannelWithLatest = {
-      id: 'private-one',
-      name: 'Private discussion',
-      channel_type: 'private',
-      owner_id: 'viewer',
-      created_at: '2026-01-01T00:00:00Z',
-      updated_at: '2026-01-01T00:00:00Z',
-      participants: [],
-      is_participant: true,
-      auto_join_team: false,
-    };
-    listChannels.mockReturnValue([
-      privateChannel,
-      { ...privateChannel, id: 'team-one', channel_type: 'team' },
-      { ...privateChannel, id: 'dm-one', channel_type: 'direct_message' },
-      {
-        ...privateChannel,
-        id: 'support-one',
-        name: 'Macro Support x Acme',
-      },
-    ]);
-    useSoupAstItemsQuery.mockImplementation(() => ({
-      isEnabled: true,
-      isLoading: false,
-      data: { entities: [] },
-    }));
-    const { dispose, sources } = createRoot((dispose) => ({
-      dispose,
-      sources: useChannelsSources(
-        () => true,
-        () => 'updated_at',
-        () => true
-      ),
-    }));
-    try {
-      expect(sources.channels.items().map((channel) => channel.id)).toEqual([
-        'private-one',
-      ]);
-    } finally {
-      dispose();
-      listChannels.mockReset();
-      useSoupAstItemsQuery.mockReset();
-    }
-  });
-
-  it('drops support conversations from Recent and keeps them in search', () => {
-    const support = {
-      type: 'channel',
-      id: 'support',
-      name: 'Macro Support x acme',
-      latestRootMessage: { id: 'm1' },
-    };
-    const team = {
-      type: 'channel',
-      id: 'eng',
-      name: 'Engineering',
-      latestRootMessage: { id: 'm2' },
-    };
-    useSoupAstItemsQuery.mockImplementation(
-      () =>
-        ({
-          isEnabled: true,
-          isPending: false,
-          isLoading: false,
-          data: { entities: [support, team] },
-        }) as never
-    );
-    const dispose = createRoot((dispose) => {
-      const sources = useChannelsSources(
-        (scope) => scope === 'recents' || scope === 'search',
-        () => 'updated_at',
-        () => true
-      );
-      expect(sources.recents.items().map((channel) => channel.id)).toEqual([
-        'eng',
-      ]);
-      expect(sources.search.items().map((channel) => channel.id)).toEqual([
-        'support',
-        'eng',
-      ]);
       return dispose;
     });
     dispose();

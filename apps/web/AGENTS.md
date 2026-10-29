@@ -424,6 +424,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Preserve loaded block content on initial access confirmation when its loader
   supplies no permissions; reload only on a later confirmed permission change.
   Apply shared access in place only after a successful permissionless load.
+  Request state can report an owner as edit, so compare a loaded level with
+  the confirmed one through `matchesConfirmedAccess`.
 - Grouped Soup's `graphql/create-grouped-soup-live-query.ts` owns initial and
   continuation pages plus their local predicate projection. Group readers only
   delegate paging; pass the parent's live `groupedPaging` accessor from every

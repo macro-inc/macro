@@ -412,6 +412,12 @@ Re-exports [InitiativeOptions](../entities/initiatives/initiative/interfaces/Ini
 
 ***
 
+### InitiativeSummary
+
+Re-exports [InitiativeSummary](../entities/initiatives/namespace/interfaces/InitiativeSummary.md)
+
+***
+
 ### Interpolation
 
 Re-exports [Interpolation](../mentions/type-aliases/Interpolation.md)
@@ -625,6 +631,12 @@ Re-exports [StructuredCompletionRequest](../../generated/cognition/types.gen/typ
 ### StructuredCompletionResponse
 
 Re-exports [StructuredCompletionResponse](../../generated/cognition/types.gen/type-aliases/StructuredCompletionResponse.md)
+
+***
+
+### TaskSummary
+
+Re-exports [TaskSummary](../entities/tasks/task/interfaces/TaskSummary.md)
 
 ***
 

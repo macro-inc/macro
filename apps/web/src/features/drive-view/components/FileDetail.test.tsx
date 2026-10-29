@@ -139,6 +139,50 @@ describe('file access errors', () => {
     expect(load).toHaveBeenCalledTimes(3);
   });
 
+  it('keeps an owner’s open document when request state confirms edit', async () => {
+    const cleanupEditor = vi.fn();
+    const load = vi
+      .fn<() => Promise<Loaded>>()
+      .mockResolvedValueOnce({ userAccessLevel: 'owner' })
+      .mockResolvedValue({ userAccessLevel: 'view' });
+    const container = mount(load, cleanupEditor);
+    await vi.waitFor(() =>
+      expect(container.textContent).toContain('Document content: owner')
+    );
+    const content = container.firstElementChild;
+
+    notifyAccess?.('edit');
+    notifyAccess?.('edit');
+    notifyAccess?.('owner');
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(cleanupEditor).not.toHaveBeenCalled();
+    expect(container.firstElementChild).toBe(content);
+
+    notifyAccess?.('view');
+    await vi.waitFor(() =>
+      expect(container.textContent).toContain('Document content: view')
+    );
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it('restarts a pending load when access is confirmed during it', async () => {
+    const pending = Promise.withResolvers<Loaded>();
+    const load = vi
+      .fn<() => Promise<Loaded>>()
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValue({ userAccessLevel: 'view' });
+    const container = mount(load);
+    // The access poll answers in a later task than the one that started the load.
+    await new Promise((resolve) => setTimeout(resolve));
+
+    notifyAccess?.('view');
+    pending.resolve({ userAccessLevel: 'edit' });
+    await vi.waitFor(() =>
+      expect(container.textContent).toContain('Document content: view')
+    );
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
   it('counts an open once the document loads, not on access reloads', async () => {
     const load = vi
       .fn<() => Promise<Loaded>>()
