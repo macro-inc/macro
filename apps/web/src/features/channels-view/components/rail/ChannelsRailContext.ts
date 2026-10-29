@@ -123,8 +123,12 @@ export type ChannelsRailContext = {
   list: ListController<ChannelRailRow, ChannelRailActivationMetadata>;
   tab: Accessor<ChannelsTab>;
   selectTab: (tab: ChannelsTab) => void;
+  /** The listed conversations, narrowed while the Unread filter is on. */
   sources: ChannelsSources;
   favorites: Accessor<readonly Favorite[]>;
+  /** Whether the rail lists only conversations with unread activity. */
+  unreadOnly: Accessor<boolean>;
+  setUnreadOnly: (unreadOnly: boolean) => void;
   /**
    * A channel the rail has loaded, from its sections or fetched by id for a
    * label or favorite row. Undefined until the fetch settles.

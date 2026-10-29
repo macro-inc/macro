@@ -58,6 +58,7 @@ import {
 } from 'solid-js/store';
 import { TASK_DEFAULT_GROUP_BY } from './constants';
 import { toTaskBoardGrouping } from './core/task-board';
+import { isProjectTab } from './core/task-navigation';
 import type { TaskFacetContext } from './filters/task-facets';
 import { DEFAULT_TASK_FACET_SELECTION } from './filters/task-facets';
 import { createTasksViewPersistence } from './persistence';
@@ -259,7 +260,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       return toTaskBoardGrouping(persistedState.groupBy);
     },
     get tab(): TasksTab {
-      return persistedState.tab === 'projects' && !projectsEnabled()
+      return isProjectTab(persistedState.tab) && !projectsEnabled()
         ? 'my-tasks'
         : persistedState.tab;
     },
@@ -267,7 +268,8 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
 
   const routeTab = (): TasksTab => {
     if (props.scopeKey) return initialTab;
-    if (routeParams.projectId || routeParams.projectsTab) return 'projects';
+    if (routeParams.projectId || routeParams.projectsTab)
+      return isProjectTab(tabSearch.tab) ? tabSearch.tab : 'projects';
 
     return tabSearch.tab;
   };
@@ -506,8 +508,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     fireAndForget(
       navigate(
         {
-          route:
-            state.tab === 'projects' ? tasksProjectsRoute : tasksSplitRoute,
+          route: isProjectTab(state.tab) ? tasksProjectsRoute : tasksSplitRoute,
           params: {},
         },
         {
@@ -561,10 +562,9 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
           fireAndForget(
             navigate(
               {
-                route:
-                  state.tab === 'projects'
-                    ? tasksProjectsRoute
-                    : tasksSplitRoute,
+                route: isProjectTab(state.tab)
+                  ? tasksProjectsRoute
+                  : tasksSplitRoute,
                 params: {},
               },
               {
@@ -590,7 +590,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   );
 
   const setTab = (tab: TasksTab) => {
-    if (tab === 'projects' && !projectsEnabled()) return;
+    if (isProjectTab(tab) && !projectsEnabled()) return;
     const leavingSavedView = state.savedViewActive;
     if (leavingSavedView) leaveSavedView();
     if (persistedState.tab === tab && !leavingSavedView) {
