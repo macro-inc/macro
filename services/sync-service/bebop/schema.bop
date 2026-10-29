@@ -58,7 +58,7 @@ struct InitializeFromSnapshotRequest {
 
 /*
  * Multiplex envelope between the browser and the sync-router (rides the
- * connection-gateway socket as binary frames). Inner payloads are the
+ * dedicated DSS /sync/ws socket as binary frames). Inner payloads are the
  * existing FromPeer/FromRemote unions, already bebop-encoded — the router
  * forwards them without parsing.
  */

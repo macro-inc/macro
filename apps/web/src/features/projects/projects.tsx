@@ -38,7 +38,6 @@ import {
   ProjectsProvider,
   useProjectsContext,
 } from './context/projects-context';
-import { projectRouteId } from './core/route';
 import {
   createProjectCollection,
   type ProjectListActivation,
@@ -85,7 +84,10 @@ function ProjectsContent(props: ParentProps) {
     <ErrorBoundary
       fallback={(_, reset) => (
         <div role="alert" class="p-4">
-          Could not load projects. <Button onClick={reset}>Try again</Button>
+          Could not load projects.{' '}
+          <Button variant="ghost" onClick={reset}>
+            Try again
+          </Button>
         </div>
       )}
     >
@@ -198,13 +200,7 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
           globalSplitManager()?.canAppendSplit() ?? false
         }
         onCopyLink={(id) =>
-          fireAndForget(
-            copyLink.executeByBlock(
-              projectRouteId({ id, section: 'overview' }),
-              'component'
-            ),
-            'projects'
-          )
+          fireAndForget(copyLink.executeByBlock(id, 'initiative'), 'projects')
         }
         onCopyId={(id) => fireAndForget(copyId.executeById(id), 'projects')}
         onShare={(projectId) => setSharing(projectId)}

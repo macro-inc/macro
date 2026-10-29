@@ -14,6 +14,8 @@ milliseconds instead of waiting on container provisioning.
 - `src/domain/engine.rs`: `TurnEngine` port — the seam `rig_engine` fills.
 - `src/outbound/manager.rs`: `InMemAgentManager` — provisions per-session
   agent tasks, implements the container-manager port the harness expects.
+- `src/domain/tool_stream.rs`: throttled, bounded argument previews for pending
+  calls; replay ignores previews and retains only calls that began execution.
 - `src/domain/session.rs` / `src/domain/replay.rs`: in-process session state
   and log replay on reconnect.
 - `src/domain/admission.rs` + `src/outbound/approval_gate.rs`: usage/plan
@@ -73,6 +75,11 @@ DecideReview are eager internal tools in both standard and code modes.
   25k tokens) for the model and offers `ReadToolResult` to page through them.
   The stream, log and history keep the whole result; replay cuts it again, so
   build turn messages with `to_rig_messages_limited`, not `to_rig_messages`.
+- `rig_engine::system_prompt` orders text from most to least stable for the
+  prompt cache: the static Macro prompt (the cached shared block, the same for
+  every agent), then the session's part, then the turn's (`with_turn`). Put
+  anything that changes per turn in the turn part, never in the shared block;
+  measure with `measure_prompt_cache_turns`.
 - Replay tool calls using `_meta.macro.toolName`; ACP titles may be human-readable
   MCP labels, so only use the title for older frames without tool-name metadata.
 

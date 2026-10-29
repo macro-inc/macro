@@ -45,8 +45,10 @@ export function BookingDurationInput(props: {
   };
   return (
     <ButtonGroup
+      finish="raised"
+      variant="secondary"
       size="lg"
-      class="h-9 w-auto rounded-lg border-edge-frame data-[orientation=horizontal]:rounded-lg has-[[data-slot=input-group-control]]:rounded-lg has-[[data-slot=input-group-control][aria-invalid=true]]:border-failure"
+      class="h-9 w-auto rounded-lg data-[orientation=horizontal]:rounded-lg has-[[data-slot=input-group-control]]:rounded-lg has-[[data-slot=input-group-control][aria-invalid=true]]:border-failure"
     >
       <For each={['hours', 'minutes'] as const}>
         {(part) => (

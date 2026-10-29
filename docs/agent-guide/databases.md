@@ -18,11 +18,13 @@ Databases open at
 `/app/database/<uuid>`; from Drive (its list, favorites, or **New → Database**)
 they open inline at `/app/drive/database/<uuid>` with Drive's sidebar in place.
 A database contains tables; records belong to a table and
-its properties describe each record. The database name in the split header is an
-static label, matching other blocks. Choose **Rename** in Database actions to
-edit it. Enter or leaving the input saves and closes it; Escape cancels. Saving
-a title does not enter the grid, and a failed rename shows a toast. Viewers without edit access see the
-split header's `viewer` badge instead.
+its properties describe each record. The database name in the split header is a
+static label until edited. Double-click it or choose **Rename** in Database actions
+to edit the same inline title with the current name selected. On touch devices,
+use **Database actions → Rename**. Enter or leaving the input saves and closes it; Escape cancels. Saving
+a title does not enter the grid, and a failed rename shows a toast. Reload to verify
+the saved name persists. Viewers cannot enter rename from either entry point and
+see the split header's `viewer` badge instead.
 
 Reopening a loaded table or view shows its cached rows while a background read
 checks for changes. Wait for refreshing to finish before asserting server
@@ -155,7 +157,10 @@ puts the typing cursor in that column's first cell, without waiting for creation
 or renaming to finish. Escape keeps the default name.
 There is no creation dialog. Double-click a header, press F2 while it is focused,
 or choose **Rename column** from its arrow or right-click menu to rename it later.
-Its type icon stays in place while editing. SQL refers to tables and columns by
+Its type icon stays in place while editing. A rename updates the cached column
+label before the save finishes and keeps the same header mounted; the old name
+must not flash back while the schema refreshes. Reload to confirm it persisted.
+SQL refers to tables and columns by
 their display names (double-quoted), so a rename changes the name a saved query
 must use.
 
@@ -216,7 +221,12 @@ text. Choosing Text explicitly disables inference. Populated columns never infer
 new type. Reference cells use Macro’s native mention menu, limited to the selected
 kind (for example, People shows users, Tasks shows tasks). Arrow keys navigate and
 Enter chooses; Escape returns without changing the value. Delete clears a selected
-reference cell. Text supports markdown and inline native mentions such as
+reference cell. Click a populated document/file reference (or press Enter) to open
+it in another split while keeping the database open. On touch, tapping uses the
+app's normal forward navigation. Right-click a populated editable reference to
+choose a replacement; F2 also opens the picker, and Escape cancels. Empty
+references still open the picker on click. Read-only references can be opened but
+not changed. Text supports markdown and inline native mentions such as
 `Say hi to @Maya`, stored using the same mention encoding as documents. A mention
 inside a sentence preserves Text.
 
@@ -363,6 +373,9 @@ not at all. New tables, columns and options carry ids the client mints, so
 later ops of the same batch can name them. Agents and MCP write SQL,
 which the same engine turns into those ops on the server, and their schema
 tools send the same ops.
+When databases share a table name, a selected database takes precedence for
+unqualified table names. Database-qualified names still select that database;
+without a selection, duplicate table names are ambiguous.
 Rows keep the table's order unless the view sorts them. After each of your own
 edits the grid reads its rows again, and another viewer's edit reaches an open
 grid or answer within a moment through the gateway's table-changed message; a
@@ -643,11 +656,12 @@ answers still load when they approach the viewport. The empty input rotates thro
 uses its actual table and column names. Typing hides these hints, and reduced-motion
 preferences keep them static. Use the searchable source picker below the question to
 choose a database; the entire chosen database is in scope, without a table
-prerequisite. **Automatic** finds a relevant accessible database from the question
-with the discovery tools and inspects all its tables. The answer's `QueryDatabase`
-runs with view access only, so asking a question never changes data, even for an
-editor. Both discovery and final answer formatting receive the registered database
-tool reference, including the current SQL dialect. Verify an Automatic question
+prerequisite. An explicit source also disambiguates databases with identical names
+when previewing or refreshing an answer. **Automatic** finds a relevant accessible
+database from the question with the discovery tools and inspects all its tables.
+The answer's `QueryDatabase` runs with view access only, so asking a question never
+changes data, even for an editor. Both discovery and final answer formatting
+receive the registered database tool reference, including the current SQL dialect. Verify an Automatic question
 that needs ListDatabases, DescribeDatabase, and QueryDatabase completes with live
 results; repeat with an explicit source and an aggregate using an AS alias. The
 formatting step must preserve tool-call/result names and ids without another tool
@@ -693,13 +707,18 @@ instead of the engine's message. For development, start the web app with
 back the SQL toggle and editor, **View SQL**, the raw error under **Technical
 details**, and the server's summary on query tool rows.
 
+SQL conditions may nest parentheses up to 64 levels. Deeper input returns a
+parse error asking the assistant to simplify the condition.
+
 ## Sharing and files
 
 **Share** opens Macro's standard sharing dialog. The owner can share with people
 or channels and change or remove their access, and an owner on a team sets
 **Team access** (view, comment, or edit for the owner's team; rows follow the
 database). Databases do not offer a public link. **Share** and viewer avatars (other people currently looking at the
-database) sit at the right of the split header, like other entities.
+database) sit at the right of the split header, like other entities. From Drive,
+the row context menu offers the same Share action, plus Rename (edit or owner),
+Favorite, Copy Link, and Delete (owner).
 
 The toolbar's **Database actions** (`…`) menu, beside **AI**, contains **Rename**,
 **Import CSV**, **Webhooks**, **Download**, and owner-only **Delete**. Rename focuses the inline

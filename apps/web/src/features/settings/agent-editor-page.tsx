@@ -834,7 +834,7 @@ export function AgentEditorPage(props: {
           <Button
             type="submit"
             form="agent-form"
-            variant="cta"
+            variant="neutral"
             size="lg"
             class="min-w-36"
             disabled={!canCreate()}
@@ -891,7 +891,7 @@ export function AgentEditorPage(props: {
             More options
             <CaretDownIcon
               class={cn(
-                'transition-transform duration-200',
+                'size-3.5 touch:size-6 shrink-0 pointer-events-none transition-transform duration-200',
                 advancedOpen() && 'rotate-180'
               )}
             />
@@ -918,7 +918,8 @@ export function AgentEditorPage(props: {
                 disabled={busy()}
                 onClick={onDelete()}
               >
-                <TrashIcon /> Delete agent
+                <TrashIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />{' '}
+                Delete agent
               </Button>
             </div>
           </AgentEditSection>

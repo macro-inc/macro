@@ -41,24 +41,20 @@ export function CalendarFilePreview(props: {
             {props.fileName || 'Calendar file'}
           </Dialog.Title>
           <Show when={props.onDownload}>
-            <Button
-              variant="outline"
-              depth={3}
-              onClick={() => props.onDownload?.()}
-            >
-              <DownloadSimple />
+            <Button variant="secondary" onClick={() => props.onDownload?.()}>
+              <DownloadSimple class="size-4 shrink-0 touch:size-6" />
               Download .ics
             </Button>
           </Show>
           <Button
-            label="Close"
+            aria-label="Close"
+            tooltip="Close"
             variant="ghost"
             size="icon-md"
-            depth={3}
             class="mobile:hidden"
             onClick={() => props.onClose()}
           >
-            <X />
+            <X class="size-4 shrink-0 touch:size-6" />
           </Button>
         </Panel.Header>
         <Panel.Body class="max-h-[70vh] overflow-y-auto px-6 pb-3">

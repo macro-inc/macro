@@ -7,10 +7,9 @@ import AlignTop from '@icon/system/regular/align-top-simple.svg';
 import ArrowsHorizontal from '@icon/system/regular/arrows-horizontal.svg';
 import ArrowsVertical from '@icon/system/regular/arrows-vertical.svg';
 import type { Alignment } from '@macro-inc/graphics';
-import { Button, ButtonGroup } from '@ui';
+import { ButtonGroup } from '@ui';
 import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { INSPECTOR_CONTROL_FRAME_CLASS } from './inspector-control-frame';
 
 export function CanvasAlignmentControls(props: {
   count: number;
@@ -38,21 +37,26 @@ export function CanvasAlignmentControls(props: {
         >
           {(alignments) => (
             <ButtonGroup
+              finish="raised"
+              variant="secondary"
               size="icon-sm"
-              class={`w-full data-[orientation=horizontal]:rounded-lg ${INSPECTOR_CONTROL_FRAME_CLASS}`}
+              class="w-full data-[orientation=horizontal]:rounded-lg"
             >
               <For each={alignments}>
                 {([alignment, icon]) => (
                   <>
-                    <Button
+                    <ButtonGroup.Button
+                      aria-label={`Align ${alignment}`}
+                      tooltip={`Align ${alignment}`}
                       fullWidth
-                      class="bg-transparent"
-                      label={`Align ${alignment}`}
                       disabled={props.count < 2}
                       onClick={() => props.onAlign(alignment)}
                     >
-                      <Dynamic component={icon} />
-                    </Button>
+                      <Dynamic
+                        component={icon}
+                        class="size-3.5 touch:size-6 shrink-0 pointer-events-none"
+                      />
+                    </ButtonGroup.Button>
                   </>
                 )}
               </For>
@@ -62,23 +66,27 @@ export function CanvasAlignmentControls(props: {
       </div>
       <Show when={props.count >= 3}>
         <ButtonGroup
+          finish="raised"
+          variant="secondary"
           size="icon-sm"
-          class={`data-[orientation=horizontal]:rounded-lg ${INSPECTOR_CONTROL_FRAME_CLASS}`}
+          class="data-[orientation=horizontal]:rounded-lg"
         >
-          <Button
-            label="Distribute horizontal"
+          <ButtonGroup.Button
+            aria-label="Distribute horizontal"
+            tooltip="Distribute horizontal"
             disabled={props.count < 3}
             onClick={() => props.onDistribute('horizontal')}
           >
-            <ArrowsHorizontal />
-          </Button>
-          <Button
-            label="Distribute vertical"
+            <ArrowsHorizontal class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+          </ButtonGroup.Button>
+          <ButtonGroup.Button
+            aria-label="Distribute vertical"
+            tooltip="Distribute vertical"
             disabled={props.count < 3}
             onClick={() => props.onDistribute('vertical')}
           >
-            <ArrowsVertical />
-          </Button>
+            <ArrowsVertical class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+          </ButtonGroup.Button>
         </ButtonGroup>
       </Show>
     </div>

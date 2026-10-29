@@ -183,7 +183,7 @@ export function AgentCreateWizard(props: {
           fallback={
             <Button
               type="submit"
-              variant="cta"
+              variant="neutral"
               size="xl"
               class="min-w-44"
               disabled={!props.canContinue(step())}
@@ -193,7 +193,7 @@ export function AgentCreateWizard(props: {
                 fallback={
                   <>
                     Continue
-                    <ArrowRightIcon />
+                    <ArrowRightIcon class="size-5 touch:size-6 shrink-0 pointer-events-none" />
                   </>
                 }
               >
@@ -204,7 +204,12 @@ export function AgentCreateWizard(props: {
         >
           {(created) => (
             <div class="flex flex-col items-center gap-2">
-              <Button type="submit" variant="cta" size="xl" class="min-w-44">
+              <Button
+                type="submit"
+                variant="neutral"
+                size="xl"
+                class="min-w-44"
+              >
                 Done
               </Button>
               <Show when={props.onMessage}>
@@ -215,7 +220,7 @@ export function AgentCreateWizard(props: {
                     size="md"
                     onClick={() => onMessage()(created())}
                   >
-                    <ChatIcon />
+                    <ChatIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                     Message {displayName()}
                   </Button>
                 )}
@@ -265,7 +270,7 @@ export function AgentCreateWizard(props: {
                 More options
                 <CaretDownIcon
                   class={cn(
-                    'transition-transform duration-200',
+                    'size-3.5 touch:size-6 shrink-0 pointer-events-none transition-transform duration-200',
                     moreOpen() && 'rotate-180'
                   )}
                 />

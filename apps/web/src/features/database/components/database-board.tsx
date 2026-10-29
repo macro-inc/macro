@@ -674,9 +674,10 @@ function BoardCard(props: {
           >
             <KanbanHandle label={`Drag ${title()}`}>
               <Button
+                variant="ghost"
+                aria-label={`Drag ${title()}`}
+                tooltip={{ content: `Drag ${title()}`, disabled: true }}
                 size="icon-xs"
-                label={`Drag ${title()}`}
-                tooltipDisabled
                 class="size-6 touch-none text-ink-muted"
                 title="Drag to another group, or use the Move menu"
                 tabindex={-1}
@@ -712,9 +713,10 @@ function BoardCard(props: {
           <KanbanBoard.CardActions>
             <Show when={props.renderCell}>
               <Button
+                variant="ghost"
+                aria-label={`Open ${title()}`}
+                tooltip={{ content: `Open ${title()}`, disabled: true }}
                 size="icon-xs"
-                label={`Open ${title()}`}
-                tooltipDisabled
                 title="Open record details"
                 onClick={() => props.onOpen(props.row.rowId)}
               >

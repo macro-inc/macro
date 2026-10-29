@@ -134,6 +134,7 @@ fn routine(
         next_run_at,
         enabled,
         run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     }
 }
 

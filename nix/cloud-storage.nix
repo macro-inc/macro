@@ -58,10 +58,12 @@
       # `crates/pptx_engine` embeds with `include_bytes!`; `.graphql` for the
       # `static_assets/schema.graphql` that `cache-core`'s build script reads;
       # `.jsonl` for the recorded sessions `agent_fold` tests embed; `.mjs`
-      # for the Deno bootstrap and bundled public SDK/Handlebars runtime.
+      # for the Deno bootstrap and bundled public SDK/Handlebars runtime;
+      # `.proto` for the protobuf files the `whatsmeow_proto` and
+      # `whatsmeow_signal` build scripts compile.
       assetFilter =
         path: _type:
-        builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs)$" path != null;
+        builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs|proto)$" path != null;
       # Rust local HTTP clients embed only the public proxy CA, never its keys.
       localCaFilter = path: _type: pkgs.lib.hasSuffix "/infra/local/certs/ca.pem" (toString path);
       binFilter = path: _type: builtins.match ".*\\.bin$" path != null;
@@ -937,6 +939,8 @@
           doppler
           biome
           jq
+          prek
+          gitleaks
           # TEMP: nixpkgs stripe-cli 1.43.2 checkPhase fails in the sandbox
           # (TestResolvePluginForInstallSucceedsForGAPluginWhenNotLoggedIn).
           # stripe-cli
@@ -1074,7 +1078,29 @@
               # entries while switching compilers, breaking aws-lc and librdkafka.
               # Remove only caches configured by another compiler so ordinary
               # shell entry keeps reusable native build state.
-              shellHook = pkgs.lib.optionalString isLinux ''
+              shellHook = ''
+                if command -v prek >/dev/null 2>&1; then
+                  repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+                  if [ -n "$repo_root" ] && [ -f "$repo_root/.pre-commit-config.yaml" ]; then
+                    # Install into .git/hooks. If Cursor Cloud owns core.hooksPath,
+                    # unset it only for this install so we do not overwrite the
+                    # dispatcher; git still runs our hook via that dispatcher.
+                    hooks_path="$(git -C "$repo_root" config --get core.hooksPath || true)"
+                    cursor_hooks=""
+                    if [ -n "$hooks_path" ] && [ -f "$hooks_path/.cursor-original-hooks-path" ]; then
+                      cursor_hooks="$hooks_path"
+                      git -C "$repo_root" config --local --unset-all core.hooksPath || true
+                    fi
+                    if ! (cd "$repo_root" && prek install --overwrite >/dev/null); then
+                      echo "warning: prek hook install failed" >&2
+                    fi
+                    if [ -n "$cursor_hooks" ]; then
+                      git -C "$repo_root" config --local core.hooksPath "$cursor_hooks"
+                    fi
+                  fi
+                fi
+              ''
+              + pkgs.lib.optionalString isLinux ''
                 target_dir="''${CARGO_TARGET_DIR:-target}"
                 current_cc="$(type -P "''${CC:-cc}" || true)"
                 if [ -n "$current_cc" ] && [ -d "$target_dir" ]; then

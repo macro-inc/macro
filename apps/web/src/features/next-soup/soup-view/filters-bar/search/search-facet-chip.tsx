@@ -218,6 +218,7 @@ export const SearchFacetChip = (props: SearchFacetChipProps) => (
       <Show when={!props.facet.isDefault()}>
         <ChipDivider />
         <Button
+          variant="ghost"
           class="rounded-none h-full not-disabled:hover:text-failure"
           aria-label={`Clear ${props.facet.label} filter`}
           size="icon-sm"

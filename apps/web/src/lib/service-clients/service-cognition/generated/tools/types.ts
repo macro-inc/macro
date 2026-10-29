@@ -1153,7 +1153,9 @@ export type DiscoveryResult =
   | {
       app: DiscoveredApp;
       /**
-       * Whether this caller has an enabled connection.
+       * Whether this caller has an enabled connection. For an app that
+       * connects through its own MCP server, that connection is checked
+       * there, not in Pipedream.
        */
       connected: boolean;
       /**
@@ -4758,7 +4760,7 @@ export type ChannelShareEntityType =
   | 'call'
   | 'thread'
   | 'agent_session'
-  | 'whatsapp_group'
+  | 'external_chat'
   | 'chat';
 /**
  * Content of a text editor code execution response - either a result or an error
@@ -15466,7 +15468,7 @@ export interface SetSenderPolicyResponse {
   summary: string;
 }
 /**
- * Share an item with the current members of a channel by writing a channel entity-access grant. Call it only after the user agrees to share that item, or when they already asked you to share it. entityType is the stored type: calendar_event for a calendar chip, document, project, database, form, call, thread, agent_session, or whatsapp_group. entityId is that item's id. A calendar event can be shared only by someone who holds it on their own calendar, and private or confidential events are refused. Sharing again is safe when a grant already exists.
+ * Share an item with the current members of a channel by writing a channel entity-access grant. Call it only after the user agrees to share that item, or when they already asked you to share it. entityType is the stored type: calendar_event for a calendar chip, document, project, database, form, call, thread, agent_session, or external_chat. entityId is that item's id. A calendar event can be shared only by someone who holds it on their own calendar, and private or confidential events are refused. Sharing again is safe when a grant already exists.
  */
 export interface ShareWithChannel {
   /**

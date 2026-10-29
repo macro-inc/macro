@@ -364,7 +364,7 @@ const Block: Component = () => {
                     : 'Please try opening it again.'}
                 </p>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   onClick={() => {
                     reset();
                     fireAndForget(detailQuery.refetch(), 'database-view');
@@ -388,7 +388,7 @@ const Block: Component = () => {
                       It may be unavailable, or you may no longer have access.
                     </p>
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       onClick={() =>
                         fireAndForget(detailQuery.refetch(), 'database-view')
                       }
@@ -427,6 +427,7 @@ const Block: Component = () => {
                                   {databaseOpMessage(failure(), 'this view')}
                                 </span>
                                 <Button
+                                  variant="primary"
                                   size="sm"
                                   onClick={() =>
                                     creations.retry(shown().view.id)
@@ -435,6 +436,7 @@ const Block: Component = () => {
                                   Retry
                                 </Button>
                                 <Button
+                                  variant="ghost"
                                   size="sm"
                                   onClick={() => {
                                     creations.discard(shown().view.id);

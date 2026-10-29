@@ -5,6 +5,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use external_chat::domain::models::{BackfillState, ExternalChatError};
+use external_chat::domain::ports::ExternalChatResult;
 use tokio::sync::{Notify, Semaphore, mpsc, watch};
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
@@ -13,10 +15,7 @@ use whatsapp_linked::domain::events::{
     BackfillWork, ClaimedSend, HistoryPage, Lease, OutgoingContent, PairingUpdate, PairingWork,
     SendOutcome, SessionScope,
 };
-use whatsapp_linked::domain::models::{
-    AccountState, BackfillState, GroupInfo, LinkedError, PairingState,
-};
-use whatsapp_linked::domain::ports::LinkedResult;
+use whatsapp_linked::domain::models::{AccountState, GroupInfo, PairingState};
 use whatsapp_linked::domain::session::SessionService;
 
 use super::inbound::InboundGate;
@@ -93,13 +92,13 @@ enum Next {
     Exit(AccountExit),
 }
 
-fn is_fenced(report: &rootcause::Report<LinkedError>) -> bool {
-    matches!(report.current_context(), LinkedError::Fenced)
+fn is_fenced(report: &rootcause::Report<ExternalChatError>) -> bool {
+    matches!(report.current_context(), ExternalChatError::Fenced)
 }
 
 /// Fenced ends the account; any other domain error is logged and survived.
 fn survive<Value>(
-    result: LinkedResult<Value>,
+    result: ExternalChatResult<Value>,
     step: &'static str,
 ) -> Result<Option<Value>, AccountExit> {
     match result {
@@ -121,7 +120,7 @@ impl<Connector: SessionConnector> AccountRunner for AccountSessions<Connector> {
     async fn run(&self, account: Uuid, control: AccountControl) -> AccountExit {
         let lease = match self.sessions.begin_lease(account).await {
             Ok(lease) => lease,
-            Err(report) if matches!(report.current_context(), LinkedError::NotFound) => {
+            Err(report) if matches!(report.current_context(), ExternalChatError::NotFound) => {
                 return AccountExit::Idle;
             }
             Err(report) => {
@@ -757,12 +756,12 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
                     if elapsed(group.requested_at) >= self.config.backfill_timeout {
                         tracing::info!(
                             account_id = %self.scope.account_id,
-                            group_id = %group.group_id,
+                            chat_id = %group.chat_id,
                             "The phone did not answer a history request; waiting for it"
                         );
                         survive(
                             self.sessions
-                                .backfill_unanswered(self.scope, group.group_id)
+                                .backfill_unanswered(self.scope, group.chat_id)
                                 .await,
                             "backfill_unanswered",
                         )?;
@@ -785,7 +784,7 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
             if group.state != BackfillState::WaitingForMessage {
                 survive(
                     self.sessions
-                        .backfill_waiting_for_message(self.scope, group.group_id)
+                        .backfill_waiting_for_message(self.scope, group.chat_id)
                         .await,
                     "backfill_waiting_for_message",
                 )?;
@@ -795,7 +794,7 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
         let span = tracing::info_span!(
             "whatsapp.backfill.request",
             account_id = %self.scope.account_id,
-            group_id = %group.group_id,
+            chat_id = %group.chat_id,
             imported = group.imported,
             first = group.cursor.is_none(),
             outcome = tracing::field::Empty,
@@ -817,7 +816,7 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
                     tracing::Span::current().record("outcome", "requested");
                     survive(
                         self.sessions
-                            .backfill_requested(self.scope, group.group_id)
+                            .backfill_requested(self.scope, group.chat_id)
                             .await,
                         "backfill_requested",
                     )?;
@@ -960,11 +959,11 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
             "whatsapp.send.dispatch",
             account_id = %self.scope.account_id,
             send_id = %send.id,
-            group_sequence = send.group_sequence,
+            chat_sequence = send.chat_sequence,
             outcome = tracing::field::Empty,
         );
         // The dispatch joins the trace of the request that recorded the send.
-        whatsapp_linked::signals::trace_context::adopt(&span, send.traceparent.as_deref());
+        external_chat::signals::trace_context::adopt(&span, send.traceparent.as_deref());
         async {
             let uploaded = self.upload(send).await?;
             let message_id = self.session.new_message_id().await;

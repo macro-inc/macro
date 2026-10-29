@@ -39,11 +39,10 @@ export function GanttZoomControls() {
       >
         <div class="flex shrink-0 items-center gap-1">
           <Button
-            depth={2}
+            aria-label={'Zoom out'}
+            tooltip={{ content: 'Zoom out', disabled: !canZoomOut() }}
             size="icon-lg"
             variant="ghost"
-            label="Zoom out"
-            tooltipDisabled={!canZoomOut()}
             class={cn(
               'invisible border-edge-muted bg-surface opacity-0 shadow-md transition-opacity group-hover/zoom:visible group-hover/zoom:pointer-events-auto group-hover/zoom:opacity-100 group-focus-within/zoom:visible group-focus-within/zoom:pointer-events-auto group-focus-within/zoom:opacity-100 touch:visible touch:pointer-events-auto touch:opacity-100 motion-reduce:transition-none',
               gantt.scrollZooming() && 'visible pointer-events-auto opacity-100'
@@ -54,11 +53,10 @@ export function GanttZoomControls() {
             <MinusIcon class="size-5" />
           </Button>
           <Button
-            depth={2}
+            aria-label={'Zoom in'}
+            tooltip={{ content: 'Zoom in', disabled: !canZoomIn() }}
             size="icon-lg"
             variant="ghost"
-            label="Zoom in"
-            tooltipDisabled={!canZoomIn()}
             class={cn(
               'invisible border-edge-muted bg-surface opacity-0 shadow-md transition-opacity group-hover/zoom:visible group-hover/zoom:pointer-events-auto group-hover/zoom:opacity-100 group-focus-within/zoom:visible group-focus-within/zoom:pointer-events-auto group-focus-within/zoom:opacity-100 touch:visible touch:pointer-events-auto touch:opacity-100 motion-reduce:transition-none',
               gantt.scrollZooming() && 'visible pointer-events-auto opacity-100'
@@ -70,10 +68,9 @@ export function GanttZoomControls() {
           </Button>
         </div>
         <Button
-          depth={2}
+          aria-label={'Reset zoom'}
           size="lg"
           variant="ghost"
-          label="Reset zoom"
           tooltip="Reset zoom to 100%"
           disabled={unavailable()}
           class="pointer-events-auto min-w-16 shrink-0 border-edge-muted bg-surface px-2 text-sm shadow-md tabular-nums"

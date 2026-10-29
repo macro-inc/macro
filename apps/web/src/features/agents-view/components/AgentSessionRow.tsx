@@ -16,6 +16,7 @@ export function AgentSessionRow(props: {
   trailing?: JSX.Element;
   timestamp: string;
   unread?: boolean;
+  failed?: boolean;
   active?: boolean;
   /** When true, hides the leading icon slot to save horizontal space. */
   hideLeading?: boolean;
@@ -42,7 +43,9 @@ export function AgentSessionRow(props: {
         class="absolute inset-0 rounded-lg outline-none focus-visible:outline-2 focus-visible:outline-accent"
         aria-label={props.title}
         aria-description={[
-          conversationStateLabel(props.state),
+          props.failed
+            ? 'Last turn failed'
+            : conversationStateLabel(props.state),
           props.unread ? 'Unread' : undefined,
         ]
           .filter(Boolean)
@@ -69,10 +72,11 @@ export function AgentSessionRow(props: {
   );
 }
 
-/** One leading dot combines activity and unread state; read dormant rows are empty. */
+/** One dot combines turn failure, activity, and unread state. */
 export function AgentSessionStatusIndicator(props: {
   state: ConversationState;
   unread?: boolean;
+  failed?: boolean;
 }) {
   return (
     <Show
@@ -80,6 +84,7 @@ export function AgentSessionStatusIndicator(props: {
         props.state === 'starting' ||
         props.state === 'working' ||
         props.state === 'waiting' ||
+        props.failed ||
         props.unread
       }
     >
@@ -87,9 +92,12 @@ export function AgentSessionStatusIndicator(props: {
         data-agent-status-indicator
         aria-label={props.unread ? 'Unread' : undefined}
         class={cn(
-          'size-1.5 rounded-full',
-          props.state === 'waiting' ? 'bg-warning' : 'bg-accent',
-          (props.state === 'starting' || props.state === 'working') &&
+          'size-1.5 shrink-0 rounded-full',
+          props.failed && 'bg-failure',
+          !props.failed &&
+            (props.state === 'waiting' ? 'bg-warning' : 'bg-accent'),
+          !props.failed &&
+            (props.state === 'starting' || props.state === 'working') &&
             'motion-safe:animate-pulse'
         )}
       />

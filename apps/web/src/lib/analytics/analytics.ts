@@ -16,6 +16,7 @@ import {
   redactLinkTokens,
 } from '@core/util/telemetryUrl';
 import { getWebOrigin } from '@core/util/webOrigin';
+import type { Language } from '@service-auth/generated/schemas/language';
 import type { Team } from '@service-auth/generated/schemas/team';
 import { type CaptureOptions, PostHog } from 'posthog-js';
 import { match } from 'ts-pattern';
@@ -37,6 +38,12 @@ const DEVICE_PROPERTY = 'macro_device' as const;
 const ENVIRONMENT_PROPERTY = 'macro_environment' as const;
 const PLAN_TIER_AT_EVENT_PROPERTY = 'plan_tier_at_event' as const;
 const HAS_PAID_ACCESS_AT_EVENT_PROPERTY = 'has_paid_access_at_event' as const;
+/**
+ * The interface language being shown, as a BCP 47 tag (`en`, `zh-Hans`):
+ * the person's choice, else the team's, else the browser's, else English.
+ * A person property, so a breakdown uses the current language.
+ */
+const INTERFACE_LANGUAGE_PROPERTY = 'interface_language' as const;
 /** PostHog group type for team analytics; server events send the same key. */
 const TEAM_GROUP_TYPE = 'team' as const;
 
@@ -355,6 +362,21 @@ const createAnalytics = () => {
     }
   };
 
+  // Person properties are per PostHog identity. Forget the last value on
+  // reset so the next account is recorded even when the tag matches.
+  let reportedInterfaceLanguage: Language | undefined;
+
+  const setInterfaceLanguage = (language: Language) => {
+    if (disabled || reportedInterfaceLanguage === language) return;
+
+    try {
+      posthog.setPersonProperties({ [INTERFACE_LANGUAGE_PROPERTY]: language });
+      reportedInterfaceLanguage = language;
+    } catch (e) {
+      console.error('[Analytics] Failed to set interface language:', e);
+    }
+  };
+
   // `group` with properties captures a `$groupidentify` event, so only send
   // it when the team or its properties change, not on every team refetch.
   let syncedTeamGroupKey: string | undefined;
@@ -401,6 +423,7 @@ const createAnalytics = () => {
 
       posthog.unregister(PLAN_TIER_AT_EVENT_PROPERTY);
       posthog.unregister(HAS_PAID_ACCESS_AT_EVENT_PROPERTY);
+      reportedInterfaceLanguage = undefined;
       posthog.reset();
     } catch (e) {
       console.error('[Analytics] Failed to reset:', e);
@@ -455,6 +478,7 @@ const createAnalytics = () => {
     trackGoogleConversion,
     identify,
     setPlanProperties,
+    setInterfaceLanguage,
     setTeamGroup,
     clearTeamGroup,
     reset,
@@ -476,6 +500,8 @@ export type AnalyticsInterface = {
   ) => void;
   identify: (userID: string, info: Partial<UserIdentifyInfo>) => void;
   setPlanProperties: (licenseStatus: string | undefined) => void;
+  /** Records the interface language currently shown, for usage breakdowns. */
+  setInterfaceLanguage: (language: Language) => void;
   /** Associates this user's events with their team (PostHog group analytics). */
   setTeamGroup: (team: TeamGroupInfo) => void;
   /** Detaches events from any team, e.g. after leaving it. */

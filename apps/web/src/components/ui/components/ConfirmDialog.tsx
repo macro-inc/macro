@@ -3,7 +3,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { createSignal, type JSX, onCleanup, Show } from 'solid-js';
 import { cn } from '../utils/classname';
 import { ActionDialogShell } from './ActionDialogShell';
-import { Button } from './Button';
+import { Button, type ButtonVariant } from './Button';
 import { Dialog, type DialogProps } from './Dialog';
 import {
   type ManagedDialogProps,
@@ -41,6 +41,11 @@ export type ConfirmDialogProps = ManagedDialogProps &
 
 /** Controlled confirmation UI: a dialog on desktop, a drawer on mobile. */
 export function ConfirmDialog(props: ConfirmDialogProps) {
+  const confirmVariant = (): ButtonVariant => {
+    if (props.tone === 'danger') return 'danger';
+    if (props.tone === 'success') return 'success';
+    return 'primary';
+  };
   return (
     <Show
       when={isMobile()}
@@ -66,7 +71,6 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
               <Button
                 type="button"
                 variant="ghost"
-                depth={2}
                 disabled={props.pending}
                 onClick={() => props.onOpenChange(false)}
               >
@@ -74,8 +78,7 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
               </Button>
               <Button
                 type="button"
-                variant="strong"
-                depth={2}
+                variant={confirmVariant()}
                 disabled={props.pending}
                 onClick={props.onConfirm}
               >

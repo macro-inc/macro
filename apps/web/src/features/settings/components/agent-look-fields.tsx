@@ -56,7 +56,7 @@ export function AgentLookFields(props: {
           disabled={props.busy}
           onClick={() => input?.click()}
         >
-          <UploadIcon />
+          <UploadIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           {props.uploading ? 'Uploading…' : props.uploadLabel}
         </Button>
         <Show when={props.secondary}>

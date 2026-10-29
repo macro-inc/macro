@@ -12,6 +12,7 @@ use soup_filter_projection::{
 mod drafts;
 mod optimistic;
 mod reminders;
+mod through;
 
 const VIEWER: &str = "macro|mail@example.com";
 const QUERY: &str = r#"query MailSeed { user { id emailLinks { id } soup(input: {initial:{limit:100,emailView:ALL}}) { items { __typename id cacheProjection ... on GraphqlSoupEmailThread { linkId ownerId inboxVisible isRead isSignal latestInboundMessageTs reminderReturnedAt mailAllPreview { id } mailDraftPreview { id } mailSentPreview { id } updatedAt } } } } }"#;
@@ -114,6 +115,7 @@ async fn read<S: PredicateIndexStorage>(
         PageRequest {
             view: view.into(),
             cursor,
+            through: None,
         },
     )
     .await
@@ -273,7 +275,8 @@ async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
             10,
             PageRequest {
                 view: "INBOX".into(),
-                cursor: Some(cursor.clone())
+                cursor: Some(cursor.clone()),
+                through: None,
             }
         )
         .await
@@ -340,10 +343,17 @@ async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
         .await
         .unwrap()
         .0;
-    assert!(matches!(
-        read(&mut engine, filters(), "INBOX", Some(cursor)).await,
-        PageResult::StaleCursor { .. }
-    ));
+    let PageResult::MailPage { keys, .. } =
+        read(&mut engine, filters(), "INBOX", Some(cursor)).await
+    else {
+        panic!("a write keeps the cursor's position")
+    };
+    assert_eq!(
+        keys,
+        all_keys(&mut engine, filters(), "INBOX").await[10..10 + keys.len()],
+        "the page after a write continues after the same row"
+    );
+    assert!(!keys.is_empty());
     let mut f = filters();
     f["emailFilter"] = json!({"tree":{"literal":{"read":true}}});
     let PageResult::MailPage { keys, .. } = read(&mut engine, f.clone(), "ALL", None).await else {
@@ -536,6 +546,7 @@ fn page_limit_bounds_match_the_index_limit() {
                 PageRequest {
                     view: "ALL".into(),
                     cursor: None,
+                    through: None,
                 },
             )
             .await;

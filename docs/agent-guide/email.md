@@ -148,6 +148,15 @@ that start within 40px of the left edge are left to swipe-back navigation.
 Search results use the same reserved column, with actions aligned to the first
 line; snippets, highlighted matches, and expanded hits remain unobstructed.
 
+The list holds still while mail changes under it. Scrolled down, new mail or a
+thread marked done elsewhere above the viewport leaves the rows on screen where
+they are; at the top, new mail appears at the top. Cache writes (the mail
+backfill, read marks, thread loads) and mutation refreshes keep the list as deep
+as it was loaded, and Load More keeps working while they land. Verify by
+scrolling past the first 100 threads, then marking a thread done and letting new
+mail arrive (locally: insert a thread and publish `email.message_received` on
+`macro.email`).
+
 When switching email tabs or inboxes, the list shows current-query cached results
 or a scoped `Loading email` spinner until they arrive—not the previous tab's rows
 under the new heading. Active searches also hide retained results and show loading
@@ -217,17 +226,19 @@ the server resolves that inbox's UNREAD label and returns the canonical thread
 (`__typename`, `id`, `isRead`) to reconcile the cache. The row should flip immediately
 even when the client labels cache is missing or stale—no label fetch precedes the
 optimistic update. Queued read/unread writes retain revalidation descriptors for
-active flat and grouped lists, including loaded continuation pages. Once replay
-commits (even after a reload), those queries refresh from the server; they should
-not refetch over the optimistic state merely because a write was queued. Trash
+the active lists the cache does not maintain (grouped lists, filters it cannot
+evaluate, a Mail page the cache cannot evaluate locally), including loaded
+continuation pages. Once replay commits (even after a reload), only those queries
+refresh from the server; they should not refetch over the optimistic state merely
+because a write was queued. Trash
 and its Undo refresh mounted GraphQL lists after the server operation finishes.
 The GraphQL-disabled REST path is unchanged. With GraphQL enabled, archive-based
 Mark Done, Mark Not Done, and Undo/Redo use `setEmailThreadArchived`: `inboxVisible`
 updates optimistically in the normalized cache, and each reversal is a distinct
 ordered queue entry. The server resolves the thread's owning/delegated inbox;
-no client INBOX-label lookup is needed. Confirmed writes revalidate mounted lists,
-including continuation pages; queued writes retain those descriptors for replay
-without refetching over optimism. Callers preserve the queued disposition and
+no client INBOX-label lookup is needed. Confirmed writes revalidate the mounted
+lists the cache does not maintain, including continuation pages; queued writes
+retain those descriptors for replay without refetching over optimism. Callers preserve the queued disposition and
 skip REST/TanStack email invalidations as well, including Done/Undo batches and
 thread archive replay. Committed writes and failed non-queued batches still
 reconcile. Permanent failures roll back the failed intent.
@@ -248,9 +259,17 @@ remain restored. Only accepted
 threads get their notifications restored. Notification or list-refresh failures
 warn without rolling back accepted unarchives. Verify mixed committed/queued/
 rejected selections, partial-success counts, and that a queued sibling prevents
-shared-list refetch even when notification restoration fails. GraphQL reversals
-rely on normalized writes and their durable revalidation, not an extra REST Soup
-refetch after rows settle. Verify the open-thread header too: with GraphQL enabled,
+shared-list refetch even when notification restoration fails. With the normalized
+cache, a list the cache maintains is not read again after Done, Not Done, Undo,
+read/unread, an entity notification update or a draft save: the optimistic write
+and the returned records update it, and it re-evaluates from the cache (FE-58).
+Every Mail tab is maintained once its local evaluation succeeds; grouped lists and
+filters the cache cannot evaluate are still read again. A reminder reads its
+thread again plus Home's unread presence, whose `unreadReminders` edge no cached
+write fills. Home's work-feed Done and Undo return no notification rows, so they
+still read every notification reader again. In the
+network panel one `e` in the Email view sends its two mutations and no `Soup`,
+`SoupNotifications` or `ChannelUnreadPresence` query. Verify the open-thread header too: with GraphQL enabled,
 Mark Not Done remains available for an archived thread whose inbox timestamp is
 missing; the server decides whether its received-message history allows restoration.
 The REST path retains its timestamp preflight, whole-batch handling, notification
@@ -306,8 +325,8 @@ retain their Inbox scope, so archived mail is found in Archived (All + Done).
 
 A `Showing cached mail` notice identifies results over synchronized metadata, not a
 claim of complete mailbox coverage. These lists paginate locally beyond the first
-page without a server cursor. Filter, revision, or engine-generation changes restart
-the local page chain; online server results take over again when available. After
+page without a server cursor. Filter or engine-generation changes restart
+the local page chain, and a cache write re-reads it through the last row already loaded; online server results take over again when available. After
 reconnecting, `Load more` follows the same server page chain as the displayed rows,
 not a leftover local cursor. Account choices are cached in the viewer-scoped GraphQL catalog. Timestamp ordering and date
 headers use the selected Mail view's indexed timestamps, not a preview cached from
@@ -339,7 +358,7 @@ schema additions before the client: it selects canonical message eligibility/rec
 fields, body-free canonical preview references, and viewer-relative share facts.
 The `soup-mail-v3` property-aware profile and new backfill checkpoint rebuild Mail proof without
 changing the persisted mutation queue format. Native Tauri maintains the same
-predicate projections and revision-bound local page contract as the browser.
+predicate projections and local page contract as the browser.
 Checkpoint v14 restarts older scans to populate property-aware indexes without wiping
 queued work. A background network failure does not hide a usable current-query
 cached Mail page; server-reported GraphQL errors still surface.
@@ -391,7 +410,11 @@ where the list is already beside the thread). The subject, tags and
 participants stay put while only the messages scroll. Pressing `Escape` in the open thread
 with focus outside any input does the same once there is nothing left to unwind
 (an open reply, an expanded body, or a focused message each take one `Escape`
-first); the list keeps the row you came from focused. The `⋯` email title menu
+first); the list keeps the row you came from focused and comes back at the same
+scroll position, scrolling only if j/k in the thread moved focus off screen. If
+the focused row leaves the list without a list `e` (a reply in Signal marks it
+done, or another device archives it), focus moves to the row that took its
+place, not the first row. The `⋯` email title menu
 right after the subject's last word, in place of Copy subject, holds **Ask AI**,
 **Create a Task**, and the other thread actions. On desktop, **Mark as unread**, **Mark done**,
 and reminders share one outlined group at the right of that header. Separate
@@ -1114,3 +1137,10 @@ Storage/schema failures that cannot prove preservation show recovery/update
 instructions instead of repeatedly reopening potentially damaged storage.
 
 Date-grouped email lists start directly with today's messages; Today is not shown as a leading group heading. Older date headings remain visible and ordering still uses the server's thread activity timestamp.
+
+## Dragging sidebar tags
+
+On desktop, drag a tag from the sidebar onto an email row. Its existing tags
+remain; dropping onto a selected row applies the tag to every taggable selected
+row. The dragged chip shows the tag color and name, and the target gets an outline.
+Clicking the tag still filters the list. Mobile uses the existing tag menu.

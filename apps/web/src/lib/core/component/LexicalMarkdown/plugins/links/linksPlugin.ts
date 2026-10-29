@@ -136,11 +136,39 @@ function $handleAppendToMatch(
     return;
   }
 
-  // append to the autolink node, and shift chars from the text node for each aggregate match
+  // Grow the existing autolink by shifting chars from the following text node.
+  // A non-positive shift means the rematch is not longer than the current
+  // label; applying it would shrink the label (JS substring(n<0) → 0) and can
+  // drop the character the user just typed (e.g. o after j@m.c → m.co).
   const numCharsToShift = rematch.raw.length - prevText.length;
+  if (numCharsToShift <= 0) {
+    return;
+  }
   textNode.setTextContent(nodeText.substring(numCharsToShift));
   prevLinkTextNode.setTextContent(rematch.text);
   prevSibling.setURL(rematch.url);
+}
+
+/**
+ * True when the collapsed caret sits inside or at the end of a match in
+ * `textNode`. Wrapping then fights the keystroke that completed the URL
+ * (j@m.c| → j@m.co|), which can swallow the typed character and blocks
+ * continuing into a longer TLD like .com.
+ */
+function $isCaretInsideAutoLinkMatch(
+  textNode: TextNode,
+  matchOffset: number,
+  matchLength: number
+): boolean {
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
+    return false;
+  }
+  if (selection.anchor.key !== textNode.getKey()) {
+    return false;
+  }
+  const offset = selection.anchor.offset;
+  return offset >= matchOffset && offset <= matchOffset + matchLength;
 }
 
 function $matchAndCreateAutoLink(
@@ -149,7 +177,6 @@ function $matchAndCreateAutoLink(
 ) {
   const nodeText = textNode.getTextContent();
   const matchedLink = findNextAutoLinkMatch(nodeText, autoLinkMatchMode);
-  let currentNode = textNode;
 
   if (!matchedLink) {
     return;
@@ -157,12 +184,26 @@ function $matchAndCreateAutoLink(
 
   const matchOffset = matchedLink.index;
   const matchLength = matchedLink.raw.length;
-  let matchedNode;
 
+  if ($isCaretInsideAutoLinkMatch(textNode, matchOffset, matchLength)) {
+    return;
+  }
+
+  const selection = $getSelection();
+  const restoreAfter =
+    $isRangeSelection(selection) &&
+    selection.isCollapsed() &&
+    selection.anchor.key === textNode.getKey() &&
+    selection.anchor.offset > matchOffset + matchLength
+      ? selection.anchor.offset - (matchOffset + matchLength)
+      : null;
+
+  let matchedNode: TextNode;
+  let afterNode: TextNode | undefined;
   if (matchOffset === 0) {
-    [matchedNode, currentNode] = currentNode.splitText(matchLength);
+    [matchedNode, afterNode] = textNode.splitText(matchLength);
   } else {
-    [, matchedNode, currentNode] = currentNode.splitText(
+    [, matchedNode, afterNode] = textNode.splitText(
       matchOffset,
       matchOffset + matchLength
     );
@@ -171,6 +212,11 @@ function $matchAndCreateAutoLink(
   const linkNode = $createAutoLinkNode(matchedLink.url);
   matchedNode.replace(linkNode);
   linkNode.append(matchedNode);
+
+  // splitText + replace can drop the caret; put it back in the trailing text.
+  if (restoreAfter !== null && afterNode) {
+    afterNode.select(restoreAfter, restoreAfter);
+  }
 }
 
 function $convertAutoLinkToLinkNode(node: AutoLinkNode): LinkNode {

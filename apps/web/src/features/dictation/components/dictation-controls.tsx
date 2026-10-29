@@ -1,4 +1,3 @@
-import { enableDictation, isFeatureEnabled } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CheckIcon from '@icon/system/regular/check.svg?component-solid';
 import MicrophoneIcon from '@icon/system/regular/microphone.svg?component-solid';
@@ -6,6 +5,7 @@ import XIcon from '@icon/system/regular/x.svg?component-solid';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { match } from 'ts-pattern';
+import { isDictationAvailable } from '../availability';
 import type { DictationController } from '../core/types';
 import { VolumeTimeline } from './volume-timeline';
 
@@ -14,17 +14,17 @@ export function DictationButton(props: {
   disabled?: boolean;
 }) {
   return (
-    <Show when={isFeatureEnabled(enableDictation)}>
+    <Show when={isDictationAvailable()}>
       <Button
+        aria-label={props.dictation.label()}
         variant="ghost"
-        size="icon-composer"
-        class="text-ink not-touch:text-composer-ink"
-        label={props.dictation.label()}
+        size="icon-md"
+        class="text-composer-ink"
         tooltip={props.dictation.label()}
         disabled={props.disabled || props.dictation.disabled()}
         onClick={() => fireAndForget(props.dictation.start(), 'dictation')}
       >
-        <MicrophoneIcon />
+        <MicrophoneIcon class="size-5 touch:size-6 shrink-0 pointer-events-none" />
       </Button>
     </Show>
   );
@@ -34,7 +34,7 @@ export function DictationPanel(props: { dictation: DictationController }) {
   return (
     <Show when={props.dictation.active()}>
       <div
-        class="absolute inset-0 z-10 flex items-center gap-2 rounded-[inherit] bg-composer px-[9.375px] text-composer-ink touch:gap-1.5 touch:bg-chrome touch:pr-2 touch:pl-3"
+        class="absolute inset-0 z-10 flex items-center gap-2 rounded-[inherit] bg-composer px-[9.375px] text-composer-ink"
         role="group"
         aria-label="Dictation"
         onKeyDown={(event) => {
@@ -45,7 +45,7 @@ export function DictationPanel(props: { dictation: DictationController }) {
           }
         }}
       >
-        <div class="flex min-w-0 flex-1 items-center gap-3 px-2 touch:gap-2 touch:px-0">
+        <div class="flex min-w-0 flex-1 items-center gap-3 px-2">
           <VolumeTimeline levels={props.dictation.volumeHistory()} />
           <span
             class="shrink-0 text-xs text-ink-muted"
@@ -60,10 +60,11 @@ export function DictationPanel(props: { dictation: DictationController }) {
           </span>
         </div>
         <Button
+          aria-label="Cancel dictation"
+          tooltip="Cancel dictation"
           variant="ghost"
-          size="icon-composer"
-          class="text-composer-ink touch:bg-ink/5 touch:text-ink-muted"
-          label="Cancel dictation"
+          size="icon-md"
+          class="text-composer-ink"
           ref={(element) =>
             queueMicrotask(() => {
               if (element.isConnected) element.focus();
@@ -71,22 +72,21 @@ export function DictationPanel(props: { dictation: DictationController }) {
           }
           onClick={props.dictation.cancel}
         >
-          <XIcon />
+          <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
-        {/* Confirm is the composer's primary action while recording, so on
-            touch it borrows the send button's filled circle. */}
         <Button
+          aria-label="Use dictation"
+          tooltip="Use dictation"
           variant="ghost"
-          size="icon-composer"
-          class="text-composer-ink touch:bg-ink touch:text-surface-4"
-          label="Use dictation"
+          size="icon-md"
+          class="text-composer-ink"
           disabled={
             props.dictation.phase() === 'starting' ||
             props.dictation.phase() === 'finishing'
           }
           onClick={() => fireAndForget(props.dictation.confirm(), 'dictation')}
         >
-          <CheckIcon />
+          <CheckIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
     </Show>

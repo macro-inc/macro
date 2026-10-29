@@ -1,9 +1,22 @@
 # AI Chat (Agents)
 
+Agent session split headers show other current viewers' avatars, excluding your
+own, with up to three avatars and a count for additional viewers. Presence uses
+the resolved session ID, including sessions opened from the create menu. Open
+the same shared session in two signed-in browser contexts and check that each
+shows the other viewer; closing one session removes its avatar from the other.
+Desktop and touch headers use the same avatar group.
+
 User-sent messages in chat and agent transcripts use an ink-colored bubble with
 `InvertUtil` in light themes. Dark themes use `Layer depth={3}` for the slightly
 lighter bubble with the normal text palette. Preview Markdown and controls at
 `/app/debug/ui?ui=invert-util` under **User-sent AI message**.
+
+Prompt bubbles show only user text: the private `<m-agent-context>` prefix
+stays in the agent payload but is stripped before Markdown rendering, for both
+the optimistic echo and stored prompts after reload. Queued previews and editors
+also hide it; editing a queued prompt preserves its private prefix on save.
+Verify with a context-bearing prompt before confirmation and after reload.
 
 A prompt shows a quiet line under its bubble (`data-testid="prompt-footer"`):
 when it was posted, and, for a prompt delivered from elsewhere (a mention, a
@@ -22,7 +35,11 @@ tool list. Expand the discovery row to see the results. An app name alone does
 not establish that the requested action is supported.
 
 For a suitable unconnected app, the assistant offers **Connect <app>**. Clicking
-it opens the hosted authorization flow over the agent transcript on web. In
+it opens the hosted authorization flow over the agent transcript on web. For an
+overlaid app (one with its own MCP server, see Settings → Integrations) it
+opens that server's OAuth consent in a new tab instead, and the session
+continues once the server is authorized; the agent then reaches the app
+through that server rather than Pipedream. In
 native apps, consent opens in the system browser, which returns to Macro on its
 own after authorization (**Return to Macro** is the fallback link). The waiting
 dialog's **Done** checks Pipedream for an account the flow created, and callbacks
@@ -109,6 +126,13 @@ read project activity. Backend tool names use `Initiative`. These operate on the
 native Projects views in Tasks. Agents set or clear a task's project with
 `SetEntityProperty` on the task's `Project` property.
 
+In-memory agent tool rows appear as pending as soon as the model names the
+call. Partial argument previews update at most every 250 ms and stop after
+16 KiB; execution replaces the preview with the full input. Cancelling while
+the model writes arguments closes the row as failed without executing it.
+Verify with a long document creation request, cancel once mid-write, then
+reconnect after a completed call and confirm its final input and result replay.
+
 Each completed tool row has an expandable result toggle, including empty results
 and per-task failures. Project chips open the native project. Shift-click opens
 another split. **Result data** reveals the complete returned response. Successful
@@ -165,13 +189,17 @@ arrow without a background, including when disabled. The short placeholder reads
 “Message Macro AI”.
 Its collapsed height matches New, with Send visible and the model/provider control hidden until the input is focused. Tap the input to expand across the row, hiding New and giving the draft
 a full-width text area above the controls.
-Chat/Code stays in the inset bar above the input on phones. Repository controls
-appear alongside it in Code mode.
+Auto/Chat/Code stays in the inset bar above the input on phones, as icons only.
+Repository controls appear alongside it in Code mode.
 Tapping outside collapses the composer and restores New.
 The editor and model picker stay mounted so collapsing preserves the draft.
 Dismissing the model or effort selector on mobile returns focus to the message input.
 Active sessions use the same compact mobile model drawer: focused search, Suggested
 with Gemini last, and More models for the complete provider catalog.
+In new and active agent composers, check that the model selector and lightning
+speed toggle share a height and vertical center: 32px on desktop and 36px with
+touch emulation. Open the model picker and toggle fast mode to verify both
+controls remain interactive at desktop, phone, and tablet widths.
 Repository and branch pickers keep the composer expanded while their search
 fields are focused, so their anchor stays in place.
 
@@ -186,8 +214,8 @@ While an agent works, a draft can be sent to its queue. Above the queue,
 message. The empty composer offers the same action as **Flush queued messages**
 with a ringed send arrow; with a draft it offers **Send**. Each queued row offers
 **Steer** while a turn is running, to interrupt it and send that row next. With no
-draft or queue, the busy composer offers **Stop**. Send-next actions disable and
-Steer is hidden during stopping/starting and for read-only sessions.
+draft or queue, the busy composer offers **Stop**. Send next and Steer stay
+available while a previous one is starting; read-only sessions get neither.
 
 Phone verification: check portrait and landscape with touch emulation. In the
 Agents composer, enter multiple lines and tap Send, attach, or the model control;
@@ -374,7 +402,7 @@ the shimmer.
   pressed; runs of routines set to **Show runs** are always listed. Every
   routine run carries the same clock icon after its age. The list starts
   without hidden runs each time the Agents view opens.
-- The agent composer's **+ (Add)** menu offers **Add photos & files**,
+- The agent composer's **+ (Add)** menu offers **Add photos**, **Add files**,
   **Add from library** (`@` references), and **Use a skill** (`/`; sessions show
   **Skills & commands**). Desktop uses a scrollable menu; phones use a bottom
   sheet with the same actions. Selecting a reference or skill restores editor
@@ -395,9 +423,9 @@ the shimmer.
   Both modes retain the production composer background.
 - In dark mode, the footer is darker than the input, with successively lighter
   toggle track and selected segment.
-- The starting page has **Chat / Code** in the composer’s inset bar, below the input on
+- The starting page has **Auto / Chat / Code** in the composer’s inset bar, below the input on
   desktop and above it on phones. On desktop, the borderless footer is inset 12px
-  from the 28px-radius input; Chat / Code share one track with equal 8px insets
+  from the 28px-radius input; Auto / Chat / Code share one track with equal 8px insets
   in the 52px footer. The dark track is lighter than the footer lip and the selected segment lighter again;
   a faint gradient gives the dark toggle depth without borders or shadows.
   Light mode uses a panel-colored selected segment with a subtle border and shadow.
@@ -409,8 +437,19 @@ the shimmer.
   The selected segment glides for 250ms with
   an ease-out curve. The greeting text flips vertically into place on each mode change
   with the same duration; both animations respect reduced motion.
-  Its bottom corners follow the toggle's curve. The choice limits the offered agents and is
-  remembered per user. Switching modes preserves the draft and attachments and
+  Its bottom corners follow the toggle's curve. Chat and Code limit the offered agents; the choice
+  lasts only while the composer is mounted, and every composer opens in **Auto**. Auto is
+  behind the `enable-composer-auto-mode` PostHog flag (Macro employees only), which the
+  agent harness checks too; without it the switch is Chat / Code and Auto reads as Chat.
+  **Auto** (sparkle, the sidebar's Agents icon) hides the agent, model, effort, and speed controls. On send, the
+  input is briefly blocked (“Choosing Chat or Code…”) while `POST /agent-mode-choice` on the
+  agent harness asks Cloudflare's Clef Flash whether the prompt needs a coding agent. Code
+  starts the user's most recently used coding agent (else the first that can start) with its default model and
+  **Choose automatically** for the repository; Chat starts the chat agent with the same
+  model Chat mode would use. If no coding agent can start, the prompt goes to Chat
+  without asking; any failure or a 3s timeout also falls back to Chat. The session opens
+  under Chat or Code like one started from that mode.
+  Switching modes preserves the draft and attachments and
   clears model and effort overrides from the previous mode. It does not filter
   the conversation sidebar. Session composers start at one line and grow with
   longer prompts or Shift+Enter. Lists, quotes, headings, and other non-paragraph
@@ -488,7 +527,7 @@ the shimmer.
   with the repository bar below the input on desktop and above it on mobile.
   The plus attachment button stays at the far left: before the
   text in the compact row, and on the bottom control row when expanded. The editor sits above the controls, with attachments
-  on the left and the agent/model and Send on the right. On mobile, Chat/Code sits at the top left and repository controls at the top right; repository and branch selection open in standard bottom drawers. These controls sit inside the same continuous surface as the input with no inset or dividing border. On desktop, the borderless bar sits 12px inside each input edge and gives the 36px Chat/Code toggle equal 8px insets, with concentric bottom corners and a darker fill. The settings row keeps a stable height when changing modes: 52px on desktop and a 46px minimum on mobile.
+  on the left and the agent/model and Send on the right. On mobile, Auto/Chat/Code sits at the top left and repository controls at the top right; repository and branch selection open in standard bottom drawers. These controls sit inside the same continuous surface as the input with no inset or dividing border. On desktop, the borderless bar sits 12px inside each input edge and gives the 36px Auto/Chat/Code toggle equal 8px insets, with concentric bottom corners and a darker fill. The settings row keeps a stable height when changing modes: 52px on desktop and a 46px minimum on mobile.
   Selecting Chat hides the repository controls and keeps the mode switch in
   the settings row, without remounting the editor or losing the draft. Reduced-motion
   preferences disable the animation. The hidden drawer is inert. **Repository**
@@ -544,7 +583,14 @@ the shimmer.
   through other hints. Clearing a draft restores the same hint.
   Coding agents show **Describe what you want to build**; phones keep the short
   **Message Macro AI** placeholder. Type `@` for
-  mentions and `/` for skills.
+  mentions and `/` for skills and connections. The **Connections** section lists enabled native
+  servers and Pipedream connectors, preferring the native connection when both
+  provide the same tools. Selecting one inserts its name as plain text
+  (`Linear MCP `) to steer the model toward those tools. Loading and failed
+  connection reads have distinct states; disabled connections are omitted.
+  See the slash menu on [desktop](media/ai-chat/slash-connections-desktop.png)
+  and [phone](media/ai-chat/slash-connections-phone.png).
+
   Check `/` with the Android software keyboard too: the skills menu should open
   and filter while typing, without sending the draft.
 - Opening a conversation updates the URL based on that conversation's kind:
@@ -607,6 +653,11 @@ the shimmer.
   changes the model of an idle native session after native confirmation and
   displays the model identified by the session (Codex's live footer, or native
   transcript metadata). Unexpected native dialogs must be completed in Herdr.
+  When a background command, subagent, or monitor that Claude Code started
+  reports back, the reply opens with a quiet one-line row per report, such as
+  `Background command "Run tests" completed (exit code 0)`, red when it failed,
+  never a prompt bubble of `<task-notification>` XML. Claude still receives the
+  full report.
   For Codex, open the current model's submenu to select **Reasoning effort**.
   Choices come from the installed Codex catalog; the selected effort is confirmed
   from the native session and shown beside the model. Local Herdr changes and
@@ -668,6 +719,13 @@ While an answer streams, resolved mention pills should keep their names and
 icons instead of flashing back to loading placeholders. Check an answer with
 multiple mentions while more text arrives and when generation finishes, in both
 chat and agent sessions. A newly encountered mention may load once.
+
+If an agent reply stops inside a Macro mention chip, its unfinished trailing
+markup stays hidden after stopping and after reload, on desktop and mobile.
+Completed chips, literal tag examples in Markdown code, and the prose before
+the unfinished chip remain visible. Verify
+with a reply containing a completed mention followed by a partial mention: stop
+it, then reload. User-authored markup remains unchanged.
 
 On mobile, only the AI/Agents view has a floating AI composer above the bottom
 dock. Its input fills the row with no separate create button. Other views keep
@@ -1071,10 +1129,11 @@ preserve the submitted tool selection.
 
 ## Composer anatomy (a11y)
 
-AI chat (including Home and doc-scoped chat) and agent session composers have
-a **Start dictation** microphone beside Send. It records
-in memory and uploads to the
-authenticated `/dictation/transcribe` storage endpoint only on confirmation.
+On pointer devices, AI chat (including Home and doc-scoped chat) and agent
+session composers have a **Start dictation** microphone beside Send. Touch
+devices omit it because their keyboards already dictate. It records in memory
+and uploads to the authenticated `/dictation/transcribe` storage endpoint only
+on confirmation.
 Whisper is available on all plans without consuming chat credits; its server
 credential is never exposed to the browser. Unsupported recording environments
 show a disabled microphone. Every supported browser uses Whisper; there are
@@ -1091,7 +1150,6 @@ If the browser stops listening on its own, **Ready** waits for confirmation.
 While **Finishing…**, the checkmark is disabled and Cancel remains available.
 No provider name or transcription hint appears below the composer; only the
 recording limit and failures do.
-Mobile chat stays expanded when focus moves into dictation controls.
 Starting dictation in another composer releases the previous session without
 moving focus back to it. Closing the composer releases the microphone. Capture failures
 appear below the composer.
@@ -1296,10 +1354,10 @@ An agent session is `/app/agent/<uuid>`. The composer placeholder is
 **`Message the agent, @mention anything`**. Creating one (`c` then `a`, or
 `Create` → `Agent`) leaves that composer focused — on mobile that is the same
 Create-menu `triggerFocusInput` as chat, so the keyboard opens. Type `/` to
-open sections for **Skills**, **Pull requests**, and **Commands**. Skills are
-available even before the connected agent advertises commands. Select a skill
-to insert its mention, a pull request to reference it, or a harness command
-to insert `/name` as text. Search filters all sections; arrow keys move across
+open sections for **Skills**, **Connections**, **Pull requests**, and **Commands**.
+Skills are available even before the connected agent advertises commands.
+Select a skill to insert its mention, a connection to name it as text, a pull
+request to reference it, or a harness command to insert `/name` as text. Search filters all sections; arrow keys move across
 sections and Enter selects the highlighted item. Saved skills have an **Edit**
 button that opens their document editor; skills you own also have **Delete**,
 which opens the usual deletion confirmation. Built-in skills have no edit or
@@ -1323,8 +1381,8 @@ mention only notifies people who could already open it.
 In Home, a new Agents conversation, and an existing agent session, files can be
 attached to a prompt three ways: drop them anywhere on the composer (a
 "Drop files here to send them to the agent" overlay appears), paste them from the
-clipboard, or use the paperclip **`Attach files`** button. Every file uploads to the
-static file service and shows as a chip above the text (media thumbnails, document
+clipboard, or choose **Add photos** / **Add files** from the **+ (Add)** menu.
+Every file uploads to the static file service and shows as a chip above the text (media thumbnails, document
 pills with a remove `×`); **Send** is disabled while an upload is pending. The agent
 receives each file as an ACP `resource_link` (a URL it can fetch) after the prompt text,
 and the sent prompt renders its files in the transcript (image thumbnails and
@@ -1354,7 +1412,9 @@ its own session. A message that alone takes more than half of the model's
 window is refused with "This message is too long. Split it into smaller messages
 or attach it as a file." `/compact` is an ordinary message to every agent: the
 transcript shows it as sent, followed by the agent's reply; a "Context compacted"
-line appears only when the agent reports a compaction.
+line appears only when the agent reports a compaction, at the point in the reply
+where the summary landed: a summary that finishes while a tool runs splits the
+tool group, with the running call above the line and later steps below it.
 
 Cursor walkthrough files the run re-hosts appear in the transcript after the
 answer: screenshots as images, recordings as video players, and `.txt` / `.log`
@@ -1475,6 +1535,10 @@ agent as working, every Thinking label, **Calling N tools** row, shimmering
 tool title, and working row settles — earlier turns never shimmer, even ones
 the runtime cut off mid-call. Shimmer identifies current activity: an active
 tool and its containing group can shimmer together; completed rows stay still.
+Working and Thinking use the same text shimmer and keep its phase when the
+status changes. Check both labels in light and dark themes at desktop and phone
+widths: one highlight should sweep evenly across the whole label, with no
+highlight returning at the opposite edge. With reduced motion, labels stay still.
 
 ### Sharing a session
 
@@ -1650,8 +1714,10 @@ and line and marks them "sent to agent". Sending a typed composer message
 while notes are queued includes those notes in the same prompt and marks them
 sent — a second Enter does not post them again. Clicking a note's path opens
 that file in the Changes pane. Notes never go to GitHub. Collapsed files and
-unsent notes persist per session in localStorage; a new capture expands all
-files.
+unsent notes persist per session in localStorage. A fresh capture expands files
+with at most 40 changed lines (additions + deletions) and collapses larger files,
+on desktop and phones. File toggles and **Collapse all / Expand all** override
+these defaults; selecting a file in the tree expands it.
 
 The Changes pane header and sidebar totals display the linked PR's `additions`
 and `deletions` returned by the GitHub API, without summing transcript edits.
@@ -1668,6 +1734,13 @@ with `set_pull_request`, then use **Refresh changes**. An unavailable or
 oversized PR is explained in the pane; there is no branch or container fallback.
 Refresh request failures show a retry banner while keeping the last diff visible.
 The pane does not create PRs or generate their descriptions.
+
+### Failed session rows
+
+A failed agent turn shows a small red status dot in Home and Agents, including
+after reloading the list. Open the row to read the existing transcript error.
+Starting another turn clears the failure dot; unread state remains independent.
+
 ### Live development previews
 
 Coding agents can call the internal **SharePreview** tool with their local HTTP
@@ -1783,12 +1856,12 @@ must stay hidden; subsequent live messages must still appear.
   with a ring so it reads as flushing the queue rather than sending a new message);
   pressing Enter or clicking that button cancels the current turn so the queue drains
   in order, oldest first. Steer on a queued row is the interrupt for that one message;
-  flush sends whatever is already next. The advance is held — the flush control is
-  disabled and Enter is inert — while a stop is already in flight or while the prompt the last
-  advance sent is still unconfirmed (it shows as a pending bubble); once the server
-  confirms that prompt as the running turn, Enter advances the queue again. Two rapid
-  Enters therefore advance one entry, not two: each advance ends the turn the server is
-  actually running. Typed composer text still takes priority and Enter
+  flush sends whatever is already next. Each advance or Steer shows its message as a
+  pending bubble at once and drops its row; consecutive ones never wait on each other in
+  the UI. Their steer requests go out one at a time in press order, each after the
+  previous message leaves the server queue, so three rapid presses send three messages,
+  each once, in that order. A refused steer brings its row back labelled `Not sent`; it
+  stays queued and can be steered again. Typed composer text still takes priority and Enter
   queues that new prompt normally.
 - The stop button cancels only the **current** turn. The queue keeps draining: the next
   queued prompt starts a new turn. To fully quiesce a session, remove the queued
@@ -1798,8 +1871,11 @@ must stay hidden; subsequent live messages must still appear.
   A pending request shows one `Approval needed` card above the composer, with
   the command or affected file separate from the actions. The transcript does
   not repeat the pending request.
-  `Allow once` and `Deny` answer immediately; `More options` contains remembered
-  choices with the agent's full rule text. Channel Magic Chips expose the same
+  `Allow once`, `Always allow`, and `Deny` answer immediately; `Always allow`
+  shows the agent's rule text as its tooltip. `More options` holds any further
+  remembered choices with their full rule text. Native Herdr sessions (Claude
+  Code or Codex in herdr) offer `Always allow` for recognized approval
+  dialogs; see `crates/coding_agent_worker/README.md`. Channel Magic Chips expose the same
   approval card in place of their loading state, alongside existing questions.
   Only authenticated users with **Edit** or **Owner** session access may answer;
   bot, harness, and internal-service credentials cannot approve on their behalf.
@@ -1993,6 +2069,18 @@ revision stale, the AI reads the latest settings and confirms a fresh proposal.
 Identical retries reuse the saved link. Old pending booking review requests can
 be dismissed so the agent can resume with conversational confirmation.
 
+## Images in Cursor sessions
+
+Paste a public PNG, JPEG, GIF, or WebP URL into a Cursor prompt. After sending,
+the URL stays in the message and an image thumbnail appears; click it to open
+the media viewer. Extensionless image URLs work too. Reopen the session and
+verify the image remains visible. Check desktop and phone layouts.
+
+Images attached as ACP image blocks are also forwarded. Each prompt sends at
+most five images of up to 15 MiB each. HTML pages, SVGs, private or loopback
+addresses, failed fetches, and oversized images stay as text links. Stop during
+image resolution must cancel the prompt without starting a remote run.
+
 ## Image attachments and model selection
 
 Attach images using the plus button, paste, or drop. Image-capable models receive
@@ -2000,7 +2088,12 @@ uploaded images as normalized inline content, including attachments from earlier
 turns. Test an image-only prompt and a text-plus-image prompt, then follow up
 without reattaching the image.
 
-Text-only model choices show a description and a composer warning. Pasted,
+Text-only model choices show a description. In the composer’s + menu, only
+**Add photos** is dimmed, with a tooltip beside the row using the model’s house
+name (`"<Model> doesn't support images"`) on hover or arrow-key focus; selecting
+it does nothing and leaves the menu open. Touch shows the reason as the row’s
+second line instead. **Add files** remains available without a tooltip, and no
+warning banner is shown. Pasted,
 dropped, and picked images should be refused before upload; document attachments
 and text should still work. If an image is already attached when switching to a
 text-only model, keep the draft and image chip but disable Send until the image

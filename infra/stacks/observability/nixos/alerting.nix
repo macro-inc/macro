@@ -1,4 +1,4 @@
-{ ... }:
+{ lib, ... }:
 let
   lokiQuery = expr: {
     refId = "A";
@@ -33,36 +33,116 @@ let
       datadog_url = "https://us5.datadoghq.com/monitors/${monitorId}";
       description = "Migrated threshold and window; Datadog remains active during validation.";
     };
-    data = query ++ [
-      {
-        refId = "B";
-        datasourceUid = "__expr__";
-        relativeTimeRange = {
-          from = 0;
-          to = 0;
-        };
-        model = {
-          refId = "B";
-          type = "reduce";
-          expression = "A";
-          reducer = "last";
-        };
-      }
-      {
-        refId = "C";
-        datasourceUid = "__expr__";
-        relativeTimeRange = {
-          from = 0;
-          to = 0;
-        };
-        model = {
-          refId = "C";
-          type = "math";
-          expression = condition;
-        };
-      }
-    ];
+    data = query ++ expressions "last" condition;
   };
+  # Reduce query A to one value per series (B), then compare it (C).
+  expressions = reducer: condition: [
+    {
+      refId = "B";
+      datasourceUid = "__expr__";
+      relativeTimeRange = {
+        from = 0;
+        to = 0;
+      };
+      model = {
+        refId = "B";
+        type = "reduce";
+        expression = "A";
+        inherit reducer;
+      };
+    }
+    {
+      refId = "C";
+      datasourceUid = "__expr__";
+      relativeTimeRange = {
+        from = 0;
+        to = 0;
+      };
+      model = {
+        refId = "C";
+        type = "math";
+        expression = condition;
+      };
+    }
+  ];
+
+  # Prod rules: a critical and a warning rule per entry in prod-alerts.nix,
+  # each linked to that entry's panel on the "Prod alerts" dashboard.
+  prodAlerts = import ./prod-alerts.nix;
+  prodRule =
+    alert:
+    {
+      severity,
+      condition,
+    }:
+    {
+      uid = "${alert.uid}-${if severity == "critical" then "crit" else "warn"}";
+      title = "[PROD] ${alert.title} (${severity})";
+      condition = "C";
+      for = "0s";
+      # Sparse CloudWatch counters have no datapoints when idle.
+      noDataState = "OK";
+      execErrState = "Error";
+      isPaused = false;
+      labels = {
+        environment = "prod";
+        inherit severity;
+        inherit (alert) service;
+        # Only critical alerts page, through GoAlert.
+        pages = lib.boolToString ((alert.pages or false) && severity == "critical");
+      };
+      # Grafana turns the dashboard and panel annotations into the panel link
+      # in notifications and the rule view.
+      annotations = {
+        summary = alert.title;
+        inherit (alert) description;
+        runbook_url = "https://github.com/macro-inc/macro/blob/main/docs/runbooks/${alert.runbook}";
+        __dashboardUid__ = prodAlerts.dashboardUid;
+        __panelId__ = toString alert.panelId;
+      };
+      data = [
+        {
+          refId = "A";
+          datasourceUid = "cloudwatch";
+          relativeTimeRange = {
+            from = alert.window;
+            to = 0;
+          };
+          model = prodAlerts.cloudwatchQuery alert.metric;
+        }
+      ]
+      ++ expressions alert.reducer condition;
+    };
+  # Warning and critical are mutually exclusive bands, as in the dev rules.
+  prodRulePair =
+    alert:
+    let
+      critical = builtins.toJSON alert.critical;
+      warning = builtins.toJSON alert.warning;
+    in
+    if alert.firesWhen == "above" then
+      [
+        (prodRule alert {
+          severity = "critical";
+          condition = "$B > ${critical}";
+        })
+        (prodRule alert {
+          severity = "warning";
+          condition = "$B > ${warning} && $B <= ${critical}";
+        })
+      ]
+    else
+      [
+        (prodRule alert {
+          severity = "critical";
+          condition = "$B < ${critical}";
+        })
+        (prodRule alert {
+          severity = "warning";
+          condition = "$B < ${warning} && $B >= ${critical}";
+        })
+      ];
+  prodRules = lib.concatMap (row: lib.concatMap prodRulePair row.alerts) prodAlerts.rows;
   dss = [
     (lokiQuery ''sum(count_over_time({service_name="cloud-storage-service",deployment_environment="dev"} |~ "(?i)\\berror\\w*" [5m]))'')
   ];
@@ -133,6 +213,41 @@ in
             }
           ];
         }
+        {
+          orgId = 1;
+          name = "Macro Alerts";
+          receivers = [
+            {
+              uid = "macro-alerts";
+              type = "webhook";
+              disableResolveMessage = false;
+              # The loopback relay adds the channel token; see goalert.nix.
+              settings = {
+                url = "http://127.0.0.1:8090/grafana";
+                httpMethod = "POST";
+                title = ''{{ template "default.title" . }}'';
+                message = ''{{ template "default.message" . }}'';
+              };
+            }
+          ];
+        }
+        {
+          orgId = 1;
+          name = "GoAlert";
+          receivers = [
+            {
+              uid = "goalert";
+              type = "webhook";
+              disableResolveMessage = false;
+              # Loopback, so paging does not depend on the ALB. GoAlert closes the
+              # alert when Grafana sends the resolved notification.
+              settings = {
+                url = "http://127.0.0.1:3030/api/v2/grafana/incoming?token=$GOALERT_GRAFANA_KEY";
+                httpMethod = "POST";
+              };
+            }
+          ];
+        }
       ];
     };
     policies.settings = {
@@ -140,21 +255,71 @@ in
       policies = [
         {
           orgId = 1;
-          receiver = "Macro team email";
+          receiver = "Macro Alerts";
           group_by = [
             "grafana_folder"
             "alertname"
             "severity"
+            "pages"
           ];
           group_wait = "30s";
           group_interval = "5m";
           repeat_interval = "4h";
+          routes = [
+            {
+              receiver = "Macro team email";
+              object_matchers = [
+                [
+                  "environment"
+                  "="
+                  "dev"
+                ]
+              ];
+            }
+            # Paging prod rules; `continue` lets the next routes still post them
+            # to Macro Alerts.
+            {
+              receiver = "GoAlert";
+              object_matchers = [
+                [
+                  "pages"
+                  "="
+                  "true"
+                ]
+                [
+                  "severity"
+                  "="
+                  "critical"
+                ]
+              ];
+              continue = true;
+            }
+            {
+              receiver = "Macro Alerts";
+              object_matchers = [
+                [
+                  "severity"
+                  "="
+                  "critical"
+                ]
+              ];
+              repeat_interval = "1h";
+            }
+            { receiver = "Macro Alerts"; }
+          ];
         }
       ];
     };
     rules.settings = {
       apiVersion = 1;
       groups = [
+        {
+          orgId = 1;
+          name = "Prod";
+          folder = "Macro";
+          interval = "1m";
+          rules = prodRules;
+        }
         {
           orgId = 1;
           name = "Datadog dev migration";

@@ -57,7 +57,7 @@ export function AgentWizard(props: {
                 disabled={props.busy}
                 onClick={onBack()}
               >
-                <ArrowLeftIcon />
+                <ArrowLeftIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
               </Button>
             )}
           </Show>

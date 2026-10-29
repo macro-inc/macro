@@ -57,7 +57,7 @@ export function AgentModelPicker(props: {
                   </p>
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     aria-label={`Retry models for ${runtimeName()}`}
                     onClick={() =>

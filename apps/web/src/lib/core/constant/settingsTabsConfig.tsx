@@ -382,7 +382,7 @@ export const useSettingsTabAvailable = () => {
       case 'Shortcuts':
         return !isTouchDevice();
       case 'Mobile App':
-        return ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform();
+        return isNativeMobilePlatform() || ENABLE_APP_STORE_QR_CODE;
       case 'Desktop App':
         return (
           isPlatform('desktop') ||

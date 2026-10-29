@@ -36,12 +36,6 @@ const MAX_TOKENS: u64 = 64;
 const TRANSCRIPT_MESSAGES: usize = 6;
 const TRANSCRIPT_MESSAGE_CHARS: usize = 600;
 
-/// Told to the turn's model, so its reply does not open a second time. "May":
-/// the opener can lose the race, skip, or fail, and then nothing was shown.
-pub(super) const ALREADY_OPENED: &str = "A faster model may already have shown the first line \
-of your reply: a short acknowledgement such as \"On it.\" or \"Let me check your calendar.\". \
-Begin with substance. Do not acknowledge the request or announce what you are about to do.";
-
 /// Who the line speaks as: the session's agent and the model behind it, so a
 /// question about either is answered truthfully rather than as the fast
 /// model itself.

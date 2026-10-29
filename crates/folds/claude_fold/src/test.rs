@@ -172,3 +172,21 @@ fn model_changes_snapshot() {
         .collect();
     insta::assert_json_snapshot!(events);
 }
+
+#[test]
+fn cli_injected_user_lines_carry_their_origin() {
+    let mut log = ClaudeLog::default();
+    let text = "<task-notification>\n<task-id>bf1lef9e9</task-id>\n<status>completed</status>\n<summary>Background command \"Run tests\" completed (exit code 0)</summary>\n</task-notification>";
+    let notification = line(json!({
+        "type": "user", "uuid": "n1", "origin": {"kind": "task-notification"},
+        "message": {"role": "user", "content": text}
+    }));
+    assert_eq!(
+        log.entry(&notification),
+        [LogEvent::Update(json!({
+            "sessionUpdate": "user_message_chunk",
+            "content": {"type": "text", "text": text},
+            "_meta": {"claudeCode": {"origin": "task-notification"}},
+        }))]
+    );
+}

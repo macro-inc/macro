@@ -31,6 +31,7 @@ eventsource-stream = { workspace = true }
 futures = { workspace = true }
 harness_id = { path = "../harness_id" }
 harnesses = { path = "../harnesses", default-features = false }
+lazy-regex = { workspace = true }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_env_var = { path = "../macro_env_var" }
 macro_user_id = { path = "../macro_user_id" }

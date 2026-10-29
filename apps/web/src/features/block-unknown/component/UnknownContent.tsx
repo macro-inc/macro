@@ -38,11 +38,11 @@ export function UnknownContent(props: {
         </Show>
 
         <div class="flex flex-row items-center gap-2">
-          <Button variant="accent" onClick={props.onShare}>
+          <Button variant="primary" onClick={props.onShare}>
             <ShareFat class="size-4" /> Share
           </Button>
 
-          <Button variant="accent" onClick={props.onDownload}>
+          <Button variant="primary" onClick={props.onDownload}>
             <DownloadSimple class="size-4" /> Download
           </Button>
         </div>

@@ -21,7 +21,12 @@ it('routes a custom trigger through the existing picker and attachment command',
     >
       <AttachFilesAction
         accept={null}
-        trigger={(open) => <button onClick={open}>Upload</button>}
+        trigger={(open, images) => (
+          <>
+            <button onClick={open}>Upload</button>
+            <button onClick={images}>Photos</button>
+          </>
+        )}
       />
     </InputProvider>
   ));
@@ -30,6 +35,10 @@ it('routes a custom trigger through the existing picker and attachment command',
   const click = vi.spyOn(picker, 'click');
   fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
   expect(click).toHaveBeenCalledOnce();
+  expect(picker.hasAttribute('accept')).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'Photos' }));
+  expect(picker.accept).toBe('image/*');
+  fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
   expect(picker.hasAttribute('accept')).toBe(false);
   const file = new File(['example'], 'example.txt');
   fireEvent.change(picker, { target: { files: [file] } });

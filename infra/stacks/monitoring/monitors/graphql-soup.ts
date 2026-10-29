@@ -14,6 +14,8 @@
 // metric tags) once https://github.com/macro-inc/macro/pull/7911 deploys; until
 // then they have no data.
 import * as datadog from '@pulumi/datadog';
+import { goalertWebhooks } from '../goalert';
+import { notify, RENOTIFY_MINUTES } from '../notify';
 
 const GRAPHQL =
   'service:cloud-storage-service,env:prod,resource_name:post_/dss/items/soup/graphql';
@@ -32,16 +34,6 @@ const GATEWAY_ALB = 'loadbalancer:app/prod-gateway-alb/8e99d35bdc70b1c9';
 const ROLLOUT_CONTEXT = `Rollout: \`enable-graphql-soup\` (https://us.posthog.com/project/299018/feature_flags/738783).
 Client-side view: https://us.posthog.com/project/299018/dashboard/2198651`;
 
-// Datadog webhook integration that posts into the Macro "Alerts" channel
-// (https://macro.com/app/channel/019fb34d-fcfd-7548-9a0f-7084ea16416c). There
-// is no separate severe channel, so severity is marked in the message instead.
-const MACRO_ALERTS_CHANNEL = '@webhook-macro-alert-hook';
-
-const notify = (severe: boolean) =>
-  severe
-    ? `{{#is_alert}}SEVERE: user-facing impact likely, act now.{{/is_alert}}\n${MACRO_ALERTS_CHANNEL}`
-    : MACRO_ALERTS_CHANNEL;
-
 function rolloutMonitor(
   name: string,
   args: {
@@ -55,25 +47,30 @@ function rolloutMonitor(
     severe?: boolean;
   }
 ): datadog.Monitor {
-  return new datadog.Monitor(name, {
-    name: args.name,
-    type: args.type,
-    query: args.query,
-    message: `${args.description}
+  return new datadog.Monitor(
+    name,
+    {
+      name: args.name,
+      type: args.type,
+      query: args.query,
+      message: `${args.description}
 
 ${ROLLOUT_CONTEXT}
 
-${notify(args.severe ?? false)}`,
-    tags: ['env:prod', `service:${args.service}`, 'rollout:graphql-soup'],
-    priority: args.severe ? '2' : '3',
-    monitorThresholds: { critical: args.critical, warning: args.warning },
-    // APM and log counts are sparse at night; a full window would skip
-    // evaluations, and an empty count must read as zero rather than alert.
-    requireFullWindow: false,
-    onMissingData: 'default',
-    includeTags: true,
-    notifyAudit: false,
-  });
+${notify({ pages: args.severe ?? false })}`,
+      tags: ['env:prod', `service:${args.service}`, 'rollout:graphql-soup'],
+      priority: args.severe ? '2' : '3',
+      monitorThresholds: { critical: args.critical, warning: args.warning },
+      renotifyInterval: RENOTIFY_MINUTES,
+      // APM and log counts are sparse at night; a full window would skip
+      // evaluations, and an empty count must read as zero rather than alert.
+      requireFullWindow: false,
+      onMissingData: 'default',
+      includeTags: true,
+      notifyAudit: false,
+    },
+    { dependsOn: args.severe ? goalertWebhooks : [] }
+  );
 }
 
 // Latency. The endpoint's p95 is long-tailed even when healthy (30-minute p95

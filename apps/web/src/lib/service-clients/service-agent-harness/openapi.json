@@ -310,6 +310,55 @@
         ]
       }
     },
+    "/agent-mode-choice": {
+      "post": {
+        "tags": ["agent-mode-choice"],
+        "summary": "Choose whether a composer prompt goes to a chat or a coding agent.",
+        "operationId": "choose_agent_mode",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentModeChoiceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The kind of agent the prompt goes to",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentModeChoiceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The prompt is blank"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "402": {
+            "description": "The caller cannot start new AI work"
+          },
+          "403": {
+            "description": "Auto mode is not enabled for the caller"
+          },
+          "503": {
+            "description": "The classifier is unconfigured, failed, or timed out"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/agent-models/load": {
       "post": {
         "tags": ["agent-models"],
@@ -3129,6 +3178,33 @@
               "$ref": "#/components/schemas/AgentConversationDto"
             },
             "description": "Empty for ordinary channels and other people's conversations."
+          }
+        }
+      },
+      "AgentMode": {
+        "type": "string",
+        "description": "Which kind of agent a prompt is sent to.",
+        "enum": ["chat", "code"]
+      },
+      "AgentModeChoiceRequest": {
+        "type": "object",
+        "description": "Request body for `POST /agent-mode-choice`.",
+        "required": ["prompt"],
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "The prompt the composer is about to send."
+          }
+        }
+      },
+      "AgentModeChoiceResponse": {
+        "type": "object",
+        "description": "Response body for `POST /agent-mode-choice`.",
+        "required": ["mode"],
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/AgentMode",
+            "description": "Which kind of agent should receive the prompt."
           }
         }
       },
@@ -6300,6 +6376,10 @@
     {
       "name": "agent-repositories",
       "description": "Repositories a coding session can work on"
+    },
+    {
+      "name": "agent-mode-choice",
+      "description": "Whether a composer prompt goes to a chat or a coding agent"
     }
   ]
 }

@@ -11,7 +11,7 @@ fn at(minute: u32) -> chrono::DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 10, 1, 12, minute, 0).unwrap()
 }
 
-fn chat(jid: &str, kind: ChatKind, name: Option<&str>, minute: Option<u32>) -> ChatUpdate {
+fn chat(jid: &str, kind: ExternalChatKind, name: Option<&str>, minute: Option<u32>) -> ChatUpdate {
     ChatUpdate {
         jid: jid.to_owned(),
         kind,
@@ -36,14 +36,19 @@ async fn the_chat_list_merges_history_activity_and_the_roster(pool: PgPool) {
         .update_chats(
             alice,
             &[
-                chat(DIRECT, ChatKind::Direct, Some("Customer"), Some(30)),
+                chat(DIRECT, ExternalChatKind::Direct, Some("Customer"), Some(30)),
                 chat(
                     GROUP,
-                    ChatKind::Group,
+                    ExternalChatKind::Group,
                     Some("ignored: roster wins"),
                     Some(10),
                 ),
-                chat(OTHER_GROUP, ChatKind::Group, Some("Old group"), Some(20)),
+                chat(
+                    OTHER_GROUP,
+                    ExternalChatKind::Group,
+                    Some("Old group"),
+                    Some(20),
+                ),
             ],
         )
         .await
@@ -53,16 +58,16 @@ async fn the_chat_list_merges_history_activity_and_the_roster(pool: PgPool) {
         .update_chats(
             alice,
             &[
-                chat(DIRECT, ChatKind::Direct, None, Some(5)),
+                chat(DIRECT, ExternalChatKind::Direct, None, Some(5)),
                 ChatUpdate {
                     archived: Some(true),
-                    ..chat(OTHER_GROUP, ChatKind::Group, None, None)
+                    ..chat(OTHER_GROUP, ExternalChatKind::Group, None, None)
                 },
                 ChatUpdate {
                     create: false,
                     ..chat(
                         "15559990000@s.whatsapp.net",
-                        ChatKind::Direct,
+                        ExternalChatKind::Direct,
                         Some("Stranger"),
                         None,
                     )
@@ -72,7 +77,7 @@ async fn the_chat_list_merges_history_activity_and_the_roster(pool: PgPool) {
         .await
         .unwrap();
 
-    let chats = linked.chats(&person(ALICE)).await.unwrap().chats;
+    let chats = linked.whatsapp.chats(&person(ALICE)).await.unwrap().chats;
     let summary: Vec<_> = chats
         .iter()
         .map(|chat| {
@@ -83,7 +88,7 @@ async fn the_chat_list_merges_history_activity_and_the_roster(pool: PgPool) {
                 chat.archived,
                 chat.can_add,
                 chat.cannot_add_reason,
-                chat.group.as_ref().map(|group| group.id),
+                chat.added.as_ref().map(|group| group.id),
             )
         })
         .collect();
@@ -92,7 +97,7 @@ async fn the_chat_list_merges_history_activity_and_the_roster(pool: PgPool) {
         [
             (
                 DIRECT,
-                ChatKind::Direct,
+                ExternalChatKind::Direct,
                 "Customer",
                 false,
                 true,
@@ -101,7 +106,7 @@ async fn the_chat_list_merges_history_activity_and_the_roster(pool: PgPool) {
             ),
             (
                 OTHER_GROUP,
-                ChatKind::Group,
+                ExternalChatKind::Group,
                 "Old group",
                 true,
                 false,
@@ -110,7 +115,7 @@ async fn the_chat_list_merges_history_activity_and_the_roster(pool: PgPool) {
             ),
             (
                 GROUP,
-                ChatKind::Group,
+                ExternalChatKind::Group,
                 "Customer escalations",
                 false,
                 false,
@@ -152,7 +157,7 @@ async fn a_new_adoption_backfills_from_the_chat_anchor_page_by_page(pool: PgPool
         !session
             .update_chats(
                 alice,
-                &[chat(GROUP, ChatKind::Group, Some("Renamed"), None)]
+                &[chat(GROUP, ExternalChatKind::Group, Some("Renamed"), None)]
             )
             .await
             .unwrap(),
@@ -160,7 +165,10 @@ async fn a_new_adoption_backfills_from_the_chat_anchor_page_by_page(pool: PgPool
     );
     assert!(
         session
-            .update_chats(alice, &[chat(GROUP, ChatKind::Group, None, Some(40))])
+            .update_chats(
+                alice,
+                &[chat(GROUP, ExternalChatKind::Group, None, Some(40))]
+            )
             .await
             .unwrap(),
         "the chat's first message makes it ready"
@@ -255,14 +263,19 @@ async fn ending_consent_forgets_the_old_numbers_chat_list(pool: PgPool) {
     session
         .update_chats(
             alice,
-            &[chat(DIRECT, ChatKind::Direct, Some("Customer"), Some(30))],
+            &[chat(
+                DIRECT,
+                ExternalChatKind::Direct,
+                Some("Customer"),
+                Some(30),
+            )],
         )
         .await
         .unwrap();
     let stored = |pool: PgPool| async move {
         sqlx::query_scalar!(
             r#"SELECT (SELECT count(*) FROM whatsapp_chat WHERE account_id = $1)
-                + (SELECT count(*) FROM whatsapp_group_roster WHERE account_id = $1) AS "count!""#,
+                + (SELECT count(*) FROM whatsapp_roster WHERE account_id = $1) AS "count!""#,
             alice.account_id
         )
         .fetch_one(&pool)
@@ -270,8 +283,14 @@ async fn ending_consent_forgets_the_old_numbers_chat_list(pool: PgPool) {
         .unwrap()
     };
     assert!(stored(pool.clone()).await > 0);
-    let account = linked.account(&person(ALICE)).await.unwrap().unwrap();
+    let account = linked
+        .whatsapp
+        .account(&person(ALICE))
+        .await
+        .unwrap()
+        .unwrap();
     linked
+        .whatsapp
         .disconnect(
             &person(ALICE),
             account.authorization_generation,
@@ -285,20 +304,25 @@ async fn ending_consent_forgets_the_old_numbers_chat_list(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn one_batch_may_name_a_chat_twice(pool: PgPool) {
     let (linked, session, _, _, alice, _) = adopted(&pool).await;
-    let mut renamed = chat(DIRECT, ChatKind::Direct, Some("Customer (work)"), Some(10));
+    let mut renamed = chat(
+        DIRECT,
+        ExternalChatKind::Direct,
+        Some("Customer (work)"),
+        Some(10),
+    );
     renamed.create = false;
     session
         .update_chats(
             alice,
             &[
-                chat(DIRECT, ChatKind::Direct, Some("Customer"), Some(40)),
+                chat(DIRECT, ExternalChatKind::Direct, Some("Customer"), Some(40)),
                 renamed,
-                chat(DIRECT, ChatKind::Direct, None, Some(20)),
+                chat(DIRECT, ExternalChatKind::Direct, None, Some(20)),
             ],
         )
         .await
         .unwrap();
-    let listed = linked.chats(&person(ALICE)).await.unwrap().chats;
+    let listed = linked.whatsapp.chats(&person(ALICE)).await.unwrap().chats;
     let direct = listed.iter().find(|chat| chat.jid == DIRECT).unwrap();
     assert_eq!(
         (direct.name.as_str(), direct.last_activity_at),

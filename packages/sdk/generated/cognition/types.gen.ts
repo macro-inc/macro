@@ -27,7 +27,7 @@ export type AddServerRequest = {
  * Everything we use AI for. The wire / DB form of each variant is its
  * `snake_case` name.
  */
-export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'dictation' | 'image_generation';
+export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'agent_mode_choice' | 'dictation' | 'image_generation';
 
 /**
  * A structured part within an assistant message.
@@ -576,7 +576,7 @@ export type Entity = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'whatsapp_group';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 
 /**
  * Error response body.
@@ -1388,6 +1388,21 @@ export type PipedreamConnectionResponse = {
      * Human-readable display name.
      */
     server_name: string;
+};
+
+/**
+ * A catalog app that connects through its own MCP server instead of
+ * Pipedream.
+ */
+export type PipedreamOverlayResponse = {
+    /**
+     * Pipedream app name slug, as it appears in the catalog.
+     */
+    app_slug: string;
+    /**
+     * The MCP server to authorize with the native MCP OAuth flow.
+     */
+    server_url: string;
 };
 
 /**
@@ -3207,6 +3222,7 @@ export type CompletePipedreamMcpConnectionData = {
 export type CompletePipedreamMcpConnectionErrors = {
     401: string;
     404: ErrorResponse;
+    409: ErrorResponse;
     500: ErrorResponse;
     501: ErrorResponse;
 };
@@ -3285,6 +3301,26 @@ export type UpdatePipedreamMcpConnectionResponses = {
 
 export type UpdatePipedreamMcpConnectionResponse = UpdatePipedreamMcpConnectionResponses[keyof UpdatePipedreamMcpConnectionResponses];
 
+export type ListPipedreamMcpOverlaysData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/pipedream/mcp/overlays';
+};
+
+export type ListPipedreamMcpOverlaysErrors = {
+    401: string;
+    500: ErrorResponse;
+};
+
+export type ListPipedreamMcpOverlaysError = ListPipedreamMcpOverlaysErrors[keyof ListPipedreamMcpOverlaysErrors];
+
+export type ListPipedreamMcpOverlaysResponses = {
+    200: Array<PipedreamOverlayResponse>;
+};
+
+export type ListPipedreamMcpOverlaysResponse = ListPipedreamMcpOverlaysResponses[keyof ListPipedreamMcpOverlaysResponses];
+
 export type RecoverPipedreamMcpConnectionData = {
     body: PipedreamRecoverRequest;
     path?: never;
@@ -3295,6 +3331,7 @@ export type RecoverPipedreamMcpConnectionData = {
 export type RecoverPipedreamMcpConnectionErrors = {
     401: string;
     404: ErrorResponse;
+    409: ErrorResponse;
     500: ErrorResponse;
     501: ErrorResponse;
 };

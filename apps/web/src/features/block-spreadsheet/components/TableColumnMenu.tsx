@@ -59,9 +59,10 @@ export function TableColumnMenu(props: {
         modal={false}
       >
         <Dropdown.Trigger
+          aria-label={`${props.column} column menu${props.filter ? ', filtered' : ''}`}
+          tooltip={`${props.column} column menu${props.filter ? ', filtered' : ''}`}
           variant="ghost"
           size="icon-xs"
-          label={`${props.column} column menu${props.filter ? ', filtered' : ''}`}
           title={
             props.filter
               ? `Filtered: ${filterSummary(props.filter)}`

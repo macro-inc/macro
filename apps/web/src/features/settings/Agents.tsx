@@ -32,10 +32,21 @@ import {
 import { useSearchParams } from '@solidjs/router';
 import { Button, Dialog, Panel } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  on,
+  Show,
+} from 'solid-js';
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
 import { canDeleteBot, canManageAgent } from '../channel/Bots/botPermissions';
 import { AgentEditorPage } from './agent-editor-page';
+import {
+  agentSettingsRequest,
+  consumeAgentSettingsRequest,
+} from './agentSettingsState';
 import { AgentAvatar } from './components/agent-avatar';
 import { AgentSetupStrips } from './components/agent-setup-strips';
 import { CodingPreferencesSetting } from './components/coding-preferences-setting';
@@ -165,6 +176,22 @@ export function Agents(props: {
     agents().filter((agent) => agent.share === 'Private')
   );
 
+  // Opened from an agent's user card: wait for the list, then show that
+  // agent's editor if it is one the viewer manages.
+  createEffect(
+    on([agentSettingsRequest, () => agentsQuery.isPending], ([request]) => {
+      if (!request || agentsQuery.isPending) return;
+      const agent = agents().find(
+        (candidate) => candidate.id === request.agentId
+      );
+      if (agent?.editable && agent.persistedAgent) {
+        setCreating(false);
+        setEditingAgent(agent.persistedAgent);
+      }
+      consumeAgentSettingsRequest(request.id);
+    })
+  );
+
   const createAgent = async (agent: CreateAgentParams) => {
     try {
       const created = await createAgentMutation.mutateAsync(agent);
@@ -241,11 +268,11 @@ export function Agents(props: {
                   </p>
                 </div>
                 <Button
-                  variant="cta"
+                  variant="neutral"
                   size="sm"
                   onClick={() => setCreating(true)}
                 >
-                  <PlusIcon />
+                  <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
                   Add agent
                 </Button>
               </div>
@@ -431,7 +458,7 @@ function AgentRow(props: {
               aria-label={`Message ${props.agent.name}`}
               onClick={onMessage()}
             >
-              <ChatIcon />
+              <ChatIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
               Message
             </Button>
           )}
@@ -445,7 +472,7 @@ function AgentRow(props: {
               aria-label={`Edit ${props.agent.name}`}
               onClick={onEdit()}
             >
-              <PencilIcon />
+              <PencilIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           )}
         </Show>
@@ -459,7 +486,7 @@ function AgentRow(props: {
               aria-label={`Delete ${props.agent.name}`}
               onClick={onDelete()}
             >
-              <TrashIcon />
+              <TrashIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           )}
         </Show>
@@ -506,12 +533,12 @@ function AgentDeleteDialog(props: {
           </Button>
           <Button
             type="button"
-            variant="strong"
+            variant="secondary"
             size="sm"
             disabled={props.pending}
             onClick={props.onConfirm}
           >
-            <TrashIcon />
+            <TrashIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
             {props.pending ? 'Deleting…' : 'Delete agent'}
           </Button>
         </Panel.Footer>

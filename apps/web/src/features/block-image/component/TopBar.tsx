@@ -78,8 +78,12 @@ export function TopBar() {
       label: 'Ask Macro',
       icon: ChatWithAgentIcon,
       action: () => openChatWithAgent(chatEntity()),
-      buttonComponent: () => (
-        <ChatWithAgentButton entity={chatEntity()} label="Ask Macro" />
+      buttonComponent: (control) => (
+        <ChatWithAgentButton
+          grouped={control.grouped}
+          entity={chatEntity()}
+          label="Ask Macro"
+        />
       ),
     },
     {

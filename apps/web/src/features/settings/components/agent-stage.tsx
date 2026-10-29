@@ -6,8 +6,8 @@ import './agent-stage.css';
 
 /**
  * The full-page frame agents are created and edited in, in the onboarding
- * style: a header row over a scrolling column, with call-to-action buttons in
- * ink. `accent` colors the glow an `AgentHero` casts.
+ * style: a header row over a scrolling column. `accent` colors the glow an
+ * `AgentHero` casts.
  */
 export function AgentStage(props: {
   /** Accessible name for the region. */
@@ -24,7 +24,7 @@ export function AgentStage(props: {
     <section
       data-agent-stage
       aria-label={props.label}
-      class="relative isolate h-full min-h-0 overflow-hidden bg-panel text-ink [&_[data-variant=cta]]:bg-ink [&_[data-variant=cta]]:text-panel [&_[data-variant=cta]]:focus-visible:ring-panel/70"
+      class="relative isolate h-full min-h-0 overflow-hidden bg-panel text-ink"
       style={{ '--agent-accent': props.accent }}
     >
       <header
