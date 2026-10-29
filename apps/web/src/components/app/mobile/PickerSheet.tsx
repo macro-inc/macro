@@ -1,6 +1,15 @@
+import { triggerFocusInput } from '@core/directive/focusInput';
 import { Button } from '@ui';
-import { createContext, type JSX, useContext } from 'solid-js';
+import {
+  createComputed,
+  createContext,
+  type JSX,
+  on,
+  useContext,
+} from 'solid-js';
 import { MobileDrawer } from './MobileDrawer';
+
+const PICKER_SEARCH = 'input[type="text"]:not(:disabled)';
 
 const PickerSheetContext = createContext<{ onCancel: () => void }>();
 
@@ -24,6 +33,21 @@ function Root(props: {
   onCancel: () => void;
   children: JSX.Element;
 }) {
+  let content: HTMLElement | undefined;
+  const search = () => content?.querySelector<HTMLInputElement>(PICKER_SEARCH);
+  // Opening runs inside the opener's tap, so the keyboard can move straight
+  // to a stand-in input and on to the picker's search once it mounts. Without
+  // it the keyboard drops as the composer's field blurs and rises again,
+  // resizing both sheets twice.
+  createComputed(
+    on(
+      () => props.open,
+      (open) => {
+        if (open) triggerFocusInput(search);
+      },
+      { defer: true }
+    )
+  );
   return (
     <PickerSheetContext.Provider value={{ onCancel: () => props.onCancel() }}>
       <MobileDrawer
@@ -32,10 +56,22 @@ function Root(props: {
         onOpenChange={(open) => {
           if (!open) props.onCancel();
         }}
+        // The search keeps focus rather than the drawer's first control
+        // (Cancel), without scrolling the sliding sheet.
+        onInitialFocus={(event) => {
+          const input = search();
+          if (!input) return;
+          event.preventDefault();
+          input.focus({ preventScroll: true });
+        }}
       >
         <MobileDrawer.Portal>
           <MobileDrawer.Overlay />
-          <MobileDrawer.Content targetHeight={92} data-corvu-no-drag>
+          <MobileDrawer.Content
+            ref={content}
+            targetHeight={92}
+            data-corvu-no-drag
+          >
             {props.children}
           </MobileDrawer.Content>
         </MobileDrawer.Portal>
