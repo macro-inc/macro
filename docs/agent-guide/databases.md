@@ -758,6 +758,9 @@ cell empty; unknown keys or values that do not fit refuse the whole call with a
 400 listing every problem. The row is written as the webhook's creator, and the
 webhook stops working if they lose edit access.
 
+Browser examples: [desktop](media/database-webhooks/desktop.png) and
+[phone](media/database-webhooks/phone.png).
+
 ## Side panel and activity
 
 The split header's `Show Side Panel` toggle (or `]`) opens the shared floating details panel,
