@@ -634,6 +634,10 @@ Provider and custom-server More menus contain Disable, Reconnect, and Disconnect
 custom servers also offer Rename. Disabled grants show Enable. Unauthenticated
 custom servers show Connect and Remove. Disconnect/Remove require confirmation.
 Adding a custom MCP saves its name and URL; Connect on its row starts OAuth.
+In chat and agent sessions, the agent can add one for the user with the
+`ConnectMcpServer` tool: it must be a public `https` URL, the row appears here
+unauthenticated, and the user still clicks Connect to sign in. Re-adding a URL
+the user already has leaves that row and its sign-in unchanged.
 The Add MCP Server dialog uses the same 24px padding above its title as on its sides.
 Enabled custom servers are offered to the owner's agent sessions (Cursor, Claude,
 Codex, macrod, in-memory) alongside connected apps, through the same session

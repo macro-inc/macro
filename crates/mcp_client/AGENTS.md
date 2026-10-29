@@ -59,6 +59,10 @@ through `rmcp`, returning the result to the caller's tool-calling loop.
 - OAuth state lives in Redis (`redis_state_store.rs`) separately from the
   server config in Postgres (`pg_server_repo.rs`) — a server record surviving
   doesn't mean its OAuth state did.
+- `ServerDirectory`'s public-destination check for agent-added servers judges
+  hostnames by name and never resolves them, so a public name that resolves
+  to a private address passes. Protection against that belongs where the
+  backend connects, for every stored server.
 
 ## Related
 

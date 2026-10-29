@@ -331,6 +331,11 @@ the shimmer.
   app authentication and disconnection), also available under Settings → Integrations.
   Home’s **Connect your tools** and agent replies’ **Connect app** chips open this
   Integrations page. It shows installed tools above the app catalog, with personal Gmail/GitHub account links in a separate section above.
+- Ask the agent to connect an MCP server by URL (for example "connect the MCP
+  server at https://mcp.example.com/mcp"). It calls **ConnectMcpServer**, which
+  adds a public `https` server to Connections and renders a **Connected MCP
+  server** card; when the server needs a sign-in, the agent asks the user to
+  click Connect next to it in Connections.
 
   In a secondary desktop split, the new-conversation page and existing chats show
   one close button beside **Show navigation** while the sidebar is collapsed.
