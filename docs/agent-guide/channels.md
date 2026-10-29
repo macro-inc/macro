@@ -285,6 +285,17 @@ be loaded or exceeds the inline limit, its URL remains available. To check this,
 ask the agent to inspect an image on a channel message and a video on a reply;
 verify that its tool response includes the matching attachment URLs.
 
+## Messages sent through an MCP client
+
+A message a user's MCP client (Claude Code, Cursor, ChatGPT) sends through
+Macro MCP's `SendChannelMessage` is posted by the Macro bot with a
+**from <user> via <client>** pill under the sender name, where the client is the
+name it registered with Macro's OAuth broker. A self-hosted agent's message
+shows the agent as the sender with **from <user>**, and a message sent with a
+pasted Macro API key shows the Macro bot with **from <user>**. To check this,
+connect an MCP client over OAuth, ask it to post in a channel, and confirm the
+pill names both you and the client on desktop and at phone width.
+
 ## Message composer
 
 Channel messages and thread replies have a microphone next to Send on pointer

@@ -67,6 +67,7 @@ fn message(id: Uuid, thread_id: Option<Uuid>, sender: ChannelSender<'static>) ->
         imported_author: None,
         bot_profile: None,
         mentions: vec![],
+        triggered_via: None,
         triggered_by: None,
         content: format!("comment {id}"),
         created_at: at(),
@@ -587,6 +588,43 @@ async fn comments_from_two_agents_post_as_each_agent_for_the_user() {
         })
         .collect();
     assert_eq!(authors, [reviewer, planner]);
+}
+
+/// A user's MCP client posts as the Macro bot for the user, with the client
+/// named on the post; a pasted API key posts the same way without a label.
+#[tokio::test]
+async fn a_comment_through_an_mcp_client_names_the_client() {
+    let messages = FakeMessages::default();
+    let ServiceContext(tool_context) = context(AccessLevel::Comment, messages.clone());
+    comment_on_initiative("Looks good.")
+        .call(
+            ServiceContext(tool_context.clone().with_via("Claude Code".to_owned())),
+            request(),
+        )
+        .await
+        .unwrap();
+    comment_on_initiative("Looks good.")
+        .call(ServiceContext(tool_context), request())
+        .await
+        .unwrap();
+
+    let posts = messages.posts.lock().unwrap();
+    let [(via_access, via_post), (key_access, key_post)] = posts.as_slice() else {
+        panic!("expected two posts, got {}", posts.len());
+    };
+    for access in [via_access, key_access] {
+        let EntityAccessAuth::Bot(bot) = access.auth() else {
+            panic!("expected a bot post, got {:?}", access.auth());
+        };
+        assert_eq!(bot.bot_id(), bot_id::MACRO_AI_BOT_ID);
+    }
+    assert_eq!(
+        via_post.attribution,
+        MessageAttribution::ActingUserVia {
+            client: "Claude Code".to_owned()
+        }
+    );
+    assert_eq!(key_post.attribution, MessageAttribution::ActingUser);
 }
 
 #[tokio::test]

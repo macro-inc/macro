@@ -3,8 +3,8 @@ use super::{
     CodeModeError, ExecutionActivity, ExecutionStatus,
     service::{Reviews, settle, validate_request},
 };
+use ai_toolset::ToolCaller;
 use async_trait::async_trait;
-use bot_id::BotId;
 use code_execution::domain::{ExecuteRequest, ProgramExecutor, RunEnvironment};
 use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;
@@ -16,13 +16,12 @@ use tokio_util::sync::CancellationToken;
 /// Mint a short-lived credential for the user a run acts as.
 #[async_trait]
 pub trait UserExecutionCredentials: Send + Sync + 'static {
-    /// The user comes from the authenticated request, never from generated code.
-    /// `agent` is the agent the request's credential was signed for, if any;
-    /// the run's SDK writes are attributed to it.
+    /// The user and caller come from the authenticated request, never from
+    /// generated code; an agent caller's SDK writes are attributed to it.
     async fn issue(
         &self,
         user: &MacroUserIdStr<'static>,
-        agent: Option<BotId>,
+        caller: &ToolCaller,
     ) -> Result<RunEnvironment, CodeModeError>;
 }
 
@@ -50,7 +49,7 @@ pub trait UserCodeMode: Send + Sync + 'static {
     async fn execute(
         &self,
         user: &MacroUserIdStr<'static>,
-        agent: Option<BotId>,
+        caller: &ToolCaller,
         request: ExecuteRequest,
         cancel: CancellationToken,
     ) -> Result<UserExecutionReceipt, CodeModeError>;
@@ -91,12 +90,12 @@ impl UserCodeMode for UserCodeModeService {
     async fn execute(
         &self,
         user: &MacroUserIdStr<'static>,
-        agent: Option<BotId>,
+        caller: &ToolCaller,
         request: ExecuteRequest,
         cancel: CancellationToken,
     ) -> Result<UserExecutionReceipt, CodeModeError> {
         validate_request(&request)?;
-        let environment = self.credentials.issue(user, agent).await?;
+        let environment = self.credentials.issue(user, caller).await?;
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
         let execution = self.executor.execute_program_with_progress(
             request,

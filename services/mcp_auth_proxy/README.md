@@ -86,6 +86,19 @@ refresh: the new token is bound before the superseded one is dropped, so a
 replay of a token the broker has already rotated past finds no binding and is
 refused.
 
+Access tokens are recorded the same way, so the `/mcp` route can tell which
+client a request comes from: both grants bind the access token they hand out to
+the same client and grant, through the same `RefreshTokenBindingStore`, under a
+SHA-256 digest taken with a fixed prefix so it can never match a refresh token's
+binding (`domain/access_token_clients.rs`). The bearer middleware reads the
+binding and the client's registered `client_name` and attaches the request's
+caller (`ai_toolset::ToolCaller`) for the tools, which label what the client
+writes "via <client_name>". The name is self-reported at `/register`: a display
+label, never an identity or permission. A token issued before its binding was
+recorded carries no name; the client's next refresh records one. Reading the
+records only through the existing ports keeps them working on any store
+backend.
+
 Refresh tokens issued before this scheme existed have no binding, so the clients
 holding them authorize once more. Rate limiting of `/register` belongs at the
 edge; the broker bounds each registration's size but not how many a caller may
