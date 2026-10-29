@@ -144,14 +144,30 @@ function EntityCollectionPropertyBody(props: {
         role="group"
         aria-label={props.property.displayName}
         aria-busy={isSaving()}
-        class="col-start-1 mt-1 min-w-0 rounded-lg"
+        class="col-span-2 mt-1 min-w-0"
       >
         <div class="flex flex-wrap gap-1.5">
           <For
             each={entities()}
             fallback={
               <Show when={!props.loading && !canDrop()}>
-                <CollectionEmptyState message={t('common.emptyCollection')} />
+                <CollectionEmptyState
+                  message={t('common.emptyCollection')}
+                  action={
+                    <Show when={!isReadOnly()}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="xs"
+                        disabled={isSaving()}
+                        onClick={handleAdd}
+                      >
+                        <Plus class="size-4" />
+                        {t('common.add')}
+                      </Button>
+                    </Show>
+                  }
+                />
               </Show>
             }
           >
@@ -197,22 +213,6 @@ function EntityCollectionPropertyBody(props: {
           </div>
         </div>
       </div>
-      <Show when={!props.loading && entities().length === 0 && !isReadOnly()}>
-        <div class="col-start-2 row-start-2 mt-1 flex min-h-9 items-center justify-end self-start">
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            class={cn(canDrop() && 'invisible pointer-events-none')}
-            aria-hidden={canDrop()}
-            disabled={isSaving() || canDrop()}
-            onClick={handleAdd}
-          >
-            <Plus class="size-4" />
-            {t('common.add')}
-          </Button>
-        </div>
-      </Show>
     </div>
   );
 }

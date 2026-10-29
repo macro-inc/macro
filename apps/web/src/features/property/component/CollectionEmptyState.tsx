@@ -13,14 +13,12 @@ export function CollectionEmptyState(props: CollectionEmptyStateProps) {
     <div
       data-slot="collection-empty-state"
       class={cn(
-        'flex min-h-9 w-full items-center gap-2 text-left',
+        'flex w-full min-w-0 flex-col items-start gap-2 text-left',
         local.class
       )}
       {...rest}
     >
-      <div class="flex min-h-9 min-w-0 flex-1 items-center px-2 py-1 text-xs text-ink-extra-muted">
-        {local.message}
-      </div>
+      <span class="text-xs text-ink-extra-muted">{local.message}</span>
       {local.action}
     </div>
   );
