@@ -53,7 +53,7 @@ The marketing homepage's separate screenshot copies under
 ## Star history
 
 `star-history.py` embeds a GitHub stargazer timestamp snapshot through
-October 28, 2026 (5,281 stars). It counts current stargazers, so removed stars
+October 29, 2026 (5,640 stars). It counts current stargazers, so removed stars
 are absent from the historical totals.
 
 Refresh the source timestamps with:

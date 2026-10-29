@@ -286,6 +286,6 @@ If Macro is interesting/useful to you, please scroll up and give the repo a star
 <a href="https://github.com/macro-inc/macro">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/readme/star-history-dark.svg" />
-    <img alt="Star history for macro-inc/macro, from launch to 5281 stars (updated October 28, 2026)" src=".github/readme/star-history-light.svg" width="100%" />
+    <img alt="Star history for macro-inc/macro, from launch to 5640 stars (updated October 29, 2026)" src=".github/readme/star-history-light.svg" width="100%" />
   </picture>
 </a>
