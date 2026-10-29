@@ -113,8 +113,10 @@ under that action, including the account catalog's durable refresh.
 
 After onboarding, an eligible desktop app user sees **Enable Desktop
 Notifications**. Select **Enable** to request permission through the native
-notification provider; macOS uses its system permission dialog. The web prompt
-continues to say **Enable Browser Notifications** and uses browser permissions.
+notification provider; macOS uses its system permission dialog. The Android app
+says **Enable Notifications** and requests the Android notification permission
+through the same native provider. The web prompt says **Enable Browser
+Notifications** and uses browser permissions.
 Select **Hide** to dismiss the prompt. It waits in the same region as other
 prompts, one card at a time.
 

@@ -309,7 +309,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   controls live under collapsed Advanced settings. See the
   [Bots walkthrough](../../docs/agent-guide/settings.md#bots).
 - Label the notification permission toast **Enable Desktop Notifications** in
-  the desktop app and keep its Enable action on the native notification provider.
+  the desktop app and **Enable Notifications** in the Android app, and keep
+  their Enable action on the native notification provider.
 - Keep signed-out Drive document routes on the shared detail viewer without
   mounting private list/sidebar sources; let document access checks decide visibility.
 - Gate account-only queries, comment readers, and account WebSockets on confirmed
