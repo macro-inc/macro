@@ -271,7 +271,7 @@ export function usePrLinksQuery(
 ) {
   const chunks = createMemo(() => chunk(pullRequests(), LINKS_CHUNK_SIZE));
   const queries = useQueries(() => ({
-    queries: chunks().map(prLinksQueryOptions),
+    queries: chunks().map((pullRequests) => prLinksQueryOptions(pullRequests)),
   }));
 
   const page = createMemo<PrLinksPage>(() => {

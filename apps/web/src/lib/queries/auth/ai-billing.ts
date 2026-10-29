@@ -16,11 +16,6 @@ type UseAiBillingSummaryQueryOptions = {
   enabled?: boolean | (() => boolean);
 };
 
-/**
- * The signed-in user's AI usage position for the current billing period:
- * included allowance, usage, credits, and overage settings. The backend
- * settles pending credits/overage before answering, so this is authoritative.
- */
 function aiBillingSummaryQueryOptions(enabled: boolean) {
   return {
     queryKey: authKeys.aiBillingSummary.queryKey,
@@ -35,6 +30,11 @@ function aiBillingSummaryQueryOptions(enabled: boolean) {
   };
 }
 
+/**
+ * The signed-in user's AI usage position for the current billing period:
+ * included allowance, usage, credits, and overage settings. The backend
+ * settles pending credits/overage before answering, so this is authoritative.
+ */
 export function useAiBillingSummaryQuery(
   options?: UseAiBillingSummaryQueryOptions
 ) {

@@ -44,8 +44,7 @@ import {
   useMessageInboxQuery,
 } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
-import { fetchDocumentMetadata } from '@queries/storage/document-metadata';
-import { entityKeys } from '@queries/storage/keys';
+import { documentMetadataQueryOptions } from '@queries/storage/document-metadata';
 import type { SendEmail } from '@service-cognition/generated/tools/types';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
 import { debounce } from '@solid-primitives/scheduled';
@@ -105,14 +104,6 @@ function fromEmailRecipients(
       'name' in recipient.data ? (recipient.data.name ?? null) : null;
     return { email, name };
   });
-}
-
-function attachedDocumentQueryOptions(documentId: string) {
-  return {
-    queryKey: entityKeys.documentMetadata(documentId).queryKey,
-    queryFn: () => fetchDocumentMetadata(documentId),
-    staleTime: 60 * 1000,
-  };
 }
 
 function DraftComposerSurface(props: ComponentProps<typeof ComposerSurface>) {
@@ -251,7 +242,7 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
     documentId: string
   ): Promise<DocumentDescription> => {
     const metadata = await queryClient.fetchQuery(
-      attachedDocumentQueryOptions(documentId)
+      documentMetadataQueryOptions(documentId)
     );
     const fileType = metadata.fileType ?? undefined;
     return {

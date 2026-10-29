@@ -21,7 +21,6 @@ import {
   resolveAvailabilityWindow,
 } from './availability';
 
-/** Evaluates every copy range against the same occurrence snapshot and settings. */
 function currentOccurrencesQueryOptions(
   userId: string | undefined,
   range: CalendarOccurrenceQueryRange
@@ -33,6 +32,7 @@ function currentOccurrencesQueryOptions(
   });
 }
 
+/** Evaluates every copy range against the same occurrence snapshot and settings. */
 export function useAvailabilityRanges(settings: () => AvailabilitySettings) {
   const userId = useUserId();
   const [now, setNow] = createSignal(new Date());

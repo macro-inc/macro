@@ -96,7 +96,7 @@ function retainedRowsQueryOptions(
   rowIds: string[]
 ) {
   return queryOptions({
-    queryKey: [...key, 'retained', rowIds],
+    queryKey: [...key, 'retained', [...rowIds].sort()],
     enabled: rowIds.length > 0,
     queryFn: async () => {
       const result = await readDatabasePages(api, {
@@ -132,7 +132,7 @@ export function createDatabaseApiSource(args: {
     () => client
   );
   const held = useQuery(
-    () => retainedRowsQueryOptions(api, key, tableId, [...retained()()].sort()),
+    () => retainedRowsQueryOptions(api, key, tableId, [...retained()()]),
     () => client
   );
   const schema = () => (queryReadyGate(table) ? table.data : undefined);

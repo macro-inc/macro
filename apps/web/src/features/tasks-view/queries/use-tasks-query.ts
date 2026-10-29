@@ -117,6 +117,15 @@ function namesCrmRecord(task: TaskEntityWithProperties, crm: TaskCrmScope) {
   ).includes(crm.id);
 }
 
+/** A plain copy of the view's facet store, safe to keep in cached options. */
+function copyFacets(
+  facets: TaskViewContext['facets']
+): TaskViewContext['facets'] {
+  return Object.fromEntries(
+    Object.entries(facets).map(([facet, values]) => [facet, [...values]])
+  );
+}
+
 /** Admits an optimistic row only where this scoped view shows it. */
 function taskInsertFilter(
   context: TaskViewContext,
@@ -187,7 +196,7 @@ export function useTasksDataSource(
     meta: scoped
       ? {
           insertFilter: taskInsertFilter(
-            viewContext(),
+            { ...viewContext(), facets: copyFacets(state.facets) },
             options.reference?.(),
             options.crm?.()
           ),
