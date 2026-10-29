@@ -33,7 +33,8 @@ export function EmailSidePanelSections(props: EmailSidePanelSectionsProps) {
         title="Properties"
         defaultOpen
         order={30}
-        render={(renderSection) => (
+      >
+        <Suspense fallback={<SidePanel.Loading />}>
           <EntityPropertiesSection
             entityId={props.threadId}
             entityType="THREAD"
@@ -41,10 +42,9 @@ export function EmailSidePanelSections(props: EmailSidePanelSectionsProps) {
             documentName={props.title}
             propertyFilter={(property) => property.isMetadata !== true}
             showTags={false}
-            renderSection={renderSection}
           />
-        )}
-      />
+        </Suspense>
+      </SidePanel.Section>
       <EntityActivitySectionConditional
         entityId={props.threadId}
         entityType="THREAD"

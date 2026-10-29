@@ -1,12 +1,16 @@
-import { t } from '@app/lib/i18n';
-import {
-  SidePanel,
-  type SidePanelSectionLayout,
-} from '@components/app/side-panel/SidePanel';
+import { SidePanel } from '@components/app/side-panel/SidePanel';
+import { useIsAuthenticated } from '@core/auth';
+import type { BlockAlias, BlockName } from '@core/block';
+import { PopupPreview } from '@core/component/DocumentPreview';
+import { HoverCard } from '@core/component/HoverCard';
+import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
+import { itemToBlockName } from '@core/constant/allBlocks';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import Plus from '@icon/system/regular/plus.svg';
 import PushPinIcon from '@icon/system/regular/push-pin.svg';
 import PushPinSlashIcon from '@icon/system/regular/push-pin-slash.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
+import DeleteIcon from '@icon/system/regular/x.svg';
 import { Property as PropertyNS, useProperty } from '@property';
 import { AddPropertyButton } from '@property/component/AddPropertyButton';
 import { Modals } from '@property/component/modal';
@@ -26,6 +30,7 @@ import type {
   PropertyDefinitionDomain,
 } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
+import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useTagsQuery } from '@queries/properties/tags';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -39,14 +44,10 @@ import {
   type JSX,
   Match,
   Show,
-  type Signal,
+  Suspense,
   Switch,
 } from 'solid-js';
 import { match } from 'ts-pattern';
-import {
-  EntityCollectionProperty,
-  NonUserEntityChip,
-} from './EntityCollectionProperty';
 
 export interface EntityPropertiesSectionProps {
   entityId: string;
@@ -58,7 +59,6 @@ export interface EntityPropertiesSectionProps {
   propertyFilter?: (property: Property) => boolean;
   getEmptyLabel?: (property: Property) => JSX.Element | undefined;
   showAddProperty?: boolean;
-  renderSection?: SidePanelSectionLayout;
   showTags?: boolean;
   defaultPinnedPropertyIds?: () => readonly string[];
   /** Keep required fields attached without hiding other entity properties. */
@@ -88,10 +88,41 @@ export interface EntityPropertiesSectionProps {
   hidePropertyDefinitionIds?: string[];
 }
 
-export {
-  EntityTagsSection,
-  type EntityTagsSectionProps,
-} from './EntityTagsSection';
+export interface EntityTagsSectionProps {
+  entityId: string;
+  entityType: EntityType;
+  canEdit: boolean;
+  order?: number;
+}
+
+export function EntityTagsSection(props: EntityTagsSectionProps) {
+  const tagsQuery = useTagsQuery();
+  const isAuthenticated = useIsAuthenticated();
+
+  return (
+    <Show when={isTaggableEntityType(props.entityType)}>
+      <SidePanel.Section id="tags" title="Tags" defaultOpen order={props.order}>
+        <Show
+          when={isAuthenticated() !== false && !tagsQuery.isError}
+          fallback={
+            <span class="text-xs text-ink-extra-muted">Tags unavailable</span>
+          }
+        >
+          <Suspense fallback={<SidePanel.Loading />}>
+            <div class="text-xs">
+              <TagsRow
+                entityId={props.entityId}
+                entityType={props.entityType}
+                canEdit={props.canEdit}
+                triggerVariant="pill"
+              />
+            </div>
+          </Suspense>
+        </Show>
+      </SidePanel.Section>
+    </Show>
+  );
+}
 
 export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
   const { properties, isLoading, error, refetch, addProperty, removeProperty } =
@@ -278,14 +309,32 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
       saveOne(property, { valueType: 'DATE', value: date }),
   };
 
-  const renderContent = () => (
+  return (
     <Show
       when={!error()}
       fallback={
         <div class="text-failure-ink text-center py-4 text-xs">{error()}</div>
       }
     >
-      <div class="flex flex-col gap-1 text-xs">
+      <div class="text-xs">
+        <PropertiesProvider
+          entityId={props.entityId}
+          entityType={props.entityType}
+          canEdit={props.canEdit}
+          documentName={props.documentName}
+          properties={filteredProperties}
+          onRefresh={refetch}
+          onPropertyAdded={handlePropertyAdded}
+          onPropertyAddFailed={handlePropertyAddFailed}
+          onPropertyDeleted={refetch}
+          onPropertyUnpinned={
+            props.onPropertyUnpinned ? unpinProperty : undefined
+          }
+          pinnedPropertyIds={titlePinnedIds}
+          addProperty={addEntityProperty}
+          removeProperty={removeEntityProperty}
+          saveHandler={saveHandler}
+        >
           <Show when={isLoading()}>
             <SidePanel.Loading />
           </Show>
@@ -295,10 +344,8 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
               props.showTags !== false && isTaggableEntityType(props.entityType)
             }
           >
-            <div class="flex items-center gap-3">
-              <span class="w-(--sidepanel-label-width) shrink-0 text-ink-muted">
-                Tags
-              </span>
+            <div class="mb-2 flex items-center gap-3">
+              <span class="text-ink-muted">Tags</span>
               <TagsRow
                 entityId={props.entityId}
                 entityType={props.entityType}
@@ -308,7 +355,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
           </Show>
 
           <Show when={gridProperties().length > 0}>
-            <SidePanel.Grid class="auto-rows-[minmax(1.75rem,auto)] gap-y-1">
+            <SidePanel.Grid class="auto-rows-[minmax(1.75rem,auto)]">
               <For each={gridProperties()}>
                 {(property) => (
                   <SidePanelPropertyRow
@@ -344,111 +391,44 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
           </Show>
 
           <Show when={collectionProperties().length > 0}>
-            <div class="flex flex-col gap-1">
-              <For
-                each={collectionProperties().map(
-                  (property) => property.propertyDefinitionId
-                )}
-              >
-                {(definitionId) => (
-                  <Show
-                    when={collectionProperties().find(
-                      (property) => property.propertyDefinitionId === definitionId
-                    )}
-                  >
-                    {(property) => (
-                      <EntityCollectionProperty
-                        entityId={props.entityId}
-                        loading={isLoading()}
-                        onRefresh={refetch}
-                        property={property()}
-                        actions={(saving) => (
-                          <PropertyRowActions
-                            saving={saving}
-                            onRefresh={refetch}
-                            canRemoveFromEntity={
-                              !defaultPinnedDefinitionIds().has(
-                                property().propertyDefinitionId
-                              )
-                            }
-                            pinFirst
-                            property={property()}
-                            onRemovePendingProperty={removePendingProperty}
-                            onPropertyPinned={
-                              props.onPropertyPinned ? pinProperty : undefined
-                            }
-                          />
-                        )}
-                      />
-                    )}
-                  </Show>
+            <div class="flex flex-col gap-2 pb-2">
+              <For each={collectionProperties()}>
+                {(property) => (
+                  <EntityCollectionProperty
+                    entityId={props.entityId}
+                    property={property}
+                    canRemoveFromEntity={
+                      !defaultPinnedDefinitionIds().has(
+                        property.propertyDefinitionId
+                      )
+                    }
+                    onRemovePendingProperty={removePendingProperty}
+                    onPropertyPinned={
+                      props.onPropertyPinned ? pinProperty : undefined
+                    }
+                  />
                 )}
               </For>
             </div>
           </Show>
 
           <Show when={props.canEdit && props.showAddProperty !== false}>
-            <div class="mt-3 flex items-center">
+            <div
+              class={cn(
+                'flex items-center',
+                filteredProperties().length > 0 && 'mt-2'
+              )}
+            >
               <AddPropertyButton size="xs" class="m-px gap-1.5" />
             </div>
           </Show>
+          <Modals />
+        </PropertiesProvider>
       </div>
     </Show>
   );
-
-  return (
-    <PropertiesProvider
-      entityId={props.entityId}
-      entityType={props.entityType}
-      canEdit={props.canEdit}
-      documentName={props.documentName}
-      properties={filteredProperties}
-      onRefresh={refetch}
-      onPropertyAdded={handlePropertyAdded}
-      onPropertyAddFailed={handlePropertyAddFailed}
-      onPropertyDeleted={refetch}
-      onPropertyUnpinned={props.onPropertyUnpinned ? unpinProperty : undefined}
-      pinnedPropertyIds={titlePinnedIds}
-      addProperty={addEntityProperty}
-      removeProperty={removeEntityProperty}
-      saveHandler={saveHandler}
-    >
-      {props.renderSection
-        ? props.renderSection(
-            renderContent,
-            <Show
-              when={
-                !error() && props.canEdit && props.showAddProperty !== false
-              }
-            >
-              <AddPropertyHeaderAction />
-            </Show>
-          )
-        : renderContent()}
-      <Modals />
-    </PropertiesProvider>
-  );
 }
 
-function AddPropertyHeaderAction() {
-  const ctx = usePropertiesContext();
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon-xs"
-      class="text-ink-extra-muted"
-      aria-label={t('common.addProperty')}
-      title={t('common.addProperty')}
-      onClick={(event) => {
-        event.stopPropagation();
-        ctx.openPropertySelector();
-      }}
-    >
-      <Plus class="size-4" />
-    </Button>
-  );
-}
 function propertyFromPendingDefinition(
   definition: PropertyDefinitionDomain
 ): Property | undefined {
@@ -565,7 +545,7 @@ function SidePanelPropertyRow(props: {
   return (
     <div class="contents group/property-row">
       <span
-        class={cn('min-w-0 whitespace-normal break-words text-ink-muted', {
+        class={cn('text-ink-muted truncate', {
           'self-start pt-[0.3125rem]': isMultilineRow(),
           'self-center': !isMultilineRow(),
         })}
@@ -630,11 +610,9 @@ function PropertyRowActions(props: {
   onPropertyPinned?: (propertyId: string) => void;
   pinFirst?: boolean;
   property: Property;
-  saving?: Signal<boolean>;
-  onRefresh?: () => Promise<unknown>;
 }) {
   const ctx = usePropertiesContext();
-  const [isSaving, setIsSaving] = props.saving ?? createSignal(false);
+  const [isSaving, setIsSaving] = createSignal(false);
 
   const canRemove = () =>
     props.canRemoveFromEntity &&
@@ -693,7 +671,7 @@ function PropertyRowActions(props: {
         props.property.propertyId,
         props.property.propertyDefinitionId
       );
-      await (props.onRefresh ?? ctx.onRefresh)();
+      ctx.onRefresh();
     } finally {
       setIsSaving(false);
     }
@@ -956,6 +934,255 @@ function NonUserEntityValue(props: {
       </div>
     </div>
   );
+}
+
+function EntityCollectionProperty(props: {
+  canRemoveFromEntity: boolean;
+  entityId: string;
+  onRemovePendingProperty: (property: Property) => void;
+  onPropertyPinned?: (propertyId: string) => void;
+  property: Property;
+}) {
+  const ctx = usePropertiesContext();
+
+  return (
+    <PropertyNS.Root
+      property={props.property}
+      canEdit={ctx.canEdit}
+      onSave={ctx.saveHandler.saveProperty}
+      onRefresh={ctx.onRefresh}
+    >
+      <EntityCollectionPropertyBody
+        canRemoveFromEntity={props.canRemoveFromEntity}
+        property={props.property}
+        onRemovePendingProperty={props.onRemovePendingProperty}
+        onPropertyPinned={props.onPropertyPinned}
+      />
+      <PropertyNS.PopoverEditor
+        entitySelfFilter={{
+          entityType: ctx.entityType,
+          blockId: props.entityId,
+        }}
+      />
+    </PropertyNS.Root>
+  );
+}
+
+function EntityCollectionPropertyBody(props: {
+  canRemoveFromEntity: boolean;
+  onRemovePendingProperty: (property: Property) => void;
+  onPropertyPinned?: (propertyId: string) => void;
+  property: Property;
+}) {
+  const ctx = usePropertiesContext();
+  const propertyCtx = useProperty();
+  const entities = () => getEntityValues(props.property);
+  const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
+
+  const handleRemoveEntity = async (entityId: string) => {
+    const remaining = entities().filter(
+      (entity) => entity.entity_id !== entityId
+    );
+    await ctx.saveHandler.saveProperty(props.property, {
+      valueType: 'ENTITY',
+      refs: remaining.length > 0 ? remaining : null,
+    });
+    ctx.onRefresh();
+  };
+
+  return (
+    <div class="group/property-row min-w-0 py-2">
+      <div class="flex items-center justify-between gap-2">
+        <span
+          class="min-w-0 truncate text-ink-muted"
+          title={props.property.displayName}
+        >
+          {props.property.displayName}
+        </span>
+        <div class="ml-auto flex shrink-0 items-center">
+          <Show when={!isReadOnly()}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              class="text-ink-extra-muted"
+              aria-label={`Add ${props.property.displayName}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                propertyCtx.openEditor(event.currentTarget);
+              }}
+            >
+              <Plus class="size-4" />
+            </Button>
+          </Show>
+          <PropertyRowActions
+            canRemoveFromEntity={props.canRemoveFromEntity}
+            pinFirst
+            property={props.property}
+            onRemovePendingProperty={props.onRemovePendingProperty}
+            onPropertyPinned={props.onPropertyPinned}
+          />
+        </div>
+      </div>
+      <div class="mt-2 flex flex-wrap gap-1.5">
+        <For
+          each={entities()}
+          fallback={<span class="text-ink-extra-muted">Empty</span>}
+        >
+          {(entityRef) => (
+            <NonUserEntityChip
+              property={props.property}
+              entityId={entityRef.entity_id}
+              entityType={entityRef.entity_type}
+              specificMessageId={entityRef.specific_message_id}
+              canEdit={!isReadOnly()}
+              onRemove={() => handleRemoveEntity(entityRef.entity_id)}
+              onEdit={(anchor) => {
+                if (isReadOnly()) return;
+                propertyCtx.openEditor(anchor);
+              }}
+            />
+          )}
+        </For>
+      </div>
+    </div>
+  );
+}
+
+function NonUserEntityChip(props: {
+  property: Property;
+  entityId: string;
+  entityType: EntityType;
+  specificMessageId?: string | null;
+  canEdit?: boolean;
+  onRemove?: () => void;
+  onEdit?: (anchor?: HTMLElement) => void;
+}) {
+  let containerRef: HTMLDivElement | undefined;
+  const { name, icon } = usePropertyEntityDisplay(
+    () => props.entityId,
+    () => props.entityType,
+    {
+      specificMessageId: () => props.specificMessageId,
+    }
+  );
+  const previewBlockType = () =>
+    getDocumentPreviewFallbackBlockType(props.entityType);
+  const isDocumentPreviewEntity = () =>
+    props.entityType === 'DOCUMENT' || props.entityType === 'TASK';
+
+  const openEditor = (event: MouseEvent) => {
+    if (!props.canEdit || !props.onEdit) return;
+    event.stopPropagation();
+    props.onEdit(containerRef);
+  };
+
+  return (
+    <Layer depth={2}>
+      <div
+        ref={containerRef}
+        class="inline-flex min-w-0 max-w-full border h-7 items-stretch border-edge-muted rounded-md bg-surface text-ink overflow-clip"
+      >
+        <Show
+          when={isDocumentPreviewEntity()}
+          fallback={
+            <button
+              type="button"
+              class="flex min-w-0 max-w-full items-center gap-1.5 px-2 text-left"
+              onClick={openEditor}
+              disabled={!props.canEdit}
+            >
+              <span class="shrink-0 flex items-center">{icon()}</span>
+              <span class="min-w-0 truncate">{name()}</span>
+            </button>
+          }
+        >
+          <DocumentEntityChipButton
+            entityId={props.entityId}
+            fallbackBlockType={previewBlockType()}
+            icon={icon()}
+            name={name()}
+          />
+        </Show>
+        <Show when={props.canEdit && props.onRemove}>
+          <div class="border-l border-edge-muted" />
+          <Button
+            variant="ghost"
+            type="button"
+            size="icon-sm"
+            class="flex w-6 p-1 h-full shrink-0 rounded-none text-ink-muted not-disabled:hover:text-failure-ink"
+            onClick={(event) => {
+              event.stopPropagation();
+              props.onRemove?.();
+            }}
+            aria-label={`Remove ${name()}`}
+          >
+            <DeleteIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+          </Button>
+        </Show>
+      </div>
+    </Layer>
+  );
+}
+
+function DocumentEntityChipButton(props: {
+  entityId: string;
+  fallbackBlockType: BlockName | BlockAlias | undefined;
+  icon: JSX.Element;
+  name: string;
+}) {
+  const [item] = useItemPreview(() => ({
+    id: props.entityId,
+    type: 'document',
+  }));
+  const blockType = () => {
+    const preview = item();
+    if (isAccessiblePreviewItem(preview)) {
+      return itemToBlockName(preview);
+    }
+    return props.fallbackBlockType;
+  };
+  const navHandlers = useSplitNavigationHandler<HTMLButtonElement>((event) => {
+    const targetBlockType = blockType();
+    if (!targetBlockType) return;
+    event.stopPropagation();
+    openDocument(targetBlockType, props.entityId, {}, event.shiftKey);
+  });
+
+  return (
+    <button
+      type="button"
+      class="flex min-w-0 max-w-full items-center gap-1.5 px-2 text-left"
+      {...navHandlers}
+    >
+      <span class="shrink-0 flex items-center">{props.icon}</span>
+      <HoverCard
+        trigger={<span class="truncate">{props.name}</span>}
+        content={
+          <PopupPreview
+            mouseEnter={() => {}}
+            mouseLeave={() => {}}
+            documentInfo={{
+              id: props.entityId,
+              name: props.name,
+              type: blockType() ?? 'unknown',
+              params: {},
+              isOpenable: true,
+            }}
+          />
+        }
+        triggerClass="min-w-0 truncate"
+      />
+    </button>
+  );
+}
+
+function getDocumentPreviewFallbackBlockType(
+  entityType: EntityType
+): BlockName | BlockAlias | undefined {
+  if (entityType === 'TASK') return 'task';
+  if (entityType === 'DOCUMENT') return undefined;
+  return undefined;
 }
 
 function InputValue() {

@@ -2,18 +2,7 @@ import { type DateValue, formatDate } from '@core/util/date';
 import { OwnerLabel } from '@entity/owner/owner-display';
 import { type ParentProps, Show } from 'solid-js';
 
-export function EntityMetadataRow(props: ParentProps<{ label: string }>) {
-  return (
-    <div class="flex min-w-0 items-center gap-3">
-      <span class="w-(--sidepanel-label-width) shrink-0 whitespace-nowrap">
-        {props.label}
-      </span>
-      <div class="min-w-0 flex-1 wrap-break-word">{props.children}</div>
-    </div>
-  );
-}
-
-/** Quiet metadata copy shared by every block information panel. */
+/** Quiet metadata copy shared by every block information footer. */
 export function EntityMetadata(
   props: ParentProps<{
     ownerId?: string | null;
@@ -22,26 +11,22 @@ export function EntityMetadata(
   }>
 ) {
   return (
-    <div class="flex flex-col gap-2">
+    <div class="flex flex-col gap-1">
       <Show when={props.ownerId}>
         {(owner) => (
-          <EntityMetadataRow label="Owner">
-            <OwnerLabel ownerId={owner()} textOnly suppressClick />
-          </EntityMetadataRow>
+          <div class="flex min-w-0 items-center gap-1">
+            Owned by <OwnerLabel ownerId={owner()} textOnly suppressClick />
+          </div>
         )}
       </Show>
       <Show when={props.createdAt}>
         {(created) => (
-          <EntityMetadataRow label="Created">
-            {formatDate(created(), { showTime: true })}
-          </EntityMetadataRow>
+          <div>Created {formatDate(created(), { showTime: true })}</div>
         )}
       </Show>
       <Show when={props.updatedAt}>
         {(updated) => (
-          <EntityMetadataRow label="Last updated">
-            {formatDate(updated(), { showTime: true })}
-          </EntityMetadataRow>
+          <div>Last updated {formatDate(updated(), { showTime: true })}</div>
         )}
       </Show>
       {props.children}

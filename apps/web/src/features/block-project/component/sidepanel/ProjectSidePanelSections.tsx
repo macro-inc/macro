@@ -34,7 +34,8 @@ export function ProjectSidePanelSections() {
         title="Properties"
         defaultOpen
         order={30}
-        render={(renderSection) => (
+      >
+        <Suspense fallback={<SidePanel.Loading />}>
           <EntityPropertiesSection
             entityId={projectId}
             entityType="PROJECT"
@@ -42,10 +43,9 @@ export function ProjectSidePanelSections() {
             documentName={projectName()}
             propertyFilter={(property) => property.isMetadata !== true}
             showTags={false}
-            renderSection={renderSection}
           />
-        )}
-      />
+        </Suspense>
+      </SidePanel.Section>
       <EntityActivitySectionConditional
         entityId={projectId}
         entityType="PROJECT"

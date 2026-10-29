@@ -34,6 +34,8 @@ const buttonFrames = {
   ghost:
     'bg-button-tertiary-bg text-ink-muted border-transparent bg-none shadow-none',
   danger: 'bg-button-danger-bg text-failure border-transparent shadow-button',
+  'danger-ghost':
+    'bg-button-tertiary-bg text-failure border-transparent bg-none shadow-none',
   success: 'bg-button-success-bg text-success border-transparent shadow-button',
   link: 'border-transparent bg-transparent text-link shadow-none',
 };
@@ -81,6 +83,11 @@ const buttonStyles = createVariants(
         'not-data-disabled:hover:bg-button-danger-hover not-data-disabled:active:bg-button-danger-pressed aria-pressed:bg-button-danger-pressed aria-pressed:not-data-disabled:hover:bg-button-danger-pressed popup-open:bg-button-danger-pressed popup-open:not-data-disabled:hover:bg-button-danger-pressed',
         buttonPressedStyles
       ),
+      'danger-ghost': cn(
+        buttonFrames['danger-ghost'],
+        'not-data-disabled:hover:bg-button-danger-hover not-data-disabled:active:bg-button-danger-pressed aria-pressed:bg-button-danger-pressed aria-pressed:not-data-disabled:hover:bg-button-danger-pressed popup-open:bg-button-danger-pressed popup-open:not-data-disabled:hover:bg-button-danger-pressed',
+        buttonPressedStyles
+      ),
       success: cn(
         buttonFrames.success,
         'not-data-disabled:hover:bg-button-success-hover not-data-disabled:active:bg-button-success-pressed aria-pressed:bg-button-success-pressed aria-pressed:not-data-disabled:hover:bg-button-success-pressed popup-open:bg-button-success-pressed popup-open:not-data-disabled:hover:bg-button-success-pressed',
@@ -120,7 +127,10 @@ export type ButtonClassOptions = {
 
 function buttonFinishClasses(variant: ButtonVariant, finish?: ButtonFinish) {
   if (finish === 'flat' || variant === 'outline') return 'shadow-none';
-  if (finish !== 'raised' && (variant === 'ghost' || variant === 'link')) {
+  if (
+    finish !== 'raised' &&
+    (variant === 'ghost' || variant === 'danger-ghost' || variant === 'link')
+  ) {
     return undefined;
   }
 

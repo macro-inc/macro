@@ -4,11 +4,7 @@ import {
   EntityTagsSection,
 } from '@app/features/property/side-panel/properties';
 import { FolderLink, SidePanel } from '@components/app/side-panel';
-import type { SidePanelSectionLayout } from '@components/app/side-panel/SidePanel';
-import {
-  EntityMetadata,
-  EntityMetadataRow,
-} from '@components/app/side-panel/EntityMetadata';
+import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
 import { useBlockId } from '@core/block';
 import { useCanEdit } from '@core/signal/permissions';
 import { useChatDataQuery } from '@queries/cognition/chat-data';
@@ -37,14 +33,11 @@ export function ChatSidePanelSections() {
         title="Properties"
         defaultOpen
         order={30}
-        render={(renderSection) => (
-          <ChatPropertiesContent
-            chatId={chatId}
-            canEdit={canEdit()}
-            renderSection={renderSection}
-          />
-        )}
-      />
+      >
+        <Suspense fallback={<SidePanel.Loading />}>
+          <ChatPropertiesContent chatId={chatId} canEdit={canEdit()} />
+        </Suspense>
+      </SidePanel.Section>
       <EntityActivitySectionConditional
         entityId={chatId}
         entityType="CHAT"
@@ -75,20 +68,17 @@ function ChatDetailsContent(props: { chatId: string }) {
         })()}
       >
         {(folder) => (
-          <EntityMetadataRow label="Folder">
+          <div class="flex items-center gap-1">
+            Folder
             <FolderLink projectId={folder().id} projectName={folder().name} />
-          </EntityMetadataRow>
+          </div>
         )}
       </Show>
     </EntityMetadata>
   );
 }
 
-function ChatPropertiesContent(props: {
-  chatId: string;
-  canEdit: boolean;
-  renderSection: SidePanelSectionLayout;
-}) {
+function ChatPropertiesContent(props: { chatId: string; canEdit: boolean }) {
   const query = useChatDataQuery(() => props.chatId);
 
   return (
@@ -98,7 +88,6 @@ function ChatPropertiesContent(props: {
       canEdit={props.canEdit}
       documentName={query.data?.name}
       showTags={false}
-      renderSection={props.renderSection}
     />
   );
 }

@@ -3,6 +3,7 @@ import {
   EntityTagsSection,
 } from '@app/features/property/side-panel/properties';
 import { useBlockId } from '@core/block';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
@@ -12,8 +13,8 @@ import { OwnerLabel } from '@entity/owner/owner-display';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { createCallback } from '@solid-primitives/rootless';
 import { createMemo, Show } from 'solid-js';
-import { EntityMetadata, EntityMetadataRow } from './EntityMetadata';
-import { SidePanel, type SidePanelSectionLayout } from './SidePanel';
+import { EntityMetadata } from './EntityMetadata';
+import { SidePanel } from './SidePanel';
 
 export function FileSidePanelSections() {
   return (
@@ -79,10 +80,9 @@ export function FilePropertiesSection(props: { order?: number }) {
       title="Properties"
       defaultOpen
       order={props.order}
-      render={(renderSection) => (
-        <PropertiesSectionContent renderSection={renderSection} />
-      )}
-    />
+    >
+      <PropertiesSectionContent />
+    </SidePanel.Section>
   );
 }
 
@@ -98,17 +98,15 @@ export function DocumentFilePropertiesSection(props: {
       title="Properties"
       defaultOpen
       order={props.order}
-      render={(renderSection) => (
-        <EntityPropertiesSection
-          entityId={props.documentId}
-          entityType="DOCUMENT"
-          canEdit={props.canEdit}
-          documentName={props.documentName}
-          showTags={false}
-          renderSection={renderSection}
-        />
-      )}
-    />
+    >
+      <EntityPropertiesSection
+        entityId={props.documentId}
+        entityType="DOCUMENT"
+        canEdit={props.canEdit}
+        documentName={props.documentName}
+        showTags={false}
+      />
+    </SidePanel.Section>
   );
 }
 
@@ -126,9 +124,7 @@ export function FileTagsSection(props: { order?: number }) {
   );
 }
 
-function PropertiesSectionContent(props: {
-  renderSection: SidePanelSectionLayout;
-}) {
+function PropertiesSectionContent() {
   const blockId = useBlockId();
   const canEdit = useCanEdit();
   const documentName = useBlockDocumentName();
@@ -140,7 +136,6 @@ function PropertiesSectionContent(props: {
       canEdit={canEdit()}
       documentName={documentName()}
       showTags={false}
-      renderSection={props.renderSection}
     />
   );
 }
@@ -168,9 +163,10 @@ function DetailsSectionContent(props: { documentId: string }) {
         })()}
       >
         {(folder) => (
-          <EntityMetadataRow label="Folder">
+          <div class="flex items-center gap-1">
+            Folder
             <FolderLink projectId={folder().id} projectName={folder().name} />
-          </EntityMetadataRow>
+          </div>
         )}
       </Show>
     </EntityMetadata>
@@ -191,6 +187,9 @@ export function FolderLink(props: { projectId: string; projectName: string }) {
         ' pointer-events-auto text-link hover:text-link-hover hover:bg-hover'
       }
     >
+      <span class="relative size-3 shrink-0">
+        <EntityIcon targetType="project" size="fill" />
+      </span>
       <span class="truncate underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
         {props.projectName}
       </span>

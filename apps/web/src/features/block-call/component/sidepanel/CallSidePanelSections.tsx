@@ -2,11 +2,7 @@ import { EntityActivitySectionConditional } from '@app/features/activity/views/e
 import { EntityPropertiesSection } from '@app/features/property/side-panel/properties';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { SidePanel } from '@components/app/side-panel';
-import type { SidePanelSectionLayout } from '@components/app/side-panel/SidePanel';
-import {
-  EntityMetadata,
-  EntityMetadataRow,
-} from '@components/app/side-panel/EntityMetadata';
+import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
 import { References } from '@core/component/References';
 import { useUserId } from '@core/context/user';
 import { type DateValue, formatDate } from '@core/util/date';
@@ -38,13 +34,11 @@ export function CallSidePanelSections(props: CallSidePanelSectionsProps) {
         title="Properties"
         defaultOpen
         order={15}
-        render={(renderSection) => (
-          <PropertiesSectionContent
-            record={props.record}
-            renderSection={renderSection}
-          />
-        )}
-      />
+      >
+        <Suspense fallback={<SidePanel.Loading />}>
+          <PropertiesSectionContent record={props.record} />
+        </Suspense>
+      </SidePanel.Section>
       <Show when={props.record.channelId != null}>
         <SidePanel.Section id="sharing" title="Sharing" order={20}>
           <SharingSectionContent record={props.record} />
@@ -71,36 +65,21 @@ function DetailsSectionContent(props: { record: CallRecord }) {
     <EntityMetadata ownerId={record().createdBy}>
       <Show when={startedAt()}>
         {(value) => (
-          <EntityMetadataRow label="Started">
-            {formatDate(value(), { showTime: true })}
-          </EntityMetadataRow>
+          <div>Started {formatDate(value(), { showTime: true })}</div>
         )}
       </Show>
       <Show when={endedAt()}>
-        {(value) => (
-          <EntityMetadataRow label="Ended">
-            {formatDate(value(), { showTime: true })}
-          </EntityMetadataRow>
-        )}
+        {(value) => <div>Ended {formatDate(value(), { showTime: true })}</div>}
       </Show>
       <Show when={durationMs()}>
-        {(ms) => (
-          <EntityMetadataRow label="Duration">
-            {formatCallDuration(ms())}
-          </EntityMetadataRow>
-        )}
+        {(ms) => <div>{formatCallDuration(ms())}</div>}
       </Show>
-      <EntityMetadataRow label="Status">
-        {record().isActive ? 'In progress' : 'Ended'}
-      </EntityMetadataRow>
+      <div>{record().isActive ? 'In progress' : 'Ended'}</div>
     </EntityMetadata>
   );
 }
 
-function PropertiesSectionContent(props: {
-  record: CallRecord;
-  renderSection: SidePanelSectionLayout;
-}) {
+function PropertiesSectionContent(props: { record: CallRecord }) {
   // Tag/property writes are authorized server-side via the call's owning
   // channel (edit access), mirroring the sharing control above, so the editor
   // is always mounted and the backend rejects unauthorized mutations.
@@ -112,7 +91,6 @@ function PropertiesSectionContent(props: {
       documentName={
         props.record.customName ?? props.record.channelName ?? undefined
       }
-      renderSection={props.renderSection}
     />
   );
 }

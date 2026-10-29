@@ -2,7 +2,6 @@ import {
   GithubPullRequestChecksContent,
   SidePanel,
 } from '@components/app/side-panel';
-import { EntityMetadataRow } from '@components/app/side-panel/EntityMetadata';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
 import { Show } from 'solid-js';
 import { PrAgentSessionsSection } from './PrAgentSessionsSection';
@@ -19,37 +18,27 @@ export function PrSidePanelSections(props: {
           {(pr) => (
             <div class="flex flex-col gap-1">
               <Show when={pr().authorLogin}>
-                {(author) => (
-                  <EntityMetadataRow label="Author">
-                    {author()}
-                  </EntityMetadataRow>
-                )}
+                {(author) => <div>Authored by {author()}</div>}
               </Show>
-              <EntityMetadataRow label="Repository">
+              <div>
                 {pr().owner}/{pr().repo}
-              </EntityMetadataRow>
+              </div>
               <Show when={pr().status}>
-                {(status) => (
-                  <EntityMetadataRow label="Status">
-                    <span class="capitalize">{status()}</span>
-                  </EntityMetadataRow>
-                )}
+                {(status) => <div class="capitalize">{status()}</div>}
               </Show>
               <Show when={pr().additions != null || pr().deletions != null}>
-                <EntityMetadataRow label="Changes">
+                <div>
                   +{pr().additions ?? 0} / −{pr().deletions ?? 0}
-                </EntityMetadataRow>
+                </div>
               </Show>
-              <EntityMetadataRow label="Pull request">
-                <a
-                  href={pr().url}
-                  target="_blank"
-                  rel="noreferrer"
-                  class="block truncate hover:underline"
-                >
-                  {pr().displayName}
-                </a>
-              </EntityMetadataRow>
+              <a
+                href={pr().url}
+                target="_blank"
+                rel="noreferrer"
+                class="truncate hover:underline"
+              >
+                {pr().displayName}
+              </a>
             </div>
           )}
         </Show>

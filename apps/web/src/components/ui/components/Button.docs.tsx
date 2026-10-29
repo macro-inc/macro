@@ -17,6 +17,7 @@ const VARIANTS: ButtonVariant[] = [
   'outline',
   'ghost',
   'danger',
+  'danger-ghost',
   'success',
   'link',
 ];
@@ -28,7 +29,7 @@ function VariantsDemo() {
       <For each={VARIANTS}>
         {(variant) => (
           <div class="flex flex-wrap items-center gap-4">
-            <span class="w-20 font-mono text-xs text-ink-muted">{variant}</span>
+            <span class="w-24 font-mono text-xs text-ink-muted">{variant}</span>
             <Button variant={variant}>Button</Button>
             <Button variant={variant}>
               <PlusIcon class="size-4" aria-hidden="true" />

@@ -68,25 +68,23 @@ export function ProjectWorkspace(props: {
         title="Properties"
         defaultOpen
         order={1}
-        render={(renderSection) => (
-          <Show when={props.project.id} keyed>
-            {(projectId) => (
-              <EntityPropertiesSection
-                entityId={projectId}
-                entityType="INITIATIVE"
-                canEdit={canEdit()}
-                documentName={props.project.name}
-                showTags={false}
-                defaultProperties={() => [...definitions.properties()]}
-                requiredPropertyDefinitionIds={PROJECT_PROPERTY_ORDER}
-                pinnedPropertyDefinitionOrder={PROJECT_PROPERTY_ORDER}
-                onPropertiesChanged={props.source.refresh}
-                renderSection={renderSection}
-              />
-            )}
-          </Show>
-        )}
-      />
+      >
+        <Show when={props.project.id} keyed>
+          {(projectId) => (
+            <EntityPropertiesSection
+              entityId={projectId}
+              entityType="INITIATIVE"
+              canEdit={canEdit()}
+              documentName={props.project.name}
+              showTags={false}
+              defaultProperties={() => [...definitions.properties()]}
+              requiredPropertyDefinitionIds={PROJECT_PROPERTY_ORDER}
+              pinnedPropertyDefinitionOrder={PROJECT_PROPERTY_ORDER}
+              onPropertiesChanged={props.source.refresh}
+            />
+          )}
+        </Show>
+      </SidePanel.Section>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
         <Show when={error()}>
           {(message) => (
