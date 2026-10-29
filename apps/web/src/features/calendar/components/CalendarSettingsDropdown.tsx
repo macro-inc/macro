@@ -345,7 +345,7 @@ function DesktopCalendarSettings(props: {
                 <span class="flex min-w-0 flex-1 flex-col">
                   <span class="truncate">Connect another account</span>
                   <span class="truncate text-xs text-ink-muted">
-                    Connects its email and calendar together
+                    Email and calendar together
                   </span>
                 </span>
               </Dropdown.Item>
@@ -557,7 +557,7 @@ function MobileCalendarSettings(props: {
                   <span class="flex min-w-0 flex-1 flex-col">
                     <span class="truncate">Connect another account</span>
                     <span class="truncate text-xs text-ink-muted">
-                      Connects its email and calendar together
+                      Email and calendar together
                     </span>
                   </span>
                 </MobileDrawer.Item>
