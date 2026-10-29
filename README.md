@@ -62,7 +62,7 @@ Each surface is purpose-built for its job rather than composed from a generic bl
 
 <br />
 
-# **Multiple email inboxes** w/ good AI tools, integrated CRM
+# **Multiple email inboxes** w/ good AI tools
 
 Macro Mail is inspired by Superhuman's keyboard-first interface with a few key additions:
 
