@@ -107,3 +107,17 @@ pub trait OAuthClient: Send + Sync + 'static {
         state: &str,
     ) -> impl Future<Output = anyhow::Result<McpServerRecord>> + Send;
 }
+
+/// The GitHub token from a user's Macro account link.
+///
+/// Object-safe (`async_trait`) so hosts without the link wire nothing and the
+/// decorated store's type stays the same everywhere.
+#[async_trait::async_trait]
+pub trait LinkedGithubTokens: Send + Sync + 'static {
+    /// The user's working link token; `None` when they never linked or the
+    /// token stopped working.
+    async fn access_token(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+    ) -> anyhow::Result<Option<String>>;
+}
