@@ -559,9 +559,11 @@ point's alerts with 401 and Grafana shows it as failing.
 
 ### Escalation
 
-Both policies have one step, webhook `http://127.0.0.1:8090/goalert`, and
-repeat it 5 times every 60 minutes, so the channel sees each open alert hourly
-until it is acknowledged, plus every acknowledgement and close.
+Both policies have one step, webhook `http://127.0.0.1:8090/goalert`. The
+channel sees every new alert, acknowledgement and close. `Macro prod` repeats
+its step 5 times every 60 minutes, so an unacknowledged page is posted again
+hourly; `Macro notify` posts once, so warnings stay quiet after their first
+post.
 
 - Escalation policy `Macro prod` pages: services `Grafana critical` (Grafana's
   paging criticals) and `Datadog critical`.
