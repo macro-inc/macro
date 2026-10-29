@@ -276,3 +276,33 @@ describe('queued prompt access', () => {
     expect(onSteer).not.toHaveBeenCalled();
   });
 });
+
+it('hides private context in the queue and preserves it when editing', () => {
+  const prefix =
+    '<m-agent-context>{"version":1,"text":"Private instructions"}</m-agent-context>\n\n';
+  const onEdit = vi.fn();
+  const view = render(() => (
+    <QueuedPrompts
+      items={[
+        {
+          actionId: 'queued-context',
+          kind: 'prompt',
+          prompt: prefix + 'Queued request',
+        },
+      ]}
+      onEdit={onEdit}
+      onRemove={() => {}}
+    />
+  ));
+  expect(view.getByRole('button', { name: 'Queued request' })).toBeTruthy();
+  expect(view.getByRole('textbox', { hidden: true }).textContent).toBe(
+    'Queued request'
+  );
+  editor.markdown = 'Updated request';
+  editor.change?.('Updated request');
+  fireEvent.focusOut(view.getByRole('textbox', { hidden: true }));
+  expect(onEdit).toHaveBeenCalledWith(
+    'queued-context',
+    prefix + 'Updated request'
+  );
+});

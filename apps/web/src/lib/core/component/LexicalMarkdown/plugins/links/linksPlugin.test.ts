@@ -1,4 +1,8 @@
-import { $isAutoLinkNode, $isLinkNode } from '@lexical/link';
+import {
+  $createAutoLinkNode,
+  $isAutoLinkNode,
+  $isLinkNode,
+} from '@lexical/link';
 import {
   $convertFromMarkdownString,
   $convertToMarkdownString,
@@ -13,6 +17,8 @@ import {
   $createParagraphNode,
   $createTextNode,
   $getRoot,
+  $getSelection,
+  $isRangeSelection,
   createEditor,
 } from 'lexical';
 import { describe, expect, it } from 'vitest';
@@ -23,6 +29,35 @@ import {
   normalizeLinkUrl,
   UNLINK_COMMAND,
 } from './linksPlugin';
+
+function editorWithLinks(mode: 'protocol' | 'common-tlds' = 'common-tlds') {
+  const editor = createEditor({
+    nodes: SupportedNodeTypes,
+    onError(error) {
+      throw error;
+    },
+  });
+  const cleanup = linksPlugin({ autoLinkMatchMode: mode })(editor);
+  return { editor, cleanup };
+}
+
+function textNodes(editor: ReturnType<typeof createEditor>) {
+  return editor.getEditorState().read(() =>
+    $getRoot()
+      .getAllTextNodes()
+      .map((node) => {
+        const parent = node.getParent();
+        return {
+          text: node.getTextContent(),
+          linked: $isLinkNode(parent) || $isAutoLinkNode(parent),
+          url:
+            $isLinkNode(parent) || $isAutoLinkNode(parent)
+              ? parent.getURL()
+              : undefined,
+        };
+      })
+  );
+}
 
 describe('normalizeLinkUrl', () => {
   it('normalizes bare hosts to HTTPS', () => {
@@ -57,6 +92,95 @@ describe('normalizeLinkUrl', () => {
   it('rejects empty and malformed URLs', () => {
     expect(normalizeLinkUrl('')).toBeNull();
     expect(normalizeLinkUrl('https://')).toBeNull();
+  });
+});
+
+describe('typing through an incomplete email TLD', () => {
+  it('keeps o after j@m.c and does not wrap while the caret is in the match', () => {
+    const { editor, cleanup } = editorWithLinks();
+    editor.update(
+      () => {
+        const node = $createTextNode('j@m.c b');
+        $getRoot().clear().append($createParagraphNode().append(node));
+        node.select(5, 5);
+      },
+      { discrete: true }
+    );
+    editor.update(
+      () => {
+        const selection = $getSelection();
+        if ($isRangeSelection(selection)) selection.insertText('o');
+      },
+      { discrete: true }
+    );
+    expect(
+      editor.getEditorState().read(() => $getRoot().getTextContent())
+    ).toBe('j@m.co b');
+    expect(textNodes(editor)).toEqual([
+      { text: 'j@m.co b', linked: false, url: undefined },
+    ]);
+    cleanup();
+  });
+
+  it('wraps mailto:j@m.co once the caret moves past the match', () => {
+    const { editor, cleanup } = editorWithLinks();
+    editor.update(
+      () => {
+        const node = $createTextNode('j@m.c b');
+        $getRoot().clear().append($createParagraphNode().append(node));
+        node.select(5, 5);
+      },
+      { discrete: true }
+    );
+    editor.update(
+      () => {
+        const selection = $getSelection();
+        if ($isRangeSelection(selection)) selection.insertText('o');
+      },
+      { discrete: true }
+    );
+    editor.update(
+      () => {
+        const node = $getRoot().getAllTextNodes()[0];
+        node.select(8, 8);
+        const selection = $getSelection();
+        if ($isRangeSelection(selection)) selection.insertText('!');
+      },
+      { discrete: true }
+    );
+    expect(
+      editor.getEditorState().read(() => $getRoot().getTextContent())
+    ).toBe('j@m.co b!');
+    expect(textNodes(editor)).toEqual([
+      { text: 'j@m.co', linked: true, url: 'mailto:j@m.co' },
+      { text: ' b!', linked: false, url: undefined },
+    ]);
+    cleanup();
+  });
+
+  it('does not shrink an autolink label when the rematch is shorter', () => {
+    const { editor, cleanup } = editorWithLinks();
+    editor.update(
+      () => {
+        // Combined text rematches a short host that starts after the label
+        // (`hello)m.co` → `m.co`). Without a non-positive shift guard,
+        // substring(n<0) keeps the suffix and replaces the longer label.
+        const link = $createAutoLinkNode('https://hello.example');
+        link.append($createTextNode('hello)'));
+        const rest = $createTextNode('m.co');
+        $getRoot().clear().append($createParagraphNode().append(link, rest));
+      },
+      { discrete: true }
+    );
+    expect(
+      editor.getEditorState().read(() => $getRoot().getTextContent())
+    ).toBe('hello)m.co');
+    expect(textNodes(editor)[0]).toEqual({
+      text: 'hello)',
+      linked: true,
+      url: 'https://hello.example',
+    });
+    cleanup();
   });
 });
 

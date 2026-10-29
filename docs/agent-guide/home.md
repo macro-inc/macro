@@ -53,7 +53,10 @@ also worked on stays, read, at the time of your own work. **Undo** brings a done
 row back in place. A new comment on a months-old document appears at the top. With
 two sessions of the same account, marking a row done in one removes it from the
 other without reloading. A channel thread and its channel remain separate rows, and
-completing the channel leaves the thread.
+completing the channel leaves the thread. The server applies **Status** and the
+**Documents**/**Tasks** split, so with **Unread** on, a feed that is mostly read own
+work still fills the first screen from one request; a row read while shown stays
+until the feed is fetched again.
 The menu shares the legacy compact submenus: **Status** offers **Unread**, **Read**,
 and **All** as single-select radio items with a checkmark on the right of the selected
 option, and **Type** contains the entity checkboxes. Status closes the menu

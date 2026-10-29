@@ -20,6 +20,7 @@ import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownCon
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import CaretUpIcon from '@icon/system/regular/caret-up.svg?component-solid';
 import XIcon from '@icon/system/regular/x.svg?component-solid';
+import { stripAgentContext } from '@macro-inc/lexical-core/utils/parsers';
 import { Button, Surface } from '@ui';
 import {
   createEffect,
@@ -173,7 +174,8 @@ function QueuedRow(props: QueuedRowProps) {
   let focusBody: (() => void) | undefined;
   const preview = () =>
     props.item.kind === 'prompt'
-      ? (draft() ?? props.item.prompt ?? '').trim() || 'Attached files'
+      ? (draft() ?? stripAgentContext(props.item.prompt ?? '')).trim() ||
+        'Attached files'
       : 'Compact the conversation';
   const open = () => {
     props.onExpandedChange(true);
@@ -306,7 +308,7 @@ function PromptBody(
   // The last text this row and the server agree on: what was mounted,
   // applied from a server snapshot, or handed to `onEdit`. Both the autosave
   // and the anti-clobber check compare against it.
-  let synced = props.item.prompt ?? '';
+  let synced = stripAgentContext(props.item.prompt ?? '');
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
 
   const flush = () => {
@@ -320,7 +322,10 @@ function PromptBody(
     // prompts and "delete the text" has the remove affordance for it.
     if (text === synced || text.trim().length === 0) return;
     synced = text;
-    props.onEdit(text);
+    // Keep the private prefix on the wire when saving the visible text.
+    const raw = props.item.prompt ?? '';
+    const visible = stripAgentContext(raw);
+    props.onEdit(raw.slice(0, raw.length - visible.length) + text);
   };
 
   const scheduleSave = (markdown: string) => {
@@ -365,7 +370,7 @@ function PromptBody(
   // untouched — never over a focused editor or unsaved local changes, which
   // are about to become the server's text anyway.
   createEffect(() => {
-    const server = props.item.prompt ?? '';
+    const server = stripAgentContext(props.item.prompt ?? '');
     if (server === synced) return;
     const root = editor.lexical.getRootElement();
     const focused = root?.contains(document.activeElement) ?? false;
@@ -381,7 +386,7 @@ function PromptBody(
     <div class="text-sm text-ink" onFocusOut={flush}>
       <MarkdownShell
         config={editor}
-        initialValue={props.item.prompt}
+        initialValue={stripAgentContext(props.item.prompt ?? '')}
         disabled={props.disabled}
       />
       {/* Attached files ride the prompt as-is: an edit rewrites the text and

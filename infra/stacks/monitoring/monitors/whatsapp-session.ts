@@ -15,12 +15,13 @@
 // Ids are opaque account uuids; never phone numbers, JIDs, or content.
 // Thresholds are starting points: there is no baseline before launch.
 import * as datadog from '@pulumi/datadog';
+import { notify, RENOTIFY_MINUTES } from '../notify';
 
 const CONTEXT = `Runbook: services/whatsapp_session_service/AGENTS.md. To stop all
 WhatsApp traffic, scale whatsapp-session-service to 0 tasks; sends recorded
 meanwhile expire unsent after ten minutes. Turning off the enable-whatsapp-linked
 flag only hides the app UI.
-@webhook-macro-alert-hook`;
+${notify({ pages: false })}`;
 
 const HEALTH = '@telemetry_event:whatsapp_session_health';
 
@@ -32,6 +33,7 @@ for (const environment of ['dev', 'prod']) {
     priority: environment === 'prod' ? '2' : '3',
     includeTags: true,
     requireFullWindow: false,
+    renotifyInterval: RENOTIFY_MINUTES,
   };
 
   new datadog.Monitor(`whatsapp-session-unowned-accounts-${environment}`, {

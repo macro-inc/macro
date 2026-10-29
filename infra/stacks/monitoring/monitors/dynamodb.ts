@@ -3,6 +3,7 @@
 // Adopted from monitors created by hand in the Datadog UI. Do not edit a
 // monitor here and in the UI at the same time — this file wins on deploy.
 import { adopted } from '../adopted';
+import { notify } from '../notify';
 
 // https://us5.datadoghq.com/monitors/16917541
 adopted('dynamodb-write-capacity', {
@@ -10,8 +11,9 @@ adopted('dynamodb-write-capacity', {
   type: 'query alert',
   query:
     'avg(last_1h):avg:aws.dynamodb.consumed_write_capacity_units{*} by {tablename} > 500',
-  message: `@hutch@macro.com 
-@evan@macro.com`,
+  message: `DynamoDB table {{tablename.name}} is consuming {{value}} write capacity units.
+
+${notify({ pages: false })}`,
   monitorThresholds: {
     critical: '500',
     warning: '300',
@@ -29,8 +31,9 @@ adopted('dynamodb-read-capacity', {
   type: 'query alert',
   query:
     'avg(last_1h):avg:aws.dynamodb.consumed_read_capacity_units{*} by {tablename} > 20',
-  message: `@hutch@macro.com 
-@evan@macro.com`,
+  message: `DynamoDB table {{tablename.name}} is consuming {{value}} read capacity units.
+
+${notify({ pages: false })}`,
   monitorThresholds: {
     critical: '20',
     warning: '10',

@@ -10838,12 +10838,18 @@ input WorkFeedInput {
 	"""
 	scope: WorkFeedScopeInput
 	"""
+	Only items in this state: `UNSEEN` or `SEEN`. Subscriptions and undo
+	place items in every state, so an item seen while it is shown stays
+	until the page is fetched again.
+	"""
+	state: WorkFeedItemState
+	"""
 	Page size; defaults to 50, capped at 100.
 	"""
 	limit: Int
 	"""
 	Opaque cursor from the previous page's `nextCursor`; absent for the
-	first page. Send it with the same scope.
+	first page. Send it with the same scope and state.
 	"""
 	cursor: String
 }
@@ -10916,9 +10922,13 @@ The kinds of item a work feed can be narrowed to.
 """
 enum WorkFeedItemType {
 	"""
-	Documents and tasks.
+	Documents other than tasks.
 	"""
 	DOCUMENT
+	"""
+	Tasks.
+	"""
+	TASK
 	"""
 	AI chats.
 	"""
@@ -10979,12 +10989,34 @@ type WorkFeedPage {
 	Cursor for the next page; absent once the feed is exhausted.
 	"""
 	nextCursor: String
+	"""
+	Where this page's read stopped, the position `nextCursor` resumes
+	after; absent once the feed is exhausted. A filtered page can read
+	past its last entry, so a live change placed after that entry but not
+	after this position belongs to this page rather than a later one.
+	"""
+	nextPosition: WorkFeedPosition
 }
 
 """
 One change to a work feed's membership, placement or items.
 """
 union WorkFeedPatch = WorkFeedEntryUpserted | WorkFeedEntryRemoved | WorkFeedInvalidated
+
+"""
+A place in the feed's order: newest `sortAt` first, then entity id
+descending.
+"""
+type WorkFeedPosition {
+	"""
+	The sort time, RFC 3339.
+	"""
+	sortAt: String!
+	"""
+	The entity id that breaks ties at `sortAt`.
+	"""
+	entityId: String!
+}
 
 """
 Why an entry is presented the way it is in its feed.

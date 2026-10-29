@@ -137,7 +137,7 @@ function AddDropdown(props: {
                         : undefined
                     }
                   >
-                    <span class="flex size-3.5 shrink-0 items-center justify-center text-ink-muted">
+                    <span class="flex size-5 shrink-0 items-center justify-center text-ink-muted">
                       {item.icon}
                     </span>
                     <span class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">

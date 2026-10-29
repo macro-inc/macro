@@ -123,7 +123,11 @@ function ActivityTasksBody(props: {
           class="flex items-center gap-3 px-3 py-2 text-sm text-ink-muted"
         >
           Some tasks could not be loaded.
-          <Button size="sm" onClick={() => source.retryPagination?.()}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => source.retryPagination?.()}
+          >
             Try again
           </Button>
         </div>

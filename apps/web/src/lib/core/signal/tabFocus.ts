@@ -20,6 +20,16 @@ createEffect(() => {
   });
 });
 
+const [isTabVisible_, setIsTabVisible] = createSignal(
+  document.visibilityState === 'visible'
+);
+document.addEventListener('visibilitychange', () =>
+  setIsTabVisible(document.visibilityState === 'visible')
+);
+
+/** Whether the tab is on screen, focused or not (e.g. beside a focused window) */
+export const isTabVisible = isTabVisible_;
+
 /** Whether the tab is currently focused */
 export const isTabFocused = createMemo(() => isTabFocused_(), {
   equalFn: (a: boolean | undefined, b: boolean | undefined) => a! === b!,

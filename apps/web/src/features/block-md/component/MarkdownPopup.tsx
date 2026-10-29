@@ -728,7 +728,7 @@ export function MarkdownPopup(props: {
                 onClick={handleInsertComment}
                 tooltip="Comment"
               >
-                <ChatTeardrop />
+                <ChatTeardrop class="size-4" />
               </Toolbar.Button>
             </Show>
             <Toolbar.Button

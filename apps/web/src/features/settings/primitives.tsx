@@ -51,7 +51,7 @@ export function SettingsPage(props: {
     <div
       data-settings-page
       data-drawer-scroll-body={inSheet ? true : undefined}
-      class="@container/settings-page h-full min-h-0 overflow-y-auto [overflow-anchor:none] select-children bg-panel [&_:has(>input[type=checkbox])]:[--color-accent:var(--color-ink)] [&_input[type=checkbox]]:accent-ink"
+      class="@container/settings-page h-full min-h-0 overflow-y-auto [overflow-anchor:none] select-children bg-panel"
     >
       {/* On mobile/tablet the page is full-frame: the chrome insets live inside the
           scroll content (plus the usual breathing room) so pages scroll under

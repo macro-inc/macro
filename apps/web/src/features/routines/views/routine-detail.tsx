@@ -139,12 +139,12 @@ export function RoutineDetailView(props: {
             <Show when={routine().templateId}>
               {(templateId) => (
                 <Button
-                  variant="primary"
+                  variant="ghost"
                   size="sm"
                   onClick={() => props.onOpenTemplate(templateId())}
                 >
                   Created from template
-                  <ArrowUpRightIcon />
+                  <ArrowUpRightIcon class="size-3.5" />
                 </Button>
               )}
             </Show>

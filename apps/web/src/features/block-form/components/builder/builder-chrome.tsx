@@ -6,7 +6,7 @@ import { Button, cn } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { QuestionTypeId } from '../../core/question-types';
 import { QuestionTypeIcon } from '../question-type-icon';
-import { DraftInput, DraftTextarea } from './draft-input';
+import { DraftTextarea } from './draft-input';
 
 /** Holds the editor's layout while its shared document opens. */
 export function BuilderSkeleton() {
@@ -78,11 +78,13 @@ export function TitleCard(props: {
   return (
     <section aria-label="Form details" class="flex min-w-0 flex-col">
       <div class="flex min-w-0 flex-col">
-        <DraftInput
+        <DraftTextarea
+          singleLine
           aria-label="Form name"
           value={props.name}
           maxlength={200}
-          class="h-8 w-full border-0 bg-transparent p-0 text-2xl font-semibold text-ink outline-none aria-invalid:text-failure"
+          rows={1}
+          class="w-full resize-none border-0 bg-transparent p-0 text-2xl leading-8 font-semibold text-ink outline-none field-sizing-content aria-invalid:text-failure"
           onCommit={props.onName}
         />
         <div class="mt-3 mb-6 flex flex-wrap items-center gap-2 text-sm">

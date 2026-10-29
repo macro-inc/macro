@@ -474,7 +474,7 @@ export function CalendarEventPreviewDetails(props: {
               onClick={(event) => event.stopPropagation()}
             >
               <Button variant="secondary" size="xs" onClick={open()}>
-                <CalendarCheckIcon />
+                <CalendarCheckIcon class="size-3.5" />
                 Open
               </Button>
             </div>

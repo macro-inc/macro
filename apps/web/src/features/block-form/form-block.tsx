@@ -229,7 +229,8 @@ function FormBlockContent(props: {
         when={props.respondOnly}
         fallback={
           <FormPageView
-            header={FormHeader}
+            // The touch header has no room for tabs beside the actions.
+            header={isTouchDevice() ? undefined : FormHeader}
             source={source}
             tab={tab()}
             respondLink={link()}

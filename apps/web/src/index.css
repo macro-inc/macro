@@ -1322,10 +1322,10 @@ html[data-platform='ios'][data-touch-device='true'] :is(
 
 @keyframes magic-chip-shimmer {
   0% {
-    background-position: 120% 0;
+    background-position: 100% 0;
   }
   100% {
-    background-position: -120% 0;
+    background-position: 0% 0;
   }
 }
 
@@ -1337,6 +1337,8 @@ html[data-platform='ios'][data-touch-device='true'] :is(
     var(--color-ink-extra-muted) 60%
   );
   background-size: 250% 100%;
+  /* The highlight starts and ends just outside the text, without tiling. */
+  background-repeat: no-repeat;
   background-clip: text;
   color: transparent;
   animation: magic-chip-shimmer 1.8s linear infinite;

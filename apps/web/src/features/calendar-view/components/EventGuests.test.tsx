@@ -183,7 +183,7 @@ const RESTRICTED = 'Only the organizer can invite guests.';
 const HIDDEN =
   'Guests cannot be added while the organizer hides the guest list.';
 const FORWARD_INSTEAD =
-  "You can forward the invitation instead. The people you send it to can add the event to their calendar but won't be on the guest list.";
+  "You can forward the invitation instead. The people you send it to get the event by email but won't be on the guest list.";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -492,7 +492,7 @@ describe('forwarding the invitation from event details', () => {
     expect(screen.queryByRole('radio', { name: 'This event' })).toBeNull();
     expect(
       screen.getByText(
-        "They can add the event to their calendar but won't appear in the guest list."
+        "They'll get the event by email but won't appear in the guest list."
       )
     ).toBeTruthy();
     await user.click(
@@ -509,12 +509,9 @@ describe('forwarding the invitation from event details', () => {
     expect(args.recipients).toEqual([
       { email: 'ada@example.com', name: 'Ada Lovelace' },
     ]);
+    // The summary alone: the server adds the note for the kind it sends.
     expect(args.bodyText).toMatch(/^Planning\n/);
-    expect(
-      args.bodyText.endsWith(
-        "\n\nThis invitation was forwarded to you. Add the event to your calendar from the attached file. You won't be on the organizer's guest list."
-      )
-    ).toBe(true);
+    expect(args.bodyText).not.toContain('forwarded to you');
     expect(
       screen
         .getByRole('button', { name: 'Forward invitation' })

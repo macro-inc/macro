@@ -8,5 +8,5 @@ Who a forwarded invitation goes to, and what its email says.
 
 | Property | Type | Description |
 | ------ | ------ | ------ |
-| <a id="property-bodytext"></a> `bodyText?` | `string` \| `null` | The email's plain-text body. Without one, it names the event and says the recipient won't be on the organizer's guest list. |
+| <a id="property-bodytext"></a> `bodyText?` | `string` \| `null` | A plain-text summary of the event the email opens with; the title when absent. The email ends with a note saying what the recipient can do with the forward. |
 | <a id="property-to"></a> `to` | [`ForwardCalendarEventRecipient`](ForwardCalendarEventRecipient.md)[] | The people it goes to, at most 50. |

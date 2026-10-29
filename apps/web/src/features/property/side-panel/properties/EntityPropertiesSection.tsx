@@ -679,19 +679,19 @@ function PropertyRowActions(props: {
         onMouseDown={stopRowInteraction}
       >
         <Show when={canPin()}>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon-sm"
             title={pinLabel()}
             aria-label={pinLabel()}
             aria-pressed={isPinned()}
             disabled={isSaving()}
-            class="flex size-5 items-center justify-center rounded-full text-ink-muted hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-accent disabled:pointer-events-none disabled:opacity-50"
             onClick={togglePin}
           >
-            <Show when={isPinned()} fallback={<PushPinIcon class="size-3" />}>
-              <PushPinSlashIcon class="size-3" />
+            <Show when={isPinned()} fallback={<PushPinIcon class="size-4" />}>
+              <PushPinSlashIcon class="size-4" />
             </Show>
-          </button>
+          </Button>
         </Show>
         <Show when={canRemove()}>
           <button

@@ -280,7 +280,7 @@ export function FloatingFormatMenu(props: {
         inlineFormat(buttonProps.item.format);
       }}
     >
-      <Dynamic component={buttonProps.item.icon} />
+      <Dynamic component={buttonProps.item.icon} class="size-4" />
     </Button>
   );
 
@@ -391,6 +391,7 @@ export function FloatingFormatMenu(props: {
               >
                 <Dynamic
                   component={selection()?.hasLinks ? BrokenLinkIcon : LinkIcon}
+                  class="size-4"
                 />
               </Button>
             </Show>

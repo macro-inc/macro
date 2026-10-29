@@ -92,6 +92,8 @@ Old `/app/pr/<foreignEntityId>` links redirect to Reviews. Check a copied link,
 a PR opened from a list or agent session, a second split, breadcrumb return,
 side-panel toggle, and phone layout. If no GitHub data loads, the detail shows
 an error banner with a Retry button; pressing it refetches the PR in place.
+Description screenshots hosted on GitHub (including `blob/…?raw=true` links)
+render in the body; they must not show "This image could not be found."
 
 PR metadata changes should update an already loaded Reviews list row and the
 linked agent session's PR status without reloading the page. To verify, keep

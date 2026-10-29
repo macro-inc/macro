@@ -20,9 +20,19 @@ During iterative visual tweaks, use focused browser verification; defer full typ
 
 Any user-visible change should be exercised in a browser before you call it fixed — type-check, biome, and vitest all pass on code that still has the interaction bug.
 
+Agent image attachments preserve external and inline image URLs; only configured
+static-file endpoints receive thumbnail sizing. The backend-free regression is
+`bunx playwright test --config src/features/block-agent/browser-test/attachments.playwright.config.ts`.
+
 Split dragging and composer reflow have a backend-free browser regression:
 `bunx playwright test --config src/lib/core/component/Resize/browser-test/playwright.config.ts`.
 It exercises the real resize solver, scroll container, and Lexical layout primitive.
+
+Database document-reference cells have a backend-free desktop/touch regression:
+`bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts references.browser.e2e.ts`.
+It uses the real records view with a local source and picker to exercise opening,
+replacement, cancellation, keyboard editing, and read-only references. Navigation
+adapter tests separately check file types, access failures, and split selection.
 
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
@@ -44,6 +54,16 @@ beside a scrolling editor whose selection runs past its visible bottom
 Suggested routines (sidebar card, modal, one-click enable, edit before enabling,
 and the phone sheet) have a backend-free browser regression:
 `bunx playwright test --config src/features/routine-suggestions/browser-test/playwright.config.ts`.
+
+Composer `/` menus list Connections between Skills and Pull requests. Keep native
+and hosted providers aligned with `mcp_select::select_connections`, prefer native
+credentials per provider, and preserve editor focus on pointer and touch selection.
+
+Undo in a large collaborative Markdown document (Loro undo, mirror, reconcile,
+caret mapping) has a backend-free timing regression:
+`bunx playwright test --config src/lib/core/component/LexicalMarkdown/collaboration/browser-test/playwright.config.ts`.
+Keep reconcile and caret lookups linear in the document: no `getChildren()` or
+container scan per node.
 
 Event details placement has a backend-free browser regression: the desktop
 popover stays beside its event when join requests arrive after it opens, and
@@ -85,9 +105,27 @@ Gate event notes and document Share meeting-link controls with
 on in dev and uses PostHog in production.
 See `docs/agent-guide/calendar.md` at the repo root.
 
+Share message image paste, file selection, drop, removal during upload, and
+upload failure have desktop, phone, and tablet browser coverage:
+`bunx playwright test --config src/lib/core/component/ForwardMessageComposer/browser-test/playwright.config.ts`.
+Keep the shared uploader from restoring removed attachments or publishing after
+the composer is disposed. The Share button and shortcut use the same upload guard.
+
+Mention menus rank loaded entity sources together with `MENTION_RANKING_CONFIG`
+in `MentionsMenu/utils/mention-ranking.ts`: name relevance, viewed recency,
+brevity, and explicit type/name boosts. Task projects use the `initiative`
+bucket; `project` means a Drive folder. Preserve broader cache/server matches
+and the existing People preview/pinning. The channel browser suite below also
+checks project ranking and insertion on desktop and phone.
+
 Channel composer draft persistence has a backend-free browser regression:
 `bunx playwright test --config src/features/channel/Input/browser-test/playwright.config.ts`.
-It types a draft, remounts the composer over it, and checks the blank lines survive.
+It checks draft blank lines across remounts and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
+
+Block formatting passes a forward copy of the selection to Lexical's
+`$setBlocksType` so backward selections include their first paragraph and keep
+the editor's actual selection direction. The Markdown core browser suite's
+`quotes.browser.e2e.ts` checks Quote through the floating toolbar and after saving.
 
 A frontend dev server runs against the **dev** backend, so this needs no local stack, Docker, Rust build, or `sudo`:
 
@@ -138,6 +176,11 @@ new MutationObserver(() => {
 
 Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '1,2,3'` (the same ids coming back) is a `<Suspense>` detach and re-attach. Fresh ids are a true remount. Nothing at all means the subtree never moved and the cause is elsewhere. Re-running the same interaction a second time is the cheapest way to prove a cold-cache cause: a once-per-session query settles after the first attempt, so the second attempt stays clean.
 
+Column renames have a backend-free desktop/phone regression using the real
+schema query and mutation adapter with delayed service responses:
+`bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts rename.browser.e2e.ts`.
+It checks the optimistic name, header identity, and persistence across reload.
+
 ## Canvas collaboration
 
 Document sync uses the `sync-via-gateway` PostHog flag in both deployed dev and
@@ -164,6 +207,13 @@ on desktop and mobile. Tool results render through
 The shared plain-text Lexical codec is `packages/lexical-core/canvas-text.ts`.
 
 ## Development Patterns
+
+Route database row rename and delete through `renameDatabase` and
+`trashDatabase`; use the row grant for rename, delete, and sharing permissions.
+
+Shared diff and Changes views expand files with at most 40 additions + deletions
+by default; keep saved per-capture choices and explicit toggles authoritative.
+Use `/app/debug/diff-view-ui` to exercise the 40/41-line boundary.
 
 Keep persistent list hotkeys free of mounted-view closures, and clear
 virtualizer accessors when their view unmounts.
@@ -192,6 +242,14 @@ the user's newest account for that app from the last fifteen minutes.
 
 ### General
 
+- Keep selection controls on shared `Checkbox`, `ToggleSwitch`, and `RadioGroup`;
+  preserve their native input semantics and use root sizing instead of internal
+  control/glyph overrides. See the [selection-control contract](../../.agents/rules/web/ui-primitives.md#selection-controls).
+
+Agent split headers show live viewers through `BlockLiveIndicators` with the
+resolved session ID; keep the existing `AgentSessionProvider` subscription to
+`agent_session` rather than enabling legacy block tracking of placeholder IDs.
+
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
 - Empty human DMs use the shared centered conversations graphic and explain email delivery to nonusers; keep this state out of agent DMs, loading/error states, and populated timelines.
 - Keep CRM database discovery row-linked and permission-scoped; use horizontally centered actionable list states raised toward the toolbar and shared skeletons, with separate search-empty and retry states. See `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
@@ -208,7 +266,9 @@ the user's newest account for that app from the last fifteen minutes.
   renderer. Phone settings show the preview with desktop-only editing. See the
   [signature walkthrough](../../docs/agent-guide/settings.md#email-signatures)
   for browser coverage. Keep signature commit callbacks on the mutation hook
-  so account-list remounts cannot leave an already-cleared draft behind.
+  so account-list remounts cannot leave an already-cleared draft behind. Offer
+  Gmail signature import only when the inbox provider is `GMAIL`, regardless of
+  its email domain; keep shared signature instructions provider-neutral.
 - Keep personal accounts and agent tool connections together in Settings → Integrations;
   preserve `agent-connections` as an alias for existing links.
 - Keep bot setup focused on the token-and-SDK workflow; Agent and Ownership
@@ -287,6 +347,7 @@ the user's newest account for that app from the last fifteen minutes.
 - Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, `sm`/`icon-sm` semantic islands (28px controls) with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for Tabs, New, and Search. Drive and Tasks list-header filter, layout, sort, and grouping islands use `md`/`icon-md` (32px) to match New and Search. Preserve touch layouts. Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
 - Keep desktop model and effort controls separate: the model selector opens the catalog and the speedometer opens the runtime's advertised slider stops; retain the mobile effort sheet.
 - Passive PR mentions must not retry initial GitHub status failures on remount; preserve confirmed status through refetch errors and keep pending data reads out of their parent Suspense boundary.
+- PR description and comment images are remote URL images: rewrite GitHub blob/`raw` links to `raw.githubusercontent.com` and load them through the image proxy so COEP does not block github.com.
 - Keep native booking exit navigation in the route shell, outside page loading boundaries, and use the router so the native hash route stays intact.
 - Diagnose native full reloads with `native_webview_started`, `native_diagnostic_recovered`, and the shared `frontend_instance_id`; use `reloadApp(reason)` for frontend reloads and keep breadcrumbs content-free. Treat `previous_document_*` checkpoints as last-observed lifecycle evidence, never a crash verdict; clear them on logout. `previous_document_last_*` comes from the native navigation breadcrumb (route and entity type, never ids). See [frontend checkpoints](docs/native-reload-diagnostics.md) and `tauri/src-tauri/README.md`.
 - Pass `$APPLOCALDATA` (Application Support on Apple platforms) as the native HTTP cookie storage directory; the plugin owns the `.cookies` filename. Never use purgeable caches. The location change intentionally requires one new sign-in, without migration. See `tauri/src-tauri/README.md#native-authentication-cookies`.
@@ -572,7 +633,15 @@ On a physical iPhone, WKWebView still synthesises the compatibility `mousedown`/
 
 4. **Strip the instrumentation before committing.**
 
+### Agent session failure indicators
+
+Use the existing status dot in Home and Agents rows with `bg-failure` when the
+persisted `turnState` is `failed`; open the session to inspect its error.
+
 ### Agent system events
+
+Agent activity labels share `block-agent/ui/TextShimmer.tsx` and the global
+`magic-chip-shimmer` style; keep Working and Thinking on the same sweep and phase.
 
 Accept `notification` in both fetched and subscribed GraphQL session log rows.
 System notifications live in fold metadata, separate from messages. Review
@@ -582,8 +651,14 @@ payloads exhaustively, summarize outcomes without draft content, and keep the
 icon, truncated summary, timestamp, and optional subject action on one line on
 desktop and mobile.
 Keep Responding bound to the notification turn, including rejection and noop.
+Harness background-task reports are `task_notification` message parts, rendered
+as `ActionLine` rows in the agent reply (`TaskNotificationPart`).
 The backend-free desktop/mobile check is
 `bunx playwright test --config src/features/block-agent/browser-test/playwright.config.ts`.
+The same suite covers stopping and reloading an agent reply inside a mention:
+keep incomplete trailing Macro XML hidden in settled agent prose, preserve
+completed chips and literal tag examples in Markdown code, and leave user prompts
+unchanged.
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when using the Nix Chrome binary.
 
 Reuse the responsive import review for Notion, Linear and Jira; scope report
@@ -634,3 +709,11 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 
 - Reuse `CreateMenuItem` for explanatory New menu entries: original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
 - Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus.
+
+### Sidebar tag dragging
+
+Email and Calls sidebar tags can be dragged onto taggable desktop list rows.
+Keep existing tags and apply to the selected rows when the drop row is selected.
+Use the shared scoped drag helpers and overlayIcon for the tag chip.
+The backend-free browser regression is
+`bunx playwright test --config src/features/property/tags/browser-test/playwright.config.ts`.

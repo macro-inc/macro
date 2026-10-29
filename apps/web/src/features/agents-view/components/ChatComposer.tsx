@@ -40,6 +40,7 @@ import {
   createEffect,
   createSignal,
   type JSX,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -176,11 +177,16 @@ export function ChatComposer(props: {
           : 'auto',
   });
 
-  // Apply host-supplied drafts (Home suggestions) to the existing editor.
-  createEffect(() => {
-    if (props.draft !== editor.controls.getMarkdown())
-      editor.controls.setMarkdown(props.draft);
-  });
+  // Only host draft changes should replace the editor contents.
+  createEffect(
+    on(
+      () => props.draft,
+      (draft) => {
+        if (draft !== editor.controls.getMarkdown())
+          editor.controls.setMarkdown(draft);
+      }
+    )
+  );
 
   onMount(() => {
     if (props.collapseOnBlur) {
@@ -214,8 +220,8 @@ export function ChatComposer(props: {
     )
       return;
     const attached = attachments();
-    editor.controls.clear();
     props.onDraftChange('');
+    editor.controls.clear();
     hapticImpact('light');
     props.onSend(prompt, attached);
   };

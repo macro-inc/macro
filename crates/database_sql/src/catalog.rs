@@ -24,6 +24,9 @@ pub use schema::{
 pub struct Catalog {
     /// The visible tables.
     pub tables: Vec<Table>,
+    /// The database whose tables win when an unqualified name matches several.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<DatabaseId>,
 }
 
 /// One table and its columns, in display order.

@@ -15,6 +15,7 @@
 // rejects them as disabled or missing endpoints, and `@error` carries the
 // `PushEndpointUnavailable` context text, so they are excluded.
 import * as datadog from '@pulumi/datadog';
+import { notify, RENOTIFY_MINUTES } from '../notify';
 
 export const nativeCallPushFailing = new datadog.Monitor(
   'native-call-push-failing',
@@ -32,9 +33,10 @@ task role lacks \`sns:Publish\` on that platform application: add it to
 
 - [Failure logs](https://us5.datadoghq.com/logs?query=service%3Acloud-storage-service%20env%3Aprod%20%22voip%20push%3A%20SNS%20delivery%20failed%22)
 
-@webhook-macro-alert-hook`,
+${notify({ pages: false })}`,
     tags: ['env:prod', 'service:cloud-storage-service'],
     monitorThresholds: { critical: '1' },
+    renotifyInterval: RENOTIFY_MINUTES,
     onMissingData: 'default',
     includeTags: false,
     notifyAudit: false,

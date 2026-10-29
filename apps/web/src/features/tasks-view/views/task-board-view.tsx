@@ -46,7 +46,7 @@ export function TaskBoardView(props: {
   ) => JSX.Element;
   ref?: (element: HTMLDivElement) => void;
 }) {
-  const { state, source, projectsEnabled, setFacets } = useTasksView();
+  const { state, source, showTaskProject, setFacets } = useTasksView();
   const grouping = () => toTaskBoardGrouping(state.groupBy);
   const scope = () =>
     JSON.stringify([
@@ -76,7 +76,7 @@ export function TaskBoardView(props: {
         return false;
       }
 
-      return id !== SYSTEM_PROPERTY_IDS.PROJECT || projectsEnabled();
+      return id !== SYSTEM_PROPERTY_IDS.PROJECT || showTaskProject();
     });
 
   const revealHiddenColumns = () => {

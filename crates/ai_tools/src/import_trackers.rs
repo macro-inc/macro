@@ -60,6 +60,7 @@ impl ToolEntityCreator {
                 ImportedContent::Markdown(markdown.to_string()),
                 properties,
                 None,
+                None,
                 shared,
             )
             .await;

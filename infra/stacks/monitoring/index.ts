@@ -1,8 +1,8 @@
 // Datadog monitors and synthetic tests.
 //
-// Every monitor in the org is declared here. See README.md before deploying —
-// the 35 monitors under `monitors/` are adopted, not created, and a program that
-// stops declaring one deletes it.
+// Every monitor in the org is declared here, and every one notifies through
+// notify.ts. See README.md before deploying — the 35 monitors under `monitors/`
+// are adopted, not created, and a program that stops declaring one deletes it.
 
 // Adopted from the Datadog UI.
 import './monitors/apm';
@@ -18,9 +18,14 @@ import './monitors/ses';
 import './synthetics';
 
 // Declared here first.
+import './goalert';
 import './monitors/ai-editing';
 import './monitors/calls';
 import './monitors/graphql-soup';
+import './monitors/macrodb';
+import './monitors/queues';
+import './monitors/redis';
+import './monitors/regressions';
 import './monitors/whatsapp-session';
 import { notificationRetentionDashboard } from './monitors/notification-retention';
 

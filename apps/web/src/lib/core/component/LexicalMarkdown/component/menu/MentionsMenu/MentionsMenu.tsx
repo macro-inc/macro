@@ -388,7 +388,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       ...(sourceEnabled('calendarEvents') ? calendarEvents() : []),
       ...(sourceEnabled('dates') ? (dates() ?? []) : []),
     ];
-    return sortMobileMentions(combined, searchTerm(), users);
+    return sortMobileMentions(combined, searchTerm(), users, true);
   });
 
   const bucketConfigs = createLazyMemo((): BucketConfig[] => {
