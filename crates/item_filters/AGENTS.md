@@ -52,6 +52,9 @@ logically-combinable query form.
 
 ## Gotchas
 
+- CRM associations serialize company/contact IDs or the unit string `activity`.
+  The CRM service resolves activity scope; clients do not enumerate record IDs.
+
 - Several entity types (initiatives, agent sessions) are opt-in: `include:
   false` by default, and asking for specific ids/owners also implicitly opts
   in — don't assume an empty `include` flag means "show everything".

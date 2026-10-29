@@ -123,7 +123,8 @@ describe('createTauriCacheHost', () => {
   });
 
   it('reports asynchronous native initialization failures', async () => {
-    const onInitializationError = vi.fn();
+    const failed = Promise.withResolvers<Error>();
+    const onInitializationError = vi.fn(failed.resolve);
     invokeMock.mockImplementation((command: string) =>
       command === 'graphql_cache_init_with_schema'
         ? Promise.reject(new Error('init failed'))
@@ -135,9 +136,8 @@ describe('createTauriCacheHost', () => {
       onInitializationError,
     });
 
-    await vi.waitFor(() =>
-      expect(onInitializationError).toHaveBeenCalledOnce()
-    );
+    await failed.promise;
+    expect(onInitializationError).toHaveBeenCalledOnce();
     expect(onInitializationError).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'init failed' })
     );

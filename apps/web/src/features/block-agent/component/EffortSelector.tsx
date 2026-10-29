@@ -1,5 +1,4 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { ModelEffortMenu } from '@core/component/AI/component/input/ModelEffortMenu';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import Check from '@icon/system/regular/check.svg';
 import { Button, Dropdown, Tooltip } from '@ui';
@@ -19,28 +18,12 @@ export function EffortSelector(props: {
   onCloseAutoFocus?: (event: Event) => void;
 }) {
   const [open, setOpen] = createSignal(false);
-  // The desktop slider stages its choice here and commits it when the menu closes.
-  const [pending, setPending] = createSignal<EffortChoice>();
-  let content: HTMLElement | undefined;
   const changeOpen = (value: boolean) => {
     setOpen(value);
-    if (!value) {
-      const choice = pending();
-      setPending(undefined);
-      if (
-        choice &&
-        choice.configId === props.config?.id &&
-        choices().some((option) => option.value === choice.value) &&
-        choice.value !== committed() &&
-        !props.disabled
-      )
-        props.onChange(choice);
-    }
     props.onOpenChange?.(value);
   };
   const choices = () => props.config?.options ?? [];
-  const committed = () => props.value ?? props.config?.currentValue;
-  const value = () => pending()?.value ?? committed();
+  const value = () => props.value ?? props.config?.currentValue;
   const index = () =>
     Math.max(
       0,
@@ -106,35 +89,19 @@ export function EffortSelector(props: {
                 {contents()}
               </Dropdown.Trigger>
             </Tooltip>
-            <Dropdown.Content
-              ref={content}
-              onOpenAutoFocus={(event) => {
-                // This menu contains a slider rather than roving menu items.
-                event.preventDefault();
-                content?.querySelector<HTMLElement>('[role="slider"]')?.focus();
-              }}
-              class="w-64 rounded-2xl"
-              aria-label="Reasoning effort"
-              onCloseAutoFocus={props.onCloseAutoFocus}
-            >
-              <ModelEffortMenu
-                effortOnly
-                label="Reasoning effort"
-                config={props.config}
-                value={value()}
-                disabled={props.disabled}
-                onChange={(next) => {
-                  const choice = choices().find(
-                    (choice) => choice.value === next
-                  );
-                  if (props.config && choice)
-                    setPending({
-                      configId: props.config.id,
-                      value: choice.value,
-                      name: choice.name,
-                    });
-                }}
-              />
+            <Dropdown.Content class="w-48" aria-label="Reasoning effort">
+              <Dropdown.Group>
+                <For each={choices()}>
+                  {(choice) => (
+                    <Dropdown.Item
+                      disabled={props.disabled}
+                      onSelect={() => choose(choice)}
+                    >
+                      {optionLabel(choice)}
+                    </Dropdown.Item>
+                  )}
+                </For>
+              </Dropdown.Group>
             </Dropdown.Content>
           </Dropdown>
         }

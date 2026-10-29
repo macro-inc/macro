@@ -1,5 +1,6 @@
 import { CreateMenuItem } from '@app/components/view-shell/CreateMenuItem';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
+import { t } from '@app/lib/i18n';
 import CheckSquareIcon from '@icon/system/regular/check-square.svg';
 import StackIcon from '@icon/system/regular/stack.svg';
 import TagIcon from '@icon/system/regular/tag.svg';
@@ -43,16 +44,16 @@ export function TasksCreateMenu(props: {
         <Dropdown.Group>
           <CreateMenuItem
             icon={CheckSquareIcon}
-            title="Task"
-            description="Track a standalone piece of work."
+            title={t('create.taskLabel')}
+            description={t('create.guideTask')}
             onSelect={() => {
               selectedAction = props.onCreateTask;
             }}
           />
           <CreateMenuItem
             icon={SubtaskIcon}
-            title="Subtask"
-            description="Choose a parent task and break its work into a smaller step."
+            title={t('create.subtaskLabel')}
+            description={t('create.guideSubtask')}
             onSelect={() => {
               selectedAction = props.onCreateSubtask;
             }}
@@ -61,8 +62,8 @@ export function TasksCreateMenu(props: {
             {(createProject) => (
               <CreateMenuItem
                 icon={StackIcon}
-                title="Project"
-                description="Group related tasks around a shared goal."
+                title={t('create.projectLabel')}
+                description={t('create.guideProject')}
                 onSelect={() => {
                   selectedAction = createProject();
                 }}
@@ -71,8 +72,8 @@ export function TasksCreateMenu(props: {
           </Show>
           <CreateMenuItem
             icon={TagIcon}
-            title="Tag"
-            description="Label work so you can organize and filter it across projects."
+            title={t('create.tagLabel')}
+            description={t('create.guideTag')}
             onSelect={() => {
               selectedAction = props.onCreateTag;
             }}

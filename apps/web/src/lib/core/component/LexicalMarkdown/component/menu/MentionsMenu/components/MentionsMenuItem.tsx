@@ -1,6 +1,8 @@
 import { EntityIcon } from '@core/component/EntityIcon';
+import { TaskStatusIcon } from '@core/component/TaskStatusIcon';
 import { UserIcon } from '@core/component/UserIcon';
-import type { ChannelEntity } from '@entity';
+import { type ChannelEntity, isTaskEntity } from '@entity/types/entity';
+import { getTaskStatusOptionId } from '@entity/utils/task-properties';
 import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import EmailIcon from '@icon/system/regular/envelope.svg';
@@ -82,6 +84,14 @@ export function MentionsMenuItem(props: {
 
       case 'bookingLink':
         return <CalendarBlankIcon class="size-4 text-accent" />;
+      case 'externalChat':
+        return (
+          <EntityIcon
+            targetType="external_chat"
+            provider={props.item.data.provider}
+            size="xs"
+          />
+        );
 
       case 'calendarEvent':
         return <EntityIcon targetType="calendar" size="xs" />;
@@ -96,6 +106,15 @@ export function MentionsMenuItem(props: {
             <EntityIcon
               size="xs"
               targetType={entity.channelType || 'channel'}
+            />
+          );
+        }
+        if (isTaskEntity(props.item.data)) {
+          return (
+            <TaskStatusIcon
+              statusId={getTaskStatusOptionId(props.item.data)}
+              completed={props.item.data.subType.is_completed}
+              size="xs"
             />
           );
         }

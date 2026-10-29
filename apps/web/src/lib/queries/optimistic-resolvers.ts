@@ -3,6 +3,7 @@ import {
   MarkEmailThreadSeenDocument,
   MarkEmailThreadUnreadDocument,
   SetEmailThreadArchivedDocument,
+  SetEmailThreadsArchivedDocument,
   UpdateNotificationsDocument,
 } from '../service-clients/service-storage/graphql/generated/graphql';
 import { entityOptimisticResolvers } from './entity-optimistic-resolvers';
@@ -24,6 +25,15 @@ export const soupOptimisticResolvers = [
     __typename: 'GraphqlSoupEmailThread',
     id: String(input.threadId),
     inboxVisible: !input.archived,
+  })),
+  // Which threads fail is the server's call; it reloads them with their
+  // unchanged state.
+  optimisticResolver(SetEmailThreadsArchivedDocument, ({ input }) => ({
+    threads: input.threadIds.map((id) => ({
+      __typename: 'GraphqlSoupEmailThread' as const,
+      id: String(id),
+      inboxVisible: !input.archived,
+    })),
   })),
   optimisticResolver(UpdateNotificationsDocument, ({ input }) =>
     input.notificationIds.map((id) => ({

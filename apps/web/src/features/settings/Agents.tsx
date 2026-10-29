@@ -5,8 +5,8 @@ import {
 } from '@app/features/agents-view/core/agent-kind';
 import { AGENTS_TOUR } from '@app/features/agents-view/tour';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
-import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
+import { modelLabel } from '@core/component/AI/constant/model-label';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
 import {
@@ -61,17 +61,23 @@ import { useSearchParams } from '@solidjs/router';
 import { ApiKeyInput, Avatar, Button, Dialog, Panel } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import {
+  createEffect,
   createMemo,
   createSignal,
   For,
   type JSX,
   Match,
+  on,
   Show,
   Switch,
 } from 'solid-js';
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
 import { canDeleteBot, canManageAgent } from '../channel/Bots/botPermissions';
 import { ChannelMultiSelect } from '../channel/Bots/ChannelMultiSelect';
+import {
+  agentSettingsRequest,
+  consumeAgentSettingsRequest,
+} from './agentSettingsState';
 import { CursorConnectPage } from './CursorConnectPage';
 import { AgentSetupStrips } from './components/agent-setup-strips';
 import { CodingPreferencesSetting } from './components/coding-preferences-setting';
@@ -247,6 +253,22 @@ export function Agents(props: {
     agents().filter((agent) => agent.share === 'Private')
   );
 
+  // Opened from an agent's user card: wait for the list, then show that
+  // agent's editor if it is one the viewer manages.
+  createEffect(
+    on([agentSettingsRequest, () => agentsQuery.isPending], ([request]) => {
+      if (!request || agentsQuery.isPending) return;
+      const agent = agents().find(
+        (candidate) => candidate.id === request.agentId
+      );
+      if (agent?.editable && agent.persistedAgent) {
+        setCreating(false);
+        setEditingAgent(agent.persistedAgent);
+      }
+      consumeAgentSettingsRequest(request.id);
+    })
+  );
+
   const createAgent = async (agent: CreateAgentParams) => {
     try {
       const created = await createAgentMutation.mutateAsync(agent);
@@ -324,11 +346,11 @@ export function Agents(props: {
                   </p>
                 </div>
                 <Button
-                  variant="cta"
+                  variant="neutral"
                   size="sm"
                   onClick={() => setCreating(true)}
                 >
-                  <PlusIcon />
+                  <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
                   Add agent
                 </Button>
               </div>
@@ -501,7 +523,7 @@ function AgentRow(props: {
               aria-label={`Message ${props.agent.name}`}
               onClick={onMessage()}
             >
-              <ChatIcon />
+              <ChatIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
               Message
             </Button>
           )}
@@ -515,7 +537,7 @@ function AgentRow(props: {
               aria-label={`Edit ${props.agent.name}`}
               onClick={onEdit()}
             >
-              <PencilIcon />
+              <PencilIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           )}
         </Show>
@@ -529,7 +551,7 @@ function AgentRow(props: {
               aria-label={`Delete ${props.agent.name}`}
               onClick={onDelete()}
             >
-              <TrashIcon />
+              <TrashIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           )}
         </Show>
@@ -600,12 +622,12 @@ function AgentDeleteDialog(props: {
           </Button>
           <Button
             type="button"
-            variant="strong"
+            variant="secondary"
             size="sm"
             disabled={props.pending}
             onClick={props.onConfirm}
           >
-            <TrashIcon />
+            <TrashIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
             {props.pending ? 'Deleting…' : 'Delete agent'}
           </Button>
         </Panel.Footer>
@@ -713,12 +735,15 @@ function AgentEditorPage(props: {
   const selectedCatalogOptions = () =>
     selectedModelOptions().map((model) => ({
       id: model.id,
-      label: model.name,
+      // The built-in runtime reports slugs as names; other runtimes name
+      // their own models.
+      label:
+        harnessId() === IN_MEMORY_HARNESS.id
+          ? modelLabel(model.id, model.name)
+          : model.name,
       description: model.description ?? undefined,
       group: model.group ?? undefined,
     }));
-  const selectedHarnessUsesCatalog = () =>
-    isLargeModelCatalog(selectedCatalogOptions());
   const [channelMode, setChannelMode] = createSignal<ChannelMode>(
     props.agent?.channel_scope ?? 'all'
   );
@@ -818,12 +843,14 @@ function AgentEditorPage(props: {
           <Show
             when={!query.isPending}
             fallback={
-              <SettingsSelect
-                label="Default model"
+              <ModelCatalogPicker
+                value={null}
                 options={[]}
                 placeholder="Loading models…"
-                onChange={setDefaultModelId}
-                disabled
+                onSelect={setDefaultModelId}
+                ariaLabel="Default model"
+                triggerClass="w-full justify-between"
+                pending
               />
             }
           >
@@ -837,7 +864,7 @@ function AgentEditorPage(props: {
                   </p>
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     aria-label={`Retry models for ${selectedHarness()?.name ?? 'this runtime'}`}
                     onClick={() =>
@@ -865,26 +892,15 @@ function AgentEditorPage(props: {
                     </p>
                   }
                 >
-                  <Show
-                    when={selectedHarnessUsesCatalog()}
-                    fallback={
-                      <SettingsSelect
-                        label="Default model"
-                        options={selectedModelOptions()}
-                        value={selectedDefaultModelId()}
-                        onChange={setDefaultModelId}
-                      />
-                    }
-                  >
-                    <ModelCatalogPicker
-                      value={selectedDefaultModelId()}
-                      options={selectedCatalogOptions()}
-                      onSelect={setDefaultModelId}
-                      ariaLabel="Default model"
-                      triggerClass="w-full justify-between"
-                      contentClass="overflow-hidden"
-                    />
-                  </Show>
+                  <ModelCatalogPicker
+                    value={selectedDefaultModelId()}
+                    options={selectedCatalogOptions()}
+                    onSelect={setDefaultModelId}
+                    ariaLabel="Default model"
+                    triggerClass="w-full justify-between"
+                    contentClass="overflow-hidden"
+                    placement="bottom-start"
+                  />
                 </Show>
               </Show>
             </Show>
@@ -1070,7 +1086,8 @@ function AgentEditorPage(props: {
           description="Name it, tell it what to do, and pick where it runs."
           actions={
             <Button variant="ghost" size="sm" onClick={close} disabled={busy()}>
-              <ArrowLeftIcon /> Back
+              <ArrowLeftIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />{' '}
+              Back
             </Button>
           }
         >
@@ -1134,12 +1151,12 @@ function AgentEditorPage(props: {
                   />
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     disabled={busy()}
                     onClick={() => avatarInputRef?.click()}
                   >
-                    <UploadIcon />
+                    <UploadIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
                     {uploadingAvatar() ? 'Uploading…' : 'Upload'}
                   </Button>
                 </div>
@@ -1348,6 +1365,7 @@ function AgentEditorPage(props: {
               <AgentFormSection
                 title="Advanced"
                 description={advancedSummary()}
+                expanded={advancedOpen()}
                 actions={
                   <Button
                     type="button"
@@ -1409,6 +1427,7 @@ function AgentEditorPage(props: {
                             name="agent-permission-policy"
                             value="bypass"
                             title="Always bypass"
+                            suggested
                             description="Approve tool calls without asking."
                             checked={autoAcceptPermissions()}
                             onChange={() => setAutoAcceptChoice(true)}
@@ -1512,7 +1531,8 @@ function AgentEditorPage(props: {
                     disabled={busy()}
                     onClick={onDelete()}
                   >
-                    <TrashIcon /> Delete agent
+                    <TrashIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />{' '}
+                    Delete agent
                   </Button>
                 )}
               </Show>
@@ -1529,7 +1549,7 @@ function AgentEditorPage(props: {
                 <Button
                   type="submit"
                   form="agent-form"
-                  variant="strong"
+                  variant="secondary"
                   size="sm"
                   disabled={!canCreate()}
                 >
@@ -1554,6 +1574,7 @@ function AgentFormSection(props: {
   title: string;
   description: string;
   actions?: JSX.Element;
+  expanded?: boolean;
   children: JSX.Element;
 }) {
   return (
@@ -1561,6 +1582,7 @@ function AgentFormSection(props: {
       title={props.title}
       description={props.description}
       actions={props.actions}
+      expanded={props.expanded}
     >
       <div class="pt-2">{props.children}</div>
     </SettingsSection>

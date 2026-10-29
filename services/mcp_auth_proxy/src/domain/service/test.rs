@@ -427,6 +427,218 @@ async fn rotated_refresh_token_is_rebound_and_the_old_one_is_refused() {
     assert!(rotated.is_ok(), "the rotated token must be usable");
 }
 
+// --- Revocation ------------------------------------------------------
+
+/// Takes `client_id` through authorize, callback, and code exchange, returning
+/// the refresh token it ends up holding.
+async fn obtain_refresh_token(harness: &Harness, client_id: &str) -> RefreshToken {
+    let code = harness
+        .complete_flow_to_code(client_id, TRUSTED_REDIRECT_URI, VICTIM_CODE_VERIFIER)
+        .await;
+    harness
+        .service
+        .exchange_token(authorization_code_request(&code, client_id))
+        .await
+        .expect("code exchange should succeed")
+        .refresh_token
+}
+
+fn refresh_request(refresh_token: RefreshToken, client_id: &str) -> TokenRequest {
+    TokenRequest {
+        grant_type: "refresh_token".to_owned(),
+        code: None,
+        code_verifier: None,
+        refresh_token: Some(refresh_token),
+        redirect_uri: None,
+        client_id: Some(client_id.to_owned()),
+    }
+}
+
+#[tokio::test]
+async fn revoked_refresh_token_cannot_mint_access_tokens() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let refresh_token = obtain_refresh_token(&harness, &client_id).await;
+
+    harness
+        .service
+        .revoke_token(RevocationRequest {
+            token: Some(refresh_token.clone()),
+            client_id: Some(client_id.clone()),
+        })
+        .await
+        .expect("the owning client should be able to revoke");
+
+    assert!(
+        harness.provider.revoked(UPSTREAM_REFRESH_TOKEN),
+        "the upstream refresh token must be revoked too"
+    );
+    let error = harness
+        .service
+        .exchange_token(refresh_request(refresh_token, &client_id))
+        .await
+        .expect_err("a revoked refresh token must not mint an access token");
+    assert!(matches!(error, TokenExchangeError::UnboundRefreshToken));
+}
+
+#[tokio::test]
+async fn revoking_twice_succeeds() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let refresh_token = obtain_refresh_token(&harness, &client_id).await;
+
+    for _ in 0..2 {
+        harness
+            .service
+            .revoke_token(RevocationRequest {
+                token: Some(refresh_token.clone()),
+                client_id: Some(client_id.clone()),
+            })
+            .await
+            .expect("revocation must be idempotent");
+    }
+}
+
+/// An expired refresh token's binding has lapsed, so to the broker it is the
+/// same as one it never issued; RFC 7009 answers both with success.
+#[tokio::test]
+async fn revoking_an_unknown_or_expired_refresh_token_succeeds() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+
+    harness
+        .service
+        .revoke_token(RevocationRequest {
+            token: Some(RefreshToken::from("never-issued-or-expired")),
+            client_id: Some(client_id),
+        })
+        .await
+        .expect("an unknown token is not an error");
+
+    assert!(
+        !harness.provider.revoked("never-issued-or-expired"),
+        "the broker must not forward a token it does not hold"
+    );
+}
+
+#[tokio::test]
+async fn another_client_cannot_revoke_the_grant() {
+    let harness = Harness::new();
+    let owner_client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let other_client_id = harness.register(&[LOOPBACK_REDIRECT_URI]).await;
+    let refresh_token = obtain_refresh_token(&harness, &owner_client_id).await;
+
+    let error = harness
+        .service
+        .revoke_token(RevocationRequest {
+            token: Some(refresh_token.clone()),
+            client_id: Some(other_client_id),
+        })
+        .await
+        .expect_err("a client must not revoke another client's grant");
+    assert!(matches!(error, RevokeTokenError::ClientMismatch));
+
+    assert!(!harness.provider.revoked(UPSTREAM_REFRESH_TOKEN));
+    harness
+        .service
+        .exchange_token(refresh_request(refresh_token, &owner_client_id))
+        .await
+        .expect("the owner's grant must survive the refused revocation");
+}
+
+#[tokio::test]
+async fn revocation_requires_a_client_id() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let refresh_token = obtain_refresh_token(&harness, &client_id).await;
+
+    let error = harness
+        .service
+        .revoke_token(RevocationRequest {
+            token: Some(refresh_token.clone()),
+            client_id: None,
+        })
+        .await
+        .expect_err("an unidentified client must not revoke anything");
+    assert!(matches!(error, RevokeTokenError::ClientIdRequired));
+
+    harness
+        .service
+        .exchange_token(refresh_request(refresh_token, &client_id))
+        .await
+        .expect("the grant must survive the refused revocation");
+}
+
+#[tokio::test]
+async fn revoking_an_access_token_is_reported_as_unsupported() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+
+    let error = harness
+        .service
+        .revoke_token(RevocationRequest {
+            token: Some(RefreshToken::from(
+                "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.c2lnbmF0dXJl",
+            )),
+            client_id: Some(client_id),
+        })
+        .await
+        .expect_err("the broker cannot revoke a JWT access token");
+    assert!(matches!(error, RevokeTokenError::UnsupportedTokenType));
+}
+
+/// A refresh that races a revocation can leave a binding behind for a token
+/// rotated out of the revoked grant. The grant marker must refuse it.
+#[tokio::test]
+async fn revocation_refuses_every_token_in_the_family() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let refresh_token = obtain_refresh_token(&harness, &client_id).await;
+    let binding = harness
+        .registry
+        .binding(&refresh_token_digest(&refresh_token))
+        .await
+        .expect("lookup should succeed")
+        .expect("the issued token should be bound");
+    harness
+        .registry
+        .bind(
+            &refresh_token_digest(&RefreshToken::from("rotated-refresh-token")),
+            &binding,
+        )
+        .await
+        .expect("seeding the rotated binding should succeed");
+
+    harness
+        .service
+        .revoke_token(RevocationRequest {
+            token: Some(refresh_token),
+            client_id: Some(client_id.clone()),
+        })
+        .await
+        .expect("the owning client should be able to revoke");
+
+    let error = harness
+        .service
+        .exchange_token(refresh_request(
+            RefreshToken::from("rotated-refresh-token"),
+            &client_id,
+        ))
+        .await
+        .expect_err("a token from the revoked family must not mint an access token");
+    assert!(matches!(error, TokenExchangeError::RevokedGrant));
+}
+
+#[test]
+fn authorization_server_metadata_advertises_revocation() {
+    let json = Harness::new().service.authorization_server_metadata();
+    assert_eq!(json["revocation_endpoint"], "https://mcp.macro.com/revoke");
+    assert_eq!(
+        json["revocation_endpoint_auth_methods_supported"],
+        serde_json::json!(["none"])
+    );
+}
+
 // --- Redirect construction -------------------------------------------
 
 #[tokio::test]
@@ -471,7 +683,7 @@ async fn seed_issued_code(
     harness: &Harness,
     code: &str,
     client_id: &str,
-    access_token_expires_at: Option<SystemTime>,
+    access_token_expires_at: SystemTime,
 ) {
     harness
         .inflight
@@ -508,7 +720,7 @@ async fn authorization_code_exchange_returns_remaining_lifetime() {
     let harness = Harness::new();
     let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
     let expires_at = SystemTime::now() + Duration::from_secs(UPSTREAM_EXPIRES_IN - 300);
-    seed_issued_code(&harness, "broker-code", &client_id, Some(expires_at)).await;
+    seed_issued_code(&harness, "broker-code", &client_id, expires_at).await;
 
     let response = harness
         .service
@@ -516,7 +728,7 @@ async fn authorization_code_exchange_returns_remaining_lifetime() {
         .await
         .expect("token exchange should succeed");
 
-    let expires_in = response.expires_in.expect("expires_in should be present");
+    let expires_in = response.expires_in;
     assert!(
         (UPSTREAM_EXPIRES_IN - 302..=UPSTREAM_EXPIRES_IN - 300).contains(&expires_in),
         "expected roughly {} seconds remaining, got {expires_in}",
@@ -532,7 +744,7 @@ async fn authorization_code_exchange_serializes_expires_in() {
         &harness,
         "broker-code",
         &client_id,
-        Some(SystemTime::now() + Duration::from_secs(UPSTREAM_EXPIRES_IN)),
+        SystemTime::now() + Duration::from_secs(UPSTREAM_EXPIRES_IN),
     )
     .await;
 
@@ -551,28 +763,6 @@ async fn authorization_code_exchange_serializes_expires_in() {
 }
 
 #[tokio::test]
-async fn authorization_code_exchange_omits_unknown_expiry() {
-    // Codes issued before the broker tracked upstream lifetimes have no expiry,
-    // and must not report a fabricated one.
-    let harness = Harness::new();
-    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
-    seed_issued_code(&harness, "broker-code", &client_id, None).await;
-
-    let response = harness
-        .service
-        .exchange_token(authorization_code_request("broker-code", &client_id))
-        .await
-        .expect("token exchange should succeed");
-
-    assert_eq!(response.expires_in, None);
-    let json = serde_json::to_value(&response).expect("response should serialize");
-    assert!(
-        json.get("expires_in").is_none(),
-        "expires_in should be omitted when unknown, got {json}"
-    );
-}
-
-#[tokio::test]
 async fn expired_access_token_reports_zero_rather_than_underflowing() {
     let harness = Harness::new();
     let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
@@ -580,7 +770,7 @@ async fn expired_access_token_reports_zero_rather_than_underflowing() {
         &harness,
         "broker-code",
         &client_id,
-        Some(SystemTime::now() - Duration::from_secs(60)),
+        SystemTime::now() - Duration::from_secs(60),
     )
     .await;
 
@@ -590,7 +780,7 @@ async fn expired_access_token_reports_zero_rather_than_underflowing() {
         .await
         .expect("token exchange should succeed");
 
-    assert_eq!(response.expires_in, Some(0));
+    assert_eq!(response.expires_in, 0);
 }
 
 #[tokio::test]
@@ -620,7 +810,7 @@ async fn refresh_grant_returns_upstream_lifetime() {
         .await
         .expect("refresh exchange should succeed");
 
-    assert_eq!(refreshed.expires_in, Some(UPSTREAM_EXPIRES_IN));
+    assert_eq!(refreshed.expires_in, UPSTREAM_EXPIRES_IN);
     assert_eq!(refreshed.access_token.as_str(), REFRESHED_ACCESS_TOKEN);
 }
 
@@ -653,7 +843,6 @@ async fn callback_records_upstream_expiry_on_the_issued_code() {
     let remaining = harness
         .inflight
         .only_issued_expiry()
-        .expect("issued code should record the upstream expiry")
         .duration_since(SystemTime::now())
         .expect("expiry should be in the future")
         .as_secs();

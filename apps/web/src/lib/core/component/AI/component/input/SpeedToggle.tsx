@@ -37,9 +37,9 @@ export function SpeedToggle(props: { model: string }) {
   return (
     <Show when={speed()}>
       <Button
+        tooltip={label()}
         variant="ghost"
-        size="icon-composer"
-        label={label()}
+        size="icon-md"
         aria-label={label()}
         aria-pressed={enabled()}
         onMouseDown={(event) => event.preventDefault()}

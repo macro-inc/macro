@@ -56,6 +56,9 @@ export function ChannelFavoriteRow(props: { favorite: Favorite }) {
       )}
       active={item().selected && !isTouchDevice()}
       aria-current={item().selected ? 'page' : undefined}
+      onPointerDown={(event) =>
+        rail.prefetchRow(rowKeyForFavorite(props.favorite), event)
+      }
       onClick={(event) => {
         if (!isPrimaryMouseDown(event)) return;
         rail.activateRow(rowKeyForFavorite(props.favorite), event);

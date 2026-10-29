@@ -11,6 +11,7 @@ const config: KnipConfig = {
     'src/lib/workers/**/*.{js,ts,tsx}',
     // Feature browser harnesses load from their own HTML and Playwright specs.
     'src/features/*/browser-test/*.{ts,tsx}',
+    'src/lib/i18n/browser-test/*.{ts,tsx}',
     'src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/*.tsx',
     'src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/browser-test/*.{ts,tsx}',
     'src/features/billing-lab/entry.tsx',

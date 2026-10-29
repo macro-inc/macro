@@ -4,6 +4,7 @@ import {
   defineQueryFilters,
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
+import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { compareDateDesc } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -20,12 +21,18 @@ import {
 } from '@queries/soup/items';
 import { type Accessor, createEffect, createMemo } from 'solid-js';
 import { channelThreadsQueryArgs } from './core/channel-threads-query';
+import {
+  applySupportChannelVisibility,
+  channelEntityFromListItem,
+  isSupportChannel,
+  isSupportChannelName,
+} from './core/support-channels';
 import type {
   ChannelListSort,
   ChannelsQueryScope,
   ChannelsSortGroup,
 } from './types';
-import { channelHasMessages, isDirectMessage } from './utils';
+import { channelHasMessages, isDirectMessage, isTeamChannel } from './utils';
 
 /** Threads per page the Threads rail reads to find their channels. */
 const THREAD_CHANNELS_PAGE_SIZE = 100;
@@ -35,6 +42,9 @@ const THREAD_CHANNELS_PAGE_SIZE = 100;
  * scrolling the rail loads the rest.
  */
 const THREAD_CHANNELS_AUTO_PAGES = 5;
+/** Pages Recent loads on its own after hiding support conversations. */
+const HIDDEN_SUPPORT_AUTO_PAGES = 8;
+const HIDDEN_SUPPORT_MIN_VISIBLE = 30;
 
 const CHANNELS_QUERY_PARAMS = {
   limit: 100,
@@ -66,13 +76,20 @@ export const CHANNELS_QUERY_DEFINITIONS = {
     }),
     matches: channelHasMessages,
   },
+  team_channels: {
+    params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'created_at' },
+    filters: defineQueryFilters({
+      include: { channelType: ['team'], channelIsParticipant: [true] },
+    }),
+    matches: isTeamChannel,
+  },
   channels: {
     params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'created_at' },
     filters: defineQueryFilters({
       include: { channelIsParticipant: [true] },
-      exclude: { channelType: ['direct_message'] },
+      exclude: { channelType: ['direct_message', 'team'] },
     }),
-    matches: (channel) => !isDirectMessage(channel),
+    matches: (channel) => !isDirectMessage(channel) && !isTeamChannel(channel),
   },
   direct_messages: {
     params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'updated_at' },
@@ -242,7 +259,8 @@ function sortChannels(
  */
 function useThreadChannelsDataSource(
   enabled: Accessor<boolean>,
-  sortMethod: Accessor<ChannelListSort>
+  sortMethod: Accessor<ChannelListSort>,
+  hideSupportChannels: Accessor<boolean>
 ): ChannelsDataSource {
   const userId = useUserId();
   const threadsQuery = useSoupAstItemsQuery(
@@ -288,10 +306,12 @@ function useThreadChannelsDataSource(
         .filter(isChannelEntity)
         .map((channel) => [channel.id, channel])
     );
-    return sortChannels(
+    const listed = sortChannels(
       channelIds().flatMap((id) => byId.get(id) ?? []),
       sortMethod()
     );
+    if (!hideSupportChannels()) return listed;
+    return listed.filter((channel) => !isSupportChannel(channel));
   }, []);
 
   return {
@@ -329,8 +349,10 @@ function useThreadChannelsDataSource(
 function useChannelsDataSource(
   scope: ChannelsListScope,
   enabled: Accessor<boolean>,
-  sortMethod: Accessor<ChannelListSort | undefined>
+  sortMethod: Accessor<ChannelListSort | undefined>,
+  hideSupportChannels: Accessor<boolean>
 ): ChannelsDataSource {
+  const list = useChannelsContext();
   const query = useSoupAstItemsQuery(
     () => channelsQueryArgs(scope, sortMethod()),
     () => ({
@@ -339,21 +361,56 @@ function useChannelsDataSource(
       graphqlProjection: 'channel-list',
     })
   );
+  const extra = createMemo(() => {
+    if (!hideSupportChannels() || scope !== 'channels') return [];
+    return list
+      .channels()
+      .filter(
+        (channel) =>
+          channel.channel_type !== 'direct_message' &&
+          !isSupportChannelName(channel.name)
+      )
+      .map(channelEntityFromListItem);
+  });
   const items = createMemo<ChannelEntity[]>((previous) => {
     if (!query.isEnabled || query.isPending) return previous;
 
-    const channels = filterChannelsForScope(
+    const channels = applySupportChannelVisibility(
       scope,
-      (query.data?.entities ?? []).filter(isChannelEntity)
+      filterChannelsForScope(
+        scope,
+        (query.data?.entities ?? []).filter(isChannelEntity)
+      ),
+      extra(),
+      hideSupportChannels()
     );
 
-    if (scope === 'recents') return channels;
+    if (scope === 'recents' || scope === 'search') return channels;
 
     return sortChannels(
       channels,
       sortMethod() ?? CHANNELS_QUERY_DEFINITIONS[scope].params.sort_method
     );
   }, []);
+  createEffect(() => {
+    if (
+      !hideSupportChannels() ||
+      scope !== 'recents' ||
+      !query.isEnabled ||
+      query.isLoading ||
+      query.isFetching ||
+      query.error ||
+      !query.hasNextPage
+    ) {
+      return;
+    }
+    const loaded = query.data?.entities.length ?? 0;
+    if (loaded >= CHANNELS_QUERY_PARAMS.limit * HIDDEN_SUPPORT_AUTO_PAGES) {
+      return;
+    }
+    if (items().length >= HIDDEN_SUPPORT_MIN_VISIBLE) return;
+    fireAndForget(query.fetchNextPage(), 'channels-view');
+  });
 
   return {
     items,
@@ -378,32 +435,43 @@ function useChannelsDataSource(
 
 export function useChannelsSources(
   enabled: (scope: ChannelsSourceScope) => boolean,
-  sortBy: (group: ChannelsSortGroup) => ChannelListSort
+  sortBy: (group: ChannelsSortGroup) => ChannelListSort,
+  hideSupportChannels: Accessor<boolean> = () => false
 ): ChannelsSources {
   return {
+    team_channels: useChannelsDataSource(
+      'team_channels',
+      () => enabled('team_channels'),
+      () => sortBy('team_channels')
+    ),
     channels: useChannelsDataSource(
       'channels',
       () => enabled('channels'),
-      () => sortBy('channels')
+      () => sortBy('channels'),
+      hideSupportChannels
     ),
     direct_messages: useChannelsDataSource(
       'direct_messages',
       () => enabled('direct_messages'),
-      () => sortBy('direct_messages')
+      () => sortBy('direct_messages'),
+      hideSupportChannels
     ),
     recents: useChannelsDataSource(
       'recents',
       () => enabled('recents'),
-      () => undefined
+      () => undefined,
+      hideSupportChannels
     ),
     search: useChannelsDataSource(
       'search',
       () => enabled('search'),
-      () => undefined
+      () => undefined,
+      hideSupportChannels
     ),
     threads: useThreadChannelsDataSource(
       () => enabled('threads'),
-      () => sortBy('threads')
+      () => sortBy('threads'),
+      hideSupportChannels
     ),
   };
 }

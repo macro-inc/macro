@@ -24,6 +24,7 @@ it('retains the complete draft after a failed send and clears it after a success
       onSendError,
     });
   });
+  clearEditor.mockImplementation(() => composer.onChange('\n \n'));
   try {
     composer.mentionsTracker.onMentionCreate({
       itemType: 'user',
@@ -32,16 +33,17 @@ it('retains the complete draft after a failed send and clears it after a success
     const draft = composer.inputState.snapshot();
     expect(await composer.inputState.commands.send()).toBe(false);
     expect(composer.inputState.snapshot()).toEqual(draft);
-    expect(clearEditor).not.toHaveBeenCalled();
+    // The box clears before delivery so a successful send cannot leave a
+    // second copy behind; a failure puts that same draft back.
+    expect(clearEditor).toHaveBeenCalledOnce();
     expect(onSendError).toHaveBeenCalledOnce();
     expect(await composer.inputState.commands.send()).toBe(true);
     expect(send).toHaveBeenLastCalledWith(draft);
-    expect(composer.inputState.snapshot()).toEqual({
-      value: '',
-      attachments: [],
-      mentions: [],
-    });
-    expect(clearEditor).toHaveBeenCalledOnce();
+    const cleared = composer.inputState.snapshot();
+    expect(cleared.value.trim()).toBe('');
+    expect(cleared.attachments).toEqual([]);
+    expect(cleared.mentions).toEqual([]);
+    expect(clearEditor).toHaveBeenCalledTimes(2);
   } finally {
     dispose();
   }
@@ -71,6 +73,45 @@ it('does not dispatch a second send while the first one is pending', async () =>
     expect(send).toHaveBeenCalledOnce();
     finish();
     expect(await sending).toBe(true);
+  } finally {
+    dispose();
+  }
+});
+
+it('preserves a new draft typed while a failed send is pending', async () => {
+  let rejectSend!: (error: Error) => void;
+  let dispose!: () => void;
+  const restoreEditor = vi.fn();
+  const composer = createRoot((cleanup) => {
+    dispose = cleanup;
+    return createMessageComposer({
+      input: { mode: 'channel', value: 'first message' },
+      callbacks: {
+        onSend: () =>
+          new Promise<void>((_resolve, reject) => {
+            rejectSend = reject;
+          }),
+      },
+      clearEditor: () => {},
+      restoreEditor,
+      attachFiles: async () => {},
+      onSendError: vi.fn(),
+    });
+  });
+  try {
+    const sending = composer.inputState.commands.send();
+    composer.onChange('next message');
+    composer.attachmentTracker.setAttachments([
+      { id: 'next-doc', kind: 'document', name: 'Document' },
+    ]);
+    rejectSend(new Error('offline'));
+    expect(await sending).toBe(false);
+    expect(composer.inputState.snapshot()).toEqual({
+      value: 'next message',
+      attachments: [{ id: 'next-doc', kind: 'document', name: 'Document' }],
+      mentions: [],
+    });
+    expect(restoreEditor).not.toHaveBeenCalled();
   } finally {
     dispose();
   }

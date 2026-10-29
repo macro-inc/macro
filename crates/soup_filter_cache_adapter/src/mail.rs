@@ -1,4 +1,4 @@
-//! Canonical email facts and revision-bound pagination over synchronized Mail.
+//! Canonical email facts and keyset pagination over synchronized Mail.
 use super::*;
 use cache_core::{
     engine::{Engine, EngineError},
@@ -16,6 +16,8 @@ use soup_filter_projection::{
     decode_cache_projection_supplement,
 };
 use std::borrow::Cow;
+
+pub(crate) mod reconciliation;
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod test;
@@ -636,18 +638,25 @@ pub fn new_generation() -> String {
 pub struct PageRequest {
     /// ALL, INBOX, DRAFTS or SENT.
     pub view: String,
-    /// Opaque revision/query-bound local continuation.
+    /// Opaque query-bound local continuation.
     pub cursor: Option<String>,
+    /// A page's `end_cursor`: read from the top through that row, and at
+    /// least `limit` rows (up to 5,000), so a list re-read after writes ends
+    /// where it did.
+    pub through: Option<String>,
 }
+/// A row position, valid across writes for one engine generation and query.
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Cursor {
     generation: String,
-    revision: String,
     query: String,
     key: RecordKey,
     value: i64,
 }
+
+/// Rows past this read through a position are left to the next page.
+const MAX_THROUGH_ROWS: usize = 5_000;
 
 /// Local Mail results are complete only over known cached projections, not the mailbox.
 #[derive(Serialize)]
@@ -665,8 +674,10 @@ pub enum PageResult {
         keys: Vec<String>,
         /// View-correct display timestamps, aligned with keys.
         sort_timestamps: Vec<String>,
-        /// Query/revision-bound local continuation.
+        /// Query-bound local continuation.
         next_cursor: Option<String>,
+        /// Position of the last row, to read through it again after writes.
+        end_cursor: Option<String>,
         /// Whether queued optimistic work contributes to this page.
         optimistic: bool,
     },
@@ -677,7 +688,7 @@ pub enum PageResult {
         /// Revision whose catalog is unavailable.
         revision: String,
     },
-    /// Generation, revision or query changed. Restart at page one.
+    /// Generation or query changed. Restart at page one.
     StaleCursor {
         /// Current revision to restart from.
         revision: String,
@@ -756,7 +767,14 @@ async fn page_impl<S: PredicateIndexStorage>(
     current: bool,
 ) -> Result<PageResult, PageError<S::Error>> {
     let revision = engine.current_revision().to_string();
-    if limit == 0 || limit >= predicate_index::MAX_QUERY_LIMIT {
+    // A read through a position takes `limit` as its fewest rows and pages
+    // the index at its own size.
+    let page_size = if request.through.is_some() {
+        predicate_index::MAX_QUERY_LIMIT - 1
+    } else {
+        limit
+    };
+    if limit == 0 || page_size >= predicate_index::MAX_QUERY_LIMIT {
         return Err(error(format!(
             "Mail page limit must be 1..{}",
             predicate_index::MAX_QUERY_LIMIT - 1
@@ -811,7 +829,7 @@ async fn page_impl<S: PredicateIndexStorage>(
         SoupFlatRequest {
             sort,
             direction,
-            limit: limit + 1,
+            limit: page_size + 1,
             has_cursor: false,
         },
         &request.view,
@@ -819,40 +837,171 @@ async fn page_impl<S: PredicateIndexStorage>(
         &viewer,
     )
     .map_err(error)?;
-    let LocalCompileOutcome::Supported(mut query) = outcome else {
+    let LocalCompileOutcome::Supported(query) = outcome else {
         return Ok(PageResult::Unsupported);
     };
+    // Positions name rows of this query whatever page size reads them.
     let fingerprint = uuid::Uuid::new_v5(
         &uuid::Uuid::NAMESPACE_OID,
-        serde_json::to_string(&query).map_err(error)?.as_bytes(),
+        serde_json::to_string(&query.with_limit(1).map_err(error)?)
+            .map_err(error)?
+            .as_bytes(),
     )
     .to_string();
-    if let Some(cursor) = request.cursor {
+    // A position stays valid across writes: rows that moved past it since are
+    // read again by the caller's next evaluation of the rows above it.
+    let decode = |cursor: &str| {
         if cursor.len() > 4096 {
-            return Err(error("oversized Mail cursor").into());
+            return Err(error("oversized Mail cursor"));
         }
-        let cursor: Cursor = serde_json::from_str(&cursor).map_err(error)?;
-        if cursor.generation != generation
-            || cursor.revision != revision
-            || cursor.query != fingerprint
-        {
-            return Ok(PageResult::StaleCursor { revision });
+        let cursor: Cursor = serde_json::from_str(cursor).map_err(error)?;
+        Ok((cursor.generation == generation && cursor.query == fingerprint).then_some(cursor))
+    };
+    let window = match (request.cursor, request.through) {
+        (Some(_), Some(_)) => {
+            return Err(error("a Mail page takes a cursor or a through position, not both").into());
         }
-        query = query.after(cursor.value, cursor.key).map_err(error)?;
-    }
+        (Some(cursor), None) => {
+            let Some(cursor) = decode(&cursor)? else {
+                return Ok(PageResult::StaleCursor { revision });
+            };
+            let query = query.after(cursor.value, cursor.key).map_err(error)?;
+            read_page(engine, &query, limit).await?
+        }
+        (None, Some(through)) => {
+            let Some(through) = decode(&through)? else {
+                return Ok(PageResult::StaleCursor { revision });
+            };
+            let fewest = usize::from(limit).min(MAX_THROUGH_ROWS);
+            read_through(engine, &query, page_size, fewest, &through).await?
+        }
+        (None, None) => read_page(engine, &query, limit).await?,
+    };
+    let sort_timestamps = window
+        .values
+        .iter()
+        .map(|value| {
+            chrono::DateTime::from_timestamp_micros(*value)
+                .map(|ts| ts.to_rfc3339())
+                .ok_or_else(|| error("invalid page timestamp"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let end_cursor = window
+        .keys
+        .last()
+        .zip(window.values.last())
+        .map(|(key, value)| {
+            serde_json::to_string(&Cursor {
+                generation: generation.into(),
+                query: fingerprint.clone(),
+                key: key.clone(),
+                value: *value,
+            })
+            .map_err(error)
+        })
+        .transpose()?;
+    Ok(PageResult::MailPage {
+        revision,
+        keys: window
+            .keys
+            .into_iter()
+            .map(|key| key.as_str().to_owned())
+            .collect(),
+        sort_timestamps,
+        next_cursor: end_cursor.clone().filter(|_| window.more),
+        end_cursor,
+        optimistic: window.optimistic,
+    })
+}
+
+/// Matching rows in index order, with their sort values.
+struct Window {
+    keys: Vec<RecordKey>,
+    values: Vec<i64>,
+    /// Matching rows remain after the last one.
+    more: bool,
+    optimistic: bool,
+}
+
+/// One page of `limit` rows. `query` asks for one more, to tell whether rows remain.
+async fn read_page<S: PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+    query: &ValidatedIndexQuery,
+    limit: u16,
+) -> Result<Window, PageError<S::Error>> {
     // Unknown rows never become fabricated matches; the UI labels this cached mail.
-    let result = engine.reconcile_predicate_index(&query, &[]).await?;
+    let result = engine.reconcile_predicate_index(query, &[]).await?;
     let mut keys = result.value.keys;
     let more = keys.len() > usize::from(limit);
     keys.truncate(usize::from(limit));
+    let values = sort_values(engine, query, &keys).await?;
+    Ok(Window {
+        keys,
+        values,
+        more,
+        optimistic: result.value.optimistic,
+    })
+}
+
+/// Rows from the top through `through`, and at least `fewest` of them, in
+/// index pages of `page_size` that `query` reads. The pages are read within
+/// one engine borrow, so no write lands between them.
+async fn read_through<S: PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+    query: &ValidatedIndexQuery,
+    page_size: u16,
+    fewest: usize,
+    through: &Cursor,
+) -> Result<Window, PageError<S::Error>> {
+    let mut window = read_page(engine, query, page_size).await?;
+    let mut checked = 0;
+    loop {
+        let end = window
+            .keys
+            .iter()
+            .zip(&window.values)
+            .enumerate()
+            .skip(checked)
+            .position(|(index, (key, value))| {
+                index >= fewest && query.sorts_after((*value, key), (through.value, &through.key))
+            })
+            .map(|offset| checked + offset)
+            .or_else(|| (window.keys.len() > MAX_THROUGH_ROWS).then_some(MAX_THROUGH_ROWS));
+        if let Some(end) = end.map(|end| end.min(MAX_THROUGH_ROWS)) {
+            window.keys.truncate(end);
+            window.values.truncate(end);
+            window.more = true;
+            return Ok(window);
+        }
+        let (Some(key), Some(value), true) =
+            (window.keys.last(), window.values.last(), window.more)
+        else {
+            return Ok(window);
+        };
+        checked = window.keys.len();
+        let next = query.after(*value, key.clone()).map_err(error)?;
+        let page = read_page(engine, &next, page_size).await?;
+        window.keys.extend(page.keys);
+        window.values.extend(page.values);
+        window.more = page.more;
+        window.optimistic |= page.optimistic;
+    }
+}
+
+/// View-correct sort values of `keys`, from their effective projections.
+async fn sort_values<S: PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+    query: &ValidatedIndexQuery,
+    keys: &[RecordKey],
+) -> Result<Vec<i64>, PageError<S::Error>> {
     let bases = engine
         .storage()
-        .load_projection_states(&keys)
+        .load_projection_states(keys)
         .await
         .map_err(EngineError::Storage)?;
     let shadows = engine
         .storage()
-        .load_optimistic_projections(&keys)
+        .load_optimistic_projections(keys)
         .await
         .map_err(EngineError::Storage)?;
     let values = bases
@@ -876,36 +1025,5 @@ async fn page_impl<S: PredicateIndexStorage>(
                 .ok_or_else(|| error("missing page sort"))
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let sort_timestamps = values
-        .iter()
-        .map(|value| {
-            chrono::DateTime::from_timestamp_micros(*value)
-                .map(|ts| ts.to_rfc3339())
-                .ok_or_else(|| error("invalid page timestamp"))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let next_cursor = if more {
-        Some(
-            serde_json::to_string(&Cursor {
-                generation: generation.into(),
-                revision: revision.clone(),
-                query: fingerprint,
-                key: keys.last().expect("nonempty page").clone(),
-                value: *values.last().expect("page has sort evidence"),
-            })
-            .map_err(error)?,
-        )
-    } else {
-        None
-    };
-    Ok(PageResult::MailPage {
-        revision,
-        keys: keys
-            .into_iter()
-            .map(|key| key.as_str().to_owned())
-            .collect(),
-        sort_timestamps,
-        next_cursor,
-        optimistic: result.value.optimistic,
-    })
+    Ok(values)
 }

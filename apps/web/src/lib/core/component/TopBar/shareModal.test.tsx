@@ -25,6 +25,9 @@ vi.mock(
 vi.mock('@app/features/soup/search/context', () => ({
   SearchProvider: (props: { children: unknown }) => props.children,
 }));
+vi.mock('@app/lib/i18n/use-interface-language-sync', () => ({
+  useInterfaceLanguageSync: () => {},
+}));
 vi.mock('@app/lib/queries/calendar/graphql/use-calendar-cache', () => ({
   useCalendarCache: () => {},
 }));

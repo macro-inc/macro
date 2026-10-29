@@ -925,6 +925,14 @@ export class CoordinatorRouter {
           this.postCacheResponse(action.tabId, action.response);
           break;
         case 'broadcast-push':
+          if (action.coalescedCount !== undefined) {
+            this.telemetry.record({
+              name: 'graphql_cache.change_batch',
+              operationCategory: 'invalidation',
+              outcome: 'success',
+              count: action.coalescedCount,
+            });
+          }
           this.broadcast(
             envelope<CoordinatorToTabEnvelope>({
               kind: 'cache-message',

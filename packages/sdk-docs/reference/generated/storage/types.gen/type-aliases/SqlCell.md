@@ -1,6 +1,6 @@
 # Type Alias: SqlCell
 
-> **SqlCell** = \{ `type`: `"text"`; `value`: `string`; \} \| \{ `type`: `"number"`; `value`: `number`; \} \| \{ `type`: `"bool"`; `value`: `boolean`; \} \| \{ `type`: `"date"`; `value`: `string`; \} \| \{ `type`: `"options"`; `value`: [`OptionId`](OptionId.md)[]; \} \| \{ `type`: `"entities"`; `value`: `string`[]; \} \| \{ `type`: `"row"`; `value`: [`RowId`](RowId.md); \}
+> **SqlCell** = \{ `type`: `"text"`; `value`: `string`; \} \| \{ `type`: `"number"`; `value`: `number`; \} \| \{ `type`: `"bool"`; `value`: `boolean`; \} \| \{ `type`: `"date"`; `value`: `string`; \} \| \{ `type`: `"dateRange"`; `value`: [`DateRange`](DateRange.md); \} \| \{ `type`: `"options"`; `value`: [`OptionId`](OptionId.md)[]; \} \| \{ `type`: `"entities"`; `value`: `string`[]; \} \| \{ `type`: `"row"`; `value`: [`RowId`](RowId.md); \}
 
 A cell as fetched. An absent cell is `NULL`; an absent multi-valued cell
 is the empty set.
@@ -48,6 +48,17 @@ is the empty set.
 | ------ | ------ | ------ |
 | `type` | `"date"` | - |
 | `value` | `string` | A date-time. |
+
+***
+
+### Type Literal
+
+\{ `type`: `"dateRange"`; `value`: [`DateRange`](DateRange.md); \}
+
+| Name | Type | Description |
+| ------ | ------ | ------ |
+| `type` | `"dateRange"` | - |
+| `value` | [`DateRange`](DateRange.md) | A span from one date-time to another. |
 
 ***
 

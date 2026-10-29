@@ -9,8 +9,8 @@ export function SidebarCreateHeader(props: {
   title: string;
   label: string;
   onCreate: () => void;
+  /** View controls (e.g. filters) beside search, at the header's right. */
   actions?: JSX.Element;
-  titleActions?: JSX.Element;
   createAction?: JSX.Element;
   search?: () => JSX.Element;
   searchLabel?: string;
@@ -21,13 +21,12 @@ export function SidebarCreateHeader(props: {
         <ViewSidebar.Header
           search={props.search}
           searchLabel={props.searchLabel}
+          actions={props.actions}
         >
           <div class="flex min-w-0 items-center gap-1">
             <ViewSidebar.CloseButton class="shrink-0" />
             <ViewSidebar.Title>{props.title}</ViewSidebar.Title>
-            {props.titleActions}
           </div>
-          {props.actions}
         </ViewSidebar.Header>
       </Show>
       <ViewSidebar.Primary>

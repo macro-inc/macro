@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use super::document_effects::WorkerDocumentEffects;
 use super::*;
 use crate::{
+    constants::SYSTEM_AUTHOR_ID,
+    d1::insert_missing_user_mappings,
     domain::document::{self, DocumentError, MAX_BINARY_BYTES, MAX_REVISION_BYTES},
     storage::DocumentUpdateStorage,
 };
@@ -123,6 +125,12 @@ impl DocumentSyncSession {
         let storage = self.session_storage().await?;
         // Only agent actors are stored with the operation; humans are still editors.
         let is_agent = claims.actor.is_some();
+        // Agents write for the user they act on behalf of; tokens without a user
+        // are service writes.
+        let author = claims
+            .user_id
+            .clone()
+            .unwrap_or_else(|| SYSTEM_AUTHOR_ID.to_owned());
         let editor = match document::DocumentAttribution::from_session_claims(
             claims.actor,
             claims.user_id,
@@ -148,6 +156,13 @@ impl DocumentSyncSession {
             Ok(prepared) => prepared,
             Err(error) => return error_response(error),
         };
+        // Taken from the request, so a retry of an applied update still maps them.
+        let writers = match document::writing_peers(&update) {
+            Ok(writers) => writers,
+            Err(error) => return error_response(error),
+        };
+        let db = self.env.d1(USER_PEER_D1_BINDING)?;
+        insert_missing_user_mappings(&db, document_id, &author, &writers).await?;
         Response::from_json(&UpdateResponse {
             revision: STANDARD.encode(prepared.revision),
             applied: prepared.applied,

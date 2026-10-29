@@ -130,9 +130,10 @@ export function MobileAgentPicker(props: AgentPickerProps) {
           <div class="flex items-center gap-2 px-4 pb-3">
             <Show when={browsing() || showAll()}>
               <Button
+                aria-label={showAll() ? 'Back to Suggested' : 'Back to agents'}
+                tooltip={showAll() ? 'Back to Suggested' : 'Back to agents'}
                 variant="ghost"
                 size="icon-md"
-                label={showAll() ? 'Back to Suggested' : 'Back to agents'}
                 onClick={() => {
                   if (showAll()) {
                     setShowAll(false);
@@ -141,7 +142,7 @@ export function MobileAgentPicker(props: AgentPickerProps) {
                   } else browse();
                 }}
               >
-                <ArrowLeft />
+                <ArrowLeft class="size-4 touch:size-6 shrink-0 pointer-events-none" />
               </Button>
             </Show>
             <h2 class="min-w-0 flex-1 truncate font-medium">
@@ -202,7 +203,7 @@ export function MobileAgentPicker(props: AgentPickerProps) {
                             }}
                           >
                             <ModelIcon model={option.id} />
-                            <span class="min-w-0 flex-1 truncate">
+                            <span class="min-w-0 flex-1 whitespace-normal wrap-anywhere">
                               {option.label}
                             </span>
                             <Show
@@ -288,13 +289,14 @@ export function MobileAgentPicker(props: AgentPickerProps) {
                             </MobileDrawer.Item>
                             <Show when={!agent.unavailableReason}>
                               <Button
+                                aria-label={`Models for ${agent.name}`}
+                                tooltip={`Models for ${agent.name}`}
                                 variant="ghost"
                                 size="icon-md"
                                 class="mr-1 size-11 shrink-0"
-                                label={`Models for ${agent.name}`}
                                 onClick={() => browse(agent)}
                               >
-                                <CaretRight />
+                                <CaretRight class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                               </Button>
                             </Show>
                           </div>
@@ -317,9 +319,8 @@ export function MobileAgentPicker(props: AgentPickerProps) {
             </Show>
             <div class="flex justify-end px-4 pt-1">
               <Button
-                variant="strong"
+                variant="secondary"
                 size="sm"
-                glass={false}
                 class="gap-1.5"
                 onClick={() => {
                   changeOpen(false);

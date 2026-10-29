@@ -1,4 +1,4 @@
-import { ViewShell } from '@app/components/view-shell';
+import { ViewShell, ViewSidebar } from '@app/components/view-shell';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/utils';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
@@ -34,6 +34,7 @@ import { MAX_PINNED_CHANNELS } from './components/ChannelPins';
 import { ChannelsMobileView } from './components/ChannelsMobileView';
 import { ChannelThreadsView } from './components/ChannelThreadsView';
 import { ChannelsRail } from './components/rail/ChannelsRail';
+import { isSupportChannel } from './core/support-channels';
 import { createChannelDetail } from './primitives/create-channel-detail';
 import {
   type ChannelsSources,
@@ -58,6 +59,7 @@ export type ChannelsViewProps = {
 
 // Mounted inside the mobile list's Suspense boundary.
 function MobileChannelsList(props: { sources: ChannelsSources }) {
+  const { hideSupportChannels } = useChannelsView();
   const listChannels = useChannelListSearchPool();
   const mobileSearchText = () => '';
   const mobileSearchSource = createChannelSearchSource({
@@ -78,6 +80,7 @@ function MobileChannelsList(props: { sources: ChannelsSources }) {
     return (favoritesData()?.favorites ?? [])
       .filter((favorite) => favorite.entityType === 'channel')
       .flatMap((favorite) => channelsById.get(favorite.entityId) ?? [])
+      .filter((channel) => !hideSupportChannels() || !isSupportChannel(channel))
       .slice(0, MAX_PINNED_CHANNELS);
   });
   return (
@@ -122,6 +125,7 @@ function DesktopChannelThreads(props: { sources: ChannelsSources }) {
       new Map(
         deduplicateChannels([
           props.sources.threads.items(),
+          props.sources.team_channels.items(),
           props.sources.channels.items(),
           props.sources.direct_messages.items(),
           props.sources.recents.items(),
@@ -143,8 +147,14 @@ function DesktopChannelThreads(props: { sources: ChannelsSources }) {
 
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { state, tab, mobileLayout, selectedChannel, setAsideWidth } =
-    useChannelsView();
+  const {
+    state,
+    tab,
+    mobileLayout,
+    selectedChannel,
+    setAsideWidth,
+    hideSupportChannels,
+  } = useChannelsView();
   const threadsTab = () => !mobileLayout() && tab() === 'threads';
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
@@ -157,7 +167,8 @@ function ChannelsViewRoot() {
       if (scope === 'threads') return tab() === 'threads';
       return tab() === 'browse';
     },
-    (group) => state.sortBy[group]
+    (group) => state.sortBy[group],
+    hideSupportChannels
   );
   onMount(() => panel.handle.setDisplayName('Channels'));
 
@@ -217,9 +228,9 @@ function ChannelsViewRoot() {
                               fallback={() => (
                                 <>
                                   <ViewShell.TopBar>
-                                    <span class="text-sm font-semibold">
+                                    <ViewSidebar.Title caret={false}>
                                       Chat
-                                    </span>
+                                    </ViewSidebar.Title>
                                   </ViewShell.TopBar>
                                   <div class="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
                                     <div class="flex max-w-sm flex-col gap-2">
@@ -288,6 +299,7 @@ function ChannelDetailRouteContent() {
       channelId(),
       sources
         ? deduplicateChannels([
+            sources.team_channels.items(),
             sources.channels.items(),
             sources.direct_messages.items(),
             sources.recents.items(),

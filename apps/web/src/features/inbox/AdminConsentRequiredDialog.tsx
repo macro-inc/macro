@@ -58,14 +58,12 @@ export function AdminConsentRequiredDialog(props: {
           <div class="pt-3 flex flex-col-reverse sm:flex-row sm:justify-end sm:items-center gap-3">
             <Button
               variant="ghost"
-              depth={3}
               onClick={() => props.onConnectDifferentAccount()}
             >
               Connect a different account
             </Button>
             <Button
-              variant="strong"
-              depth={3}
+              variant="secondary"
               disabled={props.adminConsentUrl === undefined}
               onClick={() => fireAndForget(copyApprovalLink(), 'inbox-link')}
             >

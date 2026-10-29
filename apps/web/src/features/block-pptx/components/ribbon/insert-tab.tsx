@@ -87,7 +87,7 @@ export function InsertTab(props: {
     <>
       <RibbonGroup label="Slides">
         <RibbonTextButton
-          label="New slide"
+          aria-label="New slide"
           disabled={ro()}
           onClick={() => fireAndForget(c.addSlide(), 'pptx-editor')}
         >
@@ -136,7 +136,7 @@ export function InsertTab(props: {
       </RibbonGroup>
       <RibbonGroup label="Images">
         <RibbonTextButton
-          label="Pictures"
+          aria-label="Pictures"
           disabled={ro()}
           onClick={() => fileInput.click()}
         >
@@ -195,7 +195,7 @@ export function InsertTab(props: {
         ) : null}
         {props.onSmartArt ? (
           <RibbonTextButton
-            label="SmartArt"
+            aria-label="SmartArt"
             tooltip="Insert a SmartArt graphic"
             disabled={ro()}
             data-testid="pptx-insert-smartart"
@@ -208,7 +208,7 @@ export function InsertTab(props: {
       </RibbonGroup>
       <RibbonGroup label="Media">
         <RibbonTextButton
-          label="Video"
+          aria-label="Video"
           tooltip="Insert a video from this device"
           disabled={ro()}
           data-testid="pptx-insert-video"
@@ -218,7 +218,7 @@ export function InsertTab(props: {
           Video
         </RibbonTextButton>
         <RibbonTextButton
-          label="Audio"
+          aria-label="Audio"
           tooltip="Insert audio from this device"
           disabled={ro()}
           data-testid="pptx-insert-audio"
@@ -256,7 +256,7 @@ export function InsertTab(props: {
       </RibbonGroup>
       <RibbonGroup label="Comments">
         <RibbonTextButton
-          label="Comment"
+          aria-label="Comment"
           tooltip="New Comment (Ctrl+Alt+M)"
           disabled={ro() || !env.review}
           data-testid="pptx-insert-comment"
@@ -268,7 +268,7 @@ export function InsertTab(props: {
       </RibbonGroup>
       <RibbonGroup label="Text">
         <RibbonTextButton
-          label="Text box"
+          aria-label="Text box"
           disabled={ro()}
           data-testid="pptx-insert-textbox"
           onClick={() => fireAndForget(c.insertTextBox(), 'pptx-editor')}
@@ -278,7 +278,7 @@ export function InsertTab(props: {
         </RibbonTextButton>
         <HeaderFooterButtons />
         <RibbonTextButton
-          label="Link"
+          aria-label="Link"
           tooltip="Insert link (⌘K)"
           data-testid="pptx-insert-link"
           disabled={ro() || (!c.textActive() && env.selection().length === 0)}
@@ -292,7 +292,7 @@ export function InsertTab(props: {
         {(equation) => (
           <RibbonGroup label="Symbols">
             <RibbonTextButton
-              label="Equation"
+              aria-label="Equation"
               tooltip="Insert an equation (Alt+=)"
               data-testid="pptx-insert-equation"
               disabled={ro()}

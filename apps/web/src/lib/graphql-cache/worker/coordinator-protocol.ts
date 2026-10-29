@@ -15,6 +15,7 @@ import {
   isValidCalendarRangeArgs,
   isValidNormalizedRecordKey,
   isWorkerMessage,
+  MAX_MAIL_THROUGH_ROWS,
   MAX_RECONCILIATION_BASELINE,
   MAX_RECORD_SELECTION_PAGE_SIZE,
   type WorkerMessage,
@@ -730,6 +731,11 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
       );
     case 'entity-filter': {
       const request = value.request;
+      // A Mail read through a position takes `limit` as its fewest rows.
+      const through =
+        isRecord(request) && isRecord(request.mail)
+          ? request.mail.through
+          : undefined;
       return (
         hasOnlyKeys(value, ['id', 'kind', 'request']) &&
         isRecord(request) &&
@@ -747,7 +753,11 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           request.sortMethod as string
         ) &&
         (request.sortDirection === 'ASC' || request.sortDirection === 'DESC') &&
-        isValidCacheSearchLimit(request.limit) &&
+        (through === undefined
+          ? isValidCacheSearchLimit(request.limit)
+          : Number.isSafeInteger(request.limit) &&
+            (request.limit as number) >= 1 &&
+            (request.limit as number) <= MAX_MAIL_THROUGH_ROWS) &&
         (request.liveQuery === undefined ||
           (isRecord(request.liveQuery) &&
             hasOnlyKeys(request.liveQuery, [
@@ -772,11 +782,15 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
             request.baseline !== undefined)) &&
         (request.mail === undefined ||
           (isRecord(request.mail) &&
-            hasOnlyKeys(request.mail, ['view', 'cursor']) &&
+            hasOnlyKeys(request.mail, ['view', 'cursor', 'through']) &&
             ['ALL', 'INBOX', 'DRAFTS', 'SENT'].includes(
               request.mail.view as string
             ) &&
-            request.limit < 500 &&
+            (through === undefined
+              ? (request.limit as number) < 500
+              : request.mail.cursor === undefined &&
+                typeof through === 'string' &&
+                through.length <= 4096) &&
             request.baseline === undefined &&
             (request.mail.cursor === undefined ||
               (typeof request.mail.cursor === 'string' &&

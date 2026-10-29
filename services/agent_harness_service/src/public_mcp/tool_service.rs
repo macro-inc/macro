@@ -45,7 +45,7 @@ fn definitions<Context>(toolset: &AsyncToolCollection<Context>) -> impl Iterator
 pub struct CodeModeSurface<Context> {
     /// Native tools still listed in code mode, from `tools_for_mcp_code_mode`.
     pub native: Arc<AsyncToolCollection<Context>>,
-    /// `ExecuteCode` and `DescribeCodeTools`.
+    /// `ExecuteCode`, `DescribeCodeTools` and `ReadCodeDocs`.
     pub tools: Arc<AsyncToolCollection<UserCodeModeToolContext>>,
     /// User-scoped execution and Jev.
     pub context: UserCodeModeToolContext,

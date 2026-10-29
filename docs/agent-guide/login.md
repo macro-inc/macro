@@ -257,7 +257,8 @@ from the billing catalog and describes Max as 10× Pro usage, without displaying
 dollar-denominated included AI allowances. Monthly prices use the compact
 `/usr/mo` unit on one line; Free email branding reads “Sent with Macro”.
 Free completes onboarding without a
-card. Pro returns to the account-specific Pro offer; Max starts standard paid checkout.
+card. Pro returns to the account-specific Pro offer; Max starts standard paid
+checkout with no trial period. The trial copy and button stay on the Pro offer.
 The trial button requests 30 days free through Stripe Checkout, with no coupon
 required. Stripe collects the payment method for billing after the trial. Only a
 customer's first subscription qualifies, including canceled subscriptions in that
@@ -322,3 +323,18 @@ The session lives in cookies (`local-macro-access-token`, `local-macro-refresh-t
 survives page reloads but not a browser-profile restart — if the shared Chromium is restarted
 with a fresh profile you must log in again. Workspace data (docs, channels, tasks) persists on
 the backend across logins for the same email.
+
+### Google OAuth through a remote local stack
+
+Use the stack's configured HTTPS frontend origin for Google account linking.
+In local mode, authentication accepts that exact origin (including port) as a
+return URL. Remote hostnames must use HTTPS; hosted environments retain their
+existing redirect allowlist.
+
+If Google redirects to `http://localhost:<auth-port>/oauth2/google/callback`,
+forward that port from the browser's machine to the VM's authentication port
+in addition to the app tunnel. A callback request without parameters should
+return HTTP 400 with `missing field state`; connection refusal indicates a
+missing forward. For a completed consent that returns HTTP 400, inspect auth
+logs for `original_url_rejected` before changing tunnels. After a fix, restart
+Connect Google from Command K to obtain fresh state and an authorization code.

@@ -1,0 +1,52 @@
+[package]
+default-run = "whatsapp_session_service"
+edition = "2024"
+name = "whatsapp_session_service"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "whatsapp_session_service"
+path = "src/main.rs"
+
+[[bin]]
+name = "whatsapp_session_service_doppler_config"
+path = "src/doppler_config.rs"
+
+[dependencies]
+async-trait = { workspace = true }
+aws-sdk-kms = { workspace = true }
+axum = { workspace = true }
+chrono = { workspace = true }
+futures = { workspace = true }
+database_env_vars = { path = "../../crates/database_env_vars" }
+doppler-config = { workspace = true }
+macro_aws_config = { path = "../../crates/macro_aws_config" }
+macro_config = { path = "../../crates/macro_config" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env = { path = "../../crates/macro_env" }
+macro_service_urls = { path = "../../crates/macro_service_urls" }
+nom = { workspace = true }
+rootcause = { workspace = true }
+rustls = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+whatsapp_store_pg = { path = "../../crates/whatsapp_store_pg" }
+whatsmeow = { path = "../../crates/whatsmeow" }
+whatsmeow_signal = { path = "../../crates/whatsmeow_signal" }
+whatsapp_linked = { path = "../../crates/whatsapp_linked", features = ["outbound"] }
+external_chat = { path = "../../crates/external_chat", features = ["outbound"] }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../../crates/macro_db_migrator" }
+sha2 = { workspace = true }
+tracing-subscriber = { workspace = true }
+whatsapp_fake_server = { path = "../../crates/whatsapp_fake_server" }
+whatsapp_store_pg = { path = "../../crates/whatsapp_store_pg", features = ["fake-kms"] }

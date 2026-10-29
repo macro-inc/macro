@@ -798,6 +798,43 @@ async fn create_project_publishes_repository_metadata_after_success() {
 }
 
 #[tokio::test]
+async fn a_project_dated_by_contents_starts_never_edited_and_leaves_its_parent_alone() {
+    let parent_id = Uuid::new_v4();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_default_link_share()
+        .returning(|_| Box::pin(async { Ok(None) }));
+    repo.expect_create_project()
+        .withf(|args| args.updated_at == Some(chrono::DateTime::UNIX_EPOCH))
+        .return_once(move |_| {
+            Box::pin(async move {
+                Ok(project(
+                    &Uuid::new_v4().to_string(),
+                    "macro|actor@example.com",
+                    Some(&parent_id.to_string()),
+                ))
+            })
+        });
+    repo.expect_update_project_modified().times(0);
+    let service = mutation_service_with_event_broker(
+        repo,
+        RecordingEam::default(),
+        RecordingIndexer::default(),
+        TestEventBroker::default(),
+    );
+
+    service
+        .create_project_dated_by_contents(
+            &CreationPrincipal::User(user_id("macro|actor@example.com")),
+            CreateProjectRequest {
+                name: "Imported".to_string(),
+                project_parent_id: Some(parent_id),
+            },
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
 async fn create_project_failures_publish_no_event() {
     let mut repo = MockProjectRepo::new();
     repo.expect_get_team_default_link_share()

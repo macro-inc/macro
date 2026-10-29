@@ -183,8 +183,11 @@ Postgres repo.
   databases, and pipelines are not there yet, so their trash is never emptied.
 - **Favorites (optional):** `crates/favorites/src/domain/mutation_service.rs`
   `validate_favoritable` is exhaustive; recent kinds return unsupported. If you
-  enable favorites, also update `crates/graphql_favorite` and clean up `favorite`
-  rows on delete, since nothing else does.
+  enable favorites, join your table in `list_favorites`
+  (`crates/favorites/src/outbound/pg_favorites_repo.rs`) so a favorite of a
+  deleted entity stops listing, as documents, projects, and agent sessions do.
+  Nothing reaps the `favorite` rows themselves; a delete-time cleanup is still
+  worth adding when the kind is deleted in bulk.
 
 ## 6. Properties (optional)
 

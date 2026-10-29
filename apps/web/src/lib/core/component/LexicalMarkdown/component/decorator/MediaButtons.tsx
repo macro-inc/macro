@@ -51,7 +51,7 @@ export function MediaButtons(props: MediaButtonsProps) {
             props.enlarge?.();
           }}
         >
-          <ArrowsOut />
+          <ArrowsOut class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Dialog.Trigger>
       </Show>
       <Show when={props.newTab && !isMobile()}>
@@ -65,7 +65,7 @@ export function MediaButtons(props: MediaButtonsProps) {
             props.newTab?.();
           }}
         >
-          <NewTab />
+          <NewTab class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </Show>
       <Show when={props.delete}>
@@ -79,7 +79,7 @@ export function MediaButtons(props: MediaButtonsProps) {
             props.delete?.();
           }}
         >
-          <Trash />
+          <Trash class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </Show>
     </>
@@ -102,7 +102,7 @@ export function MediaButtons(props: MediaButtonsProps) {
               variant="ghost"
               tooltip="More options"
             >
-              <ThreeDotsIcon />
+              <ThreeDotsIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Dropdown.Trigger>
             <Dropdown.Content>
               <Dropdown.Group>

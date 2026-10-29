@@ -1,7 +1,7 @@
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import type { ColumnCast as ServerColumnCast } from '@service-storage/generated/schemas/columnCast';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { match } from 'ts-pattern';
 import type {
@@ -11,6 +11,32 @@ import type {
 } from '../../database/core/column-schema';
 import { databaseColumnKeys } from './keys';
 
+function columnCastsQueryOptions(
+  databaseId: string,
+  tableId: string,
+  columnId: string,
+  version: number,
+  enabled: boolean
+) {
+  return queryOptions({
+    queryKey: databaseColumnKeys.casts(databaseId, tableId, columnId, version)
+      .queryKey,
+    queryFn: () =>
+      throwOnErr(() =>
+        storageServiceClient.databases.columnCasts({
+          id: databaseId,
+          tableId,
+          columnId,
+        })
+      ),
+    enabled,
+    select: (casts: ServerColumnCast[]) => ({
+      version,
+      casts: casts.map(toMenuCast),
+    }),
+  });
+}
+
 /** The type menu's dry runs for one table, fetched when a menu opens. */
 export function createColumnCasts(params: {
   databaseId: string;
@@ -18,30 +44,15 @@ export function createColumnCasts(params: {
   version: Accessor<number>;
 }): DatabaseColumnCastsSource {
   return (columnId, open) => {
-    const query = useQuery(() => {
-      const version = params.version();
-      return {
-        queryKey: databaseColumnKeys.casts(
-          params.databaseId,
-          params.tableId,
-          columnId,
-          version
-        ).queryKey,
-        queryFn: () =>
-          throwOnErr(() =>
-            storageServiceClient.databases.columnCasts({
-              id: params.databaseId,
-              tableId: params.tableId,
-              columnId,
-            })
-          ),
-        enabled: open(),
-        select: (casts: ServerColumnCast[]) => ({
-          version,
-          casts: casts.map(toMenuCast),
-        }),
-      };
-    });
+    const query = useQuery(() =>
+      columnCastsQueryOptions(
+        params.databaseId,
+        params.tableId,
+        columnId,
+        params.version(),
+        open()
+      )
+    );
     // Gated on status: an unopened menu's query is pending and must not suspend.
     return (): DatabaseColumnCasts =>
       query.isSuccess

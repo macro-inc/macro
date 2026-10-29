@@ -328,10 +328,11 @@ export function AvailabilityPanel(props: {
                     <Show when={props.canEdit}>
                       <Dropdown>
                         <Dropdown.Trigger
+                          aria-label={`Actions for ${schedule.name}`}
+                          tooltip={`Actions for ${schedule.name}`}
                           ref={actionsButton}
                           variant="ghost"
                           size="icon-sm"
-                          label={`Actions for ${schedule.name}`}
                           disabled={props.saving}
                           class="shrink-0 touch:hidden"
                         >
@@ -439,7 +440,7 @@ export function AvailabilityPanel(props: {
                   />
                   <Show when={props.canEdit}>
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       disabled={props.saving}
                       onClick={(event) =>
@@ -546,11 +547,12 @@ function SchedulePreview(props: {
       modal={false}
     >
       <Popover.Trigger
+        aria-label={`Preview ${props.schedule.name}`}
+        tooltip={`Preview ${props.schedule.name}`}
         as={Button}
         ref={setTrigger}
         variant="ghost"
         size="sm"
-        label={`Preview ${props.schedule.name}`}
       >
         <Eye class="size-3.5" />
         Preview

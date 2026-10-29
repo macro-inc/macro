@@ -155,6 +155,15 @@ fn normalized(
         (ColumnKind::Boolean, CellValue::Boolean(_)) | (ColumnKind::Date, CellValue::Date(_)) => {
             Ok(Some(value.clone()))
         }
+        (ColumnKind::DateRange, CellValue::DateRange(range)) => {
+            if !range.is_ordered() {
+                return Err(invalid(format!(
+                    "\"{}\" cannot end before it starts",
+                    column.name
+                )));
+            }
+            Ok(Some(value.clone()))
+        }
         (ColumnKind::Link, CellValue::Link(urls)) => {
             at_most_one(urls.len(), false)?;
             Ok((!urls.is_empty()).then(|| value.clone()))
@@ -215,6 +224,7 @@ fn value_name(value: &CellValue) -> &'static str {
         CellValue::Number(_) => "a number",
         CellValue::Boolean(_) => "a checkbox",
         CellValue::Date(_) => "a date",
+        CellValue::DateRange(_) => "a date range",
         CellValue::Link(_) => "a link",
         CellValue::Options(_) => "options",
         CellValue::Entities(_) => "references",

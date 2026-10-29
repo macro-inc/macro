@@ -193,6 +193,7 @@ fn due_action() -> ScheduledAction {
         next_run_at: Some(now - ChronoDuration::seconds(1)),
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     }
 }
 

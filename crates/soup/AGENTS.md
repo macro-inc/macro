@@ -66,6 +66,14 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 
 ## Gotchas
 
+- Project grouping uses the system Project property (initiative membership),
+  including canonical TASK assignments, rather than legacy folder `project_id`.
+
+- `crm_association.rs` resolves CRM scope before filtering, sorting, and paging.
+  Activity uses property edges rather than references and matches email within
+  the caller's mailbox. Keep browser requests bounded; never expand every CRM
+  record into client-side filters or raise ingress limits to fit them.
+
 - `expanded/` vs `unexpanded/` queries exist because hydrating full entities
   is expensive — don't widen `unexpanded` to return hydrated data; add a new
   `expanded` path instead.

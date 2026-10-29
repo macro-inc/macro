@@ -7,7 +7,10 @@ use rootcause::Report;
 use uuid::Uuid;
 
 use super::copies::{CopyChange, CopyRefusal};
-use super::ics::{CalendarEventExport, CalendarEventIcs, EventSnapshot};
+use super::ics::{
+    CalendarEventExport, CalendarEventForward, CalendarEventIcs, EventSnapshot, ForwardedCopy,
+    IcsParticipant,
+};
 use super::join_requests::{CalendarJoinRequest, CalendarJoinRequestStatus};
 use super::meeting_links::{
     CreateEventWithMacroCallError, MeetingLink, MeetingLinkError, MeetingLinkRequest,
@@ -631,6 +634,15 @@ pub trait CalendarRepository: Send + Sync + 'static {
         event_id: Uuid,
     ) -> impl Future<Output = Result<Option<CalendarEventExport>, Report>> + Send;
 
+    /// What the requester's own `event_id` copy shows about where its
+    /// invitation came from, and its conference link, for forwarding it.
+    /// `None` when the requester owns no live copy by that id.
+    fn forwarded_copy(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> impl Future<Output = Result<Option<ForwardedCopy>, Report>> + Send;
+
     /// Record a pending request from the requester to join `event_id`,
     /// leaving an existing one, whatever its status, as it is. Returns the
     /// request and whether this call created it, so a repeated ask does not
@@ -1068,6 +1080,22 @@ pub trait CalendarSnapshotImporter: Send + Sync + 'static {
         snapshot: EventSnapshot,
         calendar_id: Option<Uuid>,
     ) -> impl Future<Output = Result<CalendarEvent, CalendarMutationError>> + Send;
+}
+
+/// Inbound service port reading what forwarding one of the requester's
+/// events by email sends, for the host that sends the email.
+pub trait CalendarEventForwardSource: Send + Sync + 'static {
+    /// The requester's own copy of `event_id` as an iCalendar document for
+    /// a forward to `invitees`, with the inbox holding that copy, which
+    /// sends it, and whether the document is an invitation naming them or
+    /// the shared-event file. `None` when the event is cancelled, unknown,
+    /// or not held through one of their own inboxes.
+    fn event_forward(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+        invitees: &[IcsParticipant],
+    ) -> impl Future<Output = Result<Option<CalendarEventForward>, Report>> + Send;
 }
 
 /// Inbound service port creating events that carry a Macro call.

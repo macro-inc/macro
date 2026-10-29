@@ -7,15 +7,18 @@ afterEach(cleanup);
 function setup(name = 'Untitled database', canEdit = true) {
   let edit: (() => void) | undefined;
   const rename = vi.fn();
+  const parentDoubleClick = vi.fn();
   render(() => (
-    <DatabaseTitle
-      name={name}
-      canEdit={canEdit}
-      onRename={rename}
-      onEditReady={(start) => (edit = start)}
-    />
+    <div onDblClick={parentDoubleClick}>
+      <DatabaseTitle
+        name={name}
+        canEdit={canEdit}
+        onRename={rename}
+        onEditReady={(start) => (edit = start)}
+      />
+    </div>
   ));
-  return { rename, edit: () => edit?.() };
+  return { rename, parentDoubleClick, edit: () => edit?.() };
 }
 
 describe('database title', () => {
@@ -35,6 +38,16 @@ describe('database title', () => {
     expect(document.activeElement).toBe(input);
     expect(input.selectionStart).toBe(0);
     expect(input.selectionEnd).toBe('Untitled database'.length);
+  });
+
+  it('focuses and selects the current name on double-click without opening the header menu', () => {
+    const { parentDoubleClick } = setup('Projects');
+    fireEvent.dblClick(screen.getByText('Projects'));
+    const input = screen.getByRole('textbox') as HTMLInputElement;
+    expect(document.activeElement).toBe(input);
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe('Projects'.length);
+    expect(parentDoubleClick).not.toHaveBeenCalled();
   });
 
   it('saves on Enter and returns to a static label', () => {
@@ -76,6 +89,7 @@ describe('database title', () => {
   it('keeps the title read-only without edit access', () => {
     const { edit } = setup('Shared database', false);
     edit();
+    fireEvent.dblClick(screen.getByText('Shared database'));
     expect(screen.getByText('Shared database')).toBeTruthy();
     expect(screen.queryByRole('textbox')).toBeNull();
   });

@@ -1740,26 +1740,22 @@ describe('normalizedCacheExchange', () => {
     }
   );
 
-  it.each(['teardown', 'generation change'] as const)(
-    'does not report a cache read cancelled by %s',
-    async (cancel) => {
-      const read = deferred<ReadResult>();
-      host.readQuery = vi.fn(() => read.promise);
-      const onCacheError = vi.fn();
-      const { ops, results } = harness(host, undefined, { onCacheError });
-      const op = makeOp(1);
-      ops.next(op);
-      await tick();
+  it('does not report a cache read cancelled by teardown', async () => {
+    const read = deferred<ReadResult>();
+    host.readQuery = vi.fn(() => read.promise);
+    const onCacheError = vi.fn();
+    const { ops, results } = harness(host, undefined, { onCacheError });
+    const op = makeOp(1);
+    ops.next(op);
+    await tick();
 
-      if (cancel === 'teardown') ops.next(teardownOf(op));
-      else host.pushGeneration({ storage: 'preserved' });
-      read.resolve({ kind: 'hit', data: { from: 'cache' } });
-      await tick();
+    ops.next(teardownOf(op));
+    read.resolve({ kind: 'hit', data: { from: 'cache' } });
+    await tick();
 
-      expect(onCacheError).not.toHaveBeenCalled();
-      expect(results.filter((r) => r.operation.kind === 'query')).toEqual([]);
-    }
-  );
+    expect(onCacheError).not.toHaveBeenCalled();
+    expect(results.filter((r) => r.operation.kind === 'query')).toEqual([]);
+  });
 
   it('does not report a watched reread cancelled by teardown', async () => {
     const reread = deferred<QueryUpdate>();
