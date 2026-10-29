@@ -32,30 +32,33 @@ export function ResponsesView(props: { detail: FormDetail }) {
   };
   return (
     <div class="@container/responses flex size-full min-h-0 flex-col bg-canvas-base">
-      <div class="flex flex-col gap-3 px-4 pt-4 pb-3 @2xl/responses:px-6">
-        <Show
-          when={!summary.failure()}
-          fallback={
-            <p class="text-xs text-failure-ink">
-              The response counts couldn’t be loaded.
-            </p>
-          }
-        >
-          <StatTiles
-            loading={!summary.value()}
-            tiles={responseTiles(
-              summary.value() ?? {
-                submitted: 0,
-                stopped: 0,
-                stoppedBySection: [],
-                rows: 0,
-              },
-              reach(),
-              (sectionId) => sectionName(props.detail.layout, sectionId)
-            )}
-          />
-        </Show>
-      </div>
+      {/* The ledger's counts are editor-only; viewers of shared responses get the table. */}
+      <Show when={props.detail.access !== 'view'}>
+        <div class="flex flex-col gap-3 px-4 pt-4 pb-3 @2xl/responses:px-6">
+          <Show
+            when={!summary.failure()}
+            fallback={
+              <p class="text-xs text-failure-ink">
+                The response counts couldn’t be loaded.
+              </p>
+            }
+          >
+            <StatTiles
+              loading={!summary.value()}
+              tiles={responseTiles(
+                summary.value() ?? {
+                  submitted: 0,
+                  stopped: 0,
+                  stoppedBySection: [],
+                  rows: 0,
+                },
+                reach(),
+                (sectionId) => sectionName(props.detail.layout, sectionId)
+              )}
+            />
+          </Show>
+        </div>
+      </Show>
       <div class="flex min-h-0 flex-1 flex-col">
         {context.ui.renderResponsesGrid({
           databaseId: form().databaseId,
