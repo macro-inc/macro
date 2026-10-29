@@ -1,6 +1,7 @@
 import '@fontsource-variable/inter';
 import '../../../index.css';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
+import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
 import type { QuickAccessList } from '@core/context/quickAccess/types';
@@ -163,6 +164,7 @@ const noItems: QuickAccessList<never> = {
   hasMore: () => false,
   isLoading: () => false,
   isLoadingMore: () => false,
+  error: () => undefined,
   loadMore: async () => {},
 };
 const root = document.getElementById('root');
@@ -171,22 +173,24 @@ render(
   () => (
     <QueryClientProvider client={queryClient}>
       <AnalyticsContextProvider>
-        <QuickAccessContextProvider
-          value={{
-            useList: () => noItems,
-            usesRecordSelection: () => false,
-            usesSearchProjection: () => false,
-            isLoading: () => false,
-            refresh() {},
-            getById: () => undefined,
-          }}
-        >
-          <UserContextProvider>
-            <ChannelsContextProvider>
-              <Fixture />
-            </ChannelsContextProvider>
-          </UserContextProvider>
-        </QuickAccessContextProvider>
+        <PosthogProvider>
+          <QuickAccessContextProvider
+            value={{
+              useList: () => noItems,
+              usesRecordSelection: () => false,
+              usesSearchProjection: () => false,
+              isLoading: () => false,
+              refresh() {},
+              getById: () => undefined,
+            }}
+          >
+            <UserContextProvider>
+              <ChannelsContextProvider>
+                <Fixture />
+              </ChannelsContextProvider>
+            </UserContextProvider>
+          </QuickAccessContextProvider>
+        </PosthogProvider>
       </AnalyticsContextProvider>
     </QueryClientProvider>
   ),

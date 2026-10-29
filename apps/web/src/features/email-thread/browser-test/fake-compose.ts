@@ -17,6 +17,9 @@ export function createFakeCompose(record: {
         record.deleted(input.draftId);
       },
       async restoreDraft() {},
+      async transferDraft() {
+        return { ...identity, attachments: [] };
+      },
     },
     delivery: {
       async sendMessage() {
@@ -29,6 +32,7 @@ export function createFakeCompose(record: {
     },
     attachmentStorage: {
       async uploadAttachments() {},
+      async completeAttachment() {},
       async addForwardedAttachments() {},
       async removeAttachment() {},
       async removeForwardedAttachment() {},
@@ -47,6 +51,9 @@ export function createFakeCompose(record: {
         dismiss() {},
       },
       async blockingNotice() {},
+      async confirm() {
+        return false;
+      },
       reportError(error) {
         console.error(error);
       },
@@ -73,6 +80,9 @@ export function createFakeCompose(record: {
       readDroppedFiles() {},
       makePublic() {},
       uploadEditorFiles() {},
+      async uploadDocuments() {
+        return [];
+      },
     },
     viewerEmail: () => 'viewer@example.com',
     recipients: () => [],
