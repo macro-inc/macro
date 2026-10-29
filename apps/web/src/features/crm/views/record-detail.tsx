@@ -183,7 +183,7 @@ export function CrmRecordDetail(props: {
               aria-label="CRM record location"
               class="min-w-0 shrink"
             />
-            <div class="min-w-0 overflow-x-auto">
+            <div class="min-w-0 not-touch:overflow-x-auto">
               <Show
                 when={current().type === 'contact'}
                 fallback={

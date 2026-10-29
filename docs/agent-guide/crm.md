@@ -187,7 +187,17 @@ already in the trail (such as the contact's own company from `Companies >
 <company> > <contact>`) returns to it instead of adding a duplicate. Back and
 Forward restore the trail; a reloaded or shared record URL shows only `<list> >
 <record>`. The CRM sidebar stays visible throughout.
-Company and contact headers group `Copy link` separately from the side-panel toggle. Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.
+Company and contact headers group `Copy link` separately from the side-panel toggle.
+Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.
+On phones and tablets, the current section appears as a labeled header island
+with a caret. Tap it to open the shared bottom drawer: every available section
+has an icon and label, with a check beside the current section. Choosing a section
+closes the drawer and updates the header label; Escape, backdrop tap, and drag
+also dismiss it. Focus returns to the section trigger. Databases remains gated
+by its feature flag, and contacts do not show Team. The workspace's scrollable
+mobile view strip is unchanged. Copy-link islands are 40px square on touch with
+a 24px icon. Verify both record types, section changes, dismissal, copy feedback,
+and header fit at phone and tablet widths.
 Their information panel starts closed and opens as a floating bubble at every
 width, without shrinking the record content. Click outside the bubble or use
 the toggle to dismiss it; the open state is not restored on a later visit.
@@ -209,9 +219,10 @@ continue loading pages when the current pages have no match.
 Emails, Files, Calls, and References rows open their items without selection
 checkboxes, including on touch devices.
 
-A company is laid out like a project. Its split header or embedded breadcrumb
-header shows rounded view tabs for `Overview`, `Team`, `Emails`, `Files`, `Tasks`, `Calls`, and `Databases`
-tabs, collapsing to icons when narrow. Overview shows the name, pills
+A company is laid out like a project. On desktop, its split header or embedded
+breadcrumb header shows rounded view tabs for `Overview`, `Team`, `Emails`,
+`Files`, `Tasks`, `Calls`, and `Databases`, collapsing to icons when narrow.
+Touch headers use the section drawer described above. Overview shows the name, pills
 for each domain and `Last interacted`, the generated description, a
 **Pipelines** section and the Discussion. Pipelines stacks one full-width card
 per row of a pipeline you can open that references the record. A card's header
