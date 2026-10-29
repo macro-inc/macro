@@ -32,10 +32,12 @@ export function getCollapsedRepliesCount(
   return Math.max(totalReplies - visibleReplies, 0);
 }
 
+/** `all` labels a summary that stands for the whole thread, not a remainder. */
 export function getThreadReplyCountLabel(
-  collapsedRepliesCount: number
+  collapsedRepliesCount: number,
+  options?: { all?: boolean }
 ): string {
-  return `${collapsedRepliesCount} more repl${
+  return `${collapsedRepliesCount}${options?.all ? '' : ' more'} repl${
     collapsedRepliesCount === 1 ? 'y' : 'ies'
   }`;
 }

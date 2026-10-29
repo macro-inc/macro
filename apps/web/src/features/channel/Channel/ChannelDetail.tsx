@@ -34,9 +34,11 @@ import {
   useChannelName,
   useChannelType,
 } from '@core/context/channels';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMethodRegistration } from '@core/orchestrator';
 import { lazyNamed } from '@core/util/lazyNamed';
-import { Tabs } from '@ui';
+import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
+import { Button, cn, Tabs } from '@ui';
 import {
   type Accessor,
   children,
@@ -57,6 +59,7 @@ import {
   type ChannelTargetRequest,
 } from './ChannelSurface';
 import { ChannelTabProvider, useChannelTab } from './ChannelTabContext';
+import { ChannelThreadPanel } from './ChannelThreadPanel';
 import { ChannelLiveIndicators } from './ChannelTopBarLiveIndicators';
 import { withChannelTabIcons } from './channel-tab-icons';
 import { type ChannelTabId, DEFAULT_CHANNEL_TAB } from './channel-tabs';
@@ -66,6 +69,11 @@ import {
   toChannelTargetRequest,
   URL_PARAMS,
 } from './link';
+import {
+  ChannelThreadPanelContext,
+  createChannelThreadPanel,
+  useChannelThreadPanel,
+} from './thread-panel';
 import {
   canUseInlineCallTab,
   normalizeChannelTab,
@@ -150,6 +158,36 @@ export function ChannelDetailTabs(props: {
       value={activeTab()}
       onChange={setActiveTab}
     />
+  );
+}
+
+/**
+ * Chooses whether threads expand inline or open in a side panel. Touch
+ * devices show one pane, so they keep threads inline and never offer it.
+ */
+function ChannelThreadLayoutToggle() {
+  const panel = useChannelThreadPanel();
+
+  return (
+    <Show when={panel && !isTouchDevice() ? panel : undefined}>
+      {(panel) => (
+        <Button
+          aria-label="Open threads in side panel"
+          aria-pressed={panel().enabled()}
+          tooltip={
+            panel().enabled()
+              ? 'Show threads inline'
+              : 'Open threads in side panel'
+          }
+          variant="ghost"
+          size="icon-sm"
+          class="shrink-0"
+          onClick={() => panel().setEnabled(!panel().enabled())}
+        >
+          <SidebarIcon class="size-4 shrink-0 -scale-x-100 pointer-events-none" />
+        </Button>
+      )}
+    </Show>
   );
 }
 
@@ -251,6 +289,7 @@ export function ChannelDetailTopBar(
             collapser={collapse.collapser}
           />
         </DebugSuspense>
+        <ChannelThreadLayoutToggle />
       </PriorityCollapseOverflowSensor>
       <DebugSuspense name="ChannelDetail.actions">
         <ChannelDetailActions
@@ -342,6 +381,7 @@ function ChannelDetailContent(props: ChannelDetailProps) {
       setActiveTabInternal(DEFAULT_CHANNEL_TAB);
   });
   const [pendingJoinCall, setPendingJoinCall] = createSignal(false);
+  const threadPanel = createChannelThreadPanel();
 
   // A new target within the already-mounted channel (a notification jump)
   // must land on the messages pane, whichever tab is open.
@@ -399,71 +439,95 @@ function ChannelDetailContent(props: ChannelDetailProps) {
       <DebugSuspense name="ChannelDetail.call-event-sync">
         <CallEventSync />
       </DebugSuspense>
-      <ChannelTabProvider activeTab={activeTab} setActiveTab={setActiveTab}>
-        <DebugSuspense name="ChannelDetail.auto-join">
-          <ChannelCallAutoJoin
-            canCall={canCall}
-            channelId={channelId}
-            pendingJoinCall={pendingJoinCall}
-            onHandled={() => setPendingJoinCall(false)}
-          />
-        </DebugSuspense>
-        <div class="flex size-full min-h-0 flex-col">
-          <DebugSuspense name="ChannelDetail.header">
-            <ChannelDetailHeader
-              render={props.children}
-              context={{
-                channelId,
-                name: () => channelName() ?? 'New Channel',
-              }}
+      <ChannelThreadPanelContext.Provider value={threadPanel}>
+        <ChannelTabProvider activeTab={activeTab} setActiveTab={setActiveTab}>
+          <DebugSuspense name="ChannelDetail.auto-join">
+            <ChannelCallAutoJoin
+              canCall={canCall}
+              channelId={channelId}
+              pendingJoinCall={pendingJoinCall}
+              onHandled={() => setPendingJoinCall(false)}
             />
           </DebugSuspense>
-          <div
-            class="flex min-h-0 flex-1 flex-col px-2"
-            data-channel-tab-content
-          >
-            <Switch>
-              <Match when={activeTab() === 'messages'}>
-                <DebugSuspense
-                  name="ChannelDetail.messages"
-                  fallback={<ChannelLoading />}
-                >
-                  <ChannelMessages autofocus={props.autofocus ?? false} />
-                </DebugSuspense>
-              </Match>
-              <Match when={activeTab() === 'attachments'}>
-                <DebugSuspense name="ChannelDetail.attachments">
-                  <ChannelAttachmentsTab channelId={channelId} />
-                </DebugSuspense>
-              </Match>
-              <Match when={activeTab() === 'calls' && ENABLE_CALLS}>
-                <DebugSuspense name="ChannelDetail.calls">
-                  <ChannelCallsTab channelId={channelId} />
-                </DebugSuspense>
-              </Match>
-              <Match when={activeTab() === 'participants'}>
-                <DebugSuspense name="ChannelDetail.participants">
-                  <ChannelParticipantsTab
-                    channelId={channelId}
-                    botManagementEnabled={botManagement.enabled()}
-                    onCreateBot={botManagement.openCreateBot}
-                    inviteBotFocusRequest={botManagement.inviteFocusRequest()}
-                    onOpenBot={botManagement.openBot}
-                  />
-                </DebugSuspense>
-              </Match>
-              <Match when={activeTab() === 'call' && canUseInlineCallTab()}>
-                <DebugSuspense name="ChannelDetail.call">
-                  <ChannelCallTab
-                    channelId={channelId}
-                    pendingJoin={pendingJoinCall}
-                  />
-                </DebugSuspense>
-              </Match>
-            </Switch>
+          <div class="flex size-full min-h-0 flex-col">
+            <DebugSuspense name="ChannelDetail.header">
+              <ChannelDetailHeader
+                render={props.children}
+                context={{
+                  channelId,
+                  name: () => channelName() ?? 'New Channel',
+                }}
+              />
+            </DebugSuspense>
+            <div
+              class="flex min-h-0 flex-1 flex-col px-2"
+              data-channel-tab-content
+            >
+              <Switch>
+                <Match when={activeTab() === 'messages'}>
+                  {/* A narrow pane gives the open thread the whole width. */}
+                  <div class="@container/channel-body flex min-h-0 flex-1">
+                    <div
+                      class={cn(
+                        'flex min-h-0 min-w-0 flex-1 flex-col',
+                        threadPanel.openThreadId() &&
+                          '@max-[44rem]/channel-body:hidden'
+                      )}
+                    >
+                      <DebugSuspense
+                        name="ChannelDetail.messages"
+                        fallback={<ChannelLoading />}
+                      >
+                        <ChannelMessages autofocus={props.autofocus ?? false} />
+                      </DebugSuspense>
+                    </div>
+                    <Show when={threadPanel.openThreadId()}>
+                      {(threadId) => (
+                        <DebugSuspense name="ChannelDetail.thread-panel">
+                          <ChannelThreadPanel
+                            channelId={channelId}
+                            threadId={threadId()}
+                            panel={threadPanel}
+                          />
+                        </DebugSuspense>
+                      )}
+                    </Show>
+                  </div>
+                </Match>
+                <Match when={activeTab() === 'attachments'}>
+                  <DebugSuspense name="ChannelDetail.attachments">
+                    <ChannelAttachmentsTab channelId={channelId} />
+                  </DebugSuspense>
+                </Match>
+                <Match when={activeTab() === 'calls' && ENABLE_CALLS}>
+                  <DebugSuspense name="ChannelDetail.calls">
+                    <ChannelCallsTab channelId={channelId} />
+                  </DebugSuspense>
+                </Match>
+                <Match when={activeTab() === 'participants'}>
+                  <DebugSuspense name="ChannelDetail.participants">
+                    <ChannelParticipantsTab
+                      channelId={channelId}
+                      botManagementEnabled={botManagement.enabled()}
+                      onCreateBot={botManagement.openCreateBot}
+                      inviteBotFocusRequest={botManagement.inviteFocusRequest()}
+                      onOpenBot={botManagement.openBot}
+                    />
+                  </DebugSuspense>
+                </Match>
+                <Match when={activeTab() === 'call' && canUseInlineCallTab()}>
+                  <DebugSuspense name="ChannelDetail.call">
+                    <ChannelCallTab
+                      channelId={channelId}
+                      pendingJoin={pendingJoinCall}
+                    />
+                  </DebugSuspense>
+                </Match>
+              </Switch>
+            </div>
           </div>
-        </div>
-      </ChannelTabProvider>
+        </ChannelTabProvider>
+      </ChannelThreadPanelContext.Provider>
     </ChannelSurface>
   );
 }

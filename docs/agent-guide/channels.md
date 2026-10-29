@@ -252,6 +252,18 @@ and reload to verify that the system entry persists in chronological order.
 Also reload a short channel containing mostly system updates. Every entry should
 remain visible when the entire timeline fits without scrolling.
 
+## Thread side panel
+
+On desktop, the sidebar button right of a channel's tabs (**Open threads in
+side panel**) switches threads from inline expansion to a panel on
+the right; the choice persists across channels and sessions. In panel mode a
+root shows only an `N replies` summary; clicking it, `Reply`, or the reply and
+expand hotkeys opens the panel with every reply and a composer that stays open,
+and the root stays highlighted. A pane narrower than 44rem gives the panel its
+full width. A notification jump to a reply still expands that thread inline so
+it can land on the reply. Touch devices never offer the button and keep threads
+inline. Check opening, replying, switching threads, closing, and toggling back.
+
 ## Agent session entities
 
 The Agents list includes owned and shared sessions. Rows show the shared agent
