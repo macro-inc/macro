@@ -35,3 +35,13 @@ export function getCalendarJoinRequestNotification(
     ? notification
     : undefined;
 }
+
+/** A row announcing a pending request for more access to it, which names the requester. */
+export function getAccessRequestNotification(
+  entity: WithNotification<{ type: string }>
+): UnifiedNotification | undefined {
+  const notification = newestRowNotification(entity);
+  return notification?.notification_metadata.tag === 'entity_access_requested'
+    ? notification
+    : undefined;
+}

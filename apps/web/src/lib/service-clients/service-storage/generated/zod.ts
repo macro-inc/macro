@@ -36616,6 +36616,12 @@ export const postItemsSoupAstBody = zod
       .describe(
         'the filters that should be applied to GitHub pull request records, on top of `fef`'
       ),
+    if: zod
+      .unknown()
+      .optional()
+      .describe(
+        'Filters applied to initiatives (wire key `if`). Opt-in like agent\nsessions: an omitted filter returns no initiatives, and any literal,\na notification state included, opts them in.'
+      ),
     pf: zod
       .unknown()
       .optional()
@@ -41002,6 +41008,12 @@ export const postItemsSoupAstGroupedBody = zod
           .describe(
             'the filters that should be applied to GitHub pull request records, on top of `fef`'
           ),
+        if: zod
+          .unknown()
+          .optional()
+          .describe(
+            'Filters applied to initiatives (wire key `if`). Opt-in like agent\nsessions: an omitted filter returns no initiatives, and any literal,\na notification state included, opts them in.'
+          ),
         pf: zod
           .unknown()
           .optional()
@@ -41213,6 +41225,12 @@ export const postItemsSoupAstGroupedBody = zod
           .optional()
           .describe(
             'the filters that should be applied to GitHub pull request records, on top of `fef`'
+          ),
+        if: zod
+          .unknown()
+          .optional()
+          .describe(
+            'Filters applied to initiatives (wire key `if`). Opt-in like agent\nsessions: an omitted filter returns no initiatives, and any literal,\na notification state included, opts them in.'
           ),
         pf: zod
           .unknown()

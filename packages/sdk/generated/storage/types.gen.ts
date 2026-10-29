@@ -975,6 +975,12 @@ export type ApiEntityFilterAst = {
      */
     ghprf?: unknown;
     /**
+     * Filters applied to initiatives (wire key `if`). Opt-in like agent
+     * sessions: an omitted filter returns no initiatives, and any literal,
+     * a notification state included, opts them in.
+     */
+    if?: unknown;
+    /**
      * the filters that should be applied to the project entity
      */
     pf?: unknown;

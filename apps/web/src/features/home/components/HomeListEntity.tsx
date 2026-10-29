@@ -13,7 +13,10 @@ import ChatTeardropIcon from '@icon/system/regular/chat-teardrop.svg?component-s
 import UserPlusIcon from '@icon/system/regular/user-plus.svg?component-solid';
 import { getDocumentCommentNotification } from '@notifications/document-comment-notification';
 import { getNotificationAgentSender } from '@notifications/notification-sender';
-import { getCalendarJoinRequestNotification } from '@notifications/row-notification';
+import {
+  getAccessRequestNotification,
+  getCalendarJoinRequestNotification,
+} from '@notifications/row-notification';
 import type { UnifiedNotification } from '@notifications/types';
 import { getBotDisplayName } from '@queries/messages/message-sender';
 import { cn, pressHandlers } from '@ui';
@@ -37,6 +40,9 @@ export function HomeListEntity(props: HomeListEntityProps) {
   // A calendar event someone asked to join says who asked, like a comment.
   const joinRequestNotification = () =>
     getCalendarJoinRequestNotification(props.entity);
+  // An item someone asked for more access to says who asked for what.
+  const accessRequestNotification = () =>
+    getAccessRequestNotification(props.entity);
   const unread = () => unreadFilterFn(props.entity);
   const notificationSource = useGlobalNotificationSource();
   const muted = () =>
@@ -72,7 +78,11 @@ export function HomeListEntity(props: HomeListEntityProps) {
                     <ChatTeardropIcon class="size-4" />
                   </ViewSidebar.Icon>
                 </Match>
-                <Match when={joinRequestNotification()}>
+                <Match
+                  when={
+                    joinRequestNotification() ?? accessRequestNotification()
+                  }
+                >
                   <ViewSidebar.Icon>
                     <UserPlusIcon class="size-4" />
                   </ViewSidebar.Icon>
@@ -103,7 +113,11 @@ export function HomeListEntity(props: HomeListEntityProps) {
                     )}
                   </Match>
                   <Match
-                    when={commentNotification() ?? joinRequestNotification()}
+                    when={
+                      commentNotification() ??
+                      joinRequestNotification() ??
+                      accessRequestNotification()
+                    }
                   >
                     {(notification) => (
                       <HomeNotificationTitle
@@ -221,10 +235,17 @@ function HomeNotificationTitle(props: {
     return getNotificationAgentSender(props.notification)?.name ?? 'Someone';
   };
   const action = () =>
-    match(props.notification.notification_metadata.tag)
-      .with('mentioned_in_document_comment', () => ' mentioned you on ')
-      .with('replied_to_document_comment_thread', () => ' replied on ')
-      .with('calendar_event_join_request', () => ' asked to join ')
+    match(props.notification.notification_metadata)
+      .with(
+        { tag: 'mentioned_in_document_comment' },
+        () => ' mentioned you on '
+      )
+      .with({ tag: 'replied_to_document_comment_thread' }, () => ' replied on ')
+      .with({ tag: 'calendar_event_join_request' }, () => ' asked to join ')
+      .with(
+        { tag: 'entity_access_requested' },
+        (metadata) => ` requested ${metadata.content.accessLevel} access to `
+      )
       .otherwise(() => ' commented on ');
   return (
     <span class="flex min-w-0 items-center">

@@ -20992,6 +20992,9 @@
           "ghprf": {
             "description": "the filters that should be applied to GitHub pull request records, on top of `fef`"
           },
+          "if": {
+            "description": "Filters applied to initiatives (wire key `if`). Opt-in like agent\nsessions: an omitted filter returns no initiatives, and any literal,\na notification state included, opts them in."
+          },
           "pf": {
             "description": "the filters that should be applied to the project entity"
           },
