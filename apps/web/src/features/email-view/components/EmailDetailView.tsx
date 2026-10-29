@@ -247,8 +247,14 @@ export function EmailDetailView(props: {
           {/* The subject sits atop the thread, so the header only goes
               back; the reading pane already shows the list beside it. */}
           <Show when={!pane}>
-            <Button size="icon-md" aria-label="Back" onClick={closeThread}>
-              <ArrowLeftIcon />
+            <Button
+              variant="ghost"
+              size="icon-md"
+              tooltip="Back"
+              aria-label="Back"
+              onClick={closeThread}
+            >
+              <ArrowLeftIcon class="size-4" />
             </Button>
           </Show>
           <div ref={setHeaderMenuMount} class="flex items-center" />
