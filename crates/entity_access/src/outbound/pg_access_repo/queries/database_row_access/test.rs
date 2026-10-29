@@ -267,7 +267,12 @@ async fn viewing_a_form_that_shares_responses_views_the_rows_of_its_database(poo
     .await
     .unwrap();
 
-    let member = source_ids(&pool, "member@team.com").await;
+    let member = get_user_source_ids(
+        &pool,
+        Some(&MacroUserIdStr::try_from(MEMBER.to_string()).unwrap()),
+    )
+    .await
+    .unwrap();
     assert_eq!(
         get_database_row_access(&pool, &shared, &member)
             .await

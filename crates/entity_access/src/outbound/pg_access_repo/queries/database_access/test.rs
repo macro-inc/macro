@@ -351,7 +351,12 @@ async fn viewing_a_form_that_shares_responses_grants_view_on_its_database(pool: 
     .await
     .unwrap();
 
-    let member = source_ids(&pool, "member@team.com").await;
+    let member = get_user_source_ids(
+        &pool,
+        Some(&MacroUserIdStr::try_from(MEMBER.to_string()).unwrap()),
+    )
+    .await
+    .unwrap();
     assert_eq!(
         get_database_access(&pool, &database_id, &member)
             .await
