@@ -5,6 +5,7 @@ import type { JSX } from 'solid-js';
 import { createEffect, createSignal, createUniqueId } from 'solid-js';
 import type { CalendarEventFormController } from './create-calendar-event-form-controller';
 import type { EventGuestPolicyRowProps } from './EventGuestPolicyRow';
+import type { EventComposerGuestsPillProps } from './EventPropertyPills';
 import type {
   EventEditorDisabledFields,
   EventEditorSubmitValues,
@@ -152,6 +153,29 @@ export function createEventForm(props: EventFormProps) {
     props.guestPolicyEditable === true &&
     capabilities()?.guestPolicy !== false &&
     !isOutOfOffice();
+  /** The guests, bound for either guest pill. */
+  const guests: EventComposerGuestsPillProps = {
+    options: controller.guestOptions,
+    get selected() {
+      return controller.selectedGuests();
+    },
+    onChange: controller.setSelectedGuests,
+    get disabled() {
+      return formIsDisabled();
+    },
+    get readOnly() {
+      return fieldIsReadOnly('guests');
+    },
+    get readOnlyReason() {
+      return props.guestsReadOnlyReason;
+    },
+    get guestListHidden() {
+      return props.guestListHidden;
+    },
+    get currentGuests() {
+      return props.addOnlyGuests ? controller.initialGuests() : undefined;
+    },
+  };
   const guestPolicy: EventGuestPolicyRowProps = {
     get value() {
       return controller.guestPolicy();
@@ -205,6 +229,7 @@ export function createEventForm(props: EventFormProps) {
     outOfOfficeNotice,
     showsDeclineMessage,
     showsGuestPolicy,
+    guests,
     guestPolicy,
     submit,
   };

@@ -28,6 +28,7 @@ import {
   EventComposerDeclineMessagePill,
   EventComposerDeclinePill,
   EventComposerGuestsPill,
+  EventComposerGuestsSheetPill,
   EventComposerKindPill,
   EventComposerKindTabs,
   EventComposerLocationPill,
@@ -291,21 +292,20 @@ function RecurrencePill() {
 /** The guests, then the host's action beside them, such as forwarding. */
 function GuestsPill() {
   const form = useEventForm();
-  const controller = form.controller;
   return (
     <>
-      <EventComposerGuestsPill
-        options={controller.guestOptions}
-        selected={controller.selectedGuests()}
-        onChange={controller.setSelectedGuests}
-        disabled={form.formIsDisabled()}
-        readOnly={form.fieldIsReadOnly('guests')}
-        readOnlyReason={form.props.guestsReadOnlyReason}
-        guestListHidden={form.props.guestListHidden}
-        currentGuests={
-          form.props.addOnlyGuests ? controller.initialGuests() : undefined
-        }
-      />
+      <EventComposerGuestsPill {...form.guests} />
+      {form.props.guestsAction}
+    </>
+  );
+}
+
+/** `GuestsPill` for a touch sheet, editing the guests in a sheet of their own. */
+function GuestsSheetPill() {
+  const form = useEventForm();
+  return (
+    <>
+      <EventComposerGuestsSheetPill {...form.guests} />
       {form.props.guestsAction}
     </>
   );
@@ -627,6 +627,7 @@ export const EventFormParts = {
   CalendarPill,
   RecurrencePill,
   GuestsPill,
+  GuestsSheetPill,
   ConferencePill,
   LocationPill,
   DeclinePill,

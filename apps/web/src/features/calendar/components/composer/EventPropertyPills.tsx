@@ -1,3 +1,4 @@
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import BellSimpleIcon from '@icon/system/regular/bell-simple.svg';
 import CalendarDotsIcon from '@icon/system/regular/calendar-dots.svg';
 import CalendarXIcon from '@icon/system/regular/calendar-x.svg';
@@ -17,7 +18,7 @@ import { PropertyCaret } from '@property/extractors/PropertyCaret';
 import { PropertyPill } from '@property/extractors/PropertyPill';
 import type { EntityProperty } from '@property/types';
 import type { EventType } from '@service-storage/generated/schemas/eventType';
-import { cn, Layer, Select, Tabs, Tooltip } from '@ui';
+import { Button, cn, Layer, Select, Tabs, Tooltip } from '@ui';
 import { type Accessor, createMemo, createSignal, For, Show } from 'solid-js';
 import {
   formatReminderOffset,
@@ -233,38 +234,140 @@ function GuestsPopoverEditor(props: {
   return (
     <Show when={ctx.editorOpen()}>
       <EditorPopover portalScope="local">
-        <Show
-          when={props.currentGuests}
-          fallback={
-            <EventGuestPicker
-              options={props.options}
-              selected={props.selected}
-              onChange={props.onChange}
-              onClose={() => ctx.closeEditor()}
-            />
-          }
-        >
-          {(currentGuests) => {
-            const isCurrent = (guest: SelectedEventEditorGuest) =>
-              currentGuests().some(
-                (current) =>
-                  guestEmail(current).toLowerCase() ===
-                  guestEmail(guest).toLowerCase()
-              );
-            return (
-              <AddOnlyGuestsEditor
-                options={props.options}
-                current={currentGuests()}
-                added={props.selected.filter((guest) => !isCurrent(guest))}
-                onAddedChange={(added) =>
-                  props.onChange([...currentGuests(), ...added])
-                }
-                onClose={() => ctx.closeEditor()}
-              />
-            );
-          }}
-        </Show>
+        <GuestsEditor {...props} onClose={() => ctx.closeEditor()} />
       </EditorPopover>
+    </Show>
+  );
+}
+
+/** The add-only editor, or the picker, for guests chosen so far. */
+function GuestsEditor(props: {
+  selected: SelectedEventEditorGuest[];
+  currentGuests?: SelectedEventEditorGuest[];
+  options: Accessor<EventEditorGuestOption[]>;
+  onChange: (selected: SelectedEventEditorGuest[]) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Show
+      when={props.currentGuests}
+      fallback={
+        <EventGuestPicker
+          options={props.options}
+          selected={props.selected}
+          onChange={props.onChange}
+          onClose={props.onClose}
+        />
+      }
+    >
+      {(currentGuests) => {
+        const isCurrent = (guest: SelectedEventEditorGuest) =>
+          currentGuests().some(
+            (current) =>
+              guestEmail(current).toLowerCase() ===
+              guestEmail(guest).toLowerCase()
+          );
+        return (
+          <AddOnlyGuestsEditor
+            options={props.options}
+            current={currentGuests()}
+            added={props.selected.filter((guest) => !isCurrent(guest))}
+            onAddedChange={(added) =>
+              props.onChange([...currentGuests(), ...added])
+            }
+            onClose={props.onClose}
+          />
+        );
+      }}
+    </Show>
+  );
+}
+
+/**
+ * The guest editor in a sheet stacked over the composer's. Picks stay a
+ * draft until Done; Cancel, or dismissing the sheet, drops them.
+ */
+function GuestsSheetEditor(props: {
+  selected: SelectedEventEditorGuest[];
+  currentGuests?: SelectedEventEditorGuest[];
+  options: Accessor<EventEditorGuestOption[]>;
+  onChange: (selected: SelectedEventEditorGuest[]) => void;
+}) {
+  const ctx = useProperty();
+  // Undefined until the first pick, so each opening starts from the event's guests.
+  const [draft, setDraft] = createSignal<SelectedEventEditorGuest[]>();
+  const shown = () => draft() ?? props.selected;
+  const cancel = () => {
+    setDraft(undefined);
+    ctx.closeEditor();
+  };
+  const done = () => {
+    const picked = draft();
+    if (picked) props.onChange(picked);
+    cancel();
+  };
+
+  return (
+    <MobileDrawer
+      side="bottom"
+      open={ctx.editorOpen()}
+      onOpenChange={(open) => {
+        if (!open) cancel();
+      }}
+    >
+      <MobileDrawer.Portal>
+        <MobileDrawer.Overlay />
+        <MobileDrawer.Content maxHeight={92}>
+          <MobileDrawer.Handle />
+          <div class="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 pb-2">
+            <Button variant="ghost" class="justify-self-start" onClick={cancel}>
+              Cancel
+            </Button>
+            <MobileDrawer.Title class="text-base font-semibold text-ink">
+              Guests
+            </MobileDrawer.Title>
+            <Button variant="primary" class="justify-self-end" onClick={done}>
+              Done
+            </Button>
+          </div>
+          <MobileDrawer.ScrollBody>
+            <GuestsEditor
+              selected={shown()}
+              currentGuests={props.currentGuests}
+              options={props.options}
+              onChange={setDraft}
+              onClose={cancel}
+            />
+          </MobileDrawer.ScrollBody>
+        </MobileDrawer.Content>
+      </MobileDrawer.Portal>
+    </MobileDrawer>
+  );
+}
+
+/** The guest pill for a touch sheet: it opens the guests in a sheet of their own. */
+export function EventComposerGuestsSheetPill(
+  props: EventComposerGuestsPillProps
+) {
+  return (
+    <Show
+      when={props.readOnly}
+      fallback={
+        <PropertyRoot
+          property={guestsAsProperty(props.selected)}
+          canEdit={!props.disabled}
+        >
+          <GuestsPillTrigger {...props} />
+          <GuestsSheetEditor
+            selected={props.selected}
+            currentGuests={props.currentGuests}
+            options={props.options}
+            onChange={props.onChange}
+          />
+        </PropertyRoot>
+      }
+    >
+      <ReadOnlyEventComposerGuestsPill {...props} />
     </Show>
   );
 }

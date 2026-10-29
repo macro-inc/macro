@@ -1,6 +1,6 @@
 import { DateTimeRange } from '@app/components/date-time-range/date-time-range-fields';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { ToggleSwitch } from '@ui';
+import { cn, ToggleSwitch } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { EventFormParts } from './event-form-parts';
@@ -31,7 +31,9 @@ export function MobileEventForm(
   const form = createEventForm(props);
 
   return (
-    <EventFormParts.Root form={form} class={props.class}>
+    // -mt-4 takes back the host's top padding: the sheet's pinned chrome
+    // already separates the title from the handle.
+    <EventFormParts.Root form={form} class={cn('-mt-4', props.class)}>
       <Portal mount={props.headerMount}>
         <div class="flex justify-end px-4 pb-1">
           <EventFormParts.Submit />
@@ -80,7 +82,7 @@ export function MobileEventForm(
           </SheetRow>
           <Show when={!form.isOutOfOffice()}>
             <SheetRow label="Guests">
-              <EventFormParts.GuestsPill />
+              <EventFormParts.GuestsSheetPill />
             </SheetRow>
             <SheetRow label="Call">
               <EventFormParts.ConferencePill />
