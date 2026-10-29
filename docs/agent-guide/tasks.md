@@ -115,9 +115,16 @@ one is saved. Builtin task properties cannot be deleted from the title or side p
 
 Property edits should update the visible task before the save finishes. To verify,
 delay the GraphQL mutation and change Status, an existing Priority, and an unset
-Priority in the list and task detail. In a view grouped by that property, the task
-should move groups and update both counts immediately. Reject a save to check that
-the value, group membership, and counts all roll back without refreshing the page.
+Priority in the list and task detail. With the local cache, a view grouped by that
+property should move the task and update both counts immediately. Reject a save
+to check that the value, membership, and counts roll back without a page refresh.
+Repeat with local caching disabled: values must still update immediately and a
+failed save must roll back only its own edit; membership follows the server refresh.
+Bulk edits to different tasks must start without waiting for the first response.
+On Board, keep unrelated property editors usable during a save. Repeated edits
+to that property remain blocked, and dragging waits only when the pending property
+controls the current grouping. Complete simultaneous saves out of order and check
+that each property unlocks independently.
 
 For tags, include a task with no prior tag assignment. Delay
 `UpdateEntityPropertyOptions` and the following `EntityProperties` query: the tag

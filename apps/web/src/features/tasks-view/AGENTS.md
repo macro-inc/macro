@@ -15,6 +15,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 ## Gotchas
 
 - Group task lists by the Project property, matching the Project column and Board; resolve project headers through the authorized project identity query.
+- Lock board saves per task/property pair; disable dragging only for pending writes to the active grouping property, without disabling unrelated property editors.
 
 - Save filters, selected layout, grouping, and ordered sort directions; keep text search and scroll state local, and capture implicit person conditions as normal OR-valued facets.
 - Preserve stable tag/property bindings when labels disappear; skip unsupported or malformed conditions without discarding supported filters.

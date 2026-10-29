@@ -310,20 +310,21 @@ export function TaskBoardView(props: {
                 }
               >
                 {(task) => {
-                  const readOnly = () =>
-                    !props.data.actions.canEditTask(task().id) ||
-                    board.pending(task().id);
+                  const propertyReadOnly = () => board.pending(task().id);
+                  const canDrag = () =>
+                    props.data.actions.canEditTask(task().id) &&
+                    !propertyReadOnly();
 
                   return (
                     <TaskBoard.Card
                       task={task()}
-                      canDrag={!readOnly()}
+                      canDrag={canDrag()}
                       pending={board.pending(task().id)}
                       onOpen={props.onOpen}
                     >
                       {props.renderCard(
                         task,
-                        renderCardContent(task, readOnly)
+                        renderCardContent(task, propertyReadOnly)
                       )}
                     </TaskBoard.Card>
                   );

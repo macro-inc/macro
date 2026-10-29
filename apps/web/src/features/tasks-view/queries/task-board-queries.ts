@@ -33,7 +33,9 @@ export function createTaskBoardQueries(options: {
   facets?: Accessor<FacetSelection>;
   sort?: Accessor<SortSelection<TaskSortId>[]>;
 }) {
-  const [propertySaving, setPropertySaving] = createSignal<string[]>([]);
+  const [propertySaving, setPropertySaving] = createSignal<
+    { taskId: string; definitionId: string }[]
+  >([]);
 
   const entities = createMemo(() => {
     const result = new Map<string, TaskEntityWithProperties>();
@@ -138,9 +140,18 @@ export function createTaskBoardQueries(options: {
 
   const save = useBulkSaveEntityPropertiesMutation();
 
+  const isPropertySaving = (taskId: string, definitionId: string) =>
+    propertySaving().some(
+      (pending) =>
+        pending.taskId === taskId && pending.definitionId === definitionId
+    );
+
   const actions: TaskBoardActions = {
     canEditTask(id) {
-      return entities().has(id) && !propertySaving().includes(id);
+      return (
+        entities().has(id) &&
+        !isPropertySaving(id, taskBoardPropertyId(options.grouping()))
+      );
     },
     canMoveTo(grouping, id) {
       const property = properties().get(taskBoardPropertyId(grouping));
@@ -167,7 +178,9 @@ export function createTaskBoardQueries(options: {
         throw new Error('Task or destination is no longer editable');
       }
 
-      const canEdit = actions.canEditTask(move.id);
+      const canEdit =
+        entities().has(move.id) &&
+        !isPropertySaving(move.id, taskBoardPropertyId(grouping));
       const canMove = canEdit && actions.canMoveTo(grouping, move.toLane);
 
       if (!canMove) {
@@ -234,11 +247,19 @@ export function createTaskBoardQueries(options: {
   ) => {
     const definition = properties().get(value.propertyDefinitionId);
 
-    if (!actions.canEditTask(id) || !definition || definition.isMetadata) {
+    if (
+      !entities().has(id) ||
+      isPropertySaving(id, value.propertyDefinitionId) ||
+      !definition ||
+      definition.isMetadata
+    ) {
       throw new Error('Task is no longer editable');
     }
 
-    setPropertySaving((ids) => [...ids, id]);
+    setPropertySaving((pending) => [
+      ...pending,
+      { taskId: id, definitionId: value.propertyDefinitionId },
+    ]);
 
     try {
       if (definition.id === SYSTEM_PROPERTY_IDS.PROJECT) {
@@ -257,7 +278,13 @@ export function createTaskBoardQueries(options: {
         ],
       });
     } finally {
-      setPropertySaving((ids) => ids.filter((pendingId) => pendingId !== id));
+      setPropertySaving((pending) =>
+        pending.filter(
+          (item) =>
+            item.taskId !== id ||
+            item.definitionId !== value.propertyDefinitionId
+        )
+      );
     }
   };
 
@@ -278,7 +305,11 @@ export function createTaskBoardQueries(options: {
     canEditProperty: (id: string, definitionId: string) => {
       const definition = properties().get(definitionId);
 
-      if (!actions.canEditTask(id) || !definition) {
+      if (
+        !entities().has(id) ||
+        isPropertySaving(id, definitionId) ||
+        !definition
+      ) {
         return false;
       }
 
