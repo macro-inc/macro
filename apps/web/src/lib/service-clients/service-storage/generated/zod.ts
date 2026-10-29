@@ -17729,6 +17729,45 @@ export const getBatchPreviewHandlerResponse = zod.object({
 });
 
 /**
+ * Returns existing tasks similar to an unsaved draft. Runs vector retrieval +
+rerank only and persists nothing.
+ * @summary Handler for `POST /documents/similarity_search`.
+ */
+export const taskSimilaritySearchHandlerBody = zod
+  .object({
+    markdown: zod
+      .string()
+      .nullish()
+      .describe(
+        "Draft task body as embedding-format markdown. The composer produces it\nclient-side with lexical-core's `markdownToEmbeddingText` (the same\nformat lexical-service's `\/markdown\/{id}?target=embedding` renders), so\nthis latency-sensitive endpoint embeds the text as-is without a\nlexical-service round trip."
+      ),
+    taskName: zod.string().describe('Draft task title.'),
+  })
+  .describe('Request body for searching tasks similar to an unsaved draft.');
+
+export const taskSimilaritySearchHandlerResponse = zod
+  .object({
+    results: zod
+      .array(
+        zod
+          .object({
+            taskId: zod.string().describe('The matching existing task.'),
+            taskName: zod
+              .string()
+              .describe("The matching task's display name."),
+            vectorScore: zod
+              .number()
+              .describe('Cosine similarity from vector search.'),
+          })
+          .describe(
+            'A similar existing task computed for an unsaved draft, returned to the task\ncomposer without persisting any embedding or match state.'
+          )
+      )
+      .describe('Existing tasks similar to the draft.'),
+  })
+  .describe('Response for searching tasks similar to an unsaved draft.');
+
+/**
  * Returns document metadata, user access level, and view location.
  * @summary Handler for `GET /documents/slug/{slug}`.
  */
