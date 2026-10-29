@@ -29,3 +29,9 @@ The code-paste regression types three backticks to open a code block in the
 production composer and pastes a Macro link, then Markdown. Both land as literal
 code text: the link used to become a mention the code block dropped, and the
 Markdown used to lose its syntax.
+
+Private composer controls have separate desktop and phone coverage:
+
+```sh
+bunx playwright test --config src/features/channel/Input/browser-test/privacy.playwright.config.ts
+```

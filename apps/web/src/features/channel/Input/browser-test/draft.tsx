@@ -28,6 +28,7 @@ function Fixture() {
   onCleanup(() => client.clear());
   const [open, setOpen] = createSignal(true);
   const [sent, setSent] = createSignal('');
+  const [sentVisibility, setSentVisibility] = createSignal('');
   const [pending, setPending] = createSignal(false);
   let completeSend: (() => void) | undefined;
   let failSend: (() => void) | undefined;
@@ -45,6 +46,9 @@ function Fixture() {
                       {open() ? 'Leave channel' : 'Open channel'}
                     </button>
                     <output aria-label="Sent message">{sent()}</output>
+                    <output aria-label="Sent visibility">
+                      {sentVisibility()}
+                    </output>
                     <button
                       type="button"
                       disabled={!pending()}
@@ -61,6 +65,7 @@ function Fixture() {
                     </button>
                     <Show when={open()}>
                       <ChannelInput
+                        parent={{ type: 'channel', id: channelId }}
                         input={{
                           mode: 'channel',
                           id: `channel-input-${channelId}`,
@@ -68,6 +73,9 @@ function Fixture() {
                         }}
                         onSend={(snapshot) => {
                           setSent(snapshot.value);
+                          setSentVisibility(
+                            snapshot.ephemeral ? 'Only you' : 'Everyone'
+                          );
                           setPending(true);
                           return new Promise<void>((resolve, reject) => {
                             completeSend = () => {

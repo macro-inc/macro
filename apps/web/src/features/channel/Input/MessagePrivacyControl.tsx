@@ -1,6 +1,6 @@
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import GlobeIcon from '@phosphor/globe-simple.svg';
-import LockIcon from '@phosphor/lock-key.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import GlobeIcon from '@icon/system/regular/globe.svg';
+import LockIcon from '@icon/system/regular/lock-key.svg';
 import { Dropdown } from '@ui/components/Dropdown';
 import { cn } from '@ui/utils/classname';
 import { Show } from 'solid-js';
@@ -24,7 +24,6 @@ export function MessagePrivacyControl(props: {
         <Dropdown.Trigger
           variant="ghost"
           size="sm"
-          class={props.private ? 'text-accent' : 'text-ink-muted'}
           aria-label="Message visibility"
         >
           <Show when={props.private} fallback={<GlobeIcon class="size-3.5" />}>

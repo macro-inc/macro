@@ -86,7 +86,7 @@ Exercise the message/bots/channel/trigger/webhook domain tests and the message
 repository database regressions. The backend-free desktop/phone control check is:
 
 ```sh
-bunx playwright test --config src/features/channel/Input/browser-test/playwright.config.ts
+bunx playwright test --config src/features/channel/Input/browser-test/privacy.playwright.config.ts
 ```
 
 A full local-stack check uses two authenticated channel members: the initiator

@@ -16,7 +16,10 @@ export default defineConfig({
     tsconfigPaths({ projects: [`${webDirectory}/tsconfig.json`] }),
   ],
   resolve: {
-    dedupe: ['solid-js'],
+    dedupe: ['solid-js', 'loro-crdt'],
+    alias: { 'loro-crdt': 'loro-crdt/base64' },
   },
+  optimizeDeps: { esbuildOptions: { target: 'esnext' } },
+  build: { target: 'esnext' },
   server: { host: '127.0.0.1', strictPort: true },
 });

@@ -39249,6 +39249,10 @@
           "source": {
             "$ref": "#/components/schemas/SessionSource",
             "description": "Who started the session. Events from before it was recorded say\nnothing and read as a person."
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/MessageVisibility",
+            "description": "Immutable audience inherited from the originating message thread."
           }
         }
       },

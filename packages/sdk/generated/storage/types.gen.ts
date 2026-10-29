@@ -12509,6 +12509,10 @@ export type SessionIdentity = {
      * nothing and read as a person.
      */
     source?: SessionSource;
+    /**
+     * Immutable audience inherited from the originating message thread.
+     */
+    visibility?: MessageVisibility;
 };
 
 /**

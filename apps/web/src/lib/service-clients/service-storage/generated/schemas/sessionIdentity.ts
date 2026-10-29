@@ -7,6 +7,7 @@
 
 import type { BotId } from './botId';
 import type { MacroUserIdStr } from './macroUserIdStr';
+import type { MessageVisibility } from './messageVisibility';
 import type { SessionIdentityOrigin } from './sessionIdentityOrigin';
 import type { SessionSource } from './sessionSource';
 
@@ -33,4 +34,6 @@ a consumer fanning out never has to read the session's log. */
   /** Who started the session. Events from before it was recorded say
 nothing and read as a person. */
   source?: SessionSource;
+  /** Immutable audience inherited from the originating message thread. */
+  visibility?: MessageVisibility;
 }

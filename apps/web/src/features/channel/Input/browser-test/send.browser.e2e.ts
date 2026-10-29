@@ -1,7 +1,12 @@
 import { expect, test } from '@playwright/test';
 
-for (const mobile of [false, true]) {
-  test(`clears a pending send and restores a failed draft on ${mobile ? 'phone' : 'desktop'}`, async ({
+for (const { mobile, privateThread } of [
+  { mobile: false, privateThread: false },
+  { mobile: true, privateThread: false },
+  { mobile: false, privateThread: true },
+  { mobile: true, privateThread: true },
+]) {
+  test(`clears a pending ${privateThread ? 'private' : 'shared'} send and restores a failed draft on ${mobile ? 'phone' : 'desktop'}`, async ({
     browser,
   }) => {
     const context = await browser.newContext({
@@ -30,14 +35,28 @@ for (const mobile of [false, true]) {
     await page.goto('/src/features/channel/Input/browser-test/draft.html');
     const editor = page.locator('[data-markdown-editable]');
     await expect(editor).toBeVisible({ timeout: 60_000 });
+    const visibility = page.getByRole('button', {
+      name: 'Message visibility',
+      exact: true,
+    });
+    if (privateThread) {
+      await visibility.click();
+      await page.getByRole('menuitemradio', { name: /Only you/ }).click();
+    }
     await editor.fill('pending message');
     await page
       .getByRole('button', { name: 'Send message', exact: true })
       .click();
     await expect(page.getByLabel('Sent message')).toHaveText('pending message');
     await expect(editor).toHaveText('');
+    await expect(page.getByLabel('Sent visibility')).toHaveText(
+      privateThread ? 'Only you' : 'Everyone'
+    );
     await page.getByRole('button', { name: 'Fail send' }).click();
     await expect(editor).toHaveText('pending message');
+    await expect(visibility).toContainText(
+      privateThread ? 'Only you' : 'Everyone'
+    );
     await page
       .getByRole('button', { name: 'Send message', exact: true })
       .click();
@@ -45,6 +64,7 @@ for (const mobile of [false, true]) {
     await editor.fill('next draft');
     await page.getByRole('button', { name: 'Fail send' }).click();
     await expect(editor).toHaveText('next draft');
+    await expect(visibility).toContainText('Everyone');
     await context.close();
   });
 }
