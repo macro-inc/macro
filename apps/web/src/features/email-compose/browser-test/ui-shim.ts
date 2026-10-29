@@ -12,3 +12,5 @@ export { Tooltip } from '../../../components/ui/components/Tooltip';
 export { cn } from '../../../components/ui/utils/classname';
 export { highlightFirstMenuItemOnOpen } from '../../../components/ui/utils/menuKeyboardNavigation';
 export { pressHandlers } from '../../../components/ui/utils/press';
+export { AvatarGroup } from '../../../components/ui/components/Avatar';
+export { ButtonGroup } from '../../../components/ui/components/ButtonGroup';
