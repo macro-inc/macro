@@ -21,7 +21,7 @@ test('releases a warm tap while acknowledgment waits for a frame, retaining it f
   expect(
     await page.evaluate(() => window.notificationCoverFixture.snapshot())
   ).toEqual({
-    commands: [],
+    commands: ['plugin:notifications|release_notification_cover'],
     nativePending: 'first',
     pending: 'first',
     blockedFrames: 1,
@@ -31,7 +31,10 @@ test('releases a warm tap while acknowledgment waits for a frame, retaining it f
   expect(
     await page.evaluate(() => window.notificationCoverFixture.snapshot())
   ).toEqual({
-    commands: ['plugin:notifications|release_notification_cover'],
+    commands: [
+      'plugin:notifications|release_notification_cover',
+      'plugin:notifications|release_notification_cover',
+    ],
     nativePending: 'first',
     pending: 'first',
     blockedFrames: 1,
@@ -46,11 +49,31 @@ test('releases a warm tap while acknowledgment waits for a frame, retaining it f
   ).toEqual({
     commands: [
       'plugin:notifications|release_notification_cover',
+      'plugin:notifications|release_notification_cover',
       'plugin:notifications|acknowledge_notification',
     ],
     nativePending: undefined,
     pending: undefined,
     blockedFrames: 0,
+    covered: false,
+  });
+});
+
+test('the startup cap does not release a later notification cover', async ({
+  page,
+}) => {
+  await page.clock.fastForward(7000);
+  await page.evaluate(() => window.notificationCoverFixture.tap('startup-tap'));
+  await page.clock.fastForward(1000);
+  expect(
+    await page.evaluate(() => window.notificationCoverFixture.snapshot())
+  ).toMatchObject({ commands: [], pending: 'startup-tap', covered: true });
+  await page.clock.fastForward(7000);
+  expect(
+    await page.evaluate(() => window.notificationCoverFixture.snapshot())
+  ).toMatchObject({
+    commands: ['plugin:notifications|release_notification_cover'],
+    pending: 'startup-tap',
     covered: false,
   });
 });

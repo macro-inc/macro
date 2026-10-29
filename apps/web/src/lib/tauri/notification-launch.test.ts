@@ -127,7 +127,8 @@ function mountCoverTimeout() {
 it('releases a stalled warm tap without consuming it or extending the deadline on redelivery', async () => {
   mountCoverTimeout();
   await vi.advanceTimersByTimeAsync(10_000);
-  expect(bridge.releaseCover).not.toHaveBeenCalled();
+  expect(bridge.releaseCover).toHaveBeenCalledOnce();
+  bridge.releaseCover.mockClear();
 
   const tap = {
     type: 'BACKGROUND_TAP',
@@ -200,6 +201,8 @@ it.each(['completed', 'disposed'] as const)(
   'cancels the cover deadline when the navigation is %s',
   async (outcome) => {
     const dispose = mountCoverTimeout();
+    await vi.advanceTimersByTimeAsync(10_000);
+    bridge.releaseCover.mockClear();
     receiveNotificationTap(
       {
         type: 'BACKGROUND_TAP',
@@ -219,11 +222,32 @@ it.each(['completed', 'disposed'] as const)(
   }
 );
 
+it('lets a tap received during startup keep its own cover deadline', async () => {
+  mountCoverTimeout();
+  await vi.advanceTimersByTimeAsync(7000);
+  receiveNotificationTap(
+    {
+      type: 'BACKGROUND_TAP',
+      payload: { notificationId: 'notification' },
+      deliveryId: 'startup-tap',
+    },
+    bridge.acknowledge
+  );
+  const intent = pendingNotificationNavigation();
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(bridge.releaseCover).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(7000);
+  expect(bridge.releaseCover).toHaveBeenCalledOnce();
+  expect(pendingNotificationNavigation()).toBe(intent);
+});
+
 it.each(['unsupported', 'legacy'] as const)(
   'does not release a cover for %s notifications',
   async (kind) => {
     bridge.supported = kind !== 'unsupported';
     mountCoverTimeout();
+    await vi.advanceTimersByTimeAsync(10_000);
+    bridge.releaseCover.mockClear();
     receiveNotificationTap(
       {
         type: 'BACKGROUND_TAP',

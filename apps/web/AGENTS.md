@@ -476,8 +476,9 @@ warm resumes and stalled route acknowledgments. Release without consuming the
 intent on timeout; duplicate delivery must not extend the deadline, and a newer
 tap gets its own deadline. Convert fallible notification lookups and navigation
 promises into error results so failure cleanup acknowledges the tap and shows
-the existing error toast. The deadline requires responsive JavaScript and IPC;
-it cannot recover a frozen WebContent process.
+the existing error toast. Keep the startup cover fallback in the same owner,
+and let it defer to a pending tap's deadline. The deadline requires responsive
+JavaScript and IPC; it cannot recover a frozen WebContent process.
 
 The frontend cover deadline has a backend-free phone browser regression:
 `bunx playwright test --config src/lib/tauri/browser-test/playwright.config.ts`.

@@ -5,7 +5,7 @@ import {
   receiveNotificationTap,
 } from '@notifications/notification-navigation-intent';
 import { notificationOpenSpan } from '@notifications/notification-open-trace';
-import { createEffect, on, onCleanup } from 'solid-js';
+import { createEffect, on, onCleanup, onMount } from 'solid-js';
 import {
   createPushApi,
   releaseNotificationCover,
@@ -16,6 +16,17 @@ const NOTIFICATION_COVER_MAX_WAIT_MS = 8000;
 
 /** Keep every tap usable even when navigation or its acknowledgment stalls. */
 export function useNotificationCoverTimeout(): void {
+  onMount(() => {
+    if (!supportsNotificationLaunch()) return;
+    const timeout = setTimeout(() => {
+      // A tap received during startup owns its later deadline. Keep the
+      // bootstrap fallback for launches that have not delivered an intent.
+      if (pendingNotificationNavigation()?.deliveryId) return;
+      fireAndForget(releaseNotificationCover(), 'notification-launch');
+    }, NOTIFICATION_COVER_MAX_WAIT_MS);
+    onCleanup(() => clearTimeout(timeout));
+  });
+
   createEffect(
     on(pendingNotificationNavigation, (intent) => {
       if (!supportsNotificationLaunch() || !intent?.deliveryId) return;
