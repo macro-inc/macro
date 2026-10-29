@@ -8,8 +8,9 @@ import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import { CollectionEmptyState } from '@property/component/CollectionEmptyState';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { Badge, buttonClasses, CollectionEmptyState, Layer } from '@ui';
+import { Badge, buttonClasses, Layer } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { TagDot } from './TagDot';
 import {

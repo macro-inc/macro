@@ -1,17 +1,11 @@
+import { cn } from '@ui/utils/classname';
 import { type ComponentProps, type JSX, splitProps } from 'solid-js';
-import { cn } from '../utils/classname';
 
 export type CollectionEmptyStateProps = Omit<ComponentProps<'div'>, 'children'> & {
   message: JSX.Element;
   action?: JSX.Element;
 };
 
-/**
- * Compact unbordered empty collection message with an optional trailing action.
- * @do Keep loading, errors, collection data, and edit permissions with the caller.
- * @do Pass a shared Button as the action; omit it for read-only collections.
- * @dont Use this collection placeholder as a full-page empty state.
- */
 export function CollectionEmptyState(props: CollectionEmptyStateProps) {
   const [local, rest] = splitProps(props, ['message', 'action', 'class']);
 

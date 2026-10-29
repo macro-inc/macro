@@ -26,8 +26,8 @@ state until refresh completes. Read-only, metadata, loading, saving, and open-ed
 states reject drops. Native file uploads are not supported here; the Add action
 remains available for keyboard and touch.
 
-`CollectionEmptyState` remains presentation-only. Property-specific drop handling
-and save callbacks belong to the surrounding collection, not the shared UI component.
+`component/CollectionEmptyState.tsx` is local to this feature and shared by
+property collections and Tags. Drop handling and save callbacks stay in callers.
 
 The dedicated Tags section uses the same compact empty-state presentation with
 a trailing outline Add action and no resting border. The existing tag picker

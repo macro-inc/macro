@@ -10,6 +10,7 @@ import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
 import Plus from '@icon/system/regular/plus.svg';
 import DeleteIcon from '@icon/system/regular/x.svg';
 import { Property as PropertyNS, useProperty } from '@property';
+import { CollectionEmptyState } from '@property/component/CollectionEmptyState';
 import {
   type PropertySaveHandler,
   usePropertiesContext,
@@ -20,7 +21,7 @@ import { getEntityValues } from '@property/utils';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { Button, CollectionEmptyState, Layer } from '@ui';
+import { Button, Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { createSignal, For, type JSX, Show, type Signal } from 'solid-js';
 import { createEntityCollectionDropTarget } from './entity-collection-drop';
