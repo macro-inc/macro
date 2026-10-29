@@ -222,12 +222,17 @@ async fn frames_sent_before_the_peer_sees_our_close_still_arrive() {
         let mut socket = tokio_tungstenite::accept_async(socket)
             .await
             .expect("peer should upgrade");
-        let last = socket
-            .next()
-            .await
-            .expect("our frame should arrive")
-            .expect("our frame should read");
-        assert!(matches!(last, TungsteniteMessage::Text(_)), "got {last:?}");
+        // Our pump pings from the start; wait past that for our last frame.
+        loop {
+            let frame = socket
+                .next()
+                .await
+                .expect("our frame should arrive")
+                .expect("our frame should read");
+            if frame.is_text() {
+                break;
+            }
+        }
         socket
             .send(TungsteniteMessage::Text(
                 serde_json::to_string(&acp_to_runtime()).unwrap().into(),
