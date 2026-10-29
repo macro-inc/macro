@@ -10,16 +10,6 @@ const NOTE: &str = "0199c0a8-7d3e-7c1a-9b5e-3f2a1c4d5e71";
 const HIDDEN: &str = "0199c0a8-7d3e-7c1a-9b5e-3f2a1c4d5e72";
 const PULL_REQUEST: &str = "https://github.com/org/repo/pull/7";
 
-#[test]
-fn task_mention_is_the_lexical_chip() {
-    assert_eq!(
-        TaskDocumentId::from_stored(TASK.to_owned()).mention(),
-        format!(
-            r#"<m-document-mention>{{"documentId":"{TASK}","documentName":"","blockName":"task","blockParams":{{}}}}</m-document-mention>"#
-        )
-    );
-}
-
 /// Task documents keyed by id; `NOTE` is a document but not a task, `HIDDEN` a task the
 /// owner cannot view.
 #[derive(Clone, Default)]
@@ -228,7 +218,9 @@ async fn links_a_task_and_answers_its_link_and_reference() {
             title: "Task 6f".to_owned(),
             url: format!("https://macro.com/app/task/{TASK}"),
             reference: "ENG-6f".to_owned(),
-            mention: TaskDocumentId::from_stored(TASK.to_owned()).mention(),
+            mention: format!(
+                r#"<m-document-mention>{{"documentId":"{TASK}","blockName":"task","documentName":"Task 6f","blockParams":{{}},"collapsed":false}}</m-document-mention>"#
+            ),
             pull_request: None,
         }
     );

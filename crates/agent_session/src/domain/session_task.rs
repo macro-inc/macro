@@ -82,20 +82,6 @@ impl TaskDocumentId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
-
-    /// The lexical mention chip that renders this task in Macro Markdown.
-    pub fn mention(&self) -> String {
-        let payload = serde_json::json!({
-            "documentId": self.0,
-            "documentName": "",
-            "blockName": "task",
-            "blockParams": {},
-        })
-        .to_string()
-        .replace('<', "\\u003c")
-        .replace('>', "\\u003e");
-        format!("<m-document-mention>{payload}</m-document-mention>")
-    }
 }
 
 /// A task as its viewer sees it.
@@ -337,7 +323,11 @@ where
                 if let Some(url) = &pull_request {
                     self.link_pull_request(url, &facts).await?;
                 }
-                let mention = facts.id.mention();
+                let mention =
+                    mention_utils::serialize::task_mention(facts.id.as_str(), &facts.title)
+                        .map_err(|error| {
+                            SessionTaskError::Unavailable(rootcause::report!("{error}"))
+                        })?;
                 Ok(LinkedTask {
                     url: format!("{}/{}", self.task_url_base, facts.id.as_str()),
                     task_id: facts.id.0,
