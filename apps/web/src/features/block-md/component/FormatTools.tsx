@@ -239,7 +239,7 @@ const InlineFormatButton = (props: {
       }
       disabled={props.buttonIsDisabled()}
     >
-      <Dynamic component={icon} />
+      <Dynamic component={icon} class="size-4" />
     </Button>
   );
 };
@@ -293,7 +293,7 @@ export const ElementFormatButton = (props: {
       }
       disabled={props.buttonIsDisabled()}
     >
-      <Dynamic component={icon} />
+      <Dynamic component={icon} class="size-4" />
     </Button>
   );
 };
@@ -899,6 +899,7 @@ export function FormatTools(props: {
           >
             <Dynamic
               component={selection()?.hasLinks ? BrokenLinkIcon : LinkIcon}
+              class="size-4"
             />
           </Button>
           <MoreInlineDropdown />
@@ -1053,6 +1054,7 @@ export function FormatTools(props: {
             >
               <Dynamic
                 component={selection()?.hasLinks ? BrokenLinkIcon : LinkIcon}
+                class="size-4"
               />
             </Button>
             <MediaSelector buttonIsDisabled={buttonIsDisabled} />

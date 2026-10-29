@@ -85,8 +85,8 @@ export function ToolBar(props: {
               <Icon
                 class={
                   t.tool === 'select' || t.tool === 'direct'
-                    ? '-scale-x-100'
-                    : undefined
+                    ? 'size-4 -scale-x-100'
+                    : 'size-4'
                 }
               />
             </Button>

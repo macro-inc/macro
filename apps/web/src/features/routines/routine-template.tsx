@@ -311,7 +311,7 @@ function SendTemplate(props: { routineId: string; name: string }) {
         disabled={recipients().length === 0 || sending()}
         onClick={() => fireAndForget(send(), 'routines')}
       >
-        <PaperPlaneIcon />
+        <PaperPlaneIcon class="size-4" />
         Send
       </Button>
     </div>

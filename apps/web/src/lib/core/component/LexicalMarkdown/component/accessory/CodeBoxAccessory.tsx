@@ -287,7 +287,7 @@ export function CodeBoxAccessory(props: {
                 return copyCode();
               }}
             >
-              <Copy />
+              <Copy class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </CopyButton>
           </div>
         </div>
@@ -453,7 +453,7 @@ export const StaticCodeBoxAccessory = (props: {
               return copyCode();
             }}
           >
-            <Copy />
+            <Copy class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </CopyButton>
         </div>
       </div>
