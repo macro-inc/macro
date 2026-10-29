@@ -250,6 +250,7 @@ export function EmailDetailView(props: {
             <Button
               variant="ghost"
               size="icon-md"
+              tooltip="Back"
               aria-label="Back"
               onClick={closeThread}
             >

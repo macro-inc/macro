@@ -126,6 +126,13 @@ read project activity. Backend tool names use `Initiative`. These operate on the
 native Projects views in Tasks. Agents set or clear a task's project with
 `SetEntityProperty` on the task's `Project` property.
 
+In-memory agent tool rows appear as pending as soon as the model names the
+call. Partial argument previews update at most every 250 ms and stop after
+16 KiB; execution replaces the preview with the full input. Cancelling while
+the model writes arguments closes the row as failed without executing it.
+Verify with a long document creation request, cancel once mid-write, then
+reconnect after a completed call and confirm its final input and result replay.
+
 Each completed tool row has an expandable result toggle, including empty results
 and per-task failures. Project chips open the native project. Shift-click opens
 another split. **Result data** reveals the complete returned response. Successful

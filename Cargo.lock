@@ -721,6 +721,7 @@ dependencies = [
  "memory",
  "model-entity",
  "model_owner",
+ "nom 8.0.0",
  "non_empty",
  "opentelemetry",
  "opentelemetry_sdk",

@@ -41,6 +41,7 @@ mcp_toolset = { path = "../mcp_toolset" }
 memory = { path = "../memory" }
 model-entity = { path = "../model-entity" }
 non_empty = { path = "../non_empty" }
+nom = { workspace = true }
 prompt = { path = "../prompt" }
 rmcp = { workspace = true, features = ["client", "transport-streamable-http-client"] }
 schemars = { workspace = true }

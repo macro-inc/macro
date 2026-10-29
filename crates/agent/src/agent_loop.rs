@@ -136,6 +136,8 @@ pub struct AgentLoop {
     /// Whether this loop enriches the runtime's GenAI spans (see
     /// [`Self::with_genai_telemetry`]).
     genai_telemetry: bool,
+    /// See [`Self::with_streamed_tool_calls`].
+    stream_tool_calls: bool,
     /// The router this loop's model calls use instead of the shared one, when
     /// a caller-supplied key pays for them (see [`Self::with_provider_api_key`]).
     router: Option<ModelRouter<MeteredHttpClient>>,
@@ -163,6 +165,7 @@ impl AgentLoop {
             conversation_id: None,
             agent_name: None,
             genai_telemetry: true,
+            stream_tool_calls: false,
             router: None,
         }
     }
@@ -276,6 +279,24 @@ impl AgentLoop {
     /// calls run with `RequestContext::genai_telemetry` off.
     pub fn with_genai_telemetry(mut self, enabled: bool) -> Self {
         self.genai_telemetry = enabled;
+        self
+    }
+
+    /// Report each tool call as soon as the model names it, then its
+    /// arguments as they stream ([`StreamPart::ToolCallStarted`],
+    /// [`StreamPart::ToolCallArgs`]), before the finished
+    /// [`StreamPart::ToolCall`]. Off by default: a host that only renders
+    /// finished calls has nothing to do with the extra parts.
+    ///
+    /// A streamed call uses the provider id available on its first delta,
+    /// or rig's correlation id when none is available. Its final invocation
+    /// and result keep that id so the host updates the existing row.
+    ///
+    /// [`StreamPart::ToolCallStarted`]: crate::StreamPart::ToolCallStarted
+    /// [`StreamPart::ToolCallArgs`]: crate::StreamPart::ToolCallArgs
+    /// [`StreamPart::ToolCall`]: crate::StreamPart::ToolCall
+    pub fn with_streamed_tool_calls(mut self) -> Self {
+        self.stream_tool_calls = true;
         self
     }
 
@@ -495,6 +516,7 @@ impl AgentLoop {
                 register_loaded,
                 tool_loads: tool_search.loads.clone(),
                 user_tool_finisher: self.user_tool_finisher.clone(),
+                stream_tool_calls: self.stream_tool_calls,
                 result_limit: self.result_limit.clone(),
             },
             recorder: self.recorder.clone(),
