@@ -32,6 +32,16 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{Clock, FormAccessDirectory, FormEventPublisher, FormsRepo};
 
+/// Who a response's row is written as: the respondent, or the form's owner
+/// for an anonymous visitor or when the form hides respondents, so the row's
+/// author and its history name nobody.
+fn row_author(form: &Form, respondent: &Respondent) -> Result<MacroUserIdStr<'static>, FormError> {
+    match respondent {
+        Respondent::Member(user) if !form.respondent_hidden => Ok(user.clone()),
+        Respondent::Member(_) | Respondent::Anonymous => owner_of(form),
+    }
+}
+
 /// The cells of a new row: every answer, then the managed columns the table
 /// still has.
 fn insert_cells(
@@ -258,13 +268,9 @@ where
                 rows: vec![insert_cells(&form, &columns, &answered, &respondent, now)],
             },
         }];
-        // The row first, under the form's receipt, as the respondent or, for
-        // an anonymous one, the form's owner; then the ledger, in its own
-        // transaction.
-        let viewer = match &respondent {
-            Respondent::Member(user) => user.clone(),
-            Respondent::Anonymous => owner_of(&form)?,
-        };
+        // The row first, under the form's receipt, then the ledger, in its
+        // own transaction.
+        let viewer = row_author(&form, &respondent)?;
         let results = self.write(&form, viewer, insert, &answered).await?;
         let row = inserted_row(&results)?;
         let member = match &respondent {
@@ -396,7 +402,7 @@ where
             .collect();
         self.write(
             form,
-            user.clone(),
+            row_author(form, &Respondent::Member(user.clone()))?,
             vec![DatabaseOp::Rows {
                 table: form.table_id,
                 change: RowsChange::Update {
@@ -434,7 +440,8 @@ where
                 )],
             },
         }];
-        let results = self.write(form, user.clone(), insert, answered).await?;
+        let viewer = row_author(form, &Respondent::Member(user.clone()))?;
+        let results = self.write(form, viewer, insert, answered).await?;
         let row = inserted_row(&results)?;
         self.repository
             .repoint_response(entry.id, row, now)

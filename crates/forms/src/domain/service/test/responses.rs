@@ -246,6 +246,30 @@ async fn an_edit_rewrites_every_question_of_the_row_and_clears_dropped_answers()
 }
 
 #[tokio::test]
+async fn a_hidden_respondent_edits_their_row_as_the_owner() {
+    let world = world();
+    seed_rsvp(&world, Audience::Members);
+    world.lock().unwrap().forms[0].form.respondent_hidden = true;
+    let forms = service(&world);
+    respond(&forms, VIEWER, answers(EMPLOYEE, Some("Vegan"))).await;
+
+    forms
+        .edit_my_response(
+            form_receipt::<ViewAccessLevel>(RSVP_FORM, VIEWER, AccessLevel::View),
+            Submission {
+                answers: answers(EMPLOYEE, None),
+            },
+        )
+        .await
+        .unwrap();
+
+    let world = world.lock().unwrap();
+    assert_eq!(world.batches.len(), 2);
+    assert_eq!(world.batches[0].viewer, OWNER);
+    assert_eq!(world.batches[1].viewer, OWNER);
+}
+
+#[tokio::test]
 async fn an_edit_of_a_response_whose_row_was_deleted_writes_a_new_row_and_repoints_it() {
     let world = world();
     seed_rsvp(&world, Audience::Members);
