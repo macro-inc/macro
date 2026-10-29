@@ -704,10 +704,7 @@ function PropertyRowActions(props: {
             aria-label={pinLabel()}
             aria-pressed={isPinned()}
             disabled={isSaving()}
-            class={cn(
-              'transition aria-pressed:bg-button-tertiary-bg aria-pressed:not-data-disabled:hover:bg-button-tertiary-hover',
-              !isPinned() && actionVisibility
-            )}
+            class="aria-pressed:bg-button-tertiary-bg aria-pressed:not-data-disabled:hover:bg-button-tertiary-hover"
             onClick={togglePin}
           >
             <Show when={isPinned()} fallback={<PushPinIcon class="size-4" />}>
@@ -800,6 +797,7 @@ function MultiValue(props: {
   renderActions: () => JSX.Element;
 }) {
   const ctx = usePropertiesContext();
+  const propertyCtx = useProperty();
   const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
   const isEntity = () => props.property.valueType === 'ENTITY';
   const isUserEntity = () =>
@@ -838,12 +836,18 @@ function MultiValue(props: {
             <div class="flex shrink-0 items-center gap-1">
               {props.renderActions()}
               <Show when={!isReadOnly()}>
-                <PropertyNS.Pill
-                  class="size-6 p-0"
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
                   aria-label={`Add ${props.property.displayName}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    propertyCtx.openEditor(event.currentTarget);
+                  }}
                 >
-                  <Plus class="size-3" />
-                </PropertyNS.Pill>
+                  <Plus class="size-4" />
+                </Button>
               </Show>
             </div>
           </div>
@@ -907,14 +911,14 @@ function NonUserEntityValue(props: {
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
+              size="icon-xs"
               aria-label={`Add ${props.property.displayName}`}
               onClick={(event) => {
                 event.stopPropagation();
                 propertyCtx.openEditor(event.currentTarget);
               }}
             >
-              <Plus class="size-3" />
+              <Plus class="size-4" />
             </Button>
           </Show>
         </Show>
@@ -997,15 +1001,14 @@ function EntityCollectionPropertyBody(props: {
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
-              class="size-5"
+              size="icon-xs"
               aria-label={`Add ${props.property.displayName}`}
               onClick={(event) => {
                 event.stopPropagation();
                 propertyCtx.openEditor(event.currentTarget);
               }}
             >
-              <Plus class="size-3" />
+              <Plus class="size-4" />
             </Button>
           </Show>
         </div>
