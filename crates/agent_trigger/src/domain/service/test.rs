@@ -120,6 +120,7 @@ fn session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
         ),
         thread_id: Some(Uuid::from_u128(3)),
         thread_parent: Some(MessageParent::Channel(Uuid::from_u128(1))),
+        thread_visibility: Some(Default::default()),
         originating_message_id: None,
         bot_id,
         model: "model".to_owned(),

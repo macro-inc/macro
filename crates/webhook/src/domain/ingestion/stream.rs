@@ -49,11 +49,25 @@ pub(crate) fn message_stream_candidate(
     event: &Event<MessageTopicEvent>,
 ) -> Result<StreamCandidateEvent, WebhookEventIngestionError> {
     let (normalized, entity_type) = normalized_message_event(event)?;
-    Ok(StreamCandidateEvent {
-        audience: StreamAudience::Entity {
+    let audience = match &event.event {
+        MessageTopicEvent::Posted(posted) => match &posted.visibility {
+            messages::domain::models::MessageVisibility::Private { user_id, .. } => {
+                StreamAudience::Workspace {
+                    workspace_id: user_id.clone(),
+                }
+            }
+            messages::domain::models::MessageVisibility::Public => StreamAudience::Entity {
+                entity_id: normalized.entity_id.clone(),
+                entity_type,
+            },
+        },
+        _ => StreamAudience::Entity {
             entity_id: normalized.entity_id.clone(),
             entity_type,
         },
+    };
+    Ok(StreamCandidateEvent {
+        audience,
         event: normalized,
     })
 }
@@ -80,6 +94,9 @@ pub(crate) fn agent_trigger_stream_candidate(
             entity_id,
             entity_type,
         },
+        TriggerAudience::Personal(person) => StreamAudience::Workspace {
+            workspace_id: person.to_string(),
+        },
         // Named people subscribe from their own workspaces, as a departed
         // session's owner does.
         TriggerAudience::People(people) => StreamAudience::Any(
@@ -102,6 +119,7 @@ pub(crate) fn agent_session_lifecycle_stream_candidate(
 ) -> Result<StreamCandidateEvent, WebhookEventIngestionError> {
     let normalized = normalized_agent_session_lifecycle_event(event)?;
     let audience = match lifecycle_audience(&event.event) {
+        LifecycleAudience::Personal(workspace_id) => StreamAudience::Workspace { workspace_id },
         LifecycleAudience::Session => StreamAudience::Entity {
             entity_id: normalized.entity_id.clone(),
             entity_type: EntityType::AgentSession,

@@ -864,7 +864,10 @@ describe('Agents', () => {
 
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     expect(screen.getByRole('heading', { name: 'Edit agent' })).toBeTruthy();
-    expect(within(dialog).getByLabelText('Ephemeral agent')).toHaveProperty('checked', true);
+    expect(within(dialog).getByLabelText('Ephemeral agent')).toHaveProperty(
+      'checked',
+      true
+    );
     expect(within(dialog).getByLabelText('Name')).toHaveProperty(
       'value',
       'Bug fixer'
@@ -1259,7 +1262,10 @@ describe('Agents', () => {
       target: { value: 'Fix the **root cause** and add tests.' },
     });
     fireEvent.click(within(dialog).getByLabelText('Team'));
-    expect(within(dialog).getByLabelText('Ephemeral agent')).toHaveProperty('checked', false);
+    expect(within(dialog).getByLabelText('Ephemeral agent')).toHaveProperty(
+      'checked',
+      false
+    );
     fireEvent.click(within(dialog).getByLabelText('Ephemeral agent'));
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Create agent' })

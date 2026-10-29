@@ -47,4 +47,4 @@ before changing ingestion or delivery behavior.
 
 - Docs: `crates/webhook/README.md` · Rules: `.agents/rules/rust/architecture.md`
 
-Private message posts do not enter ordinary channel webhooks. Private agent-trigger content uses the initiating user as its audience, never the channel membership.
+Keep private posts out of ordinary channel webhooks; scope private message SSE, agent triggers, and session lifecycle events to the initiating personal workspace, without parent or team expansion.

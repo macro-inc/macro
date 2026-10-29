@@ -101,3 +101,5 @@ wakes; interrupted quiet batches return to the next real prompt.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/security.md`
+
+Private-thread sessions must not grant access through prompt mentions or emit lifecycle notifications; preserve their root audience in lifecycle facts.

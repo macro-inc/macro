@@ -158,3 +158,57 @@ async fn link_scopes_levels_and_resets_persist(pool: PgPool) {
     assert_eq!(reset.link_share, Some(LinkShare::Team));
     assert_eq!(reset.link_share_access_level, Some(AccessLevel::View));
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn private_thread_sessions_retain_their_audience_and_cannot_be_shared(pool: PgPool) {
+    let bot_id = create_test_bot(&pool).await;
+    let (_, root, _) = insert_originating_thread_fixture(&pool).await;
+    // The trigger enforces immutable audiences; create a separate private root.
+    let private_root = macro_uuid::Uuid::now_v7();
+    let params = new_session(bot_id, Some(private_root), Some(private_root));
+    let owner = params.owner_id.principal_id();
+    sqlx::query!(
+        "INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content, visibility) SELECT $1, parent_entity_type, parent_entity_id, sender_id, content, jsonb_build_object('type','private','user_id',$3::text,'bot_ids',jsonb_build_array()) FROM comms_messages WHERE id = $2",
+        private_root, root, owner
+    ).execute(&pool).await.unwrap();
+    let repo = test_repo(&pool);
+    let session = create_session(&repo, params).await;
+    assert!(!session.thread_visibility.as_ref().unwrap().is_public());
+    let loaded = repo.get(session.id).await.unwrap();
+    assert_eq!(loaded.thread_visibility, session.thread_visibility);
+    assert!(repo.is_private_conversation(session.id).await.unwrap());
+    let mut tx = pool.begin().await.unwrap();
+    assert!(
+        entity_access_db_utils::direct_share::facts(
+            &mut tx,
+            &session.id.as_uuid(),
+            model_entity::EntityType::AgentSession
+        )
+        .await
+        .unwrap()
+        .is_none()
+    );
+    tx.rollback().await.unwrap();
+    // Root deletion clears the FK but must retain the immutable audience.
+    sqlx::query!("DELETE FROM comms_messages WHERE id = $1", private_root)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let orphan = repo.get(session.id).await.unwrap();
+    assert!(orphan.thread_id.is_none());
+    assert_eq!(orphan.thread_visibility, session.thread_visibility);
+    assert!(repo.is_private_conversation(session.id).await.unwrap());
+    let mut tx = pool.begin().await.unwrap();
+    assert!(
+        entity_access_db_utils::direct_share::set(
+            &mut tx,
+            &session.id.as_uuid(),
+            model_entity::EntityType::AgentSession,
+            &macro_user_id::user_id::MacroUserIdStr::try_from_email("other@example.com").unwrap(),
+            Some(AccessLevel::Edit),
+            false
+        )
+        .await
+        .is_err()
+    );
+}

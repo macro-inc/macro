@@ -14,6 +14,7 @@ fn identity() -> SessionIdentity {
     SessionIdentity {
         session_id: AgentSessionId::TEST_A,
         session_name: "Fix the flaky test".to_owned(),
+        visibility: Default::default(),
         bot_id: BotId::TEST_A,
         bot_name: "Macro Coder".to_owned(),
         owner_id: owner(),

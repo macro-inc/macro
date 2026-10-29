@@ -227,6 +227,7 @@ impl SessionOpener for RecordingOpener {
             owner_id: request.owner.clone(),
             thread_id: request.thread.as_ref().map(|thread| thread.thread_id),
             thread_parent: request.thread.as_ref().map(|thread| thread.parent.clone()),
+            thread_visibility: Some(Default::default()),
             originating_message_id: request.thread.as_ref().map(|thread| thread.message_id),
             bot_id: request.bot_id,
             model: "claude".to_owned(),
@@ -267,6 +268,7 @@ impl SessionOpener for RecordingOpener {
             owner_id: request.owner.clone(),
             thread_id: None,
             thread_parent: None,
+            thread_visibility: Some(Default::default()),
             originating_message_id: None,
             bot_id,
             model: "claude".to_owned(),
@@ -486,6 +488,7 @@ impl ExternalSessionRequester for RecordingRequester {
             owner_id: Owner::User(request.owner.clone()),
             thread_id: None,
             thread_parent: None,
+            thread_visibility: Some(Default::default()),
             originating_message_id: None,
             bot_id: request.bot_id,
             model: request

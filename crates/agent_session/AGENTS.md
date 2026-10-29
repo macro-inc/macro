@@ -110,4 +110,4 @@ through `set_name` clears it, so a name a person chose is never replaced.
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
 
-Sessions originating in private message threads stay owner-scoped: never grant their source channel access. See `docs/architecture/private-message-threads.md`.
+Copy the originating message's audience into immutable session storage at creation and retain it after root deletion. Use it for lifecycle delivery and sharing, keep it on identity when origin metadata is incomplete, and fail closed if it is unavailable. See `docs/architecture/private-message-threads.md`.

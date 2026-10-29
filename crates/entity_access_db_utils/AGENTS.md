@@ -57,3 +57,5 @@ top of it.
 ## Related
 
 - Rules: `.agents/rules/rust/db.md`, `.agents/rules/rust/architecture.md`
+
+Return no direct-sharing facts for private-thread agent sessions; the immutable session audience also rejects non-owner grants in storage.

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, repo_branch, pull_request_url, task_id, source, visibility, workspace, sandbox_size, instructions,\n                mcp_scope, mcp_servers, acp_session_id, status,\n                status_event_name, agent_session.created_at, modified_at,\n                (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)\n                 FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_parent?: Json<MessageParent>\",\n                ext.provider AS \"external_provider?\", ext.external_id AS \"external_id?\",\n                ext.external_name AS \"external_name?\", ext.external_url AS \"external_url?\",\n                ext.last_run_id AS \"external_last_run_id?\"\n            FROM agent_session\n            LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id\n            WHERE id = $1\n            ",
+  "query": "\n            SELECT\n                id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, repo_branch, pull_request_url, task_id, source, visibility, workspace, sandbox_size, instructions,\n                mcp_scope, mcp_servers, acp_session_id, status,\n                status_event_name, agent_session.created_at, modified_at,\n                (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)\n                 FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_parent?: Json<MessageParent>\",\n                message_visibility AS \"thread_visibility?: Json<MessageVisibility>\",\n                ext.provider AS \"external_provider?\", ext.external_id AS \"external_id?\",\n                ext.external_name AS \"external_name?\", ext.external_url AS \"external_url?\",\n                ext.last_run_id AS \"external_last_run_id?\"\n            FROM agent_session\n            LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id\n            WHERE thread_id = $1\n            ORDER BY agent_session.created_at DESC\n            ",
   "describe": {
     "columns": [
       {
@@ -135,26 +135,31 @@
       },
       {
         "ordinal": 26,
+        "name": "thread_visibility?: Json<MessageVisibility>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 27,
         "name": "external_provider?",
         "type_info": "Text"
       },
       {
-        "ordinal": 27,
+        "ordinal": 28,
         "name": "external_id?",
         "type_info": "Text"
       },
       {
-        "ordinal": 28,
+        "ordinal": 29,
         "name": "external_name?",
         "type_info": "Text"
       },
       {
-        "ordinal": 29,
+        "ordinal": 30,
         "name": "external_url?",
         "type_info": "Text"
       },
       {
-        "ordinal": 30,
+        "ordinal": 31,
         "name": "external_last_run_id?",
         "type_info": "Text"
       }
@@ -193,10 +198,11 @@
       null,
       false,
       false,
+      false,
       true,
       true,
       true
     ]
   },
-  "hash": "d8519345aa8a829acadfc67935e8115abd80b6560496a20ec5e8c83711a8604b"
+  "hash": "b5fe522242cc7513b72e401b6118cf1707258c0b2383210eff719a3f890b7b0e"
 }

@@ -161,6 +161,9 @@ impl PlannedNotification {
 /// [`crate::domain::model::is_coding_agent`]).
 #[must_use]
 pub fn plan(event: &AgentSessionLifecycleEvent, is_coding: bool) -> Vec<PlannedNotification> {
+    if !event.identity().visibility.is_public() {
+        return Vec::new();
+    }
     match event {
         AgentSessionLifecycleEvent::Settled(settled) => plan_settled(settled, is_coding),
         AgentSessionLifecycleEvent::WaitingForInput(waiting) => plan_waiting(waiting, is_coding),

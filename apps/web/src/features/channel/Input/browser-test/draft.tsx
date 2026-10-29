@@ -95,7 +95,7 @@ function Fixture() {
                         <ChannelInput
                           input={{
                             id: 'custom-action-editor',
-                            mode: 'edit',
+                            mode: 'channel',
                             placeholder: 'Custom actions',
                           }}
                           participants={() => []}

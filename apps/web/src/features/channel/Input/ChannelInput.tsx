@@ -310,7 +310,10 @@ export function ChannelInput(props: ChannelInputProps) {
 
   let isEditorConnected = false;
   let acceptTyping = false;
-  const ephemeralAgent = useEphemeralMentionAgent(mentionsTracker.mentions);
+  const ephemeralAgent = useEphemeralMentionAgent(
+    mentionsTracker.mentions,
+    () => props.parent !== undefined
+  );
   createEffect(() => {
     if (ephemeralAgent()) inputState.setEphemeral(true);
   });

@@ -4,7 +4,10 @@ use super::*;
 pub(super) fn principal(auth: &EntityAccessAuth) -> Option<String> {
     match auth {
         EntityAccessAuth::Authenticated(user) => Some(user.to_string()),
-        EntityAccessAuth::Bot(bot) => Some(bot.bot_id_str().to_string()),
+        EntityAccessAuth::Bot(bot) => bot
+            .scope()
+            .acting_user_id()
+            .map(|_| bot.bot_id_str().to_string()),
         EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => None,
     }
 }
@@ -14,9 +17,11 @@ pub(super) fn can_view(auth: &EntityAccessAuth, visibility: &MessageVisibility) 
         return true;
     }
     if let EntityAccessAuth::Bot(bot) = auth
-        && let Some(acting) = bot.scope().acting_user_id()
         && let MessageVisibility::Private { user_id, .. } = visibility
-        && acting.as_ref() != user_id
+        && bot
+            .scope()
+            .acting_user_id()
+            .is_none_or(|acting| acting.as_ref() != user_id)
     {
         return false;
     }

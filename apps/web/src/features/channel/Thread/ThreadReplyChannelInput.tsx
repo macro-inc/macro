@@ -131,14 +131,18 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
         props.setReplyInputState(snapshot);
       }}
       onStartTyping={() =>
-        queryReadyGate(thread) && !privateThread() && typingMutation.mutate({
+        queryReadyGate(thread) &&
+        !privateThread() &&
+        typingMutation.mutate({
           parent: props.parent,
           action: 'start',
           threadId: props.threadId,
         })
       }
       onStopTyping={() =>
-        queryReadyGate(thread) && !privateThread() && typingMutation.mutate({
+        queryReadyGate(thread) &&
+        !privateThread() &&
+        typingMutation.mutate({
           parent: props.parent,
           action: 'stop',
           threadId: props.threadId,

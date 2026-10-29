@@ -96,7 +96,10 @@ and `macro.agent_session_lifecycle`. It supports these event names:
   `agent_session.stopped`, `agent_session.renamed`, and
   `agent_session.deleted`.
 
-For document, channel, and message events, ingestion asks `EntityAccessService`
+Ordinary message webhooks omit private posts. Private message SSE targets only
+the initiating personal workspace.
+
+For document, channel, and public message events, ingestion asks `EntityAccessService`
 for the people who currently have access to the entity; a message's entity is
 its parent channel or document. The matching workspace set
 contains each person's Macro user ID, for personal webhooks, plus every team ID
@@ -113,14 +116,20 @@ travels in the payload's `mentioned` field for consumers to filter on (e.g.
 the SDK's `events.onSelfMention`).
 
 Agent trigger events use `entity_type = "bot"`: a filter's `ids` selects one
-bot's whole trigger stream. Access is gated by the channel the mention sits in
-for `agent_trigger.new`, and by the session for `agent_trigger.existing`.
+bot's whole trigger stream. Message-backed triggers recheck access to the
+message parent, including follow-ups to an independently shared session. Private
+triggers use only the initiating personal workspace, without team expansion.
+Composer requests without a posted message use the requester's personal and team
+workspaces.
 
 Agent session lifecycle events use `entity_type = "agent_session"` with the
 session as entity and ordering key, so `ids` selects one session and events of
 one session arrive in order. Access is gated by the session's own grants: its
-owner, plus the members of the channel it was opened from. Subscribers who want
-every session's facts filter by event name alone. `agent_session.settled` is
+owner and any explicitly shared readers. A deleted public session falls back
+to its owner and origin parent. Private lifecycle events retain their immutable
+audience after deletion and use only the initiating personal workspace, without
+team or parent expansion. Subscribers who want every session's facts filter by
+event name alone. `agent_session.settled` is
 emitted when a turn ends with nothing queued behind it; a session that dies
 mid-turn emits `agent_session.stopped` with the interrupted turn instead.
 

@@ -91,6 +91,7 @@ impl AgentSessionRepo for StubSessions {
             ),
             thread_id: None,
             thread_parent: None,
+            thread_visibility: Some(Default::default()),
             originating_message_id: None,
             bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
             model: "auto".to_owned(),

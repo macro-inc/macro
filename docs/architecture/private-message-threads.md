@@ -16,8 +16,9 @@ mentions rather than guessing whether they may be public.
 `MessageVisibility` is either `public` or `private` with the initiating `user_id`
 and canonical `bot_ids` invited by the initial mention. These fields are selected
 from authenticated capabilities, never accepted as client audience claims. A
-scoped bot reader must also match its verified acting user. Parent owners,
-moderators, and other channel members do not gain private-thread access.
+bot reader must have a verified acting user matching the initiating human.
+Channel and team receipts, parent owners, moderators, and other channel members
+do not gain private-thread access.
 
 The audience is immutable. Replies inherit it in the message service and in a
 Postgres insert trigger, including replies submitted by older writers. Explicit
@@ -42,17 +43,26 @@ Private channel events reach only the initiating user through targeted realtime.
 They do not share referenced documents with the channel, notify other members,
 send invitation emails, or advance shared channel activity. Private discussion
 events likewise skip mention sharing and notifications. Shared channel, Soup,
-reference, attachment, favorite, and search projections withhold private content;
-private exchanges remain available in the viewer's channel history rather than
-the shared search index.
+reference, attachment, and message-search projections exclude private content.
+Private exchanges remain available in the initiating user's channel history and
+personal favorites. Agent-session transcript search retains personal access
+grants, so other users cannot discover the private exchange.
 
 Only the parent-aware posted broker fact carries private content for agent
 execution. It includes the audience; derivative public mention, attachment, edit,
 and deletion facts are suppressed. Agent routing checks the invited bot and
 bypasses the ordinary agent-DM conversation session. New private sessions do not
-receive a channel grant or inherit document access. Trigger webhooks go only to
-the initiating user's workspace audience, rather than every parent viewer;
-ordinary channel-message webhooks and event routines do not receive private posts.
+receive a channel grant or inherit document access. Trigger webhooks, private
+message SSE, and private session lifecycle events use only the initiating
+personal workspace, without team or parent expansion. Ordinary channel-message
+webhooks and event routines do not receive private posts.
+
+Session storage copies the immutable audience at creation and retains it after
+root deletion. Lifecycle identities carry this audience independently of origin
+metadata; missing audience fails closed. Private sessions cannot be shared
+through settings or human mentions, and lifecycle notifications are suppressed.
+Storage rejects non-owner grants from generic access requests, direct sharing,
+and inherited folder, team, or channel access.
 
 ## Interface
 

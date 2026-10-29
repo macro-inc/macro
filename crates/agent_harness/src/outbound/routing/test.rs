@@ -145,6 +145,7 @@ impl AgentSessionRepo for FixedBotSessions {
             ),
             thread_id: None,
             thread_parent: None,
+            thread_visibility: Some(Default::default()),
             originating_message_id: None,
             bot_id: self.0,
             model: "auto".to_owned(),

@@ -26,6 +26,7 @@ fn identity() -> SessionIdentity {
     SessionIdentity {
         session_id: AgentSessionId::new_from_uuid(SESSION),
         session_name: "Fix the flaky test".to_owned(),
+        visibility: Default::default(),
         bot_id: BotId::new_from_uuid(Uuid::from_u128(0xB07)),
         bot_name: "Macro Coder".to_owned(),
         owner_id: owner(),
@@ -506,4 +507,18 @@ fn a_held_tool_call_a_bot_asked_for_says_so() {
         panic!("filed as waiting for input");
     };
     assert!(notify.metadata.question.starts_with("A bot asked it"));
+}
+
+#[test]
+fn private_lifecycle_facts_never_notify_other_participants() {
+    let mut event = routine_settled(1, "end_turn");
+    let AgentSessionLifecycleEvent::Settled(settled) = &mut event else {
+        unreachable!()
+    };
+    settled.identity.source = SessionSource::User;
+    settled.identity.visibility = messages::domain::models::MessageVisibility::Private {
+        user_id: settled.identity.owner_id.to_string(),
+        bot_ids: vec![],
+    };
+    assert!(plan(&event, true).is_empty());
 }

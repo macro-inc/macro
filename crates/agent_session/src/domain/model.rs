@@ -377,6 +377,9 @@ pub struct AgentSession {
     /// Entity owning the originating thread, derived from its root message.
     /// The persisted message parent is authoritative for routing and access.
     pub thread_parent: Option<messages::domain::models::MessageParent>,
+    /// Immutable audience copied from the root at creation, retained after root deletion.
+    /// Missing audience is an invalid storage result and must fail closed.
+    pub thread_visibility: Option<messages::domain::models::MessageVisibility>,
     /// The exact message that originally invoked the bot, if any.
     pub originating_message_id: Option<Uuid>,
     /// the bot id of the bot running the agent

@@ -200,6 +200,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             thread_id: params.thread_id,
             // The in-memory repo has no comms rows to derive a channel from.
             thread_parent: None,
+            thread_visibility: Some(Default::default()),
             originating_message_id: params.originating_message_id,
             bot_id: params.bot_id,
             model: params.model,
@@ -1093,6 +1094,7 @@ pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
         ),
         thread_id: None,
         thread_parent: None,
+        thread_visibility: Some(Default::default()),
         originating_message_id: None,
         bot_id: BotId::new_from_uuid(Uuid::from_u128(0xb07)),
         model: "claude-sonnet-5".to_string(),

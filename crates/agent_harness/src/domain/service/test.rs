@@ -4876,3 +4876,32 @@ async fn a_non_staff_session_editor_can_approve_a_managed_session_request() {
         ))
     );
 }
+
+#[tokio::test]
+async fn private_session_prompts_do_not_share_with_human_mentions() {
+    let mentions = PromptMentionsMock::new();
+    let ((service, repo, _, _, _), _) = harness_with_mentions(
+        PromptContextMock::default(),
+        PromptComposerMock::default(),
+        mentions.clone(),
+    );
+    let id = AgentSessionId::new();
+    let mut session = agent_session::testing::test_agent_session(id);
+    session.thread_id = Some(Uuid::now_v7());
+    session.thread_visibility = Some(messages::domain::models::MessageVisibility::Private {
+        user_id: session.owner_user().unwrap().to_string(),
+        bot_ids: vec![],
+    });
+    repo.insert_session(session);
+    service
+        .inner
+        .publish_mentions(
+            id,
+            AgentActionId::mint(),
+            None,
+            "<m-user-mention>{\"userId\":\"macro|other@example.com\"}</m-user-mention>",
+            None,
+        )
+        .await;
+    assert!(mentions.prompts().is_empty());
+}

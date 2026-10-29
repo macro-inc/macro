@@ -430,6 +430,8 @@ pub(crate) enum TriggerAudience {
     },
     /// Named people, when nothing was posted anywhere to hold access to.
     People(Vec<MacroUserIdStr<'static>>),
+    /// A private exchange never expands into team workspaces.
+    Personal(MacroUserIdStr<'static>),
 }
 
 impl TriggerAudience {
@@ -449,7 +451,7 @@ impl TriggerAudience {
                 Ok(Self::parent(&message.parent))
             }
             messages::domain::models::MessageVisibility::Private { user_id, .. } => {
-                Self::requester(user_id)
+                Ok(Self::Personal(Self::person(user_id)?))
             }
         }
     }
@@ -458,13 +460,16 @@ impl TriggerAudience {
     /// posted, so nobody else's access is in question. Their runtime, or
     /// their team's, is who serves it.
     fn requester(owner: &str) -> Result<Self, WebhookEventIngestionError> {
-        let owner = MacroUserIdStr::try_from(owner.to_owned()).map_err(|_| {
+        Ok(Self::People(vec![Self::person(owner)?]))
+    }
+
+    fn person(owner: &str) -> Result<MacroUserIdStr<'static>, WebhookEventIngestionError> {
+        MacroUserIdStr::try_from(owner.to_owned()).map_err(|_| {
             WebhookEventIngestionError::InvalidEntityId {
                 entity_type: "user",
                 entity_id: owner.to_owned(),
             }
-        })?;
-        Ok(Self::People(vec![owner]))
+        })
     }
 }
 
@@ -553,6 +558,8 @@ pub(crate) fn normalized_agent_session_lifecycle_event(
 /// The event itself still knows who the session belonged to, and that is the
 /// audience the last fact about it is delivered to.
 pub(crate) enum LifecycleAudience {
+    /// A private session is delivered only to its initiating personal workspace.
+    Personal(String),
     /// Everyone with access to the session.
     Session,
     /// The session is gone: its owner, plus the channel or document it was
@@ -564,6 +571,11 @@ pub(crate) enum LifecycleAudience {
 }
 
 pub(crate) fn lifecycle_audience(event: &AgentSessionLifecycleEvent) -> LifecycleAudience {
+    if let messages::domain::models::MessageVisibility::Private { user_id, .. } =
+        &event.identity().visibility
+    {
+        return LifecycleAudience::Personal(user_id.clone());
+    }
     match event {
         AgentSessionLifecycleEvent::Deleted(deleted) => LifecycleAudience::Departed {
             owner: deleted.identity.owner_id.clone(),
@@ -649,6 +661,11 @@ where
                 entity_type,
             } => self.users_with_access(&entity_id, entity_type).await?,
             TriggerAudience::People(people) => people,
+            TriggerAudience::Personal(person) => {
+                return self
+                    .match_and_enqueue(event, vec![person.to_string()])
+                    .await;
+            }
         };
         let workspace_ids = self
             .repository
@@ -665,6 +682,9 @@ where
     ) -> Result<(), WebhookEventIngestionError> {
         let normalized = normalized_agent_session_lifecycle_event(&event)?;
         match lifecycle_audience(&event.event) {
+            LifecycleAudience::Personal(person) => {
+                self.match_and_enqueue(normalized, vec![person]).await
+            }
             LifecycleAudience::Session => {
                 self.resolve_entity_access_and_enqueue(normalized, EntityType::AgentSession)
                     .await

@@ -271,3 +271,37 @@ async fn private_event_replays_require_the_original_acting_user() {
     assert!(repo.creates.lock().unwrap().is_empty());
     assert!(events.0.lock().unwrap().is_empty());
 }
+
+#[test]
+fn private_audiences_reject_channel_and_team_scoped_bots() {
+    use entity_access::domain::models::BotReceiptScope;
+    let visibility = MessageVisibility::Private {
+        user_id: "macro|author@example.com".into(),
+        bot_ids: vec![bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string()],
+    };
+    for scope in [
+        BotReceiptScope::Channel {
+            channel_id: Uuid::now_v7(),
+        },
+        BotReceiptScope::Team {
+            team_id: Uuid::now_v7(),
+        },
+    ] {
+        let receipt = EntityAccessReceipt::<MessageWrite>::try_new_bot(
+            bot_id::MACRO_AI_BOT_ID.into_storage_id(),
+            scope,
+            access("macro|author@example.com", "doc", AccessLevel::Comment)
+                .entity()
+                .clone(),
+            EntityPermission::AccessLevel {
+                access_level: AccessLevel::Comment,
+            },
+        )
+        .unwrap();
+        assert!(!super::super::privacy::can_view(
+            receipt.auth(),
+            &visibility
+        ));
+        assert!(super::super::privacy::principal(receipt.auth()).is_none());
+    }
+}
