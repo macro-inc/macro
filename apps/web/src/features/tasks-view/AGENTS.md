@@ -15,6 +15,8 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 ## Gotchas
 
 - Group task lists by the Project property, matching the Project column and Board; resolve project headers through the authorized project identity query.
+- Keep project navigation in a separate Projects section above Saved views, with assigned-to-me, all-accessible, and created-by-me views; replace individual-project shortcuts and use one mobile Projects picker.
+- Preserve project scope through detail navigation, history, pagination, and editable-filter clearing; keep project views out of task queries and saved-task-view capture.
 
 - Save filters, selected layout, grouping, and ordered sort directions; keep text search and scroll state local, and capture implicit person conditions as normal OR-valued facets.
 - Preserve stable tag/property bindings when labels disappear; skip unsupported or malformed conditions without discarding supported filters.

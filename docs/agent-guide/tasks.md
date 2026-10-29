@@ -2,7 +2,7 @@
 
 ## Surface
 
-`Go to Tasks` → `/app/component/tasks`. Tabs: `My tasks`, `Created by me`, `Team tasks`, and `Projects`.
+`Go to Tasks` → `/app/component/tasks`. Task views: `My tasks`, `All tasks`, and `Created by me`.
 The single-row desktop header contains the title, `Filter`, a separate
 `Task layout` single-select icon group for `List`, `Board`, and enabled `Gantt`,
 `Sort`, `Group`, `New`, and an expandable Search icon
@@ -29,22 +29,19 @@ The desktop sidebar and toolbar `New` menus offer `Task`, `Subtask`, `Project` (
 Projects is enabled), and `Tag`. Task and Project open their existing composers;
 Tag opens the tag editor, with personal scope selected and team sharing available
 when the user has a team. The Projects list uses the same menu. Mobile creation
-controls are unchanged. With Projects enabled, `My projects` appears below the
-tabs and favorites. It lists
-accessible projects by most recently updated, with a capped height and its own scroll
-area. Click a project to open its overview within the current Tasks view, keeping
-the sidebar mounted, or Shift-click to open it in a new split.
-The current project is highlighted. Collapse the heading to hide the list; this
-preference persists. `Load more projects` fetches the next page when available.
-The plus button beside `My projects` opens the project composer, even while the
-section is collapsed or loading. Its rows use the shared project query/cache and
-load inside a local Suspense boundary, leaving sidebar controls available.
-Once a current-query project page is cached, an offline/background refresh failure
-must not show **Could not load projects** beside those rows (or a cached empty
-result). Retrying a refresh must not reintroduce that warning merely because the
-refresh promise rejects; the cached project links remain available. Cache misses,
-server/permission errors, and failed **Load more projects** requests still show
-failure and retry controls. Verify both background refresh and manual retry.
+controls are unchanged. With Projects enabled, the collapsible `Projects` section
+appears above `Saved views`. It contains `My projects` (assigned to the viewer),
+`All projects` (all accessible projects), and `Created by me` (owned by the viewer).
+These replace the old Projects tab and individual-project shortcut list. The plus
+beside the section opens the project composer even while collapsed.
+On mobile, one `Projects` pill opens a drawer with the same three views; the
+active pill shows the selected view's name. Selecting a task or saved view clears
+the project pill's active state. Project scoping applies before pagination and
+cannot be removed by clearing editable filters. Opening a project and returning
+through its breadcrumb retains the selected project view.
+Cached project rows remain available through offline/background refresh failures.
+Cache misses, server/permission errors, and failed continuation requests retain
+failure and retry controls.
 Opening a project shows a content-shaped skeleton while its data loads: title,
 wrapping property pills, description, and discussion for Overview; toolbar and
 rows for Tasks. The mobile skeleton uses the same compact insets as the content.
@@ -668,11 +665,13 @@ tasks** card at the bottom of the Tasks sidebar; see
 
 Projects are enabled by default in development. Production rollout is gated by
 PostHog `enable-projects`; `VITE_ENABLE_PROJECTS` overrides either environment.
-When off, Tasks hides
-the Projects tab, project column, and assignment actions. A saved Projects tab
-temporarily shows My Tasks without overwriting the saved selection.
+When off, Tasks hides the Projects section and mobile picker, project column,
+and assignment actions. A saved project view temporarily shows My tasks without
+overwriting the saved selection.
 
-Choose the `Projects` tab in Tasks, or open `/app/component/tasks-projects`.
+Choose a view in the `Projects` section in Tasks, or open
+`/app/component/tasks-projects` for All projects. Project view links use the Tasks
+search namespace: `tasks.tab=my-projects`, `projects`, or `created-projects`.
 Projects use the same list rows, property cells, selection, group headers, and
 keyboard navigation as Tasks. Search (`Cmd/Ctrl+F`), `Sort projects`,
 `Group projects`, and `Filter projects` sit above the list. Groups default to

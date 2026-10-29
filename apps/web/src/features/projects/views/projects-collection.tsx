@@ -83,6 +83,8 @@ export function ProjectsCollection(props: {
   scopeId: string;
   isActive: Accessor<boolean>;
   collection: ReturnType<typeof createProjectCollection>;
+  title?: string;
+  mobileNavigation?: JSX.Element;
   ganttEnabled: boolean;
   /** Whether the layout has room to open a project beside the list. */
   canOpenInNewSplit: Accessor<boolean>;
@@ -558,7 +560,7 @@ export function ProjectsCollection(props: {
           <ListHeader
             title={
               <h1 class="truncate text-sm font-semibold tracking-[-0.03em] text-ink">
-                Projects
+                {props.title ?? 'Projects'}
               </h1>
             }
           >
@@ -591,9 +593,10 @@ export function ProjectsCollection(props: {
       >
         <ViewShell.Header>
           <div class="flex min-w-0 flex-col gap-3">
+            {props.mobileNavigation}
             <div class="hidden h-8 min-w-0 items-center touch:flex @max-[720px]/view-shell:flex">
               <h1 class="min-w-0 truncate text-xl font-semibold tracking-[-0.03em] text-ink">
-                Projects
+                {props.title ?? 'Projects'}
               </h1>
               <div class="ml-auto shrink-0">
                 <SidebarCreateButton
