@@ -45,78 +45,18 @@ Macro is composed of 'blocks' designed to be modular, extensible, and work toget
 
 Each surface is purpose-built for its job rather than composed from a generic block primitive — but every one of them shares the same backend; cross-references between a doc and a task, or a channel message and an email, are natively stored as a **bidirectional graph**.
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="https://docs.macro.com/product/email"><img src=".github/readme/features/email.jpg" alt="Email: All your inboxes, with shared context." width="100%" /></a>
-      <h3>Email</h3>
-      <p>All your inboxes, with shared context.</p>
-      <a href="https://docs.macro.com/product/email">Explore email &rarr;</a>
-    </td>
-    <td width="50%" valign="top">
-      <a href="https://docs.macro.com/product/channels"><img src=".github/readme/features/messages.jpg" alt="Messages: Channels and DMs that connect your work." width="100%" /></a>
-      <h3>Messages</h3>
-      <p>Channels and DMs that connect your work.</p>
-      <a href="https://docs.macro.com/product/channels">Explore messages &rarr;</a>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="https://docs.macro.com/product/tasks"><img src=".github/readme/features/tasks.jpg" alt="Tasks: Capture, assign, and track the next step." width="100%" /></a>
-      <h3>Tasks</h3>
-      <p>Capture, assign, and track the next step.</p>
-      <a href="https://docs.macro.com/product/tasks">Explore tasks &rarr;</a>
-    </td>
-    <td width="50%" valign="top">
-      <a href="https://docs.macro.com/product/docs"><img src=".github/readme/features/docs.jpg" alt="Docs: Collaborative documents with live @links." width="100%" /></a>
-      <h3>Docs</h3>
-      <p>Collaborative documents with live @links.</p>
-      <a href="https://docs.macro.com/product/docs">Explore docs &rarr;</a>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="https://docs.macro.com/product/canvas"><img src=".github/readme/features/canvas.jpg" alt="Canvas: Map ideas across tasks, files, and emails." width="100%" /></a>
-      <h3>Canvas</h3>
-      <p>Map ideas across tasks, files, and emails.</p>
-      <a href="https://docs.macro.com/product/canvas">Explore canvas &rarr;</a>
-    </td>
-    <td width="50%" valign="top">
-      <a href="https://docs.macro.com/product/agents"><img src=".github/readme/features/agents.jpg" alt="Agents: Team memory and tools to take action." width="100%" /></a>
-      <h3>Agents</h3>
-      <p>Team memory and tools to take action.</p>
-      <a href="https://docs.macro.com/product/agents">Explore agents &rarr;</a>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="https://docs.macro.com/product/calls"><img src=".github/readme/features/calls.jpg" alt="Calls: Recordings and transcripts your team can use." width="100%" /></a>
-      <h3>Calls</h3>
-      <p>Recordings and transcripts your team can use.</p>
-      <a href="https://docs.macro.com/product/calls">Explore calls &rarr;</a>
-    </td>
-    <td width="50%" valign="top">
-      <a href="https://docs.macro.com/product/folders"><img src=".github/readme/features/files.jpg" alt="File storage: Imported, organized, and searchable." width="100%" /></a>
-      <h3>File storage</h3>
-      <p>Imported, organized, and searchable.</p>
-      <a href="https://docs.macro.com/product/folders">Explore file storage &rarr;</a>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="https://docs.macro.com/integrations/github"><img src=".github/readme/features/pull-requests.jpg" alt="Pull requests: Code reviews linked to the conversation." width="100%" /></a>
-      <h3>Pull requests</h3>
-      <p>Code reviews linked to the conversation.</p>
-      <a href="https://docs.macro.com/integrations/github">Explore pull requests &rarr;</a>
-    </td>
-    <td width="50%" valign="top">
-      <a href="https://docs.macro.com/product/crm"><img src=".github/readme/features/crm.jpg" alt="CRM: Companies, contacts, and your sales pipeline." width="100%" /></a>
-      <h3>CRM</h3>
-      <p>Companies, contacts, and your sales pipeline.</p>
-      <a href="https://docs.macro.com/product/crm">Explore crm &rarr;</a>
-    </td>
-  </tr>
-</table>
+| Block         | Docs                                                      | What it does                                                                  |
+| ------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Email         | [Docs &rarr;](https://docs.macro.com/product/email)       | Multi-account unified inbox, keyboard shortcuts, and shared inboxes. Gmail.   |
+| Messages      | [Docs &rarr;](https://docs.macro.com/product/channels)    | Channels and direct messages designed for focused technical discussions.      |
+| Tasks         | [Docs &rarr;](https://docs.macro.com/product/tasks)       | Linear-inspired tasks, tightly integrated with channels, email, and agents.   |
+| Docs          | [Docs &rarr;](https://docs.macro.com/product/docs)        | Real-time collaborative, markdown-native docs built on CRDTs, with @mentions. |
+| Canvas        | [Docs &rarr;](https://docs.macro.com/product/canvas)      | 2D board with embedded @links to tasks, files, and emails.                    |
+| Agents        | [Docs &rarr;](https://docs.macro.com/product/agents)      | Unified, team-level memory. Can take action on your behalf.                   |
+| Calls         | [Docs &rarr;](https://docs.macro.com/product/calls)       | Recorded, transcribed, and logged to team memory for agents.                  |
+| File storage  | [Docs &rarr;](https://docs.macro.com/product/folders)     | Auto-imported from email and channels, fully searchable.                      |
+| Pull requests | [Docs &rarr;](https://docs.macro.com/integrations/github) | Linked to tasks, embeddable in channels, available to agents.                 |
+| CRM           | [Docs &rarr;](https://docs.macro.com/product/crm)         | Customer and contact objects, custom properties, email sync, enrichment.      |
 
 <br />
 
@@ -143,7 +83,7 @@ Macro Mail lives in the same interface as channels, docs, tasks, and code. From 
 
 Macro Chat is designed to be more focused than Slack. The first couple of replies show inline and the rest collapse into a thread, so a busy channel stays readable. Threads are permissioned severally so you can share threads across channels by copying links. Everything is stored in a bidirectional graph, so tasks @link to messages that created them, customer support emails tie into support channels, CRM records get updated when they're discussed in messages, etc. The core idea is that (i) messaging should be the centerpiece around which tasks, mail, docs, and content management are built, all in a lightweight way, and agents should be first-class citizens like human users and (ii) messaging needs to be more focused and readable for technical conversations, and not turn into battles where context is lost and progress is indistinguishable from noise.
 
-![The Macro Engineers channel discussing search, with threaded replies and an agent handoff](.github/readme/messages-channel.jpg)
+![The Macro Engineers channel delegating project and task creation to an agent](.github/readme/messages-channel.jpg)
 
 [Messages docs &rarr;](https://docs.macro.com/product/channels)
 
@@ -185,7 +125,7 @@ We wanted everything in a single markdown editor without switching tools.
 - Mobile-friendly, in our [iOS app](https://apps.apple.com/us/app/macro-app/id6743133649) or on the web (Android app coming soon)
 - Agent native editing, powered by swarms of agents operating as peers in the CRDT collaboration system like human collaborators. See [Wolf's tech blog on this](https://404wolf.com/posts/AgentsAttackTheDocument/). Use via MCP or internal agent.
 
-![The Team Channels PRD in Macro with tags, assignees, and a details sidebar](.github/readme/docs-prd.jpg)
+![The Team Channels PRD in Macro with tags, assignees, and readable requirements](.github/readme/docs-prd.jpg)
 
 Agents can edit documents that are open or closed. One interesting use case for agentic editing is to maintain team-context. For example we have a Macro Automation that runs daily to update our in-office Pool Games markdown doc. It scans through all of the channels to see if anyone has one and then updates the doc. If somebody has already edited the doc, it can know that and forgo the update. Conflicts are handled natively by the CRDT collaboration system.
 
@@ -199,7 +139,7 @@ The problem with standalone CRM is the same as with task trackers: it's not up t
 
 **Macro fixes this by colocating your CRM with your team chat and email, instead of having a separate system.** When you @mention a company record in a message, your team can click that record to see the latest — it's much faster than navigating to your CRM to find the record, going back to Slack and pasting it in, and this speed difference makes all the difference. Secondly, @mentioning a Company/Contact creates a bidirectional link between that message and the record, so from the record later you can trace the conversations that happened. This fixes the core issue we had with Attio/HubSpot/Salesforce: the actual important conversation about a deal happens not in the CRM but over messages. Macro makes this a feature rather than making you feel disorganized about it. It's not your fault, it was the CRM's fault!
 
-![Macro Sales Demo pipeline with 11 fictional company cards grouped by stage and its navigation sidebar open](.github/readme/crm-board.jpg)
+![Macro Sales Demo pipeline with nine visible fictional company cards across three stages and its navigation sidebar open](.github/readme/crm-board.jpg)
 
 We haven't innovated on the core idea of CRM other than what you read in the above paragraph. None of this should be that interesting:
 
