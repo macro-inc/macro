@@ -78,6 +78,26 @@ describe('clearRegisteredCaches', () => {
     );
   });
 
+  it('rotates the scope when only a storage-free host is registered', async () => {
+    localStorage.setItem('graphql-cache:scope', 'current-scope');
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue(
+      '00000000-0000-4000-8000-000000000005'
+    );
+    const { clearRegisteredCaches, registerCacheHost } = await import(
+      './lifecycle'
+    );
+    registerCacheHost({
+      clear: vi.fn().mockResolvedValue(undefined),
+      disabled: true,
+    } as unknown as CacheHost);
+
+    await clearRegisteredCaches();
+
+    expect(localStorage.getItem('graphql-cache:scope')).toBe(
+      '00000000-0000-4000-8000-000000000005'
+    );
+  });
+
   it('awaits the serialized scope rotation before logout clearing resolves', async () => {
     localStorage.setItem('graphql-cache:scope', 'current-scope');
     vi.spyOn(crypto, 'randomUUID').mockReturnValue(
