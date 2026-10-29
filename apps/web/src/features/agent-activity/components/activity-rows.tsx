@@ -20,7 +20,7 @@ export type ActivityRowView = {
  */
 export function ActivityRows(props: { rows: readonly ActivityRowView[] }) {
   return (
-    <ul class="my-1 flex min-w-0 flex-col gap-0.5 text-sm" aria-label="Steps">
+    <ul class="my-1 flex min-w-0 flex-col gap-0.5" aria-label="Steps">
       {/* Rows can arrive as new objects with every paint. Keyed by step, a
           row updates in place and its spinner and shimmer run on. */}
       <Key each={props.rows} by="id">
