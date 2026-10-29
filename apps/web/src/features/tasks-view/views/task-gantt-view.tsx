@@ -1,6 +1,7 @@
 import type { GanttCreation } from '@app/components/gantt/create-gantt-creation';
 import { Gantt } from '@app/components/gantt/gantt';
 import { deriveGanttRange } from '@app/components/gantt/gantt-date';
+import type { SoupGroupHeaderRow } from '@app/features/soup';
 import { UserIcon } from '@core/component/UserIcon';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -11,8 +12,8 @@ import {
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
-import FolderIcon from '@icon/system/regular/folder-simple.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import ProjectIcon from '@icon/system/regular/stack.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { Button, cn, Layer } from '@ui';
 import type { ComponentProps } from 'solid-js';
@@ -32,7 +33,7 @@ import type {
 } from '../queries/use-tasks-query';
 import type { TaskGroupBy } from '../types';
 
-function AssigneeLabel(props: {
+function EntityGroupLabel(props: {
   id: string;
   createName: (id: Accessor<string>) => Accessor<string>;
 }) {
@@ -40,8 +41,19 @@ function AssigneeLabel(props: {
   return <>{name()}</>;
 }
 
+function fallbackGroupLabel(groupBy: TaskGroupBy, group: SoupGroupHeaderRow) {
+  if (!group.groupId) {
+    return groupBy === 'project' ? 'No project' : group.label;
+  }
+  if (groupBy === 'status' || groupBy === 'priority') {
+    return getPropertyOptionLabel(group.groupId) ?? group.label;
+  }
+  return group.label;
+}
+
 export function TaskGanttView(props: {
   createAssigneeName: (id: Accessor<string>) => Accessor<string>;
+  createProjectName: (id: Accessor<string>) => Accessor<string>;
   source: TasksDataSource;
   groupBy: TaskGroupBy;
   groupMoves: Omit<ComponentProps<typeof Gantt.GroupDrag>, 'children'>;
@@ -266,7 +278,7 @@ export function TaskGanttView(props: {
                                     />
                                   </Match>
                                   <Match when={props.groupBy === 'project'}>
-                                    <FolderIcon class="size-3.5 shrink-0" />
+                                    <ProjectIcon class="size-3.5 shrink-0" />
                                   </Match>
                                   <Match when={props.groupBy === 'date'}>
                                     <CalendarIcon class="size-3.5 shrink-0" />
@@ -275,21 +287,22 @@ export function TaskGanttView(props: {
                                 <span class="truncate">
                                   <Show
                                     when={
-                                      props.groupBy === 'assignee' &&
+                                      (props.groupBy === 'assignee' ||
+                                        props.groupBy === 'project') &&
                                       group().groupId
                                     }
-                                    fallback={
-                                      props.groupBy === 'status' ||
-                                      props.groupBy === 'priority'
-                                        ? (getPropertyOptionLabel(
-                                            group().groupId
-                                          ) ?? group().label)
-                                        : group().label
-                                    }
+                                    fallback={fallbackGroupLabel(
+                                      props.groupBy,
+                                      group()
+                                    )}
                                   >
-                                    <AssigneeLabel
+                                    <EntityGroupLabel
                                       id={group().groupId}
-                                      createName={props.createAssigneeName}
+                                      createName={
+                                        props.groupBy === 'project'
+                                          ? props.createProjectName
+                                          : props.createAssigneeName
+                                      }
                                     />
                                   </Show>
                                 </span>

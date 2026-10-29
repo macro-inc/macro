@@ -66,7 +66,6 @@ export type UseTasksDataSourceOptions = {
   networkPaused?: Accessor<boolean>;
   /** Project lists drain all cursors instead of requiring per-group Load More. */
   loadAll?: boolean;
-  board?: Accessor<boolean>;
 };
 
 export type TasksDataSourceItem = SoupRow<TaskEntityWithProperties>;
@@ -148,7 +147,6 @@ export function useTasksDataSource(
       reference: options.reference?.(),
       crm: options.crm?.(),
       nameContains,
-      board: options.board?.(),
     });
   const queryArgs = () => queryArgsFor();
 

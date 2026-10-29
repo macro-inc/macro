@@ -87,7 +87,10 @@ export const taskGroupByField = (
     case 'date':
       return { type: 'date' };
     case 'project':
-      return { type: 'project' };
+      return {
+        type: 'property',
+        propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+      };
     case 'status':
       return {
         type: 'property',
@@ -119,8 +122,6 @@ export type BuildTaskQueryOptions = {
   crm?: TaskCrmScope;
   /** Only tasks whose name contains this text, case-insensitively. */
   nameContains?: string;
-  /** Board Project columns use the initiative property, not legacy folders. */
-  board?: boolean;
 };
 
 /** The Soup CRM association naming the record. */
@@ -184,12 +185,6 @@ export function buildTaskQuery(
       sort_direction: sortDirection,
     },
     body,
-    groupBy:
-      options.board && options.groupBy === 'project'
-        ? {
-            type: 'property',
-            propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
-          }
-        : taskGroupByField(options.groupBy),
+    groupBy: taskGroupByField(options.groupBy),
   };
 }

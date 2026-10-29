@@ -39,6 +39,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Default older definitions without grouping to the All Tasks default, Priority; warn on unknown grouping and block ordinary definition saves until explicit cleanup.
 - Preserve the raw saved layout during mobile or flag fallbacks; capture that layout instead of the displayed list fallback.
 - Block ordinary definition saves while unsupported settings remain; only explicit banner cleanup removes them, and metadata writes leave the definition unchanged.
+- Group by Project through the initiative Project property in every layout; Soup's `project` grouping is the legacy Drive-folder project, which no task carries, so it puts every task in No Project.
 
 ## Checks
 

@@ -370,7 +370,6 @@ it.each([false, true])(
             tagSets: () => [],
             tagSetsReady: () => true,
             isGroupExpanded: () => !board,
-            board: () => board,
             reference: () => ({
               propertyDefinitionId: companies,
               entityId: 'acme',

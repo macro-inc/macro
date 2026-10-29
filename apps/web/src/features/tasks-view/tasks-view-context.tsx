@@ -452,7 +452,6 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         const kind = savedViews?.view().kind;
         return kind !== 'loading' && kind !== 'unavailable';
       },
-      board: () => state.layout === 'board',
     })
   );
   type ActivationHandler = (
