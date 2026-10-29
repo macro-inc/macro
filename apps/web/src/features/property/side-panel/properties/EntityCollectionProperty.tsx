@@ -329,5 +329,3 @@ function getDocumentPreviewFallbackBlockType(
   if (entityType === 'DOCUMENT') return undefined;
   return undefined;
 }
-
-[9 more lines in file. Use offset=1214 to continue.]
