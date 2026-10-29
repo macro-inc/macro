@@ -27,7 +27,9 @@ export function openAgentComposer(
   const split = layout.openWithSplit(content, {
     referredFrom: 'launcher',
     preferNewSplit,
-    ...(seed?.handle ? { handle: seed.handle } : {}),
+    // Replace the given split even when another Agents split is open, so that
+    // split keeps its own draft.
+    ...(seed?.handle ? { handle: seed.handle, allowDuplicate: true } : {}),
   }).split;
   if (!split) return;
   // Opening an existing split activates it without updating its params.

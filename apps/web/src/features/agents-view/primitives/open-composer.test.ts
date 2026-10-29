@@ -124,6 +124,7 @@ describe('openAgentComposer', () => {
       referredFrom: 'launcher',
       preferNewSplit: false,
       handle,
+      allowDuplicate: true,
     });
   });
 
