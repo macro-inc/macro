@@ -273,8 +273,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   its email domain; keep shared signature instructions provider-neutral.
 - Keep personal accounts, team imports and agent tool connections together in
   Settings → Integrations: one searchable list row per integration, styled like
-  the Drive/Tasks lists, connected first, described by what each does in Macro;
-  preserve `agent-connections` and `team-connections` as aliases for existing links.
+  the Drive/Tasks lists, custom MCP servers then connected ones first,
+  described by what each does in Macro; preserve `agent-connections` and `team-connections` as aliases for existing links.
 - Keep bot setup focused on the token-and-SDK workflow; Agent and Ownership
   controls live under collapsed Advanced settings. See the
   [Bots walkthrough](../../docs/agent-guide/settings.md#bots).

@@ -188,8 +188,8 @@ function leftoverMatches(
 }
 
 /**
- * Every integration in one list: those in use first, then the rest, then the
- * app catalog. One search filters all of them.
+ * Every integration in one list: custom MCP servers first, then those in use,
+ * then the rest, then the app catalog. One search filters all of them.
  */
 function IntegrationsOverview(
   props: IntegrationsViewProps & {
@@ -243,6 +243,12 @@ function IntegrationsOverview(
       .leftovers.filter((row) =>
         leftoverMatches(row, overlaidSlugFor(row), query())
       );
+  // Servers the user added themselves lead the list.
+  const isCustom = (leftover: Leftover) =>
+    leftover.kind === 'native-mcp' && !overlaidSlugFor(leftover);
+  const customLeftovers = () => leftovers().filter(isCustom);
+  const otherLeftovers = () =>
+    leftovers().filter((leftover) => !isCustom(leftover));
 
   // Includes overlaid apps, which are connected as native MCP servers.
   const connected = usePipedreamConnectedSlugs();
@@ -310,10 +316,13 @@ function IntegrationsOverview(
           role="rowgroup"
           class="flex flex-col [&>[role=row]+[role=row]]:border-t [&>[role=row]+[role=row]]:border-ink/5"
         >
+          <For each={customLeftovers()}>
+            {(leftover) => <LeftoverRow leftover={leftover} />}
+          </For>
           <For each={inUse()}>
             {(item) => <IntegrationItemRow item={item} />}
           </For>
-          <For each={leftovers()}>
+          <For each={otherLeftovers()}>
             {(leftover) => (
               <LeftoverRow
                 leftover={leftover}

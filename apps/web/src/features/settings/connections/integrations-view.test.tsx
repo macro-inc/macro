@@ -13,6 +13,7 @@ import {
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IntegrationsView } from './integrations-view';
+import type { Leftover } from './model';
 import { useConnectionsView } from './view-state';
 
 const mocks = vi.hoisted(() => ({
@@ -22,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   importChannels: vi.fn(),
   failure: vi.fn(),
   granolaConnected: false,
+  leftovers: [] as Leftover[],
 }));
 const [state, setState] = createSignal<ImportState>({ runs: [], entities: [] });
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'me' }));
@@ -46,7 +48,11 @@ vi.mock('@queries/pipedream-connectors', () => ({
 }));
 vi.mock('./use-connections-model', () => ({
   useConnectionsModel: () => ({
-    model: () => ({ capabilities: [], leftovers: [], providers: [] }),
+    model: () => ({
+      capabilities: [],
+      leftovers: mocks.leftovers,
+      providers: [],
+    }),
     ready: () => true,
     error: () => false,
     partialError: () => false,
@@ -90,6 +96,15 @@ vi.mock('./integration-items', async (importOriginal) => {
       }),
   };
 });
+// The real row reads connection mutations.
+vi.mock('./leftover-row', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./leftover-row')>()),
+  LeftoverRow: (props: { leftover: Leftover }) => (
+    <div role="row">
+      <span class="font-medium">{props.leftover.title}</span>
+    </div>
+  ),
+}));
 vi.mock('./catalog-rows', () => ({
   CatalogRows: () => <p>Integration catalog</p>,
 }));
@@ -172,6 +187,7 @@ beforeEach(() => {
   clearPendingConnectApp();
   mocks.connected = false;
   mocks.granolaConnected = false;
+  mocks.leftovers = [];
   setState({ runs: [], entities: [] });
 });
 afterEach(cleanup);
@@ -311,8 +327,19 @@ describe('unified Integrations page', () => {
     );
     expect(onOpenLocalAgents).toHaveBeenCalledOnce();
   });
-  it('lists connected integrations first, then the rest and the catalog', () => {
+  it('lists custom servers first, then connected integrations, the rest and the catalog', () => {
     mocks.granolaConnected = true;
+    mocks.leftovers = [
+      {
+        kind: 'native-mcp',
+        id: 'mcp:https://tools.example.com/mcp',
+        title: 'Team tools',
+        subtitle: 'tools.example.com',
+        url: 'https://tools.example.com/mcp',
+        enabled: true,
+        authenticated: true,
+      },
+    ];
     render(() => (
       <IntegrationsView
         onOpenEmailSettings={() => {}}
@@ -323,7 +350,7 @@ describe('unified Integrations page', () => {
       .getAllByRole('row')
       .slice(1)
       .map((row) => row.querySelector('span.font-medium')?.textContent);
-    expect(names[0]).toBe('Granola');
+    expect(names.slice(0, 2)).toEqual(['Team tools', 'Granola']);
     expect(names).toContain('GitHub');
     expect(screen.getByText('Integration catalog')).toBeTruthy();
   });
