@@ -15,7 +15,7 @@ use std::{
 struct Log {
     events: Arc<Mutex<Vec<ChannelEvent>>>,
     live: Arc<Mutex<Vec<(String, HashSet<String>)>>>,
-    shares: Arc<Mutex<usize>>,
+    shares: Arc<Mutex<Vec<String>>>,
     fail_live: bool,
 }
 
@@ -50,11 +50,11 @@ impl ChannelReferenceSharePermissions for Log {
     type Err = anyhow::Error;
     async fn update_channel_share_permissions_for_referenced_items(
         &self,
-        _: MacroUserIdStr<'static>,
+        actor: MacroUserIdStr<'static>,
         _: Uuid,
         _: Vec<ReferencedShareItem>,
     ) -> Result<Vec<crate::domain::models::ReferenceShareResult>, Self::Err> {
-        *self.shares.lock().unwrap() += 1;
+        self.shares.lock().unwrap().push(actor.to_string());
         anyhow::bail!("sharing temporarily unavailable")
     }
 }
@@ -62,6 +62,7 @@ impl ChannelReferenceSharePermissions for Log {
 const CHANNEL: Uuid = Uuid::from_u128(2);
 const MEMBER: &str = "macro|member@example.com";
 const SENDER: &str = "macro|sender@example.com";
+const BOT: &str = "bot|00000000-0000-0000-0000-000000000007";
 
 fn repo() -> MockChannelRepo {
     let mut repo = MockChannelRepo::new();
@@ -168,7 +169,7 @@ async fn a_post_emits_the_channel_notification_event_and_the_common_payload() {
             .is_err(),
         "the sharing failure is reported after every other effect ran"
     );
-    assert_eq!(*log.shares.lock().unwrap(), 1);
+    assert_eq!(*log.shares.lock().unwrap(), [SENDER]);
     let events = log.events.lock().unwrap();
     let [
         ChannelEvent::MessagePosted {
@@ -352,4 +353,43 @@ async fn document_events_are_rejected() {
     event.parent = MessageParent::parse("document", "doc").unwrap();
     assert!(delivery.publish(event).await.is_err());
     assert!(log.events.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_bot_post_shares_its_links_as_the_person_who_dispatched_it() {
+    let log = Log::default();
+    let delivery = ChannelMessageDelivery::new(repo(), log.clone(), log.clone(), log.clone());
+    let mut posted = event(MessageChange::Posted {
+        notification_policy: Default::default(),
+        message: Message {
+            sender_id: BOT.to_owned().try_into().unwrap(),
+            triggered_by: Some(MEMBER.to_owned()),
+            ..message()
+        },
+        mentions: mentions(),
+    });
+    posted.actor = BOT.to_owned();
+
+    let _ = delivery.publish(posted).await;
+
+    assert_eq!(*log.shares.lock().unwrap(), [MEMBER]);
+}
+
+#[tokio::test]
+async fn a_bot_post_for_nobody_shares_nothing() {
+    let log = Log::default();
+    let delivery = ChannelMessageDelivery::new(repo(), log.clone(), log.clone(), log.clone());
+    let mut posted = event(MessageChange::Posted {
+        notification_policy: Default::default(),
+        message: Message {
+            sender_id: BOT.to_owned().try_into().unwrap(),
+            ..message()
+        },
+        mentions: mentions(),
+    });
+    posted.actor = BOT.to_owned();
+
+    delivery.publish(posted).await.unwrap();
+
+    assert!(log.shares.lock().unwrap().is_empty());
 }

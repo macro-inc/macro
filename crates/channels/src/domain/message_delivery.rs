@@ -4,6 +4,7 @@ use super::{
     models::{ChannelMetadata, MutatedMessage, ReferencedShareItem, Sender},
     ports::{ChannelEventDispatcher, ChannelReferenceSharePermissions, ChannelRepo},
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{
     delivery::MessageRealtime,
     models::{
@@ -122,7 +123,15 @@ where
             message, mentions, ..
         } = &event.change
         {
-            if let Some(user) = actor.as_user() {
+            // A bot shares as the person it posted for; with no such person, nothing is shared.
+            let sharer = actor.as_user().cloned().or_else(|| {
+                message.triggered_by.clone().and_then(|id| {
+                    MacroUserIdStr::try_from(id)
+                        .inspect_err(|error| tracing::warn!(?error, "unparseable triggered_by"))
+                        .ok()
+                })
+            });
+            if let Some(user) = sharer {
                 let items = message
                     .attachments
                     .iter()
@@ -143,17 +152,17 @@ where
                     && let Err(error) = self
                         .permissions
                         .update_channel_share_permissions_for_referenced_items(
-                            user.clone(),
-                            channel_id,
-                            items,
+                            user, channel_id, items,
                         )
                         .await
                 {
                     side_effect_error = Some(repo_error(error));
                 }
-                if let Err(error) = self.repo.upsert_activity(actor.clone(), channel_id).await {
-                    side_effect_error = Some(repo_error(error));
-                }
+            }
+            if actor.as_user().is_some()
+                && let Err(error) = self.repo.upsert_activity(actor.clone(), channel_id).await
+            {
+                side_effect_error = Some(repo_error(error));
             }
             if let Err(error) = self.repo.touch_channel_updated_at(channel_id).await {
                 side_effect_error = Some(repo_error(error));
