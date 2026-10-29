@@ -14,11 +14,8 @@ import { match } from 'ts-pattern';
  * list/detail queries. The durable recipe resolves the server assignment ID on
  * commit and still applies when the parent exists only in cold storage.
  */
-function propertyParent(
-  entityType: PropertyTargetEntityType,
-  entityId: string
-) {
-  const typename = match(entityType)
+export function propertyParentTypename(entityType: PropertyTargetEntityType) {
+  return match(entityType)
     .with('DOCUMENT', () => 'GraphqlSoupDocument' as const)
     .with('CHAT', () => 'GraphqlSoupChat' as const)
     .with('PROJECT', () => 'GraphqlSoupProject' as const)
@@ -30,6 +27,13 @@ function propertyParent(
     .with('DATABASE_ROW', () => 'GraphqlSoupDatabaseRow' as const)
     .with('USER', () => undefined)
     .exhaustive(() => undefined);
+}
+
+function propertyParent(
+  entityType: PropertyTargetEntityType,
+  entityId: string
+) {
+  const typename = propertyParentTypename(entityType);
   return typename
     ? selectRecord(PropertyAssignmentParentFragmentDoc, {
         __typename: typename,

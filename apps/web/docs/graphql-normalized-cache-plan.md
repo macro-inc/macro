@@ -830,6 +830,25 @@ await client.mutation(DeleteEntityPropertyDocument, {
 }).toPromise();
 ```
 
+### Network property optimism
+
+When local caching is unavailable, `networkRevalidationExchange` retains the
+active query snapshots and applies property-specific projections supplied by
+`queries/properties/graphql/network-optimism.ts`. It reuses `LiveQuery` so Solid
+reconciliation cannot mutate rollback snapshots. These projections update only
+existing parents' property arrays; server refresh still owns list membership,
+ordering, and counts. They do not provide persistent storage or offline replay.
+
+Each invocation has a separate layer. Independent property slots start together;
+conflicting slots keep submission order. An enqueue acknowledgement means the
+local layer is installed, not that the server committed. Successful responses
+replace temporary assignment IDs and remain projected until a post-commit read
+confirms them, including through failed or stale refreshes. Failures remove only
+their own layer. Session changes discard old layers and cancel undispatched
+writes. Healthy-cache operations retain the durable queue's existing ownership.
+The `graphql_cache.network_property_projection` span records active query and
+layer counts without property values.
+
 ### Projection contract
 
 Cache-core compiles response paths while reading normalized records. Bindings

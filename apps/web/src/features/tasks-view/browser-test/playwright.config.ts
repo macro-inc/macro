@@ -14,6 +14,21 @@ export default defineConfig({
     baseURL: `http://localhost:${port}`,
     headless: true,
     viewport: { width: 1280, height: 800 },
+    storageState: {
+      cookies: [
+        {
+          name: 'login',
+          value: 'true',
+          domain: 'localhost',
+          path: '/',
+          expires: -1,
+          httpOnly: false,
+          secure: false,
+          sameSite: 'Lax',
+        },
+      ],
+      origins: [],
+    },
     launchOptions: {
       executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
     },
