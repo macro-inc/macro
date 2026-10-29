@@ -91,6 +91,7 @@ async fn current_keys<S: PredicateIndexStorage>(
             cursor: None,
             through: None,
         },
+        &[],
     )
     .await
     .unwrap() else {
@@ -252,6 +253,7 @@ fn other_mail_views_use_their_own_timestamp_and_membership() {
                     cursor: None,
                     through: None,
                 },
+                &[],
             )
             .await
             .unwrap() else {

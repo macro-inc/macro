@@ -791,7 +791,8 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
               : request.mail.cursor === undefined &&
                 typeof through === 'string' &&
                 through.length <= 4096) &&
-            request.baseline === undefined &&
+            (request.baseline === undefined ||
+              request.mail.cursor === undefined) &&
             (request.mail.cursor === undefined ||
               (typeof request.mail.cursor === 'string' &&
                 request.mail.cursor.length <= 4096)))) &&

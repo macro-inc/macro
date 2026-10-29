@@ -42,6 +42,16 @@ function pullRequestKey(url: string): string {
   return `${match[1]}/${match[2]}/pull/${match[3]}`;
 }
 
+/** An existing task that looks like the same work as a proposed one. */
+export interface SimilarTask {
+  /** The existing task. */
+  task: Task;
+  /** The existing task's name. */
+  name: string;
+  /** Cosine similarity of the two tasks' embeddings, from 0 to 1. */
+  similarity: number;
+}
+
 /**
  * A Macro task: a document with sub-type `task`. Inherits the full document
  * surface ({@link Document.rename}, move, delete, restore, content, events)
@@ -123,6 +133,27 @@ export class Task extends Document {
         },
       ];
     });
+  }
+
+  /**
+   * Existing tasks of the caller or their team that look like the same work
+   * as a task with this title and body, most similar first. Creates and
+   * changes nothing; check it before creating a task.
+   */
+  static async findSimilar(
+    client: MacroClient,
+    opts: { title: string; body?: string },
+  ): Promise<SimilarTask[]> {
+    const { results } = unwrap(
+      await client.storage.taskSimilaritySearchHandler({
+        body: { taskName: opts.title, markdown: opts.body ?? null },
+      }),
+    );
+    return results.map((result) => ({
+      task: new Task(client, result.taskId),
+      name: result.taskName,
+      similarity: result.vectorScore,
+    }));
   }
 
   /**

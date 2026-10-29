@@ -129,6 +129,7 @@ fn posted(
         sender_id: channel_sender::ChannelSender::new_from_user(
             MacroUserIdStr::try_from_email(email).unwrap(),
         ),
+        triggered_via: None,
         triggered_by: None,
         bot_profile: None,
         mentions: vec![],

@@ -382,11 +382,16 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 guest_name: None,
                 triggered_by: access
                     .acting_user_id()
-                    .filter(|_| {
-                        actor.as_bot().is_some()
-                            && input.attribution == MessageAttribution::ActingUser
-                    })
+                    .filter(|_| actor.as_bot().is_some() && input.attribution.has_acting_user())
                     .map(ToString::to_string),
+                triggered_via: match &input.attribution {
+                    MessageAttribution::ActingUserVia { client } if actor.as_bot().is_some() => {
+                        Some(client.clone())
+                    }
+                    MessageAttribution::ActingUserVia { .. }
+                    | MessageAttribution::ActingUser
+                    | MessageAttribution::Unprompted => None,
+                },
                 input,
             })
             .await?;

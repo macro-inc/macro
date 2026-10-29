@@ -104,6 +104,11 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   code redirects a link flow to its `original_url` with `email_link_error`
   (`admin_consent_required`, `cancelled`, `failed`); only the `AADSTS` code
   from `error_description` is logged, never the description.
+- `/oauth/redirect` without a code answers "Sign-in failed" and logs
+  `auth_handoff_failure=missing_code` with FusionAuth's error. `invalid_origin`
+  ("Invalid origin uri <origin>") means the page that sent the browser to
+  FusionAuth is missing from `infra/stacks/fusionauth-instance/origins.ts`;
+  these failures carry no user id.
 
 ## Related
 

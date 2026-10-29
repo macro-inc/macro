@@ -1,5 +1,6 @@
 use super::*;
 use ai_toolset::AsyncToolCollection;
+use bot_id::BotId;
 use rmcp::{handler::server::ServerHandler, model::ErrorCode};
 
 fn empty_service() -> AuthenticatedToolService<()> {
@@ -220,6 +221,51 @@ fn authenticated_user_id_requires_user_extension_inside_request_parts() {
     assert_eq!(error.message, "missing user identity — is auth configured?");
 }
 
+fn call_extensions(
+    caller: Option<ToolCaller>,
+    headers: &[(&str, &str)],
+) -> rmcp::model::Extensions {
+    let mut request = http::Request::new(());
+    for (name, value) in headers {
+        request.headers_mut().insert(
+            http::HeaderName::from_bytes(name.as_bytes()).unwrap(),
+            http::HeaderValue::from_str(value).unwrap(),
+        );
+    }
+    let mut parts = request.into_parts().0;
+    if let Some(caller) = caller {
+        parts.extensions.insert(caller);
+    }
+    let mut extensions = rmcp::model::Extensions::new();
+    extensions.insert(parts);
+    extensions
+}
+
+/// The caller is whatever the bearer middleware authenticated; a bot the
+/// request names for itself never replaces it.
+#[test]
+fn the_caller_is_the_authenticated_one_not_one_the_request_names() {
+    let forged = BotId::TEST_A.to_string();
+
+    assert_eq!(
+        caller(&call_extensions(
+            Some(ToolCaller::ApiKey),
+            &[("x-macro-agent-id", &forged), ("x-macro-bot-id", &forged)],
+        ))
+        .unwrap(),
+        ToolCaller::ApiKey
+    );
+}
+
+/// With no authenticated caller there is nothing to write as, so the call
+/// fails instead of falling back to the Macro bot.
+#[test]
+fn a_call_without_a_caller_is_refused() {
+    let error = caller(&call_extensions(None, &[])).expect_err("no caller");
+
+    assert_eq!(error.code, ErrorCode::INTERNAL_ERROR);
+}
+
 mod code_mode {
     use super::*;
     use agent_code_mode::domain::{
@@ -257,17 +303,19 @@ mod code_mode {
         }
     }
 
-    /// Records who ran what and returns the source length as data.
+    /// Records who ran what, as which agent, and returns the source length as data.
     #[derive(Default)]
-    struct Runs(Mutex<Vec<(String, String)>>);
+    struct Runs(Mutex<Vec<(String, String)>>, Mutex<Vec<ToolCaller>>);
     #[async_trait::async_trait]
     impl UserCodeMode for Runs {
         async fn execute(
             &self,
             user: &MacroUserIdStr<'static>,
+            caller: &ToolCaller,
             request: ExecuteRequest,
             _: CancellationToken,
         ) -> Result<UserExecutionReceipt, CodeModeError> {
+            self.1.lock().unwrap().push(caller.clone());
             self.0
                 .lock()
                 .unwrap()
@@ -286,10 +334,8 @@ mod code_mode {
         let surface = Arc::new(CodeModeSurface {
             native: Arc::new(AsyncToolCollection::new()),
             tools: Arc::new(agent_code_mode::inbound::toolset::user_toolset()),
-            context: agent_code_mode::inbound::toolset::UserCodeModeToolContext {
-                service: runs,
-                cognition: None,
-            },
+            service: runs,
+            cognition: None,
             selector: Arc::new(Flag),
         });
         let mut config =
@@ -301,7 +347,8 @@ mod code_mode {
             Arc::new(LocalSessionManager::default()),
             config,
         );
-        // Stands in for the OAuth bearer middleware, which inserts the user id.
+        // Stands in for the bearer middleware's user id; each request carries
+        // its caller as the middleware would leave it.
         axum::Router::new()
             .nest_service("/mcp", service)
             .layer(axum::middleware::from_fn(
@@ -321,9 +368,24 @@ mod code_mode {
         method: &str,
         params: serde_json::Value,
     ) -> serde_json::Value {
+        rpc_as(app, user, Some(ToolCaller::ApiKey), method, params).await
+    }
+
+    /// An RPC the bearer middleware authenticated as `caller`.
+    async fn rpc_as(
+        app: axum::Router,
+        user: &str,
+        caller: Option<ToolCaller>,
+        method: &str,
+        params: serde_json::Value,
+    ) -> serde_json::Value {
+        let mut request = Request::builder();
+        if let Some(caller) = caller {
+            request = request.extension(caller);
+        }
         let response = app
             .oneshot(
-                Request::builder()
+                request
                     .method("POST")
                     .uri("/mcp")
                     .header("host", "localhost")
@@ -417,6 +479,54 @@ mod code_mode {
         );
     }
 
+    /// `ExecuteCode` runs for exactly the caller the middleware
+    /// authenticated, one per kind, so its credential can be minted for it.
+    #[tokio::test]
+    async fn execute_code_runs_for_each_kind_of_caller() {
+        let runs = Arc::new(Runs::default());
+        let app = app(runs.clone());
+        let call = serde_json::json!({
+            "name": "ExecuteCode",
+            "arguments": {"source": "export async function main() { return {data: 1}; }"},
+        });
+        let callers = [
+            ToolCaller::Agent(BotId::TEST_A),
+            ToolCaller::McpClient {
+                name: Some("Claude Code".to_owned()),
+            },
+            ToolCaller::ApiKey,
+        ];
+
+        for caller in callers.clone() {
+            rpc_as(
+                app.clone(),
+                FLAGGED,
+                Some(caller),
+                "tools/call",
+                call.clone(),
+            )
+            .await;
+        }
+
+        assert_eq!(*runs.1.lock().unwrap(), callers);
+    }
+
+    /// A request the middleware left without a caller runs nothing.
+    #[tokio::test]
+    async fn execute_code_without_a_caller_runs_nothing() {
+        let runs = Arc::new(Runs::default());
+        let app = app(runs.clone());
+        let call = serde_json::json!({
+            "name": "ExecuteCode",
+            "arguments": {"source": "export async function main() { return {data: 1}; }"},
+        });
+
+        let response = rpc_as(app, FLAGGED, None, "tools/call", call).await;
+
+        assert!(response.get("error").is_some());
+        assert!(runs.1.lock().unwrap().is_empty());
+    }
+
     #[test]
     fn code_mode_tools_meet_directory_requirements() {
         for (name, tool) in agent_code_mode::inbound::toolset::user_toolset()
@@ -436,6 +546,7 @@ mod code_mode {
         async fn issue(
             &self,
             _: &MacroUserIdStr<'static>,
+            _: &ToolCaller,
         ) -> Result<code_execution::domain::RunEnvironment, CodeModeError> {
             Ok(code_execution::domain::RunEnvironment::default())
         }

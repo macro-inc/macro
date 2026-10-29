@@ -137,6 +137,20 @@ struct DocumentMention<'a, P> {
     collapsed: bool,
 }
 
+/// Serialize a task as an in-app task chip; the title is untrusted.
+pub fn task_mention(task_id: &str, title: &str) -> Result<String, serde_json::Error> {
+    let payload = tag_json(&DocumentMention {
+        document_id: task_id,
+        block_name: "task",
+        document_name: title,
+        block_params: serde_json::Map::new(),
+        collapsed: false,
+    })?;
+    Ok(format!(
+        "<m-document-mention>{payload}</m-document-mention>"
+    ))
+}
+
 /// Serialize a markdown document as an in-app document mention node.
 pub fn document_mention(
     document_id: &str,

@@ -351,6 +351,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "base64 0.22.1",
+ "bot_id",
  "bytes",
  "chrono",
  "futures",
@@ -842,6 +843,7 @@ dependencies = [
  "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
+ "mention_utils",
  "messages",
  "mockall",
  "model-entity",
@@ -1242,6 +1244,7 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-macros",
+ "bot_id",
  "genai_telemetry",
  "macro_user_id",
  "opentelemetry",
@@ -12555,9 +12558,11 @@ version = "0.1.0"
 name = "mcp_auth_proxy"
 version = "0.1.0"
 dependencies = [
+ "ai_toolset",
  "anyhow",
  "axum",
  "base64 0.22.1",
+ "bot_id",
  "fusionauth",
  "macro_auth",
  "macro_user_id",
