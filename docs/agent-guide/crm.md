@@ -217,7 +217,9 @@ Email importance and inbox choices open in the shared filter drawer.
 Section creation actions appear at the bottom right above the navigation dock,
 replacing the default app-wide action: Add contact, New email, New note, New task,
 New call, or New database. Existing contact-domain requirements, email-sync and
-database gates, recipients, and task associations still apply. Keyboard focus and
+database gates, recipients, and task associations still apply. With company email
+sync off, New email stays visible but disabled; New company must not replace it.
+Keyboard focus and
 higher-priority composers suppress the floating action; leaving the section
 restores the default action. Search remains visible for empty lists.
 Verify filter changes, section changes, disabled creation, and bottom-row clearance
