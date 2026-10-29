@@ -12,7 +12,6 @@ import DesktopIcon from '@icon/system/regular/desktop.svg';
 import DeviceMobileIcon from '@icon/system/regular/device-mobile-speaker.svg';
 import EmailIcon from '@icon/system/regular/envelope-simple.svg';
 import GaugeIcon from '@icon/system/regular/gauge.svg';
-import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
 import KeyIcon from '@icon/system/regular/key.svg';
 import KeyboardIcon from '@icon/system/regular/keyboard.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
@@ -248,11 +247,6 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
       return t('settingsNav.groupDeveloper');
     },
     items: [
-      tabItem('tabRuntimes', {
-        tab: 'Harness',
-        icon: HardDrivesIcon,
-        keywords: ['cursor', 'harness', 'runtime', 'credential', 'api key'],
-      }),
       tabItem('tabMcpServer', {
         tab: 'Agent',
         icon: PlugIcon,

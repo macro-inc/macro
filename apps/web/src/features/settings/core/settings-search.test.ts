@@ -63,11 +63,16 @@ describe('individual settings search', () => {
     }));
     expect(searchSettings(groups, 'signature')).toEqual([]);
   });
-  it('keeps runtime credentials separate from Macro API keys', () => {
-    expect(search('cursor')[0].tab).toBe('Harness');
+  it('finds Cursor among agents, apart from Macro API keys', () => {
+    expect(search('cursor')[0].tab).toBe('Agents');
     expect(search('cursor').some((item) => item.tab === 'API Keys')).toBe(
       false
     );
+  });
+  it('finds runtimes in their section of the Agents page', () => {
+    const [result] = search('runtime');
+    expect(result.tab).toBe('Agents');
+    expect(result.target).toBe('runtimes');
   });
   it('omits disabled signature controls', () => {
     expect(

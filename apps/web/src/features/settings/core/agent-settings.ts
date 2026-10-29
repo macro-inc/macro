@@ -11,7 +11,7 @@ export type AgentSummary = {
   tag: string;
   avatarUrl?: string;
   instructions: string;
-  /** "In Macro", "In Cursor", … for the row's subtitle. */
+  /** "In Macro", "In your harness", … for the row's subtitle. */
   whereItRuns: string;
   defaultModel: string;
   channelSummary: string;

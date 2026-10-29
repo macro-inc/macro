@@ -764,7 +764,6 @@ export default {
     tabMobileApp: 'Mobiilisovellus',
     tabTags: 'Tunnisteet',
     tabIntegrations: 'Integraatiot',
-    tabRuntimes: 'Suoritusympäristöt',
     tabMcpServer: 'MCP-palvelin',
     tabApiKeys: 'API-avaimet',
     tabBots: 'Botit',

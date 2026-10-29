@@ -2,12 +2,11 @@ import { ENABLE_EMAIL } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { usePipedreamMcpFlag } from '@core/pipedream/flag';
-import { createSignal, Show, Suspense } from 'solid-js';
+import { Show, Suspense } from 'solid-js';
 import { IntegrationsView } from './connections/integrations-view';
 import { EmailCard } from './Email';
 import { GitHubCard } from './GitHub';
 import { GranolaCard } from './Granola';
-import { Harness } from './Harness';
 import { IntegrationsSection } from './Integrations';
 import { SettingsPage } from './primitives';
 
@@ -16,7 +15,6 @@ export function IntegrationsPage() {
   const pipedreamMcp = usePipedreamMcpFlag();
   const isTabAvailable = useSettingsTabAvailable();
   const { openSettings } = useSettingsState();
-  const [showLocalAgents, setShowLocalAgents] = createSignal(false);
   return (
     <Show
       when={pipedreamMcp()}
@@ -29,26 +27,15 @@ export function IntegrationsPage() {
         </SettingsPage>
       }
     >
-      <Show
-        when={showLocalAgents() && isTabAvailable('Harness')}
-        fallback={
-          <IntegrationsView
-            onOpenMacroMcp={() => openSettings('Agent')}
-            onOpenLocalAgents={
-              isTabAvailable('Harness')
-                ? () => setShowLocalAgents(true)
-                : undefined
-            }
-          >
-            <AccountConnections />
-          </IntegrationsView>
+      {/* Local agents live in the Runtimes section of Agents. */}
+      <IntegrationsView
+        onOpenMacroMcp={() => openSettings('Agent')}
+        onOpenLocalAgents={
+          isTabAvailable('Harness') ? () => openSettings('Harness') : undefined
         }
       >
-        <Harness
-          onBack={() => setShowLocalAgents(false)}
-          backLabel="Integrations"
-        />
-      </Show>
+        <AccountConnections />
+      </IntegrationsView>
     </Show>
   );
 }

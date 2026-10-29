@@ -516,7 +516,7 @@ export function createInputActions(
     roster: roster.roster,
     rosterLoading: roster.loading,
     connectAgent: (agent: RosterAgent) => {
-      if (agent.harness === 'cursor') openSettings('Harness');
+      if (agent.harness === 'cursor') openSettings('Agents');
     },
     createAgent: () =>
       host.navigate({

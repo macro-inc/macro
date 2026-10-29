@@ -507,7 +507,7 @@ the shimmer.
   model. Escape dismisses the picker and restores focus to its trigger.
   A checkmark identifies the selected model,
   including when it is the agent’s configured default; there is no separate default row.
-  Disconnected Cursor offers **Connect Cursor**, opening Settings → Agents → Runtimes.
+  Disconnected Cursor offers **Connect Cursor**, opening Settings → Agents.
   The built-in sandbox and paired macrod runtimes are not offered here.
 - Selecting an agent changes the heading: **What should we work on?** for chat
   agents and **What should we build?** for coding agents. The draft stays intact
@@ -599,32 +599,34 @@ the shimmer.
   its mode and conversation. Newly created sessions replace their temporary
   URL with the real id without remounting the composer or adding a temporary
   history step.
-- **Agents page** uses the same **Agents** management screen as Settings. Two
-  slim strips sit above the list: **Connect Cursor** (**Manage** once connected)
-  and **Bring your own agent** (**Set up**, or **Paired** + **Manage** once a
-  machine is paired). One **Your agents** list shows Macro, team agents, then
-  private agents, each with a TEAM/PRIVATE pill and an "In Macro / In Cursor /
-  In your harness · model · channels" subtitle, plus Edit / Delete actions.
-  **Add agent**, the setup strips, and Edit replace the list with full pages,
-  not dialogs; Back/Cancel returns to the list. Use **Create → Agent** to open a new composer.
+- **Agents page** uses the same **Agents** management screen as Settings. One
+  **Your agents** list shows Macro, Cursor, team agents, then private agents,
+  each with a TEAM/PRIVATE pill and an "In Macro / In your harness · model ·
+  channels" subtitle, plus Edit / Delete actions. Cursor is a built-in agent,
+  always `@cursor`: its row reads **Add** until a Cursor API key is saved and
+  **Manage** after, and it has no Edit or Delete. **Runtimes** is the last
+  section of the same page, below Coding sessions.
+  **Add agent**, Cursor's Add/Manage, **New runtime**, and Edit replace the list with
+  full pages, not dialogs; Back/Cancel returns to the list. Use **Create → Agent** to open a new composer.
   The agent editor has Look, Name, Instructions, **Where it runs** (In Macro, In
-  Cursor, In your harness), **Who can use it** (Private / Team) and Channels. The selected
+  your harness), **Who can use it** (Private / Team) and Channels. Cursor is not
+  a place to run new agents; only an agent that already runs in Cursor keeps an
+  **In Cursor** option. The selected
   place opens its Model picker inside its card; In your harness adds a Harness
   picker beside it. In Macro on an Anthropic or OpenAI model also shows an
   optional **Anthropic API key** / **OpenAI API key** field (see
-  [agent API keys](#agent-api-keys)). An unconnected Cursor or unpaired harness is disabled with
-  **Connect** / **Set up**, which open the setup guide in place and return to the
+  [agent API keys](#agent-api-keys)). An unpaired harness is disabled with
+  **Set up**, which opens the setup guide in place and returns to the
   editor with that option selected. Mention style, permission requests, and
   connections sit under a collapsed **More options** whose summary line
   describes the current choices.
-  **Connect Cursor** is a three-step guide: a screenshot of Cursor's API & SSH
+  Cursor's **Add** is a three-step guide: a screenshot of Cursor's API & SSH
   Keys page with **Open API & SSH Keys** (cursor.com/dashboard/api), an API key
   field focused on open, and a default model picker that enables once the key is
   saved. Connected, the same page shows the saved date, **Disconnect**, and
-  **Done**. **Manage** on a paired machine opens **Runtimes** (Back returns to
-  Agents): built-in providers, **New runtime**, and the **Paired runtimes** list,
-  which appears once you have a paired runtime.
-  On the desktop app, **Runtimes** opens with a **This computer** card that sets
+  **Done**. **Runtimes** lists built-in providers, **New runtime**, and the
+  **Paired runtimes** list, which appears once you have a paired runtime.
+  On the desktop app, **Runtimes** starts with a **This computer** card that sets
   up the bundled macrod daemon in one click: **Set up** detects installed agents,
   then **Start running agents here** configures, pairs (auto-approved, no code),
   and starts it. The manual flow below remains for pairing other machines.

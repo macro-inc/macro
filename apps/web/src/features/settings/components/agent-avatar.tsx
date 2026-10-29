@@ -1,8 +1,10 @@
+import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import MacroLogo from '@icon/macro-logo.svg';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
+import CursorIcon from '@icon/wide-cursor-ide.svg';
 import { Avatar, cn } from '@ui';
-import { Show } from 'solid-js';
+import { Match, Show, Switch } from 'solid-js';
 import {
   type AgentFaceLook,
   agentFaceColor,
@@ -11,8 +13,8 @@ import {
 import { AgentFace, createDarkTheme } from './agent-face';
 
 /**
- * An agent's uploaded picture, the Macro mark for the built-in agent, or the
- * agent's Mark face derived from its @tag.
+ * An agent's uploaded picture, the Macro or Cursor mark for those built-in
+ * agents, or the agent's Mark face derived from its @tag.
  */
 export function AgentAvatar(props: {
   id: string;
@@ -22,7 +24,11 @@ export function AgentAvatar(props: {
 }) {
   return (
     <Show
-      when={props.avatarUrl || props.id === MACRO_AGENT_BOT_ID}
+      when={
+        props.avatarUrl ||
+        props.id === MACRO_AGENT_BOT_ID ||
+        props.id === CURSOR_BOT_ID
+      }
       fallback={
         <AgentFaceBadge
           look={agentFaceLook(props.tag || props.name)}
@@ -35,12 +41,14 @@ export function AgentAvatar(props: {
           when={props.avatarUrl}
           fallback={
             <Avatar.Fallback>
-              <Show
-                when={props.id === MACRO_AGENT_BOT_ID}
-                fallback={<AgentIcon class="size-5" />}
-              >
-                <MacroLogo class="size-5" />
-              </Show>
+              <Switch fallback={<AgentIcon class="size-5" />}>
+                <Match when={props.id === MACRO_AGENT_BOT_ID}>
+                  <MacroLogo class="size-5" />
+                </Match>
+                <Match when={props.id === CURSOR_BOT_ID}>
+                  <CursorIcon class="size-5 text-ink" />
+                </Match>
+              </Switch>
             </Avatar.Fallback>
           }
         >

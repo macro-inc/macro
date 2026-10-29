@@ -284,7 +284,7 @@ Left nav (feature and platform gates still apply):
   sidebar is hidden, **Routines** (`/app/settings/routines`) follows Agents.
 - **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Usage, Billing, Desktop App, Mobile App.
 - **Workspace**: Tags, Integrations (personal Gmail/GitHub accounts and agent tools).
-- **Developer**: Runtimes, MCP server, API Keys, Bots.
+- **Developer**: MCP server, API Keys, Bots. Runtimes are a section of Agents.
 
 **Desktop App** (`/app/settings/desktop-app`) is titled
 **Desktop App (Alpha)** and shows a compact Version, Build date, and Bundle
@@ -376,7 +376,8 @@ language has loaded, PostHog stores it on the person as `interface_language`
 `interface_language`.
 
 Existing settings URLs remain valid; `connections` still opens Integrations,
-`agent-connections` aliases Integrations, and `harness` aliases Runtimes.
+`agent-connections` aliases Integrations, and `runtimes` and `harness` open Agents
+scrolled to its Runtimes section.
 
 `Usage` appears directly above Billing, including for Free accounts. In
 production, the `enable-ai-usage-billing` PostHog flag controls activation. While
@@ -584,10 +585,9 @@ the empty state, and the setup rows use the same raised composer surface as core
 integrations, with glass in dark mode and soft shadows in light mode.
 Two thin, stacked setup rows appear at the top. “Use Macro in your favorite AI
 harness with the official Macro MCP” opens connection setup; “Stream sessions
-from your local AI harness to Macro” opens Runtimes within Integrations to connect
-a local machine. Its Back button returns to Integrations; opening Runtimes from
-Agents keeps the return to Agents. The local-harness setup row follows the
-Runtimes availability gate and is hidden when that tab is unavailable.
+from your local AI harness to Macro” opens Settings → Agents at its Runtimes
+section to connect a local machine. The local-harness setup row follows the
+Agents availability gate and is hidden when Agents is unavailable.
 Email, GitHub, and Granola cards appear next under Core Integrations;
 they use two columns and share a height on wide screens, stacking on narrow screens. A small gear on the Email card opens Email settings;
 Calendar settings remain available from the settings sidebar.
@@ -646,7 +646,7 @@ have the owner use Reconnect under Custom MCP; there is no `Connect` chip for
 custom servers. Agents configured with a fixed app selection do not receive the
 owner's custom servers.
 An agent reply's `Connect <app>` chip still starts that app's connection flow.
-Cursor stays in Agents → Runtimes with its API key and default model controls; it is not
+Cursor is a built-in agent on Settings → Agents, where **Add** / **Manage** hold its API key and default model; it is not
 featured or offered in the Connections catalog. Personal Gmail and GitHub account
 links appear above the installed tools and app catalog on Settings → Integrations. The native-only integrations section remains
 available when `pipedream-mcp` is disabled.
@@ -693,7 +693,7 @@ and `Chat agent` (the agent replies in the thread, like `@macro`). It is the
 agent's own setting and always saved: a new form starts from the selected runtime
 - Macro's in-memory runtime as chat, every other runtime as coding - and picking a
 different runtime resets it to that default, but only the saved choice counts.
-The model list is loaded live and independently for Macro Agent, connected Cursor, and every
+The model list is loaded live and independently for Macro Agent and every
 registered macrod harness. The selected harness stays selected when the list refreshes.
 A paired macrod connects on startup, so models can load before any agents are bound.
 A harness can show `Loading models…`, an unsupported message, or
@@ -704,12 +704,12 @@ New macrod sessions use the agent's saved model before sending the first prompt.
 Changing that default applies to new sessions; existing sessions keep their selected model.
 If the runtime rejects the saved model, the prompt fails instead of using a different model.
 
-The `Runtimes` section shows built-in Macro, Cursor, and Codex configuration, followed by paired macrod runtimes. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in runtimes: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents and names the one it will use (Claude Code first, then Codex, OpenCode, OpenClaw, Hermes); `Options` changes the agent, workspace folder, and Full access. `Set up <agent>` then walks a three-step checklist — Find an agent, Connect this computer (start, install the connector, link to the account; the pairing is approved automatically, no code is typed), Create your agent (a private `@<agent>` coding agent bound to this runtime) — and ends on `@<agent> is ready` with `Start a session`, which opens the Agents composer in Auto with that agent as the usual coding agent. A failed step shows its error and `Try again`, which resumes at the failed step. A desktop app that was never set up also shows a one-time “Run agents on this computer” prompt whose `Set up` runs the same flow in a dialog; closing the prompt sticks. A running runtime with no agent bound to it offers `Create agent`. The app then keeps the daemon up: it restarts after any unexpected exit (with backoff) and on every launch until the user presses `Stop`, and any re-pairing is approved from wherever the user is in the app, not only on this card. While running the card shows the bound agent and workspace with a `Stop` action; a stopped runtime offers `Start`. The web app never shows this card. The “Bring your own agent” card sits above the Agents / Runtimes navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New runtime` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission consent, then Approve and Done. Back/Cancel returns to the runtime list. Destructive removal still requires confirmation. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported.
-Connection chips in agent replies open this page, including before any account is connected. Cursor's default-model picker uses
+The `Runtimes` section closes the Agents page. It shows built-in Macro and Codex configuration, followed by paired macrod runtimes; Cursor is not a runtime but a row in the agent list. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in runtimes: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents and names the one it will use (Claude Code first, then Codex, OpenCode, OpenClaw, Hermes); `Options` changes the agent, workspace folder, and Full access. `Set up <agent>` then walks a three-step checklist — Find an agent, Connect this computer (start, install the connector, link to the account; the pairing is approved automatically, no code is typed), Create your agent (a private `@<agent>` coding agent bound to this runtime) — and ends on `@<agent> is ready` with `Start a session`, which opens the Agents composer in Auto with that agent as the usual coding agent. A failed step shows its error and `Try again`, which resumes at the failed step. A desktop app that was never set up also shows a one-time “Run agents on this computer” prompt whose `Set up` runs the same flow in a dialog; closing the prompt sticks. A running runtime with no agent bound to it offers `Create agent`. The app then keeps the daemon up: it restarts after any unexpected exit (with backoff) and on every launch until the user presses `Stop`, and any re-pairing is approved from wherever the user is in the app, not only on this card. While running the card shows the bound agent and workspace with a `Stop` action; a stopped runtime offers `Start`. The web app never shows this card. The section's `New runtime` action opens the full-page pairing flow: enter the code, look up the request, review the machine, name, sharing and permission consent, then Approve and Done. Back/Cancel returns to the Agents page scrolled to Runtimes. Destructive removal still requires confirmation. `/settings/runtimes` opens Agents scrolled to this section; `/settings/harness?pair=…` links open the pairing flow with the code filled in.
+Connection chips in agent replies open this page, including before any account is connected: Cursor's chip lands on the agent list, other harnesses on Runtimes. Cursor's default-model picker uses
 the same live model discovery and retains its existing save action.
 
 The Codex row uses the OpenAI logo and the same icon, button, and status styling
-as Cursor. Under **Codex**, choose **Connect with ChatGPT**, copy the displayed device code,
+as the other runtimes. Under **Codex**, choose **Connect with ChatGPT**, copy the displayed device code,
 and use **Continue to ChatGPT** to finish sign-in in the provider tab. The Macro
 page displays pending, expired, failed, and retryable error states; **Cancel
 sign-in** cancels the attempt. After connecting, choose a **Cloud environment**

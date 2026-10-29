@@ -61,7 +61,7 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
     props.groups
       .flatMap((group) => group.items)
       .find((item) => item.tab === navigationPage())?.label ??
-    (props.page === 'Harness' ? t('settingsNav.tabRuntimes') : undefined) ??
+    (props.page === 'Harness' ? t('settingsNav.tabAgents') : undefined) ??
     props.page ??
     t('settingsNav.settings');
 

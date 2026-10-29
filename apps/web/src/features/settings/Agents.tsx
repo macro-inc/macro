@@ -3,6 +3,11 @@ import type { AgentKind } from '@app/features/agents-view/core/agent-kind';
 import { AGENTS_TOUR } from '@app/features/agents-view/tour';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import { toast } from '@core/component/Toast/Toast';
+import {
+  CURSOR_BOT_HANDLE,
+  CURSOR_BOT_ID,
+  CURSOR_BOT_NAME,
+} from '@core/constant/cursorAgent';
 import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { MACRO_NEW_BOT_ID } from '@core/constant/macroNew';
@@ -37,18 +42,19 @@ import {
   createMemo,
   createSignal,
   For,
+  type JSX,
   on,
   Show,
 } from 'solid-js';
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
 import { canDeleteBot, canManageAgent } from '../channel/Bots/botPermissions';
+import { AgentRuntimes } from './AgentRuntimes';
 import { AgentEditorPage } from './agent-editor-page';
 import {
   agentSettingsRequest,
   consumeAgentSettingsRequest,
 } from './agentSettingsState';
 import { AgentAvatar } from './components/agent-avatar';
-import { AgentSetupStrips } from './components/agent-setup-strips';
 import { CodingPreferencesSetting } from './components/coding-preferences-setting';
 import {
   type AgentSummary,
@@ -58,6 +64,18 @@ import {
 import { SettingsCard, SettingsPage, SettingsSurface } from './primitives';
 
 type ChannelOption = ReturnType<typeof botAssignableChannelOptions>[number];
+
+/** The first-party Cursor agent, mentioned as @Cursor once it is added. */
+const CURSOR_AGENT: AgentSummary = {
+  id: CURSOR_BOT_ID,
+  name: CURSOR_BOT_NAME,
+  tag: CURSOR_BOT_HANDLE,
+  instructions: '',
+  whereItRuns: 'Cursor Cloud',
+  defaultModel: '',
+  channelSummary: 'All channels',
+  share: 'Team',
+};
 
 const MACRO_AGENT: AgentSummary = {
   id: MACRO_AGENT_BOT_ID,
@@ -74,14 +92,29 @@ const MACRO_AGENT: AgentSummary = {
 export function Agents(props: {
   createKind?: AgentKind;
   onCloseCreate?: () => void;
+  /** Adds Cursor, or manages it once it is connected. */
   onCursor: () => void;
-  onSetUpRuntime: () => void;
-  onManageRuntimes: () => void;
+  onNewRuntime: () => void;
+  /** Scrolls the Runtimes section into view, then reports it did. */
+  focusRuntimes?: boolean;
+  onRuntimesFocused?: () => void;
 }) {
   const agentDm = ENABLE_AGENT_DMS ? useOpenAgentDm() : undefined;
   const messageAgent = (id: string) =>
     agentDm?.open(id === MACRO_AGENT_BOT_ID ? MACRO_NEW_BOT_ID : id);
   const agentList = tourTarget(AGENTS_TOUR.agentList);
+  let runtimes: HTMLDivElement | undefined;
+  // Runtimes links and finished pairings land on the Runtimes section.
+  createEffect(
+    on(
+      () => props.focusRuntimes,
+      (focus) => {
+        if (!focus || !runtimes) return;
+        runtimes.scrollIntoView({ block: 'start' });
+        props.onRuntimesFocused?.();
+      }
+    )
+  );
   const [creating, setCreating] = createSignal(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const creatingFromLink = () => searchParams.createAgent === 'true';
@@ -168,10 +201,9 @@ export function Agents(props: {
         summarizeAgent(agent, connectedHarnesses(), channelOptions())
       )
   );
-  const teamAgents = createMemo(() => [
-    MACRO_AGENT,
-    ...agents().filter((agent) => agent.share === 'Team'),
-  ]);
+  const teamAgents = createMemo(() =>
+    agents().filter((agent) => agent.share === 'Team')
+  );
   const privateAgents = createMemo(() =>
     agents().filter((agent) => agent.share === 'Private')
   );
@@ -253,11 +285,6 @@ export function Agents(props: {
           title="Agents"
           description="Custom assistants with their own name, instructions, model, and place to run."
         >
-          <AgentSetupStrips
-            onCursor={props.onCursor}
-            onSetUpRuntime={props.onSetUpRuntime}
-            onManageRuntimes={props.onManageRuntimes}
-          />
           <section ref={agentList} aria-label="Your agents">
             <SettingsSurface class="flex flex-col gap-2 p-5 touch:p-4">
               <div class="flex flex-wrap items-start justify-between gap-3">
@@ -277,6 +304,57 @@ export function Agents(props: {
                 </Button>
               </div>
               <SettingsCard>
+                <AgentRow
+                  agent={MACRO_AGENT}
+                  onMessage={
+                    agentDm
+                      ? () =>
+                          fireAndForget(
+                            messageAgent(MACRO_AGENT.id),
+                            'agent-settings'
+                          )
+                      : undefined
+                  }
+                  messagePending={agentDm?.pending()}
+                />
+                <AgentRow
+                  agent={CURSOR_AGENT}
+                  badge={false}
+                  subtitle={
+                    cursorConnected()
+                      ? 'Cursor Cloud agents on your Cursor plan · All channels'
+                      : 'Hands coding work to a Cursor Cloud agent. Add your Cursor API key to mention it.'
+                  }
+                  actions={
+                    <Show when={cursorStatus.isSuccess}>
+                      <Show
+                        when={cursorConnected()}
+                        fallback={
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            aria-label="Add Cursor"
+                            onClick={props.onCursor}
+                          >
+                            <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
+                            Add
+                          </Button>
+                        }
+                      >
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          aria-label="Manage Cursor"
+                          onClick={props.onCursor}
+                        >
+                          Manage
+                        </Button>
+                      </Show>
+                    </Show>
+                  }
+                />
                 <For each={[...teamAgents(), ...privateAgents()]}>
                   {(agent) => (
                     <AgentRow
@@ -320,6 +398,9 @@ export function Agents(props: {
           </section>
 
           <CodingPreferencesSetting />
+          <div ref={runtimes}>
+            <AgentRuntimes onNewRuntime={props.onNewRuntime} />
+          </div>
         </SettingsPage>
       </Show>
 
@@ -417,6 +498,12 @@ function whereItRunsLabel(id: string, harness?: ConnectedHarness): string {
 
 function AgentRow(props: {
   agent: AgentSummary;
+  /** Replaces the Team/Private pill; `false` shows none. */
+  badge?: string | false;
+  /** Replaces the where-it-runs, model, and channels line. */
+  subtitle?: string;
+  /** Replaces Message, Edit, and Delete. */
+  actions?: JSX.Element;
   onEdit?: () => void;
   onDelete?: () => void;
   onMessage?: () => void;
@@ -438,16 +525,19 @@ function AgentRow(props: {
           <span class="truncate text-xs text-ink-extra-muted">
             @{props.agent.tag}
           </span>
-          <span class="shrink-0 rounded-full border border-edge-muted px-2 py-0.5 text-xxs font-medium uppercase text-ink-extra-muted">
-            {props.agent.share}
-          </span>
+          <Show when={props.badge !== false}>
+            <span class="shrink-0 rounded-full border border-edge-muted px-2 py-0.5 text-xxs font-medium uppercase text-ink-extra-muted">
+              {props.badge || props.agent.share}
+            </span>
+          </Show>
         </div>
         <p class="mt-0.5 text-xs text-ink-extra-muted">
-          {props.agent.whereItRuns} · {props.agent.defaultModel} ·{' '}
-          {props.agent.channelSummary}
+          {props.subtitle ??
+            `${props.agent.whereItRuns} · ${props.agent.defaultModel} · ${props.agent.channelSummary}`}
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-1">
+        {props.actions}
         <Show when={props.onMessage}>
           {(onMessage) => (
             <Button

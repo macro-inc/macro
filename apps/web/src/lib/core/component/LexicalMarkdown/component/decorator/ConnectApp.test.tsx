@@ -126,7 +126,7 @@ describe('connect-app chip', () => {
     expect(mocks.openSettings).not.toHaveBeenCalled();
   });
 
-  it('sends a harness chip to the Harness page without touching Pipedream', () => {
+  it('sends the Cursor chip to Agents settings without touching Pipedream', () => {
     render(() => (
       <ConnectApp
         appSlug="cursor"
@@ -137,7 +137,7 @@ describe('connect-app chip', () => {
       />
     ));
     fireEvent.click(screen.getByRole('button', { name: 'Connect Cursor' }));
-    expect(mocks.openSettings).toHaveBeenCalledWith('Harness');
+    expect(mocks.openSettings).toHaveBeenCalledWith('Agents');
     expect(mocks.requestConnectApp).not.toHaveBeenCalled();
   });
 

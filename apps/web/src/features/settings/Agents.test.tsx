@@ -25,7 +25,6 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agents } from './Agents';
 import { agentSettingsRequest, requestAgentDetail } from './agentSettingsState';
 import {
-  chooseModelOption,
   chooseSelectOption,
   modelOptions,
   selectOptions,
@@ -33,9 +32,19 @@ import {
 
 const agentsPageProps = {
   onCursor: vi.fn(),
-  onSetUpRuntime: vi.fn(),
-  onManageRuntimes: vi.fn(),
+  onNewRuntime: vi.fn(),
 };
+
+// Covered by its own suite; it owns live harness and device queries.
+vi.mock('./AgentRuntimes', () => ({
+  AgentRuntimes: (props: { onNewRuntime: () => void }) => (
+    <section aria-label="Runtimes">
+      <button type="button" onClick={props.onNewRuntime}>
+        New runtime
+      </button>
+    </section>
+  ),
+}));
 
 // The real Lexical surface has its own Markdown round-trip suite.
 vi.mock('./components/instructions-editor', () => ({
@@ -426,9 +435,9 @@ describe('Agents', () => {
   });
 
   it.each(['success', 'error'] as const)(
-    'keeps settings visible while Cursor models load and after %s',
+    'keeps settings visible while runtime models load and after %s',
     async (outcome) => {
-      cursorMocks.status.data.registered = true;
+      harnessMocks.query.data = [MACROD_HARNESS];
       let resolveModels!: (models: LoadAgentModelsResponse) => void;
       let rejectModels!: (error: Error) => void;
       const response = new Promise<LoadAgentModelsResponse>(
@@ -445,7 +454,7 @@ describe('Agents', () => {
           useQuery(() => ({
             queryKey: ['pending-models', target.harness],
             queryFn: () =>
-              target.harness === 'cursor'
+              target.harness === 'macrod'
                 ? response
                 : Promise.resolve(successfulModels([]).data),
           }))
@@ -460,7 +469,7 @@ describe('Agents', () => {
       ));
       fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
       continueWizardTo(WHERE);
-      fireEvent.click(screen.getByRole('radio', { name: 'In Cursor' }));
+      fireEvent.click(screen.getByRole('radio', { name: 'In your harness' }));
       expect(screen.queryByText('Settings suspended')).toBeNull();
       expect(screen.getByText('Loading models…')).toBeTruthy();
       expect(
@@ -468,15 +477,15 @@ describe('Agents', () => {
       ).toBe(true);
 
       if (outcome === 'error') {
-        rejectModels(new Error('Cursor is unavailable'));
+        rejectModels(new Error('Runtime is unavailable'));
         await waitFor(() =>
           expect(
-            screen.getByText(/Could not load models for Cursor/)
+            screen.getByText(/Could not load models for Dev box/)
           ).toBeTruthy()
         );
         expect(screen.queryByText('Settings suspended')).toBeNull();
         expect(
-          screen.getByRole('button', { name: 'Retry models for Cursor' })
+          screen.getByRole('button', { name: 'Retry models for Dev box' })
         ).toBeTruthy();
       } else {
         resolveModels({
@@ -486,7 +495,6 @@ describe('Agents', () => {
             {
               id: 'loaded-model',
               name: 'Loaded Model',
-              group: 'Cursor',
             },
           ],
         });
@@ -513,7 +521,7 @@ describe('Agents', () => {
       within(list)
         .getAllByText(/^@/)
         .map((tag) => tag.textContent)
-    ).toEqual(['@macro']);
+    ).toEqual(['@macro', '@cursor']);
     expect(within(list).getByText('Team')).toBeTruthy();
     expect(
       within(list).getByText('In Macro · Sonnet 5.5 · All channels')
@@ -552,40 +560,47 @@ describe('Agents', () => {
     }
   });
 
-  it('offers Cursor and own-agent setup above the list', () => {
+  it('lists Cursor as an agent to add, then to manage once connected', () => {
     const onCursor = vi.fn();
-    const onSetUpRuntime = vi.fn();
-    const onManageRuntimes = vi.fn();
     const view = render(() => (
-      <Agents
-        onCursor={onCursor}
-        onSetUpRuntime={onSetUpRuntime}
-        onManageRuntimes={onManageRuntimes}
-      />
+      <Agents {...agentsPageProps} onCursor={onCursor} />
     ));
-    fireEvent.click(screen.getByRole('button', { name: 'Connect Cursor' }));
+    let list = screen.getByRole('region', { name: 'Your agents' });
+    expect(within(list).getByText('Cursor')).toBeTruthy();
+    expect(within(list).getByText('@cursor')).toBeTruthy();
+    expect(
+      within(list).getByText(/Add your Cursor API key to mention it/)
+    ).toBeTruthy();
+    fireEvent.click(within(list).getByRole('button', { name: 'Add Cursor' }));
     expect(onCursor).toHaveBeenCalledOnce();
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Set up your own agent' })
-    );
-    expect(onSetUpRuntime).toHaveBeenCalledOnce();
     view.unmount();
 
     cursorMocks.status.data.registered = true;
-    harnessMocks.query.data = [MACROD_HARNESS];
-    render(() => (
-      <Agents
-        onCursor={onCursor}
-        onSetUpRuntime={onSetUpRuntime}
-        onManageRuntimes={onManageRuntimes}
-      />
-    ));
-    fireEvent.click(screen.getByRole('button', { name: 'Manage Cursor' }));
-    expect(onCursor).toHaveBeenCalledTimes(2);
+    render(() => <Agents {...agentsPageProps} onCursor={onCursor} />);
+    list = screen.getByRole('region', { name: 'Your agents' });
+    expect(
+      within(list).getByText(
+        'Cursor Cloud agents on your Cursor plan · All channels'
+      )
+    ).toBeTruthy();
     fireEvent.click(
-      screen.getByRole('button', { name: 'Manage paired runtimes' })
+      within(list).getByRole('button', { name: 'Manage Cursor' })
     );
-    expect(onManageRuntimes).toHaveBeenCalledOnce();
+    expect(onCursor).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps runtimes at the foot of the agents page', () => {
+    const onNewRuntime = vi.fn();
+    render(() => <Agents {...agentsPageProps} onNewRuntime={onNewRuntime} />);
+    const list = screen.getByRole('region', { name: 'Your agents' });
+    const runtimes = screen.getByRole('region', { name: 'Runtimes' });
+    expect(
+      list.compareDocumentPosition(runtimes) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    fireEvent.click(
+      within(runtimes).getByRole('button', { name: 'New runtime' })
+    );
+    expect(onNewRuntime).toHaveBeenCalledOnce();
   });
 
   it('groups server agents into team and private sections', () => {
@@ -637,7 +652,7 @@ describe('Agents', () => {
       within(list)
         .getAllByText(/^@/)
         .map((tag) => tag.textContent)
-    ).toEqual(['@macro', '@release-helper', '@bug-fixer']);
+    ).toEqual(['@macro', '@cursor', '@release-helper', '@bug-fixer']);
     expect(within(list).queryByText('Coordinates releases.')).toBeNull();
     expect(within(list).queryByText('Finds and fixes bugs.')).toBeNull();
 
@@ -752,7 +767,7 @@ describe('Agents', () => {
       within(screen.getByRole('region', { name: 'Your agents' }))
         .getAllByText(/^@/)
         .map((tag) => tag.textContent)
-    ).toEqual(['@macro']);
+    ).toEqual(['@macro', '@cursor']);
   });
 
   it("does not list another team's mentionable agent in Settings", () => {
@@ -1258,8 +1273,8 @@ describe('Agents', () => {
       within(dialog).getByRole('radio', { name: 'In Macro' })
     ).toHaveProperty('checked', true);
     expect(
-      within(dialog).getByRole('radio', { name: 'In Cursor' })
-    ).toHaveProperty('disabled', true);
+      within(dialog).queryByRole('radio', { name: 'In Cursor' })
+    ).toBeNull();
     expect(
       within(dialog).getByRole('radio', { name: 'In your harness' })
     ).toHaveProperty('disabled', true);
@@ -1309,17 +1324,22 @@ describe('Agents', () => {
     expect(avatarMocks.upload).toHaveBeenCalledWith(faceFile);
   });
 
-  it('offers Connect Cursor instead of an unconnected Cursor option', () => {
+  it('does not offer Cursor as a place to run a new agent', () => {
+    cursorMocks.status.data.registered = true;
+    modelMocks.queries['cursor:'] = successfulModels([
+      { id: 'cursor-small', name: 'Cursor Small' },
+    ]);
     render(() => <Agents {...agentsPageProps} />);
     fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
-    continueWizardTo(WHERE);
+    continueWizardTo(WHERE, 'Coding agent');
 
     const dialog = screen.getByRole('region', { name: 'New agent' });
-    const cursor = within(dialog).getByRole('radio', { name: 'In Cursor' });
-    expect(cursor).toHaveProperty('disabled', true);
     expect(
-      within(dialog).getByRole('button', { name: 'Connect Cursor' })
-    ).toBeTruthy();
+      within(dialog).queryByRole('radio', { name: 'In Cursor' })
+    ).toBeNull();
+    expect(
+      within(dialog).queryByRole('button', { name: 'Connect Cursor' })
+    ).toBeNull();
     expect(
       within(dialog).getByRole('radio', { name: 'In Macro' })
     ).toHaveProperty('checked', true);
@@ -1546,53 +1566,6 @@ describe('Agents', () => {
     ).toBeTruthy();
   });
 
-  it('offers Cursor and saves the model chosen from its dropdown', async () => {
-    cursorMocks.status.data = {
-      registered: true,
-      updatedAt: '2026-08-27T12:00:00Z',
-    };
-    modelMocks.queries['cursor:'] = successfulModels([
-      { id: 'cursor-small', name: 'Cursor Small' },
-      { id: 'cursor-large', name: 'Cursor Large' },
-    ]);
-
-    render(() => <Agents {...agentsPageProps} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
-    continueWizardTo(WHERE, 'Coding agent');
-
-    const dialog = screen.getByRole('region', { name: 'New agent' });
-    const cursor = within(dialog).getByRole('radio', { name: 'In Cursor' });
-    expect(cursor).toHaveProperty('disabled', false);
-    expect(
-      within(dialog).queryByRole('button', { name: 'Connect Cursor' })
-    ).toBeNull();
-    expect(
-      within(dialog).getByRole('radio', { name: 'In your harness' })
-    ).toHaveProperty('disabled', true);
-
-    fireEvent.click(cursor);
-    expect(cursor).toHaveProperty('checked', true);
-
-    const defaultModel = within(dialog).getByLabelText('Default model');
-    expect(modelOptions(defaultModel).getAllByRole('menuitem')).toHaveLength(2);
-    expect(defaultModel.textContent).toBe('Cursor Small');
-    chooseModelOption(defaultModel, 'Cursor Large');
-    expect(defaultModel.textContent).toBe('Cursor Large');
-    continueWizardTo(SHARE);
-    continueWizardTo(CHANNELS);
-    fireEvent.click(
-      within(dialog).getByRole('button', { name: 'Create agent' })
-    );
-    await waitFor(() =>
-      expect(agentMocks.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          harness: 'cursor',
-          defaultModel: 'cursor-large',
-        })
-      )
-    );
-  });
-
   it('offers registered macrod harnesses in the harness picker', () => {
     harnessMocks.query.data = [MACROD_HARNESS];
 
@@ -1604,9 +1577,6 @@ describe('Agents', () => {
     expect(
       within(dialog).getByRole('radio', { name: 'In Macro' })
     ).toHaveProperty('checked', true);
-    expect(
-      within(dialog).getByRole('radio', { name: 'In Cursor' })
-    ).toHaveProperty('disabled', true);
     const ownHarness = within(dialog).getByRole('radio', {
       name: 'In your harness',
     });
@@ -1690,18 +1660,19 @@ describe('Agents', () => {
   });
 
   it('keeps loading, error, and unsupported states independent per harness', () => {
-    cursorMocks.status.data = {
-      registered: true,
-      updatedAt: '2026-08-27T12:00:00Z',
-    };
     const loadingHarness = {
       ...MACROD_HARNESS,
       id: '4f1c9d2e-8a4b-4c5d-9e6f-1a2b3c4d5e70',
       name: 'Loading box',
     };
-    harnessMocks.query.data = [MACROD_HARNESS, loadingHarness];
+    const brokenHarness = {
+      ...MACROD_HARNESS,
+      id: '5f1c9d2e-8a4b-4c5d-9e6f-1a2b3c4d5e71',
+      name: 'Broken box',
+    };
+    harnessMocks.query.data = [MACROD_HARNESS, loadingHarness, brokenHarness];
     const retry = vi.fn();
-    modelMocks.queries['cursor:'] = {
+    modelMocks.queries[`macrod:${brokenHarness.id}`] = {
       isPending: false,
       isError: true,
       isSuccess: false,
@@ -1727,15 +1698,6 @@ describe('Agents', () => {
     const dialog = screen.getByRole('region', { name: 'New agent' });
     expect(within(dialog).getByText('Sonnet 5.5')).toBeTruthy();
 
-    fireEvent.click(within(dialog).getByRole('radio', { name: 'In Cursor' }));
-    expect(
-      within(dialog).getByText(/Could not load models for Cursor/)
-    ).toBeTruthy();
-    fireEvent.click(
-      within(dialog).getByRole('button', { name: 'Retry models for Cursor' })
-    );
-    expect(retry).toHaveBeenCalledOnce();
-
     // The first paired harness is picked when the option is chosen.
     fireEvent.click(
       within(dialog).getByRole('radio', { name: 'In your harness' })
@@ -1750,6 +1712,17 @@ describe('Agents', () => {
 
     chooseSelectOption(harness, 'Loading box');
     expect(within(dialog).getByText('Loading models…')).toBeTruthy();
+
+    chooseSelectOption(harness, 'Broken box');
+    expect(
+      within(dialog).getByText(/Could not load models for Broken box/)
+    ).toBeTruthy();
+    fireEvent.click(
+      within(dialog).getByRole('button', {
+        name: 'Retry models for Broken box',
+      })
+    );
+    expect(retry).toHaveBeenCalledOnce();
   });
 
   it('uses the discovered model selector for macrod harnesses', () => {
@@ -2252,10 +2225,9 @@ it('offers bypass only after harness consent and resets the choice on harness ch
   expect(within(dialog).queryByLabelText('Always bypass')).toBeNull();
 });
 
-it.each(['in-memory', 'cursor'])(
+it.each(['in-memory'])(
   'hides permission choices and saves bypass for built-in %s',
   async (harness) => {
-    cursorMocks.status.data.registered = true;
     modelMocks.queries[`${harness}:`] = successfulModels([
       { id: 'provider-default', name: 'Provider default' },
     ]);
@@ -2268,14 +2240,7 @@ it.each(['in-memory', 'cursor'])(
       target: { value: 'Built-in agent' },
     });
     continueWizardTo(WHERE);
-    fireEvent.click(
-      within(dialog).getByRole('radio', {
-        name: {
-          'in-memory': 'In Macro',
-          cursor: 'In Cursor',
-        }[harness]!,
-      })
-    );
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'In Macro' }));
     continueWizardTo(SHARE);
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'More options' })
