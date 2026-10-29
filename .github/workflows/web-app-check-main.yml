@@ -412,6 +412,9 @@ jobs:
     - name: Sign-up Browser Tests
       run: just test-signup-browser
       working-directory: apps/web
+    - name: Email Thread Browser Tests
+      run: just test-email-thread-browser
+      working-directory: apps/web
     - name: Interface Language Browser Tests
       if: needs.path-check.outputs.i18n_changed == 'true'
       run: |-

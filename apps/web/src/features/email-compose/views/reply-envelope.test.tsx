@@ -80,6 +80,7 @@ function renderEnvelope(inboxId: 'gmail' | 'outlook', mobile: boolean) {
       portalScope={() => undefined}
       replyType={() => 'forward'}
       disabled={() => false}
+      onEscape={() => {}}
     />
   ));
   const input = screen.getByPlaceholderText(

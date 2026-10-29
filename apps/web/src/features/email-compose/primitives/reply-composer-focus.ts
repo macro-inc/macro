@@ -34,10 +34,13 @@ export function createReplyComposerFocus(options: {
   let bounceEditorFocusGrabs = false;
   const timers = new Set<ReturnType<typeof setTimeout>>();
   const frames = new Set<number>();
-  onCleanup(() => {
+  const cancelPendingFocus = () => {
     for (const timer of timers) clearTimeout(timer);
     for (const frame of frames) cancelAnimationFrame(frame);
-  });
+    timers.clear();
+    frames.clear();
+  };
+  onCleanup(cancelPendingFocus);
 
   function afterQuoteLayout(callback: () => void) {
     const timer = setTimeout(() => {
@@ -57,6 +60,9 @@ export function createReplyComposerFocus(options: {
       'keydown',
       (event) => {
         if (event.key === 'Tab' || event.key === 'Escape') disarm();
+        // Escape right after a reply key leaves the reply; a focus still
+        // waiting on the quote layout must not pull the keyboard back.
+        if (event.key === 'Escape') cancelPendingFocus();
       },
       true
     );

@@ -18,7 +18,7 @@ import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
 import { isIOS } from '@solid-primitives/platform';
 import { Button, cn, SendButton, Surface, Tooltip } from '@ui';
 import type { LexicalEditor } from 'lexical';
-import { $getRoot } from 'lexical';
+import { $getRoot, COMMAND_PRIORITY_LOW, KEY_ESCAPE_COMMAND } from 'lexical';
 import {
   type Accessor,
   createResource,
@@ -244,6 +244,10 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
     isMobileCompose() ? signatureHtml() : undefined;
   const footerSignatureHtml = () =>
     isMobileCompose() ? undefined : signatureHtml();
+  // Escape in a field leaves the reply, not the thread: focus moves to the
+  // message it answers and the reply stays open with its draft.
+  const leaveReply = () =>
+    ctx.exitToThread('reply') || ctx.exitToThread('last');
   // File sharing and editor plugin wiring belong to this view. The controller only
   // needs to know when editor content has changed and requires another save.
   const editorConfig = buildConfig('markdown')
@@ -267,6 +271,15 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
     .withFloatingFormatMenu()
     .use(keyboardShortcutsPlugin({ shortcuts: EMAIL_FORMAT_SHORTCUTS }))
     .use(registerToggleAppendedThread)
+    // Below the editor's menus, above rich text's default blur, which would
+    // leave focus on <body> with nothing to receive the next Escape.
+    .use((lexical) =>
+      lexical.registerCommand(
+        KEY_ESCAPE_COMMAND,
+        () => !composeContext.presentation.isTouch() && leaveReply(),
+        COMMAND_PRIORITY_LOW
+      )
+    )
     .onChange(state.onContentChange)
     .withFilePaste({
       onPasteFilesAndDirs: (files, directories) => {
@@ -374,25 +387,15 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
         hotkeyToken: TOKENS.email.previousMessage,
       });
 
+      // On desktop, Escape outside the reply's fields leaves the thread. The
+      // full-screen mobile composer closes instead.
       registerHotkey({
         hotkey: 'escape',
         scopeId: composeHotkeyScope,
         description: 'Close reply',
+        condition: isMobileCompose,
         keyDownHandler: () => {
-          if (isMobileCompose()) {
-            requestClose();
-            return true;
-          }
-          const draft = collectDraft();
-          const isEmpty = draft === null;
-
-          if (isEmpty) {
-            // Delete draft and close reply
-            deleteDraftAndReset().catch(() => {});
-          } else {
-            // Move focus back to the message
-            ctx.exitToThread('selected');
-          }
+          requestClose();
           return true;
         },
         // Let editable fields handle Escape before closing the reply.
@@ -591,6 +594,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           portalScope={composePortalScope}
           replyType={state.replyType}
           disabled={editingDisabled}
+          onEscape={leaveReply}
         />
         <div
           class={cn(

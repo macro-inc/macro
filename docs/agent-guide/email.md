@@ -479,11 +479,14 @@ In the new Email view, ordinary row activation opens the thread inside
 `/app/component/mail`. On desktop the thread's header has a Back arrow instead
 of breadcrumbs; it returns to the filtered list (hidden in the reading pane,
 where the list is already beside the thread). The subject, tags and
-participants stay put while only the messages scroll. Pressing `Escape` in the open thread
-with focus outside any input does the same once there is nothing left to unwind
-(an open reply, an expanded body, or a focused message each take one `Escape`
-first); the list keeps the row you came from focused and comes back at the same
-scroll position, scrolling only if j/k in the thread moved focus off screen. If
+participants stay put while only the messages scroll. One `Escape` in the open
+thread does the same, whatever is selected or expanded and wherever focus is in
+the message bodies (in the reading pane it hands the keyboard back to the list);
+the list keeps the row you came from focused and comes back at the same
+scroll position, scrolling only if j/k in the thread moved focus off screen. An
+open menu, popover, or picker (including the send-time picker) takes the first
+`Escape` and returns focus to its trigger; so does a reply you are typing in (see
+replies below). If
 the focused row leaves the list without a list `e` (a reply in Signal marks it
 done, or another device archives it), focus moves to the row that took its
 place, not the first row. The `⋯` email title menu
@@ -573,8 +576,15 @@ collapsed reply header; inside a composer they never fall through to the
 thread's Copy link. `bunx playwright test --config
 src/features/email-compose/browser-test/playwright.app.config.ts` (from
 `apps/web`) checks both shortcuts in all four composers.
-While an editable field is focused, Escape is handled by that field before the
-close-reply shortcut.
+On desktop, while you type in a reply (body, recipients, or subject), `Escape` leaves the
+reply first: focus moves to the message it answers and the reply stays open
+with its draft. The next `Escape` returns to the list. `Escape` never discards a
+reply. The editor's own menus (mentions, emoji, formatting) close first; in the
+recipient fields, suggestions close and typed text clears first. With a reply
+open but focus elsewhere in the thread, one `Escape` returns to the list. A
+standalone `/app/email/<thread-id>` split has no list: there later presses
+collapse, then unselect, the selected message.
+For keyboard regressions, run `just test-email-thread-browser` in `apps/web`.
 An edited reply remains a draft when navigating away and returning. Standalone
 compose also flushes pending edits when leaving through app navigation. Switch
 views immediately after typing, before the 500 ms autosave debounce: the old

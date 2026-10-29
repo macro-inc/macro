@@ -212,10 +212,11 @@ export function EmailDetailView(props: {
       });
       registerScopeSignalHotkey(hotkeyScope, {
         hotkey: 'escape',
-        description: 'Collapse message or back to list',
-        // Escape unwinds thread state first (reply, expanded body, focused
-        // message). Once nothing is left to unwind it goes back to the list
-        // this thread was opened from.
+        description: 'Back to list',
+        // A thread with a list to return to unwinds nothing, so Escape leaves
+        // on the first press; fields and menus handle their own Escape first.
+        // In the reading pane the keyboard goes back to the list beside the
+        // thread; otherwise to the list the thread was opened from.
         keyDownHandler: () => {
           if (handlers.cancel()) return true;
           (pane?.focusList ?? closeThread)();
