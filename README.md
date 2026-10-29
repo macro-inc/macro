@@ -90,7 +90,7 @@ Macro Chat is designed to be more focused than Slack. The first couple of replie
 We've also added ways for you to bring in conversations outside of your team into Macro.
 
 - Add people outside your team to Macro chats.
-- Connect your WhatsApp account to bring selected direct and group chats into Macro.
+- Connect your WhatsApp account to bring selected direct and group chats.
 - Read, reply to, and share your WhatsApp conversations from Macro.
 
 [Messages docs &rarr;](https://docs.macro.com/product/channels)
