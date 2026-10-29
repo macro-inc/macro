@@ -285,7 +285,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
         <div class="text-failure-ink text-center py-4 text-xs">{error()}</div>
       }
     >
-      <div class="flex flex-col gap-2 text-xs">
+      <div class="flex flex-col gap-1 text-xs">
           <Show when={isLoading()}>
             <SidePanel.Loading />
           </Show>
@@ -308,7 +308,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
           </Show>
 
           <Show when={gridProperties().length > 0}>
-            <SidePanel.Grid class="auto-rows-[minmax(1.75rem,auto)] gap-y-2">
+            <SidePanel.Grid class="auto-rows-[minmax(1.75rem,auto)] gap-y-1">
               <For each={gridProperties()}>
                 {(property) => (
                   <SidePanelPropertyRow
@@ -344,7 +344,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
           </Show>
 
           <Show when={collectionProperties().length > 0}>
-            <div class="flex flex-col gap-2">
+            <div class="flex flex-col gap-1">
               <For
                 each={collectionProperties().map(
                   (property) => property.propertyDefinitionId

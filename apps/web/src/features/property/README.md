@@ -11,7 +11,7 @@ Debug page: `/props-debug` (LOCAL_ONLY).
 
 ## Side-panel collections
 
-Property rows use an 8px vertical gap, including inline Tags and the boundary
+Property rows use a 4px vertical gap, including inline Tags and the boundary
 between regular fields and collection fields.
 
 `side-panel/properties/EntityCollectionProperty.tsx` renders non-user, multi-entity

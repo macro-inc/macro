@@ -154,7 +154,7 @@ confirmation drawers use the same action hierarchy.
 
 ## Property collections
 
-Use an 8px vertical gap between all property rows, including inline Tags and
+Use a 4px vertical gap between all property rows, including inline Tags and
 transitions between regular fields and collection fields.
 
 Multi-entity property collections show plain, full-width empty copy without a
