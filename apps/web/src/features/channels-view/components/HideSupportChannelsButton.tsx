@@ -1,6 +1,3 @@
-import { ViewSidebar } from '@app/components/view-shell';
-import EyeIcon from '@icon/system/regular/eye.svg';
-import EyeSlashIcon from '@icon/system/regular/eye-slash.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { useChannelsView } from '../channels-view-context';
@@ -19,21 +16,15 @@ export function HideSupportChannelsButton() {
 
   return (
     <Show when={canHideSupportChannels()}>
-      <ViewSidebar.Control
-        aria-label={label()}
+      <Button
+        variant="secondary"
+        size="sm"
         aria-pressed={hideSupportChannels()}
-        tooltip={label()}
-        variant="ghost"
-        size="icon-sm"
+        class="w-full"
         onClick={() => setHideSupportChannels(!hideSupportChannels())}
       >
-        <Show
-          when={hideSupportChannels()}
-          fallback={<EyeSlashIcon class="size-3.5" />}
-        >
-          <EyeIcon class="size-3.5" />
-        </Show>
-      </ViewSidebar.Control>
+        {label()}
+      </Button>
     </Show>
   );
 }

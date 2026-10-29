@@ -433,7 +433,6 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
             value={rail.tab()}
             onChange={selectTab}
           />
-          <HideSupportChannelsButton />
           <Show when={isTouchDevice()}>
             <ViewSidebar.Control
               aria-label={
@@ -451,6 +450,7 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
             </ViewSidebar.Control>
           </Show>
         </ViewSidebar.Toolbar>
+        <HideSupportChannelsButton />
       </ViewSidebar.Primary>
       <Show when={isTouchDevice() && props.search.isOpen()}>
         <div class="px-(--sidebar-content-inset) pt-(--sidebar-gutter)">
