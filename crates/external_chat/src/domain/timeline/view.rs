@@ -2,7 +2,9 @@
 //! ids become people's names, votes become tallies.
 
 use super::*;
-use crate::domain::rich::{Event, Location, PollOption, RichContent, SystemLine, web_link};
+use crate::domain::rich::{
+    Event, Location, PollOption, RichContent, SystemAction, SystemLine, created_subject, web_link,
+};
 use std::collections::HashMap;
 
 #[cfg(test)]
@@ -108,7 +110,10 @@ fn system_view(
             .iter()
             .map(|jid| people.get(jid))
             .collect(),
-        value: line.value,
+        value: match line.action {
+            SystemAction::GroupCreated => line.value.as_deref().and_then(created_subject),
+            _ => line.value,
+        },
         call: line.call,
     }
 }

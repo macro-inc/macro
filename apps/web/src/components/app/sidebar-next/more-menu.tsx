@@ -60,12 +60,11 @@ export function MoreMenu(props: MoreMenuProps) {
     <>
       <Dropdown placement="right-start" gutter={6}>
         <Dropdown.Trigger
+          aria-label={t('nav.more')}
           variant="ghost"
           size="icon-md"
           class="size-10 shrink-0 cursor-default rounded-xl"
-          label={t('nav.more')}
-          tooltip={t('nav.moreOptions')}
-          tooltipPlacement="right"
+          tooltip={{ content: t('nav.moreOptions'), placement: 'right' }}
           draggable={false}
           data-sidebar-next-item="more"
         >

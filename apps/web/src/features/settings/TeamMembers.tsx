@@ -94,6 +94,7 @@ function RoleSelect(props: {
       )}
     >
       <Select.Trigger
+        variant="ghost"
         as={Button}
         class="rounded-xs px-1 py-0.5 text-xs -ml-1 data-expanded:bg-ink/10"
         disabled={props.disabled}
@@ -382,9 +383,8 @@ export function TeamMembers(props: { team: TeamSummary }) {
             {/* Inverted (black on light, white on dark) so inviting is the
                 page's primary action. */}
             <Button
-              variant="cta"
-              glass={false}
-              class="bg-ink text-[15px] text-surface"
+              variant="neutral"
+              class="text-[15px]"
               onClick={() => setShowInviteModal(true)}
             >
               <PlusIcon class="size-4" />

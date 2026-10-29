@@ -15,3 +15,7 @@ and blocks hosted API traffic, so it needs no backend. It types a draft with a
 blank line, unmounts the composer and mounts it again over the persisted draft,
 which is the round trip through internal markdown that used to drop every blank
 line.
+
+The send regression checks desktop and phone: a pending send clears the editor,
+a rejected send restores its draft, and a rejection preserves a newer draft
+typed while delivery was pending. The fixture controls completion locally.

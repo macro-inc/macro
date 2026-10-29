@@ -22,7 +22,8 @@ export function AttachFilesAction(
     accept?: string | null;
     disabled?: boolean;
     children?: JSX.Element;
-    trigger?: (openPicker: () => void) => JSX.Element;
+    /** Custom actions share the file input; Photos narrows it to images. */
+    trigger?: (openPicker: () => void, openImages: () => void) => JSX.Element;
   } = {}
 ) {
   const commands = useInputCommands();
@@ -56,14 +57,29 @@ export function AttachFilesAction(
         data-input-attach-file-picker
       />
       {props.trigger ? (
-        props.trigger(() => fileInputRef?.click())
+        props.trigger(
+          () => {
+            if (!fileInputRef) return;
+            if (props.accept === null) fileInputRef.removeAttribute('accept');
+            else
+              fileInputRef.accept = props.accept ?? CHANNEL_FILE_PICKER_ACCEPT;
+            fileInputRef.click();
+          },
+          () => {
+            if (!fileInputRef) return;
+            fileInputRef.accept = 'image/*';
+            fileInputRef.click();
+          }
+        )
       ) : (
         <InputActionButton
           label="Attach files"
           disabled={props.disabled}
           onClick={() => fileInputRef?.click()}
         >
-          {props.children ?? <PaperclipIcon />}
+          {props.children ?? (
+            <PaperclipIcon class="size-5 touch:size-6 shrink-0 pointer-events-none" />
+          )}
         </InputActionButton>
       )}
     </>
@@ -115,7 +131,7 @@ export function AttachNativeMediaAction() {
         label="Attach photos or videos"
         onClick={() => fireAndForget(onAttachMedia(), 'channel-input')}
       >
-        <PaperclipIcon />
+        <PaperclipIcon class="size-5 touch:size-6 shrink-0 pointer-events-none" />
       </InputActionButton>
     </>
   );
@@ -131,7 +147,7 @@ export function ToggleFormatAction() {
       active={input().showFormatRibbon}
       onClick={() => commands.toggleFormatRibbon()}
     >
-      <FormatIcon />
+      <FormatIcon class="size-5 touch:size-6 shrink-0 pointer-events-none" />
     </InputActionButton>
   );
 }
@@ -141,7 +157,7 @@ export function CloseReplyAction() {
 
   return (
     <InputActionButton label="Delete reply" onClick={() => commands.close()}>
-      <TrashIcon />
+      <TrashIcon class="size-5 touch:size-6 shrink-0 pointer-events-none" />
     </InputActionButton>
   );
 }
@@ -151,7 +167,7 @@ export function DiscardDraftAction() {
 
   return (
     <InputActionButton label="Discard Edit" onClick={() => commands.close()}>
-      <TrashIcon />
+      <TrashIcon class="size-5 touch:size-6 shrink-0 pointer-events-none" />
     </InputActionButton>
   );
 }

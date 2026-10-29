@@ -40,7 +40,6 @@ export function SignatureForm(props: {
               class="shrink-0"
               variant="ghost"
               size="md"
-              depth={3}
               disabled={props.pending || props.importing}
               onClick={() => onImport()()}
             >
@@ -73,9 +72,8 @@ export function SignatureForm(props: {
         />
         <div class="flex items-center justify-end gap-2">
           <Button
-            variant="outline"
+            variant="secondary"
             size="md"
-            depth={3}
             disabled={!props.hasContent || props.pending || props.importing}
             onClick={props.onClear}
           >
@@ -83,9 +81,8 @@ export function SignatureForm(props: {
           </Button>
           <Show when={!props.mobile}>
             <Button
-              variant="cta"
+              variant="neutral"
               size="md"
-              depth={3}
               disabled={!props.dirty || props.pending || props.importing}
               onClick={props.onSave}
             >

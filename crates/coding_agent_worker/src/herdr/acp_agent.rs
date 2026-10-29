@@ -12,7 +12,8 @@
 //! - the agent's own session transcript is tailed and streamed back as
 //!   `session/update`s, and its end-of-turn record ends the turn;
 //! - a permission dialog in the TUI becomes a `session/request_permission`,
-//!   answered by pressing the matching key; `session/cancel` presses Esc.
+//!   answered by pressing the matching key (see `permission`);
+//!   `session/cancel` presses Esc.
 //!
 //! Anyone watching the herdr window can also type into the TUI directly.
 
@@ -39,6 +40,11 @@ use codex_fold::CodexLog;
 mod commands;
 mod effort;
 mod models;
+mod permission;
+
+#[cfg(test)]
+use permission::permission_title;
+use permission::{OpenTool, track_open_tool};
 
 /// The subcommand macrod's harness config names to run this adapter.
 pub(crate) const SUBCOMMAND: &str = "herdr-acp";
@@ -294,6 +300,9 @@ struct Session {
     prompt_pending: AtomicBool,
     live: tokio::sync::Mutex<Option<Live>>,
     cancel: Mutex<Option<CancellationToken>>,
+    /// Tools a user in Macro chose to always allow for this session, where
+    /// the native dialog had no "don't ask again" answer of its own.
+    always_allowed: Mutex<std::collections::HashSet<String>>,
 }
 
 struct PermissionEpoch(Arc<AtomicU64>);
@@ -481,6 +490,7 @@ impl Adapter {
             prompt_pending: AtomicBool::new(false),
             live: tokio::sync::Mutex::new(None),
             cancel: Mutex::new(None),
+            always_allowed: Mutex::new(std::collections::HashSet::new()),
         });
         self.save(&session, None)?;
         lock(&self.sessions).insert(id.clone(), session.clone());
@@ -563,6 +573,7 @@ impl Adapter {
             prompt_pending: AtomicBool::new(false),
             live: tokio::sync::Mutex::new(None),
             cancel: Mutex::new(None),
+            always_allowed: Mutex::new(std::collections::HashSet::new()),
         });
         // ACP load stages this complete history until our successful response.
         loop {
@@ -872,7 +883,7 @@ impl Adapter {
         let mut settled = 0u32;
         let mut missing = 0u32;
         let mut active = false;
-        let mut open_tool: Option<(String, String)> = None;
+        let mut open_tool: Option<OpenTool> = None;
         // Bumped whenever a dialog is asked about or goes away, so a late
         // answer from Macro never presses keys into a different dialog.
         let generation = Arc::new(AtomicU64::new(0));
@@ -977,7 +988,7 @@ impl Adapter {
         &self,
         session: &Session,
         live: &mut Live,
-        open_tool: &mut Option<(String, String)>,
+        open_tool: &mut Option<OpenTool>,
     ) -> Result<(bool, Option<&'static str>), RpcError> {
         let mut moved = false;
         let mut ended = None;
@@ -1006,94 +1017,6 @@ impl Adapter {
             }
         }
         Ok((moved, ended))
-    }
-
-    /// Ask Macro about the TUI's permission dialog, then press the key for
-    /// the answer - unless the dialog was already answered in the window.
-    fn ask_permission(
-        self: &Arc<Self>,
-        session: &Arc<Session>,
-        live: &Live,
-        tool: Option<(String, String)>,
-        generation: u64,
-        blocked: &Arc<AtomicU64>,
-    ) {
-        let Some(herdr) = self.herdr.clone() else {
-            return;
-        };
-        let adapter = self.clone();
-        let session_id = session.id.clone();
-        let name = live.name.clone();
-        let blocked = blocked.clone();
-        let kind = self.options.kind;
-        tokio::spawn(async move {
-            let Ok(before) = herdr.agent_info(&name).await else {
-                return;
-            };
-            let Ok(screen) = herdr.read_agent(&name).await else {
-                return;
-            };
-            let Some(approve_key) = super::controls::approve_key(kind, &screen) else {
-                adapter.notify_update(&session_id, json!({"sessionUpdate":"agent_message_chunk", "content":{"type":"text", "text":"The native agent needs input in Herdr."}}));
-                return;
-            };
-            if before.status != "blocked" {
-                return;
-            }
-            let (tool_id, title) = match tool {
-                Some(tool) => tool,
-                None => (
-                    format!("herdr-permission-{generation}"),
-                    permission_title(kind, &screen),
-                ),
-            };
-            let answer = adapter
-                .call(
-                    "session/request_permission",
-                    json!({
-                        "sessionId": session_id,
-                        "toolCall": {"toolCallId": tool_id, "title": title, "status": "pending"},
-                        "options": [
-                            {"optionId": "allow", "name": "Allow", "kind": "allow_once"},
-                            {"optionId": "reject", "name": "Reject", "kind": "reject_once"},
-                        ],
-                    }),
-                )
-                .await;
-            if blocked.load(Ordering::SeqCst) != generation {
-                return;
-            }
-            let Ok(after) = herdr.agent_info(&name).await else {
-                return;
-            };
-            let Ok(current_screen) = herdr.read_agent(&name).await else {
-                return;
-            };
-            if !super::controls::same_dialog(
-                &screen,
-                &current_screen,
-                before.state_change_seq,
-                after.state_change_seq,
-                &after.status,
-            ) {
-                return;
-            }
-            let key = match answer
-                .as_ref()
-                .and_then(|answer| answer.pointer("/result/outcome/optionId"))
-                .and_then(Value::as_str)
-            {
-                Some("allow") => approve_key,
-                Some("reject") => "esc",
-                _ => return,
-            };
-            if blocked.load(Ordering::SeqCst) != generation {
-                return;
-            }
-            if let Err(error) = herdr.send_keys(&name, &[key]).await {
-                tracing::warn!(error = %error, "could not answer the agent's permission dialog");
-            }
-        });
     }
 
     /// Where the agent writes the session's transcript, once it exists.
@@ -1130,56 +1053,6 @@ impl Adapter {
             .into_iter()
             .flat_map(|line| live.log.entry(&line))
             .collect())
-    }
-}
-
-/// What a permission dialog on the agent's screen is asking about.
-pub(crate) fn permission_title(kind: TuiAgent, screen: &str) -> String {
-    let lines: Vec<&str> = screen.lines().map(str::trim).collect();
-    let asked = lines
-        .iter()
-        .rposition(|line| line.starts_with("Would you like to"))
-        .map(|index| (lines[index], &lines[index + 1..]));
-    if let Some((question, rest)) = asked {
-        if let Some(command) = rest.iter().find_map(|line| line.strip_prefix("$ ")) {
-            return format!("Run {}", clip_title(command));
-        }
-        if question.contains("edit") {
-            return "Edit files".to_owned();
-        }
-        if let Some(reason) = rest.iter().find_map(|line| line.strip_prefix("Reason: ")) {
-            return clip_title(reason);
-        }
-    }
-    match kind {
-        TuiAgent::Claude => "Claude Code is asking for permission".to_owned(),
-        TuiAgent::Codex => "Codex is asking for permission".to_owned(),
-    }
-}
-
-fn clip_title(text: &str) -> String {
-    const LIMIT: usize = 80;
-    let mut clipped: String = text.chars().take(LIMIT).collect();
-    if text.chars().count() > LIMIT {
-        clipped.push('…');
-    }
-    clipped
-}
-
-fn track_open_tool(open_tool: &mut Option<(String, String)>, update: &Value) {
-    let id = update.get("toolCallId").and_then(Value::as_str);
-    match update.get("sessionUpdate").and_then(Value::as_str) {
-        Some("tool_call") => {
-            let title = update
-                .get("title")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            *open_tool = id.map(|id| (id.to_owned(), title.to_owned()));
-        }
-        Some("tool_call_update") if open_tool.as_ref().map(|(open, _)| open.as_str()) == id => {
-            *open_tool = None;
-        }
-        _ => {}
     }
 }
 

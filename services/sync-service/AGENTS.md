@@ -64,6 +64,11 @@ legacy reserved AI peer range; Canvas workers use random full-width peer IDs.
   proportional to the update; `LoroDoc::diff`, `fork`, and checkouts cost time
   that grows with document history. A backlog past `DEFAULT_TIMEOUT_MS` (4.5 s)
   makes the front worker fail connects, which clients see as close 1006.
+- Document history names each Loro peer from D1 `peer_user_map`, so every
+  path that writes operations maps the peers it writes with: WebSocket and
+  HTTP `/update` writes to their user, `/initialize` snapshots to the system
+  author (`SYSTEM_AUTHOR_ID`), and `/copy` copies the source's mappings first.
+  A new write path does the same (`tests/peer_authors.test.ts`).
 - `migration-test-hooks` is test-only fault injection — never enable it in a
   deployed worker (see the feature's doc comment in `Cargo.toml`).
 - Never run `just deploy-dev` / `just deploy-prod` without explicit approval.

@@ -13,7 +13,7 @@ import { useUserId } from '@core/context/user';
 import { Route, Router } from '@solidjs/router';
 import { macroDarkTheme } from '@theme/themes/macro-dark';
 import { macroLightTheme } from '@theme/themes/macro-light';
-import { themeCssVars } from '@theme/utils/themeColorTokens';
+import { themeCssVars } from '@theme/utils/themeCssVars';
 import { onMount, Show, Suspense } from 'solid-js';
 // The app's styles, so the page and its screenshots look like the app.
 import '../../../src/index.css';

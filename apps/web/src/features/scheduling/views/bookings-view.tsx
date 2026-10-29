@@ -48,6 +48,7 @@ export function BookingsView(props: {
   let panel: HTMLDivElement | undefined;
   const filters = () => (
     <SchedulingFilters
+      grouped
       title="Booking filters"
       activeCount={state.eventId() === 'all' ? 0 : 1}
       onClear={state.clearFilters}

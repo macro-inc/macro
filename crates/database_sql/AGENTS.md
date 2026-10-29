@@ -51,10 +51,16 @@ uses the wasm build directly).
 
 ## Gotchas
 
+- Reject more than 64 parenthesis levels before parsing SQL, and keep pushed
+  AND/OR/IN filters balanced so long statements serialize and drop safely.
+
 - Keep the crate free of native-only dependencies (no `tokio`, no `sqlx`) —
   it must compile to `wasm32`; native-only tooling goes behind the `cli` feature.
 - The grammar is the contract: a statement this crate rejects must never reach
   `databases`' ops API some other way.
+
+- Preserve `Catalog.scope` through the browser wire boundary; it gives the selected
+  database precedence for unqualified table names without hiding qualified joins.
 
 ## Related
 

@@ -211,7 +211,7 @@ export function FormRelationPicker(props: RelationPickerProps) {
                     onChange={(checked) => toggle(row.id, checked)}
                     class="flex min-h-8 gap-2.5 rounded-md px-1.5 text-sm text-ink hover:bg-hover"
                   >
-                    <Checkbox.Control class="border-ink-extra-muted" />
+                    <Checkbox.Control />
                     <Checkbox.Label class="flex min-h-8 min-w-0 flex-1 items-center">
                       <span class="truncate">{row.name || 'Untitled'}</span>
                     </Checkbox.Label>

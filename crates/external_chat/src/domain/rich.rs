@@ -239,5 +239,21 @@ pub fn web_link(value: &str) -> Option<String> {
     .then(|| value.to_owned())
 }
 
+/// The subject a group-created line names. Older phones give the subject;
+/// newer ones give the group's creation metadata as a JSON object, whose
+/// `subject` may be null. Lines stored before this was read hold the
+/// metadata itself, so the timeline reads them through this again.
+pub fn created_subject(value: &str) -> Option<String> {
+    let subject = match serde_json::from_str(value) {
+        Ok(serde_json::Value::Object(metadata)) => metadata
+            .get("subject")
+            .and_then(serde_json::Value::as_str)?
+            .to_owned(),
+        _ => value.to_owned(),
+    };
+    let subject = subject.trim();
+    (!subject.is_empty()).then(|| subject.to_owned())
+}
+
 #[cfg(test)]
 mod test;

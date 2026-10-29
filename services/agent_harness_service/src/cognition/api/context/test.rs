@@ -119,7 +119,7 @@ impl ConnectionRepo for MockConnectionRepo {
         &self,
         _entity: &EntityConnection<'_>,
         _timestamp: u64,
-    ) -> anyhow::Result<StoredConnectionEntity> {
+    ) -> anyhow::Result<Option<StoredConnectionEntity>> {
         unimplemented!()
     }
     async fn update_user_connection_last_ping(

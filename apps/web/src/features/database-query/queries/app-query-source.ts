@@ -84,11 +84,14 @@ export function createQueryCapabilities(
   return createQuestionCapabilities({
     generate: (input) => generateDatabaseQuery(input, model()),
     // A draft question may read any database the viewer can reach.
-    read: (sql) =>
+    read: (sql, context) =>
       viewerDatabases().andThen((databases) =>
-        readDatabaseSql({ schema: databaseSqlSchema(databases), sql }).map(
-          ({ catalog, outcome }) =>
-            databaseSqlAnswer(outcome, catalog, databases)
+        readDatabaseSql({
+          schema: databaseSqlSchema(databases),
+          sql,
+          scope: context?.databaseId,
+        }).map(({ catalog, outcome }) =>
+          databaseSqlAnswer(outcome, catalog, databases)
         )
       ),
     describe: (databaseId) =>

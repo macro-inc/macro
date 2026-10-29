@@ -473,8 +473,8 @@ export function CalendarEventPreviewDetails(props: {
               class="mt-1 flex flex-wrap items-center gap-1"
               onClick={(event) => event.stopPropagation()}
             >
-              <Button variant="outline" size="xs" onClick={open()}>
-                <CalendarCheckIcon />
+              <Button variant="secondary" size="xs" onClick={open()}>
+                <CalendarCheckIcon class="size-3.5" />
                 Open
               </Button>
             </div>
@@ -851,7 +851,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
           variant="ghost"
           aria-label="Reference actions"
         >
-          <DotsThree />
+          <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Dropdown.Trigger>
         <Dropdown.Content blockingBackdrop class="z-nested-action-menu">
           <Dropdown.Group>

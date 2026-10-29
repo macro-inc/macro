@@ -16,6 +16,8 @@ between the sandbox and the rest of the product.
   transport that speaks `agent_runtime_protocol`.
 - `src/outbound/containers.rs` / `managed_containers.rs`: container
   provisioning.
+- `src/outbound/cursor/manager.rs`: compose Cursor sessions, including public
+  prompt-image fetching through the `cursor_cloud_agents` image-fetcher port.
 - `src/domain/trigger_router.rs`: routes an incoming trigger to a session.
 - `src/inbound/kafka.rs`: trigger ingestion.
 - `src/domain/mode_choice.rs` + `src/inbound/mode_choice.rs`: the agent
@@ -80,7 +82,9 @@ wakes; interrupted quiet batches return to the next real prompt.
 
 ## Checks
 
-- `cargo test -p agent_harness` (`SQLX_OFFLINE` unset).
+- `cargo nextest run -p agent_harness --lib --test-threads=2` (`SQLX_OFFLINE`
+  unset). Use CI's process isolation for the full database-backed suite so each
+  test has its own process and runtime.
 
 ## Related
 

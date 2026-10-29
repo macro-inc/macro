@@ -69,6 +69,11 @@ pub struct Config {
     /// TypeSafe credential for the Jev classifier behind trigger conditions.
     /// Optional: routines cannot save conditions while it is unset.
     pub typesafe_api_key: jev::outbound::TypesafeApiKey,
+    /// PostHog project token for routine run analytics. When unset, runs are
+    /// not recorded.
+    pub posthog_api_key: agent_harness_service::cognition::config::PosthogApiKey,
+    /// PostHog ingestion origin. Falls back to the US origin when unset.
+    pub posthog_host: agent_harness_service::cognition::config::PosthogHost,
 }
 
 impl Config {

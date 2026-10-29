@@ -29,12 +29,17 @@ const INK_VARIANTS = [
 const BUTTON_VARIANTS = [
   'ghost',
   'outline',
-  'accent',
-  'strong',
+  'secondary',
   'danger',
-  'cta',
+  'primary',
 ] as const;
-const BUTTON_CONTENT_VARIANTS = ['outline', 'accent', 'strong', 'cta'] as const;
+const BUTTON_CONTENT_VARIANTS = ['outline', 'secondary', 'primary'] as const;
+const BUTTON_ICON_SIZES = {
+  sm: 'icon-sm',
+  md: 'icon-md',
+  lg: 'icon-lg',
+  xl: 'icon-xl',
+} as const;
 const BUTTON_SIZES = ['sm', 'md', 'lg', 'xl'] as const;
 const BADGE_SIZES = ['sm', 'md', 'lg'] as const;
 const BADGE_VARIANTS = ['ghost', 'outline'] as const;
@@ -286,12 +291,12 @@ function ThemeDebug() {
                                     Icon only
                                   </span>
                                   <Button
+                                    aria-label={`Add (${variant}, ${size})`}
+                                    tooltip={`Add (${variant}, ${size})`}
                                     variant={variant}
-                                    size={size}
-                                    square
-                                    label={`Add (${variant}, ${size})`}
+                                    size={BUTTON_ICON_SIZES[size]}
                                   >
-                                    <PlusIcon />
+                                    <PlusIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                                   </Button>
                                 </div>
                                 <div class="flex flex-col items-start gap-1.5">
@@ -307,7 +312,7 @@ function ThemeDebug() {
                                     Icon + text
                                   </span>
                                   <Button variant={variant} size={size}>
-                                    <PlusIcon />
+                                    <PlusIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                                     Button
                                   </Button>
                                 </div>
@@ -422,18 +427,10 @@ function ThemeDebug() {
                   </Panel.Header>
                   <Panel.Body class="p-4">
                     <div class="flex flex-wrap gap-2">
-                      <Button variant="ghost" depth={depth}>
-                        Ghost
-                      </Button>
-                      <Button variant="outline" depth={depth}>
-                        Base
-                      </Button>
-                      <Button variant="accent" depth={depth}>
-                        Active
-                      </Button>
-                      <Button variant="danger" depth={depth}>
-                        Danger
-                      </Button>
+                      <Button variant="ghost">Ghost</Button>
+                      <Button variant="secondary">Base</Button>
+                      <Button variant="primary">Active</Button>
+                      <Button variant="danger">Danger</Button>
                     </div>
                   </Panel.Body>
                 </Panel>
@@ -461,7 +458,7 @@ function ThemeDebug() {
               <Button variant="ghost" size="sm">
                 Cancel
               </Button>
-              <Button variant="strong" size="sm">
+              <Button variant="secondary" size="sm">
                 Confirm
               </Button>
             </Panel.Footer>

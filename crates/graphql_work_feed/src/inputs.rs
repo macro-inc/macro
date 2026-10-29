@@ -1,8 +1,10 @@
 use async_graphql::{Enum, ID, InputObject};
 use work_feed::domain::models::{
-    WorkFeedDoneTarget, WorkFeedItemKey, WorkFeedItemType, WorkFeedMode, WorkFeedPosition,
-    WorkFeedQuery, WorkFeedRevision, WorkFeedScope,
+    WorkFeedDoneTarget, WorkFeedItemKey, WorkFeedItemState, WorkFeedItemType, WorkFeedMode,
+    WorkFeedPosition, WorkFeedQuery, WorkFeedRevision, WorkFeedScope,
 };
+
+use crate::objects::GraphqlWorkFeedItemState;
 
 #[cfg(test)]
 mod test;
@@ -38,8 +40,10 @@ impl From<GraphqlWorkFeedMode> for WorkFeedMode {
 #[derive(Enum, Clone, Copy, Debug, PartialEq, Eq)]
 #[graphql(name = "WorkFeedItemType")]
 pub enum GraphqlWorkFeedItemType {
-    /// Documents and tasks.
+    /// Documents other than tasks.
     Document,
+    /// Tasks.
+    Task,
     /// AI chats.
     Chat,
     /// Projects.
@@ -62,6 +66,7 @@ impl From<GraphqlWorkFeedItemType> for WorkFeedItemType {
     fn from(value: GraphqlWorkFeedItemType) -> Self {
         match value {
             GraphqlWorkFeedItemType::Document => Self::Document,
+            GraphqlWorkFeedItemType::Task => Self::Task,
             GraphqlWorkFeedItemType::Chat => Self::Chat,
             GraphqlWorkFeedItemType::Project => Self::Project,
             GraphqlWorkFeedItemType::Email => Self::Email,
@@ -107,10 +112,14 @@ impl WorkFeedScopeInput {
 pub struct WorkFeedInput {
     /// Which items the feed shows.
     pub scope: Option<WorkFeedScopeInput>,
+    /// Only items in this state: `UNSEEN` or `SEEN`. Subscriptions and undo
+    /// place items in every state, so an item seen while it is shown stays
+    /// until the page is fetched again.
+    pub state: Option<GraphqlWorkFeedItemState>,
     /// Page size; defaults to 50, capped at 100.
     pub limit: Option<i32>,
     /// Opaque cursor from the previous page's `nextCursor`; absent for the
-    /// first page. Send it with the same scope.
+    /// first page. Send it with the same scope and state.
     pub cursor: Option<String>,
 }
 
@@ -124,8 +133,19 @@ impl WorkFeedInput {
             .map(|cursor| WorkFeedPosition::decode(&cursor))
             .transpose()
             .map_err(|_| async_graphql::Error::new("invalid work feed cursor"))?;
+        let state = match self.state {
+            None => None,
+            Some(GraphqlWorkFeedItemState::Unseen) => Some(WorkFeedItemState::Unseen),
+            Some(GraphqlWorkFeedItemState::Seen) => Some(WorkFeedItemState::Seen),
+            Some(GraphqlWorkFeedItemState::Done) => {
+                return Err(async_graphql::Error::new(
+                    "work feed pages hold only unseen and seen items",
+                ));
+            }
+        };
         Ok(WorkFeedQuery {
             scope: self.scope.unwrap_or_default().into_scope(),
+            state,
             limit: u16::try_from(limit).expect("limit is capped below u16::MAX"),
             after,
         })

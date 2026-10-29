@@ -90,7 +90,7 @@ export function ProjectsGantt(props: {
           >
             Projects couldn’t be loaded.
             <Button
-              variant="outline"
+              variant="secondary"
               onClick={() => fireAndForget(collection.refresh(), 'projects')}
             >
               Try again
