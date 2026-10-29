@@ -1424,6 +1424,7 @@ export * from './messageTimelineQueryAround';
 export * from './messageTimelineQueryCursor';
 export * from './messageTimelineQueryLimit';
 export * from './messageTriggeredBy';
+export * from './messageTriggeredVia';
 export * from './myResponse';
 export * from './newAttachment';
 export * from './newAttachmentHeight';

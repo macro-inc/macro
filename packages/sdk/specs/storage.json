@@ -34953,6 +34953,10 @@
             "type": ["string", "null"],
             "description": "User who triggered a bot-authored message."
           },
+          "triggered_via": {
+            "type": ["string", "null"],
+            "description": "Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only."
+          },
           "updated_at": {
             "type": "string",
             "format": "date-time",

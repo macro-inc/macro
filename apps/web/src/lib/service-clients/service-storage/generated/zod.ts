@@ -50219,6 +50219,12 @@ export const messageTimelineResponse = zod
               .string()
               .nullish()
               .describe('User who triggered a bot-authored message.'),
+            triggered_via: zod
+              .string()
+              .nullish()
+              .describe(
+                'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+              ),
             updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
           })
           .describe(
@@ -50569,6 +50575,12 @@ export const messageTimelineResponse = zod
                             .nullish()
                             .describe(
                               'User who triggered a bot-authored message.'
+                            ),
+                          triggered_via: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
                             ),
                           updated_at: zod.iso
                             .datetime({})
@@ -50927,6 +50939,12 @@ export const entityMessageCreateResponse = zod
       .string()
       .nullish()
       .describe('User who triggered a bot-authored message.'),
+    triggered_via: zod
+      .string()
+      .nullish()
+      .describe(
+        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+      ),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
   })
   .describe(
@@ -51089,6 +51107,12 @@ export const entityMessageGetMessageResponse = zod
       .string()
       .nullish()
       .describe('User who triggered a bot-authored message.'),
+    triggered_via: zod
+      .string()
+      .nullish()
+      .describe(
+        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+      ),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
   })
   .describe(
@@ -51255,6 +51279,12 @@ export const entityMessageDeleteMessageResponse = zod
       .string()
       .nullish()
       .describe('User who triggered a bot-authored message.'),
+    triggered_via: zod
+      .string()
+      .nullish()
+      .describe(
+        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+      ),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
   })
   .describe(
@@ -51517,6 +51547,12 @@ export const entityMessageEditResponse = zod
       .string()
       .nullish()
       .describe('User who triggered a bot-authored message.'),
+    triggered_via: zod
+      .string()
+      .nullish()
+      .describe(
+        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+      ),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
   })
   .describe(
@@ -51687,6 +51723,12 @@ export const entityMessageReactResponse = zod
       .string()
       .nullish()
       .describe('User who triggered a bot-authored message.'),
+    triggered_via: zod
+      .string()
+      .nullish()
+      .describe(
+        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+      ),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
   })
   .describe(
@@ -51856,6 +51898,12 @@ export const entityMessageLegacyResponse = zod
       .string()
       .nullish()
       .describe('User who triggered a bot-authored message.'),
+    triggered_via: zod
+      .string()
+      .nullish()
+      .describe(
+        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+      ),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
   })
   .describe(
@@ -52045,6 +52093,12 @@ export const entityMessageGetThreadResponse = zod
               .string()
               .nullish()
               .describe('User who triggered a bot-authored message.'),
+            triggered_via: zod
+              .string()
+              .nullish()
+              .describe(
+                'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+              ),
             updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
           })
           .describe(
@@ -52210,6 +52264,12 @@ export const entityMessageGetThreadResponse = zod
           .string()
           .nullish()
           .describe('User who triggered a bot-authored message.'),
+        triggered_via: zod
+          .string()
+          .nullish()
+          .describe(
+            'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+          ),
         updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
       })
       .describe(
@@ -52810,6 +52870,12 @@ export const messageTimelineEntriesResponse = zod
                       .string()
                       .nullish()
                       .describe('User who triggered a bot-authored message.'),
+                    triggered_via: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+                      ),
                     updated_at: zod.iso
                       .datetime({})
                       .describe('Last persisted update.'),
@@ -53184,6 +53250,12 @@ export const messageTimelineEntriesResponse = zod
                                     .nullish()
                                     .describe(
                                       'User who triggered a bot-authored message.'
+                                    ),
+                                  triggered_via: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
                                     ),
                                   updated_at: zod.iso
                                     .datetime({})

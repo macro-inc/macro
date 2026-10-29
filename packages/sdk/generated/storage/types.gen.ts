@@ -10045,6 +10045,11 @@ export type Message = {
      */
     triggered_by?: string | null;
     /**
+     * Self-reported name of the client the user triggered it through, such
+     * as "Claude Code"; a display label only.
+     */
+    triggered_via?: string | null;
+    /**
      * Last persisted update.
      */
     updated_at: string;
