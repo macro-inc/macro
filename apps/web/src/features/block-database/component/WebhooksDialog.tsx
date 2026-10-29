@@ -37,7 +37,7 @@ export function WebhooksDialog(props: {
   onClose: () => void;
   returnFocus?: HTMLElement;
 }) {
-  const { webhooks, failed, refreshing } = useTableWebhooks(
+  const { webhooks, failed, ready } = useTableWebhooks(
     () => props.databaseId,
     () => props.table.table.id
   );
@@ -81,7 +81,7 @@ export function WebhooksDialog(props: {
 
   createEffect(
     on(
-      () => (refreshing() || failed() ? undefined : webhooks()),
+      () => (ready() ? webhooks() : undefined),
       (loaded) => {
         if (loaded === undefined || initialCreationHandled) return;
         initialCreationHandled = true;

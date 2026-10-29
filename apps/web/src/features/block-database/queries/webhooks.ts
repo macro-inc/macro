@@ -28,7 +28,7 @@ export function useTableWebhooks(
 ): {
   webhooks: Accessor<DatabaseWebhookResponse[] | undefined>;
   failed: Accessor<boolean>;
-  refreshing: Accessor<boolean>;
+  ready: Accessor<boolean>;
 } {
   const query = useQuery(() => databaseWebhooksQueryOptions(databaseId()));
   return {
@@ -37,7 +37,10 @@ export function useTableWebhooks(
         ? query.data.webhooks.filter((webhook) => webhook.tableId === tableId())
         : undefined,
     failed: () => query.isError,
-    refreshing: () => query.isFetching,
+    ready: () =>
+      query.isFetchedAfterMount &&
+      query.isSuccess &&
+      query.fetchStatus === 'idle',
   };
 }
 

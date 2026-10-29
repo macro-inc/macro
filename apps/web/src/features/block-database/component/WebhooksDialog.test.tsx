@@ -8,7 +8,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { QueryClientProvider } from '@tanstack/solid-query';
+import { onlineManager, QueryClientProvider } from '@tanstack/solid-query';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { toast } from '../../../lib/core/component/Toast/Toast';
@@ -72,6 +72,7 @@ afterEach(() => {
   cleanup();
   queryClient.clear();
   vi.restoreAllMocks();
+  onlineManager.setOnline(true);
 });
 
 it('creates once after the empty list loads and keeps deletion explicit', async () => {
@@ -184,4 +185,22 @@ it('keeps the dialog open while the one-time URL is being created', async () => 
   await screen.findByDisplayValue(/secret-token/);
   fireEvent.click(done);
   expect(close).toHaveBeenCalledOnce();
+});
+
+it('waits for a paused offline refetch before automatic creation', async () => {
+  onlineManager.setOnline(false);
+  queryClient.setQueryData(databaseWebhookKeys.list('database').queryKey, {
+    webhooks: [],
+  });
+  open();
+  await waitFor(() =>
+    expect(
+      queryClient.getQueryState(databaseWebhookKeys.list('database').queryKey)
+        ?.fetchStatus
+    ).toBe('paused')
+  );
+  expect(api.create).not.toHaveBeenCalled();
+  onlineManager.setOnline(true);
+  await screen.findByDisplayValue(/secret-token/);
+  expect(api.create).toHaveBeenCalledTimes(1);
 });
