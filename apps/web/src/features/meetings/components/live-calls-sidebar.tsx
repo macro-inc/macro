@@ -41,7 +41,7 @@ export function LiveCallsSidebar<T extends LiveCallRow>(props: {
             {(call) => {
               const dismissable = () => !!call().ringing && !!props.onDismiss;
               return (
-                <div class="relative min-w-0 shrink-0">
+                <div class="relative flex min-w-0 shrink-0 flex-col">
                   <Tooltip
                     label={call().label}
                     placement="right"
