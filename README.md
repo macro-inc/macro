@@ -83,7 +83,7 @@ Macro Mail lives in the same interface as channels, docs, tasks, and code. From 
 
 Macro Chat is designed to be more focused than Slack. The first couple of replies show inline and the rest collapse into a thread, so a busy channel stays readable. Threads are permissioned severally so you can share threads across channels by copying links. Everything is stored in a bidirectional graph, so tasks @link to messages that created them, customer support emails tie into support channels, CRM records get updated when they're discussed in messages, etc. The core idea is that (i) messaging should be the centerpiece around which tasks, mail, docs, and content management are built, all in a lightweight way, and agents should be first-class citizens like human users and (ii) messaging needs to be more focused and readable for technical conversations, and not turn into battles where context is lost and progress is indistinguishable from noise.
 
-![The Macro Engineers channel delegating project and task creation to an agent](.github/readme/messages-channel.jpg)
+![A team discussion in Macro with a completed Cursor handoff and agent searches for task owners](.github/readme/messages-channel.jpg)
 
 [Messages docs &rarr;](https://docs.macro.com/product/channels)
 

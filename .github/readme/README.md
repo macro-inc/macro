@@ -14,7 +14,7 @@ and deal values in a dedicated private Sales Demo pipeline.
 | Asset | View |
 | --- | --- |
 | `email-thread.jpg` | First Macro Outlook Email!, a team test message, with email navigation open |
-| `messages-channel.jpg` | Engineers, delegating project and task creation to an agent |
+| `messages-channel.jpg` | feature-requests, discussing a Has PR / No PR task filter, handing it to Cursor, and asking an agent to find the owners |
 | `tasks-list.jpg` | Search surface area project, Tasks grouped by assignee |
 | `docs-prd.jpg` | PRD: Team Channels, with tags, assignees, and readable requirements |
 | `crm-board.jpg` | Sales Demo pipeline, showing 9 fictional companies in Lead, Demo, and Customer; 2 Churned companies are outside the crop; all deal values are sample data |
@@ -29,7 +29,8 @@ items. Use navigation search or collapse unrelated sections where needed. Avoid
 private customer details, credentials, financial information, and personal
 conversations. Use a populated pipeline board with fictional sample companies
 for CRM and keep the root README's alt text consistent with each displayed
-view. Review every saved image before staging it.
+view. For chat, show a real team exchange with an agent handoff and result, not
+only a long tool trace. Review every saved image before staging it.
 The marketing homepage's separate screenshot copies under
 `apps/marketing/src/app/assets/desktop-feature-screens` are independent.
 
