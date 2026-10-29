@@ -32122,7 +32122,7 @@ export const postItemsSoupBody = zod
           .boolean()
           .optional()
           .describe(
-            'Opt this query into initiatives at all. Initiatives are off by\ndefault — see [`crate::ast::initiative::InitiativeLiteral::Include`].\nAsking for specific `initiative_ids` or `owners` also opts in.'
+            'Opt this query into initiatives at all. Initiatives are off by\ndefault — see [`crate::ast::initiative::InitiativeLiteral::Include`].\nAsking for specific `initiative_ids`, `owners` or `notification_filters`\nalso opts in.'
           ),
         initiative_ids: zod
           .array(zod.string())
@@ -32134,6 +32134,23 @@ export const postItemsSoupBody = zod
           .string()
           .nullish()
           .describe('Case-insensitive name substring.'),
+        notification_filters: zod
+          .object({
+            states: zod
+              .array(
+                zod
+                  .enum(['unseen', 'seen', 'done'])
+                  .describe(
+                    "The mutually exclusive lifecycle states of a user's notification."
+                  )
+              )
+              .optional()
+              .describe(
+                'Include entities with a non-deleted notification in any of these exact states.\nEmpty means no notification restriction. Active means `[unseen, seen]`.'
+              ),
+          })
+          .optional()
+          .describe('Notification-level filters that apply to an entity type.'),
         owners: zod
           .array(zod.string())
           .optional()
