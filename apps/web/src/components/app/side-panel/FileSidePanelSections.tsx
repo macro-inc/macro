@@ -3,17 +3,17 @@ import {
   EntityTagsSection,
 } from '@app/features/property/side-panel/properties';
 import { useBlockId } from '@core/block';
-import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { type DateValue, formatDate } from '@core/util/date';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { OwnerLabel } from '@entity/owner/owner-display';
+import FolderIcon from '@icon/system/regular/folder.svg';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { createCallback } from '@solid-primitives/rootless';
 import { createMemo, Show } from 'solid-js';
-import { EntityMetadata } from './EntityMetadata';
+import { EntityMetadata, EntityMetadataRow } from './EntityMetadata';
 import { SidePanel } from './SidePanel';
 
 export function FileSidePanelSections() {
@@ -163,10 +163,9 @@ function DetailsSectionContent(props: { documentId: string }) {
         })()}
       >
         {(folder) => (
-          <div class="flex items-center gap-1">
-            Folder
+          <EntityMetadataRow icon={<FolderIcon class="size-3.5" />} label="Folder">
             <FolderLink projectId={folder().id} projectName={folder().name} />
-          </div>
+          </EntityMetadataRow>
         )}
       </Show>
     </EntityMetadata>
@@ -187,9 +186,6 @@ export function FolderLink(props: { projectId: string; projectName: string }) {
         ' pointer-events-auto text-link hover:text-link-hover hover:bg-hover'
       }
     >
-      <span class="relative size-3 shrink-0">
-        <EntityIcon targetType="project" size="fill" />
-      </span>
       <span class="truncate underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
         {props.projectName}
       </span>

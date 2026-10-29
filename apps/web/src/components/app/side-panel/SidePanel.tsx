@@ -1,4 +1,5 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { CollapsibleSection } from '@app/components/view-shell/CollapsibleSection';
 import { usePreference } from '@app/preferences/use-preference';
 import { useMaybeBlockAliasedName } from '@core/block';
 import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';
@@ -7,7 +8,6 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ArrowLeft from '@icon/system/regular/arrow-left.svg';
-import CaretRight from '@icon/system/regular/caret-right.svg';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import InfoIcon from '@icon/system/regular/info.svg';
 import SidePanelIcon from '@icon/system/regular/sidebar-simple.svg';
@@ -660,7 +660,10 @@ function Section(
       component: (floating) => (
         <Accordion.Item
           value={props.id}
-          class={cn(floating && 'border-b border-edge-muted last:border-b-0')}
+          class={cn(
+            'group/sidebar-section',
+            floating && 'border-b border-edge-muted last:border-b-0'
+          )}
         >
           <Show
             when={floating}
@@ -686,10 +689,10 @@ function Section(
   function SectionContent() {
     return (
       <>
-        <Accordion.Header class="group flex items-center">
-          <Accordion.Trigger class="px-3 py-3 flex flex-1 min-w-0 items-center justify-between gap-2 text-xs text-ink-muted hover:underline">
-            <span>{props.title}</span>
-            <CaretRight class="size-3 shrink-0 transition-transform duration-90 group-data-expanded:rotate-90" />
+        <Accordion.Header class="flex min-w-0 items-center gap-1">
+          <Accordion.Trigger class="flex min-w-0 flex-1 items-center gap-1 rounded-lg p-3 text-left text-xs font-medium leading-5 text-ink-muted outline-none transition-colors group-hover/sidebar-section:text-ink focus-visible:outline-2 focus-visible:outline-accent">
+            <CollapsibleSection.Indicator class="touch:opacity-100 group-focus-within/sidebar-section:opacity-100" />
+            <span class="min-w-0 truncate">{props.title}</span>
           </Accordion.Trigger>
           <Show when={props.actions}>
             <div class="shrink-0 pr-3">{props.actions}</div>

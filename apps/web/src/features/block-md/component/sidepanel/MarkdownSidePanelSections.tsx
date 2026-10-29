@@ -11,9 +11,11 @@ import {
   GithubPullRequestDetailsRows,
   SidePanel,
 } from '@components/app/side-panel';
-import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
+import {
+  EntityMetadata,
+  EntityMetadataRow,
+} from '@components/app/side-panel/EntityMetadata';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { Wordcount } from '@core/component/LexicalMarkdown/component/status/Wordcount';
 import { Notifications } from '@core/component/Notifications';
@@ -27,6 +29,9 @@ import type { DateValue } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { buildTaskProjectDefaultProperty } from '@entity/extractors-property';
+import FolderIcon from '@icon/system/regular/folder.svg';
+import TextAaIcon from '@icon/system/regular/text-aa.svg';
+import TextTIcon from '@icon/system/regular/text-t.svg';
 import { useNotificationsForEntity } from '@notifications';
 import {
   getBuiltinPropertyIds,
@@ -49,7 +54,7 @@ import { useMarkdownName } from '../MarkdownNameProvider';
 import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
 import { MarkdownReferencesSection } from './MarkdownReferencesSection';
 
-/** Registers markdown header actions, panel sections, and metadata footer. */
+/** Registers markdown header actions, panel sections, and shared metadata. */
 export function MarkdownSidePanelSections() {
   const { documentId, kind, permissions } = useMarkdownDocument();
   const canEdit = permissions.canEdit;
@@ -83,10 +88,10 @@ export function MarkdownSidePanelSections() {
         </div>
       </SidePanel.HeaderActions>
       <SidePanel.Footer>
+        <DetailsSectionContent documentId={documentId()} />
         <Show when={!isTask()}>
           <StatsSectionContent />
         </Show>
-        <DetailsSectionContent documentId={documentId()} />
       </SidePanel.Footer>
       <EntityTagsSection
         entityId={documentId()}
@@ -158,10 +163,9 @@ function DetailsGrid(props: {
     >
       <Show when={props.folder()}>
         {(folder) => (
-          <div class="flex items-center gap-1">
-            Folder
+          <EntityMetadataRow icon={<FolderIcon class="size-3.5" />} label="Folder">
             <FolderLink projectId={folder().id} projectName={folder().name} />
-          </div>
+          </EntityMetadataRow>
         )}
       </Show>
     </EntityMetadata>
@@ -178,9 +182,6 @@ function FolderLink(props: { projectId: string; projectName: string }) {
       {...navHandlers}
       class="pointer-events-auto min-w-0 truncate py-0.5 rounded-xs text-link hover:text-link-hover hover:bg-hover focus:bg-active"
     >
-      <span class="relative top-[0.125em] size-[1em] inline-flex mx-1">
-        <EntityIcon targetType="project" size="fill" />
-      </span>
       <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
         {props.projectName}
       </span>
@@ -266,8 +267,16 @@ function StatsSectionContent() {
     <Show when={md.wordcountStats}>
       {(stats) => (
         <Wordcount.Root stats={stats()}>
-          <div class="mb-1">
-            <Wordcount.Words /> words · <Wordcount.Characters /> characters
+          <div class="mt-1 flex flex-col gap-1">
+            <EntityMetadataRow icon={<TextTIcon class="size-3.5" />} label="Words">
+              <Wordcount.Words />
+            </EntityMetadataRow>
+            <EntityMetadataRow
+              icon={<TextAaIcon class="size-3.5" />}
+              label="Characters"
+            >
+              <Wordcount.Characters />
+            </EntityMetadataRow>
           </div>
         </Wordcount.Root>
       )}

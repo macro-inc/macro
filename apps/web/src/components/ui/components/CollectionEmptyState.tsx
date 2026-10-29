@@ -19,7 +19,7 @@ export function CollectionEmptyState(props: CollectionEmptyStateProps) {
     <div
       data-slot="collection-empty-state"
       class={cn(
-        'flex min-h-8 w-full items-center justify-between gap-2 text-left',
+        'flex min-h-8 w-full items-center justify-between gap-2 rounded-lg border border-dashed border-border-secondary px-2 py-1 text-left',
         local.class
       )}
       {...rest}

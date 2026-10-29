@@ -4,9 +4,13 @@ import {
   EntityTagsSection,
 } from '@app/features/property/side-panel/properties';
 import { FolderLink, SidePanel } from '@components/app/side-panel';
-import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
+import {
+  EntityMetadata,
+  EntityMetadataRow,
+} from '@components/app/side-panel/EntityMetadata';
 import { useBlockId } from '@core/block';
 import { useCanEdit } from '@core/signal/permissions';
+import FolderIcon from '@icon/system/regular/folder.svg';
 import { useChatDataQuery } from '@queries/cognition/chat-data';
 import { useProjectDataQuery } from '@queries/storage/project-data';
 import { createMemo, Show, Suspense } from 'solid-js';
@@ -68,10 +72,9 @@ function ChatDetailsContent(props: { chatId: string }) {
         })()}
       >
         {(folder) => (
-          <div class="flex items-center gap-1">
-            Folder
+          <EntityMetadataRow icon={<FolderIcon class="size-3.5" />} label="Folder">
             <FolderLink projectId={folder().id} projectName={folder().name} />
-          </div>
+          </EntityMetadataRow>
         )}
       </Show>
     </EntityMetadata>
