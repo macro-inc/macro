@@ -11441,10 +11441,6 @@ export type PostMessage = {
      */
     content: string;
     /**
-     * Start a thread visible only to the sender and its explicitly mentioned agents.
-     */
-    ephemeral?: boolean;
-    /**
      * Client-minted UUIDv7 for the new message, so an optimistic message
      * already carries its final id; the server mints one when absent.
      */

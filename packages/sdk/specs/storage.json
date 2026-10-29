@@ -37426,10 +37426,6 @@
             "type": "string",
             "description": "Macro Markdown body."
           },
-          "ephemeral": {
-            "type": "boolean",
-            "description": "Start a thread visible only to the sender and its explicitly mentioned agents."
-          },
           "id": {
             "type": ["string", "null"],
             "format": "uuid",
@@ -37451,7 +37447,8 @@
             "format": "uuid",
             "description": "Root to reply to, if this is a reply."
           }
-        }
+        },
+        "additionalProperties": false
       },
       "PostMessageNotificationPolicy": {
         "type": "string",

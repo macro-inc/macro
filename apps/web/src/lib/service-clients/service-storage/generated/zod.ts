@@ -50908,12 +50908,6 @@ export const entityMessageCreateBody = zod
       .optional()
       .describe('Initial attachments.'),
     content: zod.string().describe('Macro Markdown body.'),
-    ephemeral: zod
-      .boolean()
-      .optional()
-      .describe(
-        'Start a thread visible only to the sender and its explicitly mentioned agents.'
-      ),
     id: zod
       .uuid()
       .nullish()
