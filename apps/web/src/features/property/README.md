@@ -13,13 +13,15 @@ Debug page: `/props-debug` (LOCAL_ONLY).
 
 `side-panel/properties/EntityCollectionProperty.tsx` renders non-user, multi-entity
 properties. Empty collections use a compact message and trailing Add action.
-During app-item drags, compatible collections expand into dropzones with the
-same label-to-content gap. Incompatible or unavailable collections show a muted
-rejection hint only while the pointer is over that field. The same target covers
-empty and populated bodies, and geometry updates during expansion. Drops append
-a reference using the same entity-type conversion as the picker,
-ignore duplicate references and the owning entity's type-and-ID pair, and retain
-existing values. Picker saves, drops, chip removal, and row removal share a pending
+Collection bodies stop before the header action column. During app-item drags,
+keep hidden Add actions in the layout so unavailable empty rows retain their
+height. Compatible collections still expand into dropzones with the same
+label-to-content gap. Incompatible or unavailable collections show no rejection
+feedback. The same target covers empty and populated bodies, and geometry updates
+during expansion. Drops append a reference using the same entity-type conversion
+as the picker, ignore duplicate references and the owning entity's type-and-ID
+pair, and retain existing values. Picker saves, drops, chip removal, and row
+removal share a pending
 state until refresh completes. Read-only, metadata, loading, saving, and open-editor
 states reject drops. Native file uploads are not supported here; the Add action
 remains available for keyboard and touch.

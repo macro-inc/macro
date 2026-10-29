@@ -116,37 +116,35 @@ function EntityCollectionPropertyBody(props: {
     saveReferences(entities().filter((entity) => entity.entity_id !== entityId));
 
   return (
-    <div class="group/property-row min-w-0">
-      <div class="flex items-center justify-between gap-2">
-        <span
-          class="min-w-0 truncate text-ink-muted"
-          title={props.property.displayName}
-        >
-          {props.property.displayName}
-        </span>
-        <div class="ml-auto flex shrink-0 items-center">
-          <Show when={!isReadOnly() && entities().length > 0}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              class="text-ink-extra-muted"
-              aria-label={`Add ${props.property.displayName}`}
-              disabled={isSaving()}
-              onClick={handleAdd}
-            >
-              <Plus class="size-4" />
-            </Button>
-          </Show>
-          {props.actions}
-        </div>
+    <div class="group/property-row grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2">
+      <span
+        class="min-w-0 truncate text-ink-muted"
+        title={props.property.displayName}
+      >
+        {props.property.displayName}
+      </span>
+      <div class="ml-auto flex shrink-0 items-center">
+        <Show when={!isReadOnly() && entities().length > 0}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            class="text-ink-extra-muted"
+            aria-label={`Add ${props.property.displayName}`}
+            disabled={isSaving()}
+            onClick={handleAdd}
+          >
+            <Plus class="size-4" />
+          </Button>
+        </Show>
+        {props.actions}
       </div>
       <div
         ref={(element) => dropTarget?.ref(element)}
         role="group"
         aria-label={props.property.displayName}
         aria-busy={isSaving()}
-        class="mt-1 min-w-0 rounded-lg"
+        class="col-start-1 mt-1 min-w-0 rounded-lg"
       >
         <div class="flex flex-wrap gap-1.5">
           <For
@@ -156,13 +154,17 @@ function EntityCollectionPropertyBody(props: {
                 <CollectionEmptyState
                   message={t('common.emptyCollection')}
                   action={
-                    <Show when={!isReadOnly() && !isDragging()}>
+                    <Show when={!isReadOnly()}>
                       <Button
                         type="button"
                         variant="ghost"
                         size="xs"
-                        class="text-ink-extra-muted"
-                        disabled={isSaving()}
+                        class={cn(
+                          'text-ink-extra-muted',
+                          isDragging() && 'invisible pointer-events-none'
+                        )}
+                        aria-hidden={isDragging()}
+                        disabled={isSaving() || isDragging()}
                         onClick={handleAdd}
                       >
                         <Plus class="size-4" />
