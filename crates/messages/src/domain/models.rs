@@ -593,6 +593,7 @@ impl MessageAttribution {
 
 /// Create a root or reply. Thread state may only be supplied on a root.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub struct PostMessage {
@@ -600,9 +601,6 @@ pub struct PostMessage {
     #[serde(skip)]
     #[cfg_attr(feature = "schema", schema(ignore))]
     pub attribution: MessageAttribution,
-    /// Start a thread visible only to the sender and its explicitly mentioned agents.
-    #[serde(default)]
-    pub ephemeral: bool,
     /// Notification behavior chosen by a trusted server caller.
     #[serde(skip)]
     #[cfg_attr(feature = "schema", schema(ignore))]

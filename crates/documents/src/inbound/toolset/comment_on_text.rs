@@ -176,7 +176,6 @@ where
             .post(
                 access,
                 PostMessage {
-                    ephemeral: false,
                     id: None,
                     attribution: MessageAttribution::ActingUser,
                     notification_policy: PostMessageNotificationPolicy::Default,
@@ -242,7 +241,6 @@ impl CommentOnText {
             .post(
                 access,
                 PostMessage {
-                    ephemeral: false,
                     id: None,
                     attribution: MessageAttribution::ActingUser,
                     notification_policy: PostMessageNotificationPolicy::Default,

@@ -114,7 +114,6 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
         attachments: props.replyInputState()?.attachments,
         mode: 'reply',
         privateThread: privateThread(),
-        ephemeral: props.replyInputState()?.ephemeral,
         host: props.host,
       }}
       collapsible={props.collapsible}
@@ -161,12 +160,7 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
         if (!senderId) return;
         const payload = buildPostMessageSendPayload({
           snapshot,
-          threadId:
-            snapshot.ephemeral &&
-            queryReadyGate(thread) &&
-            thread.data.root.visibility?.type !== 'private'
-              ? undefined
-              : props.threadId,
+          threadId: props.threadId,
         });
 
         sendMessageMutation.mutate(

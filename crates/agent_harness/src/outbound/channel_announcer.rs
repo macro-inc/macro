@@ -393,7 +393,6 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
             });
         }
         let input = PostMessage {
-            ephemeral: false,
             id: announcement.reply_message_id,
             attribution: MessageAttribution::ActingUser,
             // Neither shape is news yet. The chip is a pointer: the
@@ -522,7 +521,6 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
             .post(
                 access,
                 PostMessage {
-                    ephemeral: false,
                     id: None,
                     attribution: MessageAttribution::ActingUser,
                     anchor: None,
@@ -581,7 +579,6 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                 access.clone(),
                 message_id,
                 PostMessage {
-                    ephemeral: false,
                     id: None,
                     attribution: MessageAttribution::ActingUser,
                     // Only the reply's last message is news. Earlier ones are

@@ -52,7 +52,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         // A call's canonical thread is created atomically by its first post.
         // It is always shared, so privacy must not require that root to exist.
         if matches!(parent_from_receipt(access)?, MessageParent::Call(_)) {
-            if input.ephemeral || ephemeral {
+            if ephemeral {
                 return Err(MessageError::Invalid(
                     "call chat does not support private threads",
                 ));
@@ -63,14 +63,14 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             let state = self
                 .active_thread(access.auth(), &parent_from_receipt(access)?, root)
                 .await?;
-            if !state.visibility.is_public() || (!input.ephemeral && !ephemeral) {
+            if !state.visibility.is_public() || !ephemeral {
                 return Ok(state.visibility);
             }
-            // A private reply to a shared thread starts a separate private
-            // thread rather than silently changing the old thread's audience.
+            // Mentioning an ephemeral agent in a shared thread starts a separate
+            // private thread without changing the shared thread's audience.
             input.thread_id = None;
         }
-        if !input.ephemeral && !ephemeral {
+        if !ephemeral {
             return Ok(MessageVisibility::Public);
         }
         // Document anchors are serialized into shared content and cannot

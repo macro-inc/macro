@@ -6,9 +6,10 @@ thread and the agent's replies in their channel history.
 
 ## Audience
 
-`agent_configs.is_ephemeral` controls the default for a new mention. Creating a
-message with `PostMessage.ephemeral` also selects a private audience without
-requiring an agent. The message service resolves mentioned agent settings through
+`agent_configs.is_ephemeral` is the sole setting that starts a new private
+exchange. A person mentioning an ephemeral agent automatically makes the
+mentioning message and its thread private. Clients do not choose an audience
+on message requests; obsolete manual audience fields are rejected. The message service resolves mentioned agent settings through
 `EphemeralAgentReader`, implemented by the bots repository. Every writable
 composition supplies this reader; an unconfigured service rejects persisted-agent
 mentions rather than guessing whether they may be public.
@@ -23,7 +24,8 @@ do not gain private-thread access.
 The audience is immutable. Replies inherit it in the message service and in a
 Postgres insert trigger, including replies submitted by older writers. Explicit
 private writes with a different thread audience are rejected before persistence.
-A private reply to a public thread starts a separate private root. Editing a
+Mentioning an ephemeral agent while replying to a public thread starts a
+separate private root; ordinary replies and mentions keep the existing behavior. Editing a
 message keeps its original audience; public edits cannot introduce an ephemeral
 agent and require a new private thread instead. Changing an agent's setting
 affects future threads only; older clients that omit the setting on an agent
@@ -66,13 +68,13 @@ and inherited folder, team, or channel access.
 
 ## Interface
 
-Agent settings expose **Ephemeral agent** under **Message privacy**. The channel
-composer shows **Everyone** or **Only you** before sending. Mentioning an
-ephemeral agent selects and locks **Only you**; removing the mention retains the
-private draft choice until the user changes it. Private replies stay locked,
-and a private reply to a shared thread explains that it starts a private thread.
-Sent messages carry an **Only you** lock label on desktop and touch layouts.
-The manual privacy choice is saved with the draft and restored after send errors.
+Agent settings expose **Ephemeral agent** under **Thread privacy** on desktop
+and phone, with an explanation that mentions automatically start private threads
+saved in the mentioning person's history. The composer has no visibility picker,
+audience labels, or persisted privacy choice. Removing an ephemeral agent's
+mention before sending removes that automatic trigger; ordinary agent and person
+mentions behave as before. Existing ephemeral threads retain their immutable
+audience on all further messages, even without another agent mention.
 
 ## Release and verification
 
@@ -83,10 +85,10 @@ new audience and must not coexist with enabled private-message writes. Do not
 create private data during a rolling backend deployment.
 
 Exercise the message/bots/channel/trigger/webhook domain tests and the message
-repository database regressions. The backend-free desktop/phone control check is:
+repository database regressions. The backend-free desktop/phone composer check is:
 
 ```sh
-bunx playwright test --config src/features/channel/Input/browser-test/privacy.playwright.config.ts
+bunx playwright test --config src/features/channel/Input/browser-test/playwright.config.ts
 ```
 
 A full local-stack check uses two authenticated channel members: the initiator

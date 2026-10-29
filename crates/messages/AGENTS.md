@@ -80,4 +80,4 @@ grant users another agent invocation's edit, deletion, or reaction authority.
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md` ·
   Skill: `collab-surface-core`
 
-Private thread audiences are immutable and enforced independently of parent access; keep individual operations, SQL pagination/previews, agent context, and realtime delivery aligned with `docs/architecture/private-message-threads.md`.
+Only mentioned-agent settings select new private thread audiences; clients cannot choose per-message privacy. Private thread audiences are immutable and enforced independently of parent access; keep individual operations, SQL pagination/previews, agent context, and realtime delivery aligned with `docs/architecture/private-message-threads.md`.

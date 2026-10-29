@@ -638,7 +638,6 @@ fn view_access_cannot_mint_a_write_receipt() {
 #[test]
 fn only_root_document_messages_can_have_anchors() {
     let mut input = PostMessage {
-        ephemeral: false,
         id: None,
         attribution: Default::default(),
         notification_policy: Default::default(),
@@ -669,7 +668,6 @@ async fn inaccessible_references_are_rejected_before_persistence() {
         height: None,
     };
     let input = PostMessage {
-        ephemeral: false,
         id: None,
         attribution: Default::default(),
         notification_policy: Default::default(),
@@ -742,7 +740,6 @@ async fn user_mentions_do_not_require_or_grant_parent_sharing() {
 
 fn post_input() -> PostMessage {
     PostMessage {
-        ephemeral: false,
         id: None,
         attribution: Default::default(),
         notification_policy: Default::default(),

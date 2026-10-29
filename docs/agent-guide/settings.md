@@ -679,10 +679,11 @@ agent's own setting and always saved: a new form starts from the selected runtim
 different runtime resets it to that default, but only the saved choice counts.
 The model list is loaded live and independently for Macro Agent, connected Cursor, and every
 registered macrod harness. The selected harness stays selected when the list refreshes.
-Under **Message privacy**, **Ephemeral agent** makes new @mentions start private
-threads visible only to the person who mentions the agent. Both the initial
-message and agent replies stay saved in that person's history. The composer
-shows **Only you** before sending. Turning this off affects future threads;
+Under **Thread privacy**, **Ephemeral agent** makes new @mentions start private
+threads visible only to the person who mentions the agent. The mentioning message,
+agent replies, and further messages in the thread stay saved in that person's
+history. This checkbox is the only privacy setting; the composer has no
+per-message audience control on desktop or phone. Turning this off affects future threads;
 existing private threads keep their audience. Verify create, reopen, and edit,
 including an unrelated agent update that must preserve this checkbox.
 

@@ -1,13 +1,18 @@
 use super::*;
 
-struct EphemeralAgents;
-impl EphemeralAgentReader for EphemeralAgents {
+struct AgentSettings {
+    ephemeral: bool,
+}
+impl EphemeralAgentReader for AgentSettings {
     fn ephemeral_agents<'a>(
         &'a self,
         bots: &'a [bot_id::BotId],
     ) -> std::pin::Pin<Box<dyn Future<Output = Result<Vec<String>, MessageError>> + Send + 'a>>
     {
         Box::pin(async move {
+            if !self.ephemeral {
+                return Ok(vec![]);
+            }
             Ok(bots
                 .iter()
                 .map(|bot| bot.into_storage_id().to_string())
@@ -17,11 +22,51 @@ impl EphemeralAgentReader for EphemeralAgents {
 }
 
 #[tokio::test]
+async fn ordinary_mentions_keep_the_existing_shared_audience() {
+    let repo = fixture();
+    let service = MessageService::new(repo.clone(), Events::default())
+        .with_ephemeral_agents(AgentSettings { ephemeral: false });
+    for thread_id in [None, Some(repo.message.id)] {
+        for mentions in [
+            vec![],
+            vec![SimpleMention {
+                entity_type: "user".into(),
+                entity_id: "macro|coworker@example.com".into(),
+            }],
+            vec![SimpleMention {
+                entity_type: "bot".into(),
+                entity_id: bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string(),
+            }],
+        ] {
+            let mut input = post_input();
+            input.thread_id = thread_id;
+            input.mentions = mentions;
+            let message = service
+                .post(
+                    access("macro|author@example.com", "doc", AccessLevel::Comment),
+                    input,
+                )
+                .await
+                .unwrap();
+            assert!(message.visibility.is_public());
+            assert_eq!(message.thread_id, thread_id);
+        }
+    }
+}
+
+#[test]
+fn clients_cannot_request_manual_message_privacy() {
+    let mut body = serde_json::to_value(post_input()).unwrap();
+    body["ephemeral"] = serde_json::json!(true);
+    assert!(serde_json::from_value::<PostMessage>(body).is_err());
+}
+
+#[tokio::test]
 async fn ephemeral_mention_selects_a_private_audience_before_delivery() {
     let repo = fixture();
     let events = Events::default();
-    let service =
-        MessageService::new(repo.clone(), events.clone()).with_ephemeral_agents(EphemeralAgents);
+    let service = MessageService::new(repo.clone(), events.clone())
+        .with_ephemeral_agents(AgentSettings { ephemeral: true });
     let mut input = post_input();
     input.mentions = vec![SimpleMention {
         entity_type: "bot".into(),
@@ -107,7 +152,7 @@ async fn parent_owner_cannot_read_write_react_to_or_delete_another_users_private
 }
 
 #[tokio::test]
-async fn replies_inherit_privacy_and_a_private_reply_to_a_public_thread_forks() {
+async fn replies_inherit_privacy_and_ephemeral_mentions_fork_public_threads() {
     let mut repo = fixture();
     repo.state.anchor = None;
     repo.state.visibility = MessageVisibility::Private {
@@ -128,8 +173,12 @@ async fn replies_inherit_privacy_and_a_private_reply_to_a_public_thread_forks() 
     assert_eq!(result.thread_id, Some(repo.message.id));
 
     repo.state.visibility = MessageVisibility::Public;
-    let service = MessageService::new(repo.clone(), Events::default());
-    reply.ephemeral = true;
+    let service = MessageService::new(repo.clone(), Events::default())
+        .with_ephemeral_agents(AgentSettings { ephemeral: true });
+    reply.mentions = vec![SimpleMention {
+        entity_type: "bot".into(),
+        entity_id: bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string(),
+    }];
     let result = service
         .post(
             access("macro|author@example.com", "doc", AccessLevel::Comment),
@@ -144,8 +193,8 @@ async fn replies_inherit_privacy_and_a_private_reply_to_a_public_thread_forks() 
 #[tokio::test]
 async fn an_edit_cannot_introduce_an_ephemeral_agent_into_a_public_thread() {
     let repo = fixture();
-    let service =
-        MessageService::new(repo.clone(), Events::default()).with_ephemeral_agents(EphemeralAgents);
+    let service = MessageService::new(repo.clone(), Events::default())
+        .with_ephemeral_agents(AgentSettings { ephemeral: true });
     let result = service
         .patch(
             access("macro|author@example.com", "doc", AccessLevel::Comment),
@@ -168,14 +217,18 @@ async fn an_edit_cannot_introduce_an_ephemeral_agent_into_a_public_thread() {
 }
 
 #[tokio::test]
-async fn private_call_chat_is_rejected_before_creating_the_canonical_thread() {
+async fn ephemeral_agent_call_chat_is_rejected_before_creating_the_canonical_thread() {
     let repo = fixture();
-    let service = MessageService::new(repo.clone(), Events::default());
+    let service = MessageService::new(repo.clone(), Events::default())
+        .with_ephemeral_agents(AgentSettings { ephemeral: true });
     let call_id = Uuid::from_u128(10);
     for thread_id in [None, Some(call_id)] {
         let mut input = post_input();
         input.thread_id = thread_id;
-        input.ephemeral = true;
+        input.mentions = vec![SimpleMention {
+            entity_type: "bot".into(),
+            entity_id: bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string(),
+        }];
         let result = service
             .post(
                 call_receipt("macro|author@example.com", call_id, AccessLevel::Comment).unwrap(),

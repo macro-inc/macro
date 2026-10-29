@@ -1453,20 +1453,19 @@ for progress, cancellation, retries, and mobile save/share verification.
 
 ## Private threads and ephemeral agents
 
-The channel composer's visibility menu starts at **Everyone**. Choose **Only you**
-to start a private thread. Only the sender sees it and any agent replies; it stays
-saved in that person's channel history. Each private message has a lock and an
-**Only you** label. Desktop and phone use the same audience control.
-On a phone, open the collapsed composer first; choosing an audience or closing
-its menu keeps the composer open and ready to type.
+Thread privacy is automatic and comes only from the mentioned agent's
+**Ephemeral agent** setting. When a person @mentions an ephemeral agent, the
+mentioning message, agent replies, and further messages in that thread are
+visible only to that person and stay saved in their channel history.
 
-Mentioning an agent configured as **Ephemeral agent** automatically selects and
-locks **Only you**. Removing the mention keeps the draft private until the sender
-chooses Everyone. Replies to a private thread inherit its audience. Choosing
-Only you while replying to a shared thread starts a separate private thread;
-it does not change who can see the original thread.
+Desktop and phone composers have no audience picker or visibility labels.
+Mentioning a normal agent or a person behaves as before. Removing the ephemeral
+agent mention before sending leaves an ordinary shared message. Replies to an
+existing ephemeral thread retain its private audience without another mention.
+Mentioning an ephemeral agent while replying to a shared thread starts a separate
+private thread and preserves the original shared thread's audience.
 
-Verify with two local accounts in the same channel: send and reopen a private
+Verify with two local accounts in the same channel: mention an ephemeral agent and reopen its
 thread as the sender, then check that the other account cannot see it, fetch its
 root or replies by URL/id, receive notifications, or find its contents in shared
 search. Verify a normal shared send afterward. Private attachments must not be

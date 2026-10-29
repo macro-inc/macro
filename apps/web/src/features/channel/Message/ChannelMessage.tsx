@@ -2,7 +2,6 @@ import { useMessageActionDrawer } from '@channel/Mobile/message-action-drawer-co
 import { touchHandler } from '@core/directive/touchHandler';
 import type { MessageActions, MessageData } from '@core/messages/types';
 import { messageSendMotion } from '@core/util/message-send-motion';
-import LockIcon from '@icon/system/regular/lock-key.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import type { MessageParent } from '@service-storage/messages';
 import { type JSX, Match, Show, Switch } from 'solid-js';
@@ -66,12 +65,6 @@ function MessageContentSlot(props: {
 
   const content = (
     <>
-      <Show when={message().visibility?.type === 'private'}>
-        <div class="mb-1 flex items-center gap-1 text-xs text-ink-muted">
-          <LockIcon class="size-3" />
-          Only you
-        </div>
-      </Show>
       <Switch>
         <Match when={inlineEditing()}>
           {(editing) => (

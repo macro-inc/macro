@@ -48,7 +48,6 @@ import {
 } from 'lexical';
 import {
   type Accessor,
-  createEffect,
   createSignal,
   type JSX,
   Match,
@@ -80,7 +79,6 @@ import {
 import { createCollapsedInputState } from './create-collapsed-input-state';
 import { FormatButtons } from './FormatButtons';
 import { Input } from './Input';
-import { MessagePrivacyControl } from './MessagePrivacyControl';
 import type {
   EntityMentionInsertCoordinates,
   InputAttachmentTracker,
@@ -256,7 +254,6 @@ export function ChannelInput(props: ChannelInputProps) {
   // Suppresses focus-out handling during clearComposer's iOS blur/refocus
   // cycle, which is not a user-intended blur.
   let isInternalRefocus = false;
-  let isPrivacyMenuOpen = false;
   // Assigned once applySnapshot exists. Send clears before the request, so a
   // failure has to put the same draft back into the editor.
   let restoreFailedSend = (_snapshot: InputSnapshot) => {};
@@ -278,13 +275,7 @@ export function ChannelInput(props: ChannelInputProps) {
       onRemoveAttachment: props.onRemoveAttachment,
       onStartTyping: props.onStartTyping,
       onStopTyping: props.onStopTyping,
-      onSend: props.onSend
-        ? (snapshot) =>
-            props.onSend?.({
-              ...snapshot,
-              ...(isPrivate() ? { ephemeral: true } : {}),
-            })
-        : undefined,
+      onSend: props.onSend,
     },
     onSendError: props.onSendError,
     clearEditor: () => clearComposer(),
@@ -315,13 +306,8 @@ export function ChannelInput(props: ChannelInputProps) {
     mentionsTracker.mentions,
     () => props.parent !== undefined
   );
-  createEffect(() => {
-    if (ephemeralAgent()) inputState.setEphemeral(true);
-  });
-  const privacyLocked = () =>
-    props.input.privateThread === true || !!ephemeralAgent();
   const isPrivate = () =>
-    privacyLocked() || inputState.view().ephemeral === true;
+    props.input.privateThread === true || !!ephemeralAgent();
   let pendingRestore:
     | {
         snapshot: InputSnapshot;
@@ -338,7 +324,6 @@ export function ChannelInput(props: ChannelInputProps) {
     options?: RestoreSnapshotOptions
   ) => {
     acceptTyping = false;
-    inputState.setEphemeral(snapshot.ephemeral ?? false);
     markdownEditor.controls.setMarkdown(snapshot.value);
     pendingCursor = options?.cursor;
     attachmentTracker.setAttachments(snapshot.attachments);
@@ -779,22 +764,6 @@ export function ChannelInput(props: ChannelInputProps) {
         onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
         onDragEnd={() => inputState.setIsDraggedOver(false)}
       >
-        <Show when={props.parent?.type === 'channel' && !props.children}>
-          <MessagePrivacyControl
-            private={isPrivate()}
-            locked={privacyLocked()}
-            newThread={isReplyInput(props.input) && !props.input.privateThread}
-            reason={
-              ephemeralAgent()
-                ? `@${ephemeralAgent()?.bot.name} is an ephemeral agent. Its threads are only visible to you.`
-                : undefined
-            }
-            onChange={(value) => inputState.setEphemeral(value)}
-            onOpenChange={(open) => {
-              isPrivacyMenuOpen = open;
-            }}
-          />
-        </Show>
         <Input.Layout
           ref={setLayout}
           oneLineInput={oneLineInput()}
@@ -921,7 +890,6 @@ export function ChannelInput(props: ChannelInputProps) {
           const next = e.relatedTarget as Node | null;
           if (next && e.currentTarget.contains(next)) return;
           if (isInternalRefocus) return;
-          if (isPrivacyMenuOpen) return;
           if (dictation.active()) return;
           collapsedInput.collapse();
         }}

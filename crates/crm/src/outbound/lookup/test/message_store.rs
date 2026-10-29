@@ -35,7 +35,6 @@ async fn setup(pool: &PgPool) {
 
 fn input(content: &str, root: Option<Uuid>) -> PostMessage {
     PostMessage {
-        ephemeral: false,
         id: None,
         attribution: Default::default(),
         notification_policy: Default::default(),

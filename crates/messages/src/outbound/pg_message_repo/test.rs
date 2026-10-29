@@ -41,7 +41,6 @@ fn command(document: &str, root: Option<Uuid>, content: &str) -> CreateMessage {
         triggered_via: None,
         triggered_by: None,
         input: PostMessage {
-            ephemeral: false,
             id: None,
             attribution: Default::default(),
             notification_policy: Default::default(),

@@ -94,7 +94,6 @@ impl<ESvc: EntityAccessService> AsyncTool<MessageToolContext<ESvc>> for Comment 
             .post(
                 access,
                 PostMessage {
-                    ephemeral: false,
                     id: None,
                     attribution: ctx.attribution(),
                     notification_policy: PostMessageNotificationPolicy::Default,

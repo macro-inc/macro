@@ -1367,8 +1367,8 @@ function AgentEditorPage(props: {
               </AgentFormSection>
 
               <AgentFormSection
-                title="Message privacy"
-                description="Choose who sees conversations started with an @mention."
+                title="Thread privacy"
+                description="Automatically keep threads private when this agent is mentioned."
               >
                 <Checkbox
                   checked={isEphemeral()}
@@ -1383,8 +1383,8 @@ function AgentEditorPage(props: {
                     </Checkbox.Label>
                     <Checkbox.Description class="text-xs leading-relaxed text-ink-muted">
                       Only the person who @mentions this agent can see the
-                      thread and its replies. Conversations stay saved in their
-                      history.
+                      mentioning message, agent replies, and further messages in
+                      that thread. Everything stays saved in their history.
                     </Checkbox.Description>
                   </div>
                 </Checkbox>

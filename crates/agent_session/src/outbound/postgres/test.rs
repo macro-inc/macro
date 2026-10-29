@@ -2748,7 +2748,6 @@ async fn a_document_session_preserves_its_origin_and_inherits_live_document_acce
             triggered_via: None,
             triggered_by: None,
             input: PostMessage {
-                ephemeral: false,
                 id: None,
                 attribution: Default::default(),
                 notification_policy: Default::default(),

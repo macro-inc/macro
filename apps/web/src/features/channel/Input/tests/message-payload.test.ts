@@ -170,11 +170,13 @@ describe('buildPostMessageRequest — bot mentions', () => {
   });
 });
 
-it('sends the explicit private audience choice without changing public requests', () => {
-  const snapshot = snap([]);
-  expect(buildPostMessageRequest({ snapshot }).ephemeral).toBeUndefined();
-  expect(
-    buildPostMessageRequest({ snapshot: { ...snapshot, ephemeral: true } })
-      .ephemeral
-  ).toBe(true);
+it('leaves the audience to the server when sending an agent mention', () => {
+  const botPrincipal = 'bot|00000000-0000-0000-0000-000000000001';
+  const request = buildPostMessageRequest({
+    snapshot: snap([{ itemType: 'user', itemId: botPrincipal }]),
+  });
+  expect(request.mentions).toEqual([
+    { entity_type: 'bot', entity_id: botPrincipal },
+  ]);
+  expect(request).not.toHaveProperty('ephemeral');
 });

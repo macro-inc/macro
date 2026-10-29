@@ -30,8 +30,8 @@ production composer and pastes a Macro link, then Markdown. Both land as literal
 code text: the link used to become a mention the code block dropped, and the
 Markdown used to lose its syntax.
 
-Private composer controls have separate desktop and phone coverage:
-
-```sh
-bunx playwright test --config src/features/channel/Input/browser-test/privacy.playwright.config.ts
-```
+Thread privacy is determined by the mentioned agent's settings on the server.
+The composer has no visibility controls or saved audience choice. Exercise
+agent mentions, inherited ephemeral-thread replies, and shared-thread forks
+against the isolated full stack with two users; see
+`docs/agent-guide/channels.md` at the repository root.
