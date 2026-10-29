@@ -122,7 +122,7 @@ function ToolWindow(props: {
         scrolling = false;
       }}
     >
-      <div ref={setContent} class="flex min-w-0 flex-col pl-6">
+      <div ref={setContent} class="flex min-w-0 flex-col">
         {props.children}
       </div>
     </div>
