@@ -1,11 +1,11 @@
 import { perfMark } from '@app/observability/perf-marks';
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
-import { getNativeNetworkAbortSignal } from '@core/mobile/native-network-status';
 import { Telemetry } from '@macro-inc/observability';
 
 import { fetchWithAuth } from '@service-auth/fetch';
 import { err, ok, type Result } from 'neverthrow';
+import { getNativeNetworkAbortSignal } from '../mobile/native-network-status';
 import { fireAndForget } from './fireAndForget';
 import type { ObjectLike, ResultError } from './result';
 import {
