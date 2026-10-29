@@ -120,6 +120,7 @@ impl LifecycleFold {
         self.closed.insert(message.id);
         self.progress.remove(&message.id);
         signals.push(TurnSignal::TurnEnded {
+            notification_noop: false,
             turn: message.id,
             action_id: self.action_id(message),
             stop: stop.clone(),
@@ -137,9 +138,35 @@ impl LifecycleFold {
                 candidate.id == reply.id && matches!(candidate.author, Author::User { .. })
             })
             .and_then(|prompt| prompt.request_id)
+            .or_else(|| {
+                self.inner
+                    .metadata()
+                    .notifications
+                    .iter()
+                    .find(|event| event.turn == reply.id.0)
+                    .and_then(|event| event.action_id.parse().ok())
+                    .map(AgentActionId::from_uuid)
+            })
     }
 
     fn observe_metadata(&mut self, metadata: &SessionMetadata, signals: &mut Vec<TurnSignal>) {
+        if let Some(turn) = metadata.noop_turn.map(TurnId)
+            && self.closed.insert(turn)
+        {
+            let action_id = metadata
+                .notifications
+                .iter()
+                .find(|event| event.turn == turn.0)
+                .and_then(|event| event.action_id.parse().ok())
+                .map(AgentActionId::from_uuid);
+            signals.push(TurnSignal::TurnEnded {
+                turn,
+                action_id,
+                notification_noop: true,
+                stop: super::model::StopReason::EndTurn,
+                last_text: None,
+            });
+        }
         let now = metadata
             .pending_elicitation()
             .map(|pending| (pending.request_id.clone(), TurnId(pending.turn)));

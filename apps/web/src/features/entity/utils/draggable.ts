@@ -1,4 +1,4 @@
-import { useDragOperation } from '@components/app/ItemDragAndDrop';
+import { useOptionalDragOperation } from '@components/app/ItemDragAndDrop';
 import { createSubRoot } from '@solid-primitives/rootless';
 import { createDraggable } from '@thisbeyond/solid-dnd';
 import {
@@ -19,7 +19,9 @@ export function createEntityDraggable(options: {
   /** Opt-in by the owning view; legacy rows register eagerly. */
   deferUntilInteraction?: Accessor<boolean>;
 }): (element: HTMLElement) => void {
-  const { isAltKey } = useDragOperation();
+  const operation = useOptionalDragOperation();
+  if (!operation) return () => {};
+  const { isAltKey } = operation;
   const draggableId = `${options.entity.id}-${options.splitId ?? createUniqueId()}`;
 
   const create = () => {

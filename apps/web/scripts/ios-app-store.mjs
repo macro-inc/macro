@@ -136,8 +136,8 @@ const BOOLEAN_FLAGS = new Set(["require-live", "require-unused-build"]);
 /// `windows` or `desktop`, that name plus `_`, `.` or `-`, or a `*.android.*`
 /// / `*.macos.*` / `*.linux.*` / `*.windows.*` infix; all behind
 /// cfg(target_os) / cfg(desktop)), the desktop updater manifest, editor
-/// config — plus the version of the client cache wasm package, which the team
-/// bumps when a cache change must ship (the app compiles the cache crates
+/// config and Markdown docs — plus the version of the client cache wasm
+/// package, which the team bumps when a cache change must ship (the app compiles the cache crates
 /// natively). `apple`/`ios` paths stay included: gen/apple is the Xcode
 /// project. Must match `native_tree_hash` in
 /// tooling/xtask/.../workflows/scripts/ios_native_tree.sh and the iOS Native
@@ -145,7 +145,7 @@ const BOOLEAN_FLAGS = new Set(["require-live", "require-unused-build"]);
 const NATIVE_TREE_PATH = "apps/web/tauri";
 const CACHE_WASM_MANIFEST = "crates/client/cache-wasm/Cargo.toml";
 const NATIVE_TREE_EXCLUDE =
-  /(^|\/)(android|macos|linux|windows|desktop)([_./-]|$)|\.(android|macos|linux|windows)\.|^desktop-release\.json$|^\.helix\//;
+  /(^|\/)(android|macos|linux|windows|desktop)([_./-]|$)|\.(android|macos|linux|windows)\.|\.md$|^desktop-release\.json$|^\.helix\//;
 const STAMP_RE = /native tree ([0-9a-f]{40})/;
 const STAMP_PR_RE = /for PR #(\d+)/;
 

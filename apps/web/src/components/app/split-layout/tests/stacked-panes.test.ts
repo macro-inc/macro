@@ -9,6 +9,10 @@ import {
   type SplitRoutes,
 } from '@app/lib/split-router';
 import { firstChangedDepth } from '@app/lib/split-router/routes/queries';
+import {
+  clearDocumentLifecycle,
+  startDocumentLifecycle,
+} from '@app/observability/document-lifecycle';
 import { paneRoute } from '@app/routes/app-route';
 import {
   appRoute,
@@ -150,6 +154,7 @@ function setup(url: string, stacked = true) {
 }
 
 afterEach(() => {
+  clearDocumentLifecycle();
   cleanup();
   SearchState.close();
   dispose?.();
@@ -157,6 +162,74 @@ afterEach(() => {
 });
 
 describe('stacked panes', () => {
+  it('releases saved state when entries are replaced and panes are removed', async () => {
+    startDocumentLifecycle();
+    const { manager, router } = setup('/search');
+    const pane = router.panes()[0]!;
+    for (let index = 0; index < 100; index++) {
+      const handle = manager.activeSplit()!;
+      const stop = handle.registerEntryStateCaptor('rows', () => [index]);
+      handle.captureEntryState();
+      await router.navigatePane(
+        pane,
+        index % 2 === 0 ? '/settings' : '/search',
+        { replace: true }
+      );
+      stop();
+    }
+    await Promise.resolve();
+    expect(
+      JSON.parse(sessionStorage.getItem('macro-document-lifecycle')!).navigation
+    ).toMatchObject({
+      paneCount: 1,
+      historyEntryCount: 1,
+      savedEntryStateCount: 0,
+    });
+    const handle = manager.activeSplit()!;
+    handle.registerEntryStateCaptor('rows', () => ['retained until close']);
+    handle.captureEntryState();
+    manager.openWithSplit(documents);
+    await router.remove(pane);
+    await Promise.resolve();
+
+    expect(
+      JSON.parse(sessionStorage.getItem('macro-document-lifecycle')!).navigation
+    ).toMatchObject({
+      paneCount: 1,
+      historyEntryCount: 1,
+      savedEntryStateCount: 0,
+    });
+  });
+
+  it('keeps reachable snapshots and releases a discarded forward branch', async () => {
+    startDocumentLifecycle();
+    const { manager, router } = setup('/search');
+    const pane = router.panes()[0]!;
+    const handle = manager.activeSplit()!;
+    const stopSearch = handle.registerEntryStateCaptor('rows', () => [
+      'search',
+    ]);
+    await router.navigatePane(pane, '/settings');
+    stopSearch();
+    const stopSettings = handle.registerEntryStateCaptor('rows', () => [
+      'settings',
+    ]);
+    handle.goBack();
+    stopSettings();
+    expect(handle.currentEntryState()?.rows).toEqual(['search']);
+    handle.goForward();
+    expect(handle.currentEntryState()?.rows).toEqual(['settings']);
+    handle.goBack();
+    await router.navigatePane(pane, '/drive');
+    await Promise.resolve();
+    expect(handle.canGoForward()).toBe(false);
+    expect(
+      JSON.parse(sessionStorage.getItem('macro-document-lifecycle')!).navigation
+    ).toMatchObject({ historyEntryCount: 2, savedEntryStateCount: 1 });
+    handle.goBack();
+    expect(handle.currentEntryState()?.rows).toEqual(['search']);
+  });
+
   it('restores search after a second entity evicts its mounted pane', () => {
     const { manager, stack, router } = setup('/search');
     const handle = manager.activeSplit()!;

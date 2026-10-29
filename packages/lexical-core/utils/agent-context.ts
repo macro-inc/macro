@@ -35,6 +35,16 @@ export type ContextPerson = {
   email?: string;
 };
 
+/** A file attached to a context message. */
+export type ContextAttachment = {
+  /** What was attached, such as `static/image`, `static/video`, or `document`. */
+  entity_type: string;
+  /** Its id. For a static file, the file id used in `/file/{id}`. */
+  entity_id: string;
+  /** Where the agent can fetch it; only static files have one. */
+  url?: string;
+};
+
 /** A message the agent may read. */
 export type ContextMessage = {
   id: string;
@@ -42,6 +52,8 @@ export type ContextMessage = {
   /** Internal markdown. */
   content: string;
   posted_at: string;
+  /** Absent when empty. */
+  attachments?: ContextAttachment[];
 };
 
 /** Messages of one discussion, oldest first. */
@@ -709,19 +721,52 @@ type DiscussionReading = {
 
 type MessageMarker = { attribute: string; messageId: string };
 
+function attachmentNodes(
+  attachments: ContextAttachment[] | undefined
+): FxpNode[] {
+  return (attachments ?? []).map((attachment) =>
+    el(
+      'attachment',
+      [],
+      present({
+        type: attachment.entity_type,
+        id: attachment.entity_id,
+        url: attachment.url,
+      })
+    )
+  );
+}
+
 function contextMessageNode(
   message: ContextMessage,
   marker: MessageMarker
 ): FxpNode {
   return el(
     'message',
-    [text(readable(message.content))],
+    [text(readable(message.content)), ...attachmentNodes(message.attachments)],
     present({
       id: message.id,
       ...personAttributes(message.author, 'author'),
       at: message.posted_at,
       [marker.attribute]: message.id === marker.messageId ? 'true' : undefined,
     })
+  );
+}
+
+function discussionHasAttachments(discussion: DiscussionContext): boolean {
+  const quoted =
+    discussion.reply_target.kind === 'quote'
+      ? discussion.reply_target.message
+      : undefined;
+  const threads = [
+    ...(discussion.thread ? [discussion.thread] : []),
+    ...(discussion.channel ?? []),
+  ];
+  return (
+    (quoted?.attachments?.length ?? 0) > 0 ||
+    threads.some((thread) =>
+      thread.messages.some((message) => (message.attachments?.length ?? 0) > 0)
+    )
   );
 }
 
@@ -951,6 +996,13 @@ function discussionNode(
       : []),
     personNode('sender', discussion.sender),
     contextReplyTargetNode(discussion.reply_target, marker, reading.subject),
+    ...(discussionHasAttachments(discussion)
+      ? [
+          note(
+            'Attachments are listed on each message and can be fetched by their url.'
+          ),
+        ]
+      : []),
     ...(discussion.thread
       ? [contextThreadNode(discussion.thread, marker)]
       : []),
@@ -1373,9 +1425,7 @@ function sessionNode(
 ): FxpNode {
   const isOwner = sender?.id === owner.id;
   const prompter = sender?.name ?? 'A bot acting for nobody';
-  const policy = isOwner
-    ? `${owner.name} owns this session and sent this prompt.`
-    : `${prompter} sent this prompt, but ${owner.name} owns this session. You act with the access of ${owner.name} - their email, calendar, documents, and connected apps. Every tool call that uses that access waits for ${owner.name} to approve it, so use the tools the request needs and let ${owner.name} decide. Do not refuse on ${owner.name}'s behalf: the approval request is how they say yes or no. Looking things up on the public web needs no approval. Do not repeat anything private to ${owner.name} that you saw in earlier turns. If a call is declined or not approved, say so and do not look for another way to do it.`;
+  const policy = `${prompter} sent this prompt. ${owner.name} owns this session. Choose acting_as explicitly on each tool that accepts it. Prefer requester: this uses the access and connected apps of the person who sent this prompt, without an extra account approval. Choose owner only when the request calls for ${owner.name}'s access; when someone else prompted this turn, those calls wait for ${owner.name}'s approval. Public web lookups need no account selection. A bot or system event with no authenticated acting user has no requester account. If the selected account lacks a connection, offer the connect action returned by the tool; never silently switch accounts. Do not repeat private information from another person's earlier tool results. If a call is declined or not approved, say so and do not try another way to perform it. Existing email/calendar draft confirmations still apply.`;
   return el(
     'session',
     [

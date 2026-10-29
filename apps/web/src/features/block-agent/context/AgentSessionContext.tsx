@@ -74,21 +74,18 @@ export type AgentSessionState = {
   /** Resolve only after the runtime confirms the selected model and effort. */
   selectModel: (model: string, effort?: EffortSelection) => Promise<void>;
   /**
-   * Send the next queued message now: stop the running turn, and show the
-   * queue head as sent under the id the server already holds it by. The
-   * server dispatches it when the turn actually ends, and that row promotes
-   * the speculation in place. No-op with nothing queued, and while the head
-   * a previous call showed as sent is still unconfirmed (`turn` reads
-   * `starting`): a stop posted then would end the turn already ending, and
-   * the server would dispatch that head, not the next one.
+   * Force-send the oldest queued message: the same as {@link steer} on the
+   * queue head. No-op with nothing queued.
    */
   sendNext: () => void;
   /**
-   * Steer one queued message: show it as sent, move it to the front of the
-   * queue, and cancel the turn in flight so it runs next. No-op while the
-   * prompt a previous steer or send-next showed as sent is still unconfirmed.
+   * Force-send one queued message: show it as sent at once, move it to the
+   * front of the queue, and cancel the turn in flight so it runs next.
+   * Consecutive presses all apply at once and steer in press order.
    */
   steer: (actionId: string) => void;
+  /** Queued messages whose force-send the server refused; still queued. */
+  steerFailed: Accessor<ReadonlySet<string>>;
   /** The live requests, and the action that answers each one. */
   interactions: InteractionController;
   /**

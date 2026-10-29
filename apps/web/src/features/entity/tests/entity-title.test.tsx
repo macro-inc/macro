@@ -2,7 +2,7 @@ import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EntityTitle } from '../extractors/entity-title';
-import type { FormEntity } from '../types/entity';
+import type { EmailEntity, FormEntity } from '../types/entity';
 
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
@@ -64,5 +64,22 @@ describe('form entity titles', () => {
     };
     const { getByText } = render(() => <EntityTitle entity={form} />);
     expect(getByText('Untitled form')).toBeTruthy();
+  });
+});
+
+describe('email thread titles', () => {
+  it('drops the reply prefix the thread header drops', () => {
+    const thread: EmailEntity = {
+      type: 'email',
+      id: '019a1f40-2c7e-7d10-9a4b-6f2b0c1d2e3f',
+      name: 'Re: hello from my outlook to your outlook',
+      ownerId: 'macro|teo@macro.com',
+      isRead: true,
+      isDraft: false,
+      isImportant: true,
+      done: false,
+    };
+    const { container } = render(() => <EntityTitle entity={thread} />);
+    expect(container.textContent).toBe('hello from my outlook to your outlook');
   });
 });

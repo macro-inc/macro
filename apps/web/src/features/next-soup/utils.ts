@@ -1,5 +1,7 @@
 import { isListViewID } from '@app/constants/list-views';
+import { markAgentSessionNotificationsSeenOnOpen } from '@app/features/block-agent/mark-session-notifications-seen';
 import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
+import { markCalendarNotificationSeenOnOpen } from '@app/features/calendar/mark-event-notifications-seen';
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
 import {
   type CalendarEventTime,
@@ -87,7 +89,6 @@ import {
   getChannelNotificationParams,
   getDocumentCommentLocation,
   getDocumentCommentNotification,
-  markNotificationsForEntityAsReadInBackground,
   type NotificationSource,
   notificationIsRead,
   setDoneOverride,
@@ -99,6 +100,7 @@ import { queryClient } from '@queries/client';
 import { updateEmailThreadState } from '@queries/email/cache-cleanup';
 import {
   archiveEmailThread,
+  archiveEmailThreads,
   type EmailArchiveDisposition,
 } from '@queries/email/integration';
 import { emailKeys } from '@queries/email/keys';
@@ -261,9 +263,7 @@ export const openEntityInNewTab = ({
   location ??= getRowClickFallbackLocation(entity);
   // Build URL for the entity
   let entityPath: string;
-  if (entity.type === 'initiative') {
-    entityPath = `/app/component/${projectRouteId({ id: entity.id, section: 'overview' })}`;
-  } else if (entity.type === 'calendar_event') {
+  if (entity.type === 'calendar_event') {
     entityPath = `/app${calendarPath(getPreferredCalendarPeriodView())}`;
   } else if (entity.type === 'document') {
     const { fileType, subType } = entity;
@@ -888,20 +888,16 @@ export function markChannelNotificationsSeenOnOpen(
   });
 }
 
-/** Mark calendar-event notifications seen when opening their occurrence. */
-export function markCalendarNotificationSeenOnOpen(
-  entity: EntityData,
+/**
+ * Clear the dots of rows whose opened view has no block that marks the row's
+ * loaded notifications read: calendar events and agent sessions.
+ */
+export function markRowNotificationsSeenOnOpen(
+  entity: EntityWithRawNotifications<EntityData>,
   notificationSource: NotificationSource
 ) {
-  // Calendar events open a component split without a block to clear notifications.
-  if (entity.type !== 'calendar_event') return;
-  fireAndForget(
-    markNotificationsForEntityAsReadInBackground(notificationSource, {
-      type: entity.type,
-      id: entity.id,
-    }),
-    'open-entity-in-split'
-  );
+  markCalendarNotificationSeenOnOpen(entity, notificationSource);
+  markAgentSessionNotificationsSeenOnOpen(entity, notificationSource);
 }
 
 /**
@@ -1532,9 +1528,7 @@ export async function executeMarkEntitiesDone(args: {
   };
   const [emailResults, [notificationResult], [entityResult]] =
     await Promise.all([
-      Promise.allSettled(
-        emailIds.map((id) => archiveEmailThread({ value: true, id }))
-      ),
+      archiveEmailThreads(emailIds, true),
       Promise.allSettled([writeNotificationIds()]),
       Promise.allSettled([writeNotificationEntities()]),
     ]);
@@ -1631,9 +1625,7 @@ export async function executeMarkEntitiesUndone(args: {
     return notificationIds;
   };
   const [emailResults, [notificationResult]] = await Promise.all([
-    Promise.allSettled(
-      emailIds.map((id) => archiveEmailThread({ value: false, id }))
-    ),
+    archiveEmailThreads(emailIds, false),
     Promise.allSettled([writeNotificationIds()]),
   ]);
   for (const [index, result] of emailResults.entries()) {

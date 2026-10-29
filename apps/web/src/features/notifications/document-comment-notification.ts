@@ -1,5 +1,5 @@
-import { compareDateDesc } from '@core/util/date';
 import type { WithNotification } from '@entity/types/notification';
+import { newestRowNotification } from './row-notification';
 import type { UnifiedNotification } from './types';
 
 export const DOCUMENT_COMMENT_EVENT_TYPES = [
@@ -22,21 +22,9 @@ export function getDocumentCommentNotification(
   }>
 ): UnifiedNotification | undefined {
   if (entity.type !== 'document') return undefined;
-  const notification = (entity.notifications?.() ?? [])
-    .filter((n) => n.state !== 'done')
-    .sort((a, b) => compareDateDesc(a.created_at, b.created_at))[0];
-  if (
-    !notification ||
-    !isDocumentCommentTag(notification.notification_metadata.tag)
-  ) {
-    return undefined;
-  }
-  if (
-    entity.notificationDisplayCutoff != null &&
-    compareDateDesc(notification.created_at, entity.notificationDisplayCutoff) >
-      0
-  ) {
-    return undefined;
-  }
-  return notification;
+  const notification = newestRowNotification(entity);
+  return notification &&
+    isDocumentCommentTag(notification.notification_metadata.tag)
+    ? notification
+    : undefined;
 }

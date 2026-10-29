@@ -16,6 +16,7 @@ chrono = { workspace = true }
 fractional_index = { workspace = true }
 macro_user_id = { path = "../macro_user_id", features = ["schema"] }
 macro_uuid = { path = "../macro_uuid" }
+nom = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 specta = { workspace = true, features = ["chrono", "uuid"] }

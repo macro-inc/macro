@@ -1,7 +1,8 @@
 import { Telemetry } from '@macro-inc/observability';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { initializeBrowserObservability } from './browser';
 import { readDesktopDiagnostics } from './desktop';
+import { clearDocumentLifecycle } from './document-lifecycle';
 import { frontendInstanceId } from './frontend-instance';
 import { initializeUiOperationTelemetry } from './ui-operation';
 
@@ -56,6 +57,8 @@ beforeEach(() => {
     await config.enabled();
   });
 });
+
+afterEach(clearDocumentLifecycle);
 
 it('explicit native recording overrides the normal enablement gate and exporter before startup', async () => {
   vi.mocked(readDesktopDiagnostics).mockResolvedValue({
@@ -132,6 +135,15 @@ it('drops browser and extension noise from window errors but reports app errors'
 });
 
 it('an older binary without diagnostics still obeys the normal telemetry gate', async () => {
+  sessionStorage.setItem(
+    'macro-document-lifecycle',
+    JSON.stringify({
+      frontendInstanceId: '11111111-1111-4111-8111-111111111111',
+      startedAtMs: Date.now() - 1000,
+      updatedAtMs: Date.now() - 1000,
+      visible: true,
+    })
+  );
   vi.mocked(readDesktopDiagnostics).mockResolvedValue(undefined);
   await initializeBrowserObservability();
   const config = vi.mocked(Telemetry.init).mock.calls[0][0];
@@ -142,4 +154,44 @@ it('an older binary without diagnostics still obeys the normal telemetry gate', 
     'app.runtime': 'tauri',
     'app.platform': 'desktop',
   });
+  expect(startupSpan.setAttr).toHaveBeenCalledWith(
+    'previous_document_checkpoint_available',
+    true
+  );
+  expect(startupSpan.setAttr).toHaveBeenCalledWith(
+    'previous_document_pagehide_observed',
+    false
+  );
+});
+
+it('revokes the previous document identity if logout happens while telemetry initializes', async () => {
+  sessionStorage.setItem(
+    'macro-document-lifecycle',
+    JSON.stringify({
+      frontendInstanceId: '11111111-1111-4111-8111-111111111111',
+      startedAtMs: Date.now() - 1000,
+      updatedAtMs: Date.now() - 1000,
+      visible: true,
+    })
+  );
+  vi.mocked(readDesktopDiagnostics).mockResolvedValue(undefined);
+  const reached = Promise.withResolvers<void>();
+  const resume = Promise.withResolvers<void>();
+  vi.mocked(Telemetry.init).mockImplementation(async () => {
+    reached.resolve();
+    await resume.promise;
+  });
+  const initializing = initializeBrowserObservability();
+  await reached.promise;
+  clearDocumentLifecycle();
+  resume.resolve();
+  await initializing;
+  expect(startupSpan.setAttr).toHaveBeenCalledWith(
+    'previous_document_checkpoint_available',
+    false
+  );
+  expect(startupSpan.setAttr).not.toHaveBeenCalledWith(
+    'previous_document_instance_id',
+    expect.anything()
+  );
 });

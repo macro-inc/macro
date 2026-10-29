@@ -1,12 +1,12 @@
 import { useApplyPreset } from '@app/features/next-soup/soup-view/soup-view-tabs';
 import { toast } from '@core/component/Toast/Toast';
-import FloppyDiskIcon from '@phosphor/floppy-disk.svg';
-import LinkIcon from '@phosphor/link.svg';
-import PushPinIcon from '@phosphor/push-pin.svg';
-import SlidersIcon from '@phosphor/sliders-horizontal.svg';
-import StackIcon from '@phosphor/stack.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import { Button, cn, Dropdown, SegmentedControl, Tooltip } from '@ui';
+import FloppyDiskIcon from '@icon/system/regular/floppy-disk.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import PushPinIcon from '@icon/system/regular/push-pin.svg';
+import SlidersIcon from '@icon/system/regular/sliders-horizontal.svg';
+import StackIcon from '@icon/system/regular/stack.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
+import { Button, ButtonGroup, cn, Dropdown, Tabs, Tooltip } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import { useCrmContext } from '../context/crm-context';
@@ -54,9 +54,10 @@ const SavedViewRow = (props: {
       {(onSetDefault) => (
         <Tooltip label={props.isDefault ? 'Remove default' : 'Set as default'}>
           <Button
+            aria-label={props.isDefault ? 'Remove default' : 'Set as default'}
+            tooltip={props.isDefault ? 'Remove default' : 'Set as default'}
             variant="ghost"
             size="icon-sm"
-            label={props.isDefault ? 'Remove default' : 'Set as default'}
             class={cn(
               'size-6 shrink-0 p-1 text-ink-muted',
               !props.isDefault &&
@@ -71,9 +72,10 @@ const SavedViewRow = (props: {
     </Show>
     <Tooltip label="Copy link">
       <Button
+        aria-label="Copy link"
+        tooltip="Copy link"
         variant="ghost"
         size="icon-sm"
-        label="Copy link"
         class="size-6 shrink-0 p-1 text-ink-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
         onClick={props.onCopyLink}
       >
@@ -84,9 +86,10 @@ const SavedViewRow = (props: {
       {(onDelete) => (
         <Tooltip label="Delete view">
           <Button
+            aria-label="Delete view"
+            tooltip="Delete view"
             variant="ghost"
             size="icon-sm"
-            label="Delete view"
             class="size-6 shrink-0 p-1 text-ink-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
             onClick={() => onDelete()()}
           >
@@ -108,7 +111,9 @@ const EmptyViewsHint = (props: { children: JSX.Element }) => (
  * list/board mode, stage/owner sub-filters, tab), plus share links that
  * encode the same state into the URL (see `queries/saved-view-codec.ts`).
  */
-export function CompanyViewsMenu(props: { hideLabel?: boolean } = {}) {
+export function CompanyViewsMenu(
+  props: { hideLabel?: boolean; grouped?: boolean } = {}
+) {
   const copyShareLink = useCrmContext().copyViewLink;
   const {
     soup,
@@ -179,14 +184,21 @@ export function CompanyViewsMenu(props: { hideLabel?: boolean } = {}) {
     }
   };
 
+  const triggerSize = () => {
+    if (!props.hideLabel) return 'sm';
+    return props.grouped ? 'icon-sm' : 'icon-md';
+  };
+
   return (
     <Dropdown open={open()} onOpenChange={handleOpenChange}>
       <Dropdown.Trigger
+        tooltip={props.hideLabel ? 'Views' : undefined}
+        as={props.grouped ? ButtonGroup.Button : Button}
         variant="ghost"
-        label={props.hideLabel ? 'Views' : undefined}
+        size={triggerSize()}
         aria-label={props.hideLabel ? 'Views' : undefined}
       >
-        <StackIcon />
+        <StackIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
         <Show when={!props.hideLabel}>
           <span>Views</span>
         </Show>
@@ -278,7 +290,8 @@ export function CompanyViewsMenu(props: { hideLabel?: boolean } = {}) {
                 )}
               />
               <div class="flex items-center justify-between gap-1.5">
-                <SegmentedControl
+                <Tabs
+                  touch="segmented"
                   size="sm"
                   aria-label="View visibility"
                   value={saveScope()}
@@ -289,7 +302,7 @@ export function CompanyViewsMenu(props: { hideLabel?: boolean } = {}) {
                   ]}
                 />
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   disabled={!saveName().trim()}
                   onClick={saveCurrentView}
@@ -318,7 +331,7 @@ export function CompanyViewsMenu(props: { hideLabel?: boolean } = {}) {
  * captured by saved views. Admins/owners additionally get a toggle to view
  * the hidden-companies set (backed by the active/hidden tab presets).
  */
-export function CompanyDisplayMenu() {
+export function CompanyDisplayMenu(props: { grouped?: boolean } = {}) {
   const { options, toggleListColumn } = useCrmDisplayOptions();
   const { activeTab } = useCrmWorkspace();
   const { applyTabPreset } = useApplyPreset();
@@ -329,8 +342,14 @@ export function CompanyDisplayMenu() {
   return (
     <Dropdown>
       <Tooltip label="Display options">
-        <Dropdown.Trigger variant="ghost" label="Display options">
-          <SlidersIcon />
+        <Dropdown.Trigger
+          aria-label="Display options"
+          tooltip="Display options"
+          as={props.grouped ? ButtonGroup.Button : Button}
+          variant="ghost"
+          size={props.grouped ? 'icon-sm' : 'icon-md'}
+        >
+          <SlidersIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
         </Dropdown.Trigger>
       </Tooltip>
 

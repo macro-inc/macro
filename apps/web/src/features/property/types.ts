@@ -29,11 +29,19 @@ export type ValueType =
   | 'STRING'
   | 'NUMBER'
   | 'DATE'
+  | 'DATE_RANGE'
   | 'BOOLEAN'
   | 'SELECT_STRING'
   | 'SELECT_NUMBER'
   | 'ENTITY'
   | 'LINK';
+
+/**
+ * A time range, never ending before it starts. An all-day range spans the
+ * local calendar days `start` to `end`, both included, each at local
+ * midnight; a timed range runs from the instant `start` to the instant `end`.
+ */
+export type DateRangeValue = { allDay: boolean; start: Date; end: Date };
 
 /**
  * UI layer property with discriminated union for type-safe values
@@ -66,6 +74,7 @@ export type Property = {
   | { valueType: 'NUMBER'; value: number | null }
   | { valueType: 'BOOLEAN'; value: boolean | null }
   | { valueType: 'DATE'; value: Date | null }
+  | { valueType: 'DATE_RANGE'; value: DateRangeValue | null }
   // Multi-value types (select values are option IDs, not display values)
   | { valueType: 'SELECT_STRING'; value: string[] | null }
   | { valueType: 'SELECT_NUMBER'; value: string[] | null }
@@ -79,6 +88,7 @@ export type StringProperty = PropertyOfType<'STRING'>;
 export type NumberProperty = PropertyOfType<'NUMBER'>;
 export type BooleanProperty = PropertyOfType<'BOOLEAN'>;
 export type DateProperty = PropertyOfType<'DATE'>;
+export type DateRangeProperty = PropertyOfType<'DATE_RANGE'>;
 export type SelectStringProperty = PropertyOfType<'SELECT_STRING'>;
 export type SelectNumberProperty = PropertyOfType<'SELECT_NUMBER'>;
 export type EntityProperty = PropertyOfType<'ENTITY'>;
@@ -89,7 +99,8 @@ export type SingleValueProperty =
   | StringProperty
   | NumberProperty
   | BooleanProperty
-  | DateProperty;
+  | DateProperty
+  | DateRangeProperty;
 
 /** Properties that hold multiple values (arrays) */
 export type MultiValueProperty =
@@ -168,6 +179,7 @@ export type PropertyApiValues =
   | { valueType: 'STRING'; value: string | null }
   | { valueType: 'NUMBER'; value: number | null }
   | { valueType: 'DATE'; value: Date | null }
+  | { valueType: 'DATE_RANGE'; value: DateRangeValue | null }
   | { valueType: 'BOOLEAN'; value: boolean | null }
   | { valueType: 'SELECT_STRING'; values: string[] | null }
   | { valueType: 'SELECT_NUMBER'; values: string[] | null }

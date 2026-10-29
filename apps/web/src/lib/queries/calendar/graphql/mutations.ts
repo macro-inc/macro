@@ -467,6 +467,7 @@ export async function executeGraphqlUpdate(
         ...(patch.reminders
           ? { reminders: graphqlReminders(patch.reminders) }
           : {}),
+        ...(patch.guestPolicy ? { guestPolicy: patch.guestPolicy } : {}),
         ...(patch.conference
           ? {
               conference: graphqlEnum<GraphqlCalendarConferenceChange>(
@@ -633,19 +634,21 @@ export async function executeGraphqlCreate(
       comment: null,
     })),
     reminders,
-    guestPolicy: {
+    guestPolicy: args.guestPolicy ?? {
       canModify: false,
       canInviteOthers: true,
       canSeeOtherGuests: true,
     },
+    isSnapshot: false,
     // The viewer organizes what they create; the server adds their own
     // attendee row, and with it the RSVP, when the event lands.
     viewerCan: {
       editDetails: true,
       inviteGuests: true,
       removeGuests: true,
-      setGuestPolicy: true,
+      setGuestPolicy: calendar?.capabilities.guestPolicy ?? false,
       rsvp: false,
+      organize: true,
     },
     createdAt: now,
     updatedAt: now,
@@ -701,6 +704,7 @@ export async function executeGraphqlCreate(
             }
           : {}),
         ...(args.macroCall ? { macroCall: true } : {}),
+        ...(args.guestPolicy ? { guestPolicy: args.guestPolicy } : {}),
         ...(args.outOfOffice
           ? {
               outOfOffice: {

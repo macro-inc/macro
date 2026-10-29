@@ -14,7 +14,7 @@ import type { CardPosition } from '@service-storage/generated/schemas/cardPositi
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import type { NewView } from '@service-storage/generated/schemas/newView';
 import type { ViewQuery } from '@service-storage/generated/schemas/viewQuery';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { v7 as uuidv7 } from 'uuid';
@@ -26,6 +26,10 @@ import {
 import type { CardMove } from '../../database/core/board-moves';
 import type { DatabaseViewColumn } from '../../database/core/database-view';
 import { createKeyedSerializer } from '../../database/core/keyed-serializer';
+import {
+  newTimelineWithTimeRangeColumn,
+  timelineWithTimeRangeColumn,
+} from '../../database/core/timeline-range';
 import type { DatabaseOpFailure } from '../../database/core/write-failure';
 import { applyOp, isResult, patchViews } from './detail-cache';
 import { databaseViewKeys } from './keys';
@@ -155,6 +159,37 @@ export function showAsBoardWithStatusColumn(
   );
 }
 
+/** Add a timeline along a new Time range column, the column and the timeline in one batch. */
+export function createTimelineWithTimeRangeColumn(params: {
+  databaseId: string;
+  tableId: string;
+  name: string;
+  query: ViewQuery;
+  columns: readonly DatabaseViewColumn[];
+  viewId: string;
+  column: string;
+}): ResultAsync<DatabaseView, DatabaseOpFailure> {
+  return applyColumnAndView(
+    params.databaseId,
+    params.tableId,
+    viewListKey(params.tableId),
+    newTimelineWithTimeRangeColumn(params)
+  );
+}
+
+/** Lay a view out as a timeline along a new Time range column, the column and the change in one batch. */
+export function showAsTimelineWithTimeRangeColumn(
+  view: DatabaseView,
+  columns: readonly DatabaseViewColumn[]
+): ResultAsync<DatabaseView, DatabaseOpFailure> {
+  return applyColumnAndView(
+    view.databaseId,
+    view.tableId,
+    view.id,
+    timelineWithTimeRangeColumn({ view, columns, column: uuidv7() })
+  );
+}
+
 /** Change a view; a later change made before this one answers keeps its place. */
 export function updateDatabaseView(
   view: DatabaseView,
@@ -264,27 +299,28 @@ export function reorderDatabaseViews(
     });
 }
 
+function cardPositionsQueryOptions(databaseId: string, id: string | undefined) {
+  return queryOptions({
+    queryKey: databaseViewKeys.positions(databaseId, id ?? '').queryKey,
+    queryFn: async () => {
+      const { positions } = await throwOnErr(() =>
+        storageServiceClient.databases.viewPositions({
+          id: databaseId,
+          viewId: id ?? '',
+        })
+      );
+      return positions;
+    },
+    enabled: !!id,
+  });
+}
+
 /** Where a board's cards sit, read again when its table changes. */
 export function useCardPositions(
   databaseId: string,
   viewId: Accessor<string | undefined>
 ) {
-  return useQuery(() => {
-    const id = viewId();
-    return {
-      queryKey: databaseViewKeys.positions(databaseId, id ?? '').queryKey,
-      queryFn: async () => {
-        const { positions } = await throwOnErr(() =>
-          storageServiceClient.databases.viewPositions({
-            id: databaseId,
-            viewId: id ?? '',
-          })
-        );
-        return positions;
-      },
-      enabled: !!id,
-    };
-  });
+  return useQuery(() => cardPositionsQueryOptions(databaseId, viewId()));
 }
 
 export function setCardPositions(

@@ -1,6 +1,7 @@
 use super::*;
 use crate::domain::models::{WorkFeedCandidateRequest, WorkFeedSoupMode};
 use crate::outbound::pg_soup_repo::work_feed::work_feed_soup_page;
+use item_filters::ast::agent_session::AgentSessionVisibility;
 
 fn work_request<'a>(
     filter: &'a EntityFilterAst,
@@ -47,7 +48,7 @@ async fn hidden_contexts_with_notifications_and_activity_stay_out_of_broad_feeds
     assert_eq!(before.len(), 1);
     assert!(before[0].attention_at.is_some() && before[0].touched_at.is_some());
     sqlx::query!(
-        "UPDATE agent_session SET list_hidden = TRUE, for_warming = FALSE WHERE id = $1",
+        "UPDATE agent_session SET visibility = 'hidden', for_warming = FALSE WHERE id = $1",
         mine
     )
     .execute(&pool)
@@ -121,5 +122,57 @@ async fn hidden_contexts_with_notifications_and_activity_stay_out_of_broad_feeds
         .await?
         .is_empty()
     );
+    Ok(())
+}
+
+/// Home's work feed leaves unlisted routine runs out even while they hold
+/// attention, and a feed that does not exclude them still shows them.
+#[sqlx::test(
+    fixtures(path = "../../../../../fixtures", scripts("notified_at")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn unlisted_runs_with_notifications_stay_out_of_feeds_that_exclude_them(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let (mine, _) = seed_agent_sessions(&pool).await?;
+    let sources = sources();
+    sqlx::query!(
+        "UPDATE agent_session SET source = 'routine', visibility = 'unlisted' WHERE id = $1",
+        mine,
+    )
+    .execute(&pool)
+    .await?;
+    let include = EntityFilterAst {
+        agent_session_filter: Some(Arc::new(Expr::val(AgentSessionLiteral::Include))),
+        ..Default::default()
+    };
+    let without_runs = EntityFilterAst {
+        agent_session_filter: Some(Arc::new(Expr::and(
+            Expr::val(AgentSessionLiteral::Include),
+            Expr::is_not(Expr::val(AgentSessionLiteral::Visibility(
+                AgentSessionVisibility::Unlisted,
+            ))),
+        ))),
+        ..Default::default()
+    };
+    assert_eq!(
+        work_feed_soup_page(
+            &pool,
+            work_request(&include, &sources, WorkFeedSoupMode::Attention, None)
+        )
+        .await?
+        .len(),
+        1
+    );
+    for mode in [WorkFeedSoupMode::Work, WorkFeedSoupMode::Attention] {
+        assert!(
+            work_feed_soup_page(&pool, work_request(&without_runs, &sources, mode, None))
+                .await?
+                .is_empty()
+        );
+    }
+    let notified =
+        notified_soup_page(&pool, req(Some(&without_runs), &[], &sources, EVERYTHING)).await?;
+    assert!(!keys(&notified).contains(&(EntityType::AgentSession, mine.to_string())));
     Ok(())
 }

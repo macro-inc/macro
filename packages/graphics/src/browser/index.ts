@@ -16,8 +16,9 @@ import {
 import { isShapeKind } from '../core/shapes/registry';
 import { selectionTarget } from './selection-target';
 
-const WHEEL_ZOOM_RATE = 0.002;
-const MAX_WHEEL_ZOOM_EXPONENT = 0.2;
+// Matches the Figma viewer: pinch tracks finger speed, wheel notches stay bounded.
+const WHEEL_ZOOM_RATE = 0.01;
+const MAX_WHEEL_ZOOM_EXPONENT = 0.6;
 
 export function resizeCursor(handle: ResizeHandle, frame?: SelectionFrame) {
   if (handle === 'n' || handle === 's') return 'ns-resize';
@@ -451,6 +452,37 @@ export function attachCameraControls(
       editor.panBy({ x: -event.deltaX * unit, y: -event.deltaY * unit });
     }
   };
+  // WebKit (Safari, the desktop app) reports trackpad pinches as gesture events
+  // with a running scale instead of ctrl+wheel.
+  let gestureScale = 1;
+  const gestureStart = (event: Event) => {
+    event.preventDefault();
+    gestureScale = 1;
+  };
+  const gestureChange = (event: Event) => {
+    event.preventDefault();
+    const gesture = event as Event & {
+      scale: number;
+      clientX: number;
+      clientY: number;
+    };
+    const factor = gesture.scale / gestureScale;
+    gestureScale = gesture.scale;
+    if (options.suspended?.() || drag) return;
+    const camera = editor.getCamera();
+    if (options.navigation === 'centered-image') {
+      editor.centerImage(
+        { width: element.clientWidth, height: element.clientHeight },
+        camera.scale * factor
+      );
+      return;
+    }
+    const rect = element.getBoundingClientRect();
+    editor.zoomAt(
+      { x: gesture.clientX - rect.left, y: gesture.clientY - rect.top },
+      camera.scale * factor
+    );
+  };
   element.addEventListener('pointerdown', pointerDown);
   element.addEventListener('pointermove', pointerHover);
   element.addEventListener('pointerup', pointerHover);
@@ -459,6 +491,8 @@ export function attachCameraControls(
   element.addEventListener('keyup', keyUp);
   element.addEventListener('blur', cancel);
   element.addEventListener('wheel', wheel, { passive: false });
+  element.addEventListener('gesturestart', gestureStart);
+  element.addEventListener('gesturechange', gestureChange);
   window.addEventListener('blur', cancel);
   window.addEventListener('keydown', updateHover);
   window.addEventListener('keyup', updateHover);
@@ -472,6 +506,8 @@ export function attachCameraControls(
     element.removeEventListener('keyup', keyUp);
     element.removeEventListener('blur', cancel);
     element.removeEventListener('wheel', wheel);
+    element.removeEventListener('gesturestart', gestureStart);
+    element.removeEventListener('gesturechange', gestureChange);
     window.removeEventListener('blur', cancel);
     window.removeEventListener('keydown', updateHover);
     window.removeEventListener('keyup', updateHover);

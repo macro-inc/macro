@@ -1,5 +1,6 @@
 import type { SettingsTab } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
+import { lazyNamed } from '@core/util/lazyNamed';
 import { Show, Suspense } from 'solid-js';
 import { CalendarSettings } from '../calendar/calendar-settings';
 import { CrmSettings as Crm } from '../crm/crm-settings';
@@ -20,9 +21,13 @@ import { Notifications } from './Notifications';
 import { Shortcuts } from './Shortcuts';
 import { Tags } from './Tags';
 import { TeamPage } from './Team';
-import { TeamConnections } from './TeamConnections';
 import { TeamGeneral } from './TeamGeneral';
 import { TeamMembers } from './TeamMembers';
+
+const RoutineSettings = lazyNamed(
+  () => import('../routines/routine-settings'),
+  'RoutineSettings'
+);
 
 /** Shared forms for desktop panels and mobile sheet detail pages. */
 export function SettingsTabContent(props: { tab: SettingsTab }) {
@@ -70,9 +75,6 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
       <Show when={isCurrentTab('Team Members')}>
         <TeamPage>{(team) => <TeamMembers team={team} />}</TeamPage>
       </Show>
-      <Show when={isCurrentTab('Team Connections')}>
-        <TeamPage>{(team) => <TeamConnections team={team} />}</TeamPage>
-      </Show>
       <Show when={isCurrentTab('Tags')}>
         <Tags />
       </Show>
@@ -93,6 +95,9 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
       </Show>
       <Show when={isCurrentTab('Agents')}>
         <AgentSettings />
+      </Show>
+      <Show when={isCurrentTab('Routines')}>
+        <RoutineSettings />
       </Show>
       <Show when={isCurrentTab('Harness')}>
         <AgentSettings initialSection="runtimes" />

@@ -1,10 +1,12 @@
 import { EntityIcon } from '@core/component/EntityIcon';
+import { TaskStatusIcon } from '@core/component/TaskStatusIcon';
 import { UserIcon } from '@core/component/UserIcon';
-import type { ChannelEntity } from '@entity';
-import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
-import ClockIcon from '@phosphor/clock.svg';
-import EmailIcon from '@phosphor/envelope.svg';
-import UsersIcon from '@phosphor/users.svg';
+import { type ChannelEntity, isTaskEntity } from '@entity/types/entity';
+import { getTaskStatusOptionId } from '@entity/utils/task-properties';
+import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import EmailIcon from '@icon/system/regular/envelope.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
 import { cn } from '@ui';
 import { createEffect, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -54,6 +56,10 @@ export function MentionsMenuItem(props: {
         name: data.title,
         detail: `${data.durationMinutes} min · ${data.owner}`,
       }))
+      .with({ kind: 'calendarEvent' }, ({ data }) => ({
+        name: data.title,
+        detail: data.when,
+      }))
       .otherwise(() => ({ name: name(), detail: undefined }));
 
   const icon = () => {
@@ -78,6 +84,17 @@ export function MentionsMenuItem(props: {
 
       case 'bookingLink':
         return <CalendarBlankIcon class="size-4 text-accent" />;
+      case 'externalChat':
+        return (
+          <EntityIcon
+            targetType="external_chat"
+            provider={props.item.data.provider}
+            size="xs"
+          />
+        );
+
+      case 'calendarEvent':
+        return <EntityIcon targetType="calendar" size="xs" />;
 
       case 'entity':
         if (props.item.bucket === 'email') {
@@ -89,6 +106,15 @@ export function MentionsMenuItem(props: {
             <EntityIcon
               size="xs"
               targetType={entity.channelType || 'channel'}
+            />
+          );
+        }
+        if (isTaskEntity(props.item.data)) {
+          return (
+            <TaskStatusIcon
+              statusId={getTaskStatusOptionId(props.item.data)}
+              completed={props.item.data.subType.is_completed}
+              size="xs"
             />
           );
         }

@@ -612,7 +612,7 @@ async fn seed_agent_sessions(pool: &Pool<Postgres>) -> anyhow::Result<(Uuid, Uui
     let mine = Uuid::from_u128(0xa5e5_0001);
     let theirs = Uuid::from_u128(0xa5e5_0002);
     for (id, owner) in [(mine, USER_1), (theirs, USER_2)] {
-        sqlx::query(
+        sqlx::query!(
             r#"
             INSERT INTO agent_session (
                 id, owner_id, bot_id, model, harness, repo_url, workspace, name,
@@ -621,20 +621,20 @@ async fn seed_agent_sessions(pool: &Pool<Postgres>) -> anyhow::Result<(Uuid, Uui
             VALUES ($1, $2, $3, 'model', 'harness', NULL, '/workspace', 'Fix the flaky test',
                     'event', 'acp_ready', '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00')
             "#,
+            id,
+            owner,
+            Uuid::from_u128(0xa9e7),
         )
-        .bind(id)
-        .bind(owner)
-        .bind(Uuid::from_u128(0xa9e7))
         .execute(pool)
         .await?;
-        sqlx::query(
+        sqlx::query!(
             r#"
             INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
             VALUES ($1, 'agent_session', $2, 'user', 'owner')
             "#,
+            id,
+            owner,
         )
-        .bind(id)
-        .bind(owner)
         .execute(pool)
         .await?;
     }
@@ -642,24 +642,24 @@ async fn seed_agent_sessions(pool: &Pool<Postgres>) -> anyhow::Result<(Uuid, Uui
     // about a session they have no access to must never surface.
     for (index, session) in [(0x51u128, mine), (0x52u128, theirs)] {
         let notification_id = Uuid::from_u128(index);
-        sqlx::query(
+        sqlx::query!(
             r#"
             INSERT INTO notification ("id", "notification_event_type", "event_item_id", "event_item_type", "service_sender", "created_at", "metadata")
             VALUES ($1, 'agent_session_settled', $2, 'agent_session', 'test', '2024-06-01 10:21:00', '{}')
             "#,
+            notification_id,
+            session.to_string(),
         )
-        .bind(notification_id)
-        .bind(session.to_string())
         .execute(pool)
         .await?;
-        sqlx::query(
+        sqlx::query!(
             r#"
             INSERT INTO user_notification ("user_id", "notification_id", "created_at", "sent", "state")
             VALUES ($1, $2, '2024-06-01 10:21:00', TRUE, 'unseen')
             "#,
+            USER_1,
+            notification_id,
         )
-        .bind(USER_1)
-        .bind(notification_id)
         .execute(pool)
         .await?;
     }

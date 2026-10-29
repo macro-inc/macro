@@ -19,7 +19,16 @@ notified AS NOT MATERIALIZED (
             THEN n.secondary_event_item_id ELSE n.event_item_id
         END AS entity_id
     FROM user_notification un
-    JOIN notification n ON n.id = un.notification_id
+    -- Filter the caller's notifications before probing notification by primary
+    -- key. Without the fence, bad estimates can scan all users' notifications
+    -- and probe user_notification once per row before applying the user filter.
+    CROSS JOIN LATERAL (
+        SELECT event_item_type, secondary_event_item_type,
+            event_item_id, secondary_event_item_id
+        FROM notification
+        WHERE id = un.notification_id
+        OFFSET 0
+    ) n
     WHERE un.user_id = $1
     AND un.deleted_at IS NULL
 ),

@@ -115,6 +115,19 @@ pub enum MessagePart {
         /// The tasks, in the order the agent listed them.
         entries: Vec<PlanEntry>,
     },
+    /// A background task the harness reported on: a command, subagent or
+    /// monitor it started earlier finished or emitted an event. The harness
+    /// hands the agent this report as a user turn; it is shown as a system
+    /// fact, never as something a person said.
+    TaskNotification {
+        /// Where the task ended up; absent for a monitor's mid-stream event.
+        status: Option<TaskStatus>,
+        /// The harness's one-line account, such as `Background command
+        /// "Run tests" completed (exit code 0)`.
+        summary: String,
+        /// The line a monitor streamed, for a monitor event.
+        event: Option<String>,
+    },
     /// The agent asking the user a question.
     ///
     /// When the question was asked on behalf of a tool call this fold had
@@ -179,6 +192,21 @@ impl MessagePart {
             _ => &[],
         }
     }
+}
+
+/// How a background task ended, per [`MessagePart::TaskNotification`].
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Type, strum::EnumString, strum::IntoStaticStr,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum TaskStatus {
+    /// It ran to the end.
+    Completed,
+    /// It ended with an error or a nonzero exit.
+    Failed,
+    /// It was stopped, or did not survive the previous session.
+    Stopped,
 }
 
 /// A session control operation shown in the conversation timeline.

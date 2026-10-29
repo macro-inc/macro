@@ -1,0 +1,40 @@
+//
+// Copyright 2020-2022 Signal Messenger, LLC.
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// Modified for WhatsApp by Macro: the Kyber and post-quantum ratchet fields
+// are gone, and the sender key messages use WhatsApp's layout (a 32-bit key
+// ID in field 1 instead of a distribution UUID plus chain ID). See NOTICE.
+
+syntax = "proto2";
+
+package signal.proto.wire;
+
+message SignalMessage {
+  optional bytes  ratchet_key      = 1;
+  optional uint32 counter          = 2;
+  optional uint32 previous_counter = 3;
+  optional bytes  ciphertext       = 4;
+}
+
+message PreKeySignalMessage {
+  optional uint32 pre_key_id        = 1;
+  optional bytes  base_key          = 2;
+  optional bytes  identity_key      = 3;
+  optional bytes  message           = 4; // SignalMessage
+  optional uint32 registration_id   = 5;
+  optional uint32 signed_pre_key_id = 6;
+}
+
+message SenderKeyMessage {
+  optional uint32 id         = 1;
+  optional uint32 iteration  = 2;
+  optional bytes  ciphertext = 3;
+}
+
+message SenderKeyDistributionMessage {
+  optional uint32 id          = 1;
+  optional uint32 iteration   = 2;
+  optional bytes  chain_key   = 3;
+  optional bytes  signing_key = 4;
+}

@@ -13,6 +13,8 @@ import type { DraftFormAttachment } from './email-form-state';
 /** Preserve the operation ID across a lost response and adopt a distinct identity. */
 export function createDraftTransfer(options: {
   session: DraftSession;
+  draftGeneration?: () => number;
+  onTransferred?: () => void;
   drafts: Pick<EmailDraftStorage, 'transferDraft'>;
   attachments: {
     list(): DraftFormAttachment[];
@@ -54,6 +56,7 @@ export function createDraftTransfer(options: {
           );
         setPending({
           operationId: uuidv7(),
+          draftGeneration: options.draftGeneration?.(),
           draftId,
           sourceInboxId,
           destinationInboxId: destination.id,
@@ -69,6 +72,7 @@ export function createDraftTransfer(options: {
         throw error;
       }
       options.invalidateOldSaves();
+      options.onTransferred?.();
       options.session.dispatch({
         type: 'seeded',
         draftId: result.draftId,

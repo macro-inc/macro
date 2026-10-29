@@ -9,6 +9,7 @@ import type {
   EmailAttachment,
   EmailMessage,
 } from '../../email-message/core/email-message';
+import type { InvitationRenderOptions } from '../../email-message/views/email-message';
 import type { EmailThreadContext } from './email-thread-context';
 
 export interface EmailThreadOrganizationStatus {
@@ -55,11 +56,13 @@ export interface EmailThreadViewContext {
     ) => JSX.Element;
     renderInvitation?: (
       message: EmailMessage,
-      invitation: CalendarInvitation
+      invitation: CalendarInvitation,
+      options?: InvitationRenderOptions
     ) => JSX.Element;
     renderOperation?: (message: EmailMessage) => JSX.Element;
     renderAvatar?: (message: EmailMessage) => JSX.Element;
     openAttachment?: (attachment: EmailAttachment) => void;
+    downloadAttachment?: (attachment: EmailAttachment) => void;
   };
 }
 

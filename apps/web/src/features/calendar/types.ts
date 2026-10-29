@@ -91,6 +91,12 @@ export interface CalendarEvent {
   /** What the organizer lets guests do. */
   guestPolicy: GuestPolicy;
   /**
+   * Whether the event is the viewer's snapshot of a meeting shared in one of
+   * their channels: a private copy the meeting's changes never reach and
+   * whose answers never reach the organizer. Absent on a regular event.
+   */
+  isSnapshot?: boolean;
+  /**
    * What the viewer may do with the displayed copy. Nothing when that copy's
    * calendar is read-only, even if another copy is writable.
    */
@@ -162,6 +168,7 @@ export const NO_VIEWER_CAPABILITIES: ViewerCapabilities = {
   removeGuests: false,
   setGuestPolicy: false,
   rsvp: false,
+  organize: false,
 };
 
 /** Shared presentation source until calendar/account metadata is exposed. */
@@ -291,6 +298,7 @@ export function mapCalendarOccurrence(
     creatorEmail: optionalText(content.creatorEmail),
     attendees: event.attendees ?? [],
     guestPolicy: event.guestPolicy,
+    isSnapshot: event.isSnapshot,
     viewerCan: content.isReadOnly ? NO_VIEWER_CAPABILITIES : event.viewerCan,
     reminders: canonical.reminders ?? undefined,
     reminderCalendarId: canonical.calendarId ?? undefined,

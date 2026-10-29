@@ -17,13 +17,19 @@ const KEY: &str = "coding-test-internal-key";
 struct UserCredentials;
 
 impl JwtValidator for UserCredentials {
-    fn validate(&self, _: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
-        Ok(ValidatedIdentity {
-            agent_id: None,
-            user_id: USER.into(),
-            fusion_user_id: "fusion-owner".into(),
-            organization_id: None,
-            permissions: None,
+    fn validate_credential(
+        &self,
+        _: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        Ok(macro_authorization::ValidatedCredential {
+            origin: macro_authorization::CredentialOrigin::Session,
+            identity: ValidatedIdentity {
+                agent_id: None,
+                user_id: USER.into(),
+                fusion_user_id: "fusion-owner".into(),
+                organization_id: None,
+                permissions: None,
+            },
         })
     }
 }

@@ -37,6 +37,7 @@ import { createWALSyncSource } from '@macro-inc/collaboration/collab/wal';
 import {
   $isCustomCodeNode,
   $updateAllNodeIds,
+  COLLAB_SELECTION_TAG,
   COLLABORATION_TAG,
   CustomCodeNode,
   LOCAL_STATUS_TAG,
@@ -217,6 +218,7 @@ export function CollabProvider(props: CollabProviderProps) {
         // Queue microtask after this `editor.update` to ensure that all the nodeIds are updated
         queueMicrotask(() => {
           props.editor.update(() => {
+            $addUpdateTag(COLLAB_SELECTION_TAG);
             $updateAllNodeIds(props.mappings);
             // If we import a remote update, it's possible that the update
             // has shifted out own selection / cursor. We need to re-position our local

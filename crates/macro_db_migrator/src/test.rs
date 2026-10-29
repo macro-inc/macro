@@ -8,6 +8,42 @@ use std::borrow::Cow;
 const EMPTY_PUBLIC_SCHEMA: &str = "DROP SCHEMA public CASCADE; CREATE SCHEMA public;";
 
 const SCHEMA_DROP_VERSION: i64 = 20261002150422;
+const EMAIL_DELIVERY_VERSION: i64 = 20261015141405;
+
+#[sqlx::test(migrations = false)]
+async fn email_delivery_upgrade_preserves_existing_schedules_and_attachments(pool: PgPool) {
+    sqlx::raw_sql(EMPTY_PUBLIC_SCHEMA)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let before_delivery = Migrator {
+        migrations: Cow::Owned(
+            MACRO_DB_MIGRATIONS
+                .iter()
+                .filter(|migration| migration.version < EMAIL_DELIVERY_VERSION)
+                .cloned()
+                .collect(),
+        ),
+        ..Migrator::DEFAULT
+    };
+    before_delivery.run(&pool).await.unwrap();
+    sqlx::raw_sql(include_str!(
+        "../../email_db_client/fixtures/get_process_scheduled_messages.sql"
+    ))
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::raw_sql(include_str!("test/before_email_delivery.sql"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    MACRO_DB_MIGRATIONS.run(&pool).await.unwrap();
+    sqlx::raw_sql(include_str!("test/after_email_delivery.sql"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    MACRO_DB_MIGRATIONS.run(&pool).await.unwrap();
+}
 const OUTLOOK_RUNTIME_VERSION: i64 = 20261004022345;
 
 async fn before_drop(pool: &PgPool) {

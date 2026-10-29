@@ -18,18 +18,17 @@ import { useAugmentUserWithDmActivity } from '@core/user/dmActivity';
 import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
 import { matches } from '@core/util/match';
 import { truncateString } from '@core/util/string';
+import CheckIcon from '@icon/system/regular/check.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import PaperPlaneTiltIcon from '@icon/system/regular/paper-plane-tilt.svg';
+import RobotIcon from '@icon/system/regular/robot.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import type { CollectionNode } from '@kobalte/core';
 import {
   Combobox,
   type ComboboxTriggerMode,
   useComboboxContext,
 } from '@kobalte/core/combobox';
-import CheckIcon from '@phosphor/check.svg';
-import HashIcon from '@phosphor/hash.svg';
-import PaperPlaneTiltIcon from '@phosphor/paper-plane-tilt.svg';
-import RobotIcon from '@phosphor/robot.svg';
-import XIcon from '@phosphor/x.svg';
-import { debounce } from '@solid-primitives/scheduled';
 import { Avatar, cn, Layer } from '@ui';
 import * as EmailValidator from 'email-validator';
 import {
@@ -322,10 +321,12 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
   );
 }
 
-type RecipientSelectorProps<K extends CombinedRecipientKind> = {
+export type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   options: Accessor<CombinedRecipientItem<K>[]>;
   selectedOptions: WithCustomUserInput<K>[];
   setSelectedOptions: (next: WithCustomUserInput<K>[]) => void;
+  /** Notify the owner while a recipient query is being entered, before selection. */
+  onInputChange?: (value: string) => void;
   // If you provide triedToSubmit, the component will show an error message if no options are selected and triedToSubmit is true
   triedToSubmit?: Accessor<boolean>;
   placeholder?: string | JSX.Element;
@@ -349,6 +350,8 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   portalScope?: 'local';
   /** Show an invite action for a complete email outside the known recipients. */
   inviteExternalEmails?: boolean;
+  /** Messages can target only existing users or channels. Defaults to true. */
+  allowCustomRecipients?: boolean;
 };
 
 export function RecipientSelector<K extends CombinedRecipientKind>(
@@ -386,8 +389,6 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       { defer: true }
     )
   );
-
-  const debouncedHandleChange = debounce(handleChange, 100);
 
   const [isOpen, setIsOpen] = createSignal(false);
   const [suppressOpenUntilInputChange, setSuppressOpenUntilInputChange] =
@@ -603,6 +604,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
     // Only add custom input if it doesn't match an existing email
     if (
+      props.allowCustomRecipients !== false &&
       currentUserInput &&
       !hasExactEmailMatch &&
       EmailValidator.validate(currentUserInput)
@@ -649,6 +651,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   let contentEl: HTMLElement | undefined;
 
   const onInputChange = (next: string) => {
+    props.onInputChange?.(next);
     const previous = inputValue();
     setInputValue(next);
     if (next !== previous) {
@@ -688,7 +691,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
           visibleOptionKeys().has(getRecipientOptionValue(option))
         }
         value={props.selectedOptions as CombinedRecipientItem[]}
-        onChange={debouncedHandleChange}
+        onChange={handleChange}
         onInputChange={onInputChange}
         shouldFocusWrap
         placeholder={
@@ -978,7 +981,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                   inputRef()?.focus({ preventScroll: true });
                 }
               }}
-              class="z-modal-content translate-y-1 rounded-xl p-1.5 glass bg-menu-glass menu-open-animation text-sm [--color-surface:var(--color-menu)]"
+              class="menu-surface z-modal-content translate-y-1 p-1.5 menu-open-animation text-sm"
             >
               <Combobox.Listbox
                 ref={setListboxRef}

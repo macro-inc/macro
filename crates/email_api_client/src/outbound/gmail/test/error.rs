@@ -49,7 +49,33 @@ fn maps_provider_statuses_centrally() {
         )),
         EmailApiError::RateLimited {
             retry_after: Some(retry_after),
-            origin: RateLimitOrigin::Provider,
+            origin: RateLimitOrigin::Provider { concurrency: false },
+        }
+    );
+}
+
+#[test]
+fn only_the_concurrent_requests_429_is_a_concurrency_limit() {
+    assert_eq!(
+        map_gmail_error(http_error(
+            StatusCode::TOO_MANY_REQUESTS,
+            r#"{"error":{"code":429,"message":"Too many concurrent requests for user.","errors":[{"reason":"rateLimitExceeded"}]}}"#,
+            None,
+        )),
+        EmailApiError::RateLimited {
+            retry_after: None,
+            origin: RateLimitOrigin::Provider { concurrency: true },
+        }
+    );
+    assert_eq!(
+        map_gmail_error(http_error(
+            StatusCode::TOO_MANY_REQUESTS,
+            r#"{"error":{"code":429,"message":"User-rate limit exceeded.  Retry after 2026-10-25T10:00:00Z","errors":[{"reason":"rateLimitExceeded"}]}}"#,
+            None,
+        )),
+        EmailApiError::RateLimited {
+            retry_after: None,
+            origin: RateLimitOrigin::Provider { concurrency: false },
         }
     );
 }
@@ -64,7 +90,7 @@ fn quota_403s_are_rate_limited_and_plain_403s_stay_forbidden() {
         )),
         EmailApiError::RateLimited {
             retry_after: None,
-            origin: RateLimitOrigin::Provider,
+            origin: RateLimitOrigin::Provider { concurrency: false },
         }
     );
 
@@ -77,7 +103,7 @@ fn quota_403s_are_rate_limited_and_plain_403s_stay_forbidden() {
         )),
         EmailApiError::RateLimited {
             retry_after: Some(retry_after),
-            origin: RateLimitOrigin::Provider,
+            origin: RateLimitOrigin::Provider { concurrency: false },
         }
     );
 
@@ -90,7 +116,7 @@ fn quota_403s_are_rate_limited_and_plain_403s_stay_forbidden() {
             )),
             EmailApiError::RateLimited {
                 retry_after: None,
-                origin: RateLimitOrigin::Provider,
+                origin: RateLimitOrigin::Provider { concurrency: false },
             },
             "reason {reason} should map to RateLimited",
         );

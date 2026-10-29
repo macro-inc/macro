@@ -195,7 +195,7 @@ function ColorButton(props: {
         <span class="text-ink-muted">▾</span>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content class="z-action-menu rounded-xl border border-edge bg-menu p-2 shadow-xl outline-none">
+        <Popover.Content class="menu-surface z-action-menu p-2 outline-none">
           <ColorPicker
             themeGrid={props.colors.themeGrid}
             standard={props.colors.standard}
@@ -234,7 +234,7 @@ function PresetsButton(props: {
         <span class="text-ink-muted">▾</span>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content class="z-action-menu rounded-xl border border-edge bg-menu p-2 text-ink text-xs shadow-xl outline-none">
+        <Popover.Content class="menu-surface z-action-menu p-2 text-xs outline-none">
           {props.children(() => setOpen(false))}
         </Popover.Content>
       </Popover.Portal>
@@ -600,7 +600,7 @@ export function PicturePaneSections(props: { env: RibbonEnv }) {
           <div class="flex justify-end">
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={ro()}
               data-testid="pptx-pane-corrections-reset"
               onClick={() =>
@@ -696,7 +696,7 @@ export function PicturePaneSections(props: { env: RibbonEnv }) {
           <div class="flex justify-end gap-1.5">
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={ro()}
               onClick={() =>
                 fireAndForget(c.fitPictures('fill'), 'pptx-editor')
@@ -706,7 +706,7 @@ export function PicturePaneSections(props: { env: RibbonEnv }) {
             </Button>
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={ro()}
               onClick={() => fireAndForget(c.fitPictures('fit'), 'pptx-editor')}
             >
@@ -717,7 +717,7 @@ export function PicturePaneSections(props: { env: RibbonEnv }) {
         <div class="flex justify-end p-3">
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             disabled={ro()}
             data-testid="pptx-pane-picture-reset"
             onClick={() => fireAndForget(c.resetPictures(true), 'pptx-editor')}

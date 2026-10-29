@@ -25,7 +25,7 @@ export function ProductBrand(props: { product: string }) {
         class="product-home-link"
         aria-label="Macro home"
       >
-        <MacroLogo aria-hidden="true" />
+        <MacroLogo width="20" height="20" aria-hidden="true" />
         <span>Macro</span>
       </a>
       <span aria-hidden="true">/</span>

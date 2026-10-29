@@ -32,12 +32,12 @@ attribute.
   separate tiny traces for the same path — prefer the trace whose root is `web-app`.
 
 URL prefix → service mapping: `/dss/*` → document_storage_service,
-`/unfurl/*` → unfurl_service, `/cognition/*` → document_cognition_service,
+`/unfurl/*` → unfurl_service, `/cognition/*`, `/scheduled-action/*`, `/preview/*`, and `/mcp/*` → agent_harness_service,
 `/auth/*` → authentication_service, `/email/*` → email_service. Frontend OTel
 exports to `/i/otlp/v1/{traces,logs}`.
 
-The local Caddy proxy strips these prefixes before forwarding, so `span.url.path` is
-unprefixed locally. The deployed gateway ALB does **not** strip `/dss`, `/unfurl`, or
+The local Caddy proxy preserves cognition, scheduling, preview, and MCP prefixes.
+It strips most other service prefixes, so their `span.url.path` is unprefixed locally. The deployed gateway ALB does **not** strip `/dss`, `/unfurl`, or
 `/auth` — those services serve the same routes at both `/` and the prefix — so in
 dev and prod `span.url.path` includes the prefix. Query both forms when a search
 comes back empty.
@@ -58,7 +58,7 @@ trace context — timestamps + service are the only join for those.
   (`POST /cognition/stream/chat/message`) produce a trace containing only the browser client
   span — the cognition HTTP server layer emits no server span, so the entire agent loop
   (tools, model calls) is invisible in Tempo.
-- `document_cognition_service` emits orphaned single-span traces (`add_subtoolset`) and giant
+- The cognition surface in `agent_harness_service` emits orphaned single-span traces (`add_subtoolset`) and giant
   "root span not yet received" traces made of repeated 10-second spans (a polling loop traced
   per-iteration under a never-ending root).
 - Server traces are shallow: `http.request` spans have no child spans (no DB, S3, or
@@ -119,7 +119,10 @@ The HTTP requests can have separate trace IDs across asynchronous mutation
 boundaries. Capture each request's `traceparent` as described above and inspect
 the backend trace as well. For the join request, compare `create_room`,
 `prepare_meeting_call`, and `join_invitation`; `start_meeting_media` runs in the
-background and must not be added to the time spent waiting for credentials.
+background and must not be added to the time spent waiting for credentials. Channel
+calls similarly launch `start_channel_call` for recording, transcription, and
+recipient notifications; these run concurrently outside the token response path.
+A slow recorder or push provider should not hold the creator on Connecting.
 
 ## Agent sessions
 

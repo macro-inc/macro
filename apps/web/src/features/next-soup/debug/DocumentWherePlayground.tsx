@@ -21,7 +21,7 @@ import type {
   SoupApiItem,
   SoupPage,
 } from '@service-storage/generated/schemas';
-import { Button, InlineCheckbox, SegmentedControl } from '@ui';
+import { Button, InlineCheckbox, Tabs } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 
 type FilterTokenId =
@@ -465,8 +465,10 @@ export default function DocumentWherePlayground() {
         <aside class="flex min-h-0 flex-col gap-4 border-edge-muted border-r p-4">
           <section class="space-y-2">
             <div class="text-sm font-medium">Endpoint</div>
-            <SegmentedControl
-              class="w-full"
+            <Tabs
+              aria-label="Endpoint"
+              touch="segmented"
+              fullWidth
               size="sm"
               value={mode()}
               options={[
@@ -501,7 +503,7 @@ export default function DocumentWherePlayground() {
               <For each={EXAMPLES}>
                 {(example) => (
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     class="h-auto justify-start py-1.5"
                     onClick={() => applyExample(example)}
@@ -592,11 +594,15 @@ export default function DocumentWherePlayground() {
           </section>
 
           <section class="flex gap-2">
-            <Button variant="outline" size="sm" onClick={loadJsonFromControls}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={loadJsonFromControls}
+            >
               Edit JSON
             </Button>
             <Button
-              variant="cta"
+              variant="primary"
               size="sm"
               disabled={loading()}
               onClick={() => run()}
@@ -652,7 +658,7 @@ export default function DocumentWherePlayground() {
               </div>
               <Show when={nextCursor()}>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   disabled={loading()}
                   onClick={() => run(nextCursor())}

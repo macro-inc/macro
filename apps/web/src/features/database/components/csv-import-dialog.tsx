@@ -130,7 +130,7 @@ export function CsvImportDialog(props: {
               </Button>
               <Button
                 type="submit"
-                variant="accent"
+                variant="primary"
                 disabled={pending() || !name().trim()}
               >
                 {pending()

@@ -89,15 +89,19 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
         .unwrap();
     let app = router(
         Arc::new(repo.clone()),
-        Arc::new(SessionPullRequestService::new(
-            repo.clone(),
-            RecordingRealtime::new(),
-            Arc::new(FixedTasks::default()),
-        )),
-        Arc::new(FixedTasks::default()),
         "localhost".into(),
-        Some(code_mode.clone()),
-        Arc::new(std::sync::OnceLock::new()),
+        InternalTools {
+            service: Arc::new(SessionPullRequestService::new(
+                repo.clone(),
+                RecordingRealtime::new(),
+                Arc::new(FixedTasks::default()),
+            )),
+            tasks: Arc::new(FixedTasks::default()),
+            code_mode: Some(code_mode.clone()),
+            cognition: None,
+            reviews: Arc::new(std::sync::OnceLock::new()),
+            gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
+        },
     );
     assert_eq!(
         rpc(app.clone(), Some("wrong-session"), "tools/list", json!({}))
@@ -112,7 +116,11 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
         .iter()
         .map(|tool| tool["name"].as_str().unwrap())
         .collect();
-    assert!(names.contains(&"ExecuteCode") && names.contains(&"DescribeCodeTools"));
+    assert!(
+        ["ExecuteCode", "DescribeCodeTools", "ReadCodeDocs"]
+            .iter()
+            .all(|name| names.contains(name))
+    );
     let (_, docs) = rpc(
         app.clone(),
         Some("session-secret"),
@@ -127,10 +135,25 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
     let doc = &docs["result"]["structuredContent"]["tools"][0];
     assert_eq!(doc["name"], "documents");
     assert!(
-        doc["documentation"]
+        doc["index"]
             .as_str()
             .unwrap()
-            .contains("Class: DocumentNamespace")
+            .contains("### DocumentNamespace (`macro.documents`)")
+    );
+    let (_, read) = rpc(
+        app.clone(),
+        Some("session-secret"),
+        "tools/call",
+        json!({"name": "ReadCodeDocs", "arguments": {"symbols": ["DocumentNamespace.search"]}}),
+    )
+    .await;
+    let reference = &read["result"]["structuredContent"]["references"][0];
+    assert_eq!(reference["symbol"], "DocumentNamespace.search");
+    assert!(
+        reference["reference"]
+            .as_str()
+            .unwrap()
+            .starts_with("### search()")
     );
     let (_, guides) = rpc(
         app.clone(),
@@ -153,7 +176,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
             .contains("macro.ai.decide")
     );
     let source = "export async function main() { const rows = await Promise.all(['first', 'second'].map(async value => value)); return {data:rows,reviews:[]}; }";
-    let (_, response) = rpc(app.clone(), Some("session-secret"), "tools/call", json!({"name": "ExecuteCode", "arguments": {"execution_id": ExecutionId::mint(), "source": source}})).await;
+    let (_, response) = rpc(app.clone(), Some("session-secret"), "tools/call", json!({"name": "ExecuteCode", "arguments": {"acting_as": "owner", "turn_id": "00000000-0000-0000-0000-000000000003", "execution_id": ExecutionId::mint(), "source": source}})).await;
     assert_ne!(response["result"]["isError"], true, "{response}");
     let receipt = &response["result"]["structuredContent"];
     assert_eq!(
@@ -246,7 +269,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
             (),
             RequestContext::new(session.owner_user().unwrap().clone()),
             "mcp__macro_internal__ExecuteCode",
-            &json!({"execution_id": ExecutionId::mint(), "source": source}),
+            &json!({"acting_as": "owner", "turn_id": "00000000-0000-0000-0000-000000000003", "execution_id": ExecutionId::mint(), "source": source}),
         )
         .await
         .unwrap()
@@ -262,7 +285,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
         store.get(session.id, execution).await.unwrap().calls.len(),
         0
     );
-    let (_, failed) = rpc(app.clone(), Some("session-secret"), "tools/call", json!({"name": "ExecuteCode", "arguments": {"execution_id": ExecutionId::mint(), "source": "export async function main() { throw new Error(\"fixture failure\"); }"}})).await;
+    let (_, failed) = rpc(app.clone(), Some("session-secret"), "tools/call", json!({"name": "ExecuteCode", "arguments": {"acting_as": "owner", "turn_id": "00000000-0000-0000-0000-000000000003", "execution_id": ExecutionId::mint(), "source": "export async function main() { throw new Error(\"fixture failure\"); }"}})).await;
     assert_ne!(failed["result"]["isError"], true, "{failed}");
     assert_eq!(failed["result"]["structuredContent"]["status"], "failed");
     // A Stop processed on another replica changes shared session state. The
@@ -270,7 +293,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
     let cancelled_id = ExecutionId::mint();
     let running = tokio::spawn(async move {
         rpc(app, Some("session-secret"), "tools/call", json!({"name": "ExecuteCode", "arguments": {
-            "execution_id": cancelled_id,
+            "acting_as": "owner", "turn_id": "00000000-0000-0000-0000-000000000003", "execution_id": cancelled_id,
             "source": "export async function main() { await new Promise(r => setTimeout(r, 10000)); return {data:true,reviews:[]}; }"
         }})).await
     });

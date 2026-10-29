@@ -54,8 +54,10 @@ pub use elicitation::{
 };
 pub use event::{FoldEvent, OwnedFoldEvent};
 pub use interaction::{PendingInteraction, PendingPermission, PendingToolApproval};
-pub use metadata::{AvailableCommand, Harness, ModelOption, SessionMetadata, TurnState};
-pub use part::{Control, ControlOutcome, MessagePart, StopReason};
+pub use metadata::{
+    AvailableCommand, Harness, ModelOption, SessionMetadata, SessionNotification, TurnState,
+};
+pub use part::{Control, ControlOutcome, MessagePart, StopReason, TaskStatus};
 pub use permission::{PermissionOption, PermissionOptionKind, PermissionOutcome};
 pub use plan::{PlanEntry, PlanEntryPriority, PlanEntryStatus};
 pub use segment::{

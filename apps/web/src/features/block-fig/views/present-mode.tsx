@@ -13,10 +13,10 @@ import type {
   PrototypeHotspot,
   PrototypeInfo,
 } from '@core/fig-engine/prototype-types';
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import ArrowRight from '@phosphor/arrow-right.svg';
-import LinkIcon from '@phosphor/link.svg';
-import XIcon from '@phosphor/x.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import {
   createEffect,
   createMemo,

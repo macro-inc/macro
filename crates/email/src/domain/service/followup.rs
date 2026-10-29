@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::domain::{
     followup::{EmailFollowupMailbox, EmailFollowupRepo, FollowupThread, ReminderThreadFilter},
-    models::{EmailErr, label::system_labels},
+    models::{EmailErr, UserProvider, label::system_labels},
     ports::{EmailMessageEnqueuer, EmailRepo},
 };
 use frecency::domain::ports::FrecencyQueryService;
@@ -159,11 +159,26 @@ where
         if messages.is_empty() {
             return Ok(None);
         }
-        let labels = self
-            .email_repo
-            .labels_by_thread_ids(&[thread_id])
-            .await
-            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
+        let unavailable = if link.provider == UserProvider::Outlook {
+            self.email_repo
+                .mailbox_action_messages(link.id, thread_id)
+                .await
+                .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
+                .iter()
+                .any(|message| message.is_present && (message.in_trash || message.in_junk))
+        } else {
+            self.email_repo
+                .labels_by_thread_ids(&[thread_id])
+                .await
+                .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
+                .iter()
+                .any(|label| {
+                    matches!(
+                        label.provider_label_id.as_str(),
+                        system_labels::TRASH | system_labels::SPAM
+                    )
+                })
+        };
         let latest = self
             .email_repo
             .latest_content_message_rows(&[thread_id])
@@ -182,12 +197,7 @@ where
                 .email_repo
                 .followup_returned_at(thread_id, link.id)
                 .await?,
-            unavailable: labels.iter().any(|label| {
-                matches!(
-                    label.provider_label_id.as_str(),
-                    system_labels::TRASH | system_labels::SPAM
-                )
-            }),
+            unavailable,
             messages,
         }))
     }
@@ -212,24 +222,16 @@ where
             .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
             .filter(|link| link.id == facts.link_id)
             .ok_or(EmailErr::ThreadNotFound)?;
-        let label = self
-            .email_repo
-            .list_labels_by_link_id(link.id)
-            .await
-            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
-            .into_iter()
-            .find(|label| label.provider_label_id == system_labels::INBOX)
-            .ok_or(EmailErr::LabelNotFound)?;
         // Persist the explicit return before provider work/events can observe
         // INBOX, so sent-only metadata reconciliation sees the same intent.
-        // A failed label write leaves a timestamp on an archived thread, which
+        // A failed inbox write leaves a timestamp on an archived thread, which
         // remains excluded by inbox visibility and is retried by the workflow.
         if visible {
             self.email_repo
                 .set_followup_returned_at(thread_id, link_id, returned_at)
                 .await?;
         }
-        self.update_thread_labels_with_actor(&link, thread_id, label.id, visible, Some(user))
+        self.set_thread_inbox(&link, thread_id, user, visible)
             .await?;
         if !visible {
             self.email_repo

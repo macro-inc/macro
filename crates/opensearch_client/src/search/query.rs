@@ -87,16 +87,35 @@ pub(crate) fn generate_terms_must_query<'a>(
     terms: impl Into<Cow<'a, [&'a str]>>,
     combine: TermCombine,
 ) -> QueryType<'a> {
+    generate_terms_must_query_for_fields(query_key, &[field], terms, combine)
+}
+
+/// Each term must match at least one field on the same document.
+pub(crate) fn generate_terms_must_query_for_fields<'a>(
+    query_key: QueryKey,
+    fields: &[&'a str],
+    terms: impl Into<Cow<'a, [&'a str]>>,
+    combine: TermCombine,
+) -> QueryType<'a> {
     let terms = terms.into();
 
     let queries: Vec<_> = terms
         .iter()
         .map(|term| {
-            create_query(CreateQueryParams {
-                query_key,
-                field,
-                term,
-            })
+            let mut alternatives = BoolQueryBuilder::new();
+            alternatives.minimum_should_match(1);
+            for field in fields {
+                let query = create_query(CreateQueryParams {
+                    query_key,
+                    field,
+                    term,
+                });
+                if fields.len() == 1 {
+                    return query;
+                }
+                alternatives.should(query);
+            }
+            alternatives.build().into()
         })
         .collect();
 

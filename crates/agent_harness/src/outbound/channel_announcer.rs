@@ -251,12 +251,6 @@ fn connection_prompt(blocker: SessionBlocker) -> AgentConnectionPrompt {
             "codex-cloud",
             "Codex",
         ),
-        SessionBlocker::ClaudeNotConnected => (
-            "@claude",
-            "runs on your own Claude account. Connect Claude, then mention me again.",
-            "claude-cloud",
-            "Claude",
-        ),
     };
     AgentConnectionPrompt {
         agent_tag: agent_tag.to_owned(),

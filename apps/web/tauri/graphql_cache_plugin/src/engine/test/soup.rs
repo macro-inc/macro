@@ -215,7 +215,7 @@ fn native_backfill_evaluates_unseen_mail_filters_without_query_baselines() {
 }
 
 #[test]
-fn native_mail_pagination_and_revision_bound_cursors() {
+fn native_mail_pagination_and_cursors_that_survive_writes() {
     let handle = spawn_handle();
     write_data(&handle, MAIL, seed(), Some(VIEWER));
     let first = evaluate(&handle, request("ALL", None, 2, None));
@@ -239,8 +239,11 @@ fn native_mail_pagination_and_revision_bound_cursors() {
     );
     write_data(&handle, PARTIAL, patch(VIEWER, 4, false), None);
     assert_eq!(
-        evaluate(&handle, request("ALL", None, 2, Some(first_cursor)))["kind"],
-        "stale-cursor"
+        keys(&evaluate(
+            &handle,
+            request("ALL", None, 2, Some(first_cursor))
+        )),
+        vec![key(9), key(8)]
     );
     assert!(block_on(handle.entity_filter(request("ALL", None, 2, Some("not a cursor")))).is_err());
 }

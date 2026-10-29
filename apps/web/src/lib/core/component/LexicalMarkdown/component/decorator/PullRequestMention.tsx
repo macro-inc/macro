@@ -11,6 +11,10 @@ import {
   useNativeSplitNavigationHandler,
   useSplitNavigationHandler,
 } from '@core/util/useSplitNavigationHandler';
+import OpenIcon from '@icon/system/regular/arrows-out.svg';
+import ChatCircle from '@icon/system/regular/chat-circle.svg';
+import GitMerge from '@icon/system/regular/git-merge.svg';
+import GitPullRequest from '@icon/system/regular/git-pull-request.svg';
 import {
   $isPullRequestMentionNode,
   HISTORIC_TAG,
@@ -19,10 +23,6 @@ import {
   SKIP_DOM_SELECTION_TAG,
   SKIP_SCROLL_INTO_VIEW_TAG,
 } from '@macro-inc/lexical-core';
-import OpenIcon from '@phosphor/arrows-out.svg';
-import ChatCircle from '@phosphor/chat-circle.svg';
-import GitMerge from '@phosphor/git-merge.svg';
-import GitPullRequest from '@phosphor/git-pull-request.svg';
 import { useGithubLinkStatusQuery } from '@queries/auth/github-link';
 import { queryReadyGate } from '@queries/gate';
 import {
@@ -394,7 +394,7 @@ export function PullRequestPreviewCard(props: {
 }) {
   return (
     <div class="select-none w-80 text-ink">
-      <Surface depth={3} class="glass bg-menu-glass rounded-xl">
+      <Surface depth={3} hideBorder class="menu-surface rounded-xl">
         <Suspense
           fallback={
             <div class="p-3 flex items-center justify-center text-sm text-ink-muted">
@@ -449,7 +449,7 @@ function UnsyncedPullRequestPreviewCard(props: {
 }) {
   return (
     <div class="select-none w-80 text-ink">
-      <Surface depth={3} class="glass bg-menu-glass rounded-xl">
+      <Surface depth={3} hideBorder class="menu-surface rounded-xl">
         <div class="flex items-center justify-between gap-2 p-2">
           <div class="flex items-center gap-2 min-w-0">
             <span class="relative size-4 shrink-0 inline-flex">

@@ -1,6 +1,6 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import CaretDownIcon from '@phosphor/caret-down.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { Button, CalendarMonthMenu, Dropdown, formatCalendarMonth } from '@ui';
 import { createSignal, Match, Switch } from 'solid-js';
 import { useCalendarPager } from './CalendarPagerContext';
@@ -42,6 +42,7 @@ export function MonthDrawer(props: MonthDrawerProps) {
           preventScrollbarShift={false}
         >
           <MobileDrawer.Trigger
+            variant="ghost"
             as={Button}
             aria-label="Choose month"
             class="max-w-full min-w-0 shrink justify-start gap-1 rounded-full border-none bg-transparent px-1 text-base font-semibold text-ink not-touch:hover:bg-hover"

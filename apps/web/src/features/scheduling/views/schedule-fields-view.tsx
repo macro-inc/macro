@@ -1,11 +1,11 @@
-import ArrowsClockwise from '@phosphor/arrows-clockwise.svg';
-import CalendarBlank from '@phosphor/calendar-blank.svg';
-import ArrowLeft from '@phosphor/caret-left.svg';
-import ArrowRight from '@phosphor/caret-right.svg';
-import Globe from '@phosphor/globe.svg';
-import Pencil from '@phosphor/pencil-simple.svg';
-import Plus from '@phosphor/plus.svg';
-import Trash from '@phosphor/trash.svg';
+import ArrowsClockwise from '@icon/system/regular/arrows-clockwise.svg';
+import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
+import ArrowLeft from '@icon/system/regular/caret-left.svg';
+import ArrowRight from '@icon/system/regular/caret-right.svg';
+import Globe from '@icon/system/regular/globe.svg';
+import Pencil from '@icon/system/regular/pencil-simple.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { Button, Tabs } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { getDefaultCalendarTimeFormat } from '../../calendar/utils/time-format';
@@ -204,14 +204,12 @@ export function ScheduleFields(props: {
           </div>
           <Tabs
             aria-label="Time format"
-            list={[
+            options={[
               { value: '12h', label: '12h' },
               { value: '24h', label: '24h' },
             ]}
             value={timeFormat()}
-            onChange={(value) => {
-              if (value === '12h' || value === '24h') setTimeFormat(value);
-            }}
+            onChange={setTimeFormat}
           />
         </div>
       </header>
@@ -246,9 +244,10 @@ export function ScheduleFields(props: {
                         />
                       </div>
                       <Button
+                        aria-label={`${hours().windows.length || hours().unavailableWindows.length ? 'Edit' : 'Add'} ${day} hours`}
+                        tooltip={`${hours().windows.length || hours().unavailableWindows.length ? 'Edit' : 'Add'} ${day} hours`}
                         variant="ghost"
                         size="icon-sm"
-                        label={`${hours().windows.length || hours().unavailableWindows.length ? 'Edit' : 'Add'} ${day} hours`}
                         aria-expanded={active()}
                         disabled={locked()}
                         onClick={(event) =>
@@ -288,7 +287,7 @@ export function ScheduleFields(props: {
                                 Cancel
                               </Button>
                               <Button
-                                variant="cta"
+                                variant="primary"
                                 size="sm"
                                 disabled={!draft().ranges}
                                 onClick={apply}
@@ -320,9 +319,10 @@ export function ScheduleFields(props: {
               </div>
               <div class="flex items-center gap-1">
                 <Button
+                  aria-label="Previous month"
+                  tooltip="Previous month"
                   variant="ghost"
                   size="icon-sm"
-                  label="Previous month"
                   disabled={locked()}
                   onClick={() =>
                     changeMonth(shiftAvailabilityMonth(monthDate(), -1))
@@ -336,9 +336,10 @@ export function ScheduleFields(props: {
                   onChange={changeMonth}
                 />
                 <Button
+                  aria-label="Next month"
+                  tooltip="Next month"
                   variant="ghost"
                   size="icon-sm"
-                  label="Next month"
                   disabled={locked()}
                   onClick={() =>
                     changeMonth(shiftAvailabilityMonth(monthDate(), 1))
@@ -393,12 +394,12 @@ export function ScheduleFields(props: {
               </div>
               <Button
                 ref={addExceptionButton}
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 disabled={locked()}
-                onClick={(event) =>
-                  openDates([monthDate()], event.currentTarget)
-                }
+                onClick={(
+                  event: MouseEvent & { currentTarget: HTMLButtonElement }
+                ) => openDates([monthDate()], event.currentTarget)}
               >
                 <Plus class="size-4" />
                 Add exception
@@ -440,9 +441,10 @@ export function ScheduleFields(props: {
                       </Show>
                     </div>
                     <Button
+                      aria-label={`Edit exception ${formatAvailabilityDate(override.date)}`}
+                      tooltip={`Edit exception ${formatAvailabilityDate(override.date)}`}
                       variant="ghost"
                       size="icon-sm"
-                      label={`Edit exception ${formatAvailabilityDate(override.date)}`}
                       disabled={locked()}
                       onClick={(event) =>
                         openDates([override.date], event.currentTarget)
@@ -451,9 +453,9 @@ export function ScheduleFields(props: {
                       <Pencil class="size-4" />
                     </Button>
                     <Button
+                      aria-label={`Remove exception ${formatAvailabilityDate(override.date)}`}
                       variant="ghost"
                       size="icon-sm"
-                      label={`Remove exception ${formatAvailabilityDate(override.date)}`}
                       tooltip="Remove this exception and use weekly hours again"
                       disabled={locked()}
                       onClick={() => {

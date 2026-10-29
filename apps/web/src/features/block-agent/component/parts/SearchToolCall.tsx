@@ -1,6 +1,6 @@
 /** A search: scope in the row, reported hits in the body. */
 
-import SearchIcon from '@phosphor/magnifying-glass.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import type { ToolDetail } from '@service-agent-fold/generated/types';
 import { Show } from 'solid-js';
 import { FoldedOutput, ToolCard } from '../../ui';

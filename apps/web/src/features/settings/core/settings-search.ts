@@ -81,6 +81,12 @@ const SETTINGS: Setting[] = [
       'google gmail connect accounts visibility show hide color colour subcalendar',
   },
   {
+    tab: 'Calendar',
+    title: 'Next meeting countdown',
+    target: 'Next meeting countdown',
+    keywords: 'sidebar badge upcoming meeting minutes now timer hide',
+  },
+  {
     tab: 'Agents',
     title: 'Team agents',
     target: 'Team agents',
@@ -132,6 +138,15 @@ const SETTINGS: Setting[] = [
     title: 'Monochrome icons',
     target: 'Monochrome icons',
     keywords: 'color colourful sidebar',
+  },
+  {
+    tab: 'Appearance',
+    title: 'Interface language',
+    target: 'Language',
+    // The word for "language" in each interface language, so people can find
+    // it in their own.
+    keywords:
+      'translate translation locale team personal sprache langue idioma lingua taal språk sprog kieli język язык 言語 언어 语言 語言 भाषा bahasa ngôn ngữ ภาษา',
   },
   {
     tab: 'Appearance',
@@ -216,18 +231,6 @@ const SETTINGS: Setting[] = [
     keywords: 'access public private permission',
   },
   {
-    tab: 'Team Connections',
-    title: 'Team GitHub connection',
-    target: 'Connections',
-    keywords: 'repository app install integration',
-  },
-  {
-    tab: 'Team Connections',
-    title: 'Import from Slack',
-    target: 'Connections',
-    keywords: 'slack export channels messages history team',
-  },
-  {
     tab: 'Tags',
     title: 'Personal tags',
     target: 'Personal',
@@ -239,16 +242,78 @@ const SETTINGS: Setting[] = [
     target: 'Team',
     keywords: 'shared label workspace category',
   },
+  // Integrations rows are targeted by name.
   {
     tab: 'Connected',
-    title: 'GitHub account',
-    target: 'Accounts',
-    keywords: 'connect integration repository pull request',
+    title: 'Gmail',
+    target: 'Gmail',
+    keywords: 'email google workspace inbox calendar connect account',
+  },
+  {
+    tab: 'Connected',
+    title: 'Outlook',
+    target: 'Outlook',
+    keywords: 'email microsoft 365 inbox calendar connect account',
+  },
+  {
+    tab: 'Connected',
+    title: 'GitHub',
+    target: 'GitHub',
+    keywords:
+      'connect integration repository pull request code app install team',
+  },
+  {
+    tab: 'Connected',
+    title: 'Slack',
+    target: 'Slack',
+    keywords: 'chat messages channels agent tools mcp connect',
+  },
+  {
+    tab: 'Connected',
+    title: 'Import from Slack',
+    target: 'Slack',
+    keywords: 'slack export channels messages history team',
+  },
+  {
+    tab: 'Connected',
+    title: 'Linear',
+    target: 'Linear',
+    keywords: 'issues tasks projects agent tools mcp connect import',
+  },
+  {
+    tab: 'Connected',
+    title: 'Notion',
+    target: 'Notion',
+    keywords: 'pages wikis docs agent tools mcp connect import',
+  },
+  {
+    tab: 'Connected',
+    title: 'Granola',
+    target: 'Granola',
+    keywords: 'meetings notes transcripts calls import',
+  },
+  {
+    tab: 'Connected',
+    title: 'Claude Code, Codex, and ChatGPT',
+    target: 'Claude Code, Codex, and ChatGPT',
+    keywords: 'ai apps mcp ide setup',
+  },
+  {
+    tab: 'Connected',
+    title: 'Coding agents on your computer',
+    target: 'Coding agents on your computer',
+    keywords: 'local harness hermes openclaw desktop stream sessions',
+  },
+  {
+    tab: 'Connected',
+    title: 'Custom MCP server',
+    keywords: 'add mcp server url integration',
   },
   {
     tab: 'Connected',
     title: 'Agent apps and tools',
-    keywords: 'mcp integration connect external services',
+    keywords:
+      'mcp integration connect external services catalog airtable trello jira asana google drive dropbox',
   },
   {
     tab: 'Agent',
@@ -267,18 +332,22 @@ const SETTINGS: Setting[] = [
   },
   {
     tab: 'Mobile App',
-    title: 'Get the mobile app',
-    keywords: 'download phone ios android qr code',
+    title: 'Mobile app version and download',
+    keywords: 'download phone ios android qr code version build bundle',
   },
 ];
 
+/**
+ * Lowercased words with Latin accents stripped. Any script counts, so a label
+ * in the interface language (German, Japanese, Hindi) is searchable too.
+ */
 function words(value: string): string[] {
   return (
     value
       .toLowerCase()
       .normalize('NFKD')
       .replace(/[\u0300-\u036f]/g, '')
-      .match(/[a-z0-9]+/g) ?? []
+      .match(/[\p{L}\p{M}\p{N}]+/gu) ?? []
   );
 }
 
@@ -347,7 +416,10 @@ export function searchSettings(
   return entries
     .map((entry) => {
       const titleWords = words(entry.title);
-      const otherWords = words(`${entry.keywords} ${entry.page.label}`);
+      // The English label keeps English searches working in any language.
+      const otherWords = words(
+        `${entry.keywords} ${entry.page.label} ${entry.page.englishLabel}`
+      );
       const scores = tokens.map((token) =>
         Math.max(
           0,

@@ -20,6 +20,40 @@ fn android_native_check_is_an_unconditional_required_merge_check() {
     assert!(android.contains("bun scripts/android-version-check.mjs"));
     assert!(android.contains("bun scripts/android-play-status.mjs --version-code"));
     assert!(android.contains("id-token: write"));
+    // skip-android-update bypasses the bump too, like skip-ios-update: the
+    // labels are read first, and the version check only runs without it.
+    let labels = android.find("id: labels").expect("labels step");
+    let version = android
+        .find("id: android-version")
+        .expect("version check step");
+    assert!(
+        labels < version,
+        "labels must be read before the version check: {android}"
+    );
+    let version_step = android[version..]
+        .split("\n    - ")
+        .next()
+        .expect("version check step body");
+    assert!(
+        version_step.contains("if: steps.labels.outputs.skip != 'true'"),
+        "the version check runs only without the skip label: {android}"
+    );
+    // A skipped PR never releases, so it may not raise the Android floor.
+    let floor = android
+        .find("--skip-release")
+        .expect("skip-label floor check step");
+    let floor_step = android[..floor]
+        .rsplit("\n    - ")
+        .next()
+        .expect("floor check step body");
+    assert!(
+        floor_step.contains("if: steps.labels.outputs.skip == 'true'"),
+        "the floor check runs only with the skip label: {android}"
+    );
+    assert!(
+        !android.contains("!steps.labels"),
+        "never negate a comparison with a leading `!`: {android}"
+    );
     let status = yaml
         .split("\n  status-check:\n")
         .nth(1)
@@ -75,6 +109,14 @@ fn status_check_requires_the_ios_native_check() {
     assert!(
         gate.contains("predicate-quantifier: every"),
         "negated path filters need the `every` quantifier: {gate}"
+    );
+    assert!(
+        gate.contains("!apps/web/tauri/**/*.md"),
+        "documentation must not trigger an iOS native release: {gate}"
+    );
+    assert!(
+        gate.contains("!apps/web/tauri/**/desktop-*/**"),
+        "macOS CEF files must not trigger an iOS native release: {gate}"
     );
     // `!` binds tighter than `==` in GitHub expressions: `!x == 'true'` is
     // always false, which silently skipped every gated step.

@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.jid, p.display_name AS \"display_name!\" FROM whatsapp_identity_alias a\n            JOIN external_chat_person p ON p.id = a.person_id\n            WHERE a.chat_id = $1 AND a.jid = ANY($2) AND p.display_name IS NOT NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "jid",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "display_name!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "dbbb683ad196ce7bc81ea83cbf790847c96f059d5af57d7008e00edd0c5ff17d"
+}

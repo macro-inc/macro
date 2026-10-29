@@ -13,6 +13,7 @@ A draft email. Sending remains an explicit separate operation.
 | <a id="property-bcc"></a> `bcc` | `readonly` | () => `Promise`\<[`ContactInfo`](../../../../../generated/email/types.gen/type-aliases/ContactInfo.md)[]\> | The Bcc recipients. | [`EmailMessage`](../../message/classes/EmailMessage.md).[`bcc`](../../message/classes/EmailMessage.md#property-bcc) |
 | <a id="property-body"></a> `body` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | The parsed message body, as the API returns it. | [`EmailMessage`](../../message/classes/EmailMessage.md).[`body`](../../message/classes/EmailMessage.md#property-body) |
 | <a id="property-cc"></a> `cc` | `readonly` | () => `Promise`\<[`ContactInfo`](../../../../../generated/email/types.gen/type-aliases/ContactInfo.md)[]\> | The Cc recipients. | [`EmailMessage`](../../message/classes/EmailMessage.md).[`cc`](../../message/classes/EmailMessage.md#property-cc) |
+| <a id="property-draftgeneration"></a> `draftGeneration` | `readonly` | () => `Promise`\<`number` \| `undefined`\> | Edit generation to capture with content before saving or transferring it. | - |
 | <a id="property-from"></a> `from` | `readonly` | () => `Promise`\<[`ContactInfo`](../../../../../generated/email/types.gen/type-aliases/ContactInfo.md) \| `undefined`\> | The sender. | [`EmailMessage`](../../message/classes/EmailMessage.md).[`from`](../../message/classes/EmailMessage.md#property-from) |
 | <a id="property-id"></a> `id` | `public readonly` | `string` | - | [`EmailMessage`](../../message/classes/EmailMessage.md).[`id`](../../message/classes/EmailMessage.md#property-id) |
 | <a id="property-labels"></a> `labels` | `readonly` | () => `Promise`\<[`LabelInfo`](../../../../../generated/email/types.gen/type-aliases/LabelInfo.md)[]\> | Labels on this message. | [`EmailMessage`](../../message/classes/EmailMessage.md).[`labels`](../../message/classes/EmailMessage.md#property-labels) |
@@ -69,15 +70,16 @@ Add a label to this message.
 
 ### completeDraftAttachment()
 
-> **completeDraftAttachment**(`attachmentId`): `Promise`\<`void`\>
+> **completeDraftAttachment**(`attachmentId`, `draftGeneration?`): `Promise`\<`void`\>
 
-Verify an uploaded draft attachment before it can be sent.
+Verify an uploaded attachment using the draft generation captured when its upload began.
 
 #### Parameters
 
-| Parameter | Type |
-| ------ | ------ |
-| `attachmentId` | `string` |
+| Parameter | Type | Default value |
+| ------ | ------ | ------ |
+| `attachmentId` | `string` | `undefined` |
+| `draftGeneration?` | `number` | `0` |
 
 #### Returns
 
@@ -98,6 +100,24 @@ Delete the draft.
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### downloadEml()
+
+> **downloadEml**(): `Promise`\<`Blob`\>
+
+The message's original source, exactly as Gmail or Outlook holds it, as
+`message/rfc822` bytes for an `.eml` file. Drafts and messages still on
+their way have no source yet and fail with a 404.
+
+#### Returns
+
+`Promise`\<`Blob`\>
+
+#### Inherited from
+
+[`EmailMessage`](../../message/classes/EmailMessage.md).[`downloadEml`](../../message/classes/EmailMessage.md#downloademl)
 
 ***
 

@@ -2,7 +2,6 @@ import type { ListDataSource } from '@app/components/list';
 import type { EmailRowReminder } from '@app/features/reminders/core/email-row-reminder';
 import {
   buildFlatSoupRows,
-  buildGroupedSoupRows,
   createSearchState,
   createSoupLoadMoreRow,
   createSoupRowStore,
@@ -16,12 +15,17 @@ import { withEntityNotifications } from '@app/features/soup/entity-notifications
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useUserId } from '@core/context/user';
 import { arrayEquals } from '@core/util/compareUtils';
+import { matchesTokenSubsequences } from '@core/util/string';
 import {
   type EmailEntity,
   type EntityData,
   isEmailEntity,
   type WithNotification,
 } from '@entity';
+import {
+  createLocalDraftSource,
+  localDraftEntities,
+} from '@queries/email/local-draft-source';
 import { useFavoritesQuery } from '@queries/favorites/favorites';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { useSearchSoupQuery } from '@queries/soup/search';
@@ -32,7 +36,7 @@ import { EMAIL_FACETS, type EmailFacetContext } from '../filters/email-facets';
 import type { EmailTab, EmailViewState } from '../types';
 import { advanceEmptyAliasPages } from './advance-empty-alias-pages';
 import { buildEmailQuery, type EmailQueryContext } from './email-query';
-import { groupEmailEntitiesByDate } from './email-results';
+import { buildEmailDateRows } from './email-results';
 import { buildEmailSearchRequest } from './email-search';
 import { emailAdmissionBatches, mergeEmailAdmission } from './read-admission';
 import { useReminderEmailSource } from './use-reminder-email-source';
@@ -66,7 +70,9 @@ export type UseEmailDataSourceOptions = {
 function emailMatchesTab(
   entity: EmailEntity,
   tab: EmailTab,
-  userId: string | undefined
+  userId: string | undefined,
+  /** A search hit, which the service matched across archived mail too. */
+  searchHit: boolean
 ): boolean {
   return (
     match(tab)
@@ -75,7 +81,8 @@ function emailMatchesTab(
       .with('shared', () => userId !== undefined && entity.ownerId !== userId)
       // The inbox views list only threads still in the inbox; a cached page can
       // carry a row whose record was archived after the page was fetched.
-      .with('important', 'noise', () => entity.done !== true)
+      // Searching them still finds archived mail, as it always has.
+      .with('important', 'noise', () => searchHit || entity.done !== true)
       .with(
         'favorites',
         'sent',
@@ -156,15 +163,20 @@ export function useEmailDataSource(
   const query = useSoupAstItemsQuery(queryArgs, () => ({
     enabled: sourceEnabled(),
   }));
+  const localDrafts = createLocalDraftSource(
+    () => query.transport === 'graphql'
+  );
   const isListPending = () =>
     !filtersReady() || query.isPending || query.isPlaceholderData;
 
   const selectEmails = (entities: EntityData[]): EmailEntity[] => {
     const context = queryContext();
+    // Rows and their lookups come from search hits while searching.
+    const searchHits = search.isSearching();
     const selected: EmailEntity[] = [];
     for (const entity of entities) {
       if (!isEmailEntity(entity)) continue;
-      if (!emailMatchesTab(entity, context.tab, userId())) continue;
+      if (!emailMatchesTab(entity, context.tab, userId(), searchHits)) continue;
       if (showsFavorites()) {
         if (entity.isFavorited === false) continue;
         // Search results have no Soup favorite field and use search's ID scope.
@@ -176,9 +188,9 @@ export function useEmailDataSource(
     return selected;
   };
 
-  // The quick-access pool behind local search holds no email threads, so
-  // every search result comes from the search service.
+  // Mail search retains server relevance; recoverable local drafts are merged below.
   const search = createSearchState({
+    surface: () => 'email',
     text: () => state.search,
     enabled: () => sourceEnabled() && searchFavoritesReady(),
     disableLocalSearch: () => true,
@@ -398,7 +410,82 @@ export function useEmailDataSource(
     },
     { scope: '', items: [], resolved: new Map() }
   );
-  const entities = () => publication().items;
+  // Working copies can exist before sender metadata allows a GraphQL save.
+  // Keep them discoverable without waiting for the remote list/search.
+  const recoverable = () =>
+    state.tab === 'drafts' || (state.tab === 'all' && !!state.search.trim())
+      ? localDraftEntities(localDrafts.drafts()).filter(
+          (email) => email.ownerId === userId()
+        )
+      : [];
+  // Resolve recovery threads independently of the active filters. Otherwise an
+  // excluded thread could reappear with the synthetic first-use draft flags.
+  const recoveryBatches = createMemo(() =>
+    emailAdmissionBatches(recoverable())
+  );
+  const recoveryQueries = indexArray(recoveryBatches, (ids) =>
+    useSoupAstItemsQuery(
+      () => ({
+        ...buildEmailQuery(
+          {
+            tab: 'all',
+            inboxIds: undefined,
+            facets: {},
+            facetContext: facetContext(),
+          },
+          ids()
+        ),
+        transport: 'graphql',
+      }),
+      () => ({ enabled: sourceEnabled(), keepPreviousData: false })
+    )
+  );
+  const localRows = () => {
+    if (!filtersReady()) return [];
+    const remote = new Map(
+      [
+        ...recoveryQueries().flatMap((query) =>
+          !query.isPending && !query.isPlaceholderData
+            ? (query.data?.entities.filter(isEmailEntity) ?? [])
+            : []
+        ),
+        ...rawEntities().filter(isEmailEntity),
+        ...publication().items,
+      ].map((email) => [email.id, email])
+    );
+    return recoverable()
+      .map((email) => {
+        const confirmed = remote.get(email.id);
+        return confirmed
+          ? {
+              ...confirmed,
+              name: email.name,
+              snippet: email.snippet,
+              updatedAt: email.updatedAt,
+            }
+          : email;
+      })
+      .filter(
+        (email) =>
+          email.ownerId === userId() &&
+          (!state.inboxIds?.length ||
+            (!!email.linkId && state.inboxIds.includes(email.linkId))) &&
+          (!state.aliasFilter ||
+            (email.linkId === state.aliasFilter.inboxId &&
+              email.senderEmail?.toLowerCase() ===
+                state.aliasFilter.emailAddress.toLowerCase())) &&
+          testFacets(state.facets, EMAIL_FACETS, email, facetContext()) &&
+          matchesTokenSubsequences(email.name, state.search.trim())
+      );
+  };
+  const entities = () => {
+    const recovered = localRows();
+    const ids = new Set(recovered.map((email) => email.id));
+    return [
+      ...recovered,
+      ...publication().items.filter((email) => !ids.has(email.id)),
+    ];
+  };
 
   const listEntities = createMemo((): WithNotification<EntityData>[] =>
     entities().map((email) =>
@@ -448,7 +535,7 @@ export function useEmailDataSource(
     // bucketed by date.
     const result: EmailDataSourceItem[] = search.isSearching()
       ? buildFlatSoupRows(listEntities())
-      : buildGroupedSoupRows(groupEmailEntitiesByDate(listEntities()));
+      : buildEmailDateRows(listEntities());
 
     if (hasMore()) {
       result.push(
@@ -464,6 +551,7 @@ export function useEmailDataSource(
   const items = createSoupRowStore(builtItems);
 
   const isLoading = () => {
+    if (localRows().length > 0) return false;
     if (search.isSearching() && showsFavorites() && favorites.isError)
       return false;
     if (!filtersReady()) return true;

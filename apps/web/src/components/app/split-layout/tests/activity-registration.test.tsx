@@ -41,6 +41,7 @@ vi.mock('@service-connection/websocket', () => ({
 vi.mock('@app/lib/split-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/lib/split-router')>()),
   useSplitRouter: () => ({ entry: () => undefined }),
+  createSearchParams: () => [{ scope: 'mine' }, vi.fn()],
 }));
 vi.mock('@core/auth', () => ({
   useIsAuthenticated: () => () => state.authenticated(),
@@ -154,7 +155,7 @@ vi.mock('@app/signal/splitLayout', () => {
 vi.mock('@block-calendar/components/EventComposerSplit', () => ({}));
 vi.mock('@block-channel/component/Compose', () => ({}));
 vi.mock('@block-md/component/ComposeSkill', () => ({}));
-vi.mock('@block-md/component/ComposeTask', () => ({
+vi.mock('@app/features/task-composer/compose-task', () => ({
   ComposeTask: (props: {
     composerContext?: {
       key: string;

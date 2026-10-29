@@ -426,21 +426,14 @@ where
                 if session.is_archived {
                     return Err(AgentSessionError::Archived(session_id).into());
                 }
-                if AgentKind::for_session(session.bot_id, &session.harness)
-                    == AgentKind::ClaudeCloud
-                    && !actor
-                        .as_ref()
-                        .is_some_and(|actor| session.owner_id.is_user(actor))
-                {
-                    return Err(AgentSessionError::Forbidden.into());
-                }
                 if AgentKind::of(session.bot_id) == AgentKind::SandboxedCoder
                     && !actor.as_ref().is_some_and(is_macro_staff)
                 {
                     return Err(AgentSessionError::Forbidden.into());
                 }
             }
-            HarnessCommand::Open(_)
+            HarnessCommand::DrainNotifications
+            | HarnessCommand::Open(_)
             | HarnessCommand::ConversationMessage(_)
             | HarnessCommand::Turn(_)
             | HarnessCommand::ToolApproval(_)
@@ -455,6 +448,72 @@ where
         }
 
         match command {
+            HarnessCommand::DrainNotifications => {
+                if let Some(outcome) = self
+                    .notification_completions
+                    .get(&session_id)
+                    .map(|entry| *entry)
+                    && let Some(store) = &self.notification_store
+                    && let Some(batch) = self
+                        .notification_batches
+                        .get(&session_id)
+                        .map(|entry| entry.clone())
+                {
+                    store.complete(batch.lease_id, outcome).await?;
+                    self.notification_batches.remove(&session_id);
+                    self.notification_completions.remove(&session_id);
+                }
+                // A terminal response can commit before observer takeover.
+                // Reconcile active leases as well as expired ones so a missed
+                // callback cannot keep renewing an already-finished turn.
+                if let Some(batch) = self
+                    .notification_batches
+                    .get(&session_id)
+                    .map(|entry| entry.clone())
+                {
+                    use agent_session::domain::action_history::RecordedAction;
+                    match self
+                        .sessions
+                        .recorded_action(session_id, batch.action_id)
+                        .await?
+                    {
+                        Some(RecordedAction::Finished {
+                            notification_noop,
+                            turn,
+                            stop,
+                            last_text,
+                        }) => {
+                            return self
+                                .execute(
+                                    session_id,
+                                    HarnessCommand::Turn(TurnSignal::TurnEnded {
+                                        turn,
+                                        action_id: Some(batch.action_id),
+                                        stop,
+                                        last_text,
+                                        notification_noop,
+                                    }),
+                                )
+                                .await;
+                        }
+                        Some(RecordedAction::Interrupted { .. }) | None => {
+                            self.execute(
+                                session_id,
+                                HarnessCommand::SessionStopped {
+                                    reason: "notification delivery was interrupted".into(),
+                                },
+                            )
+                            .await?;
+                        }
+                        Some(RecordedAction::Running { .. }) => {}
+                    }
+                }
+                self.restore_queue(session_id).await?;
+                if !self.busy.is_pending(session_id) {
+                    self.dispatch_next(session_id).await?;
+                }
+                Ok(CommandOutcome::Completed)
+            }
             HarnessCommand::ConversationMessage(_) => {
                 unreachable!("conversation messages were normalized before dispatch")
             }
@@ -497,12 +556,24 @@ where
                 self.steer_queued(session_id, action_id, actor).await
             }
             HarnessCommand::Turn(TurnSignal::TurnEnded {
+                notification_noop,
                 stop,
                 last_text,
                 action_id: fold_action_id,
                 turn,
                 ..
             }) => {
+                let duplicate = match fold_action_id {
+                    Some(action) => self
+                        .notification_finished
+                        .lock()
+                        .await
+                        .contains(&(session_id, action)),
+                    None => false,
+                };
+                if duplicate {
+                    return Ok(CommandOutcome::Completed);
+                }
                 if let Some(action) = fold_action_id {
                     self.complete_external_reply(
                         session_id,
@@ -582,6 +653,42 @@ where
                         }
                     }
                 }
+                if let Some(store) = &self.notification_store
+                    && let Some(batch) = self
+                        .notification_batches
+                        .get(&session_id)
+                        .map(|batch| batch.clone())
+                {
+                    {
+                        let mut finished = self.notification_finished.lock().await;
+                        finished.push_back((session_id, batch.action_id));
+                        if finished.len() > 1024 {
+                            finished.pop_front();
+                        }
+                    }
+                    let outcome = if notification_noop {
+                        agent_session::domain::notifications::NotificationOutcome::Noop
+                    } else {
+                        agent_session::domain::notifications::NotificationOutcome::Delivered
+                    };
+                    self.notification_completions.insert(session_id, outcome);
+                    match store.complete(batch.lease_id, outcome).await {
+                        Ok(()) => {
+                            self.notification_batches.remove(&session_id);
+                            self.notification_completions.remove(&session_id);
+                        }
+                        Err(error) => {
+                            tracing::warn!(?error, %session_id, "notification acknowledgment will retry")
+                        }
+                    }
+                }
+                // A recovered completion may already have acknowledged and
+                // removed its batch before the original observer arrives.
+                if notification_noop {
+                    self.busy.take(session_id);
+                    self.dispatch_next(session_id).await?;
+                    return Ok(CommandOutcome::Completed);
+                }
                 self.busy.take(session_id);
                 // A turn end with no record: this replica restarted mid-turn
                 // and the in-memory mark went with it, or the fold closed a
@@ -655,6 +762,16 @@ where
                 Ok(CommandOutcome::Completed)
             }
             HarnessCommand::SessionStopped { reason } => {
+                if let Some(store) = &self.notification_store
+                    && let Some(batch) = self
+                        .notification_batches
+                        .get(&session_id)
+                        .map(|entry| entry.clone())
+                {
+                    store.release(batch.lease_id).await?;
+                    self.notification_batches.remove(&session_id);
+                }
+                self.notification_completions.remove(&session_id);
                 let in_flight = self.busy.take(session_id);
                 // No `TurnEnded` follows a death, so this is the turn's last
                 // chance to stop its pending reply spinning, and to tell the
@@ -773,6 +890,10 @@ where
                 Ok(CommandOutcome::Completed)
             }
             HarnessCommand::Delete => {
+                self.notification_finished
+                    .lock()
+                    .await
+                    .retain(|(session, _)| *session != session_id);
                 // Identity first: the row is gone once the delete succeeds.
                 let identity = self.identity(session_id).await;
                 self.delete(session_id).await?;
@@ -1155,6 +1276,16 @@ where
     /// Put a claimed entry back and persist. A persist failure here loses the
     /// in-flight item on the next restart — the same as losing the turn mark.
     async fn requeue_claimed(&self, session_id: AgentSessionId, entry: QueuedEntry) -> Result<()> {
+        if let Some(store) = &self.notification_store
+            && let Some((_, batch)) = self.notification_batches.remove(&session_id)
+        {
+            store.release(batch.lease_id).await?;
+        }
+        if matches!(&entry.action, AgentAction::Prompt(prompt) if prompt.notifications.as_ref().is_some_and(|input| input.system_turn))
+        {
+            return Ok(());
+        }
+
         self.queues.requeue_front(session_id, entry);
         self.write_queue(session_id).await.inspect_err(|error| {
             tracing::error!(
@@ -1260,6 +1391,18 @@ where
             self.publish_queue(session_id).await;
             return Ok(Dispatch::QueueEmpty);
         }
+        if self.notification_completions.contains_key(&session_id) {
+            self.busy.clear(session_id);
+            return Ok(Dispatch::QueueEmpty);
+        }
+        if self.queues.list(session_id).is_empty() {
+            self.stage_notifications(session_id).await?;
+            if self.busy.is_pending(session_id)
+                && self.notification_batches.contains_key(&session_id)
+            {
+                return Ok(Dispatch::Dispatched);
+            }
+        }
         if self.queues.list(session_id).is_empty() {
             self.busy.clear(session_id);
             return Ok(Dispatch::QueueEmpty);
@@ -1274,7 +1417,7 @@ where
             // this leaves the claimed entry as in-flight (lost, like the turn
             // mark) and keeps every still-waiting action.
             if let Err(error) = self.write_queue(session_id).await {
-                self.queues.requeue_front(session_id, entry);
+                self.requeue_claimed(session_id, entry).await?;
                 return Err(error);
             }
 
@@ -1354,6 +1497,22 @@ where
                 return Err(error);
             }
 
+            match self
+                .attach_notifications(session_id, entry.action_id, &mut composed)
+                .await
+            {
+                Ok(true) => {}
+                Ok(false) => {
+                    self.queues.requeue_front(session_id, entry);
+                    self.write_queue(session_id).await?;
+                    return Ok(Dispatch::Dispatched);
+                }
+                Err(error) => {
+                    self.requeue_claimed(session_id, entry).await?;
+                    return Err(error);
+                }
+            }
+
             // A reply shown in segments posts nothing until the agent has
             // something to say or do: the bot types meanwhile.
             let in_segments = entry.announce.as_ref().is_some_and(|origin| {
@@ -1398,6 +1557,11 @@ where
                             self.requeue_claimed(session_id, entry).await?;
                             self.busy.clear(session_id);
                             return Ok(Dispatch::QueueEmpty);
+                        }
+                        if let Some(store) = &self.notification_store
+                            && let Some((_, batch)) = self.notification_batches.remove(&session_id)
+                        {
+                            store.release(batch.lease_id).await?;
                         }
                         continue;
                     }
@@ -1448,6 +1612,9 @@ where
                     &TurnPrompter {
                         action_id: entry.action_id,
                         user: entry.actor.clone(),
+                        kind: if matches!(&entry.action, AgentAction::Prompt(prompt) if prompt.notifications.as_ref().is_some_and(|input| input.system_turn)) {
+                            agent_session::domain::model::PrompterKind::System
+                        } else { agent_session::domain::model::PrompterKind::User },
                     },
                 )
                 .await

@@ -144,7 +144,7 @@ where
         let actor = ctx.data::<FavoritesMutationActor>()?.clone();
         let service = ctx.data::<Arc<S>>()?;
         let result = service
-            .set_favorite(actor, entity.into_model(), favorite)
+            .set_favorite(actor, entity.into_model()?, favorite)
             .await;
 
         // Preserve both the success and error union shapes for legacy callers.
@@ -165,7 +165,7 @@ where
         let actor = ctx.data::<FavoritesMutationActor>()?.clone();
         let service = ctx.data::<Arc<S>>()?;
         let result = service
-            .set_favorite(actor, entity.into_model(), favorite)
+            .set_favorite(actor, entity.into_model()?, favorite)
             .await
             .map_err(mutation_error)?;
 
@@ -187,7 +187,7 @@ where
             .favorites
             .into_iter()
             .map(EntityRefInput::into_model)
-            .collect();
+            .collect::<async_graphql::Result<_>>()?;
         let service = ctx.data::<Arc<S>>()?;
         let favorites = service
             .reorder_favorites(user_id, ordered)

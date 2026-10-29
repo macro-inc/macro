@@ -22,6 +22,7 @@ const draftMessage: ParsedMessage = {
   cc: [],
   to: [],
   labels: [],
+  draft_generation: 2,
 };
 
 test('draft editing encodes Unicode HTML and every write stays in the draft inbox', async () => {
@@ -33,13 +34,13 @@ test('draft editing encodes Unicode HTML and every write stays in the draft inbo
       writes.push(request);
       if (request.headers.get('X-Email-Link-Id') !== 'secondary-inbox')
         return Response.json({ error: 'wrong inbox' }, { status: 403 });
-      if (request.url.endsWith('/attachments'))
+      if (new URL(request.url).pathname.endsWith('/attachments'))
         return Response.json({
           attachment_id: 'attachment-1',
           upload_url: 'https://uploads.test/file',
           content_type: 'text/plain',
         });
-      if (request.url.endsWith('/forwarded-attachments'))
+      if (new URL(request.url).pathname.endsWith('/forwarded-attachments'))
         return Response.json({ attachment_id: 'attachment-2' });
       if (request.url.endsWith('/drafts'))
         return Response.json({
@@ -58,6 +59,7 @@ test('draft editing encodes Unicode HTML and every write stays in the draft inbo
     hosts: { email: 'https://email.test' },
   });
   const draft = macro.email.draftById('draft-1');
+  expect(await draft.draftGeneration()).toBe(2);
   await draft.update({
     subject: 'Updated',
     bodyHtml: '<p>café ☕</p>',
@@ -67,6 +69,7 @@ test('draft editing encodes Unicode HTML and every write stays in the draft inbo
   expect(await writes[0].json()).toEqual({
     draft: {
       db_id: 'draft-1',
+      draft_generation: 2,
       subject: 'Updated',
       body_html: Buffer.from('<p>café ☕</p>').toString('base64url'),
       thread_db_id: 'thread-1',
@@ -90,10 +93,18 @@ test('draft editing encodes Unicode HTML and every write stays in the draft inbo
   await draft.delete();
   expect(writes).toHaveLength(9);
   expect(
+    writes
+      .slice(1)
+      .every(
+        (request) =>
+          new URL(request.url).searchParams.get('draft_generation') === '2',
+      ),
+  ).toBe(true);
+  expect(
     writes.every((r) => r.headers.get('X-Email-Link-Id') === 'secondary-inbox'),
   ).toBe(true);
   expect(JSON.stringify(upload.attachment)).toBe(
-    '{"id":"attachment-1","draftId":"draft-1","forwarded":false}',
+    '{"id":"attachment-1","draftId":"draft-1","forwarded":false,"draftGeneration":2}',
   );
 });
 

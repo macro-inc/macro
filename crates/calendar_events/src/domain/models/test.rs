@@ -250,6 +250,7 @@ fn default_reminders_stay_out_of_serialized_projections() {
         attendees: Vec::new(),
         reminders: EventReminders::default(),
         guest_policy: GuestPolicy::default(),
+        is_snapshot: false,
         viewer_can: ViewerCapabilities::NONE,
         created_at: starts_at,
         updated_at: starts_at,
@@ -348,4 +349,24 @@ fn popup_minutes_resolve_defaults_and_deduplicate() {
         Vec::<u32>::new(),
         "explicitly no reminders resolves to nothing even with defaults"
     );
+}
+
+#[test]
+fn a_mentioned_copy_reads_as_a_snapshot_an_invitation_or_an_event() {
+    use CalendarMentionViewerCopy::{Event, Invitation, Snapshot};
+    // (is_snapshot, inbox organizes, inbox attends)
+    for (facts, expected) in [
+        ((true, false, true), Snapshot),
+        ((true, true, true), Snapshot),
+        ((false, false, true), Invitation),
+        ((false, true, true), Event),
+        ((false, true, false), Event),
+        ((false, false, false), Event),
+    ] {
+        assert_eq!(
+            CalendarMentionViewerCopy::classify(facts.0, facts.1, facts.2),
+            expected,
+            "{facts:?}"
+        );
+    }
 }

@@ -3,8 +3,8 @@
  * reported in the body — the chat block's GenericTool analog.
  */
 
-import BrainIcon from '@phosphor/brain.svg';
-import GlobeIcon from '@phosphor/globe.svg';
+import BrainIcon from '@icon/system/regular/brain.svg';
+import GlobeIcon from '@icon/system/regular/globe.svg';
 import type { ToolDetail } from '@service-agent-fold/generated/types';
 import { Show } from 'solid-js';
 import { FoldedOutput, ToolCard } from '../../ui';

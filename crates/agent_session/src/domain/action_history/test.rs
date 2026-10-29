@@ -18,7 +18,12 @@ fn an_empty_prompt_still_proves_delivery() {
         .collect();
     assert_eq!(
         recorded_action(entries, action),
-        Some(RecordedAction::Running { turn: TurnId(0) })
+        Some(RecordedAction::Running {
+            turn: TurnId(0),
+            actor: Some(
+                macro_user_id::user_id::MacroUserIdStr::try_from_email("eric@example.com").unwrap(),
+            ),
+        })
     );
 }
 
@@ -40,6 +45,7 @@ fn an_empty_prompt_recovers_its_completed_answer() {
     assert_eq!(
         recorded_action(entries, action),
         Some(RecordedAction::Finished {
+            notification_noop: false,
             turn: TurnId(0),
             stop: StopReason::EndTurn,
             last_text: Some("Done.".into()),

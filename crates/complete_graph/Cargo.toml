@@ -54,8 +54,11 @@ soup_realtime = { path = "../soup_realtime", default-features = false, features 
   "ports",
 ] }
 tokio = { workspace = true }
+tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+saved_views = { path = "../saved_views" }
 
 [dev-dependencies]
 bot_id = { path = "../bot_id" }
@@ -74,7 +77,6 @@ models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup" }
 rootcause = { workspace = true }
-scheduled_action = { path = "../../services/scheduled_action" }
+scheduled_action = { path = "../scheduled_action" }
 serde = { workspace = true }
-tracing = { workspace = true }
 uuid = { workspace = true }

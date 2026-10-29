@@ -56,14 +56,20 @@ const TEAM_ID: &str = "55555555-5555-4555-8555-555555555555";
 struct FakeJwtValidator;
 
 impl JwtValidator for FakeJwtValidator {
-    fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
+    fn validate_credential(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
         match jwt {
-            VALID_TOKEN => Ok(ValidatedIdentity {
-                agent_id: None,
-                user_id: USER_ID.to_string(),
-                fusion_user_id: "test-fusion-user".to_string(),
-                organization_id: None,
-                permissions: None,
+            VALID_TOKEN => Ok(macro_authorization::ValidatedCredential {
+                origin: macro_authorization::CredentialOrigin::Session,
+                identity: ValidatedIdentity {
+                    agent_id: None,
+                    user_id: USER_ID.to_string(),
+                    fusion_user_id: "test-fusion-user".to_string(),
+                    organization_id: None,
+                    permissions: None,
+                },
             }),
             "expired" => Err(Report::new(MacroAuthorizationError::CredentialsExpired)),
             _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),

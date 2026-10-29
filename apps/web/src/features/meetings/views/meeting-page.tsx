@@ -1,10 +1,10 @@
 import { getCallExitPath } from '@channel/Call/call-exit';
 import type { BackgroundEffect } from '@core/media/background-effect';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import Phone from '@icon/system/regular/phone-call.svg';
 import { Telemetry } from '@macro-inc/observability';
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import Phone from '@phosphor/phone-call.svg';
-import { Button } from '@ui';
+import { Button, Input } from '@ui';
 import {
   type Accessor,
   createEffect,
@@ -299,8 +299,8 @@ export function MeetingPage(props: {
               >
                 <label class="flex flex-col gap-2 text-sm font-medium">
                   Your name
-                  <input
-                    class="rounded-lg border border-edge-muted bg-input px-3 py-2.5 text-ink placeholder:text-ink-placeholder outline-none focus:border-accent"
+                  <Input
+                    size="lg"
                     placeholder="Enter your name"
                     autocomplete="name"
                     value={name()}

@@ -1,6 +1,7 @@
 # Class: InitiativeNamespace
 
-Initiatives in the caller's workspace.
+Initiatives in the caller's workspace; find one by name with one
+`summaries()` call, not `name()` on each listed handle (one request each).
 
 ## Constructors
 
@@ -60,8 +61,20 @@ Create an initiative.
 
 > **list**(): `Promise`\<[`Initiative`](../../initiative/classes/Initiative.md)[]\>
 
-List accessible initiatives.
+List accessible initiatives as handles; use `summaries()` for their names.
 
 #### Returns
 
 `Promise`\<[`Initiative`](../../initiative/classes/Initiative.md)[]\>
+
+***
+
+### summaries()
+
+> **summaries**(): `Promise`\<[`InitiativeSummary`](../interfaces/InitiativeSummary.md)[]\>
+
+Every accessible initiative with its name, in one request.
+
+#### Returns
+
+`Promise`\<[`InitiativeSummary`](../interfaces/InitiativeSummary.md)[]\>

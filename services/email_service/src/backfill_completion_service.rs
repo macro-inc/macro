@@ -256,6 +256,9 @@ async fn finalize_claimed_backfill(
         handle_contacts_sync(ctx, &link)
             .await
             .map_err(completion_effect_retry)?;
+        // Best effort: the mailbox now has sent mail to rank, so open direct
+        // messages with the people the user emails most.
+        crate::util::contact_dms::ensure_top_contact_dms(&ctx.db, &link).await;
         cg_refresh_email(
             &ctx.connection_gateway_client,
             link.macro_id.as_ref(),
@@ -430,16 +433,29 @@ async fn handle_thread_completed(
     job_id: Uuid,
     p: &BackfillMessagePayload,
 ) -> Result<(), ProcessingError> {
-    let new_payload = UpdateMetadataPayload {
-        thread_provider_id: p.thread_provider_id.clone(),
-        thread_db_id: p.thread_db_id,
-    };
+    enqueue_thread_metadata_update(ctx, link, job_id, &p.thread_provider_id, p.thread_db_id)
+        .await?;
+    handle_thread_attachment_upload(ctx, link, job_id, p.thread_db_id).await
+}
 
+/// Hands a fully written thread to its UpdateThreadMetadata step, which
+/// computes the thread's metadata and counts it as completed.
+#[tracing::instrument(skip(ctx))]
+pub async fn enqueue_thread_metadata_update(
+    ctx: &PubSubContext,
+    link: &Link,
+    job_id: Uuid,
+    thread_provider_id: &str,
+    thread_db_id: Uuid,
+) -> Result<(), ProcessingError> {
     let ps_message = BackfillPubsubMessage {
         backfill_operation: BackfillOperation::UpdateThreadMetadata(JobScopedPayload {
             link_id: link.id,
             job_id,
-            payload: new_payload,
+            payload: UpdateMetadataPayload {
+                thread_provider_id: thread_provider_id.to_string(),
+                thread_db_id,
+            },
         }),
     };
 
@@ -451,11 +467,7 @@ async fn handle_thread_completed(
                 reason: FailureReason::SqsEnqueueFailed,
                 source: e.context("Failed to enqueue metadata message".to_string()),
             })
-        })?;
-
-    handle_thread_attachment_upload(ctx, link, job_id, p.thread_db_id).await?;
-
-    Ok(())
+        })
 }
 
 /// Creates BackfillAttachmentPayload messages and enqueues them via SQS for the given attachments
@@ -540,8 +552,9 @@ async fn send_attachment_backfill_messages(
     Ok(())
 }
 
+/// Enqueues the uploads of a backfilled thread's attachments.
 #[tracing::instrument(skip(ctx))]
-async fn handle_thread_attachment_upload(
+pub async fn handle_thread_attachment_upload(
     ctx: &PubSubContext,
     link: &Link,
     job_id: Uuid,

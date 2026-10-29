@@ -4,17 +4,18 @@ import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
+import { keyboardShortcutsPlugin } from '@core/component/LexicalMarkdown/plugins/keyboard-shortcuts';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
+import DotsThree from '@icon/system/regular/dots-three.svg';
+import Paperclip from '@icon/system/regular/paperclip.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
-import DotsThree from '@phosphor/dots-three.svg';
-import Paperclip from '@phosphor/paperclip.svg';
-import Trash from '@phosphor/trash.svg';
 import { isIOS } from '@solid-primitives/platform';
 import { Button, cn, SendButton, Surface, Tooltip } from '@ui';
 import type { LexicalEditor } from 'lexical';
@@ -45,7 +46,9 @@ import { getOrInitEmailFormContext } from '../context/email-form-context';
 import { decodeBase64Utf8 } from '../core/decode-base64';
 import { plainTextToHtml } from '../core/plain-text-to-html';
 import { registerCcBccHotkeys } from '../primitives/cc-bcc-hotkeys';
+import { registerDraftActionHotkeys } from '../primitives/draft-action-hotkeys';
 import { createDraftSyncStatus } from '../primitives/draft-sync-status';
+import { EMAIL_FORMAT_SHORTCUTS } from '../primitives/format-shortcuts';
 import { registerToggleAppendedThread } from '../primitives/prepare-email-body';
 import {
   createReplyMove,
@@ -179,7 +182,6 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
     drafts: composeContext.drafts,
     draftId: state.savedDraftId,
     localSaveState: state.localSaveState,
-    acknowledgeSaved: state.acknowledgeSaved,
     retry: state.retryDraft,
     discard: state.deleteDraftAndReset,
   });
@@ -210,6 +212,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
     scheduleActionLabel,
     scheduleOperation,
     cancelSchedule,
+    checkScheduleStatus,
     schedulePickerDisabled,
     editingDisabled,
     sendUnavailableReason,
@@ -283,6 +286,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
     .withRestoreFocus()
     .withSelectionData()
     .withFloatingFormatMenu()
+    .use(keyboardShortcutsPlugin({ shortcuts: EMAIL_FORMAT_SHORTCUTS }))
     .use(registerToggleAppendedThread)
     .onChange(state.onContentChange)
     .withFilePaste({
@@ -341,6 +345,13 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
         runWithInputFocused: true,
         hotkeyToken: TOKENS.email.sendAndMarkDone,
         displayPriority: 10,
+      });
+
+      registerDraftActionHotkeys({
+        scopeId: composeHotkeyScope,
+        disabled: editingDisabled,
+        discard: () => fireAndForget(deleteDraftAndReset(), 'email-compose'),
+        attach: handleAddAttachments,
       });
 
       const recipients = state.recipients;
@@ -478,17 +489,18 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
 
   const AttachButton = () => (
     <Button
+      variant="ghost"
       ref={(el) =>
         fileSelector(el, () => ({
           multiple: true,
           onSelect: handleAddAttachments,
         }))
       }
-      size="icon-composer"
+      size="icon-md"
       tooltip="Attach"
       disabled={editingDisabled()}
     >
-      <Paperclip />
+      <Paperclip class="size-4 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
   );
 
@@ -563,7 +575,6 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
         </Show>
         <Show when={isMobileCompose()}>
           <MobileReplyToolbar
-            status={<SyncStatus />}
             onBack={requestClose}
             attachRef={(element) =>
               fileSelector(element, () => ({
@@ -582,6 +593,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
                 operation={scheduleOperation()}
                 onSelectTime={handleSendTimeChange}
                 onCancelSchedule={cancelSchedule}
+                onCheckStatus={checkScheduleStatus}
               />
             }
             scheduleControl={
@@ -600,6 +612,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
             }
           />
         </Show>
+        <SyncStatus />
         <ReplyEnvelope
           fields={state.recipients}
           values={form.recipients}
@@ -758,7 +771,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
                   setComposerExpanded(true);
                 }}
               >
-                <DotsThree />
+                <DotsThree class="size-3.5 shrink-0 pointer-events-none" />
               </Button>
             </div>
           </Show>
@@ -783,12 +796,12 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
                   as={Button}
                   variant="ghost"
                   size="icon-sm"
-                  class="size-5 rounded bg-transparent p-0 text-ink-extra-muted hover:text-ink-muted [&_:where(svg)]:size-5"
+                  class="size-5 rounded bg-transparent p-0 text-ink-extra-muted hover:text-ink-muted"
                   pressed={form.replyAppended()}
                   disabled={editingDisabled()}
                   onChange={toggleQuotedText}
                 >
-                  <DotsThree />
+                  <DotsThree class="size-5 shrink-0" />
                 </KToggleButton>
               </Tooltip>
             </div>
@@ -820,25 +833,27 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
               class="shrink-0 flex min-w-0 justify-end pt-1.5"
             >
               <div class="flex shrink-0 items-center gap-1">
-                <SyncStatus />
                 {/* In the window, its title bar returns the reply. */}
                 <Show when={props.popout && !props.popout.inWindow}>
                   <Button
+                    variant="ghost"
                     onClick={() => fireAndForget(moveReply(), 'email-compose')}
                     tooltip="Pop out"
+                    aria-label="Pop out"
                     hotkey={TOKENS.email.popOutReply}
-                    size="icon-composer"
+                    size="icon-md"
                   >
-                    <ArrowSquareOut />
+                    <ArrowSquareOut class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                   </Button>
                 </Show>
                 <Button
+                  variant="ghost"
                   onClick={deleteDraftAndReset}
                   tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
-                  size="icon-composer"
+                  size="icon-md"
                   disabled={editingDisabled()}
                 >
-                  <Trash />
+                  <Trash class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
                 <AttachButton />
                 <Show
@@ -866,8 +881,10 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
                   pending={isSending()}
                   hidden={sendActionHidden()}
                   onClick={() => sendEmail()}
-                  tooltip={sendUnavailableReason() ?? scheduleActionLabel()}
-                  shortcut={sendUnavailableReason() ? undefined : 'cmd+enter'}
+                  tooltip={{
+                    content: sendUnavailableReason() ?? scheduleActionLabel(),
+                    shortcut: sendUnavailableReason() ? undefined : 'cmd+enter',
+                  }}
                   aria-label={scheduleActionLabel()}
                 />
               </div>
@@ -899,6 +916,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           operation={scheduleOperation()}
           onSelectTime={handleSendTimeChange}
           onCancelSchedule={cancelSchedule}
+          onCheckStatus={checkScheduleStatus}
           class="-mx-4 -mb-4 mt-3 rounded-b-[26.25px] border-t border-edge-muted px-4 py-2 touch:rounded-b-lg mobile:rounded-none"
         />
       </Show>

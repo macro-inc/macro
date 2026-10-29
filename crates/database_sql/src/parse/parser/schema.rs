@@ -14,7 +14,7 @@ use super::super::lexer::TokenKind;
 use super::{ParseResult, Tokens, identifier, keyword, message_at, next_token, table, token, word};
 use crate::catalog::EntityKind;
 
-const COLUMN_TYPES: &str = "text, number, boolean, date, link, select, select_number, tag or \
+const COLUMN_TYPES: &str = "text, number, boolean, date, date_range, link, select, select_number, tag or \
                             entity(<KIND>) such as entity(USER); add [] after select, \
                             select_number or entity(…) for several values";
 
@@ -88,6 +88,7 @@ fn plain_type(input: Tokens<'_>) -> ParseResult<'_, OpColumnKind> {
         ColumnTypeName::Number => single(OpColumnKind::Number)?,
         ColumnTypeName::Boolean => single(OpColumnKind::Boolean)?,
         ColumnTypeName::Date => single(OpColumnKind::Date)?,
+        ColumnTypeName::DateRange => single(OpColumnKind::DateRange)?,
         ColumnTypeName::Link => single(OpColumnKind::Link)?,
         ColumnTypeName::Select => OpColumnKind::Select { multi },
         ColumnTypeName::SelectNumber => OpColumnKind::SelectNumber { multi },

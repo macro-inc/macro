@@ -152,6 +152,17 @@ async fn reservation_passes_requester_explicit_team_and_authorized_target_for_ev
 }
 
 #[test]
+fn unexpected_discovery_error_fails_closed() {
+    assert_eq!(
+        map_error(LedgerError::UnsupportedDiscovery(
+            ledger::ImportSource::Slack
+        ))
+        .into_current_context(),
+        ImportError::Internal
+    );
+}
+
+#[test]
 fn unexpected_ai_admission_error_fails_closed() {
     let admission = serde_json::from_str(r#""unavailable""#).unwrap();
     assert_eq!(

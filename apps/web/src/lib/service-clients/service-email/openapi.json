@@ -388,6 +388,90 @@
         }
       }
     },
+    "/email/calendar-events/{event_id}/forward": {
+      "post": {
+        "tags": ["email"],
+        "summary": "Email one of the viewer's events to people the organizer's guest list\ndoes not name, from the inbox that holds the viewer's copy, with the\nusual undo delay, carrying the copy's join link. When the copy is Google's\nprivate copy of an invitation from an organizer outside Google, it is a\nreal invitation (`METHOD:REQUEST`) naming the recipients, who answer it to\nthe organizer, who gets the email too. Otherwise it is the event's file\n(`METHOD:PUBLISH`, no attendees): recipients can add the event to their\nown calendar, are not added to the guest list, and the organizer is not\ntold.",
+        "operationId": "forward_calendar_event",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "description": "The viewer's copy of the event",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForwardCalendarEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "The email is queued to send",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForwardCalendarEventResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No, too many, or invalid recipients",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForwardCalendarEventError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "The inbox holding the copy cannot send for the viewer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForwardCalendarEventError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such event on one of the viewer's own inboxes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForwardCalendarEventError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The email could not be sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForwardCalendarEventError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/contacts": {
       "get": {
         "tags": ["Contacts"],
@@ -784,6 +868,16 @@
         "operationId": "upsert_scheduled_message",
         "parameters": [
           {
+            "name": "draft_generation",
+            "in": "query",
+            "description": "Generation from the last loaded draft. Legacy clients use zero.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
             "name": "id",
             "in": "path",
             "description": "The ID of the draft message to schedule",
@@ -875,6 +969,16 @@
         "operationId": "delete_scheduled_draft",
         "parameters": [
           {
+            "name": "draft_generation",
+            "in": "query",
+            "description": "Generation from the last loaded draft. Legacy clients use zero.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
             "name": "message_id",
             "in": "path",
             "description": "The ID of the draft",
@@ -948,6 +1052,16 @@
         "summary": "Delete a draft.",
         "operationId": "delete_draft",
         "parameters": [
+          {
+            "name": "draft_generation",
+            "in": "query",
+            "description": "Generation from the last loaded draft. Legacy clients use zero.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
           {
             "name": "id",
             "in": "path",
@@ -1027,6 +1141,16 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "draft_generation",
+            "in": "query",
+            "description": "Generation from the last loaded draft. Legacy clients use zero.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
             }
           }
         ],
@@ -1119,6 +1243,16 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "draft_generation",
+            "in": "query",
+            "description": "Generation from the last loaded draft. Legacy clients use zero.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
           }
         ],
         "responses": {
@@ -1182,6 +1316,16 @@
         "operationId": "complete_draft_attachment",
         "parameters": [
           {
+            "name": "draft_generation",
+            "in": "query",
+            "description": "Generation from the last loaded draft. Legacy clients use zero.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
             "name": "id",
             "in": "path",
             "required": true,
@@ -1236,6 +1380,16 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "draft_generation",
+            "in": "query",
+            "description": "Generation from the last loaded draft. Legacy clients use zero.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
             }
           }
         ],
@@ -1307,6 +1461,16 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "draft_generation",
+            "in": "query",
+            "description": "Generation from the last loaded draft. Legacy clients use zero.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
             }
           }
         ],
@@ -2548,6 +2712,97 @@
         }
       }
     },
+    "/email/messages/{id}/eml": {
+      "get": {
+        "tags": ["Messages"],
+        "summary": "Download a message's original source as an `.eml` file.",
+        "operationId": "get_message_eml",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Message ID.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "message/rfc822": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmlFile"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/settings": {
       "patch": {
         "tags": ["Settings"],
@@ -2642,8 +2897,21 @@
     "/email/sync": {
       "delete": {
         "tags": ["Sync"],
-        "summary": "Disables inbox syncing for user.",
+        "summary": "Disables inbox syncing for the selected inbox.",
+        "description": "The inbox is the caller's primary, or the one named by `X-Email-Link-Id`,\nwhich may be an inbox the caller only reaches through delegation. Removal\ntherefore follows the same policy as `DELETE /email/links/{link_id}`: an\nowner's inbox is torn down, while a delegate only loses their\n`macro_user_links` edge and the owner's data stays intact.",
         "operationId": "disable_sync",
+        "parameters": [
+          {
+            "name": "X-Email-Link-Id",
+            "in": "header",
+            "description": "Inbox link ID to act on instead of the caller's primary inbox; may name a delegated inbox.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "204": {
             "description": "",
@@ -2651,6 +2919,95 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/threads/archived": {
+      "patch": {
+        "tags": ["Threads"],
+        "summary": "Change the archived status of up to 100 threads, sending one provider\nwrite per inbox. A thread that can't change is reported, not fatal.",
+        "operationId": "archive_threads",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveThreadsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchiveThreadsResponse"
                 }
               }
             }
@@ -3331,6 +3688,119 @@
         }
       }
     },
+    "/email/threads/{thread_id}/messages/{message_id}/calendar-invitations/{invitation_id}/copy": {
+      "post": {
+        "tags": ["email"],
+        "summary": "Add a shared event saved from one of the thread's messages to one of the\nviewer's Google calendars, the way Add to calendar adds a channel-shared\nevent: a snapshot under the meeting's iCalendar UID and organizer, with the\nviewer as its only guest and no join link. Nobody is notified. Only a\npublished event file (`METHOD:PUBLISH`) can be added; an invitation is\nanswered from the calendar it reached.",
+        "operationId": "copy_thread_calendar_invitation",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Authorized email thread",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "description": "Message carrying the event",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "invitation_id",
+            "in": "path",
+            "description": "Saved event within the message",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopyCalendarEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The copy on the viewer's calendar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarEvent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The saved event cannot be added, or the calendar is not a Google calendar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Calendar is read-only or needs reauthorization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such saved event in the thread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already on the viewer's calendar, no writable calendar, or the provider refused the copy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Transient provider failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/threads/{thread_id}/project": {
       "patch": {
         "tags": ["Threads"],
@@ -3716,6 +4186,11 @@
             "format": "uuid",
             "description": "Existing message DB ID (for updating an existing draft)."
           },
+          "draft_generation": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Generation from the last loaded draft; legacy clients begin at zero."
+          },
           "headers_json": {
             "oneOf": [
               {
@@ -3765,7 +4240,7 @@
       "ApiDraftOutput": {
         "type": "object",
         "description": "The draft output matching the current `MessageToSend` JSON shape for backward compat.",
-        "required": ["link_id", "subject"],
+        "required": ["draft_generation", "link_id", "subject"],
         "properties": {
           "bcc": {
             "type": ["array", "null"],
@@ -3797,6 +4272,11 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Message DB ID."
+          },
+          "draft_generation": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Generation required for subsequent edits."
           },
           "headers_json": {
             "oneOf": [
@@ -3928,6 +4408,7 @@
         "type": "object",
         "description": "API representation of a fully assembled email message.",
         "required": [
+          "draft_generation",
           "db_id",
           "thread_db_id",
           "link_id",
@@ -4003,6 +4484,11 @@
             "type": "string",
             "format": "uuid"
           },
+          "draft_generation": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Draft edit generation; changes at send and cancellation boundaries."
+          },
           "from": {
             "oneOf": [
               {
@@ -4068,6 +4554,17 @@
           "replying_to_id": {
             "type": ["string", "null"],
             "format": "uuid"
+          },
+          "scheduled_send_status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ScheduledSendStatus",
+                "description": "Delivery state, including failures and unresolved provider outcomes."
+              }
+            ]
           },
           "scheduled_send_time": {
             "type": ["string", "null"],
@@ -4474,6 +4971,44 @@
           }
         }
       },
+      "ArchiveThreadsRequest": {
+        "type": "object",
+        "required": ["thread_ids", "value"],
+        "properties": {
+          "thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "value": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ArchiveThreadsResponse": {
+        "type": "object",
+        "required": ["updated_thread_ids", "failed_thread_ids"],
+        "properties": {
+          "failed_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Threads left unchanged because they could not be updated."
+          },
+          "updated_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Threads whose archived status now matches the request."
+          }
+        }
+      },
       "Attachment": {
         "type": "object",
         "description": "Attachments of a message, as sent to us by the provider.",
@@ -4738,6 +5273,7 @@
           "isReadOnly",
           "attendees",
           "guestPolicy",
+          "isSnapshot",
           "viewerCan",
           "createdAt",
           "updatedAt"
@@ -4807,6 +5343,10 @@
           "isReadOnly": {
             "type": "boolean",
             "description": "Whether the canonical source's calendar prohibits editing it."
+          },
+          "isSnapshot": {
+            "type": "boolean",
+            "description": "Whether this is a snapshot of a meeting shared with the owner, which\nMacro added to their calendar as a private copy: the meeting's changes\nnever reach it, and nothing done to it reaches the meeting."
           },
           "location": {
             "type": ["string", "null"],
@@ -5005,6 +5545,13 @@
               }
             ]
           },
+          "recurrence": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Raw `RRULE`, `RDATE` and `EXDATE` lines, empty for a single event.\n`None` on snapshots saved before recurrence was recorded, where a\nseries cannot be told apart from a single event."
+          },
           "recurrence_id": {
             "oneOf": [
               {
@@ -5050,6 +5597,47 @@
             "description": "iCalendar UID; never a Google provider event ID."
           }
         }
+      },
+      "CalendarMutationApiError": {
+        "type": "object",
+        "description": "HTTP error body returned by calendar mutation endpoints.",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/CalendarMutationErrorCode",
+            "description": "Machine-readable failure category."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable failure description."
+          }
+        }
+      },
+      "CalendarMutationErrorCode": {
+        "type": "string",
+        "description": "Machine-readable failure category for calendar mutations.",
+        "enum": [
+          "not_found",
+          "occurrence_not_found",
+          "read_only",
+          "no_writable_calendar",
+          "not_attendee",
+          "not_organizer",
+          "guests_cannot_invite",
+          "guest_list_hidden",
+          "guests_cannot_modify",
+          "already_on_calendar",
+          "join_request_open",
+          "copy_refused",
+          "snapshot",
+          "invalid_input",
+          "reauth_required",
+          "provider_rejected",
+          "retryable",
+          "persist_failed",
+          "macro_call_failed",
+          "copy_choice_required"
+        ]
       },
       "CalendarOccurrence": {
         "type": "object",
@@ -5170,6 +5758,17 @@
           }
         ]
       },
+      "CopyCalendarEventRequest": {
+        "type": "object",
+        "description": "Request body adding a shared event to the requester's calendar.",
+        "properties": {
+          "calendarId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Google calendar to add the copy to; defaults to the requester's\nprimary inbox's primary calendar."
+          }
+        }
+      },
       "CreateDraftRequest": {
         "type": "object",
         "description": "Request body for creating a draft.",
@@ -5216,6 +5815,10 @@
             "description": "Local label. Pending provider creation is reported by settings operations."
           }
         }
+      },
+      "EmlFile": {
+        "type": "string",
+        "format": "binary"
       },
       "EmptyResponse": {
         "type": "object",
@@ -5344,6 +5947,81 @@
         "type": "string",
         "description": "Visibility of event details.",
         "enum": ["default", "public", "private", "confidential"]
+      },
+      "ForwardCalendarEventError": {
+        "type": "object",
+        "description": "A refused or failed forward.",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ForwardCalendarEventErrorCode",
+            "description": "What went wrong."
+          },
+          "message": {
+            "type": "string",
+            "description": "A message fit to show the user."
+          }
+        }
+      },
+      "ForwardCalendarEventErrorCode": {
+        "type": "string",
+        "description": "Why a forward was not sent.",
+        "enum": [
+          "not_found",
+          "invalid_recipients",
+          "inbox_unavailable",
+          "send_failed"
+        ]
+      },
+      "ForwardCalendarEventRecipient": {
+        "type": "object",
+        "description": "One person a forwarded invitation goes to.",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Their email address."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Their display name."
+          }
+        }
+      },
+      "ForwardCalendarEventRequest": {
+        "type": "object",
+        "description": "Who a forwarded invitation goes to, and what its email says.",
+        "required": ["to"],
+        "properties": {
+          "bodyText": {
+            "type": ["string", "null"],
+            "description": "A plain-text summary of the event the email opens with; the title\nwhen absent. The email ends with a note saying what the recipient\ncan do with the forward."
+          },
+          "to": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ForwardCalendarEventRecipient"
+            },
+            "description": "The people it goes to, at most 50."
+          }
+        }
+      },
+      "ForwardCalendarEventResponse": {
+        "type": "object",
+        "description": "The email the forward queued.",
+        "required": ["messageId", "threadId"],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The sent message."
+          },
+          "threadId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Its thread."
+          }
+        }
       },
       "GetActiveBackfillJobResponse": {
         "type": "object",
@@ -6297,6 +6975,11 @@
             "type": "string",
             "format": "uuid"
           },
+          "draft_generation": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Draft edit generation captured with this message snapshot."
+          },
           "from": {
             "oneOf": [
               {
@@ -6552,6 +7235,11 @@
           }
         }
       },
+      "ScheduledSendStatus": {
+        "type": "string",
+        "description": "The user-visible delivery state of an unsent scheduled message.",
+        "enum": ["pending", "sending", "failed", "unconfirmed"]
+      },
       "SendMessageRequest": {
         "type": "object",
         "description": "Request body for sending a message (backward-compatible with `{ message: MessageToSend }`).",
@@ -6793,6 +7481,11 @@
           "destination_link_id": {
             "type": "string",
             "format": "uuid"
+          },
+          "draft_generation": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Generation captured with the source draft."
           },
           "operation_id": {
             "type": "string",
@@ -7060,7 +7753,8 @@
           "inviteGuests",
           "removeGuests",
           "setGuestPolicy",
-          "rsvp"
+          "rsvp",
+          "organize"
         ],
         "properties": {
           "editDetails": {
@@ -7070,6 +7764,10 @@
           "inviteGuests": {
             "type": "boolean",
             "description": "Add guests."
+          },
+          "organize": {
+            "type": "boolean",
+            "description": "Act as the event's organizer: replace its whole guest list and manage\nits conferencing."
           },
           "removeGuests": {
             "type": "boolean",
@@ -7081,7 +7779,7 @@
           },
           "setGuestPolicy": {
             "type": "boolean",
-            "description": "Change the event's guest policy."
+            "description": "Change the event's guest policy, which only Google calendars have."
           }
         }
       }

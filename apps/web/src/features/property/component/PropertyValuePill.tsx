@@ -9,7 +9,10 @@ type PropertyValuePillProps = Pick<
   emptyLabel?: JSX.Element;
   showLabel?: boolean;
   class?: string;
+  variant?: ComponentProps<typeof Property.Pill>['variant'];
+  size?: ComponentProps<typeof Property.Pill>['size'];
   hoverActions?: JSX.Element;
+  hoverTrailingAction?: JSX.Element;
   entitySelfFilter?: ComponentProps<
     typeof Property.PopoverEditor
   >['entitySelfFilter'];
@@ -31,41 +34,51 @@ export function PropertyValuePill(props: PropertyValuePillProps) {
       onRefresh={props.onRefresh}
       onEdit={props.onEdit}
     >
-      <Property.Tooltip property={props.property} actions={props.hoverActions}>
-        <Property.Pill class={props.class} variant="outline">
+      <Property.Tooltip
+        property={props.property}
+        actions={props.hoverActions}
+        trailingAction={props.hoverTrailingAction}
+      >
+        <Property.Pill
+          class={props.class}
+          variant={props.variant ?? 'outline'}
+          size={props.size}
+        >
           <Show when={props.showLabel && hasValue(props.property)}>
             <span class="shrink-0 text-ink-muted">
               {props.property.displayName}:
             </span>
           </Show>
-          <Switch
-            fallback={
-              <Property.Icon
-                property={props.property}
-                class="size-3 shrink-0"
-              />
-            }
-          >
-            <Match when={isMultiUserEntity()}>
-              <Property.UserStack property={props.property} maxUsers={2} />
-            </Match>
-            <Match when={isUserEntity()}>
-              <Property.Icon property={props.property} />
-            </Match>
-          </Switch>
-          <Property.Text
-            property={props.property}
-            resolveSingleEntity={
-              props.showLabel ||
-              props.property.specificEntityType === 'INITIATIVE'
-            }
-            class="min-w-0 max-w-60"
-            fallback={
-              <Property.Empty
-                label={props.emptyLabel ?? props.property.displayName}
-              />
-            }
-          />
+          <span class="inline-flex min-w-0 items-center gap-1">
+            <Switch
+              fallback={
+                <Property.Icon
+                  property={props.property}
+                  class="size-3 shrink-0"
+                />
+              }
+            >
+              <Match when={isMultiUserEntity()}>
+                <Property.UserStack property={props.property} maxUsers={2} />
+              </Match>
+              <Match when={isUserEntity()}>
+                <Property.Icon property={props.property} />
+              </Match>
+            </Switch>
+            <Property.Text
+              property={props.property}
+              resolveSingleEntity={
+                props.showLabel ||
+                props.property.specificEntityType === 'INITIATIVE'
+              }
+              class="min-w-0 max-w-60"
+              fallback={
+                <Property.Empty
+                  label={props.emptyLabel ?? props.property.displayName}
+                />
+              }
+            />
+          </span>
           <Property.Caret />
         </Property.Pill>
       </Property.Tooltip>

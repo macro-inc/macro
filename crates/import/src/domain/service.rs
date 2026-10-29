@@ -1,13 +1,11 @@
-//! The import orchestrator: staging (with team-wide dedup), gather jobs,
+//! The import orchestrator: staging (with team-wide dedup), Slack discovery,
 //! and import jobs.
 //!
-//! Slack discovery uses the typed workspace source port to stage public
-//! channels and enrich their membership. Manual discovery never uses an agent
-//! or auto-imports; onboarding may fall back to an agent session. Other gather
-//! jobs use connector tools with `CreateImportEntity` locked to
-//! `(user, source, initiator)`. Import jobs copy
-//! accepted rows in: Linear tasks and Slack channels are composed
-//! deterministically from staged metadata; Notion pages are fetched
+//! Slack discovery uses the typed workspace source port to stage every
+//! visible public channel for the user to pick from; it never uses an agent
+//! or imports on its own. Linear and Notion rows are staged by chat tools.
+//! Import jobs copy accepted rows in: Linear tasks and Slack channels are
+//! composed deterministically from staged metadata; Notion pages are fetched
 //! directly through the connector's fetch tool (no model in the content
 //! path), falling back to a bounded single-page Haiku session that lands
 //! content through `FinalizeImport` when the direct path can't cope.
@@ -15,16 +13,15 @@
 use super::models::*;
 use super::ports::{
     CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, ImportedDocumentProperties,
-    ImportedDocumentProperty, ImportedDocumentPropertyValue, ImportedTaskProperties, Result,
-    SlackSourceError, SlackWorkspaceSource,
+    ImportedDocumentProperty, ImportedDocumentPropertyValue, ImportedTaskProperties, NotionLinks,
+    Result, SlackSourceError, SlackWorkspaceSource,
 };
-use crate::inbound::toolset::{
-    ImportToolContext, ToolPolicy, gather_toolset, notion_import_toolset,
-};
+use crate::inbound::toolset::{ImportToolContext, notion_import_toolset};
 use agent::types::{ChatMessage, ChatMessageContent, Role};
 use agent::{AgentLoop, PredefinedModel};
 use ai_toolset::{RequestContext, ToolResult, ToolSet, ToolSetError};
 use futures::StreamExt;
+use import_notion::domain::ports::NotionConnections;
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_select::{ConnectorSelect, UserMcpTools};
 use std::collections::HashSet;
@@ -35,32 +32,20 @@ use std::time::Duration;
 use uuid::Uuid;
 
 mod admission;
+mod notion_workspace;
+mod tracker_workspace;
+mod workspace;
+pub use workspace::WorkspaceImporter;
 mod prompts;
 mod slack;
 mod slack_discovery;
 
+pub use notion_workspace::NoNotionConnections;
 pub use slack_discovery::NoSlackSource;
 use slack_discovery::SlackBatch;
 
 #[cfg(test)]
 mod test;
-
-/// Model for gather sessions: fast beats maximal while the user watches the
-/// section shimmer, and Cerebras serves gpt-oss-120b at interactive latency.
-/// A raw provider-prefixed id (not [`PredefinedModel`]) because the registry
-/// has no Cerebras tier — the model router resolves the `cerebras/` prefix.
-const GATHER_MODEL: &str = "cerebras/gpt-oss-120b";
-/// Fallback when the primary gather session fails: Cerebras enforces tight
-/// org-wide rate limits, so a burst of concurrent onboardings can 429 every
-/// gather at once. gpt-5.4-nano is slower per token but rides OpenAI's much
-/// higher limits, and a slower gather beats a failed section.
-const GATHER_FALLBACK_MODEL: &str = "openai/gpt-5.4-nano";
-/// Turn cap for gather sessions: a couple of searches plus one staging tool
-/// call per candidate (providers may batch several per turn).
-const GATHER_MAX_TURNS: usize = 24;
-/// Hard cap on a gather session. Staged rows land incrementally, so the
-/// section fills while this runs; the cap only bounds the shimmer tail.
-const GATHER_TIMEOUT: Duration = Duration::from_secs(90);
 
 /// Model for Notion import sessions (normal ai_usage attribution).
 const NOTION_IMPORT_MODEL: PredefinedModel = PredefinedModel::Fast;
@@ -73,22 +58,13 @@ const NOTION_PAGE_IMPORT_TIMEOUT: Duration = Duration::from_secs(120);
 /// enough to stay polite to Notion's MCP.
 const NOTION_IMPORT_CONCURRENCY: usize = 4;
 
-/// Discovery policy: bounded onboarding suggestions or a user-driven listing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GatherMode {
-    /// Suggest the strongest active channels for onboarding.
-    Onboarding,
-    /// Stage all visible public channels for explicit selection.
-    Manual,
-}
+/// Hard cap on one manual Slack discovery: a full channel listing plus
+/// membership reads for every channel.
+const SLACK_DISCOVERY_TIMEOUT: Duration = Duration::from_secs(360);
 
-fn gather_timeout(source: ImportSource, mode: GatherMode) -> Duration {
-    match (source, mode) {
-        (ImportSource::Slack, GatherMode::Onboarding) => Duration::from_secs(180),
-        (ImportSource::Slack, GatherMode::Manual) => Duration::from_secs(360),
-        _ => GATHER_TIMEOUT,
-    }
-}
+/// How long a discovery run may stay `running` before the read path declares
+/// its process dead. Twice the discovery timeout, so a live run is never reaped.
+const STALE_RUN_AFTER: Duration = Duration::from_secs(SLACK_DISCOVERY_TIMEOUT.as_secs() * 2);
 
 /// How often a running import batch touches its rows' `updated_at`. The
 /// heartbeat covers every row the batch owns — queued AND in-flight — so a
@@ -162,7 +138,7 @@ pub enum DiscardOutcome {
     NotDiscardable(ImportStatus),
 }
 
-/// The API the import router (and host services like onboarding) talk to.
+/// The API the import router talks to.
 pub trait ImportService: Send + Sync + 'static {
     /// The full import aggregate for the user.
     fn state(
@@ -170,39 +146,13 @@ pub trait ImportService: Send + Sync + 'static {
         user: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<ImportState>> + Send;
 
-    /// Start a gather run for `source` if none has ever run (the
-    /// connector-just-authenticated hook). `auto_import` is persisted with
-    /// the new run before its background gather starts. Returns whether a
-    /// run started.
-    fn start_gather(
-        &self,
-        user: MacroUserIdStr<'static>,
-        source: ImportSource,
-        auto_import: bool,
-    ) -> impl Future<Output = Result<bool>> + Send;
-
-    /// User-triggered, non-auto-import gather that stages candidates for
-    /// explicit selection. Returns whether a run started.
+    /// User-triggered discovery that stages everything visible. Only Slack is
+    /// supported. Returns whether a run started.
     fn start_discovery(
         &self,
         user: MacroUserIdStr<'static>,
         source: ImportSource,
     ) -> impl Future<Output = Result<bool>> + Send;
-
-    /// Restart a failed (or dismissed) gather run. Returns whether a run
-    /// started.
-    fn retry_gather(
-        &self,
-        user: MacroUserIdStr<'static>,
-        source: ImportSource,
-    ) -> impl Future<Output = Result<bool>> + Send;
-
-    /// Dismiss a source's import section.
-    fn dismiss_run(
-        &self,
-        user: MacroUserIdStr<'static>,
-        source: ImportSource,
-    ) -> impl Future<Output = Result<()>> + Send;
 
     /// Accept `import_ids` (flip to `importing` and start import jobs) and
     /// discard `discard_ids`.
@@ -212,26 +162,6 @@ pub trait ImportService: Send + Sync + 'static {
         import_ids: Vec<Uuid>,
         discard_ids: Vec<Uuid>,
     ) -> impl Future<Output = Result<RunImportOutcome>> + Send;
-
-    /// Discard all remaining staged rows with `initiator` — an explicit
-    /// decline; `stage()` refuses to re-stage discarded items. Returns how
-    /// many were discarded.
-    fn discard_staged_by_initiator(
-        &self,
-        user: MacroUserIdStr<'static>,
-        initiator: Initiator,
-    ) -> impl Future<Output = Result<u64>> + Send;
-
-    /// Delete remaining unreserved staged rows with `initiator` (onboarding
-    /// completion cleanup). Candidates reserved by active or retryable
-    /// configured auto-import runs survive. Unlike discarding, deleted
-    /// candidates were never reviewed and stay re-stageable by later gathers
-    /// or chat. Returns how many were removed.
-    fn delete_staged_by_initiator(
-        &self,
-        user: MacroUserIdStr<'static>,
-        initiator: Initiator,
-    ) -> impl Future<Output = Result<u64>> + Send;
 }
 
 /// Staging operations the AI tools drive. Split from [`ImportService`] so
@@ -313,7 +243,7 @@ pub enum ImportNotionPageOutcome {
 /// Workflow used by the interactive agent to import one specific Notion page.
 ///
 /// Unlike [`ImportFinalizer`], this owns the complete operation: deduplication,
-/// ledger transitions, connector fetch, content normalization, document
+/// ledger transitions, connector fetch, content checks, document
 /// creation, and final ledger state.
 pub trait NotionPageImporter: Send + Sync + 'static {
     /// Import a Notion page URL or page id for `user`.
@@ -324,28 +254,111 @@ pub trait NotionPageImporter: Send + Sync + 'static {
     ) -> impl Future<Output = Result<ImportNotionPageOutcome>> + Send;
 }
 
+/// Importing a whole Notion workspace (or part of it) through a reviewed plan.
+///
+/// Planning reads the workspace and asks the decision model what to do with
+/// each object; the plan is staged as ledger rows and presented for review.
+/// Approving the review writes the plan; nothing is written before that.
+pub trait NotionWorkspaceImporter: Send + Sync + 'static {
+    /// Plan an import of `scope`, replacing any previous plan. Planning runs
+    /// in the background; this waits up to `wait` for it and reports where it
+    /// got. `sharing` is required of a user on a team
+    /// ([`ImportError::NotionSharingRequired`]); without a team everything
+    /// is personal.
+    fn prepare_notion_import(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        scope: import_notion::domain::model::ImportScope,
+        sharing: Option<NotionSharing>,
+        wait: Duration,
+    ) -> impl Future<Output = Result<NotionImportReport>> + Send;
+
+    /// Where the user's Notion import stands.
+    fn notion_import_report(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<NotionImportReport>> + Send;
+
+    /// Tie the staged plan to the review presenting it in agent session
+    /// `session_id`, which then hears when the plan is ready and when its
+    /// write ends.
+    fn attach_notion_review(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        review_id: Uuid,
+        session_id: agent_session::domain::model::AgentSessionId,
+    ) -> impl Future<Output = Result<u64>> + Send;
+
+    /// Write the plan tied to `review_id` with the owner's `choices`.
+    /// Writing runs in the background; this returns once it has started.
+    fn start_notion_write(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        review_id: Uuid,
+        choices: NotionWriteChoices,
+    ) -> impl Future<Output = Result<NotionImportReport>> + Send;
+
+    /// Stop planning or writing. Objects already written stay. Returns
+    /// whether anything was running.
+    fn cancel_notion_import(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<bool>> + Send;
+}
+
 /// Concrete orchestrator wiring the repo, the user's MCP servers, the
 /// entity creator, and usage recording together.
-pub struct ImportServiceImpl<R, S, C, W = NoSlackSource> {
+pub struct ImportServiceImpl<R, S, C, W = NoSlackSource, N = NoNotionConnections> {
     repo: R,
+    notion: Arc<N>,
+    workspace_source: ImportSource,
+    trackers: std::collections::HashMap<
+        ImportSource,
+        Arc<dyn import_tracker::domain::model::TrackerConnections>,
+    >,
     slack_source: Arc<W>,
     mcp_tools: Arc<S>,
     creator: Arc<C>,
     recorder: Arc<dyn ai_usage::UsageRecorder>,
     admission: Arc<dyn ai_billing::AiAdmissionService>,
     notifier: Option<ImportNotify>,
+    jobs: WorkspaceJobs,
 }
 
-impl<R: Clone, S, C, W: SlackWorkspaceSource> Clone for ImportServiceImpl<R, S, C, W> {
+/// Where this process runs Notion workspace imports: its identity on the
+/// runs it holds, the shutdown that makes them hand over, and the tracker the
+/// host waits on before exiting.
+#[derive(Clone)]
+struct WorkspaceJobs {
+    instance: Uuid,
+    shutdown: tokio_util::sync::CancellationToken,
+    tracker: tokio_util::task::TaskTracker,
+}
+
+impl WorkspaceJobs {
+    fn new() -> Self {
+        Self {
+            instance: Uuid::now_v7(),
+            shutdown: tokio_util::sync::CancellationToken::new(),
+            tracker: tokio_util::task::TaskTracker::new(),
+        }
+    }
+}
+
+impl<R: Clone, S, C, W: SlackWorkspaceSource, N> Clone for ImportServiceImpl<R, S, C, W, N> {
     fn clone(&self) -> Self {
         Self {
             repo: self.repo.clone(),
+            notion: self.notion.clone(),
+            workspace_source: self.workspace_source,
+            trackers: self.trackers.clone(),
             slack_source: self.slack_source.clone(),
             mcp_tools: self.mcp_tools.clone(),
             creator: self.creator.clone(),
             recorder: self.recorder.clone(),
             admission: self.admission.clone(),
             notifier: self.notifier.clone(),
+            jobs: self.jobs.clone(),
         }
     }
 }
@@ -360,37 +373,91 @@ impl<R, S, C> ImportServiceImpl<R, S, C> {
     ) -> Self {
         Self {
             repo,
+            notion: Arc::new(NoNotionConnections),
+            workspace_source: ImportSource::Notion,
+            trackers: Default::default(),
             slack_source: Arc::new(NoSlackSource),
             mcp_tools,
             creator,
             recorder,
             admission: Arc::new(ai_billing::DisabledAiAdmissionService),
             notifier: None,
+            jobs: WorkspaceJobs::new(),
         }
     }
 }
 
-impl<R, S, C, W: SlackWorkspaceSource> ImportServiceImpl<R, S, C, W> {
+impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceImpl<R, S, C, W, N> {
     /// Attach a live Slack workspace reader, preserving the service configuration.
     pub fn with_slack_source<W2: SlackWorkspaceSource>(
         self,
         source: Arc<W2>,
-    ) -> ImportServiceImpl<R, S, C, W2> {
+    ) -> ImportServiceImpl<R, S, C, W2, N> {
         ImportServiceImpl {
             repo: self.repo,
+            notion: self.notion,
+            workspace_source: self.workspace_source,
+            trackers: self.trackers,
             mcp_tools: self.mcp_tools,
             creator: self.creator,
             recorder: self.recorder,
             admission: self.admission,
             notifier: self.notifier,
+            jobs: self.jobs,
             slack_source: source,
         }
+    }
+
+    /// Register the read-only Linear and Jira adapters supplied by the host.
+    pub fn with_tracker_connections(
+        mut self,
+        linear: Arc<dyn import_tracker::domain::model::TrackerConnections>,
+        jira: Arc<dyn import_tracker::domain::model::TrackerConnections>,
+    ) -> Self {
+        self.trackers.insert(ImportSource::Linear, linear);
+        self.trackers.insert(ImportSource::Jira, jira);
+        self
     }
 
     /// Push state-change nudges through the given notifier.
     pub fn with_notifier(mut self, notifier: ImportNotify) -> Self {
         self.notifier = Some(notifier);
         self
+    }
+
+    /// Run Notion workspace imports on `tracker`, handing them over to
+    /// another process once `shutdown` is cancelled: a job stops at its next
+    /// checkpoint and gives up its run, which the next process adopts. The
+    /// host waits on `tracker` before exiting.
+    pub fn with_job_shutdown(
+        mut self,
+        shutdown: tokio_util::sync::CancellationToken,
+        tracker: tokio_util::task::TaskTracker,
+    ) -> Self {
+        self.jobs.shutdown = shutdown;
+        self.jobs.tracker = tracker;
+        self
+    }
+
+    /// Read users' Notion workspaces through `connections` for workspace
+    /// imports.
+    pub fn with_notion_connections<N2: NotionConnections>(
+        self,
+        connections: Arc<N2>,
+    ) -> ImportServiceImpl<R, S, C, W, N2> {
+        ImportServiceImpl {
+            repo: self.repo,
+            notion: connections,
+            workspace_source: self.workspace_source,
+            trackers: self.trackers,
+            mcp_tools: self.mcp_tools,
+            creator: self.creator,
+            recorder: self.recorder,
+            admission: self.admission,
+            notifier: self.notifier,
+            jobs: self.jobs,
+            slack_source: self.slack_source,
+        }
     }
 
     async fn notify(&self, user: &MacroUserIdStr<'static>) {
@@ -400,192 +467,64 @@ impl<R, S, C, W: SlackWorkspaceSource> ImportServiceImpl<R, S, C, W> {
     }
 }
 
-impl<R, S, C, W: SlackWorkspaceSource> ImportServiceImpl<R, S, C, W>
+impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + Clone,
     S: ConnectorSelect,
     C: EntityCreator,
 {
-    /// Spawn the gather session for one source; finishes the run row either
-    /// way and nudges the client.
-    fn spawn_gather(&self, user: MacroUserIdStr<'static>, source: ImportSource, mode: GatherMode) {
+    /// Fail discovery runs that outlived their own timeout: their process died
+    /// (crash or deploy) and the run would otherwise block a new discovery
+    /// forever. Best-effort, so a read or a restart never fails because of it.
+    async fn reap_stale_runs(&self, user: &MacroUserIdStr<'static>) {
+        match self
+            .repo
+            .fail_stale_runs(user, STALE_RUN_AFTER.as_secs() as i64)
+            .await
+        {
+            Ok(0) => {}
+            Ok(reaped) => tracing::warn!(reaped, "reaped orphaned discovery runs"),
+            Err(e) => tracing::warn!(error = ?e, "failed to reap stale discovery runs"),
+        }
+    }
+
+    /// Spawn Slack discovery; finishes the run row either way and nudges the
+    /// client.
+    fn spawn_slack_discovery(&self, user: MacroUserIdStr<'static>) {
         let service = self.clone();
         tokio::spawn(async move {
             let outcome = tokio::time::timeout(
-                gather_timeout(source, mode),
-                service.run_gather_session(&user, source, mode),
+                SLACK_DISCOVERY_TIMEOUT,
+                slack_discovery::discover_slack(&service, &user),
             )
             .await
-            .unwrap_or_else(|_| Err(anyhow::anyhow!("gather session timed out")));
-            let gather_succeeded = outcome.is_ok();
-
+            .unwrap_or_else(|_| Err(anyhow::anyhow!("Slack discovery timed out").into()));
             let finished = match outcome {
-                Ok(()) => {
+                Ok(_) => {
                     service
                         .repo
-                        .finish_run(&user, source, RunStatus::Ready, None)
+                        .finish_run(&user, ImportSource::Slack, RunStatus::Ready, None)
                         .await
                 }
                 Err(e) => {
-                    tracing::warn!(source = source.as_ref(), error = ?e, "gather session failed");
+                    tracing::warn!(error = ?e, "Slack discovery failed");
+                    let reason = match e {
+                        SlackSourceError::ToolsUnavailable(_) => {
+                            "Your Slack connection does not expose channel tools".to_string()
+                        }
+                        e => e.to_string(),
+                    };
                     service
                         .repo
-                        .finish_run(
-                            &user,
-                            source,
-                            RunStatus::Failed,
-                            Some(&admission::failure_reason(&e)),
-                        )
+                        .finish_run(&user, ImportSource::Slack, RunStatus::Failed, Some(&reason))
                         .await
                 }
             };
-            match finished {
-                Ok(true) if gather_succeeded => {
-                    let _ = service
-                        .maybe_start_auto_import(&user, source)
-                        .await
-                        .inspect_err(|e| {
-                            tracing::error!(source = source.as_ref(), error = ?e, "failed to start automatic import");
-                        });
-                }
-                Ok(_) => {}
-                Err(e) => {
-                    tracing::error!(source = source.as_ref(), error = ?e, "failed to persist gather outcome");
-                }
-            }
+            let _ = finished.inspect_err(|e| {
+                tracing::error!(error = ?e, "failed to persist Slack discovery outcome");
+            });
             service.notify(&user).await;
         });
-    }
-
-    /// Claim and spawn a configured automatic import once gathering is ready.
-    /// The repository CAS makes this safe when completion, configuration, and
-    /// read-path reconciliation race across service replicas.
-    async fn maybe_start_auto_import(
-        &self,
-        user: &MacroUserIdStr<'static>,
-        source: ImportSource,
-    ) -> Result<bool> {
-        let Some(rows) = self.repo.begin_auto_import(user, source).await? else {
-            return Ok(false);
-        };
-        let ids: Vec<Uuid> = rows.iter().map(|row| row.id).collect();
-        self.notify(user).await;
-        if rows.is_empty() {
-            self.finish_auto_import_batch(user, source, &ids).await;
-        } else {
-            self.spawn_import_batch(user.clone(), rows, Some(source));
-        }
-        Ok(true)
-    }
-
-    async fn finish_auto_import_batch(
-        &self,
-        user: &MacroUserIdStr<'static>,
-        source: ImportSource,
-        ids: &[Uuid],
-    ) {
-        match self.repo.finish_auto_import(user, source, ids).await {
-            Ok(Some(status)) => {
-                tracing::info!(
-                    source = source.as_ref(),
-                    status = status.as_ref(),
-                    "automatic import finished"
-                );
-                self.notify(user).await;
-            }
-            Ok(None) => {}
-            Err(e) => {
-                tracing::error!(source = source.as_ref(), error = ?e, "failed to persist automatic import outcome");
-            }
-        }
-    }
-
-    /// Run typed Slack discovery or an agent gather with locked staging tools.
-    /// Candidates land incrementally; any final agent text is ignored.
-    #[tracing::instrument(skip(self, user), err)]
-    async fn run_gather_session(
-        &self,
-        user: &MacroUserIdStr<'static>,
-        source: ImportSource,
-        mode: GatherMode,
-    ) -> anyhow::Result<()> {
-        // Recheck queued AI work before loading tools. Slack stays deterministic
-        // until its onboarding fallback actually needs an agent.
-        self.admit_gather(user, source).await?;
-        self.gather_with_tools(user, source, mode).await
-    }
-
-    async fn gather_with_tools(
-        &self,
-        user: &MacroUserIdStr<'static>,
-        source: ImportSource,
-        mode: GatherMode,
-    ) -> anyhow::Result<()> {
-        // Typed Slack discovery runs before loading agent tools. Only
-        // onboarding may fall back to an agent when workspace reads fail.
-        if source == ImportSource::Slack {
-            match slack_discovery::gather_slack(self, user, mode).await {
-                Ok(_) => return Ok(()),
-                Err(SlackSourceError::ToolsUnavailable(_)) if mode == GatherMode::Manual => {
-                    anyhow::bail!("Your Slack connection does not expose channel tools");
-                }
-                Err(e) if mode == GatherMode::Manual => return Err(e.into()),
-                Err(e) => {
-                    tracing::warn!(error = ?e, "direct slack gather failed; trying the agent");
-                }
-            }
-        }
-
-        let mcp_tools = self.connector_tools(user, source).await?;
-
-        // Staging is idempotent (the ledger dedups already-staged rows), so
-        // rerunning the whole session on the fallback model is safe even
-        // when the primary died mid-way through staging.
-        match self
-            .gather_agent_session(user, source, mode, GATHER_MODEL, mcp_tools.clone())
-            .await
-        {
-            Ok(()) => Ok(()),
-            Err(e) if e.is::<ai_billing::AiAdmissionError>() => Err(e),
-            Err(e) => {
-                tracing::warn!(model = GATHER_MODEL, error = ?e, "gather session failed; retrying on the fallback model");
-                self.gather_agent_session(user, source, mode, GATHER_FALLBACK_MODEL, mcp_tools)
-                    .await
-            }
-        }
-    }
-
-    /// One agent gather session on a specific model.
-    #[tracing::instrument(skip(self, user, mcp_tools), err)]
-    async fn gather_agent_session<M: ToolSet<ImportToolContext<Self>> + 'static>(
-        &self,
-        user: &MacroUserIdStr<'static>,
-        source: ImportSource,
-        mode: GatherMode,
-        model: &str,
-        mcp_tools: Arc<M>,
-    ) -> anyhow::Result<()> {
-        let native = gather_toolset::<Self>();
-        let toolset = NativePlusMcp::new(native, mcp_tools);
-        let initiator = match mode {
-            GatherMode::Onboarding => Initiator::Onboarding,
-            GatherMode::Manual => Initiator::Manual,
-        };
-        let context = ImportToolContext {
-            service: Some(Arc::new(self.clone())),
-            policy: ToolPolicy::gather(source, initiator),
-        };
-
-        self.drive_session(
-            user,
-            model,
-            GATHER_MAX_TURNS,
-            toolset,
-            context,
-            &prompts::gather_system(source),
-            prompts::gather_prompt(source),
-        )
-        .await
     }
 
     /// Copy one accepted Notion page in WITHOUT a model: call the
@@ -641,9 +580,7 @@ where
                     .map(str::to_string)
             })
             .unwrap_or_else(|| "Untitled".to_string());
-        let markdown = prepare_notion_markdown(&fetched.body)?;
-
-        self.finalize_document(user, row.id, &name, &markdown, &fetched.properties)
+        self.finalize_document(user, row.id, &name, &fetched.body, &fetched.properties)
             .await
             .map_err(|e| anyhow::anyhow!("finalize failed: {e}"))?;
         Ok(())
@@ -660,10 +597,7 @@ where
     ) -> anyhow::Result<()> {
         let native = notion_import_toolset::<Self>();
         let toolset = NativePlusMcp::new(native, mcp_tools);
-        let context = ImportToolContext {
-            service: Some(Arc::new(self.clone())),
-            policy: ToolPolicy::import_job(),
-        };
+        let context = ImportToolContext::wired(Arc::new(self.clone()));
 
         self.drive_session(
             user,
@@ -780,7 +714,7 @@ where
                 .await
             }
             // Notion rows go through the agent session, never here.
-            ImportSource::Notion => return,
+            ImportSource::Notion | ImportSource::Jira => return,
         };
 
         let persisted = match created {
@@ -870,15 +804,8 @@ where
         outcome
     }
 
-    /// Run a claimed import batch in the background. Manual batches only
-    /// update their entity rows; automatic batches also settle their owning
-    /// run after every row reaches a terminal state.
-    fn spawn_import_batch(
-        &self,
-        user: MacroUserIdStr<'static>,
-        rows: Vec<ImportEntity>,
-        auto_run: Option<ImportSource>,
-    ) {
+    /// Run a claimed import batch in the background.
+    fn spawn_import_batch(&self, user: MacroUserIdStr<'static>, rows: Vec<ImportEntity>) {
         let service = self.clone();
         tokio::spawn(async move {
             let batch_ids: Vec<Uuid> = rows.iter().map(|row| row.id).collect();
@@ -927,11 +854,6 @@ where
                             .fail_unfinished(&user, &ids, &format!("notion unavailable: {e}"))
                             .await;
                         service.notify(&user).await;
-                        if let Some(source) = auto_run {
-                            service
-                                .finish_auto_import_batch(&user, source, &batch_ids)
-                                .await;
-                        }
                         return;
                     }
                 };
@@ -948,17 +870,12 @@ where
                     .await;
                 service.notify(&user).await;
             }
-
-            if let Some(source) = auto_run {
-                service
-                    .finish_auto_import_batch(&user, source, &batch_ids)
-                    .await;
-            }
         });
     }
 }
 
-impl<R, S, C, W: SlackWorkspaceSource> ImportService for ImportServiceImpl<R, S, C, W>
+impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportService
+    for ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + Clone,
     S: ConnectorSelect,
@@ -984,58 +901,10 @@ where
             Err(e) => tracing::warn!(error = ?e, "failed to reap stale imports"),
         }
 
-        match self.repo.reconcile_auto_import_runs(&user).await {
-            Ok(0) => {}
-            Ok(reconciled) => {
-                tracing::warn!(reconciled, "reconciled interrupted automatic import runs");
-                self.notify(&user).await;
-            }
-            // A read must never fail because recovery did.
-            Err(e) => tracing::warn!(error = ?e, "failed to reconcile automatic import runs"),
-        }
-
-        // Self-heal the small window between persisting gather completion and
-        // spawning its configured follow-on batch. The begin CAS makes this
-        // safe across concurrent readers and replicas.
-        let mut runs = self.repo.list_runs(&user).await?;
-        let auto_ready: Vec<ImportSource> = runs
-            .iter()
-            .filter(|run| run.auto_import && run.status == RunStatus::Ready)
-            .map(|run| run.source)
-            .collect();
-        let mut started = false;
-        for source in auto_ready {
-            match self.maybe_start_auto_import(&user, source).await {
-                Ok(did_start) => started |= did_start,
-                Err(e) => {
-                    tracing::warn!(source = source.as_ref(), error = ?e, "failed to self-heal automatic import start");
-                }
-            }
-        }
-        if started {
-            runs = self.repo.list_runs(&user).await?;
-        }
+        self.reap_stale_runs(&user).await;
+        let runs = self.repo.list_runs(&user).await?;
         let entities = self.repo.list(&user, None, None).await?;
         Ok(ImportState { runs, entities })
-    }
-
-    #[tracing::instrument(skip(self, user), err)]
-    async fn start_gather(
-        &self,
-        user: MacroUserIdStr<'static>,
-        source: ImportSource,
-        auto_import: bool,
-    ) -> Result<bool> {
-        if !self.prepare_gather(&user, source, &[]).await? {
-            return Ok(false);
-        }
-        // The CAS still decides the winner if another request raced admission.
-        let won = self.repo.start_run(&user, source, &[], auto_import).await?;
-        if won {
-            self.spawn_gather(user.clone(), source, GatherMode::Onboarding);
-            self.notify(&user).await;
-        }
-        Ok(won)
     }
 
     #[tracing::instrument(skip(self, user), err)]
@@ -1044,66 +913,22 @@ where
         user: MacroUserIdStr<'static>,
         source: ImportSource,
     ) -> Result<bool> {
+        if source != ImportSource::Slack {
+            return Err(ImportError::UnsupportedDiscovery(source));
+        }
         let from = [
             RunStatus::Ready,
             RunStatus::Completed,
             RunStatus::Failed,
             RunStatus::Dismissed,
         ];
-        if !self.prepare_gather(&user, source, &from).await? {
-            return Ok(false);
-        }
-        let won = self.repo.start_manual_run(&user, source, &from).await?;
+        self.reap_stale_runs(&user).await;
+        let won = self.repo.start_run(&user, source, &from).await?;
         if won {
-            self.spawn_gather(user.clone(), source, GatherMode::Manual);
+            self.spawn_slack_discovery(user.clone());
             self.notify(&user).await;
         }
         Ok(won)
-    }
-
-    #[tracing::instrument(skip(self, user), err)]
-    async fn retry_gather(
-        &self,
-        user: MacroUserIdStr<'static>,
-        source: ImportSource,
-    ) -> Result<bool> {
-        if !self
-            .prepare_gather(&user, source, &[RunStatus::Failed, RunStatus::Dismissed])
-            .await?
-        {
-            return Ok(false);
-        }
-        let won = self
-            .repo
-            .start_run(
-                &user,
-                source,
-                &[RunStatus::Failed, RunStatus::Dismissed],
-                false,
-            )
-            .await?;
-        if won {
-            self.spawn_gather(user.clone(), source, GatherMode::Onboarding);
-            self.notify(&user).await;
-        }
-        Ok(won)
-    }
-
-    #[tracing::instrument(skip(self, user), err)]
-    async fn dismiss_run(&self, user: MacroUserIdStr<'static>, source: ImportSource) -> Result<()> {
-        let dismissed = self
-            .repo
-            .transition_run(
-                &user,
-                source,
-                &[RunStatus::Ready, RunStatus::Failed],
-                RunStatus::Dismissed,
-            )
-            .await?;
-        if dismissed {
-            self.notify(&user).await;
-        }
-        Ok(())
     }
 
     #[tracing::instrument(skip(self, user, import_ids, discard_ids), fields(imports = import_ids.len(), discards = discard_ids.len()), err)]
@@ -1113,6 +938,15 @@ where
         import_ids: Vec<Uuid>,
         discard_ids: Vec<Uuid>,
     ) -> Result<RunImportOutcome> {
+        for id in &import_ids {
+            if let Some(row) = self.repo.get(&user, *id).await?
+                && (row.metadata.get("plan").is_some() || row.source == ImportSource::Jira)
+            {
+                return Err(ImportError::NotReady(
+                    "Workspace plans must be approved through their review.",
+                ));
+            }
+        }
         let mut discarded = 0u64;
         for id in discard_ids {
             if self.repo.discard(&user, id).await? {
@@ -1128,7 +962,7 @@ where
         self.notify(&user).await;
 
         if !rows.is_empty() {
-            self.spawn_import_batch(user.clone(), rows, None);
+            self.spawn_import_batch(user.clone(), rows);
         }
 
         Ok(RunImportOutcome {
@@ -1136,41 +970,9 @@ where
             importing,
         })
     }
-
-    #[tracing::instrument(skip(self, user), err)]
-    async fn discard_staged_by_initiator(
-        &self,
-        user: MacroUserIdStr<'static>,
-        initiator: Initiator,
-    ) -> Result<u64> {
-        let discarded = self
-            .repo
-            .discard_staged_by_initiator(&user, initiator)
-            .await?;
-        if discarded > 0 {
-            self.notify(&user).await;
-        }
-        Ok(discarded)
-    }
-
-    #[tracing::instrument(skip(self, user), err)]
-    async fn delete_staged_by_initiator(
-        &self,
-        user: MacroUserIdStr<'static>,
-        initiator: Initiator,
-    ) -> Result<u64> {
-        let removed = self
-            .repo
-            .delete_staged_by_initiator(&user, initiator)
-            .await?;
-        if removed > 0 {
-            self.notify(&user).await;
-        }
-        Ok(removed)
-    }
 }
 
-impl<R, S, C, W: SlackWorkspaceSource> ImportServiceImpl<R, S, C, W>
+impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + Clone,
     S: ConnectorSelect,
@@ -1221,7 +1023,14 @@ where
 
         match self
             .repo
-            .upsert_staged(user, source, initiator, &foreign_id, &metadata)
+            .upsert_staged(
+                user,
+                source,
+                source.default_kind(),
+                initiator,
+                &foreign_id,
+                &metadata,
+            )
             .await?
         {
             Some(row) => {
@@ -1253,7 +1062,8 @@ where
     }
 }
 
-impl<R, S, C, W: SlackWorkspaceSource> ImportStager for ImportServiceImpl<R, S, C, W>
+impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportStager
+    for ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + Clone,
     S: ConnectorSelect,
@@ -1297,6 +1107,7 @@ where
             .upsert_imported(
                 user,
                 source,
+                source.default_kind(),
                 initiator,
                 &foreign_id,
                 &metadata,
@@ -1335,7 +1146,8 @@ where
     }
 }
 
-impl<R, S, C, W: SlackWorkspaceSource> NotionPageImporter for ImportServiceImpl<R, S, C, W>
+impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> NotionPageImporter
+    for ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + Clone,
     S: ConnectorSelect,
@@ -1470,7 +1282,8 @@ where
     }
 }
 
-impl<R, S, C, W: SlackWorkspaceSource> ImportFinalizer for ImportServiceImpl<R, S, C, W>
+impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportFinalizer
+    for ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + Clone,
     S: ConnectorSelect,
@@ -1497,6 +1310,11 @@ where
             )));
         }
 
+        if row.metadata.get("plan").is_some() {
+            return Err(ImportError::NotReady(
+                "Reviewed workspace rows are written only by the workspace importer.",
+            ));
+        }
         let entity_id = match row.source {
             ImportSource::Linear => {
                 // Agent-finalized Linear rows still carry staged metadata —
@@ -1509,11 +1327,23 @@ where
                     .await
             }
             ImportSource::Notion => {
-                let content_markdown =
-                    prepare_notion_markdown(content_markdown).map_err(ImportError::Other)?;
+                check_notion_markdown(content_markdown).map_err(ImportError::Other)?;
+                // A single page knows nothing else of the import, so its
+                // references link back to Notion.
                 self.creator
-                    .create_markdown_doc(user, name, &content_markdown, properties)
+                    .create_notion_document(
+                        user,
+                        name,
+                        content_markdown,
+                        &NotionLinks::default(),
+                        properties,
+                    )
                     .await
+            }
+            ImportSource::Jira => {
+                return Err(ImportError::NotReady(
+                    "Jira imports require an approved workspace review.",
+                ));
             }
             ImportSource::Slack => {
                 return Err(ImportError::Other(anyhow::anyhow!(
@@ -1874,48 +1704,6 @@ fn dedupe_strings(values: &mut Vec<String>) {
     values.retain(|value| seen.insert(value.to_ascii_lowercase()));
 }
 
-static PAIRED_NOTION_PAGE_REFS: LazyLock<Vec<regex::Regex>> = LazyLock::new(|| {
-    ["page", "mention-page"]
-        .into_iter()
-        .map(|tag| {
-            regex::Regex::new(&format!(
-                r#"(?s)<{tag}\b(?P<attrs>[^>]*)>(?P<label>.*?)</{tag}>"#
-            ))
-            .expect("valid notion page reference regex")
-        })
-        .collect()
-});
-static SELF_CLOSING_NOTION_PAGE_REF: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r#"<(?:ancestor-\d+-)?page\b(?P<attrs>[^>]*)/?>"#)
-        .expect("valid self-closing notion page reference regex")
-});
-static PAIRED_NOTION_TEXT_MENTIONS: LazyLock<Vec<regex::Regex>> = LazyLock::new(|| {
-    ["mention-user", "mention-agent"]
-        .into_iter()
-        .map(|tag| {
-            regex::Regex::new(&format!(r#"(?s)<{tag}\b[^>]*>(?P<label>.*?)</{tag}>"#))
-                .expect("valid notion text mention regex")
-        })
-        .collect()
-});
-static NOTION_DATE_MENTION: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r#"<mention-date\b(?P<attrs>[^>]*)/?>"#)
-        .expect("valid notion date mention regex")
-});
-static PAIRED_NOTION_MEDIA: LazyLock<Vec<regex::Regex>> = LazyLock::new(|| {
-    ["audio", "video", "file", "pdf"]
-        .into_iter()
-        .map(|tag| {
-            regex::Regex::new(&format!(
-                r#"(?s)<{tag}\b(?P<attrs>[^>]*)>(?P<label>.*?)</{tag}>"#
-            ))
-            .expect("valid notion media regex")
-        })
-        .collect()
-});
-static NOTION_UNKNOWN_BLOCK: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r#"<unknown\b(?P<attrs>[^>]*)/?>"#).expect("valid notion unknown-block regex")
-});
 static PAIRED_NOTION_DATABASES: LazyLock<Vec<regex::Regex>> = LazyLock::new(|| {
     ["database", "mention-database", "mention-data-source"]
         .into_iter()
@@ -1929,28 +1717,6 @@ static SELF_CLOSING_NOTION_DATABASE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r#"(?s)<(?:database|mention-database|mention-data-source)\b[^>]*/?>"#)
         .expect("valid self-closing notion database regex")
 });
-static NOTION_TOGGLE_MARKER: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r#"[ \t]*\{toggle\s*=\s*"true"\}"#).expect("valid notion toggle marker regex")
-});
-static NOTION_BLOCK_ATTRIBUTES: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r#"[ \t]*\{(?:(?:toggle|color)\s*=\s*"[^"]*"[ \t]*)+\}[ \t]*$"#)
-        .expect("valid notion block-attribute regex")
-});
-static PAIRED_NOTION_SPAN: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r#"(?s)<span\b[^>]*>(?P<label>.*?)</span>"#).expect("valid notion span regex")
-});
-static NOTION_SUMMARY: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r#"(?s)<summary>(?P<label>.*?)</summary>"#)
-        .expect("valid notion summary regex")
-});
-static NOTION_EMPTY_BLOCK: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r#"(?m)^[\t ]*<(?:empty-block|table_of_contents)\b[^>]*/?>[\t ]*$"#)
-        .expect("valid empty Notion block regex")
-});
-static ESCAPED_NOTION_TODO: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r#"^(?P<indent>[\t ]*)(?:-\s+)?\\\[(?P<state>[ xX])\\\](?P<rest>.*)$"#)
-        .expect("valid escaped Notion todo regex")
-});
 static NOTION_TOOL_RESULT_PREAMBLE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r#"(?im)^\s*Here is the result of "(?:view|fetch)"(?:\s|:)"#)
         .expect("valid notion tool-result preamble regex")
@@ -1959,120 +1725,24 @@ static NOTION_SERIALIZED_TITLE_WRAPPER: LazyLock<regex::Regex> = LazyLock::new(|
     regex::Regex::new(r#"(?m)^\s*(?:\[\s*)?\{\s*"[^"]+"\s*:"#)
         .expect("valid notion serialized title wrapper regex")
 });
-static UNHANDLED_NOTION_MARKUP: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(
-        r#"(?i)</?(?:page|database|mention-[\w-]+|ancestor-\d+-page|details|summary|callout|columns?|synced_block(?:_reference)?|table|tr|td|th|colgroup|col|properties|content)\b"#,
-    )
-    .expect("valid unsupported Notion markup regex")
-});
-static NOTION_ATTR_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r#"(?P<name>[\w-]+)="(?P<value>[^"]*)""#)
-        .expect("valid notion attribute regex")
-});
 static INLINE_TAG_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"(?s)<[^>]+>").expect("valid inline tag regex"));
-static BREAK_TAG_RE: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"(?i)<br\s*/?>").expect("valid HTML break regex"));
-static TABLE_ROW_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"(?s)<tr\b[^>]*>(?P<body>.*?)</tr>").expect("valid notion table row regex")
-});
-static TABLE_CELL_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"(?s)<t[dh]\b[^>]*>(?P<body>.*?)</t[dh]>")
-        .expect("valid notion table cell regex")
-});
 
-/// Convert Notion's enhanced-markdown extensions into the markdown dialect
-/// consumed by Macro's Lexical service. In particular, pipe tables become
-/// native Lexical tables and Notion page references remain clickable external
-/// links even when the referenced page was not part of the import.
-fn normalize_notion_markdown(input: &str) -> String {
-    transform_outside_fenced_code(input, normalize_notion_markdown_fragment)
-}
-
-fn normalize_notion_markdown_fragment(input: &str) -> String {
-    let mut markdown = remove_notion_databases_fragment(input);
-    for regex in PAIRED_NOTION_PAGE_REFS.iter() {
-        markdown = regex
-            .replace_all(&markdown, |captures: &regex::Captures<'_>| {
-                notion_page_link(
-                    &captures["attrs"],
-                    Some(INLINE_TAG_RE.replace_all(&captures["label"], "")),
-                )
-            })
-            .into_owned();
-    }
-    markdown = SELF_CLOSING_NOTION_PAGE_REF
-        .replace_all(&markdown, |captures: &regex::Captures<'_>| {
-            notion_page_link(&captures["attrs"], None)
-        })
-        .into_owned();
-    for regex in PAIRED_NOTION_TEXT_MENTIONS.iter() {
-        markdown = regex
-            .replace_all(&markdown, |captures: &regex::Captures<'_>| {
-                let label = INLINE_TAG_RE.replace_all(&captures["label"], "");
-                let label = label.trim();
-                if label.is_empty() {
-                    String::new()
-                } else {
-                    format!("@{label}")
-                }
-            })
-            .into_owned();
-    }
-    markdown = NOTION_DATE_MENTION
-        .replace_all(&markdown, |captures: &regex::Captures<'_>| {
-            notion_date_mention(&captures["attrs"])
-        })
-        .into_owned();
-    for regex in PAIRED_NOTION_MEDIA.iter() {
-        markdown = regex
-            .replace_all(&markdown, |captures: &regex::Captures<'_>| {
-                notion_media_link(&captures["attrs"], &captures["label"])
-            })
-            .into_owned();
-    }
-    markdown = NOTION_UNKNOWN_BLOCK
-        .replace_all(&markdown, |captures: &regex::Captures<'_>| {
-            notion_unknown_block(&captures["attrs"])
-        })
-        .into_owned();
-    markdown = PAIRED_NOTION_SPAN
-        .replace_all(&markdown, |captures: &regex::Captures<'_>| {
-            captures["label"].to_string()
-        })
-        .into_owned();
-    markdown = NOTION_SUMMARY
-        .replace_all(&markdown, |captures: &regex::Captures<'_>| {
-            captures["label"].to_string()
-        })
-        .into_owned();
-    markdown = markdown
-        .replace("<ancestor-path>\n", "")
-        .replace("\n</ancestor-path>", "")
-        .replace("<ancestor-path>", "")
-        .replace("</ancestor-path>", "");
-    markdown = NOTION_TOGGLE_MARKER.replace_all(&markdown, "").into_owned();
-    markdown = NOTION_BLOCK_ATTRIBUTES
-        .replace_all(&markdown, "")
-        .into_owned();
-    markdown = NOTION_EMPTY_BLOCK.replace_all(&markdown, "").into_owned();
-    markdown = convert_notion_tables(&markdown);
-    markdown = flatten_notion_containers(&markdown);
-    markdown = normalize_escaped_notion_todos(&markdown);
-    let input_trailing_newlines = input
-        .chars()
-        .rev()
-        .take_while(|value| *value == '\n')
-        .count();
-    let output_trailing_newlines = markdown
-        .chars()
-        .rev()
-        .take_while(|value| *value == '\n')
-        .count();
-    for _ in output_trailing_newlines..input_trailing_newlines {
-        markdown.push('\n');
-    }
-    markdown
+/// Whether a fetched Notion page is worth importing as a document: real body
+/// content, not a connector's tool-result wrapper or a page that is mostly a
+/// database. Converting it is lexical-service's job.
+fn check_notion_markdown(input: &str) -> anyhow::Result<()> {
+    anyhow::ensure!(!input.trim().is_empty(), "fetched page has no content");
+    anyhow::ensure!(
+        !NOTION_TOOL_RESULT_PREAMBLE.is_match(input)
+            && !NOTION_SERIALIZED_TITLE_WRAPPER.is_match(input),
+        "fetched page contained tool-result metadata instead of body content"
+    );
+    anyhow::ensure!(
+        !notion_page_is_mostly_database(input),
+        "fetched page is primarily a Notion database"
+    );
+    Ok(())
 }
 
 fn remove_notion_databases(input: &str) -> String {
@@ -2087,30 +1757,6 @@ fn remove_notion_databases_fragment(input: &str) -> String {
     SELF_CLOSING_NOTION_DATABASE
         .replace_all(&markdown, "")
         .into_owned()
-}
-
-fn prepare_notion_markdown(input: &str) -> anyhow::Result<String> {
-    anyhow::ensure!(!input.trim().is_empty(), "fetched page has no content");
-    anyhow::ensure!(
-        !NOTION_TOOL_RESULT_PREAMBLE.is_match(input)
-            && !NOTION_SERIALIZED_TITLE_WRAPPER.is_match(input),
-        "fetched page contained tool-result metadata instead of body content"
-    );
-    anyhow::ensure!(
-        !notion_page_is_mostly_database(input),
-        "fetched page is primarily a Notion database"
-    );
-
-    let markdown = normalize_notion_markdown(input);
-    anyhow::ensure!(
-        !markdown.trim().is_empty(),
-        "fetched page has no supported body content"
-    );
-    anyhow::ensure!(
-        !contains_outside_fenced_code(&markdown, &UNHANDLED_NOTION_MARKUP),
-        "fetched page contained unsupported Notion markup after normalization"
-    );
-    Ok(markdown)
 }
 
 fn notion_page_is_mostly_database(input: &str) -> bool {
@@ -2128,228 +1774,6 @@ fn notion_page_is_mostly_database(input: &str) -> bool {
         .filter(|character| character.is_alphanumeric())
         .count();
     substantive_chars < 200
-}
-
-fn notion_page_link(attrs: &str, body_label: Option<std::borrow::Cow<'_, str>>) -> String {
-    let mut url = None;
-    let mut title = None;
-    for captures in NOTION_ATTR_RE.captures_iter(attrs) {
-        match &captures["name"] {
-            "url" => url = Some(captures["value"].to_string()),
-            "title" => title = Some(captures["value"].to_string()),
-            _ => {}
-        }
-    }
-    let Some(url) = url else {
-        return body_label.unwrap_or_default().into_owned();
-    };
-    let label = body_label
-        .as_deref()
-        .map(str::trim)
-        .filter(|label| !label.is_empty())
-        .or_else(|| {
-            title
-                .as_deref()
-                .map(str::trim)
-                .filter(|label| !label.is_empty())
-        })
-        .unwrap_or("Notion page");
-    format!("[{}]({url})", escape_markdown_link_label(label))
-}
-
-fn notion_media_link(attrs: &str, body_label: &str) -> String {
-    let attributes = notion_attributes(attrs);
-    let Some(url) = attributes
-        .get("src")
-        .or_else(|| attributes.get("url"))
-        .filter(|url| is_web_url(url))
-    else {
-        return INLINE_TAG_RE.replace_all(body_label, "").trim().to_string();
-    };
-    let label = INLINE_TAG_RE.replace_all(body_label, "");
-    let label = label.trim();
-    let label = if label.is_empty() {
-        "Notion file"
-    } else {
-        label
-    };
-    format!("[{}]({url})", escape_markdown_link_label(label))
-}
-
-fn notion_unknown_block(attrs: &str) -> String {
-    let attributes = notion_attributes(attrs);
-    let Some(url) = attributes.get("url").filter(|url| is_web_url(url)) else {
-        return String::new();
-    };
-    let label = attributes
-        .get("alt")
-        .map(String::as_str)
-        .map(str::trim)
-        .filter(|label| !label.is_empty())
-        .unwrap_or("Unsupported Notion content");
-    format!("[{}]({url})", escape_markdown_link_label(label))
-}
-
-fn notion_date_mention(attrs: &str) -> String {
-    let attributes = notion_attributes(attrs);
-    let Some(start) = attributes.get("start") else {
-        return String::new();
-    };
-    let mut label = humanize_notion_date(start);
-    if let Some(time) = attributes.get("startTime").filter(|time| !time.is_empty()) {
-        label.push(' ');
-        label.push_str(time);
-    }
-    if let Some(end) = attributes
-        .get("end")
-        .filter(|end| !end.is_empty() && *end != start)
-    {
-        label.push_str(" – ");
-        label.push_str(&humanize_notion_date(end));
-    }
-    label
-}
-
-fn humanize_notion_date(value: &str) -> String {
-    chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d")
-        .map(|date| date.format("%B %-d, %Y").to_string())
-        .unwrap_or_else(|_| value.to_string())
-}
-
-fn notion_attributes(attrs: &str) -> std::collections::HashMap<String, String> {
-    NOTION_ATTR_RE
-        .captures_iter(attrs)
-        .map(|captures| (captures["name"].to_string(), captures["value"].to_string()))
-        .collect()
-}
-
-fn escape_markdown_link_label(label: &str) -> String {
-    label
-        .replace('\\', "\\\\")
-        .replace('[', "\\[")
-        .replace(']', "\\]")
-}
-
-#[derive(Debug)]
-enum DroppedNotionContainer {
-    Plain,
-    Callout {
-        icon: Option<String>,
-        emitted_icon: bool,
-    },
-}
-
-fn flatten_notion_containers(input: &str) -> String {
-    let mut output = Vec::new();
-    let mut containers: Vec<DroppedNotionContainer> = Vec::new();
-
-    for line in input.lines() {
-        let trimmed = line.trim();
-        if is_notion_container_close(trimmed) {
-            containers.pop();
-            continue;
-        }
-        if let Some(container) = notion_container_open(trimmed) {
-            containers.push(container);
-            continue;
-        }
-
-        let mut flattened = drop_notion_container_indentation(line, containers.len()).to_string();
-        if containers
-            .iter()
-            .any(|container| matches!(container, DroppedNotionContainer::Callout { .. }))
-        {
-            let icon = containers
-                .iter_mut()
-                .rev()
-                .find_map(|container| match container {
-                    DroppedNotionContainer::Callout { icon, emitted_icon } if !*emitted_icon => {
-                        *emitted_icon = true;
-                        icon.take()
-                    }
-                    _ => None,
-                });
-            flattened = match (icon, flattened.trim().is_empty()) {
-                (Some(icon), false) => format!("> {icon} {flattened}"),
-                (Some(icon), true) => format!("> {icon}"),
-                (None, false) => format!("> {flattened}"),
-                (None, true) => ">".to_string(),
-            };
-        }
-        output.push(flattened);
-    }
-
-    output.join("\n")
-}
-
-fn notion_container_open(line: &str) -> Option<DroppedNotionContainer> {
-    for tag in [
-        "details",
-        "columns",
-        "column",
-        "synced_block",
-        "synced_block_reference",
-    ] {
-        if line.starts_with(&format!("<{tag}")) && line.ends_with('>') {
-            return Some(DroppedNotionContainer::Plain);
-        }
-    }
-    if line.starts_with("<callout") && line.ends_with('>') {
-        let attrs = line
-            .strip_prefix("<callout")
-            .and_then(|line| line.strip_suffix('>'))
-            .unwrap_or_default();
-        return Some(DroppedNotionContainer::Callout {
-            icon: notion_attributes(attrs).remove("icon"),
-            emitted_icon: false,
-        });
-    }
-    None
-}
-
-fn is_notion_container_close(line: &str) -> bool {
-    [
-        "</details>",
-        "</callout>",
-        "</columns>",
-        "</column>",
-        "</synced_block>",
-        "</synced_block_reference>",
-    ]
-    .contains(&line)
-}
-
-fn drop_notion_container_indentation(mut line: &str, levels: usize) -> &str {
-    for _ in 0..levels {
-        if let Some(rest) = line.strip_prefix('\t') {
-            line = rest;
-        } else if let Some(rest) = line.strip_prefix("    ") {
-            line = rest;
-        } else {
-            break;
-        }
-    }
-    line
-}
-
-fn normalize_escaped_notion_todos(input: &str) -> String {
-    input
-        .lines()
-        .map(|line| {
-            ESCAPED_NOTION_TODO
-                .captures(line)
-                .map(|captures| {
-                    format!(
-                        "{}- [{}]{}",
-                        &captures["indent"],
-                        captures["state"].to_ascii_lowercase(),
-                        &captures["rest"]
-                    )
-                })
-                .unwrap_or_else(|| line.to_string())
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 fn transform_outside_fenced_code(input: &str, mut transform: impl FnMut(&str) -> String) -> String {
@@ -2382,83 +1806,6 @@ fn transform_outside_fenced_code(input: &str, mut transform: impl FnMut(&str) ->
     }
     output.push_str(&transform(&fragment));
     output
-}
-
-fn contains_outside_fenced_code(input: &str, pattern: &regex::Regex) -> bool {
-    let mut found = false;
-    let _ = transform_outside_fenced_code(input, |fragment| {
-        found |= pattern.is_match(fragment);
-        fragment.to_string()
-    });
-    found
-}
-
-fn convert_notion_tables(input: &str) -> String {
-    let mut output = String::with_capacity(input.len());
-    let mut remaining = input;
-    while let Some(start) = remaining.find("<table") {
-        output.push_str(&remaining[..start]);
-        let table = &remaining[start..];
-        let Some(close_start) = table.find("</table>") else {
-            output.push_str(table);
-            return output;
-        };
-        let close_end = close_start + "</table>".len();
-        let fragment = &table[..close_end];
-        match notion_table_to_markdown(fragment) {
-            Some(converted) => output.push_str(&converted),
-            None => output.push_str(fragment),
-        }
-        remaining = &table[close_end..];
-    }
-    output.push_str(remaining);
-    output
-}
-
-fn notion_table_to_markdown(table: &str) -> Option<String> {
-    let mut rows: Vec<Vec<String>> = TABLE_ROW_RE
-        .captures_iter(table)
-        .filter_map(|row| {
-            let cells: Vec<String> = TABLE_CELL_RE
-                .captures_iter(&row["body"])
-                .map(|cell| normalize_notion_table_cell(&cell["body"]))
-                .collect();
-            (!cells.is_empty()).then_some(cells)
-        })
-        .collect();
-    let column_count = rows.iter().map(Vec::len).max()?;
-    if column_count == 0 {
-        return None;
-    }
-    for row in &mut rows {
-        row.resize(column_count, String::new());
-    }
-
-    let mut lines = Vec::with_capacity(rows.len() + 1);
-    for (index, row) in rows.into_iter().enumerate() {
-        lines.push(format!("| {} |", row.join(" | ")));
-        if index == 0 {
-            lines.push(format!(
-                "| {} |",
-                std::iter::repeat_n("---", column_count)
-                    .collect::<Vec<_>>()
-                    .join(" | ")
-            ));
-        }
-    }
-    Some(lines.join("\n"))
-}
-
-fn normalize_notion_table_cell(cell: &str) -> String {
-    let with_breaks = BREAK_TAG_RE.replace_all(cell, "\n");
-    let without_tags = INLINE_TAG_RE.replace_all(&with_breaks, "");
-    without_tags
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .collect::<Vec<_>>()
-        .join("\\n")
-        .replace('|', "&#124;")
 }
 
 /// Map a Linear workflow status name onto Macro's task status label.

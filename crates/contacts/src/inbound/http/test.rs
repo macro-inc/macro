@@ -63,7 +63,10 @@ impl FakeJwtValidator {
 }
 
 impl JwtValidator for FakeJwtValidator {
-    fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
+    fn validate_credential(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
         self.validation_count.fetch_add(1, Ordering::SeqCst);
 
         let user_id = match jwt {
@@ -73,12 +76,15 @@ impl JwtValidator for FakeJwtValidator {
             _ => return Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
         };
 
-        Ok(ValidatedIdentity {
-            agent_id: None,
-            user_id: user_id.to_string(),
-            fusion_user_id: "fusion-user-id".to_string(),
-            permissions: None,
-            organization_id: None,
+        Ok(macro_authorization::ValidatedCredential {
+            origin: macro_authorization::CredentialOrigin::Session,
+            identity: ValidatedIdentity {
+                agent_id: None,
+                user_id: user_id.to_string(),
+                fusion_user_id: "fusion-user-id".to_string(),
+                permissions: None,
+                organization_id: None,
+            },
         })
     }
 }

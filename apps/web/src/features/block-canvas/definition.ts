@@ -5,12 +5,13 @@ import {
   loadResult,
 } from '@core/block';
 import { blockAcceptedFileExtensionToMimeType } from '@core/constant/allBlocks';
-import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
-import { fetchBinary } from '@service-storage/util/fetchBinary';
+import { catchToResult } from '@core/util/result';
+import { fetchFileDocumentOpenContext } from '@queries/storage/documentLoad/sync-document-context';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
 import { err, ok } from 'neverthrow';
 import { lazy } from 'solid-js';
 import type { CanvasFile } from './core/document-format';
+import { loadCanvasDocument } from './queries/document';
 
 export const definition = defineBlock({
   name: 'canvas',
@@ -22,26 +23,28 @@ export const definition = defineBlock({
   liveTrackingEnabled: true,
   async load(source, intent) {
     if (source.type === 'dss') {
-      const maybeDocument = await loadResult(
-        fetchBinaryDocumentData(source.id)
-      );
-
       if (intent === 'preload') {
+        await fetchFileDocumentOpenContext(source.id);
         return ok({
           type: 'preload',
           origin: source,
         });
       }
 
+      const maybeDocument = await loadResult(
+        catchToResult(() => loadCanvasDocument(source.id))
+      );
       if (maybeDocument.isErr()) return err(maybeDocument.error);
       const documentResult = maybeDocument.value;
-      const { documentMetadata, blobUrl, userAccessLevel } = documentResult;
-
-      const blobResult = await loadResult(fetchBinary(blobUrl, 'blob'));
-
-      if (blobResult.isErr()) return err(blobResult.error);
-
-      const blob = blobResult.value;
+      const { documentMetadata, userAccessLevel } = documentResult;
+      if (documentResult.shared) {
+        return ok({
+          documentMetadata,
+          userAccessLevel,
+          shared: true as const,
+        });
+      }
+      const blob = documentResult.file;
 
       const dssFile = await makeFileFromBlob({
         blob,
@@ -63,7 +66,12 @@ export const definition = defineBlock({
         metadata: documentMetadata,
       });
 
-      return ok({ dssFile, userAccessLevel, documentMetadata });
+      return ok({
+        dssFile,
+        userAccessLevel,
+        documentMetadata,
+        shared: false as const,
+      });
     }
 
     return LoadErrors.INVALID;

@@ -1,0 +1,15 @@
+[default]
+description = "iOS push registration and acknowledged notification navigation."
+permissions = [
+  "allow-check-permissions",
+  "allow-request-permissions",
+  "allow-check-registration-status",
+  "allow-register-for-remote-notifications",
+  "allow-watch-notifications",
+  "allow-unwatch-notifications",
+  "allow-get-pending-notification",
+  "allow-acknowledge-notification",
+  "allow-clear-pending-notification",
+  "allow-release-notification-cover",
+  "allow-configure-recipient",
+]

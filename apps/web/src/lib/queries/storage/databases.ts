@@ -166,6 +166,41 @@ export function onDatabaseBatchCommitted(
   return () => committedListeners.delete(listener);
 }
 
+/** How many rows a batch inserts, updates and deletes; never cell contents. */
+export function countRowWrites(ops: DatabaseOp[]) {
+  const rows = { insert: 0, update: 0, delete: 0 };
+  for (const op of ops) {
+    if (op.kind !== 'rows') continue;
+    rows[op.change.kind] +=
+      op.change.kind === 'update'
+        ? op.change.changes.rows.length
+        : op.change.rows.length;
+  }
+  return {
+    insertedRows: rows.insert,
+    updatedRows: rows.update,
+    deletedRows: rows.delete,
+  };
+}
+
+/**
+ * Reports a batch's row writes as edits. A batch that creates a table or a
+ * column fills it in the same request (a type conversion copies every cell
+ * into its new column), so its row writes are a schema change, not edits.
+ */
+function trackRowEdits(databaseId: string, ops: DatabaseOp[]) {
+  const createsSchema = ops.some(
+    (op) =>
+      (op.kind === 'table' || op.kind === 'column') &&
+      op.change.kind === 'create'
+  );
+  if (createsSchema) return;
+  const counts = countRowWrites(ops);
+  if (counts.insertedRows + counts.updatedRows + counts.deletedRows === 0)
+    return;
+  analytics.track('database_rows_edited', { databaseId, ...counts });
+}
+
 /**
  * Apply ops to one database as the current viewer, together or not at all.
  * Each table `baseVersions` names must still be at that version, or the batch
@@ -195,6 +230,7 @@ export function applyDatabaseOps(
             tableVersions,
           });
         applyDatabaseTableVersions(databaseId, tableVersions);
+        trackRowEdits(databaseId, ops);
         // Schema-only creation waits for data callers need to focus or patch views.
         // A row edit that mints options keeps the write queue moving.
         const createsColumnData = ops.some(

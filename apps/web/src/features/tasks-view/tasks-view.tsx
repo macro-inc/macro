@@ -1,14 +1,22 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { openProject } from '@app/features/projects/open-project';
 import { ProjectsTab } from '@app/features/projects/projects';
+import {
+  useSavedView,
+  useSavedViews,
+} from '@app/features/saved-views/queries/saved-views';
 import { ViewTour, ViewTourAction } from '@app/features/tours/ViewTour';
 import { SplitRouter, useNavigate, useParams } from '@app/lib/split-router';
 import { projectDetailRoute } from '@app/routes/routes';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
+import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ListEntityMetadataQueryProvider } from '@entity';
+import { queryReadyGate } from '@queries/gate';
+import { useCurrentTeamQuery } from '@queries/team/teams';
 import {
   createSignal,
   onMount,
@@ -16,17 +24,17 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
-import {
-  TasksHeader,
-  TasksTopBar,
-  TaskViewBreadcrumbItem,
-} from './components/TasksHeader';
+import { TasksHeader, TaskViewBreadcrumbItem } from './components/TasksHeader';
 import { TasksMobileTabs } from './components/TasksMobileTabs';
 import { TasksSidebar } from './components/TasksSidebar';
 import { TasksContent, TasksLoading } from './tasks-content';
 import { TasksViewProvider, useTasksView } from './tasks-view-context';
 import { tasksTour } from './tour';
 import type { TasksViewStateOptions } from './types';
+import {
+  TaskSavedViewFailure,
+  TaskSavedViewWarning,
+} from './views/task-saved-views';
 
 export type TasksViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
@@ -87,22 +95,39 @@ function ImportLinearAction() {
 
 function TasksViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { state, projectsEnabled } = useTasksView();
+  const { state, setState, projectsEnabled, savedViews } = useTasksView();
   const navigate = useNavigate();
   const layout = useSplitLayout();
   const [listElement, setListElement] = createSignal<HTMLDivElement>();
+  const savedViewReady = () => {
+    const kind = savedViews?.view().kind;
+    return kind !== 'loading' && kind !== 'unavailable';
+  };
+  const unavailable = () => {
+    const view = savedViews?.view();
+    return view?.kind === 'unavailable' ? view.message : undefined;
+  };
 
   onMount(() => panel.handle.setDisplayName('Tasks'));
 
   const taskList = () => (
     <>
-      <TasksTopBar />
-      <ViewShell.Header>
-        <TasksHeader onSearchEscape={() => listElement()?.focus()} />
-      </ViewShell.Header>
+      <TasksHeader onSearchEscape={() => listElement()?.focus()} />
       <ViewTour tour={tasksTour} actions={<ImportLinearAction />} />
-      <ViewShell.Content>
-        <TasksContent ref={setListElement} />
+      <ViewShell.Content class="flex flex-col">
+        <Show
+          when={savedViewReady()}
+          fallback={
+            <Show when={unavailable()} fallback={<TasksLoading />}>
+              <TaskSavedViewFailure />
+            </Show>
+          }
+        >
+          <TaskSavedViewWarning />
+          <div class="min-h-0 flex-1">
+            <TasksContent ref={setListElement} />
+          </div>
+        </Show>
       </ViewShell.Content>
     </>
   );
@@ -124,14 +149,23 @@ function TasksViewRoot() {
               <SplitRouter.Outlet
                 fallback={() => (
                   <Show
-                    when={state.tab === 'projects' && projectsEnabled()}
+                    when={
+                      state.tab === 'projects' &&
+                      projectsEnabled() &&
+                      !state.savedViewActive
+                    }
                     fallback={taskList()}
                   >
-                    <TasksTopBar />
-                    <div class="hidden @max-[720px]/view-shell:block">
-                      <TasksMobileTabs />
-                    </div>
+                    <Show when={isTouchDevice()}>
+                      <div class="hidden @max-[720px]/view-shell:block">
+                        <TasksMobileTabs />
+                      </div>
+                    </Show>
                     <ProjectsTab
+                      search={{
+                        value: () => state.search,
+                        onChange: (search) => setState('search', search),
+                      }}
                       onOpen={(id, event, newSplit) => {
                         if (
                           newSplit ||
@@ -167,9 +201,25 @@ function TasksViewRoot() {
 
 /** Production Tasks view. */
 export function TasksView(props: TasksViewProps) {
+  const viewerId = useUserId();
+  const teamQuery = useCurrentTeamQuery();
   return (
     <ListEntityMetadataQueryProvider>
-      <TasksViewProvider initialState={props.initialState}>
+      <TasksViewProvider
+        initialState={props.initialState}
+        savedViewsSource={() =>
+          useSavedViews({
+            viewerId,
+            kind: 'tasks',
+          })
+        }
+        savedViewSource={(id) => useSavedView({ viewerId, id })}
+        savedViewTeam={() => {
+          if (!queryReadyGate(teamQuery)) return;
+          const team = teamQuery.data?.team;
+          return team ? { id: team.id, name: team.name } : undefined;
+        }}
+      >
         <TasksViewBreadcrumbs>
           <TasksViewRoot />
         </TasksViewBreadcrumbs>

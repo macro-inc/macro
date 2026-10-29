@@ -30,9 +30,6 @@ pub enum AgentHarnessOption {
     /// A Cursor cloud agent on the session owner's Cursor account.
     #[serde(rename = "cursor")]
     Cursor,
-    /// Claude Code on the session owner's Claude account.
-    #[serde(rename = "claude-cloud")]
-    ClaudeCloud,
     /// A registered self-hosted harness; requires `harnessId`.
     #[serde(rename = "macrod")]
     Macrod,
@@ -44,7 +41,6 @@ impl AgentHarnessOption {
         match self {
             Self::InMemory => "in-memory",
             Self::Cursor => "cursor",
-            Self::ClaudeCloud => "claude-cloud",
             Self::Macrod => harness_id::MACROD_HARNESS_SLUG,
         }
     }

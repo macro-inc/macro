@@ -9,6 +9,11 @@ use utoipa::OpenApi;
 #[openapi(
     paths(
         crate::health::health_handler,
+        calendar_events::inbound::notes_router::event_notes,
+        calendar_events::inbound::notes_router::note_documents,
+        calendar_events::inbound::notes_router::document_note_links,
+        calendar_events::inbound::notes_router::link_event_note,
+        calendar_events::inbound::notes_router::unlink_event_note,
         calendar_events::inbound::replacement_router::prepare_calendar_replacement,
         calendar_events::inbound::replacement_router::confirm_calendar_replacement,
         calendar_events::inbound::replacement_router::calendar_replacement_status,
@@ -24,6 +29,8 @@ use utoipa::OpenApi;
         calendar_events::inbound::mutation_router::delete_calendar_event,
         calendar_events::inbound::mutation_router::rsvp_calendar_event,
         calendar_events::inbound::mutation_router::invite_calendar_event_guests,
+        calendar_events::inbound::mutation_router::copy_calendar_event,
+        calendar_events::inbound::mutation_router::respond_to_join_request,
     ),
     components(schemas(
         calendar_events::inbound::team_router::TeamCalendarSharingBody,
@@ -38,6 +45,11 @@ use utoipa::OpenApi;
         calendar_events::inbound::mutation_router::RsvpCalendarEventRequest,
         calendar_events::inbound::mutation_router::InviteCalendarEventGuestsRequest,
         calendar_events::inbound::mutation_router::CalendarGuestInputBody,
+        calendar_events::inbound::mutation_router::CopyCalendarEventRequest,
+        calendar_events::inbound::mutation_router::RespondToJoinRequestRequest,
+        calendar_events::inbound::mutation_router::CalendarJoinRequestDecision,
+        calendar_events::domain::join_requests::CalendarJoinRequest,
+        calendar_events::domain::join_requests::CalendarJoinRequestStatus,
         calendar_events::inbound::mutation_router::CalendarAttendeeInputBody,
         calendar_events::inbound::mutation_router::CalendarMutationApiError,
         calendar_events::inbound::mutation_router::CalendarMutationErrorCode,

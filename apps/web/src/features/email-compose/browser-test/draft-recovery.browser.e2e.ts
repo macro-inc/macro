@@ -64,10 +64,9 @@ test('an already-sent background save clears the draft without offering recovery
     .getByRole('textbox', { name: 'Message' })
     .fill('Already delivered');
   await expect(page.getByTestId('save-count')).toHaveText('1');
+  await expect(page.getByTestId('has-draft')).toHaveText('true');
   await page.getByRole('button', { name: 'Report already sent' }).click();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'This email was already sent' })
-  ).toBeVisible();
+  await expect(page.getByTestId('has-draft')).toHaveText('false');
   await expect(
     page.getByRole('button', { name: 'Save as new draft' })
   ).toHaveCount(0);

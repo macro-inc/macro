@@ -25,6 +25,7 @@ services:
 
   fusionauth:
     image: fusionauth/fusionauth-app:1.62.1
+    init: true
     env_file:
       - path: .env
         required: false

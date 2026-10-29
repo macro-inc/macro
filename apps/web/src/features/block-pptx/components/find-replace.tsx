@@ -4,9 +4,9 @@
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretUp from '@phosphor/caret-up.svg';
-import X from '@phosphor/x.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretUp from '@icon/system/regular/caret-up.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { createMemo, createSignal, onMount, Show } from 'solid-js';
 import {
@@ -138,7 +138,7 @@ export function FindReplace(props: {
 
   return (
     <div
-      class="absolute top-2 right-3 z-20 flex w-80 flex-col gap-1.5 rounded-xl border border-edge bg-menu p-2 shadow-xl"
+      class="menu-surface absolute top-2 right-3 z-20 flex w-80 flex-col gap-1.5 p-2"
       data-testid="pptx-find"
       role="search"
       onKeyDown={onKeyDown}
@@ -168,28 +168,31 @@ export function FindReplace(props: {
             : ''}
         </span>
         <Button
+          aria-label="Previous"
+          tooltip="Previous"
           size="icon-xs"
           variant="ghost"
-          label="Previous"
           onClick={() => step(-1)}
         >
-          <CaretUp />
+          <CaretUp class="size-3 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
         <Button
+          aria-label="Next"
+          tooltip="Next"
           size="icon-xs"
           variant="ghost"
-          label="Next"
           onClick={() => step(1)}
         >
-          <CaretDown />
+          <CaretDown class="size-3 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
         <Button
+          aria-label="Close"
+          tooltip="Close"
           size="icon-xs"
           variant="ghost"
-          label="Close"
           onClick={props.onClose}
         >
-          <X />
+          <X class="size-3 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
       <Show when={props.replace && !props.readonly}>
@@ -204,7 +207,7 @@ export function FindReplace(props: {
           />
           <Button
             size="xs"
-            variant="outline"
+            variant="secondary"
             disabled={matches().length === 0}
             onClick={() => fireAndForget(replaceOne(), 'pptx-editor')}
           >
@@ -212,7 +215,7 @@ export function FindReplace(props: {
           </Button>
           <Button
             size="xs"
-            variant="outline"
+            variant="secondary"
             data-testid="pptx-replace-all"
             disabled={matches().length === 0}
             onClick={() => fireAndForget(replaceAll(), 'pptx-editor')}

@@ -3,6 +3,7 @@ import {
   useCalendarUiFlag,
 } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
+import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -13,6 +14,10 @@ import { useEmailLinksQuery } from '@queries/email/link';
  * `needs_calendar_permission` from the links list. Re-running the connect flow
  * re-shows Google consent for the linked account and applies the upgraded
  * grant to the existing link, which kicks off the calendar backfill.
+ *
+ * Only the viewer's own inboxes are prompted. The links list also carries
+ * inboxes another Macro user delegated to the viewer; whether that user's
+ * calendar syncs is theirs to decide, as in the calendar settings.
  *
  * Inboxes that also need a full reconnect are skipped so the two prompts don't
  * stack. Reconnecting restores previously enabled calendar access too; an
@@ -29,6 +34,7 @@ export function CalendarPermissionPrompt() {
   const calendarUiEnabled = useCalendarUiFlag();
   const promptAllowed = useCalendarPromptAllowed();
   const linksQuery = useEmailLinksQuery();
+  const userId = useUserId();
   const startAddInbox = useAddInboxFlow();
 
   useKeyedPersistentToasts({
@@ -36,6 +42,7 @@ export function CalendarPermissionPrompt() {
       calendarUiEnabled() && promptAllowed()
         ? (linksQuery.isSuccess ? linksQuery.data.links : []).filter(
             (link) =>
+              link.macro_id === userId() &&
               link.needs_calendar_permission &&
               !link.needs_reauth &&
               !link.calendar_disabled
@@ -43,10 +50,11 @@ export function CalendarPermissionPrompt() {
         : [],
     key: (link) => link.id,
     persistKey: 'macro:calendar-prompt:dismissed',
-    // Until the flag resolves and the links land, the empty list above means
-    // "don't know yet", not "no inbox needs this" — stored dismissals must
-    // survive that window.
-    itemsLoaded: () => calendarUiEnabled() && linksQuery.isSuccess,
+    // Until the flag, the links and the viewer's id resolve, the empty list
+    // above means "don't know yet", not "no inbox needs this" — stored
+    // dismissals must survive that window.
+    itemsLoaded: () =>
+      calendarUiEnabled() && linksQuery.isSuccess && userId() !== undefined,
     toast: (link, dismiss) => ({
       title: 'Enable calendar',
       content(): string {

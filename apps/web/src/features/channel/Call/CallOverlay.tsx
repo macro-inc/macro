@@ -1,9 +1,10 @@
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ChatIcon from '@phosphor/chat-circle.svg';
+import ChatIcon from '@icon/system/regular/chat-circle.svg';
 import { cn, InlineCheckbox, Tooltip } from '@ui';
 import type { RemoteParticipant, Track } from 'livekit-client';
 import {
@@ -422,9 +423,12 @@ export function CallOverlay(props: {
           </Show>
         </Show>
       </div>
-      {/* Settings expand over the tiles; sharing stays clear of the controls. */}
+      {/* Settings expand over the tiles; sharing stays clear of the controls.
+          On desktop the bar (and the chat composer beside it) is the call's
+          last row, where the corner prompt sits, so the prompt waits. */}
       <div
         class="relative flex shrink-0 flex-col items-center gap-2 py-3"
+        data-holds-prompts={isTouchDevice() ? undefined : ''}
         classList={{
           '@min-[800px]/call:mr-90': canChat() && chatOpen(),
         }}
@@ -468,13 +472,16 @@ export function CallOverlay(props: {
         <div
           class="grid w-full items-center gap-2 px-2"
           classList={{
-            'grid-cols-[minmax(3.5rem,1fr)_minmax(0,36rem)_minmax(3.5rem,1fr)]':
+            'grid-cols-[minmax(3.5rem,1fr)_minmax(0,36rem)_minmax(3.5rem,1fr)] @max-[500px]/call:grid-cols-[minmax(0,1fr)_auto]':
               canChat(),
             'grid-cols-[minmax(0,1fr)_minmax(0,36rem)_minmax(0,1fr)]':
               !canChat(),
           }}
         >
-          <div class="col-start-2 flex min-w-0 justify-center">
+          <div
+            class="col-start-2 flex min-w-0 justify-center"
+            classList={{ '@max-[500px]/call:col-start-1': canChat() }}
+          >
             <CallControls onLeave={props.onLeave} />
           </div>
           <Show when={canChat()}>

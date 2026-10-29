@@ -37,6 +37,11 @@ enum CapturedMutation {
         thread_id: Uuid,
         archived: bool,
     },
+    ArchiveMany {
+        user_id: String,
+        thread_ids: Vec<Uuid>,
+        archived: bool,
+    },
     Label {
         user_id: String,
         thread_id: Uuid,
@@ -130,6 +135,29 @@ impl EmailMutationService for CapturingEmailMutationService {
         Ok(())
     }
 
+    async fn set_email_threads_archived(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        thread_ids: Vec<Uuid>,
+        archived: bool,
+    ) -> Result<SetThreadsArchivedResult, EmailErr> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(CapturedMutation::ArchiveMany {
+                user_id: user_id.to_string(),
+                thread_ids: thread_ids.clone(),
+                archived,
+            });
+        let (failed_thread_ids, updated_thread_ids) = thread_ids
+            .into_iter()
+            .partition(|thread_id| self.reject_archive && *thread_id == TEST_THREAD_ID);
+        Ok(SetThreadsArchivedResult {
+            updated_thread_ids,
+            failed_thread_ids,
+        })
+    }
+
     async fn mark_email_thread_seen(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -217,6 +245,7 @@ impl EmailMutationService for CapturingEmailMutationService {
                 photo_url: None,
             },
             draft: email::domain::models::CreatedDraft {
+                draft_generation: input.draft_generation,
                 db_id: input.db_id.unwrap_or_default(),
                 provider_id: input.provider_id,
                 replying_to_id: input.replying_to_id,
@@ -256,6 +285,8 @@ impl EmailMutationService for CapturingEmailMutationService {
         &self,
         user_id: MacroUserIdStr<'static>,
         draft_id: Uuid,
+
+        _expected_generation: i32,
     ) -> Result<DeletedUserDraft, EmailErr> {
         if self
             .draft_fails_as_already_sent
@@ -894,4 +925,12 @@ async fn semantic_mailbox_action_needs_no_provider_label_id() {
     let response = anonymous.execute(format!(r#"mutation {{ setEmailThreadState(input: {{ threadId: "{TEST_THREAD_ID}",field: STARRED,value: true }}) {{ id }} }}"#)).await;
     assert!(!response.errors.is_empty());
     assert_eq!(service.calls.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn stale_draft_generation_is_recoverable_not_already_sent() {
+    let error = super::draft_mutation_error(&EmailErr::DraftGenerationConflict(Uuid::nil()));
+    let extensions = format!("{:?}", error.extensions);
+    assert!(extensions.contains("DRAFT_VERSION_CONFLICT"));
+    assert!(!extensions.contains("DRAFT_ALREADY_SENT"));
 }

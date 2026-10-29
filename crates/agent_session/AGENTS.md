@@ -33,7 +33,7 @@ consumer talks to.
 
 ## Boundaries
 
-- Depends on: `agent_runtime_protocol`, `agent_fold`, `teams`,
+- Depends on: `agent_runtime_protocol`, `agent_fold`, `jev`, `teams`,
   `macro_authorization`.
 - Used by: `agent_harness`, `agent_inmem`, `agent_egress`, `agent_trigger`,
   `agent_changes`, `agent_session_realtime`, `ai_tools` (coding-agent
@@ -50,11 +50,37 @@ consumer talks to.
 
 ## Tool contracts
 
-- `src/inbound/toolset/`: session reads, creation, lifecycle actions, and sharing. Mutations preserve acting-user identity and existing owner/edit receipts; internal controls accept only prompt/stop, never human approvals.
+- `src/inbound/toolset/`: session reads, creation, lifecycle actions, and sharing. Mutations preserve acting-user identity and existing owner/edit receipts; internal controls accept only prompt/stop, never human approvals. `link_task` returns a `mention` chip to paste when naming the task.
 
 Internal action recovery uses `AgentSessionService::recorded_action`, which reads
 one durable log snapshot including pre-load frames. Keep this separate from the
 effective history served to transcript readers: replayed prompts lose action IDs.
+
+`domain/notifications.rs` owns durable typed system-event production and the
+transaction-aware producer port. `outbound/notifications.rs` owns the outbox
+queries and leased batches. Retain unreadable payloads for a delayed retry; a
+previously bound action stays whole and returns its identity for runtime
+reconciliation, even when this consumer cannot decode its input.
+Fresh unreadable rows keep no action identity and do not block valid siblings.
+Await rollback on empty or blocked claims so their session lock is released
+before the next real prompt attempts to attach quiet events.
+Discovery uses bounded cursor pages so callers can
+advance past unavailable sessions. Quiet batches bind to the actual prompt action ID;
+notification-only turns record `PrompterKind::System` and no human authority.
+Never expose notification metadata through public session controls. Notification
+sessions read original log frames across load boundaries to retain trusted event
+provenance when runtimes echo their prompt history. Queue reads discard legacy
+private-context entries; the migration bridge preserves their review outcomes
+without restoring owner authority. Claim legacy actions with a conditional
+update of only their matching prompter; recover acting identity from that
+persisted prompter, never from an old wire actor or a newer user turn.
+
+Session names: the first prompt names a session (`set_name_if_default`), and
+after each turn that ends with a reply, `domain/retitle.rs` hands the
+conversation digest to the namer. `name_generation::ClassifiedRetitle` asks Jev
+whether the name stopped fitting (threshold 0.8) before Haiku proposes a new
+one. Only names with `agent_session.name_is_generated` are retitled; a rename
+through `set_name` clears it, so a name a person chose is never replaced.
 
 ## Checks
 
@@ -62,12 +88,23 @@ effective history served to transcript readers: replayed prompts lose action IDs
 
 ## Gotchas
 
+- Where a session is shown is `agent_session.visibility` (`listed`,
+  `unlisted`, `hidden`); `hidden` replaces `list_hidden`. Never read or write
+  `list_hidden`: until a later migration drops it, the
+  `agent_session_hidden_sync` trigger keeps it in step for replicas on older
+  code, and it must keep sorting before `agent_session_legacy_warm_write`
+  (triggers fire in name order).
+
 - `ReadAgentSession` bounds its response, not storage work: it folds the full
   effective history like the app. Raw log limits break replay and turn numbering;
   bounded reads need a persisted conversation projection or a fold-aware port.
 - The row's fenced log writer and the Cursor projection both lock the
   session row `FOR UPDATE`; never add a second `NOWAIT` locker without
   checking both paths (see git history on `src/domain/control.rs`).
+- `modified_at` is Agents/Home list recency. Bump it for user-visible work
+  (`moves_session_list`: starting/running/stopping/blocked) and metadata
+  the viewer asked to change. Do not bump it for claim, release, recovery,
+  ACP session id, or system events (`acp_ready`, `disconnected`).
 
 ## Related
 

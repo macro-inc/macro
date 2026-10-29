@@ -45,6 +45,7 @@ mod logging;
 mod macos_notification_permission;
 mod share_target;
 mod staged_upload;
+mod whatsapp_passkey;
 #[cfg(desktop)]
 mod window_state;
 
@@ -200,7 +201,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>) {
 
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     {
-        builder = builder.on_web_content_process_terminate(|webview| {
+        let on_terminate = |webview: &tauri::Webview<AppRuntime>| {
             tracing::warn!(webview = %webview.label(), "WebContent process terminated; reloading");
             if let Some(state) = webview.try_state::<diagnostics::Diagnostics>() {
                 let _ = state.record_web_content_termination().inspect_err(|error| {
@@ -212,7 +213,16 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>) {
             let _ = webview.reload().inspect_err(|error| {
                 tracing::error!(%error, "Failed to reload terminated WebContent process");
             });
-        });
+        };
+        #[cfg(feature = "cef")]
+        {
+            builder = builder
+                .on_web_content_process_terminate(move |webview, _details| on_terminate(webview));
+        }
+        #[cfg(not(feature = "cef"))]
+        {
+            builder = builder.on_web_content_process_terminate(on_terminate);
+        }
     }
 
     #[cfg(desktop)]
@@ -245,6 +255,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>) {
             .plugin(tauri_plugin_auth::init())
             .plugin(tauri_plugin_virtual_keyboard::init())
             .plugin(tauri_plugin_edit_menu::init())
+            .plugin(tauri_plugin_file_export::init())
             .plugin(tauri_plugin_input_accessory::init())
             .plugin(tauri_plugin_network_status::init())
             .plugin(tauri_plugin_pasteboard::init())
@@ -276,7 +287,9 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>) {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_device_info::init())
-        .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_http::init_with_cookie_store_dir(
+            "$APPLOCALDATA",
+        ))
         .plugin(
             tauri_plugin_websocket::Builder::new()
                 .merge_header_callback(Box::new(merge_header_callback))
@@ -354,6 +367,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>) {
         .manage(graphql_cache_plugin::CacheState::default())
         .manage(IsIpad(is_ipad_device))
         .invoke_handler(tauri::generate_handler![
+            whatsapp_passkey::whatsapp_passkey_authenticate,
             desktop_update::get_native_update_status,
             desktop_update::restart_native_update,
             diagnostics::read_desktop_diagnostics,

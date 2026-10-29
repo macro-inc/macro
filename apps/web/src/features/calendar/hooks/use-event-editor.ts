@@ -3,6 +3,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { recipientEntityMapper, useContacts } from '@core/user';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import {
+  isGuestEditRefused,
   useCreateCalendarEventMutation,
   useInviteCalendarEventGuestsMutation,
   useUpdateCalendarEventMutation,
@@ -13,7 +14,13 @@ import {
   useUpdateMeetingMutation,
 } from '@queries/call/meetings';
 import type { CalendarUpdateScope } from '@service-email/client';
-import { type Accessor, createMemo, createSignal } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+} from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   buildEventTime,
@@ -33,11 +40,15 @@ import {
 } from '../utils/calendar-label';
 import {
   addedGuestEmails,
+  canForwardInvitation,
   type EventGuestEditing,
   eventGuestEditing,
-  GUEST_INVITES_RESTRICTED,
-  guestInvitesRestricted,
+  FORWARD_INVITATION_INSTEAD,
+  GUEST_EDITS_RESTRICTED,
+  guestEditsRestricted,
+  guestInvitesRestrictedReason,
   guestListChanged,
+  guestListHidden,
   viewerReplacesGuests,
 } from '../utils/event-guest-editing';
 import {
@@ -48,6 +59,18 @@ import {
 
 const EDIT_DISABLED_FIELDS = {
   calendar: true,
+} satisfies EventEditorDisabledFields;
+
+/** What a guest the organizer does not let modify the event cannot change. */
+const DETAIL_FIELDS = {
+  title: true,
+  allDay: true,
+  start: true,
+  end: true,
+  recurrence: true,
+  location: true,
+  description: true,
+  outOfOffice: true,
 } satisfies EventEditorDisabledFields;
 
 /**
@@ -89,8 +112,28 @@ interface UseEventEditorProps {
   event: Accessor<CalendarEvent | undefined>;
   onSaved: () => void;
   macroCallsEnabled: Accessor<boolean>;
-  /** Whether a guest the organizer lets invite may add guests; off when omitted. */
+  /**
+   * Whether the guest-invites rollout is on: a guest the organizer lets
+   * invite may add guests, and the organizer may set guest permissions. Off
+   * when omitted.
+   */
   guestInvitesEnabled?: Accessor<boolean>;
+  /** Whether a guest who cannot add guests may forward the invitation. */
+  invitationForwardEnabled?: Accessor<boolean>;
+  /**
+   * The edited event as the calendar now holds it. The lock on its details
+   * follows this copy, so a guest whose organizer stops letting guests
+   * modify the event loses the details while the editor is open. The edit
+   * itself still compares against `event`, the version it opened with.
+   */
+  syncedEvent?: Accessor<CalendarEvent | undefined>;
+  /**
+   * Called when the details lock while the editor is open, because the
+   * server refused a detail change or the synced event no longer lets the
+   * viewer change them, so the form can return them to the event's own
+   * instead of holding changes it can no longer save.
+   */
+  onDetailsLocked?: () => void;
 }
 
 /** Shared create/edit query and mutation orchestration for any editor shell. */
@@ -163,10 +206,35 @@ export function useEventEditor(props: UseEventEditorProps) {
   });
   const guestsReadOnlyReason = () => {
     const event = props.event();
-    return event && guestInvitesRestricted(event)
-      ? GUEST_INVITES_RESTRICTED
-      : undefined;
+    const reason = event && guestInvitesRestrictedReason(event);
+    if (!reason) return undefined;
+    return (props.invitationForwardEnabled?.() ?? false) &&
+      canForwardInvitation(event)
+      ? `${reason} ${FORWARD_INVITATION_INSTEAD}`
+      : reason;
   };
+  // A refusal means the stored guest policy was newer than the event shown,
+  // so the details lock without waiting for the refetch.
+  const [detailEditsRefused, setDetailEditsRefused] = createSignal(false);
+  const detailsLocked = () => {
+    const event = props.event();
+    if (!event) return false;
+    return (
+      detailEditsRefused() ||
+      guestEditsRestricted(props.syncedEvent?.() ?? event)
+    );
+  };
+  // The lock can arrive from outside the form, with the synced event, so the
+  // form is told rather than asked. The first run has no earlier state and
+  // only records the lock the editor opened with.
+  createEffect(
+    on(detailsLocked, (locked, wasLocked) => {
+      if (!locked || wasLocked !== false) return;
+      props.onDetailsLocked?.();
+      // A refused save already says why.
+      if (!detailEditsRefused()) toast.alert(GUEST_EDITS_RESTRICTED);
+    })
+  );
 
   const updateMeeting = useUpdateMeetingMutation();
   const create = useCreateCalendarEventMutation();
@@ -287,6 +355,7 @@ export function useEventEditor(props: UseEventEditorProps) {
           ...(needsCall() ? { macroCall: true } : {}),
           ...(values.reminders ? { reminders: values.reminders } : {}),
           ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
+          ...(values.guestPolicy ? { guestPolicy: values.guestPolicy } : {}),
         });
         props.onSaved();
         return;
@@ -330,6 +399,21 @@ export function useEventEditor(props: UseEventEditorProps) {
         guestEditing() === 'add'
           ? addedGuestEmails(event, values.guestEmails)
           : [];
+      const detailChanges = {
+        ...(values.title !== event.title ? { title: values.title } : {}),
+        ...(hasTimeChanged(event, values.time) ? { time: values.time } : {}),
+        ...(content.location !== (event.location ?? '')
+          ? { location: content.location }
+          : {}),
+        ...(content.description !== (event.description ?? '')
+          ? { description: content.description }
+          : {}),
+        ...(recurrenceChanged
+          ? { recurrenceLines: values.recurrenceLines }
+          : {}),
+        ...(conference ? { conference } : {}),
+        ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
+      };
       const updateArgs = {
         eventId: event.eventId,
         calendarId: event.calendarId,
@@ -339,26 +423,20 @@ export function useEventEditor(props: UseEventEditorProps) {
           : undefined,
         occurrenceKey: targetsOneOccurrence ? event.occurrenceKey : undefined,
         patch: {
-          ...(values.title !== event.title ? { title: values.title } : {}),
-          ...(hasTimeChanged(event, values.time) ? { time: values.time } : {}),
-          ...(content.location !== (event.location ?? '')
-            ? { location: content.location }
-            : {}),
-          ...(content.description !== (event.description ?? '')
-            ? { description: content.description }
-            : {}),
-          ...(recurrenceChanged
-            ? { recurrenceLines: values.recurrenceLines }
-            : {}),
+          // A guest who may not modify the event sends only their own fields.
+          ...(detailsLocked() ? {} : detailChanges),
           ...(guestEditing() === 'replace' &&
           guestListChanged(event, values.guestEmails)
             ? {
                 attendees: values.guestEmails.map((email) => ({ email })),
               }
             : {}),
-          ...(conference ? { conference } : {}),
           ...(values.reminders ? { reminders: values.reminders } : {}),
-          ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
+          ...(values.guestPolicy &&
+          event.viewerCan.setGuestPolicy &&
+          !targetsOneOccurrence
+            ? { guestPolicy: values.guestPolicy }
+            : {}),
         },
       };
       if (Object.keys(updateArgs.patch).length > 0) {
@@ -403,6 +481,9 @@ export function useEventEditor(props: UseEventEditorProps) {
             'Your event is saved, but its call link could not be added. Save again to retry.'
           );
         }
+      } else if (event && isGuestEditRefused(error)) {
+        setDetailEditsRefused(true);
+        toast.failure(GUEST_EDITS_RESTRICTED);
       } else {
         toast.failure(
           event ? 'Failed to update event' : 'Failed to create event',
@@ -425,6 +506,7 @@ export function useEventEditor(props: UseEventEditorProps) {
       const editsOtherCopy = !editsPrimaryCopy(event);
       return {
         ...EDIT_DISABLED_FIELDS,
+        ...(detailsLocked() ? DETAIL_FIELDS : {}),
         guests: guestEditing() === 'none',
         conference: editsOtherCopy || !viewerReplacesGuests(event),
         reminders: editsOtherCopy,
@@ -437,6 +519,16 @@ export function useEventEditor(props: UseEventEditorProps) {
     disabledFields,
     addOnlyGuests: () => guestEditing() === 'add',
     guestsReadOnlyReason,
+    guestListHidden: () => {
+      const event = props.event();
+      return event !== undefined && guestListHidden(event);
+    },
+    /** The organizer sets what guests may do; a new event is the viewer's own. */
+    guestPolicyEditable: () =>
+      (props.guestInvitesEnabled?.() ?? false) &&
+      (props.event()?.viewerCan.setGuestPolicy ?? true),
+    detailsReadOnlyReason: () =>
+      detailsLocked() ? GUEST_EDITS_RESTRICTED : undefined,
     calendarOptions,
     guestOptions,
     showRecurringEditNotice,

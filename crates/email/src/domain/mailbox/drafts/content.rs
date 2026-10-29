@@ -190,6 +190,7 @@ where
             references.push(parent.clone());
         }
         let request = SendRequest {
+            message_id: None,
             message: MessageToSend {
                 db_id: Some(lease.message_id),
                 provider_id: lease.provider_id.as_ref().map(|id| id.as_str().to_owned()),

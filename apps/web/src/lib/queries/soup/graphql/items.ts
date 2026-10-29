@@ -6,7 +6,6 @@ import {
   type GraphqlSoupItem,
   mapGraphqlSoupItem,
 } from '../../../service-clients/service-storage/graphql-soup';
-import { useInstructionsMdIdQuery } from '../../storage/instructions-md';
 import { createKeyedProjection } from '../create-keyed-projection';
 import { soupQueryExcludesDone } from '../excludes-done';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
@@ -38,6 +37,8 @@ export type GraphqlSoupAstItemsQueryOptions = SoupLiveQueryOptions & {
 
 export type GraphqlSoupAstItemsQuery = {
   groupedPaging?: GroupedSoupPaging;
+  /** Cache writes keep this list current. Grouped lists leave it out. */
+  cacheMaintained?: Accessor<boolean>;
   localRevision?: Accessor<CacheRevision | undefined>;
   localOptimistic?: Accessor<boolean>;
   data: Accessor<SoupAstItemsData | undefined>;
@@ -74,10 +75,6 @@ export function createGraphqlSoupAstItemsQuery(
     }
   });
   const source = createSoupLiveQuery(input, options);
-  const instructions = useInstructionsMdIdQuery();
-  const instructionsId = createMemo(() =>
-    instructions.isSuccess ? instructions.data : undefined
-  );
   const sortMethod = createMemo(() => args().params.sort_method);
   const showForeign = createMemo(() => options().showSupportedForeignEntities);
   const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
@@ -112,7 +109,6 @@ export function createGraphqlSoupAstItemsQuery(
     records,
     (row) => row.key,
     ({ record, fetched }) => {
-      const id = instructionsId();
       const sort = sortMethod();
       const showSupportedForeignEntities = showForeign();
       const view = { emailView: input()?.emailView };
@@ -129,10 +125,7 @@ export function createGraphqlSoupAstItemsQuery(
         entity: item
           ? mapSoupPageToEntityList(
               { items: [item], next_cursor: undefined },
-              {
-                instructionsIdQuery: { isSuccess: id !== undefined, data: id },
-                showSupportedForeignEntities,
-              }
+              { showSupportedForeignEntities }
             )[0]
           : undefined,
         timestamp: fetchedItem

@@ -1,3 +1,4 @@
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { describe, expect, it } from 'vitest';
 import { parseCacheRevision } from '../../../graphql-cache/protocol';
 import type {
@@ -5,6 +6,11 @@ import type {
   GroupSoupQuery,
   SoupItemFieldsFragment,
 } from '../../../service-clients/service-storage/graphql/generated/graphql';
+import { mapGraphqlSoupItem } from '../../../service-clients/service-storage/graphql-soup';
+import {
+  computeGroupKeysForItem,
+  resolveGroupMetaForKey,
+} from '../grouped/api';
 import {
   localSoupGroupKeys,
   mergeGroupedSoupBins,
@@ -88,26 +94,36 @@ describe('loaded grouped pages', () => {
 });
 
 describe('local grouped Soup projection', () => {
-  it('retains server membership for an unknown grouping field', () => {
-    const futureInput: GroupedSoupInitialInput = JSON.parse(
-      '{"groupBy":{"field":"FUTURE"},"sortMethod":"UPDATED_AT"}'
-    );
-    const item = groupedDocument('a');
-    const baseline = [
-      { key: 'server-group', items: [item], totalCount: 1, nextCursor: null },
-    ];
+  it('retains server membership for an unfamiliar grouping while refreshing rows', () => {
+    const before = groupedDocument('a');
+    const next = { ...groupedDocument('a', ['done']), displayName: 'Updated' };
+    const fromNewerServer = JSON.parse('"ASSIGNEE"');
 
-    expect(localSoupGroupKeys(item, futureInput, now)).toBeUndefined();
     expect(
       projectLocalGroupedSoup(
-        baseline,
+        [
+          {
+            key: 'server-group',
+            items: [before],
+            totalCount: 30,
+            nextCursor: 'more',
+          },
+        ],
         new Map(),
-        snapshot([item]),
-        futureInput,
+        snapshot([next]),
+        { ...input, groupBy: { field: fromNewerServer } },
         now
       )
-    ).toEqual(baseline);
+    ).toEqual([
+      {
+        key: 'server-group',
+        items: [next],
+        totalCount: 30,
+        nextCursor: 'more',
+      },
+    ]);
   });
+
   it('moves normalized rows and removes filter nonmatches without losing unknown rows', () => {
     const a = groupedDocument('a');
     const b = groupedDocument('b');
@@ -278,6 +294,55 @@ describe('local grouped Soup projection', () => {
     ).toBeUndefined();
   });
 
+  it('moves project groups with the initiative property despite a different folder', () => {
+    const task = groupedDocument('a');
+    task.projectId = 'legacy-folder';
+    task.properties[0] = {
+      ...task.properties[0],
+      propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+      value: {
+        __typename: 'GraphqlEntityReferencePropertyValue',
+        references: [
+          {
+            entityId: 'initiative-1',
+            entityType: 'INITIATIVE',
+            specificMessageId: null,
+          },
+        ],
+      },
+    };
+    const projectInput: GroupedSoupInitialInput = {
+      groupBy: { field: 'PROJECT' },
+    };
+    expect(localSoupGroupKeys(task, projectInput, now)).toEqual([
+      'initiative-1',
+    ]);
+    const apiTask = mapGraphqlSoupItem(task);
+    expect(apiTask).toBeDefined();
+    if (!apiTask) throw new Error('Task must map to the REST item shape');
+    expect(computeGroupKeysForItem(apiTask, { type: 'project' })).toEqual([
+      'initiative-1',
+    ]);
+    expect(resolveGroupMetaForKey({ type: 'project' }, '')?.label).toBe(
+      'No Project'
+    );
+
+    const unassigned = { ...task, properties: [] };
+    const result = projectLocalGroupedSoup(
+      [{ key: 'initiative-1', items: [task], totalCount: 1, nextCursor: null }],
+      new Map(),
+      snapshot([unassigned]),
+      projectInput,
+      now
+    );
+    expect(
+      result.find((bin) => bin.key === '')?.items.map((item) => item.id)
+    ).toEqual(['a']);
+    expect(result.find((bin) => bin.key === 'initiative-1')?.totalCount).toBe(
+      0
+    );
+  });
+
   it('distinguishes known empty property values from unknown grouping evidence', () => {
     expect(localSoupGroupKeys(groupedDocument('a', []), input, now)).toEqual([
       '',
@@ -288,7 +353,7 @@ describe('local grouped Soup projection', () => {
         { ...input, groupBy: { field: 'PROJECT' } },
         now
       )
-    ).toEqual(['project-2']);
+    ).toEqual(['']);
     const linked = groupedDocument('a');
     linked.properties[0].value = {
       __typename: 'GraphqlLinkPropertyValue',
