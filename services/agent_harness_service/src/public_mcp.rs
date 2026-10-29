@@ -79,6 +79,7 @@ pub async fn router(
             context: agent_code_mode::inbound::toolset::UserCodeModeToolContext {
                 service: code_mode.service,
                 cognition: tool_context.cognition_tool_context.service.clone(),
+                agent: None,
             },
             selector: Arc::new(CachedToolMode::new(code_mode.selector)),
         })

@@ -46,6 +46,9 @@ pub struct UserCodeModeToolContext {
     pub service: Arc<dyn UserCodeMode>,
     /// Jev, for selecting documentation by task; absent falls back to the catalog.
     pub cognition: Option<Arc<dyn Cognition>>,
+    /// The agent the request's credential was signed for, set per call by the
+    /// adapter; `None` for a user's own client.
+    pub agent: Option<bot_id::BotId>,
 }
 
 /// Code mode for clients outside agent sessions, such as the public MCP.
@@ -184,6 +187,7 @@ impl AsyncTool<UserCodeModeToolContext> for UserExecuteCode {
             .service
             .execute(
                 &request.user_id,
+                context.agent,
                 ExecuteRequest {
                     source: self.source.clone(),
                     timeout_ms: self.timeout_ms,

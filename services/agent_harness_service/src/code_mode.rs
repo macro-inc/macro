@@ -45,8 +45,10 @@ impl ExecutionCredentials for RunCredentials {
     }
 }
 
-/// Credentials for public MCP runs: the signed-in user, with no session or agent.
-/// The MCP client asks the user before each tool call, so there is no owner gate.
+/// Credentials for public MCP runs: the signed-in user, with no session, and the
+/// agent their credential was signed for when a self-hosted agent's call came
+/// through egress. The MCP client asks the user before each tool call, so there
+/// is no owner gate.
 pub struct UserRunCredentials {
     pub signer: MacroApiTokenSigner,
     pub hosts: BTreeMap<String, String>,
@@ -54,12 +56,20 @@ pub struct UserRunCredentials {
 
 #[async_trait]
 impl UserExecutionCredentials for UserRunCredentials {
-    async fn issue(&self, user: &MacroUserIdStr<'static>) -> Result<RunEnvironment, CodeModeError> {
+    async fn issue(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        agent: Option<bot_id::BotId>,
+    ) -> Result<RunEnvironment, CodeModeError> {
         // Same lifetime as session runs: the 30-second deadline plus clock margin.
-        let token = self.signer.mint_for(user, 60).await.map_err(|error| {
-            tracing::error!(?error, "could not mint execution credential");
-            CodeModeError::Unavailable
-        })?;
+        let token = self
+            .signer
+            .mint_for_agent(user, 60, agent.map(bot_id::BotId::as_uuid))
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "could not mint execution credential");
+                CodeModeError::Unavailable
+            })?;
         Ok(RunEnvironment {
             token,
             trace_headers: trace_headers(),

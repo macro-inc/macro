@@ -55,6 +55,13 @@ impl ActsAsAgent for ai_tools::ToolServiceContext {
     }
 }
 
+impl ActsAsAgent for UserCodeModeToolContext {
+    fn acting_as(mut self, agent: BotId) -> Self {
+        self.agent = Some(agent);
+        self
+    }
+}
+
 impl ActsAsAgent for () {
     fn acting_as(self, _agent: BotId) -> Self {}
 }
@@ -154,23 +161,21 @@ impl<Context> AuthenticatedToolService<Context> {
     }
 }
 
-impl<Context> AuthenticatedToolService<Context>
-where
-    Context: Clone + ActsAsAgent,
-{
-    /// The context a tool call runs in: as the agent its token was signed
-    /// for, when it was. A self-hosted agent's calls arrive through egress
-    /// with the session's bound agent signed in; OAuth clients and pasted
-    /// API keys carry none and keep the default Macro bot. Nothing the
-    /// request says for itself (headers, arguments) can name a bot.
-    fn call_context(&self, extensions: &rmcp::model::Extensions) -> Context {
-        let agent = extensions
-            .get::<http::request::Parts>()
-            .and_then(|parts| parts.extensions.get::<SignedAgent>());
-        match agent {
-            Some(SignedAgent(agent)) => self.context.clone().acting_as(*agent),
-            None => self.context.clone(),
-        }
+/// The context a tool call runs in: as the agent its token was signed for,
+/// when it was. A self-hosted agent's calls arrive through egress with the
+/// session's bound agent signed in; OAuth clients and pasted API keys carry
+/// none and keep the default Macro bot. Nothing the request says for itself
+/// (headers, arguments) can name a bot.
+fn call_context<Context: Clone + ActsAsAgent>(
+    context: &Context,
+    extensions: &rmcp::model::Extensions,
+) -> Context {
+    let agent = extensions
+        .get::<http::request::Parts>()
+        .and_then(|parts| parts.extensions.get::<SignedAgent>());
+    match agent {
+        Some(SignedAgent(agent)) => context.clone().acting_as(*agent),
+        None => context.clone(),
     }
 }
 
@@ -322,7 +327,7 @@ where
             let result = match code_mode
                 .tools
                 .try_tool_call(
-                    code_mode.context.clone(),
+                    call_context(&code_mode.context, &context.extensions),
                     request_context,
                     &request.name,
                     &arguments,
@@ -355,7 +360,7 @@ where
         let result = match self
             .toolset
             .try_tool_call(
-                self.call_context(&context.extensions),
+                call_context(&self.context, &context.extensions),
                 request_context,
                 &request.name,
                 &arguments,

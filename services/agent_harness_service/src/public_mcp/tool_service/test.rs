@@ -230,16 +230,6 @@ impl ActsAsAgent for WritesAs {
     }
 }
 
-fn writing_service() -> AuthenticatedToolService<WritesAs> {
-    AuthenticatedToolService::new(
-        Arc::new(AsyncToolCollection::new()),
-        WritesAs(bot_id::MACRO_AI_BOT_ID),
-        "https://macro.com".to_owned(),
-        url::Url::parse("https://static-file-service.macro.com").unwrap(),
-        McpAnalytics::disabled(),
-    )
-}
-
 fn call_extensions(agent: Option<BotId>, headers: &[(&str, &str)]) -> rmcp::model::Extensions {
     let mut request = http::Request::new(());
     for (name, value) in headers {
@@ -264,14 +254,18 @@ fn call_extensions(agent: Option<BotId>, headers: &[(&str, &str)]) -> rmcp::mode
 /// agent egress signed into their session's token.
 #[test]
 fn a_call_signed_for_an_agent_writes_as_that_agent() {
-    let service = writing_service();
-
     assert_eq!(
-        service.call_context(&call_extensions(Some(BotId::TEST_A), &[])),
+        call_context(
+            &WritesAs(bot_id::MACRO_AI_BOT_ID),
+            &call_extensions(Some(BotId::TEST_A), &[])
+        ),
         WritesAs(BotId::TEST_A)
     );
     assert_eq!(
-        service.call_context(&call_extensions(Some(BotId::TEST_B), &[])),
+        call_context(
+            &WritesAs(bot_id::MACRO_AI_BOT_ID),
+            &call_extensions(Some(BotId::TEST_B), &[])
+        ),
         WritesAs(BotId::TEST_B)
     );
 }
@@ -280,14 +274,16 @@ fn a_call_signed_for_an_agent_writes_as_that_agent() {
 /// default bot; a bot the request names for itself is ignored.
 #[test]
 fn an_unsigned_call_cannot_pick_a_bot() {
-    let service = writing_service();
     let forged = BotId::TEST_A.to_string();
 
     assert_eq!(
-        service.call_context(&call_extensions(
-            None,
-            &[("x-macro-agent-id", &forged), ("x-macro-bot-id", &forged)],
-        )),
+        call_context(
+            &WritesAs(bot_id::MACRO_AI_BOT_ID),
+            &call_extensions(
+                None,
+                &[("x-macro-agent-id", &forged), ("x-macro-bot-id", &forged)],
+            )
+        ),
         WritesAs(bot_id::MACRO_AI_BOT_ID)
     );
 }
@@ -329,17 +325,19 @@ mod code_mode {
         }
     }
 
-    /// Records who ran what and returns the source length as data.
+    /// Records who ran what, as which agent, and returns the source length as data.
     #[derive(Default)]
-    struct Runs(Mutex<Vec<(String, String)>>);
+    struct Runs(Mutex<Vec<(String, String)>>, Mutex<Vec<Option<BotId>>>);
     #[async_trait::async_trait]
     impl UserCodeMode for Runs {
         async fn execute(
             &self,
             user: &MacroUserIdStr<'static>,
+            agent: Option<BotId>,
             request: ExecuteRequest,
             _: CancellationToken,
         ) -> Result<UserExecutionReceipt, CodeModeError> {
+            self.1.lock().unwrap().push(agent);
             self.0
                 .lock()
                 .unwrap()
@@ -361,6 +359,7 @@ mod code_mode {
             context: agent_code_mode::inbound::toolset::UserCodeModeToolContext {
                 service: runs,
                 cognition: None,
+                agent: None,
             },
             selector: Arc::new(Flag),
         });
@@ -373,7 +372,8 @@ mod code_mode {
             Arc::new(LocalSessionManager::default()),
             config,
         );
-        // Stands in for the OAuth bearer middleware, which inserts the user id.
+        // Stands in for the bearer middleware, which inserts the user id and,
+        // for a token signed for an agent, the signed agent.
         axum::Router::new()
             .nest_service("/mcp", service)
             .layer(axum::middleware::from_fn(
@@ -382,6 +382,10 @@ mod code_mode {
                     request
                         .extensions_mut()
                         .insert(MacroUserIdStr::try_from_email(&user).unwrap());
+                    if let Some(agent) = request.headers().get("x-test-signed-agent") {
+                        let agent = BotId::new_from_uuid(agent.to_str().unwrap().parse().unwrap());
+                        request.extensions_mut().insert(SignedAgent(agent));
+                    }
                     next.run(request).await
                 },
             ))
@@ -393,9 +397,24 @@ mod code_mode {
         method: &str,
         params: serde_json::Value,
     ) -> serde_json::Value {
+        rpc_signed(app, user, None, method, params).await
+    }
+
+    /// An RPC whose bearer token was signed for `agent`.
+    async fn rpc_signed(
+        app: axum::Router,
+        user: &str,
+        agent: Option<BotId>,
+        method: &str,
+        params: serde_json::Value,
+    ) -> serde_json::Value {
+        let mut request = Request::builder();
+        if let Some(agent) = agent {
+            request = request.header("x-test-signed-agent", agent.to_string());
+        }
         let response = app
             .oneshot(
-                Request::builder()
+                request
                     .method("POST")
                     .uri("/mcp")
                     .header("host", "localhost")
@@ -489,6 +508,30 @@ mod code_mode {
         );
     }
 
+    /// A self-hosted agent's `ExecuteCode` mints its SDK credential for the
+    /// agent its token was signed for; a user's own client runs unsigned.
+    #[tokio::test]
+    async fn execute_code_runs_as_the_signed_agent() {
+        let runs = Arc::new(Runs::default());
+        let app = app(runs.clone());
+        let call = serde_json::json!({
+            "name": "ExecuteCode",
+            "arguments": {"source": "export async function main() { return {data: 1}; }"},
+        });
+
+        rpc_signed(
+            app.clone(),
+            FLAGGED,
+            Some(BotId::TEST_A),
+            "tools/call",
+            call.clone(),
+        )
+        .await;
+        rpc_signed(app, FLAGGED, None, "tools/call", call).await;
+
+        assert_eq!(*runs.1.lock().unwrap(), [Some(BotId::TEST_A), None]);
+    }
+
     #[test]
     fn code_mode_tools_meet_directory_requirements() {
         for (name, tool) in agent_code_mode::inbound::toolset::user_toolset()
@@ -508,6 +551,7 @@ mod code_mode {
         async fn issue(
             &self,
             _: &MacroUserIdStr<'static>,
+            _: Option<BotId>,
         ) -> Result<code_execution::domain::RunEnvironment, CodeModeError> {
             Ok(code_execution::domain::RunEnvironment::default())
         }

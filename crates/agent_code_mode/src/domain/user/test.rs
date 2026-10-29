@@ -4,11 +4,15 @@ use serde_json::json;
 use std::sync::Mutex;
 
 #[derive(Default)]
-struct Credentials(Mutex<Vec<String>>);
+struct Credentials(Mutex<Vec<(String, Option<BotId>)>>);
 #[async_trait]
 impl UserExecutionCredentials for Credentials {
-    async fn issue(&self, user: &MacroUserIdStr<'static>) -> Result<RunEnvironment, CodeModeError> {
-        self.0.lock().unwrap().push(user.to_string());
+    async fn issue(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        agent: Option<BotId>,
+    ) -> Result<RunEnvironment, CodeModeError> {
+        self.0.lock().unwrap().push((user.to_string(), agent));
         Ok(RunEnvironment {
             token: "run-only-secret".into(),
             ..Default::default()
@@ -68,8 +72,9 @@ async fn runs_as_the_authenticated_user_and_returns_data_with_activity() {
     let service =
         UserCodeModeService::new(Arc::new(Returns(json!({"data": 42}))), credentials.clone());
 
+    let agent = BotId::new_from_uuid(macro_uuid::Uuid::from_u128(0xA1));
     let receipt = service
-        .execute(&user(), request(), CancellationToken::new())
+        .execute(&user(), Some(agent), request(), CancellationToken::new())
         .await
         .unwrap();
 
@@ -84,7 +89,7 @@ async fn runs_as_the_authenticated_user_and_returns_data_with_activity() {
     );
     assert_eq!(
         *credentials.0.lock().unwrap(),
-        ["macro|fixture@example.com"]
+        [("macro|fixture@example.com".to_owned(), Some(agent))]
     );
 }
 
@@ -98,7 +103,7 @@ async fn review_references_fail_outside_a_session() {
     );
 
     let receipt = service
-        .execute(&user(), request(), CancellationToken::new())
+        .execute(&user(), None, request(), CancellationToken::new())
         .await
         .unwrap();
 
@@ -124,7 +129,7 @@ async fn invalid_requests_are_rejected_before_minting_a_credential() {
     ] {
         assert!(matches!(
             service
-                .execute(&user(), request, CancellationToken::new())
+                .execute(&user(), None, request, CancellationToken::new())
                 .await,
             Err(CodeModeError::Invalid(_))
         ));
@@ -140,7 +145,7 @@ async fn an_empty_reviews_list_is_dropped() {
     );
 
     let receipt = service
-        .execute(&user(), request(), CancellationToken::new())
+        .execute(&user(), None, request(), CancellationToken::new())
         .await
         .unwrap();
 
