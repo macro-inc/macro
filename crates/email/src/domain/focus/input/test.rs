@@ -11,7 +11,7 @@ fn message(body: &str, is_sent: bool) -> FocusMessage {
         is_sent,
         from_email: Some("ava@example.com".to_owned()),
         from_name: Some("Ava".to_owned()),
-        to: vec!["owner@acme.com".to_owned()],
+        to: vec!["owner@acme.example".to_owned()],
         cc: Vec::new(),
         subject: Some("Contract".to_owned()),
         has_attachments: false,
@@ -25,8 +25,9 @@ fn thread(messages: Vec<FocusMessage>) -> FocusThread {
     FocusThread {
         thread_id: Uuid::new_v4(),
         link_id: Uuid::new_v4(),
-        owner: macro_user_id::user_id::MacroUserIdStr::try_from_email("owner@acme.com").unwrap(),
-        owner_email: "owner@acme.com".to_owned(),
+        owner: macro_user_id::user_id::MacroUserIdStr::try_from_email("owner@acme.example")
+            .unwrap(),
+        owner_email: "owner@acme.example".to_owned(),
         is_signal: true,
         inbox_visible: true,
         classified_message_id: None,
@@ -77,7 +78,7 @@ fn shows_the_last_three_messages_with_the_profile() {
     let input = jev_input(&thread, Some("Owner leads engineering at Acme."));
     assert_eq!(
         input["recipient"],
-        "The recipient's address is owner@acme.com.\n\nOwner leads engineering at Acme."
+        "The recipient's address is owner@acme.example.\n\nOwner leads engineering at Acme."
     );
     assert_eq!(input["thread"]["message_count"], 4);
     assert_eq!(input["thread"]["earlier_messages_omitted"], 1);
@@ -116,18 +117,18 @@ fn no_profile_means_address_only() {
     let thread = thread(vec![message("hello there", false)]);
     assert_eq!(
         jev_input(&thread, Some("   "))["recipient"],
-        "The recipient's address is owner@acme.com."
+        "The recipient's address is owner@acme.example."
     );
 }
 
 #[test]
 fn long_recipient_lists_are_cut() {
     let mut list = message("Quarterly all-hands notes", false);
-    list.to = (0..30).map(|n| format!("person{n}@acme.com")).collect();
-    list.cc = vec!["cc@acme.com".to_owned()];
+    list.to = (0..30).map(|n| format!("person{n}@acme.example")).collect();
+    list.cc = vec!["cc@acme.example".to_owned()];
     let shown = &jev_input(&thread(vec![list]), None)["thread"]["messages"][0];
     assert_eq!(shown["to"].as_array().unwrap().len(), SHOWN_RECIPIENTS);
-    assert_eq!(shown["cc"], json!(["cc@acme.com"]));
+    assert_eq!(shown["cc"], json!(["cc@acme.example"]));
     assert_eq!(shown["other_recipients"], 10);
 
     let short = &jev_input(&thread(vec![message("hi", false)]), None)["thread"]["messages"][0];

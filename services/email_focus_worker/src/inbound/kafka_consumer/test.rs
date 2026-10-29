@@ -7,7 +7,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use super::*;
 
 fn owner() -> MacroUserIdStr<'static> {
-    MacroUserIdStr::try_from_email("owner@acme.com").unwrap()
+    MacroUserIdStr::try_from_email("owner@acme.example").unwrap()
 }
 
 fn received(thread_id: Uuid, is_spam_or_trash: bool) -> EmailTopicEvent {

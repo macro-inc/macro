@@ -48,7 +48,7 @@ impl EmailFocusReader for FakeReader {
 }
 
 fn user() -> MacroUserIdStr<'static> {
-    MacroUserIdStr::try_from_email("viewer@acme.com").unwrap()
+    MacroUserIdStr::try_from_email("viewer@acme.example").unwrap()
 }
 
 fn focus(importance: u8) -> ThreadFocus {
@@ -131,13 +131,13 @@ async fn focus_edge_maps_stored_classifications() {
     assert!(
         calls
             .iter()
-            .any(|(who, ids)| who == "macro|viewer@acme.com" && ids.len() == 2)
+            .any(|(who, ids)| who == "macro|viewer@acme.example" && ids.len() == 2)
     );
     // The list is read for the viewer over the requested window.
     assert!(
         calls
             .iter()
-            .any(|(who, _)| who == "macro|viewer@acme.com:30")
+            .any(|(who, _)| who == "macro|viewer@acme.example:30")
     );
 }
 

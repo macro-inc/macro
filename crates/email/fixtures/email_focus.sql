@@ -1,26 +1,26 @@
 -- Fixture for the Focus repository (email crate, outbound/focus_pg).
 --
--- Link f01 is owner@acme.com; link f02 is other@elsewhere.com.
+-- Link f01 is owner@acme.example; link f02 is other@elsewhere.example.
 -- Thread f201: signal, in inbox. Casey wrote, the owner replied, Casey wrote
 --   again, and a later message from Casey is in the trash.
 -- Thread f202: signal but archived.
 -- Thread f203: in inbox but not signal.
--- Thread f204: signal bulk mail (List-Unsubscribe) from seller@leads.io.
--- Thread f205: the owner's own "No thanks" to seller@leads.io.
+-- Thread f204: signal bulk mail (List-Unsubscribe) from seller@leads.example.
+-- Thread f205: the owner's own "No thanks" to seller@leads.example.
 -- Thread f206: signal, in inbox, but its mail is 60 days old.
 -- Thread f207: signal, in inbox, on the other link.
 
 INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at)
-VALUES ('00000000-0000-0000-0000-000000000f01', 'macro|owner@acme.com', '00000000-0000-0000-0000-000000000f01',
-        'Owner@Acme.com', 'GMAIL', true, NOW(), NOW()),
-       ('00000000-0000-0000-0000-000000000f02', 'macro|other@elsewhere.com', '00000000-0000-0000-0000-000000000f02',
-        'other@elsewhere.com', 'GMAIL', true, NOW(), NOW());
+VALUES ('00000000-0000-0000-0000-000000000f01', 'macro|owner@acme.example', '00000000-0000-0000-0000-000000000f01',
+        'Owner@Acme.example', 'GMAIL', true, NOW(), NOW()),
+       ('00000000-0000-0000-0000-000000000f02', 'macro|other@elsewhere.example', '00000000-0000-0000-0000-000000000f02',
+        'other@elsewhere.example', 'GMAIL', true, NOW(), NOW());
 
 INSERT INTO email_contacts (id, link_id, email_address, name, created_at, updated_at)
-VALUES ('00000000-0000-0000-0000-0000000cf001', '00000000-0000-0000-0000-000000000f01', 'Casey@Customer.com', 'Casey', NOW(), NOW()),
-       ('00000000-0000-0000-0000-0000000cf002', '00000000-0000-0000-0000-000000000f01', 'owner@acme.com', 'Owner', NOW(), NOW()),
-       ('00000000-0000-0000-0000-0000000cf003', '00000000-0000-0000-0000-000000000f01', 'jacob@acme.com', 'Jacob', NOW(), NOW()),
-       ('00000000-0000-0000-0000-0000000cf004', '00000000-0000-0000-0000-000000000f01', 'seller@leads.io', NULL, NOW(), NOW()),
+VALUES ('00000000-0000-0000-0000-0000000cf001', '00000000-0000-0000-0000-000000000f01', 'Casey@Customer.example', 'Casey', NOW(), NOW()),
+       ('00000000-0000-0000-0000-0000000cf002', '00000000-0000-0000-0000-000000000f01', 'owner@acme.example', 'Owner', NOW(), NOW()),
+       ('00000000-0000-0000-0000-0000000cf003', '00000000-0000-0000-0000-000000000f01', 'jacob@acme.example', 'Jacob', NOW(), NOW()),
+       ('00000000-0000-0000-0000-0000000cf004', '00000000-0000-0000-0000-000000000f01', 'seller@leads.example', NULL, NOW(), NOW()),
        ('00000000-0000-0000-0000-0000000cf005', '00000000-0000-0000-0000-000000000f02', 'friend@example.com', NULL, NOW(), NOW());
 
 INSERT INTO email_labels (id, link_id, provider_label_id, name, created_at)
@@ -64,7 +64,7 @@ VALUES ('00000000-0000-0000-0000-00000000f501', '00000000-0000-0000-0000-0000000
        ('00000000-0000-0000-0000-00000000f505', '00000000-0000-0000-0000-00000000f204', '00000000-0000-0000-0000-000000000f01',
         'p-f505', 'g-f505', false, '00000000-0000-0000-0000-0000000cf004', 'Sam Seller',
         NOW() - INTERVAL '3 days', 'Quick question', 'Worth a chat?',
-        '[{"name": "List-Unsubscribe", "value": "<mailto:u@leads.io>"}]'::jsonb,
+        '[{"name": "List-Unsubscribe", "value": "<mailto:u@leads.example>"}]'::jsonb,
         false, false, false, false, NOW(), NOW()),
        ('00000000-0000-0000-0000-00000000f506', '00000000-0000-0000-0000-00000000f205', '00000000-0000-0000-0000-000000000f01',
         'p-f506', 'g-f506', true, '00000000-0000-0000-0000-0000000cf002', 'Owner',

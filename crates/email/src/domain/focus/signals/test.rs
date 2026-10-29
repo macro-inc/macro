@@ -26,8 +26,8 @@ fn thread(messages: Vec<FocusMessage>, sent_notes: Vec<SentNote>) -> FocusThread
     FocusThread {
         thread_id: Uuid::new_v4(),
         link_id: Uuid::new_v4(),
-        owner: MacroUserIdStr::try_from_email("owner@acme.com").unwrap(),
-        owner_email: "owner@acme.com".to_owned(),
+        owner: MacroUserIdStr::try_from_email("owner@acme.example").unwrap(),
+        owner_email: "owner@acme.example".to_owned(),
         is_signal: true,
         inbox_visible: true,
         classified_message_id: None,
@@ -47,7 +47,7 @@ fn note(recipient: &str, body: &str) -> SentNote {
 fn a_stranger_is_not_a_contact() {
     let signals = signals(&thread(
         vec![message(
-            "seller@leads.io",
+            "seller@leads.example",
             0,
             false,
             "Quick question for you",
@@ -60,8 +60,8 @@ fn a_stranger_is_not_a_contact() {
 #[test]
 fn someone_the_owner_wrote_to_is_a_contact() {
     let signals = signals(&thread(
-        vec![message("Eva@Vendor.com", 0, false, "Your invoice")],
-        vec![note("eva@vendor.com", "Yes, please send it over!")],
+        vec![message("Eva@Vendor.example", 0, false, "Your invoice")],
+        vec![note("eva@vendor.example", "Yes, please send it over!")],
     ));
     assert!(signals.contact);
     assert!(!signals.replied);
@@ -71,10 +71,10 @@ fn someone_the_owner_wrote_to_is_a_contact() {
 fn a_brushed_off_sender_is_not_a_contact() {
     let signals = signals(&thread(
         vec![
-            message("seller@leads.io", 0, false, "Following up"),
-            message("owner@acme.com", 5, true, "I'm not interested"),
+            message("seller@leads.example", 0, false, "Following up"),
+            message("owner@acme.example", 5, true, "I'm not interested"),
         ],
-        vec![note("seller@leads.io", "No thanks")],
+        vec![note("seller@leads.example", "No thanks")],
     ));
     assert!(signals.replied);
     assert!(!signals.contact);
@@ -85,14 +85,14 @@ fn a_brushed_off_sender_is_not_a_contact() {
 fn a_real_reply_makes_a_contact() {
     let signals = signals(&thread(
         vec![
-            message("kaio@liftaris.dev", 0, false, "Application"),
+            message("kaio@applicant.example", 0, false, "Application"),
             message(
-                "owner@acme.com",
+                "owner@acme.example",
                 5,
                 true,
                 "Let's chat, are you free tomorrow?",
             ),
-            message("kaio@liftaris.dev", 10, false, "Yes!"),
+            message("kaio@applicant.example", 10, false, "Yes!"),
         ],
         Vec::new(),
     ));
@@ -104,20 +104,25 @@ fn a_real_reply_makes_a_contact() {
 #[test]
 fn teammates_count_unless_it_is_bulk_mail() {
     let teammate = signals(&thread(
-        vec![message("jacob@acme.com", 0, false, "CRM plan")],
+        vec![message("jacob@acme.example", 0, false, "CRM plan")],
         Vec::new(),
     ));
     assert!(teammate.teammate);
     assert!(teammate.contact);
 
-    let mut bulk = message("jacob@acme.com", 0, false, "Weekly digest");
+    let mut bulk = message("jacob@acme.example", 0, false, "Weekly digest");
     bulk.bulk = true;
     let bulk = signals(&thread(vec![bulk], Vec::new()));
     assert!(bulk.teammate);
     assert!(!bulk.contact);
 
     let automated = signals(&thread(
-        vec![message("notifications@acme.com", 0, false, "Build failed")],
+        vec![message(
+            "notifications@acme.example",
+            0,
+            false,
+            "Build failed",
+        )],
         Vec::new(),
     ));
     assert!(!automated.contact);
@@ -125,17 +130,18 @@ fn teammates_count_unless_it_is_bulk_mail() {
 
 #[test]
 fn freemail_owners_have_no_teammates() {
+    let freemail = FREEMAIL_DOMAINS[0];
     let mut thread = thread(
-        vec![message("friend@gmail.com", 0, false, "Dinner?")],
+        vec![message(&format!("friend@{freemail}"), 0, false, "Dinner?")],
         Vec::new(),
     );
-    thread.owner_email = "owner@gmail.com".to_owned();
+    thread.owner_email = format!("owner@{freemail}");
     assert!(!signals(&thread).teammate);
 }
 
 #[test]
 fn calendar_subject_comes_from_the_first_message() {
-    let mut invite = message("jacob@acme.com", 0, false, "");
+    let mut invite = message("jacob@acme.example", 0, false, "");
     invite.subject = Some("Invitation: Standup @ Mon".to_owned());
     assert!(signals(&thread(vec![invite], Vec::new())).calendar_subject);
 }

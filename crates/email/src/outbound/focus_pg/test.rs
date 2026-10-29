@@ -26,7 +26,7 @@ async fn load_thread(
 }
 
 fn owner() -> MacroUserIdStr<'static> {
-    MacroUserIdStr::try_from_email("owner@acme.com").unwrap()
+    MacroUserIdStr::try_from_email("owner@acme.example").unwrap()
 }
 
 fn record(thread_id: Uuid, message_id: Uuid, at: DateTime<Utc>, importance: u8) -> FocusRecord {
@@ -57,7 +57,7 @@ async fn reads_a_thread_with_its_relationship(pool: Pool<Postgres>) -> Result<()
     let thread = load_thread(&repo, INVOICE).await?.expect("thread exists");
 
     assert_eq!(thread.owner, owner());
-    assert_eq!(thread.owner_email, "owner@acme.com");
+    assert_eq!(thread.owner_email, "owner@acme.example");
     assert!(thread.is_signal && thread.inbox_visible);
     assert_eq!(thread.classified_message_id, None);
     // Oldest first; the trashed follow-up is left out.
@@ -66,17 +66,17 @@ async fn reads_a_thread_with_its_relationship(pool: Pool<Postgres>) -> Result<()
     assert_eq!(ids.last(), Some(&LATEST_MESSAGE));
     assert_eq!(ids.len(), 3);
     let first = &thread.messages[0];
-    assert_eq!(first.from_email.as_deref(), Some("Casey@Customer.com"));
+    assert_eq!(first.from_email.as_deref(), Some("Casey@Customer.example"));
     assert_eq!(first.from_name.as_deref(), Some("Casey"));
-    assert_eq!(first.to, vec!["owner@acme.com"]);
-    assert_eq!(first.cc, vec!["jacob@acme.com"]);
+    assert_eq!(first.to, vec!["owner@acme.example"]);
+    assert_eq!(first.cc, vec!["jacob@acme.example"]);
     assert!(first.has_attachments && !first.bulk);
     assert_eq!(thread.messages[2].from_name.as_deref(), Some("Casey C."));
     assert!(thread.messages[1].is_sent);
     assert_eq!(
         thread.sent_notes,
         vec![SentNote {
-            recipient: "casey@customer.com".to_owned(),
+            recipient: "casey@customer.example".to_owned(),
             body: Some("Thanks, I will take a look today.".to_owned()),
         }]
     );
@@ -95,7 +95,7 @@ async fn marks_bulk_mail_and_finds_brush_offs(pool: Pool<Postgres>) -> Result<()
     assert_eq!(
         thread.sent_notes,
         vec![SentNote {
-            recipient: "seller@leads.io".to_owned(),
+            recipient: "seller@leads.example".to_owned(),
             body: Some("No thanks".to_owned()),
         }]
     );
@@ -111,7 +111,7 @@ async fn stale_threads_cover_enabled_inbox_signal_mail_in_the_window(
 ) -> Result<(), Report> {
     let repo = FocusPgRepository(pool);
     let since = Utc::now() - Duration::days(30);
-    let enabled = vec!["acme.com".to_owned()];
+    let enabled = vec!["acme.example".to_owned()];
     let stale = async |limit| -> Result<Vec<Uuid>, Report> {
         Ok(repo
             .stale_threads(since, &enabled, limit)
@@ -236,7 +236,7 @@ async fn focus_list_is_the_owners_inbox_by_priority(pool: Pool<Postgres>) -> Res
     );
 
     // The other inbox's owner sees only their own thread.
-    let stranger = MacroUserIdStr::try_from_email("other@elsewhere.com").unwrap();
+    let stranger = MacroUserIdStr::try_from_email("other@elsewhere.example").unwrap();
     assert_eq!(
         repo.focus_thread_ids(&stranger, since, 10).await?,
         vec![OTHER_THREAD]
