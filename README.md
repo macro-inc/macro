@@ -146,7 +146,9 @@ Agents can edit documents that are open or closed. One interesting use case for 
 
 # Databases
 
-[Placeholder]
+Macro is designed to fit the exact needs of your team. Our databases let you build your own tables for things like recruiting, customer requests, or a content calendar, with custom columns, relationships, and saved table or board views. Databases bidirectionally link to people, tasks, and files, keeping your records connected to the work they describe.
+
+You can ask agents to create tables, update records, and answer questions about your data. You can also embed a database view or query result in a document and it'll stay up to date as the underlying data changes.
 
 <br />
 
