@@ -93,7 +93,9 @@ Workspace activity uses the shared single-row desktop header with New and an
 expandable Search control; record-detail tabs retain their section toolbar.
 Company and contact headers keep desktop section tabs; touch uses a labeled
 header island that opens the shared bottom drawer with the current section
-checked. Keep the workspace's mobile view strip separate. Copy-link islands
+checked. A collapsed host keeps the section icon and accessible label; embedded
+phone headers put the switcher below the breadcrumb and action row. Keep the
+workspace's mobile view strip separate. Copy-link islands
 are square on touch, with a 24px glyph and the standard 40px icon control.
 
 Activity rows render stored Companies and Contacts reference properties as inline

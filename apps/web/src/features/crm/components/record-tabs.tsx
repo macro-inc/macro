@@ -81,7 +81,9 @@ export function RecordTabs<S extends CrmRecordSection>(props: {
             })}
           >
             <Dynamic component={icon(props.value)} class="size-5 shrink-0" />
-            <span class="truncate">{label(props.value)}</span>
+            <Show when={!props.compact}>
+              <span class="truncate">{label(props.value)}</span>
+            </Show>
             <CaretDownIcon
               class="size-4 shrink-0 transition-transform"
               classList={{ 'rotate-180': open() }}

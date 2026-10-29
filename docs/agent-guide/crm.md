@@ -190,12 +190,17 @@ Forward restore the trail; a reloaded or shared record URL shows only `<list> >
 Company and contact headers group `Copy link` separately from the side-panel toggle.
 Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.
 On phones and tablets, the current section appears as a labeled header island
-with a caret. Tap it to open the shared bottom drawer: every available section
+with a caret. When the host collapses it, the section icon and caret keep its
+accessible label. Embedded phone headers put the switcher below the breadcrumb
+and actions so the record name and navigation retain space. Tap the switcher to
+open the shared bottom drawer: every available section
 has an icon and label, with a check beside the current section. Choosing a section
 closes the drawer and updates the header label; Escape, backdrop tap, and drag
 also dismiss it. Focus returns to the section trigger. Databases remains gated
 by its feature flag, and contacts do not show Team. The workspace's scrollable
-mobile view strip is unchanged. Copy-link islands are 40px square on touch with
+mobile view strip is unchanged. A direct Databases section link retains its
+title with the unavailable-state message when the flag is off, without database
+queries or creation actions. Copy-link islands are 40px square on touch with
 a 24px icon. Verify both record types, section changes, dismissal, copy feedback,
 and header fit at phone and tablet widths.
 Their information panel starts closed and opens as a floating bubble at every
