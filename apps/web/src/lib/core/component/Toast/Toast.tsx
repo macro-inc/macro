@@ -1,8 +1,10 @@
 import './toast.css';
+import { t } from '@app/lib/i18n';
 import { isMobile } from '@core/mobile/isMobile';
-import CheckIcon from '@icon/system/regular/check.svg';
+import CheckIcon from '@icon/system/bold/check-bold.svg';
 import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg';
 import Spinner from '@icon/system/regular/spinner.svg';
+import WarningIcon from '@icon/system/regular/warning.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Toast, toaster } from '@kobalte/core/toast';
 import { Button, cn } from '@ui';
@@ -17,11 +19,26 @@ export enum ToastType {
   LOADING = 'loading',
 }
 
-const TOAST_STYLES = {
-  [ToastType.SUCCESS]: { icon: CheckIcon, color: 'var(--color-success)' },
-  [ToastType.FAILURE]: { icon: ExclamationIcon, color: 'var(--color-failure)' },
-  [ToastType.ALERT]: { icon: ExclamationIcon, color: 'var(--color-alert)' },
-  [ToastType.LOADING]: { icon: Spinner, color: 'var(--color-ink-muted)' },
+const TOAST_STYLES: Record<
+  ToastType,
+  { icon: Component<{ class?: string }>; iconClass: string }
+> = {
+  [ToastType.SUCCESS]: {
+    icon: CheckIcon,
+    iconClass:
+      'rounded-full bg-success-bg text-success dark-mode:bg-success dark-mode:text-surface',
+  },
+  [ToastType.FAILURE]: {
+    icon: ExclamationIcon,
+    iconClass:
+      'rounded-full bg-failure-bg text-failure dark-mode:bg-failure dark-mode:text-surface',
+  },
+  [ToastType.ALERT]: {
+    icon: WarningIcon,
+    iconClass:
+      'rounded-full bg-warning-bg text-warning dark-mode:bg-warning dark-mode:text-surface',
+  },
+  [ToastType.LOADING]: { icon: Spinner, iconClass: 'text-accent' },
 };
 
 /** A single entry in the actions row — icon and label rendered as a button */
@@ -40,6 +57,8 @@ interface ToastOptions {
   duration?: number;
   /** When true, don't render this toast on mobile. */
   hideOnMobile?: boolean;
+  /** Hide only the visible close control; Escape, swipe, and expiry stay unchanged. */
+  showCloseButton?: boolean;
 }
 
 interface ToastActionOptions extends ToastOptions {
@@ -191,18 +210,26 @@ function ActionButtons(props: { actions: ToastAction[] }) {
   return (
     <For each={props.actions}>
       {(action) => (
-        <Button size="sm" onClick={action.onClick} variant="ghost">
+        <Button
+          size="sm"
+          onClick={action.onClick}
+          variant="secondary"
+          class="max-w-full"
+        >
           <Show when={action.icon}>
-            {(icon) => <Dynamic component={icon()} class="size-3.5" />}
+            {(icon) => <Dynamic component={icon()} class="size-3.5 shrink-0" />}
           </Show>
-          {action.label}
+          <span class="min-w-0 whitespace-normal break-words">
+            {action.label}
+          </span>
         </Button>
       )}
     </For>
   );
 }
 
-function ToastContent(props: {
+/** Shared presentation for the app service and isolated gallery regions. */
+export function ToastContent(props: {
   toastId: number;
   toastType?: ToastType;
   message?: string;
@@ -212,18 +239,22 @@ function ToastContent(props: {
   duration?: number;
   embed?: Component;
   custom?: CustomToastConfig;
+  showCloseButton?: boolean;
   onDismiss?: () => void;
   onUserDismiss?: () => void;
 }) {
-  const style = () =>
+  const styles = () =>
     props.toastType ? TOAST_STYLES[props.toastType] : undefined;
-  const icon = () => props.custom?.icon ?? style()?.icon;
-  const actions = () => props.custom?.actions ?? props.actions;
+  const icon = () => props.custom?.icon ?? styles()?.icon;
+  const actions = () => props.custom?.actions ?? props.actions ?? [];
+  const hasBody = () => Boolean(props.custom?.content || props.subtext);
+  const singleRow = () => !props.embed && !hasBody() && actions().length <= 1;
+  const showCloseButton = () => props.showCloseButton !== false;
+  const loading = () => !props.custom && props.toastType === ToastType.LOADING;
   const [height, setHeight] = createSignal<number>();
   let surface!: HTMLDivElement;
 
-  // The content keeps its natural height even when an older card is tucked
-  // into the stack. This makes expansion work with async/custom content too.
+  // Keep the natural height while older cards are tucked into the stack.
   onMount(() => {
     const measure = () => setHeight(surface.offsetHeight);
     measure();
@@ -238,6 +269,8 @@ function ToastContent(props: {
       toastId={props.toastId}
       data-macro-toast
       data-toast-id={props.toastId}
+      data-mobile={isMobile() ? '' : undefined}
+      data-single-row={singleRow() ? '' : undefined}
       class="macro-toast"
       style={{ '--toast-height': height() ? `${height()}px` : undefined }}
       persistent={props.persistent}
@@ -247,66 +280,96 @@ function ToastContent(props: {
         if (!event.defaultPrevented) props.onUserDismiss?.();
       }}
     >
-      <div ref={surface} class="macro-toast-surface">
-        <div class="macro-toast-content flex items-center gap-2.5">
+      <div ref={surface} class="macro-toast-surface menu-surface">
+        <div
+          class={cn('macro-toast-content min-w-0', showCloseButton() && 'pr-8')}
+        >
           <Show
             when={props.embed}
             fallback={
-              <>
+              <div
+                class={cn(
+                  'flex min-w-0 gap-2',
+                  singleRow() ? 'items-center' : 'items-start'
+                )}
+              >
                 <Show when={icon()}>
                   {(Icon) => (
-                    <div
-                      class="flex size-5 shrink-0 items-center justify-center"
-                      style={{ color: props.custom?.color ?? style()?.color }}
+                    <span
+                      aria-hidden="true"
+                      class={cn(
+                        'flex size-5 shrink-0 items-center justify-center',
+                        !singleRow() && 'mt-0.5',
+                        props.custom ? 'text-ink-muted' : styles()?.iconClass
+                      )}
+                      style={
+                        props.custom ? { color: props.custom.color } : undefined
+                      }
                       data-icon-motion="none"
                     >
                       <Dynamic
                         component={Icon()}
                         class={cn(
-                          'size-4',
-                          props.toastType === ToastType.LOADING &&
-                            'motion-safe:animate-spin'
+                          props.custom || loading() ? 'size-4' : 'size-3',
+                          loading() && 'motion-safe:animate-spin'
                         )}
                       />
-                    </div>
+                    </span>
                   )}
                 </Show>
                 <div class="min-w-0 flex-1">
-                  <Toast.Title class="text-[13px] font-medium leading-5 text-ink [overflow-wrap:anywhere]">
-                    {props.custom?.title ?? props.message}
-                  </Toast.Title>
-                  <Show when={props.custom?.content || props.subtext}>
-                    <Toast.Description class="mt-1 text-xs leading-[1.55] text-ink-muted [overflow-wrap:anywhere]">
+                  <div class="flex min-w-0 flex-wrap items-center gap-2">
+                    <Toast.Title class="min-w-0 flex-1 text-base font-medium leading-normal text-ink wrap-anywhere">
+                      {props.custom?.title ?? props.message}
+                    </Toast.Title>
+                    <Show when={singleRow() && actions().length > 0}>
+                      <div class="flex max-w-full shrink-0 flex-wrap items-center gap-2">
+                        <ActionButtons actions={actions()} />
+                      </div>
+                    </Show>
+                  </div>
+                  <Show when={hasBody()}>
+                    <Toast.Description class="mt-0.5 text-sm leading-normal text-ink-muted wrap-anywhere">
                       {props.custom?.content
                         ? props.custom.content()
                         : props.subtext}
                     </Toast.Description>
                   </Show>
+                  <Show when={!singleRow() && actions().length > 0}>
+                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                      <ActionButtons actions={actions()} />
+                    </div>
+                  </Show>
                 </div>
-              </>
+              </div>
             }
           >
             {(Embed) => (
-              <div class="min-w-0 flex-1">
+              <div class="min-w-0">
                 <Dynamic component={Embed()} />
+                <Show when={actions().length > 0}>
+                  <div class="mt-3 flex flex-wrap items-center gap-2">
+                    <ActionButtons actions={actions()} />
+                  </div>
+                </Show>
               </div>
             )}
           </Show>
-          <Show when={actions()?.length}>
-            <div class="flex shrink-0 flex-col items-end gap-1.5">
-              <ActionButtons actions={actions()!} />
-            </div>
+          <Show when={showCloseButton()}>
+            <Toast.CloseButton
+              as={Button}
+              variant="ghost"
+              size={isMobile() ? 'icon-md' : 'icon-sm'}
+              aria-label={t('common.close')}
+              class={cn(
+                'absolute right-1 z-10',
+                singleRow() ? 'top-1/2 -translate-y-1/2' : 'top-1'
+              )}
+              onClick={() => props.onUserDismiss?.()}
+            >
+              <XIcon class="size-4" />
+            </Toast.CloseButton>
           </Show>
-          <Toast.CloseButton
-            as={Button}
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Close"
-            class="macro-toast-corner-close shrink-0"
-            onClick={() => props.onUserDismiss?.()}
-          >
-            <XIcon class="size-2.5" />
-          </Toast.CloseButton>
         </div>
       </div>
     </Toast>
@@ -325,6 +388,7 @@ async function promise<T>(
     subtext?: string;
     /** When true, don't render the loading/result toasts on mobile. */
     hideOnMobile?: boolean;
+    showCloseButton?: boolean;
   }
 ): Promise<T> {
   if (isMobile() && options.hideOnMobile) return promiseArg;
@@ -341,6 +405,7 @@ async function promise<T>(
         message={options.loading}
         subtext={options.subtext}
         persistent={true}
+        showCloseButton={options.showCloseButton}
         onDismiss={() => clearTrackedToast(region, props.toastId)}
       />
     ),
@@ -363,6 +428,7 @@ async function promise<T>(
 
         createToast(successMessage, toastType, {
           hideOnMobile: options.hideOnMobile,
+          showCloseButton: options.showCloseButton,
         });
       }
 
@@ -375,7 +441,10 @@ async function promise<T>(
           typeof options.error === 'function'
             ? options.error(error)
             : options.error;
-        failure(errorMessage, { hideOnMobile: options.hideOnMobile });
+        failure(errorMessage, {
+          hideOnMobile: options.hideOnMobile,
+          showCloseButton: options.showCloseButton,
+        });
       }
       throw error;
     });
@@ -388,7 +457,8 @@ function createToast(
   toastType: ToastType,
   options?: ToastActionOptions
 ) {
-  const { subtext, actions, duration, stack, hideOnMobile } = options ?? {};
+  const { subtext, actions, duration, stack, hideOnMobile, showCloseButton } =
+    options ?? {};
 
   if (isMobile() && hideOnMobile) return undefined;
 
@@ -413,6 +483,7 @@ function createToast(
         subtext={subtext}
         actions={actions}
         duration={duration}
+        showCloseButton={showCloseButton}
         onDismiss={() => {
           clearTrackedToast(region, props.toastId);
         }}
@@ -450,6 +521,7 @@ function embed(
     persistent?: boolean;
     duration?: number;
     region?: string;
+    showCloseButton?: boolean;
   }
 ) {
   const useMobile = isMobile();
@@ -463,6 +535,7 @@ function embed(
         embed={component}
         persistent={options?.persistent}
         duration={options?.duration}
+        showCloseButton={options?.showCloseButton}
         onDismiss={() => clearTrackedToast(region, props.toastId)}
       />
     ),
@@ -487,6 +560,7 @@ function custom(
     region?: string;
     onDismiss?: () => void;
     onUserDismiss?: () => void;
+    showCloseButton?: boolean;
   }
 ): number {
   const useMobile = isMobile();
@@ -501,6 +575,7 @@ function custom(
         persistent={options?.persistent}
         duration={options?.duration}
         onUserDismiss={options?.onUserDismiss}
+        showCloseButton={options?.showCloseButton}
         onDismiss={() => {
           clearTrackedToast(region, props.toastId);
           options?.onDismiss?.();

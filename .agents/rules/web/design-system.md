@@ -25,6 +25,7 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
 | Menu, popover, floating toolbar or editor panel | `Dropdown`, `Toolbar`, or `menu-surface` on the overlay root | A hand-built fill, border, and shadow, or `bg-menu-glass` |
 | Dialog or modal card | `Dialog`, or `elevated-surface` for a custom dialog root | `bg-dialog`/`bg-surface` with its own radius and shadow |
 | Loading placeholder, view skeleton | `ListSkeleton` (`Root`, `Row`, `Bar`); `ViewSkeleton` with the view's tabs and `controls` | `animate-pulse` boxes with their own fill |
+| Transient notification or persistent notice | `toast` from `@core/component/Toast/Toast` | A second toast service or hand-built global notification overlay |
 
 - **FE-60** Pick the component for the role from the table above, and import
   tabs only from `@ui`. Enforced by ast-grep `tsx-tabs-from-ui`, CI error; the
@@ -87,6 +88,8 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
   tabs, and header controls as placeholders), so change the skeleton in the
   same change as the header. Enforced for pulsing boxes by ast-grep
   `tsx-skeleton-shimmer`, CI error.
+- Toasts share the floating `menu-surface` material and semantic status icon colors. Keep descriptions, custom content, and stacked actions aligned with their title; never add surface colors in toast callers. Simple phone notices use content-width pills and rich notices use bounded cards.
+- Keep toast close buttons visible by default. Use `showCloseButton: false` only to hide that control; it does not change expiry, Escape, swipe, or user-dismiss callbacks. Preserve desktop queueing, mobile replacement, and separate persistent regions when changing presentation. `ToastContent` is the shared renderer for isolated gallery regions, not an alternative application service.
 
 Check: `just check` passes the ast-grep rules; the changed bar shows one height,
 16px icon glyphs, tabs on the left, and islands only around actions, at desktop
