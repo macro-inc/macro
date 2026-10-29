@@ -14,6 +14,30 @@ use models_email::service::message::{MessageSenderInfo, MessageToSend};
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 
+/// The threads of the link's messages among `message_ids`, each once.
+#[tracing::instrument(skip(executor, message_ids), err)]
+pub async fn thread_ids_of_messages<'e, E>(
+    executor: E,
+    link_id: Uuid,
+    message_ids: &[Uuid],
+) -> Result<Vec<Uuid>, sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
+    sqlx::query_scalar!(
+        r#"
+        SELECT DISTINCT thread_id
+        FROM email_messages
+        WHERE id = ANY($1) AND link_id = $2
+        ORDER BY thread_id
+        "#,
+        message_ids,
+        link_id,
+    )
+    .fetch_all(executor)
+    .await
+}
+
 /// Returns a map of message IDs to sender info for all found messages
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_message_sender_and_pretty_sender(

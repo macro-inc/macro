@@ -197,7 +197,7 @@ function DesktopCalendarSettings(props: {
       >
         <Show when={props.sidebar} fallback={<GearIcon class="size-5" />}>
           <ViewSidebar.Icon>
-            <GearIcon />
+            <GearIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </ViewSidebar.Icon>
           <span class="min-w-0 truncate">Settings</span>
         </Show>
@@ -383,7 +383,7 @@ function MobileCalendarSettings(props: {
       >
         <Show when={props.sidebar} fallback={<GearIcon class="size-6" />}>
           <ViewSidebar.Icon>
-            <GearIcon />
+            <GearIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </ViewSidebar.Icon>
           <span class="min-w-0 truncate">Settings</span>
         </Show>

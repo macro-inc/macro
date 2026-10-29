@@ -5,6 +5,7 @@ use worker::Result;
 
 use crate::{
     auth::WriteAccess,
+    domain::document::writing_peers,
     durable_object::{DocumentSyncSession, Wsm},
     error::ResultExt,
     generated::schema::{FromPeer, FromRemote},
@@ -253,6 +254,20 @@ pub async fn process_message(
                     );
                 }
             }
+
+            // Map every peer the update was written with, not only the one the
+            // client registered, so history can name its author. Before the
+            // ack: a failure here makes the client resend and retry it.
+            let mut writers = Vec::new();
+            for update in &updates {
+                writers.extend(
+                    writing_peers(update)
+                        .map_err(|error| worker::Error::from(error.to_string()))?,
+                );
+            }
+            Wsm::new(dss, sender.websocket())
+                .add_writing_peerids(&writers, document_id)
+                .await?;
 
             // ACK only after the update is durably stored.
             sender

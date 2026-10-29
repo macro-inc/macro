@@ -40,6 +40,7 @@ import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import type { ChannelsDataSource } from '../queries';
 import { ChannelPin, ChannelPinGrid } from './ChannelPins';
 import { ChannelsEmptyState } from './ChannelsEmptyState';
+import { HideSupportChannelsMobileButton } from './HideSupportChannelsButton';
 import { IncomingCallActions } from './rail/ChannelRailItems';
 import { useChannelCalls } from './rail/hooks/useChannelCalls';
 import { useChannelRailActivity } from './rail/hooks/useChannelRailActivity';
@@ -179,6 +180,7 @@ export function ChannelsMobileView(props: {
             aria-hidden="true"
             class="h-[calc(var(--mobile-content-inset-top,0px)+0.75rem)]"
           />
+          <HideSupportChannelsMobileButton />
           <Show when={pinned().length > 0}>
             <ChannelPinGrid>
               <For each={pinned()}>
@@ -235,7 +237,7 @@ export function ChannelsMobileView(props: {
             <div class="flex min-h-32 flex-col items-center justify-center gap-3 px-(--mobile-chrome-gutter) text-sm text-ink-muted">
               <span>Conversations couldn’t be loaded.</span>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() =>
                   fireAndForget(props.source.refresh(), 'channels-view')
@@ -354,7 +356,7 @@ export function ChannelsMobileView(props: {
               <div class="flex items-center justify-center gap-2 py-3 text-xs text-ink-muted">
                 <span>Couldn’t load more conversations.</span>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="xs"
                   onClick={() =>
                     fireAndForget(props.source.refresh(), 'channels-view')

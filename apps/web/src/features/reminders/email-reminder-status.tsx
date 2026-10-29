@@ -4,7 +4,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import type { EntityData } from '@entity';
 import BellIcon from '@icon/system/regular/bell-simple.svg';
 import { useEmailFollowupQuery } from '@queries/reminders/email-followup';
-import { Button } from '@ui';
+import { Button, ButtonGroup } from '@ui';
 import { Show } from 'solid-js';
 import { makeCreateReminderAction } from '../next-soup/actions/make-create-reminder-action';
 
@@ -12,6 +12,7 @@ import { makeCreateReminderAction } from '../next-soup/actions/make-create-remin
 export function EmailReminderStatus(props: {
   entity: EntityData;
   onSaved?: () => void | Promise<void>;
+  grouped?: boolean;
 }) {
   const enabled = useFeatureFlag(enableReminders);
   return (
@@ -23,6 +24,7 @@ export function EmailReminderStatus(props: {
 function EmailReminderStatusContent(props: {
   entity: EntityData;
   onSaved?: () => void | Promise<void>;
+  grouped?: boolean;
 }) {
   const query = useEmailFollowupQuery(() => props.entity.id);
   const reminder = () => (query.isSuccess ? query.data : undefined);
@@ -33,11 +35,16 @@ function EmailReminderStatusContent(props: {
       ? `Reminder set for ${new Date(reminder()!.remindAt).toLocaleString()}`
       : 'Remind me';
   const action = makeCreateReminderAction({ onEmailSaved: props.onSaved });
+  const Control = props.grouped ? ButtonGroup.Button : Button;
   return (
-    <Button
+    <Control
+      variant="ghost"
+      aria-label={label()}
+      tooltip={{
+        content: label(),
+        hotkey: TOKENS.entity.action.createReminder,
+      }}
       size="icon-md"
-      label={label()}
-      hotkey={TOKENS.entity.action.createReminder}
       onMouseDown={(event) => event.preventDefault()}
       onClick={() => {
         action.execute([props.entity]);
@@ -49,6 +56,6 @@ function EmailReminderStatusContent(props: {
           'text-accent': pending(),
         }}
       />
-    </Button>
+    </Control>
   );
 }

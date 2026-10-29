@@ -28,7 +28,9 @@ export function buildEmailDateRows(
   entities: WithNotification<EntityData>[],
   now = new Date()
 ) {
-  const rows = buildGroupedSoupRows(groupEmailEntitiesByDate(entities, now));
+  const rows = buildGroupedSoupRows(groupEmailEntitiesByDate(entities, now), {
+    keyByEntity: true,
+  });
   if (rows[0]?.kind === 'group-header' && rows[0].groupId === 'today')
     rows.shift();
   return rows;

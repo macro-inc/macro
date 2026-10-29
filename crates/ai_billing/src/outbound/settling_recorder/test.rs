@@ -228,6 +228,52 @@ fn user() -> MacroUserIdStr<'static> {
 }
 
 #[tokio::test]
+async fn background_usage_recording_keeps_the_callers_trace() {
+    use tracing_subscriber::{Layer, layer::SubscriberExt};
+
+    struct Capture(Arc<AtomicBool>);
+    impl<S> Layer<S> for Capture
+    where
+        S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+    {
+        fn on_new_span(
+            &self,
+            attrs: &tracing::span::Attributes<'_>,
+            id: &tracing::span::Id,
+            ctx: tracing_subscriber::layer::Context<'_, S>,
+        ) {
+            if attrs.metadata().name() == "ai_usage.record" {
+                let connected = ctx
+                    .span(id)
+                    .unwrap()
+                    .scope()
+                    .any(|span| span.name() == "origin");
+                if connected {
+                    self.0.store(true, Ordering::SeqCst);
+                }
+            }
+        }
+    }
+    let connected = Arc::new(AtomicBool::new(false));
+    let subscriber = tracing_subscriber::registry().with(Capture(connected.clone()));
+    tracing::subscriber::set_global_default(subscriber).expect("test subscriber installs once");
+    record(
+        AiUsageBilling::Disabled,
+        user(),
+        PlanTier::Free,
+        false,
+        0,
+        false,
+    )
+    .instrument(tracing::info_span!("origin"))
+    .await;
+    assert!(
+        connected.load(Ordering::SeqCst),
+        "background priced usage must remain in the initiating trace"
+    );
+}
+
+#[tokio::test]
 async fn records_everywhere_but_only_requests_settlement_when_enabled() {
     for (settlement, expected) in [(AiUsageBilling::Enabled, 1), (AiUsageBilling::Disabled, 0)] {
         for fail_first in [false, true] {

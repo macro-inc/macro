@@ -1,6 +1,7 @@
 export type ChannelsTab = 'browse' | 'recents' | 'threads';
 
-export type ChannelsGroup = 'channels' | 'direct_messages';
+/** The All tab's conversation lists, each its own paginated query. */
+export type ChannelsGroup = 'team_channels' | 'channels' | 'direct_messages';
 
 export type ChannelListSort = 'viewed_at' | 'updated_at' | 'created_at';
 
@@ -28,6 +29,12 @@ export type ChannelsViewState = {
   threadsChannelId: string | undefined;
   sortBy: Record<ChannelsSortGroup, ChannelListSort>;
   asideWidth: number;
+  /**
+   * Staff-only: hide seeded `Macro Support x …` conversations in Chat lists.
+   * Search still finds them. Default on so those conversations do not bury
+   * the rest of the sidebar.
+   */
+  hideSupportChannels: boolean;
 };
 
 export type ChannelsViewStateOptions = Partial<

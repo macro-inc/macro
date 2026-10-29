@@ -78,7 +78,7 @@ function DialogShell(props: {
         {props.children}
         <div class="flex justify-end gap-2">
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             data-testid={`${props.testId}-cancel`}
             onClick={() => props.onCancel()}
@@ -87,7 +87,7 @@ function DialogShell(props: {
           </Button>
           <Show when={props.onOk}>
             <Button
-              variant="cta"
+              variant="primary"
               size="sm"
               data-testid={`${props.testId}-ok`}
               onClick={() => props.onOk?.()}

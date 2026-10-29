@@ -183,7 +183,7 @@ function Fixture() {
         </div>
         <Button
           ref={setAnchor}
-          variant="outline"
+          variant="secondary"
           size="md"
           class="mt-5"
           onClick={() => setSelected(true)}

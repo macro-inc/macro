@@ -36,7 +36,7 @@ export function RecordSection(
           </div>
         </Show>
       </div>
-      <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-6 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1.5rem)] touch:[--mobile-content-inset-top:0px]">
+      <div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-6 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1.5rem)] touch:[--mobile-content-inset-top:0px]">
         {props.children}
       </div>
     </section>

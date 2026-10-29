@@ -42,6 +42,7 @@
 | <a id="property-email"></a> `email` | `readonly` | [`EmailNamespace`](../../entities/email/namespace/classes/EmailNamespace.md) | - |
 | <a id="property-entitymentions"></a> `entityMentions` | `readonly` | [`EntityMentionNamespace`](../../entities/entity-mentions/namespace/classes/EntityMentionNamespace.md) | entityMentions resources and operations. |
 | <a id="property-events"></a> `events` | `readonly` | [`MacroEvents`](../../events/receiver/classes/MacroEvents.md) | - |
+| <a id="property-externalchats"></a> `externalChats` | `readonly` | [`ExternalChatsNamespace`](../../entities/external-chat/namespace/classes/ExternalChatsNamespace.md) | Chats from external providers (WhatsApp) added to Macro: read, share and send. |
 | <a id="property-favorites"></a> `favorites` | `readonly` | [`FavoritesNamespace`](../../entities/favorites/namespace/classes/FavoritesNamespace.md) | - |
 | <a id="property-foreignentities"></a> `foreignEntities` | `readonly` | [`ForeignEntityNamespace`](../../entities/foreign/namespace/classes/ForeignEntityNamespace.md) | - |
 | <a id="property-forms"></a> `forms` | `readonly` | [`FormNamespace`](../../entities/forms/namespace/classes/FormNamespace.md) | Build forms and submit answers without granting respondents database access. |
@@ -60,6 +61,7 @@
 | <a id="property-users"></a> `users` | `readonly` | [`UserNamespace`](../../entities/users/namespace/classes/UserNamespace.md) | - |
 | <a id="property-webappurl"></a> `webAppUrl` | `readonly` | `string` | Base URL of the Macro web app, used to build entity URLs. |
 | <a id="property-webhooks"></a> `webhooks` | `readonly` | [`WebhooksNamespace`](../../entities/webhooks/namespace/classes/WebhooksNamespace.md) | - |
+| <a id="property-whatsapp"></a> `whatsapp` | `readonly` | [`WhatsAppNamespace`](../../entities/whatsapp/namespace/classes/WhatsAppNamespace.md) | The current user's WhatsApp account and chat list; add chats from it. |
 | <a id="property-workspace"></a> `workspace` | `readonly` | [`WorkspaceNamespace`](../../entities/workspace/namespace/classes/WorkspaceNamespace.md) | Browse workspace activity with type, task, time, tag and inbox filters. |
 
 ## Methods

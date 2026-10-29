@@ -1,4 +1,5 @@
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
+import type { MentionBucketId } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenuController';
 import {
   DefaultShortcuts,
   type ItemMention,
@@ -27,6 +28,8 @@ export type MessageEditorOptions = {
   namespace: string;
   resolveAppLink?: MentionLinkResolver;
   enableMentions?: boolean;
+  /** Restrict the `@` menu, e.g. to `['users']` for a fixed people list. */
+  mentionSources?: MentionBucketId[];
   onMentionCreate?: (mention: ItemMention) => void;
   onMentionRemove?: (mention: ItemMention) => void;
   users?: () => IUser[];
@@ -36,6 +39,8 @@ export type MessageEditorOptions = {
     files: FileSystemFileEntry[],
     directories: FileSystemDirectoryEntry[]
   ) => void;
+  /** Shared slash actions a surface can't carry, e.g. tables in a WhatsApp group. */
+  ignoreActionIds?: string[];
   /** Slash actions a surface adds beyond the shared set, e.g. a channel's `/poll`. */
   additionalActions?: Action[];
   /** Invoked when the user picks the "Image" slash action. Opens a file picker and hands files back. */
@@ -55,6 +60,7 @@ export function createConfiguredMessageEditor(options: MessageEditorOptions) {
       onCreate: options.onMentionCreate,
       onRemove: options.onMentionRemove,
       users: options.users,
+      sources: options.mentionSources,
       block: options.groupMentions ? 'channel' : undefined,
       disableMentionTracking: options.disableMentionTracking,
     });
@@ -69,9 +75,10 @@ export function createConfiguredMessageEditor(options: MessageEditorOptions) {
   editor
     .withEmojis()
     .withActions({
-      ignoreActionIds: options.inlineMedia
-        ? ['hr', 'table', 'latex']
-        : ['hr', 'latex'],
+      ignoreActionIds: [
+        ...(options.inlineMedia ? ['hr', 'table', 'latex'] : ['hr', 'latex']),
+        ...(options.ignoreActionIds ?? []),
+      ],
     })
     .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })

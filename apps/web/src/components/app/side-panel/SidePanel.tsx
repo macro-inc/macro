@@ -12,7 +12,7 @@ import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import InfoIcon from '@icon/system/regular/info.svg';
 import SidePanelIcon from '@icon/system/regular/sidebar-simple.svg';
 import { Accordion } from '@kobalte/core/accordion';
-import { Button, Panel, Scroll } from '@ui';
+import { Button, ButtonGroup, Panel, Scroll } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
@@ -48,6 +48,14 @@ const NARROW_THRESHOLD_PX = 1224;
 const SIDE_MIN_PX = 320;
 const SIDE_MAX_PX = 380;
 const MAIN_MIN_PX = 320;
+// The floating card's width, and its inset from the pane's top and right.
+const FLOATING_WIDTH_PX = 320;
+const FLOATING_INSET_PX = 12;
+/**
+ * Room to leave on the right so an open floating card covers nothing, for
+ * content that makes room for it where the pane is wide enough.
+ */
+const FLOATING_CLEARANCE_PX = FLOATING_WIDTH_PX + 2 * FLOATING_INSET_PX;
 
 /**
  * Wide-mode open state for a side panel.
@@ -384,7 +392,13 @@ function SidePanelLayoutInner(
               <aside
                 aria-label="Block details"
                 inert={!showFloating()}
-                class="absolute right-3 top-3 flex max-h-[calc(100%-1.5rem)] w-[min(320px,calc(100%-1.5rem))] max-w-full flex-col overflow-hidden rounded-xl border border-edge-frame bg-surface shadow-xl pointer-events-auto"
+                class="absolute flex max-w-full flex-col overflow-hidden rounded-xl border border-edge-frame bg-surface shadow-xl pointer-events-auto"
+                style={{
+                  top: `${FLOATING_INSET_PX}px`,
+                  right: `${FLOATING_INSET_PX}px`,
+                  width: `min(${FLOATING_WIDTH_PX}px, calc(100% - ${2 * FLOATING_INSET_PX}px))`,
+                  'max-height': `calc(100% - ${2 * FLOATING_INSET_PX}px)`,
+                }}
                 onClick={(event) => event.stopPropagation()}
               >
                 <SidePanelOutlet
@@ -402,49 +416,56 @@ function SidePanelLayoutInner(
   );
 }
 
-function Toggle() {
+function Toggle(props: { size?: 'sm' | 'md' } = {}) {
   const ctx = useContext(SidePanelContext);
   if (!ctx) {
     throw new Error('<SidePanel.Toggle> must be inside <SidePanel.Root>');
   }
+  const iconSize = () =>
+    isTouchDevice() || props.size === 'md' ? 'icon-md' : 'icon-sm';
 
   return (
     <Show when={ctx.hasSections()}>
-      <HeaderActionGroup label="Details">
-        <Button
-          depth={2}
+      <HeaderActionGroup label="Details" size={props.size}>
+        <ButtonGroup.Button
           variant="ghost"
-          size="icon-md"
+          size={iconSize()}
+          aria-label={ctx.isOpen() ? 'Hide details' : 'Show details'}
           class={cn(
             isTouchDevice() &&
               'border-0 hover:bg-transparent! active:bg-transparent! focus-visible:bg-transparent! active:text-accent',
             isTouchDevice() && ctx.isOpen() && 'text-accent'
           )}
-          tooltip={
-            isTouchDevice()
+          tooltip={{
+            content: isTouchDevice()
               ? ctx.isOpen()
                 ? 'Hide details'
                 : 'Show details'
               : ctx.isOpen()
                 ? 'Hide Side Panel'
-                : 'Show Side Panel'
-          }
+                : 'Show Side Panel',
+            hotkey: TOKENS.block.toggleSidePanel,
+          }}
           aria-haspopup={isTouchDevice() ? 'dialog' : undefined}
           aria-expanded={ctx.isOpen()}
-          hotkey={TOKENS.block.toggleSidePanel}
           onClick={() => ctx.toggle()}
         >
           <Show
             when={isTouchDevice()}
             fallback={
               <SidePanelIcon
-                class={cn('rotate-180', ctx.isOpen() && 'text-accent')}
+                class={cn(
+                  'size-4 shrink-0 rotate-180',
+                  ctx.isOpen() && 'text-accent'
+                )}
               />
             }
           >
-            <InfoIcon class={cn(ctx.isOpen() && 'text-accent')} />
+            <InfoIcon
+              class={cn('size-6 shrink-0', ctx.isOpen() && 'text-accent')}
+            />
           </Show>
-        </Button>
+        </ButtonGroup.Button>
       </HeaderActionGroup>
     </Show>
   );
@@ -832,5 +853,6 @@ export const SidePanel = {
   Loading,
   CountTitle,
   Card,
+  FLOATING_CLEARANCE_PX,
 };
 export { useSidePanel };

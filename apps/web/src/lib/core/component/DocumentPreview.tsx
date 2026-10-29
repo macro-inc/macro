@@ -1,4 +1,3 @@
-import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
 import {
   parseMacroAppLink,
   sanitizeCalendarDescription,
@@ -39,6 +38,7 @@ import {
 import { getDisplayName, tryMacroId } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { parseLocalDate } from '@core/util/local-date';
 import { matches } from '@core/util/match';
 import { openExternalUrl } from '@core/util/url';
 import MacroEmbed from '@icon/macro-embed.svg';
@@ -473,8 +473,8 @@ export function CalendarEventPreviewDetails(props: {
               class="mt-1 flex flex-wrap items-center gap-1"
               onClick={(event) => event.stopPropagation()}
             >
-              <Button variant="outline" size="xs" onClick={open()}>
-                <CalendarCheckIcon />
+              <Button variant="secondary" size="xs" onClick={open()}>
+                <CalendarCheckIcon class="size-3.5" />
                 Open
               </Button>
             </div>
@@ -851,7 +851,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
           variant="ghost"
           aria-label="Reference actions"
         >
-          <DotsThree />
+          <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Dropdown.Trigger>
         <Dropdown.Content blockingBackdrop class="z-nested-action-menu">
           <Dropdown.Group>

@@ -219,7 +219,7 @@ export function QuestionActions(props: {
       <Match when={form(props.question)}>
         {(question) => (
           <Button
-            variant="cta"
+            variant="primary"
             size="xs"
             disabled={props.locked}
             onClick={() => submit(question().draft)}
@@ -231,7 +231,7 @@ export function QuestionActions(props: {
       <Match when={url(props.question)}>
         {(question) => (
           <Button
-            variant="cta"
+            variant="primary"
             size="xs"
             disabled={props.locked}
             onClick={() =>
@@ -246,7 +246,7 @@ export function QuestionActions(props: {
   );
   const decline = (
     <Button
-      variant="outline"
+      variant="secondary"
       size="xs"
       disabled={props.locked}
       onClick={() => respond({ action: 'decline' })}

@@ -264,7 +264,7 @@ export const CollapsedSoupViewTabs = () => {
 
   return (
     <Dropdown placement="bottom-start">
-      <Dropdown.Trigger variant="outline" size="md">
+      <Dropdown.Trigger variant="secondary" size="md">
         {selected()?.label}
         <CaretDownIcon class="size-3 text-ink-extra-muted" />
       </Dropdown.Trigger>

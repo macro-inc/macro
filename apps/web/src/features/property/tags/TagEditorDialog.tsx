@@ -194,13 +194,14 @@ export function TagEditorDialog(props: {
             {title()}
           </Dialog.Title>
           <Dialog.CloseButton
+            aria-label="Close"
+            tooltip="Close"
             as={Button}
             variant="ghost"
             size="icon-sm"
             disabled={pending()}
-            label="Close"
           >
-            <XIcon />
+            <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
         </CommandMenuShell.Header>
         <CommandMenuShell.Body>
@@ -268,8 +269,7 @@ export function TagEditorDialog(props: {
               Cancel
             </Button>
             <Button
-              variant="strong"
-              depth={3}
+              variant="primary"
               class="gap-3 "
               disabled={!canSubmit() || pending()}
               onClick={submit}

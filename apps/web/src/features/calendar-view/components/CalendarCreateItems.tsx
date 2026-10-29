@@ -5,6 +5,7 @@ import {
   bookingLinksSearchCodec,
 } from '@app/features/scheduling/booking-links-search';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { useNavigate as useSplitNavigate } from '@app/lib/split-router';
 import { bookingLinksRoute } from '@app/routes/routes';
 import { enableCalendarScheduling } from '@core/constant/featureFlags';
@@ -24,8 +25,8 @@ export function CalendarCreateEventItem(props: CreateItemProps) {
   return (
     <CreateMenuItem
       icon={CalendarIcon}
-      title="Event"
-      description="Schedule a meeting or block time on your calendar."
+      title={t('create.eventLabel')}
+      description={t('create.guideEvent')}
       closeOnSelect
       onSelect={() => {
         props.onSelect?.();
@@ -43,8 +44,8 @@ export function CalendarCreateCallItem(props: CreateItemProps) {
     <Show when={quickCalls().enabled}>
       <CreateMenuItem
         icon={PhoneIcon}
-        title="Call"
-        description="Start a live call now and invite others to join."
+        title={t('create.callLabel')}
+        description={t('create.guideCall')}
         closeOnSelect
         onSelect={() => {
           props.onSelect?.();
@@ -62,8 +63,8 @@ export function CalendarCreateBookingLinkItem(props: CreateItemProps) {
     <ShowFeatureFlag flag={enableCalendarScheduling}>
       <CreateMenuItem
         icon={LinkIcon}
-        title="Booking link"
-        description="Share your availability so others can book a time with you."
+        title={t('create.bookingLinkLabel')}
+        description={t('create.guideBookingLink')}
         closeOnSelect
         onSelect={() => {
           props.onSelect?.();

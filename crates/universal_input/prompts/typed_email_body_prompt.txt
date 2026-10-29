@@ -1,0 +1,1 @@
+The entire outgoing email message, including every sentence and line. Exclude addressing instructions and separately labeled To, Cc and Bcc routing metadata. Preserve the author's words.

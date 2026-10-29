@@ -90,6 +90,8 @@ import type {
   SendMobileWelcomeEmailResponse,
   SetGithubPullRequestDraftRequest,
   SetGithubPullRequestDraftResponse,
+  SetGithubPullRequestStateRequest,
+  SetGithubPullRequestStateResponse,
   SsoLoginParams,
   SsoRequiredResponse,
   StripeSessionResponse,
@@ -107,6 +109,7 @@ import type {
   UpdateAutoReloadRequest,
   UpdateOverageRequest,
   UsageSnapshot,
+  UserLanguage,
   UserLinkResponse,
   UserName,
   UserNames,
@@ -1743,6 +1746,91 @@ export const getGithubPullRequestMergeability = async (
     status: res.status,
     headers: res.headers,
   } as getGithubPullRequestMergeabilityResponse;
+};
+
+/**
+ * @summary Closes a GitHub pull request, or reopens it, as the authenticated user
+with their own GitHub grant.
+ */
+export type setGithubPullRequestStateResponse200 = {
+  data: SetGithubPullRequestStateResponse;
+  status: 200;
+};
+
+export type setGithubPullRequestStateResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type setGithubPullRequestStateResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type setGithubPullRequestStateResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type setGithubPullRequestStateResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type setGithubPullRequestStateResponse428 = {
+  data: ErrorResponse;
+  status: 428;
+};
+
+export type setGithubPullRequestStateResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type setGithubPullRequestStateResponseSuccess =
+  setGithubPullRequestStateResponse200 & {
+    headers: Headers;
+  };
+export type setGithubPullRequestStateResponseError = (
+  | setGithubPullRequestStateResponse401
+  | setGithubPullRequestStateResponse403
+  | setGithubPullRequestStateResponse404
+  | setGithubPullRequestStateResponse422
+  | setGithubPullRequestStateResponse428
+  | setGithubPullRequestStateResponse500
+) & {
+  headers: Headers;
+};
+
+export type setGithubPullRequestStateResponse =
+  | setGithubPullRequestStateResponseSuccess
+  | setGithubPullRequestStateResponseError;
+
+export const getSetGithubPullRequestStateUrl = () => {
+  return `/github_pull_requests/state`;
+};
+
+export const setGithubPullRequestState = async (
+  setGithubPullRequestStateRequest: SetGithubPullRequestStateRequest,
+  options?: RequestInit
+): Promise<setGithubPullRequestStateResponse> => {
+  const res = await fetch(getSetGithubPullRequestStateUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(setGithubPullRequestStateRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setGithubPullRequestStateResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setGithubPullRequestStateResponse;
 };
 
 /**
@@ -5641,6 +5729,136 @@ export const patchUserGroup = async (
     status: res.status,
     headers: res.headers,
   } as patchUserGroupResponse;
+};
+
+/**
+ * @summary Get the caller's interface language.
+ */
+export type getUserLanguageResponse200 = {
+  data: UserLanguage;
+  status: 200;
+};
+
+export type getUserLanguageResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getUserLanguageResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getUserLanguageResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getUserLanguageResponseSuccess = getUserLanguageResponse200 & {
+  headers: Headers;
+};
+export type getUserLanguageResponseError = (
+  | getUserLanguageResponse401
+  | getUserLanguageResponse404
+  | getUserLanguageResponse500
+) & {
+  headers: Headers;
+};
+
+export type getUserLanguageResponse =
+  | getUserLanguageResponseSuccess
+  | getUserLanguageResponseError;
+
+export const getGetUserLanguageUrl = () => {
+  return `/user/language`;
+};
+
+export const getUserLanguage = async (
+  options?: RequestInit
+): Promise<getUserLanguageResponse> => {
+  const res = await fetch(getGetUserLanguageUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getUserLanguageResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUserLanguageResponse;
+};
+
+/**
+ * @summary Set the caller's interface language, or clear it to follow their team's,
+else their browser's.
+ */
+export type putUserLanguageResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type putUserLanguageResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type putUserLanguageResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type putUserLanguageResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type putUserLanguageResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type putUserLanguageResponseSuccess = putUserLanguageResponse204 & {
+  headers: Headers;
+};
+export type putUserLanguageResponseError = (
+  | putUserLanguageResponse400
+  | putUserLanguageResponse401
+  | putUserLanguageResponse404
+  | putUserLanguageResponse500
+) & {
+  headers: Headers;
+};
+
+export type putUserLanguageResponse =
+  | putUserLanguageResponseSuccess
+  | putUserLanguageResponseError;
+
+export const getPutUserLanguageUrl = () => {
+  return `/user/language`;
+};
+
+export const putUserLanguage = async (
+  userLanguage: UserLanguage,
+  options?: RequestInit
+): Promise<putUserLanguageResponse> => {
+  const res = await fetch(getPutUserLanguageUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(userLanguage),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: putUserLanguageResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putUserLanguageResponse;
 };
 
 /**

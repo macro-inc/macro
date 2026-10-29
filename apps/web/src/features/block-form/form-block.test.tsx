@@ -33,6 +33,10 @@ vi.mock('@components/app/split-layout/components/SplitHeader', () => ({
 }));
 vi.mock('@components/app/split-layout/components/SplitLabel', () => ({
   BlockItemSplitLabel: () => null,
+  SplitTitleFileMenu: (props: ParentProps) => props.children,
+}));
+vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({
+  SplitFileMenu: () => null,
 }));
 vi.mock('@components/app/ResponsiveBlockToolbar', () => ({
   ResponsivePermissionsBadge: () => null,

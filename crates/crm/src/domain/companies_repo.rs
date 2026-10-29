@@ -66,6 +66,13 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         record: super::association::CrmAssociation,
     ) -> impl Future<Output = Result<Option<super::association::CrmRecordAssociation>, CrmError>> + Send;
 
+    /// Resolve the complete activity scope with no contact email deduplication.
+    /// Membership and CRM settings gate rows; hidden records never participate.
+    fn resolve_activity(
+        &self,
+        scope: super::contact_listing::CrmContactListScope<'_>,
+    ) -> impl Future<Output = Result<super::association::CrmRecordAssociation, CrmError>> + Send;
+
     /// Idempotently records that `email` (which lives on `domain`) was seen
     /// from the mailbox identified by `link_id`, for the team `team_id`.
     /// Performs the company/domain/contact/contact_source upserts in a single

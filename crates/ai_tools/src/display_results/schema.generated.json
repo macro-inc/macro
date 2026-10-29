@@ -103,6 +103,7 @@
                           "database",
                           "database_row",
                           "form",
+                          "external_chat",
                           "email",
                           "routine",
                           "channel_thread"
@@ -201,6 +202,7 @@
                               "database",
                               "database_row",
                               "form",
+                              "external_chat",
                               "email",
                               "routine",
                               "channel_thread"

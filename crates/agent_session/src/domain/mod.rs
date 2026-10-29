@@ -17,6 +17,7 @@ pub mod ports;
 pub mod pull_request;
 pub mod pull_request_links;
 pub mod read;
+pub mod retitle;
 mod sandbox_size;
 pub mod search;
 pub mod service;

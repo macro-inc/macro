@@ -38,3 +38,5 @@ the durable notification/realtime dispatcher.
   and entity. Identical pending replays are harmless; cancellation stays available
   and preserves the deadline. Approval clears it for a further upgrade, while
   denial replaces it with the 24-hour cooldown.
+
+- `ShareEntityType::ExternalChat` uses the generic direct-access/request workflow; viewing requires no provider account.

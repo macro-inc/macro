@@ -677,7 +677,9 @@ describe('createWorkerCacheHost', () => {
     const rejected = expect(host.currentRevision()).rejects.toThrow(
       'cache worker timeout: registration'
     );
-    await vi.advanceTimersByTimeAsync(COORDINATOR_CONNECT_TIMEOUT_MS * 3 + 1);
+    await vi.advanceTimersByTimeAsync(
+      COORDINATOR_CONNECT_TIMEOUT_MS * 3 + 100 + 200 + 1
+    );
     await rejected;
     expect(adapterFactory).toHaveBeenCalledTimes(3);
     expect(onInitializationError).toHaveBeenCalledOnce();

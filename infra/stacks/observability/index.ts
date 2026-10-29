@@ -20,6 +20,7 @@ const baseDomain = 'macro-internal.com';
 const suffix = stack === 'prod' ? '' : '-dev';
 const grafanaHost = `grafana${suffix}.${baseDomain}`;
 const otlpHost = `otlp${suffix}.${baseDomain}`;
+const oncallHost = `oncall${suffix}.${baseDomain}`;
 const tags = { project: 'observability', environment: stack };
 const durable = { protect: true, retainOnDelete: true };
 const secretArn = config.require('secretArn');
@@ -34,6 +35,7 @@ validateSettings({
   region,
   grafanaHost,
   otlpHost,
+  oncallHost,
   secretArn,
   alarmTopicArn,
   volumeId: 'vol-0',
@@ -59,24 +61,26 @@ const zone = aws.route53.getZoneOutput({
 });
 const certificate = new aws.acm.Certificate('observability', {
   domainName: grafanaHost,
-  subjectAlternativeNames: [otlpHost],
+  subjectAlternativeNames: [otlpHost, oncallHost],
   validationMethod: 'DNS',
   tags,
 });
-const validationRecords = [grafanaHost, otlpHost].map((hostname) => {
-  const option = certificate.domainValidationOptions.apply((options) => {
-    const match = options.find((entry) => entry.domainName === hostname);
-    if (!match) throw new Error(`Missing ACM validation for ${hostname}`);
-    return match;
-  });
-  return new aws.route53.Record(`observability-certificate-${hostname}`, {
-    zoneId: zone.zoneId,
-    name: option.resourceRecordName,
-    type: option.resourceRecordType,
-    records: [option.resourceRecordValue],
-    ttl: 300,
-  });
-});
+const validationRecords = [grafanaHost, otlpHost, oncallHost].map(
+  (hostname) => {
+    const option = certificate.domainValidationOptions.apply((options) => {
+      const match = options.find((entry) => entry.domainName === hostname);
+      if (!match) throw new Error(`Missing ACM validation for ${hostname}`);
+      return match;
+    });
+    return new aws.route53.Record(`observability-certificate-${hostname}`, {
+      zoneId: zone.zoneId,
+      name: option.resourceRecordName,
+      type: option.resourceRecordType,
+      records: [option.resourceRecordValue],
+      ttl: 300,
+    });
+  }
+);
 const validatedCertificate = new aws.acm.CertificateValidation(
   'observability',
   {
@@ -281,6 +285,7 @@ const instance = new aws.ec2.Instance(
           region,
           grafanaHost,
           otlpHost,
+          oncallHost,
           secretArn,
           alarmTopicArn,
           volumeId,
@@ -346,7 +351,29 @@ new aws.lb.ListenerRule('observability-hosts', {
   conditions: [{ hostHeader: { values: [grafanaHost, otlpHost] } }],
   actions: [{ type: 'forward', targetGroupArn: target.arn }],
 });
-for (const hostname of [grafanaHost, otlpHost]) {
+// Same nginx port, but its own health check so a GoAlert outage alarms
+// separately from Grafana.
+const oncallTarget = new aws.lb.TargetGroup('observability-oncall', {
+  port: 8080,
+  protocol: 'HTTP',
+  targetType: 'instance',
+  vpcId: vpc.vpcId,
+  healthCheck: { path: '/goalert-healthz', matcher: '200', interval: 30 },
+  deregistrationDelay: 30,
+  tags,
+});
+new aws.lb.TargetGroupAttachment('observability-oncall', {
+  targetGroupArn: oncallTarget.arn,
+  targetId: instance.id,
+  port: 8080,
+});
+new aws.lb.ListenerRule('observability-oncall', {
+  listenerArn: listener.arn,
+  priority: 2,
+  conditions: [{ hostHeader: { values: [oncallHost] } }],
+  actions: [{ type: 'forward', targetGroupArn: oncallTarget.arn }],
+});
+for (const hostname of [grafanaHost, otlpHost, oncallHost]) {
   new aws.route53.Record(hostname, {
     zoneId: zone.zoneId,
     name: hostname,
@@ -418,6 +445,20 @@ new aws.cloudwatch.MetricAlarm('observability-ui', {
   dimensions: { LoadBalancer: alb.arnSuffix, TargetGroup: target.arnSuffix },
   treatMissingData: 'breaching',
 });
+// Paging must not depend on GoAlert to report that GoAlert is down. On-call
+// phones subscribe to this topic by SMS directly (see README).
+new aws.cloudwatch.MetricAlarm('observability-goalert', {
+  ...alarm,
+  alarmDescription: `GoAlert at ${oncallHost} is failing health checks; pages are not being sent.`,
+  namespace: 'AWS/ApplicationELB',
+  metricName: 'UnHealthyHostCount',
+  threshold: 0,
+  dimensions: {
+    LoadBalancer: alb.arnSuffix,
+    TargetGroup: oncallTarget.arnSuffix,
+  },
+  treatMissingData: 'breaching',
+});
 for (const [name, path] of [
   ['observability-disk', '/srv/observability'],
   ['observability-root-disk', '/'],
@@ -444,6 +485,7 @@ new aws.cloudwatch.MetricAlarm('observability-memory', {
 
 export const grafanaUrl = `https://${grafanaHost}`;
 export const otlpHttpEndpoint = `https://${otlpHost}`;
+export const goalertUrl = `https://${oncallHost}`;
 export const instanceId = instance.id;
 export const dataVolumeId = data.id;
 export const logsBucket = logs.bucket;
