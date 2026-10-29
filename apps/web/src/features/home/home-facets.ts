@@ -114,15 +114,17 @@ const typeOptions: Record<HomeTypeFilter, HomeFacetOption> = {
     predicate: (entity) =>
       entity.type === 'agent_session' || entity.type === 'chat',
   },
+  folders: {
+    id: 'folders',
+    label: 'Folders',
+    clause: { pf: clause.not(clause.eq('folderId', NIL_UUID)) },
+    predicate: (entity) => entity.type === 'project',
+  },
   projects: {
     id: 'projects',
     label: 'Projects',
-    clause: {
-      pf: clause.not(clause.eq('folderId', NIL_UUID)),
-      if: clause.eq('includeInitiatives', true),
-    },
-    predicate: (entity) =>
-      entity.type === 'project' || entity.type === 'initiative',
+    clause: { if: clause.eq('includeInitiatives', true) },
+    predicate: (entity) => entity.type === 'initiative',
   },
   github: {
     id: 'github',

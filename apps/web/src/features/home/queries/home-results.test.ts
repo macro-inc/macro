@@ -123,7 +123,12 @@ describe('home projects', () => {
   });
 
   it('drops them under a type filter that leaves them out', () => {
-    for (const types of [['documents'], ['email', 'channels'], ['none']]) {
+    for (const types of [
+      ['documents'],
+      ['folders'],
+      ['email', 'channels'],
+      ['none'],
+    ]) {
       expect(projectClause({ type: types })).toBe('null');
     }
   });

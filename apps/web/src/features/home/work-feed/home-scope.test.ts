@@ -39,6 +39,7 @@ describe('homeWorkFeedScope', () => {
       'email',
       'channels',
       'agents',
+      'folders',
       'projects',
       'github',
       'calendar',
@@ -59,6 +60,10 @@ describe('homeWorkFeedScope', () => {
 
   it('has no scope when the filters leave nothing to show', () => {
     expect(homeWorkFeedScope(['none'], everything)).toBeUndefined();
+    expect(homeWorkFeedScope(['projects'], everything)).toBeUndefined();
+    expect(homeWorkFeedScope(['folders'], everything)?.types).toEqual([
+      'project',
+    ]);
     expect(
       homeWorkFeedScope(['calendar'], { ...everything, calendar: false })
     ).toBeUndefined();
