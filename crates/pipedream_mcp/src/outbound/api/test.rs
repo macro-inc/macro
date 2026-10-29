@@ -1,6 +1,6 @@
 use super::{AppResponse, PipedreamClient, PipedreamConfig, connectable_catalog_entry};
 use crate::domain::models::{MacroUserIdStr, PipedreamConnection};
-use crate::domain::ports::{ConnectedAppProxy, PipedreamConnect};
+use crate::domain::ports::{ConnectedAppProxy, ConnectorDirectory, PipedreamConnect};
 use http::{HeaderMap, HeaderValue, Method, StatusCode};
 use std::time::Duration;
 use wiremock::matchers::{body_json, header, method, path, query_param};
@@ -36,6 +36,56 @@ fn an_app_without_an_auth_flow_is_not_connectable() {
 #[test]
 fn a_different_slug_than_the_one_asked_for_is_not_that_app() {
     assert!(connectable_catalog_entry("linear", app("slack", Some("oauth"))).is_none());
+}
+
+#[test]
+fn a_hidden_app_is_not_connectable() {
+    assert!(connectable_catalog_entry("linkedin", app("linkedin", Some("oauth"))).is_none());
+}
+
+#[tokio::test]
+async fn browsing_leaves_hidden_apps_out_of_the_catalog() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/oauth/token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            serde_json::json!({"access_token": "project-token", "expires_in": 3600}),
+        ))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1/connect/apps"))
+        .and(query_param("q", "link"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "page_info": {"end_cursor": "cursor-2"},
+            "data": [
+                {"name_slug": "linkedin", "name": "LinkedIn", "auth_type": "oauth"},
+                {"name_slug": "linear", "name": "Linear", "auth_type": "oauth"}
+            ]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let client = PipedreamClient::new(PipedreamConfig {
+        client_id: "fixture".into(),
+        client_secret: "fixture".into(),
+        project_id: "proj_fixture".into(),
+        environment: "development".into(),
+        allowed_origins: vec![],
+        api_url: server.uri(),
+        mcp_url: format!("{}/mcp", server.uri()),
+    })
+    .unwrap();
+
+    let page = client.search(Some("link"), None, 2).await.unwrap();
+
+    let slugs: Vec<_> = page.entries.iter().map(|e| e.app_slug.as_str()).collect();
+    assert_eq!(slugs, ["linear"]);
+    assert_eq!(
+        page.next_cursor.as_deref(),
+        Some("cursor-2"),
+        "a full upstream page still has more, even when an app was hidden"
+    );
 }
 
 #[test]
