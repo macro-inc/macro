@@ -432,11 +432,10 @@ mod tests {
             &url::Url::parse("https://macro.com/app").unwrap(),
             &parsed.attribution,
         );
-        assert!(
-            query(&url)
-                .iter()
-                .any(|(key, value)| { key == "signup_flow" && value == "mobile_email" })
-        );
+        let has_mobile_email_flow = query(&url)
+            .iter()
+            .any(|(key, value)| key == "signup_flow" && value == "mobile_email");
+        assert!(has_mobile_email_flow);
 
         let bare: SendMobileWelcomeEmailRequest =
             serde_json::from_str(r#"{"email":"lead"}"#).unwrap();
