@@ -43,6 +43,20 @@ the following paragraph leaves that following paragraph unchanged.
 The backend-free quote check is documented in the Markdown browser-test README
 linked above.
 
+## Loading recovery
+
+Switch between Home and Channels repeatedly, including after backgrounding the
+native app. Conversation queries must remain reusable: their operation names and
+serialized GraphQL documents must stay consistent. The backend-free desktop and
+iPhone WebKit regression is
+`bunx playwright test --config src/lib/urql-solid/browser-test/playwright.config.ts`
+from `apps/web`.
+
+If an expired session triggers cookie-auth refresh, a stalled refresh settles
+after 12 seconds as a retryable network failure. Cancelling one view stops only
+its wait; other requests may finish the shared refresh. Retry can start a fresh
+refresh after timeout, without reloading or treating a timeout as sign-out.
+
 ## Empty direct messages
 
 An empty human DM shows the centered conversations illustration and “Say hello”

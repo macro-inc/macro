@@ -123,6 +123,11 @@ Channel composer draft persistence has a backend-free browser regression:
 It checks draft blank lines across remounts and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
 It also pastes a Macro link and Markdown into a code block, which must keep both as literal text.
 
+Shared GraphQL query metadata has a backend-free desktop and iPhone WebKit regression:
+`bunx playwright test --config src/lib/urql-solid/browser-test/playwright.config.ts`.
+Reconcile result data only; replace operation metadata so shared documents,
+cached query text, and operation names remain consistent across query changes.
+
 Block formatting passes a forward copy of the selection to Lexical's
 `$setBlocksType` so backward selections include their first paragraph and keep
 the editor's actual selection direction. The Markdown core browser suite's
@@ -294,6 +299,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   hint never checks identity, so the returning user sees sign-in again.
 - Disable GraphQL cache sessions and clear login hints on confirmed auth 401s,
   even with retained user data; preserve session state on transient failures.
+- Bound shared cookie-auth refresh to 12 seconds and native network availability;
+  let each caller cancel its wait independently, and keep refresh timeouts retryable.
 - Treat a repeated worker-ready frame as a coordinator restart: retire the old
   engine and re-register in place, preserving durable storage and never replaying
   uncertain enqueues. Space failed coordinator registrations with bounded,
