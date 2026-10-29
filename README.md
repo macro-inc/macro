@@ -213,7 +213,7 @@ Deeper reading: [key concepts](https://docs.macro.com/concepts/blocks) covers bl
 
 # Using the hosted app
 
-[Sign up](https://macro.com/app) and connect your Gmail or Google Workspace account. Macro runs in any modern browser, with an [iOS app](https://apps.apple.com/us/app/macro-app/id6743133649) or [Android app](https://play.google.com/store/apps/details?id=com.macro.workspace.mobile&pcampaignid=web_share) for your phone. The [getting started guide](https://docs.macro.com/getting-started) takes you from a fresh account to a working setup in about 15 minutes. Coming from Notion, Slack, Superhuman, or Linear? See [Switch to Macro](https://docs.macro.com/switch-to-macro).
+[Sign up](https://macro.com/app) and connect your Gmail or Outlook account. Macro runs in any modern browser, with an [iOS app](https://apps.apple.com/us/app/macro-app/id6743133649) or [Android app](https://play.google.com/store/apps/details?id=com.macro.workspace.mobile&pcampaignid=web_share) for your phone. The [getting started guide](https://docs.macro.com/getting-started) takes you from a fresh account to a working setup in about 15 minutes. Coming from Notion, Slack, Superhuman, or Linear? See [Switch to Macro](https://docs.macro.com/switch-to-macro).
 
 <br />
 
