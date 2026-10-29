@@ -1,6 +1,8 @@
+import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PlusIcon from '@icon/system/regular/plus.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { hasValue } from '@property/utils/typeGuards';
 import { Button } from '@ui/components/Button';
@@ -95,20 +97,9 @@ export function TaskBoardView(props: {
     }
   };
 
-  const loadMore = async (columnId?: string) => {
-    if (columnId === undefined) {
-      await source.loadMore();
-      const error = source.error();
-
-      if (error) {
-        throw error;
-      }
-
-      return;
-    }
-
-    await source.loadMoreGroup(columnId);
-    const error = source.groupError?.(columnId);
+  const loadMore = async () => {
+    await source.loadMore();
+    const error = source.error();
 
     if (error) {
       throw error;
@@ -291,21 +282,16 @@ export function TaskBoardView(props: {
                 }
                 footer={
                   <Show when={column().hasMore}>
-                    <div class="py-3">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={column().loadingMore}
-                        onClick={() =>
-                          fireAndForget(
-                            read(() => loadMore(column().id)),
-                            'tasks-view'
-                          )
-                        }
-                      >
-                        {column().loadingMore ? 'Loading…' : 'Load more tasks'}
-                      </Button>
-                    </div>
+                    <TaskBoardColumnContinuation
+                      isLoading={column().loadingMore}
+                      failed={Boolean(source.groupError?.(column().id))}
+                      onLoad={() =>
+                        fireAndForget(
+                          source.loadMoreGroup(column().id),
+                          'tasks-view'
+                        )
+                      }
+                    />
                   </Show>
                 }
               >
@@ -349,6 +335,39 @@ export function TaskBoardView(props: {
             {source.isLoadingMore() ? 'Loading…' : 'Load more tasks'}
           </Button>
         </div>
+      </Show>
+    </div>
+  );
+}
+
+/** Requests the column's next page while near its visible cards; a failure waits for Retry. */
+function TaskBoardColumnContinuation(props: {
+  isLoading: boolean;
+  failed: boolean;
+  onLoad: () => void;
+}) {
+  const [sentinel, setSentinel] = createSignal<HTMLDivElement>();
+  useInfiniteScrollSentinel({
+    sentinel,
+    hasNextPage: () => !props.failed,
+    isFetchingNextPage: () => props.isLoading,
+    fetchNextPage: () => props.onLoad(),
+  });
+
+  return (
+    <div
+      ref={setSentinel}
+      aria-busy={!props.failed}
+      class="flex flex-wrap items-center justify-center gap-2 py-3 text-xs text-ink-muted"
+    >
+      <Show
+        when={props.failed}
+        fallback={<SpinnerIcon class="size-4 animate-spin" />}
+      >
+        <span>Couldn’t load more tasks.</span>
+        <Button size="sm" variant="secondary" onClick={() => props.onLoad()}>
+          Retry
+        </Button>
       </Show>
     </div>
   );

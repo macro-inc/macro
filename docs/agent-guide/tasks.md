@@ -289,11 +289,12 @@ The timeline reuses the list's filtered, sorted, grouped rows and collapsed
 state. Sidebar items fill the list's inset width and share vertical scrolling with
 bars. Compact group headers show the grouping's icon and span both the list and
 calendar; they remain visible when the list is collapsed.
-Pagination remains available in the item list and as a quiet, labeled action at
-the visible calendar's left edge outside the open list, even after horizontal
-panning. Group pagination stays after its group; the global continuation appears
-once after the loaded rows. Loading shows a spinner and disables both actions;
-pagination and group headers do not start range creation.
+A continuation row loads the next page when it scrolls near the visible rows,
+showing a spinner in the item list and at the visible calendar's left edge
+outside the open list, even after horizontal panning. A failed page shows
+**Retry loading tasks** there instead. Group continuations stay after their
+group; the global continuation appears once after the loaded rows. Continuation
+rows and group headers do not start range creation.
 The chart contains loaded results, not an implied complete schedule. Selecting
 Gantt persists in `tasks.layout` or `projectTasks.layout`, just like List and Board.
 
@@ -332,7 +333,8 @@ Layout, primary sort, sort direction, and grouping are reflected in `tasks.layou
 `tasks.sort`, `tasks.sortReversed`, and `tasks.groupBy` search parameters.
 Explicit URL values override saved preferences; back/forward navigation
 restores the corresponding controls, including the layout.
-Columns are 336px wide. Each column pages independently with **Load more tasks**.
+Columns are 336px wide. Each column loads its next page when the end of its cards
+scrolls into view; a failed page shows **Retry** at the bottom of that column.
 Use the horizontal scrollbar to reach more columns. Vertical wheel input over
 empty board background or gaps also scrolls horizontally. A wheel gesture stays
 with its original scroll area until momentum stops, even if another column moves
