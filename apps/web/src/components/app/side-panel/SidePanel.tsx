@@ -1,5 +1,5 @@
-import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { CollapsibleSection } from '@app/components/view-shell/CollapsibleSection';
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { usePreference } from '@app/preferences/use-preference';
 import { useMaybeBlockAliasedName } from '@core/block';
 import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';

@@ -2,11 +2,11 @@ import { EntityActivitySectionConditional } from '@app/features/activity/views/e
 import { EntityPropertiesSection } from '@app/features/property/side-panel/properties';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { SidePanel } from '@components/app/side-panel';
-import type { SidePanelSectionLayout } from '@components/app/side-panel/SidePanel';
 import {
   EntityMetadata,
   EntityMetadataRow,
 } from '@components/app/side-panel/EntityMetadata';
+import type { SidePanelSectionLayout } from '@components/app/side-panel/SidePanel';
 import { References } from '@core/component/References';
 import { useUserId } from '@core/context/user';
 import { type DateValue, formatDate } from '@core/util/date';

@@ -4,11 +4,11 @@ import {
   EntityTagsSection,
 } from '@app/features/property/side-panel/properties';
 import { FolderLink, SidePanel } from '@components/app/side-panel';
-import type { SidePanelSectionLayout } from '@components/app/side-panel/SidePanel';
 import {
   EntityMetadata,
   EntityMetadataRow,
 } from '@components/app/side-panel/EntityMetadata';
+import type { SidePanelSectionLayout } from '@components/app/side-panel/SidePanel';
 import { useBlockId } from '@core/block';
 import { useCanEdit } from '@core/signal/permissions';
 import { useChatDataQuery } from '@queries/cognition/chat-data';

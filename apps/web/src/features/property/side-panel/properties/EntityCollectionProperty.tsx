@@ -80,28 +80,36 @@ export function EntityCollectionProperty(props: {
     setConfirmedReferences(undefined);
   });
 
-  const [pendingReferences, setPendingReferences] =
-    createSignal<PendingEntityReference[]>([]);
-  const [pendingRemovals, setPendingRemovals] = createSignal<EntityReference[]>([]);
+  const [pendingReferences, setPendingReferences] = createSignal<
+    PendingEntityReference[]
+  >([]);
+  const [pendingRemovals, setPendingRemovals] = createSignal<EntityReference[]>(
+    []
+  );
   const saveProperty = async (
     property: Property,
     values: PropertyApiValues,
     displayName?: string
   ) => {
-    if (!ctx.canEdit || property.isMetadata || props.loading || isSaving()) return;
+    if (!ctx.canEdit || property.isMetadata || props.loading || isSaving())
+      return;
     const currentRefs = getEntityValues(property);
     const nextRefs = values.valueType === 'ENTITY' ? (values.refs ?? []) : [];
     batch(() => {
       setPendingReferences(
         nextRefs
-          .filter((reference) =>
-            !currentRefs.some((current) => sameEntityReference(current, reference))
+          .filter(
+            (reference) =>
+              !currentRefs.some((current) =>
+                sameEntityReference(current, reference)
+              )
           )
           .map((reference) => ({ ...reference, displayName }))
       );
       setPendingRemovals(
-        currentRefs.filter((reference) =>
-          !nextRefs.some((next) => sameEntityReference(next, reference))
+        currentRefs.filter(
+          (reference) =>
+            !nextRefs.some((next) => sameEntityReference(next, reference))
         )
       );
       setIsSaving(true);
@@ -190,13 +198,16 @@ function EntityCollectionPropertyBody(props: {
       Boolean(
         isReadOnly() || props.loading || isSaving() || propertyCtx.editorOpen()
       ),
-    onDrop: (reference, name) => saveReferences([...entities(), reference], name),
+    onDrop: (reference, name) =>
+      saveReferences([...entities(), reference], name),
   });
   const isDraggingOver = () => dropTarget?.isOver() ?? false;
   const canDrop = () => dropTarget?.canDrop() ?? false;
   const isDragging = () => dropTarget?.isDragging() ?? false;
   const showDropZone = () => isDraggingOver();
-  const handleAdd: JSX.EventHandler<HTMLButtonElement, MouseEvent> = (event) => {
+  const handleAdd: JSX.EventHandler<HTMLButtonElement, MouseEvent> = (
+    event
+  ) => {
     event.stopPropagation();
     if (isReadOnly() || props.loading || isSaving()) return;
     propertyCtx.openEditor(event.currentTarget);
@@ -257,7 +268,9 @@ function EntityCollectionPropertyBody(props: {
               isDragging() && 'invisible'
             )}
             aria-label={`Add ${props.property.displayName}`}
-            tooltip={hasItems() ? `Add ${props.property.displayName}` : undefined}
+            tooltip={
+              hasItems() ? `Add ${props.property.displayName}` : undefined
+            }
             disabled={props.loading || isSaving() || isDragging()}
             onClick={handleAdd}
           >
@@ -265,9 +278,7 @@ function EntityCollectionPropertyBody(props: {
             <Show when={!hasItems()}>{t('common.add')}</Show>
           </Button>
         </Show>
-        <div
-          class={cn('flex shrink-0 items-center', !hasItems() && 'ml-auto')}
-        >
+        <div class={cn('flex shrink-0 items-center', !hasItems() && 'ml-auto')}>
           {props.children}
         </div>
       </div>
@@ -306,7 +317,12 @@ function EntityCollectionPropertyBody(props: {
             )}
           </For>
         </div>
-        <span class="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        <span
+          class="sr-only"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
           {props.pendingReferences.length > 0 ? t('common.addingItem') : ''}
         </span>
         <Show when={!hasItems()}>
@@ -378,7 +394,9 @@ export function NonUserEntityChip(props: {
           fallback={
             <span class="flex min-w-0 items-center gap-1.5 px-2 text-ink-muted">
               <span class="shrink-0 flex items-center">{icon()}</span>
-              <span class="min-w-0 truncate">{props.pendingLabel ?? name()}</span>
+              <span class="min-w-0 truncate">
+                {props.pendingLabel ?? name()}
+              </span>
               <SpinnerIcon
                 class="size-3.5 shrink-0 animate-spin motion-reduce:animate-none"
                 aria-hidden="true"

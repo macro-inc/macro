@@ -3,6 +3,7 @@ import {
   SidePanel,
   type SidePanelSectionLayout,
 } from '@components/app/side-panel/SidePanel';
+import { fireAndForget } from '@core/util/fireAndForget';
 import Plus from '@icon/system/regular/plus.svg';
 import { Property as PropertyNS, useProperty } from '@property';
 import { AddPropertyButton } from '@property/component/AddPropertyButton';
@@ -214,7 +215,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
         return next;
       });
     }
-    refetch();
+    fireAndForget(refetch(), 'property-added-refresh');
   };
 
   const removePendingProperty = (property: Property) => {
@@ -232,7 +233,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
       next.delete(definitionId);
       return next;
     });
-    refetch();
+    fireAndForget(refetch(), 'property-add-failed-refresh');
   };
 
   createEffect(() => {
@@ -294,131 +295,132 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
       }
     >
       <div class="flex flex-col gap-1 text-xs">
-          <Show when={isLoading()}>
-            <SidePanel.Loading />
-          </Show>
+        <Show when={isLoading()}>
+          <SidePanel.Loading />
+        </Show>
 
-          <Show
-            when={
-              props.showTags !== false && isTaggableEntityType(props.entityType)
-            }
+        <Show
+          when={
+            props.showTags !== false && isTaggableEntityType(props.entityType)
+          }
+        >
+          <div class="flex items-center gap-3">
+            <span class="w-(--sidepanel-label-width) shrink-0 text-ink-muted">
+              Tags
+            </span>
+            <TagsRow
+              entityId={props.entityId}
+              entityType={props.entityType}
+              canEdit={props.canEdit}
+            />
+          </div>
+        </Show>
+
+        <Show when={gridProperties().length > 0}>
+          <SidePanel.Grid
+            class={cn(
+              'auto-rows-[minmax(1.75rem,auto)] gap-y-1',
+              collectionProperties().length === 0 &&
+                props.canEdit &&
+                props.showAddProperty !== false &&
+                'mb-3'
+            )}
           >
-            <div class="flex items-center gap-3">
-              <span class="w-(--sidepanel-label-width) shrink-0 text-ink-muted">
-                Tags
-              </span>
-              <TagsRow
-                entityId={props.entityId}
-                entityType={props.entityType}
-                canEdit={props.canEdit}
-              />
-            </div>
-          </Show>
+            <For each={gridProperties()}>
+              {(property) => (
+                <SidePanelPropertyRow
+                  entityId={props.entityId}
+                  getEmptyLabel={props.getEmptyLabel}
+                  property={property}
+                  canRemoveFromEntity={
+                    !defaultPinnedDefinitionIds().has(
+                      property.propertyDefinitionId
+                    ) &&
+                    !(
+                      isPendingProperty(property) &&
+                      props
+                        .defaultProperties?.()
+                        .some(
+                          (placeholder) =>
+                            placeholder.propertyDefinitionId ===
+                            property.propertyDefinitionId
+                        )
+                    )
+                  }
+                  canPinPendingProperty={props
+                    .defaultTitlePropertyDefinitionIds?.()
+                    .includes(property.propertyDefinitionId)}
+                  onRemovePendingProperty={removePendingProperty}
+                  onPropertyPinned={
+                    props.onPropertyPinned ? pinProperty : undefined
+                  }
+                />
+              )}
+            </For>
+          </SidePanel.Grid>
+        </Show>
 
-          <Show when={gridProperties().length > 0}>
-            <SidePanel.Grid
-              class={cn(
-                'auto-rows-[minmax(1.75rem,auto)] gap-y-1',
-                collectionProperties().length === 0 &&
-                  props.canEdit &&
-                  props.showAddProperty !== false &&
-                  'mb-3'
+        <Show when={collectionProperties().length > 0}>
+          <div
+            class={cn(
+              'flex flex-col gap-1',
+              props.canEdit && props.showAddProperty !== false && 'mb-3'
+            )}
+          >
+            <For
+              each={collectionProperties().map(
+                (property) => property.propertyDefinitionId
               )}
             >
-              <For each={gridProperties()}>
-                {(property) => (
-                  <SidePanelPropertyRow
-                    entityId={props.entityId}
-                    getEmptyLabel={props.getEmptyLabel}
-                    property={property}
-                    canRemoveFromEntity={
-                      !defaultPinnedDefinitionIds().has(
-                        property.propertyDefinitionId
-                      ) &&
-                      !(
-                        isPendingProperty(property) &&
-                        props
-                          .defaultProperties?.()
-                          .some(
-                            (placeholder) =>
-                              placeholder.propertyDefinitionId ===
-                              property.propertyDefinitionId
-                          )
-                      )
-                    }
-                    canPinPendingProperty={props
-                      .defaultTitlePropertyDefinitionIds?.()
-                      .includes(property.propertyDefinitionId)}
-                    onRemovePendingProperty={removePendingProperty}
-                    onPropertyPinned={
-                      props.onPropertyPinned ? pinProperty : undefined
-                    }
-                  />
-                )}
-              </For>
-            </SidePanel.Grid>
-          </Show>
-
-          <Show when={collectionProperties().length > 0}>
-            <div
-              class={cn(
-                'flex flex-col gap-1',
-                props.canEdit && props.showAddProperty !== false && 'mb-3'
-              )}
-            >
-              <For
-                each={collectionProperties().map(
-                  (property) => property.propertyDefinitionId
-                )}
-              >
-                {(definitionId) => {
-                  const saving = createSignal(false);
-                  return (
-                    <Show
-                      when={collectionProperties().find(
-                        (property) => property.propertyDefinitionId === definitionId
-                      )}
-                    >
-                      {(property) => (
-                        <EntityCollectionProperty
-                          entityId={props.entityId}
-                          loading={isLoading()}
-                          onSave={savePropertyValues}
-                          onRefresh={refreshCollection}
-                          property={property()}
+              {(definitionId) => {
+                const saving = createSignal(false);
+                return (
+                  <Show
+                    when={collectionProperties().find(
+                      (property) =>
+                        property.propertyDefinitionId === definitionId
+                    )}
+                  >
+                    {(property) => (
+                      <EntityCollectionProperty
+                        entityId={props.entityId}
+                        loading={isLoading()}
+                        onSave={savePropertyValues}
+                        onRefresh={refreshCollection}
+                        property={property()}
+                        saving={saving}
+                      >
+                        <PropertyRowActions.Root
                           saving={saving}
+                          onRefresh={refetch}
+                          canRemoveFromEntity={
+                            !defaultPinnedDefinitionIds().has(
+                              property().propertyDefinitionId
+                            )
+                          }
+                          property={property()}
+                          onRemovePendingProperty={removePendingProperty}
+                          onPropertyPinned={
+                            props.onPropertyPinned ? pinProperty : undefined
+                          }
                         >
-                          <PropertyRowActions.Root
-                            saving={saving}
-                            onRefresh={refetch}
-                            canRemoveFromEntity={
-                              !defaultPinnedDefinitionIds().has(
-                                property().propertyDefinitionId
-                              )
-                            }
-                            property={property()}
-                            onRemovePendingProperty={removePendingProperty}
-                            onPropertyPinned={
-                              props.onPropertyPinned ? pinProperty : undefined
-                            }
-                          >
-                            <PropertyRowActions.Pin />
-                            <PropertyRowActions.Remove />
-                          </PropertyRowActions.Root>
-                        </EntityCollectionProperty>
-                      )}
-                    </Show>
-                  );
-                }}
-              </For>
-            </div>
-          </Show>
+                          <PropertyRowActions.Pin />
+                          <PropertyRowActions.Remove />
+                        </PropertyRowActions.Root>
+                      </EntityCollectionProperty>
+                    )}
+                  </Show>
+                );
+              }}
+            </For>
+          </div>
+        </Show>
 
-          <Show when={props.canEdit && props.showAddProperty !== false}>
-            <div class="flex items-center">
-              <AddPropertyButton size="xs" class="m-px gap-1.5" />
-            </div>
-          </Show>
+        <Show when={props.canEdit && props.showAddProperty !== false}>
+          <div class="flex items-center">
+            <AddPropertyButton size="xs" class="m-px gap-1.5" />
+          </div>
+        </Show>
       </div>
     </Show>
   );
@@ -732,10 +734,7 @@ function UserStackPill(props: { property: Property }) {
   );
 }
 
-function MultiValue(props: {
-  property: Property;
-  children: JSX.Element;
-}) {
+function MultiValue(props: { property: Property; children: JSX.Element }) {
   const ctx = usePropertiesContext();
   const propertyCtx = useProperty();
   const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;

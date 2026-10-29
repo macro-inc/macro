@@ -26,7 +26,10 @@ export function getCollectionDropReference(
   const entityType = getEntityType({ kind: 'entity', id: data.id, data });
   if (!entityType) return;
   if (data.id === selfId && entityType === selfType) return;
-  if (property.specificEntityType && property.specificEntityType !== entityType) {
+  if (
+    property.specificEntityType &&
+    property.specificEntityType !== entityType
+  ) {
     return;
   }
   if (property.value?.some((reference) => reference.entity_id === data.id)) {
@@ -76,7 +79,10 @@ export function createEntityCollectionDropTarget(options: {
     if (!isEntityDragData(draggable.data)) return;
     const reference = referenceFor(draggable.data);
     if (!reference) return;
-    fireAndForget(options.onDrop(reference, draggable.data.name), 'property-collection-drop');
+    fireAndForget(
+      options.onDrop(reference, draggable.data.name),
+      'property-collection-drop'
+    );
   });
 
   return {

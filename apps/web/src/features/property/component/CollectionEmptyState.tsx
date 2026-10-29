@@ -1,7 +1,10 @@
 import { cn } from '@ui/utils/classname';
 import { type ComponentProps, type JSX, splitProps } from 'solid-js';
 
-export type CollectionEmptyStateProps = Omit<ComponentProps<'div'>, 'children'> & {
+export type CollectionEmptyStateProps = Omit<
+  ComponentProps<'div'>,
+  'children'
+> & {
   message: JSX.Element;
   action?: JSX.Element;
 };

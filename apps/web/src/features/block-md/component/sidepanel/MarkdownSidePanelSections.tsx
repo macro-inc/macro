@@ -11,11 +11,11 @@ import {
   GithubPullRequestDetailsRows,
   SidePanel,
 } from '@components/app/side-panel';
-import type { SidePanelSectionLayout } from '@components/app/side-panel/SidePanel';
 import {
   EntityMetadata,
   EntityMetadataRow,
 } from '@components/app/side-panel/EntityMetadata';
+import type { SidePanelSectionLayout } from '@components/app/side-panel/SidePanel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { Wordcount } from '@core/component/LexicalMarkdown/component/status/Wordcount';
