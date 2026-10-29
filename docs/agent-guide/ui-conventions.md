@@ -197,10 +197,12 @@ information panels. Markdown/tasks include Ask Macro and document/task dispatch;
 includes Ask Macro and Create task; PDF and calls include Ask Macro. Native
 projects put Delete in the `Project actions` menu after the project title.
 
-Standard metadata is quiet, non-collapsible text at the bottom of each panel,
-separated by a muted divider. Owner and available timestamps share one format;
-Markdown adds word/character counts. There is no standard Details or Stats
-disclosure. Agent runtime information remains in its dedicated Session section.
+Standard metadata is quiet, non-collapsible text at the top of each panel,
+before the interactive sections and separated by a muted divider. Owner and
+available timestamps share one format; Markdown adds word/character counts.
+There is no standard Details or Stats disclosure. Agent runtime information
+remains in its dedicated Session section. Section headers and bodies use 12px
+horizontal insets, with 12px bottom padding on the body.
 
 Block information panels float over the right side of the block without changing
 the content width or its centered position. A single rounded bubble fits its

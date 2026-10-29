@@ -2,7 +2,7 @@ import { type DateValue, formatDate } from '@core/util/date';
 import { OwnerLabel } from '@entity/owner/owner-display';
 import { type ParentProps, Show } from 'solid-js';
 
-/** Quiet metadata copy shared by every block information footer. */
+/** Quiet metadata copy shared by every block information panel. */
 export function EntityMetadata(
   props: ParentProps<{
     ownerId?: string | null;

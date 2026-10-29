@@ -571,8 +571,8 @@ function SidePanelOutlet(props: {
       when={props.floating}
       fallback={
         <Scroll class="flex flex-col min-h-0">
+          <Metadata />
           <Sections />
-          <Footers />
         </Scroll>
       }
     >
@@ -582,13 +582,13 @@ function SidePanelOutlet(props: {
           props.scrollable !== false && 'overflow-y-auto overscroll-contain'
         )}
       >
+        <Metadata />
         <Sections />
-        <Footers />
       </div>
     </Show>
   );
 
-  function Footers() {
+  function Metadata() {
     return (
       <For each={sortedSections().filter((section) => section.footer)}>
         {(section) => section.component(props.floating ?? false)}
@@ -597,7 +597,7 @@ function SidePanelOutlet(props: {
   }
 }
 
-/** Unheaded metadata always follows the panel's interactive sections. */
+/** Unheaded metadata appears before the panel's interactive sections. */
 function Footer(props: ParentProps) {
   const ctx = useContext(SidePanelContext);
   if (!ctx)
@@ -609,12 +609,12 @@ function Footer(props: ParentProps) {
       defaultOpen: false,
       footer: true,
       component: () => (
-        <footer
-          aria-label="Metadata"
-          class="border-t border-edge-muted px-3 py-3 text-xs leading-relaxed text-ink-extra-muted"
+        <section
+          aria-label="Details"
+          class="border-b border-edge-muted p-3 text-xs leading-relaxed text-ink-extra-muted"
         >
           <Suspense fallback={<Loading />}>{props.children}</Suspense>
-        </footer>
+        </section>
       ),
     });
     onCleanup(() => ctx.unregister('metadata-footer'));
@@ -687,17 +687,17 @@ function Section(
     return (
       <>
         <Accordion.Header class="group flex items-center">
-          <Accordion.Trigger class="px-2 py-3 flex flex-1 min-w-0 items-center justify-between gap-2 text-xs text-ink-muted hover:underline">
+          <Accordion.Trigger class="px-3 py-3 flex flex-1 min-w-0 items-center justify-between gap-2 text-xs text-ink-muted hover:underline">
             <span>{props.title}</span>
             <CaretRight class="size-3 shrink-0 transition-transform duration-90 group-data-expanded:rotate-90" />
           </Accordion.Trigger>
           <Show when={props.actions}>
-            <div class="shrink-0 pr-2">{props.actions}</div>
+            <div class="shrink-0 pr-3">{props.actions}</div>
           </Show>
         </Accordion.Header>
         <Accordion.Content class="group/content overflow-hidden data-expanded:animate-accordion-down data-closed:animate-accordion-up">
           <Suspense fallback={<Loading />}>
-            <div class="px-2 pb-2 text-sm opacity-0 group-data-expanded/content:opacity-100 transition-opacity duration-150 ease-out">
+            <div class="px-3 pb-3 text-sm opacity-0 group-data-expanded/content:opacity-100 transition-opacity duration-150 ease-out">
               {props.children}
             </div>
           </Suspense>
