@@ -15,6 +15,7 @@ import { PosthogProvider } from '@app/lib/analytics/posthog';
 import type { CollabSurfaceLoroManager } from '@core/collab-surface/createCollabSurface';
 import { UserContextProvider } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { onElementConnect } from '@core/util/onElementConnect';
 import { $isCodeNode } from '@lexical/code';
 import { createHeadlessEditor } from '@lexical/headless';
 import {
@@ -46,7 +47,6 @@ import {
 } from '@macro-inc/lexical-core';
 import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
 import { markdownToLoroSnapshot } from '@macro-inc/lexical-core/markdown-loro-snapshot';
-import { onElementConnect } from '@solid-primitives/lifecycle';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { DragDropProvider } from '@thisbeyond/solid-dnd';
 import {
