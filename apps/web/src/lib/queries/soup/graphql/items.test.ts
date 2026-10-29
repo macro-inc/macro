@@ -255,7 +255,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
           record: {
             ...row.record,
             emailName: 'Preview from another tab',
-            ...(!supported && !hydrated && row.recordKey === inviteKey
+            ...(!hydrated && row.recordKey === inviteKey
               ? { mailAllPreview: null }
               : {}),
           },
@@ -306,6 +306,12 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         expect(query.data()?.entities[0]).toMatchObject({
           emailName: 'Calendar invitation',
         });
+        expect(query.cacheMaintained?.()).toBe(false);
+        expect(
+          getActiveGraphqlSoupRevalidations(undefined, {
+            unmaintainedOnly: true,
+          })
+        ).not.toHaveLength(0);
         if (supported) {
           archived = true;
           revision = '3';
@@ -325,11 +331,484 @@ describe('createGraphqlSoupAstItemsQuery', () => {
             })
           );
         }
+        if (!supported) {
+          expect(query.cacheMaintained?.()).toBe(false);
+          archived = true;
+          revision = '4';
+          changed(revision);
+          const refresh = query.refresh();
+          fake.executions.at(-1)!.next(
+            graphqlSoupPage({
+              items: [{ __typename: 'GraphqlSoupEmailThread', id: 'normal' }],
+              next_cursor: null,
+            }),
+            { source: 'live-network', revision }
+          );
+          await refresh;
+          expect(query.data()?.entities.map((row) => row.id)).toEqual([
+            'normal',
+          ]);
+        }
       } finally {
         dispose();
       }
     }
   );
+
+  it('keeps retained previews while read state changes before and after settlement', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    let revision = '1';
+    let changed: (revision: string) => void = () => {};
+    let isRead = false;
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      currentRevision: async () => revision,
+      entityFilter: entityFilterMock,
+      onCacheChanged: (callback: typeof changed) => {
+        changed = callback;
+        return () => {};
+      },
+      onCacheGenerationChanged: () => () => {},
+    });
+    const key = 'GraphqlSoupEmailThread:invite';
+    entityFilterMock.mockImplementation(async () => ({
+      kind: 'mail-page',
+      revision,
+      keys: [key],
+      retainedKeys: [key],
+      sortTimestamps: ['2026-01-01T00:00:00Z'],
+      nextCursor: null,
+      optimistic: revision === '2',
+    }));
+    readRecordsByKeysMock.mockImplementation(async () => ({
+      revision,
+      records: [
+        {
+          recordKey: key,
+          record: {
+            __typename: 'GraphqlSoupEmailThread',
+            id: 'invite',
+            isRead,
+            inboxVisible: true,
+            isSignal: false,
+            emailName: 'Another view',
+            mailAllPreview: null,
+          },
+        },
+      ],
+    }));
+    const { source, dispose } = createRoot((dispose) => ({
+      dispose,
+      source: createSoupLiveQuery(() => ({
+        emailView: 'INBOX',
+        sortMethod: 'UPDATED_AT',
+        limit: 20,
+      })),
+    }));
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [
+            {
+              __typename: 'GraphqlSoupEmailThread',
+              id: 'invite',
+              isRead: false,
+              inboxVisible: true,
+              emailName: 'Invitation',
+            },
+          ],
+          next_cursor: null,
+        })
+      );
+      revision = '2';
+      isRead = true;
+      changed(revision);
+      await vi.waitFor(() =>
+        expect(source.data()?.[0]).toMatchObject({
+          isRead: true,
+          emailName: 'Invitation',
+        })
+      );
+      expect(source.cacheMaintained()).toBe(false);
+      revision = '3';
+      changed(revision);
+      await vi.waitFor(() => expect(source.localRevision()).toBe('3'));
+      expect(source.data()?.[0]).toMatchObject({
+        isRead: true,
+        emailName: 'Invitation',
+      });
+      isRead = false;
+      revision = '4';
+      changed(revision);
+      await vi.waitFor(() =>
+        expect(source.data()?.[0]).toMatchObject({
+          isRead: false,
+          emailName: 'Invitation',
+        })
+      );
+    } finally {
+      dispose();
+    }
+  });
+
+  it('merges retained rows across a Mail cursor before publishing the next page', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    let revision = '1';
+    let changed: (revision: string) => void = () => {};
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      currentRevision: async () => revision,
+      entityFilter: entityFilterMock,
+      onCacheChanged: (callback: typeof changed) => {
+        changed = callback;
+        return () => {};
+      },
+      onCacheGenerationChanged: () => () => {},
+    });
+    const key = (id: string) => `GraphqlSoupEmailThread:${id}`;
+    entityFilterMock.mockImplementation(async ({ mail }) => ({
+      kind: 'mail-page',
+      revision,
+      keys: (mail.through === 'end'
+        ? ['first', 'second', 'retained']
+        : mail.cursor
+          ? ['second']
+          : ['first', 'retained']
+      ).map(key),
+      retainedKeys: mail.cursor ? [] : [key('retained')],
+      sortTimestamps:
+        mail.through === 'end'
+          ? [
+              '2026-01-03T00:00:00Z',
+              '2026-01-02T00:00:00Z',
+              '2026-01-01T00:00:00Z',
+            ]
+          : mail.cursor
+            ? ['2026-01-02T00:00:00Z']
+            : ['2026-01-03T00:00:00Z', '2026-01-01T00:00:00Z'],
+      endCursor: mail.cursor || mail.through === 'end' ? 'end' : 'first',
+      nextCursor: mail.cursor || mail.through === 'end' ? null : 'next',
+      optimistic: false,
+    }));
+    readRecordsByKeysMock.mockImplementation(
+      async (_host, _selection, keys) => ({
+        revision,
+        records: mailThreadRecords(keys),
+      })
+    );
+    const { source, dispose } = createRoot((dispose) => ({
+      dispose,
+      source: createSoupLiveQuery(() => ({
+        emailView: 'INBOX',
+        sortMethod: 'UPDATED_AT',
+        limit: 1,
+      })),
+    }));
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [
+            {
+              __typename: 'GraphqlSoupEmailThread',
+              id: 'retained',
+              emailName: 'Invitation',
+            },
+          ],
+          next_cursor: null,
+        })
+      );
+      revision = '2';
+      changed(revision);
+      await vi.waitFor(() => expect(source.cachedMail()).toBe(true));
+      expect(source.data()?.map((row) => row.id)).toEqual([
+        'first',
+        'retained',
+      ]);
+      await source.fetchNextPage();
+      expect(source.data()?.map((row) => row.id)).toEqual([
+        'first',
+        'second',
+        'retained',
+      ]);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('discards a local Mail projection when the server baseline exceeds its bound', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    let revision = '1';
+    let changed: (revision: string) => void = () => {};
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      currentRevision: async () => revision,
+      entityFilter: entityFilterMock,
+      onCacheChanged: (callback: typeof changed) => {
+        changed = callback;
+        return () => {};
+      },
+      onCacheGenerationChanged: () => () => {},
+    });
+    const key = 'GraphqlSoupEmailThread:one';
+    entityFilterMock.mockImplementation(async () => ({
+      kind: 'mail-page',
+      revision,
+      keys: [key],
+      retainedKeys: [],
+      sortTimestamps: ['2026-01-01T00:00:00Z'],
+      nextCursor: null,
+      endCursor: 'previous-depth',
+      optimistic: false,
+    }));
+    readRecordsByKeysMock.mockImplementation(async () => ({
+      revision,
+      records: mailThreadRecords([key]),
+    }));
+    const { source, dispose } = createRoot((dispose) => ({
+      dispose,
+      source: createSoupLiveQuery(() => ({
+        emailView: 'INBOX',
+        sortMethod: 'UPDATED_AT',
+        limit: 20,
+      })),
+    }));
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [{ __typename: 'GraphqlSoupEmailThread', id: 'one' }],
+          next_cursor: null,
+        })
+      );
+      revision = '2';
+      changed(revision);
+      await vi.waitFor(() => expect(source.cachedMail()).toBe(true));
+      const refresh = source.refresh();
+      const items = Array.from({ length: 5001 }, (_, i) => ({
+        __typename: 'GraphqlSoupEmailThread',
+        id: i === 0 ? 'one' : String(i),
+        emailName: 'Fresh server row',
+      }));
+      fake.executions
+        .at(-1)!
+        .next(graphqlSoupPage({ items, next_cursor: null }), {
+          source: 'live-network',
+          revision: '3',
+        });
+      await refresh;
+      revision = '4';
+      changed(revision);
+      await vi.waitFor(() => expect(source.cachedMail()).toBe(false));
+      expect(source.cacheMaintained()).toBe(false);
+      expect(source.data()?.[0]).toMatchObject({
+        emailName: 'Fresh server row',
+      });
+      entityFilterMock.mockClear();
+      source.resetToInitialPage();
+      fake.executions.at(-1)!.next(
+        graphqlSoupPage({
+          items: [{ __typename: 'GraphqlSoupEmailThread', id: 'one' }],
+          next_cursor: null,
+        }),
+        { source: 'normalized-cache-hit', revision }
+      );
+      await vi.waitFor(() => expect(entityFilterMock).toHaveBeenCalled());
+      expect(entityFilterMock.mock.calls[0][0].mail.through).toBeUndefined();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('reconciles late server rows even when the local list is already longer', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    let revision = '1';
+    let changed: (revision: string) => void = () => {};
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      currentRevision: async () => revision,
+      entityFilter: entityFilterMock,
+      onCacheChanged: (callback: typeof changed) => {
+        changed = callback;
+        return () => {};
+      },
+      onCacheGenerationChanged: () => () => {},
+    });
+    const key = (id: string) => `GraphqlSoupEmailThread:${id}`;
+    entityFilterMock.mockImplementation(async ({ baseline }) => {
+      const ids = baseline?.some(
+        (entry: { key: string }) => entry.key === key('late')
+      )
+        ? ['late', 'one', 'two']
+        : ['one', 'two'];
+      return {
+        kind: 'mail-page',
+        revision,
+        keys: ids.map(key),
+        retainedKeys: [],
+        sortTimestamps: ids.map(() => '2026-01-01T00:00:00Z'),
+        nextCursor: null,
+        optimistic: false,
+      };
+    });
+    readRecordsByKeysMock.mockImplementation(
+      async (_host, _selection, keys) => ({
+        revision,
+        records: mailThreadRecords(keys),
+      })
+    );
+    const { source, dispose } = createRoot((dispose) => ({
+      dispose,
+      source: createSoupLiveQuery(() => ({
+        emailView: 'INBOX',
+        sortMethod: 'UPDATED_AT',
+        limit: 20,
+      })),
+    }));
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [{ __typename: 'GraphqlSoupEmailThread', id: 'one' }],
+          next_cursor: null,
+        })
+      );
+      revision = '2';
+      changed(revision);
+      await vi.waitFor(() => expect(source.cachedMail()).toBe(true));
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [{ __typename: 'GraphqlSoupEmailThread', id: 'late' }],
+          next_cursor: null,
+        }),
+        { source: 'normalized-cache-hit', revision }
+      );
+      await vi.waitFor(() =>
+        expect(source.data()?.map((row) => row.id)).toEqual([
+          'late',
+          'one',
+          'two',
+        ])
+      );
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [], next_cursor: null }),
+        { source: 'normalized-cache-hit', revision }
+      );
+      await vi.waitFor(() =>
+        expect(source.data()?.map((row) => row.id)).toEqual(['one', 'two'])
+      );
+      expect(source.cacheMaintained()).toBe(true);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('keeps recovery refreshes enabled when server evidence arrives during pagination', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    let revision = '1';
+    let changed: (revision: string) => void = () => {};
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      currentRevision: async () => revision,
+      entityFilter: entityFilterMock,
+      onCacheChanged: (callback: typeof changed) => {
+        changed = callback;
+        return () => {};
+      },
+      onCacheGenerationChanged: () => () => {},
+    });
+    const key = (id: string) => `GraphqlSoupEmailThread:${id}`;
+    const merged = {
+      kind: 'mail-page' as const,
+      revision: '2',
+      keys: ['first', 'second', 'retained'].map(key),
+      retainedKeys: [key('retained')],
+      sortTimestamps: [
+        '2026-01-03T00:00:00Z',
+        '2026-01-02T00:00:00Z',
+        '2026-01-01T00:00:00Z',
+      ],
+      nextCursor: null,
+      endCursor: 'end',
+      optimistic: false,
+    };
+    const evaluation = deferred<typeof merged>();
+    let paging = false;
+    entityFilterMock.mockImplementation(async ({ mail, baseline }) => {
+      if (mail.cursor) {
+        paging = true;
+        fake.executions[0].next(
+          graphqlSoupPage({
+            items: ['first', 'retained'].map((id) => ({
+              __typename: 'GraphqlSoupEmailThread',
+              id,
+            })),
+            next_cursor: null,
+          }),
+          { source: 'normalized-cache-hit', revision }
+        );
+        return {
+          ...merged,
+          keys: [key('second')],
+          retainedKeys: [],
+          sortTimestamps: [merged.sortTimestamps[1]],
+        };
+      }
+      if (mail.through === 'end') return merged;
+      if (
+        paging &&
+        baseline.some((entry: { key: string }) => entry.key === key('retained'))
+      ) {
+        return evaluation.promise;
+      }
+      return {
+        ...merged,
+        revision,
+        keys: [key('first')],
+        retainedKeys: [],
+        sortTimestamps: [merged.sortTimestamps[0]],
+        endCursor: 'first',
+        nextCursor: 'next',
+      };
+    });
+    readRecordsByKeysMock.mockImplementation(
+      async (_host, _selection, keys: string[]) => ({
+        revision,
+        records: mailThreadRecords(
+          keys.filter((key) => !key.endsWith(':retained'))
+        ),
+      })
+    );
+    const { source, dispose } = createRoot((dispose) => ({
+      dispose,
+      source: createSoupLiveQuery(() => ({
+        emailView: 'INBOX',
+        sortMethod: 'UPDATED_AT',
+        limit: 1,
+      })),
+    }));
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [{ __typename: 'GraphqlSoupEmailThread', id: 'first' }],
+          next_cursor: null,
+        })
+      );
+      revision = '2';
+      changed(revision);
+      await vi.waitFor(() => expect(source.cacheMaintained()).toBe(true));
+      await source.fetchNextPage();
+      expect(source.data()?.map((row) => row.id)).toEqual([
+        'first',
+        'second',
+        'retained',
+      ]);
+      expect(source.cacheMaintained()).toBe(false);
+      expect(
+        getActiveGraphqlSoupRevalidations(undefined, { unmaintainedOnly: true })
+      ).not.toHaveLength(0);
+    } finally {
+      evaluation.resolve(merged);
+      dispose();
+    }
+  });
 
   it("hands the query's email view to the item mapper", async () => {
     const fake = makeFakeClient();
@@ -1819,6 +2298,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     });
     entityFilterMock.mockResolvedValue({
       kind: 'mail-page',
+      retainedKeys: [],
       revision: REVISION_2,
       keys: [],
       sortTimestamps: [],
@@ -1949,6 +2429,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       const index = args.filters.emailFilter ? 2 : args.mail.cursor ? 1 : 0;
       return {
         kind: 'mail-page',
+        retainedKeys: [],
         revision: REVISION_0,
         keys: [keys[index]],
         sortTimestamps: [ts],
@@ -2055,6 +2536,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     });
     entityFilterMock.mockImplementation(async (args) => ({
       kind: 'mail-page',
+      retainedKeys: [],
       revision: REVISION_0,
       keys: [`GraphqlSoupEmailThread:${args.mail.cursor ? 'two' : 'one'}`],
       sortTimestamps: ['2025-01-01T00:00:00.000001Z'],
@@ -2150,6 +2632,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         const keys = all.slice(start, end);
         return {
           kind: 'mail-page',
+          retainedKeys: [],
           revision: REVISION_0,
           keys,
           sortTimestamps: keys.map(() => '2025-01-01T00:00:00.000001Z'),
@@ -2247,6 +2730,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     });
     entityFilterMock.mockImplementation(async () => ({
       kind: 'mail-page',
+      retainedKeys: [],
       revision,
       keys: ['GraphqlSoupEmailThread:a'],
       sortTimestamps: ['2025-01-01T00:00:00.000001Z'],
@@ -2355,6 +2839,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         const last = keys.length ? `${generation}|${keys.at(-1)}` : null;
         return {
           kind: 'mail-page',
+          retainedKeys: [],
           revision,
           keys,
           sortTimestamps: keys.map(() => '2025-01-01T00:00:00.000001Z'),
@@ -2611,6 +3096,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       );
       entityFilterMock.mockResolvedValue({
         kind: 'mail-page',
+        retainedKeys: [],
         revision: REVISION_0,
         keys: [],
         sortTimestamps: [],
@@ -2687,10 +3173,14 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       const fake = makeFakeClient();
       getGraphqlSoupClientMock.mockReturnValue(fake.client);
       let revision = REVISION_0;
+      let changed: (revision: string) => void = () => {};
       getGraphqlSoupCacheHostMock.mockReturnValue({
         currentRevision: async () => revision,
         entityFilter: entityFilterMock,
-        onCacheChanged: () => () => {},
+        onCacheChanged: (callback: typeof changed) => {
+          changed = callback;
+          return () => {};
+        },
         onCacheGenerationChanged: () => () => {},
       });
       makeGraphqlSoupInputMock.mockReturnValue({
@@ -2707,6 +3197,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       };
       entityFilterMock.mockImplementation(async () => ({
         kind: 'mail-page',
+        retainedKeys: [],
         revision,
         keys: ['GraphqlSoupEmailThread:local-draft'],
         sortTimestamps: ['2026-09-28T12:00:00Z'],
@@ -2769,6 +3260,16 @@ describe('createGraphqlSoupAstItemsQuery', () => {
           ])
         );
         expect(query.data()?.cachedMail).toBe(true);
+
+        entityFilterMock.mockRejectedValueOnce(
+          new Error('temporary cache read failure')
+        );
+        revision = REVISION_2;
+        changed(revision);
+        await vi.waitFor(() => expect(query.cacheMaintained?.()).toBe(false));
+        expect(query.data()?.entities.map((row) => row.id)).toEqual([
+          'local-draft',
+        ]);
 
         // Once the write settles, the fresh server page takes over even if
         // an old local row remains. Pending preservation must not retain ghosts.

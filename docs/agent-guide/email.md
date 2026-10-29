@@ -355,7 +355,14 @@ necessarily evaluated from the last synchronized grants.
 The lightweight metadata backfill runs before body hydration. Its refreshes scan all
 metadata: message-time watermarks alone miss archive/read changes on old threads.
 Filter availability therefore does not guarantee that opening every message body works offline. Missing
-projection proof is unknown, never false. Tag selections use cached property postings;
+projection proof is unknown, never false. A retained invitation keeps its fetched
+preview while read/archive flags update immediately, including rollback and undo.
+Check the retained invitation itself: mark it read, archive it, reject an archive,
+and undo a committed archive before metadata hydration finishes. Older cache hosts
+must still refresh affected lists after commit. Scroll across a retained row and
+check that the next page remains ordered; a baseline beyond 5,000 rows returns to
+the live server list instead of freezing local membership.
+Tag selections use cached property postings;
 attachment chips refine the cached rows on the client. Sender/recipient filters and
 non-created/updated sorts remain outside this local profile. Grouping and sort-selector
 coverage are separate from the filter-selection matrix. No cache-format wipe is required: Mail uses a separate versioned profile

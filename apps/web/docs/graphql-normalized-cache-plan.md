@@ -868,15 +868,20 @@ and Mail policy through its predicate adapter. That policy remains outside
 generic cache-core.
 
 Mail list pages carry same-query server membership in the existing `baseline`
-field. The Mail adapter reconciles it against current predicates, retaining
-unknown rows and rejecting confirmed nonmembers. `retainedKeys` preserves the
-server display snapshot until canonical previews are readable; indexed page
-cursors do not move to retained rows. Older native hosts that omit `retainedKeys`
-cannot replace server membership with an incomplete local page, so the frontend
-keeps the server-backed list and its existing revalidation path.
-Combined server and indexed membership evidence above the engine's 5,000-key
-limit preserves displayed rows and enables server revalidation; do not truncate
-membership evidence to fit that limit.
+field. The Mail adapter reconciles only baseline rows outside the indexed window,
+retaining unknown rows and rejecting confirmed nonmembers. Known read, archive,
+and signal flags can disprove an incomplete row's membership through the compiled
+predicate; missing facts never prove a new match. Optimistic and committed flags
+are read from the same engine revision as the page.
+
+Fallbacks preserve the server's query-dependent preview fields while selecting
+live flags independently of canonical preview hydration. Lists with retained rows,
+or older native hosts without `retainedKeys`, remain eligible for mutation-driven
+server revalidation. Indexed cursors do not move to retained rows; continuation
+publishes an ordered through-read of the union instead of appending across them.
+New server membership triggers evaluation even when the local list is already
+longer. A baseline beyond the 5,000-row cap discards the local projection and uses
+the live server list; indexed rows do not count against that baseline cap.
 
 Grouped Soup uses `graphql/create-grouped-soup-live-query.ts` to own the initial
 request and every loaded per-bin continuation. With maintained cache queries and

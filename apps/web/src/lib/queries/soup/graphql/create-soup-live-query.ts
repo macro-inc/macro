@@ -599,7 +599,8 @@ export function createSoupLiveQuery(
   // (unsupported filters, a cold cache) still read the server after writes.
   const cacheMaintained = (): boolean => {
     if (!hasGraphqlCacheHost()) return false;
-    if (localSource()?.mailView) return localMailCurrent();
+    if (localSource()?.mailView)
+      return localMailCurrent() && displayLocalProjection() !== undefined;
     // A folder list keeps its email rows from the server, and a maintained
     // query still loading leaves the server page on screen.
     return (
@@ -667,6 +668,12 @@ export function createSoupLiveQuery(
       existing.generation === cacheGeneration &&
       existing.mail.revision === revision &&
       existing.mail.edge === edge &&
+      [...existing.baselineKeys].every((key) => serverRecordKeys().has(key)) &&
+      definition?.records.every(
+        (record) =>
+          existing.baselineKeys.has(soupItemKey(record)) ||
+          existing.displayedKeys.has(soupItemKey(record))
+      ) &&
       (existing.displayedKeys.size >= loaded ||
         existing.mail.nextCursor == null)
     )
@@ -684,6 +691,10 @@ export function createSoupLiveQuery(
             !query.error?.networkError)))
     ) {
       localEvaluationPending = false;
+      if (!definition && !hasUnpersistedPages(input)) {
+        setLocalProjection(undefined);
+        setLocalMailCurrent(false);
+      }
       return;
     }
     const {
@@ -815,7 +826,11 @@ export function createSoupLiveQuery(
                 setLocalMailEdge(result.endCursor ?? null);
               // Set here: a new edge reruns the effect, which supersedes
               // this request before its `finally`.
-              if (mailView) setLocalMailCurrent(true);
+              if (mailView)
+                setLocalMailCurrent(
+                  result.kind === 'mail-page' &&
+                    result.retainedKeys?.length === 0
+                );
               // The filter, fragments, and final revision agree. A newer coherent
               // page is valid even if hydration advanced past the initial read.
               // Publish both result kinds' watermarks: the Mail guard avoids a
@@ -833,8 +848,8 @@ export function createSoupLiveQuery(
           }
         } catch {
           outcome = 'error';
-          // Unsupported, incomplete, validation, and storage failures retain
-          // the stale network/normalized-cache fallback already on screen.
+          // Transient evaluation failures retain the last coherent projection,
+          // including offline rows absent from the server fallback.
         } finally {
           // Only the latest request decides, after any stale-revision retries.
           if (mailView && requestId === localRequest && outcome !== 'success')
@@ -903,6 +918,9 @@ export function createSoupLiveQuery(
     if (networkIsAuthoritative()) return query.data?.records();
     const local = displayLocalProjection();
     if (!local) return query.data?.records();
+    // Mail merges new server evidence in its ordered through-read. Appending
+    // it here would bypass membership decisions and the local cursor order.
+    if (local.mail) return local.records;
     const additions = unreconciledServerRecords(
       serverRecords(),
       local.baselineKeys,
@@ -1031,7 +1049,7 @@ export function createSoupLiveQuery(
       const mailView = initial.emailView;
       setFetchingMailPage(true);
       try {
-        const result = await host.entityFilter({
+        let result = await host.entityFilter({
           filters: initial.filters ?? {},
           sortMethod: initial.sortMethod ?? 'UPDATED_AT',
           sortDirection: initial.sortDirection ?? 'DESC',
@@ -1045,11 +1063,33 @@ export function createSoupLiveQuery(
           return;
         }
         if (result.kind !== 'mail-page') return;
-        const keys = [...local.displayedKeys, ...result.keys];
+        const definition = localSource();
+        const reconcile =
+          result.retainedKeys !== undefined &&
+          result.endCursor &&
+          definition?.source.baseline?.length;
+        if (reconcile) {
+          // A retained row may sit below the indexed cursor. Re-read the whole
+          // window through the next page before publishing; append cannot keep
+          // that union ordered and deduplication alone can produce no-op pages.
+          result = await host.entityFilter({
+            ...definition.source,
+            limit: Math.min(
+              local.displayedKeys.size + result.keys.length,
+              MAX_MAIL_THROUGH_ROWS
+            ),
+            mail: { view: mailView, through: result.endCursor ?? undefined },
+          });
+          if (displayLocalProjection() !== local || result.kind !== 'mail-page')
+            return;
+        }
+        const keys = reconcile
+          ? result.keys
+          : [...local.displayedKeys, ...result.keys];
         const selected = await readSoupPage(host, {
           page: result,
           select: mailItemSelection,
-          baseline: local.records,
+          baseline: reconcile ? definition.records : local.records,
           keys,
           mailView,
         });
@@ -1072,8 +1112,12 @@ export function createSoupLiveQuery(
         // Together, so the evaluation sees the new edge already displayed.
         batch(() => {
           setLocalMailEdge(edge);
+          setLocalMailCurrent(result.retainedKeys?.length === 0);
           setLocalProjection({
             ...local,
+            baselineKeys: reconcile
+              ? new Set(definition.records.map(soupItemKey))
+              : local.baselineKeys,
             displayedKeys: new Set(keys),
             mail: {
               nextCursor: result.nextCursor,
@@ -1091,15 +1135,19 @@ export function createSoupLiveQuery(
       }
     },
     resetToInitialPage: () => {
+      // Resetting server pages can invalidate the displayed projection's
+      // baseline. Capture ownership before that happens, then clear its edge.
+      const mail = localProjection()?.mail;
       pagingGeneration += 1;
-      query.resetToInitialPage();
-      if (displayLocalProjection()?.mail) {
-        batch(() => {
+      batch(() => {
+        query.resetToInitialPage();
+        setLocalMailEdge(null);
+        setLocalMailCurrent(false);
+        if (mail) {
           setLocalProjection(undefined);
-          setLocalMailEdge(null);
           setLocalEvaluationTrigger((value) => value + 1);
-        });
-      }
+        }
+      });
     },
     refresh: async () => {
       if (firstPageInput() === undefined) return;

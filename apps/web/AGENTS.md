@@ -429,7 +429,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   [choosing a reactive read](docs/graphql-normalized-cache-plan.md#choosing-a-reactive-read).
 - Reconcile cached Mail pages with same-query server membership; missing local
   previews are unknown, not proof that a fetched email left the inbox. Keep
-  local pagination cursors independent of retained server rows.
+  local pagination cursors independent of retained server rows. Preserve live
+  flags alongside fallback previews; retained rows and legacy hosts still need
+  mutation revalidation. Merge continuation pages through the indexed cursor.
 - Render user-visible text in new UI, and every menu and navigation label,
   with `t()` from `@app/lib/i18n`, adding only the English to
   `src/lib/i18n/locales/en/`. The periodic `update-translations` skill fills

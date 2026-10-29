@@ -1,5 +1,10 @@
 //! Preserve server membership until the Mail index can confirm or reject it.
 use super::*;
+use cache_core::predicate::reconciliation::{
+    PredicateMembership, predicate_membership, reconcile_predicate_baseline,
+};
+use cache_core::record_selection::RecordSelection;
+use predicate_index::{PredicateExpr, ReferenceHit};
 use std::collections::HashMap;
 
 pub(super) async fn reconcile_window<S: PredicateIndexStorage>(
@@ -11,56 +16,83 @@ pub(super) async fn reconcile_window<S: PredicateIndexStorage>(
     if baseline.is_empty() {
         return Ok((window, Vec::new()));
     }
-    let mut evidence: HashMap<_, _> = baseline
-        .iter()
-        .map(|entry| (entry.record_key.clone(), entry.sort_value))
-        .collect();
-    evidence.extend(
-        window
-            .keys
-            .iter()
-            .cloned()
-            .zip(window.values.iter().copied()),
-    );
-    let combined = evidence
-        .iter()
-        .map(|(key, value)| PredicateBaselineEntry {
-            record_key: key.clone(),
-            sort_value: *value,
-        })
-        .collect::<Vec<_>>();
-    // The indexed window already contains every local candidate to publish.
-    // Do not admit the look-ahead row that only established `next_cursor`.
-    let membership_query = query.with_limit(1).map_err(error)?;
-    let result = engine
-        .reconcile_predicate_index(&membership_query, &combined)
-        .await?
-        .value;
-    let retained: HashSet<_> = result.retained_keys.iter().cloned().collect();
-    let confirmed = result
+    let mut values: HashMap<_, _> = window
         .keys
         .iter()
-        .filter(|key| !retained.contains(*key))
+        .cloned()
+        .zip(window.values.iter().copied())
+        .collect();
+    // The window already proves membership. Only classify server rows outside
+    // it; combining both sets into a new baseline incorrectly consumed its cap.
+    let baseline = baseline
+        .iter()
+        .filter(|entry| !values.contains_key(&entry.record_key))
         .cloned()
         .collect::<Vec<_>>();
-    let values = sort_values(engine, query, &confirmed).await?;
-    evidence.extend(confirmed.into_iter().zip(values));
-    let values = result
-        .keys
+    let keys = baseline
         .iter()
-        .map(|key| {
-            evidence
-                .get(key)
-                .copied()
-                .ok_or_else(|| error("missing Mail baseline sort"))
+        .map(|entry| entry.record_key.clone())
+        .collect::<Vec<_>>();
+    let bases = engine
+        .storage()
+        .load_projection_states(&keys)
+        .await
+        .map_err(EngineError::Storage)?;
+    let shadows = engine
+        .storage()
+        .load_optimistic_projections(&keys)
+        .await
+        .map_err(EngineError::Storage)?;
+    let records = engine
+        .storage()
+        .get_batch(
+            &keys
+                .iter()
+                .map(|key| EntityKey(key.as_str().to_owned().into()))
+                .collect::<Vec<_>>(),
+        )
+        .await
+        .map_err(EngineError::Storage)?;
+    let membership = baseline
+        .iter()
+        .zip(&bases)
+        .zip(&shadows)
+        .zip(&records)
+        .map(|(((entry, base), shadow), record)| {
+            let membership =
+                predicate_membership(query, base.as_ref(), shadow.as_ref(), record.is_some());
+            let value = match membership {
+                PredicateMembership::Match(value) => value,
+                _ => entry.sort_value,
+            };
+            values.insert(entry.record_key.clone(), value);
+            membership
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Vec<_>>();
+    let mut result = reconcile_predicate_baseline(
+        query,
+        &baseline,
+        membership,
+        window
+            .keys
+            .into_iter()
+            .zip(window.values)
+            .map(|(record_key, sort_value)| ReferenceHit {
+                record_key,
+                sort_value,
+            })
+            .collect(),
+        window.optimistic || shadows.iter().any(Option::is_some),
+    );
+    let rejected = known_nonmembers(engine, query, &result.retained_keys).await?;
+    result.keys.retain(|key| !rejected.contains(key));
+    result.retained_keys.retain(|key| !rejected.contains(key));
     Ok((
         Window {
+            values: result.keys.iter().map(|key| values[key]).collect(),
             keys: result.keys,
-            values,
             more: window.more,
-            optimistic: window.optimistic || result.optimistic,
+            optimistic: result.optimistic,
         },
         result
             .retained_keys
@@ -68,4 +100,97 @@ pub(super) async fn reconcile_window<S: PredicateIndexStorage>(
             .map(|key| key.as_str().to_owned())
             .collect(),
     ))
+}
+
+/// Missing previews/capsules cannot undo a known read/archive/signal change.
+/// Substitute only present booleans into the compiled predicate, then use its
+/// normal simplifier to prove non-membership. Other facts stay unknown: this
+/// can reject a retained row, never admit a new one or invent projection facts.
+async fn known_nonmembers<S: PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+    query: &ValidatedIndexQuery,
+    keys: &[RecordKey],
+) -> Result<HashSet<RecordKey>, PageError<S::Error>> {
+    if keys.is_empty() {
+        return Ok(HashSet::new());
+    }
+    let Some(partition) = query
+        .as_query()
+        .partitions
+        .iter()
+        .find(|p| p.partition == vocabulary::partition())
+    else {
+        return Ok(keys.iter().cloned().collect());
+    };
+    let mut facts: HashMap<String, HashMap<&str, ExactValue>> = HashMap::new();
+    for (field, attribute) in [
+        ("inboxVisible", "mail-inbox"),
+        ("isRead", "mail-read"),
+        ("isSignal", "mail-signal"),
+    ] {
+        let selection = RecordSelection::parse(
+            cache_core::meta::bundled_schema_ref(),
+            &format!("fragment MailState on GraphqlSoupEmailThread {{ {field} }}"),
+            "MailState",
+        )
+        .map_err(error)?;
+        for chunk in keys.chunks(cache_core::record_selection::MAX_RECORD_SELECTION_KEYS) {
+            let selected = engine
+                .read_records_by_keys(
+                    &selection,
+                    &chunk
+                        .iter()
+                        .map(|key| EntityKey(key.as_str().to_owned().into()))
+                        .collect::<Vec<_>>(),
+                )
+                .await?;
+            for row in selected.value {
+                if let Some(value) = row.record.get(field).and_then(Value::as_bool) {
+                    let fact = boolean_fact(value, attribute)
+                        .ok_or_else(|| error("invalid boolean fact"))?;
+                    facts
+                        .entry(row.record_key.to_string())
+                        .or_default()
+                        .insert(attribute, fact.value);
+                }
+            }
+        }
+    }
+    let mut rejected = HashSet::new();
+    for key in keys {
+        if let Some(facts) = facts.get(key.as_str()) {
+            let predicate = substitute_flags(&partition.predicate, facts)
+                .validate_and_simplify()
+                .map_err(error)?;
+            if matches!(predicate, PredicateExpr::None) {
+                rejected.insert(key.clone());
+            }
+        }
+    }
+    Ok(rejected)
+}
+
+fn substitute_flags(expr: &PredicateExpr, facts: &HashMap<&str, ExactValue>) -> PredicateExpr {
+    match expr {
+        PredicateExpr::And(a, b) => PredicateExpr::And(
+            Box::new(substitute_flags(a, facts)),
+            Box::new(substitute_flags(b, facts)),
+        ),
+        PredicateExpr::Or(a, b) => PredicateExpr::Or(
+            Box::new(substitute_flags(a, facts)),
+            Box::new(substitute_flags(b, facts)),
+        ),
+        PredicateExpr::Not(a) => PredicateExpr::Not(Box::new(substitute_flags(a, facts))),
+        PredicateExpr::Exact { attribute, value } if facts.contains_key(attribute.as_str()) => {
+            if facts.get(attribute.as_str()) == Some(value) {
+                PredicateExpr::All
+            } else {
+                PredicateExpr::None
+            }
+        }
+        PredicateExpr::ExactExists { attribute } if facts.contains_key(attribute.as_str()) => {
+            PredicateExpr::All
+        }
+        _ => expr.clone(),
+    }
 }

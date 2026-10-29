@@ -49,6 +49,8 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
 - Mail pages reconcile server membership through the generic predicate engine;
   retain unknown projections with their supplied sort values, exclude confirmed
   nonmembers, and keep continuation cursors on the original indexed window.
+  Reconcile only baseline rows outside that window; known live flags may reject
+  incomplete rows through predicate simplification, never establish new membership.
 
 - This crate must stay wasm-compatible — no `sqlx`, no native-only crates in
   default features; native-only test fixtures live under
