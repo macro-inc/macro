@@ -24,12 +24,12 @@ use channel_sender::ChannelSender;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
-use crate::domain::agent_hops::{MAX_AGENT_HOPS, agent_hops};
 use crate::domain::broker_events::{ThreadMessageKind, TriggerDecision};
 use crate::domain::thread_window::{ThreadMessage, render_transcript, thread_window};
 use crate::domain::yield_event::{
     AgentSessionEventDecision, NoEventReason, PotentialTriggerEvent, yield_event,
 };
+use messages::domain::agent_hops::{MAX_AGENT_HOPS, agent_hops};
 
 /// Messages kept either side of a point where the agent spoke or was spoken to.
 /// Wide enough to carry the exchange around it, narrow enough that a long

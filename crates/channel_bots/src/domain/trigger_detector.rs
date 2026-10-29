@@ -4,7 +4,14 @@ use std::sync::Arc;
 
 use ai_billing::{AiAdmissionService, AiFeature, DisabledAiAdmissionService};
 use async_trait::async_trait;
-use messages::domain::{api::MessageReader, events::MessagePostedMetadata};
+use channel_sender::ChannelSender;
+use entity_access::domain::models::EntityAccessReceipt;
+use messages::domain::{
+    agent_hops::{MAX_AGENT_HOPS, agent_hops},
+    api::MessageReader,
+    events::MessagePostedMetadata,
+    service::MessageWrite,
+};
 use uuid::Uuid;
 
 use super::models::{BotInvocation, BotTrigger, TranscriptMessage};
@@ -95,6 +102,43 @@ where
         Ok(transcript)
     }
 
+    /// Whether a bot's mention stays within [`MAX_AGENT_HOPS`] of the last
+    /// person in its thread. An unreadable thread counts as over the limit.
+    async fn within_hop_limit(
+        &self,
+        candidate: &MessagePostedMetadata,
+        access: EntityAccessReceipt<MessageWrite>,
+    ) -> bool {
+        let thread: anyhow::Result<_> = async {
+            let view = access.try_into_requirement()?;
+            Ok(self.messages.get_thread(view, candidate.root_id).await?)
+        }
+        .await;
+        let thread = match thread {
+            Ok(thread) => thread,
+            Err(error) => {
+                tracing::warn!(error = ?error, "thread read failed; not counting agent hops");
+                return false;
+            }
+        };
+        let senders: Vec<&ChannelSender<'static>> = std::iter::once(&thread.root)
+            .chain(&thread.replies)
+            .take_while(|message| message.id != candidate.message_id)
+            .map(|message| &message.sender_id)
+            .chain(std::iter::once(&candidate.sender))
+            .collect();
+        let hops = agent_hops(senders.into_iter());
+        if hops > MAX_AGENT_HOPS {
+            tracing::info!(
+                message_id = %candidate.message_id,
+                hops,
+                "bot mention exceeds the agent hop limit; not invoking"
+            );
+            return false;
+        }
+        true
+    }
+
     async fn infer(&self, candidate: &MessagePostedMetadata) -> Option<BotInvocation> {
         let requesting_user = candidate.sender.as_user()?;
         let parent_id = candidate.thread_id?;
@@ -153,15 +197,15 @@ where
         let Some(user) = candidate.invoking_user() else {
             return Vec::new();
         };
-        if self
-            .access
-            .user_write(&user, &candidate.parent)
-            .await
-            .is_err()
+        let Ok(access) = self.access.user_write(&user, &candidate.parent).await else {
+            return Vec::new();
+        };
+        let mentioned = messages::domain::mentions::bot_mention_ids(&candidate.mentions);
+        if candidate.sender.as_bot().is_some()
+            && (mentioned.is_empty() || !self.within_hop_limit(candidate, access).await)
         {
             return Vec::new();
         }
-        let mentioned = messages::domain::mentions::bot_mention_ids(&candidate.mentions);
         if !mentioned.is_empty() {
             return mentioned
                 .into_iter()

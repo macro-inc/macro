@@ -880,6 +880,7 @@ fn attributed_bot_mentions_keep_the_user_for_open_and_follow_up() {
             AgentBotMentionedEvent {
                 bot_id: target,
                 message: posted.clone(),
+                context: None,
             },
         ));
         let RoutedTrigger::Command(_, HarnessCommand::Open(open)) =
@@ -895,6 +896,7 @@ fn attributed_bot_mentions_keep_the_user_for_open_and_follow_up() {
                 session_id: AgentSessionId::TEST_A,
                 kind: ThreadMessageKind::MentionThread,
                 message: posted,
+                context: None,
             },
         ));
         let RoutedTrigger::Command(id, HarnessCommand::Deliver(deliver)) =

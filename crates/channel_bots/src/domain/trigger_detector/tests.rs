@@ -204,15 +204,57 @@ async fn attributed_bots_require_an_explicit_other_bot_mention_and_current_acces
             access.revoke();
         }
         let classifier = classifier(Ok(true));
-        let detector = MentionOrInferredDetector::new(
-            Arc::new(MockMessageServiceApi::new()),
-            access,
-            classifier.clone(),
+        let mut api = MockMessageServiceApi::new();
+        configure_reads(
+            &mut api,
+            &trigger,
+            thread(message(1, None, "@cursor look"), vec![trigger.clone()]),
         );
+        let detector = MentionOrInferredDetector::new(Arc::new(api), access, classifier.clone());
         assert_eq!(
             !detector.detect(&event(&trigger)).await.is_empty(),
             expected
         );
         assert!(classifier.calls.lock().unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn agents_handing_a_thread_back_and_forth_stop_after_three_hops() {
+    let by = |id: u128, bot: bot_id::BotId| {
+        let mut reply = message(id, Some(Uuid::from_u128(1)), "over to you");
+        reply.sender_id = channel_sender::ChannelSender::new_from_bot(bot);
+        reply.triggered_by = Some(user().to_string());
+        reply.mentions = vec![SimpleMention {
+            entity_type: "bot".into(),
+            entity_id: bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string(),
+        }];
+        reply
+    };
+    let earlier = vec![
+        by(2, bot_id::MACRO_AI_BOT_ID),
+        by(3, bot_id::CURSOR_BOT_ID),
+        by(4, bot_id::MACRO_AI_BOT_ID),
+    ];
+    for (read, expected) in [(2, true), (3, false)] {
+        let trigger = by(10, bot_id::CURSOR_BOT_ID);
+        let mut replies = earlier[..read].to_vec();
+        replies.push(trigger.clone());
+        let mut api = MockMessageServiceApi::new();
+        configure_reads(
+            &mut api,
+            &trigger,
+            thread(message(1, None, "@macro ask cursor"), replies),
+        );
+        let detector = MentionOrInferredDetector::new(
+            Arc::new(api),
+            Arc::new(Access::default()),
+            classifier(Ok(true)),
+        );
+        assert_eq!(
+            !detector.detect(&event(&trigger)).await.is_empty(),
+            expected,
+            "after {read} agent replies"
+        );
     }
 }

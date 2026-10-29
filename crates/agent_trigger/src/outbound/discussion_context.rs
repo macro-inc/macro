@@ -16,6 +16,7 @@ use initiative::domain::{lookup::InitiativeReader, models::InitiativeId};
 use lexical_client::LexicalClient;
 use lexical_client::parse_markdown::ExtractedExplicitReply;
 use macro_uuid::Uuid;
+use messages::domain::agent_hops::agent_hops;
 use messages::domain::{
     api::MessageReader,
     events::MessagePostedMetadata,
@@ -29,7 +30,6 @@ use trigger_context::{
 };
 
 use crate::domain::{
-    agent_hops::agent_hops,
     context::{DiscussionReader, PeopleDirectory},
     service::AuthorizedInvocation,
 };
