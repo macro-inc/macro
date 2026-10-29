@@ -45,6 +45,9 @@ AI loop calls their tools through Pipedream's remote MCP server.
   imports (Linear, Jira, Notion) and Granola sync, which use the Pipedream
   proxy. Keep those slugs out of `mcp_overlays` until their readers have a
   native path.
+- Advertising dynamic client registration does not mean a server accepts
+  Macro: some answer 403 or reject the callback URL. Overlay an app only after
+  a real registration against its server succeeds.
 - Discovery answers an overlaid app's connection status through
   `OverlayConnections` (implemented in `mcp_select` over the native store); its
   advertised tools still come from Pipedream's listing for the slug.
