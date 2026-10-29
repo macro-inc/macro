@@ -18,9 +18,12 @@ mod test;
 use std::sync::Arc;
 
 use agent_egress::domain::approval::MACRO_SERVER_SLUG;
-use agent_fold::domain::model::{ActivityStatus, ProjectedSegment, SegmentKind, TurnId, TurnPhase};
+use agent_fold::domain::model::{
+    ActivityStatus, GeneratedImage, ProjectedSegment, SegmentKind, TurnId, TurnPhase,
+};
 use agent_session::domain::model::AgentSessionId;
 use bot_id::BotId;
+use channels::domain::media_upload::ChannelMediaKind;
 use entity_access::domain::{
     models::{BotAccessScope, EntityAccessReceipt},
     ports::EntityAccessService,
@@ -35,10 +38,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{
     api::MessageCommands,
     models::{
-        MessageAttribution, MessageParent, PatchMessageNotificationPolicy, PostMessage,
-        PostMessageNotificationPolicy,
+        MAX_ATTACHMENTS, MessageAttribution, MessageParent, NewAttachment,
+        PatchMessageNotificationPolicy, PostMessage, PostMessageNotificationPolicy,
     },
-    ports::{AgentTyping, AgentTypingPhase, MessageError, MessagePatch},
+    ports::{AgentTyping, AgentTypingPhase, AttachmentChange, MessageError, MessagePatch},
     service::MessageWrite,
 };
 
@@ -48,6 +51,7 @@ use crate::domain::model::{
     ReplyPresentation, ResolvedReply, SessionAnnouncement, SessionBlocker,
 };
 use crate::domain::ports::SessionAnnouncer;
+use crate::domain::presenter::generated_images;
 
 const EMPTY_RESPONSE_FALLBACK: &str = "I wasn't able to come up with a response.";
 const CANCELLED_FALLBACK: &str = "I stopped before finishing that.";
@@ -180,6 +184,38 @@ fn typing_phase(phase: TurnPhase) -> AgentTypingPhase {
         TurnPhase::Writing => AgentTypingPhase::Writing,
         TurnPhase::Working => AgentTypingPhase::Working,
         TurnPhase::Waiting => AgentTypingPhase::Waiting,
+    }
+}
+
+/// A reply's generated images as image attachments, sized so the message
+/// reserves their space before they load. Past the message's attachment
+/// limit the rest stay in the session.
+fn image_attachments(images: &[GeneratedImage]) -> Vec<NewAttachment> {
+    images
+        .iter()
+        // The message service refuses a whole message over one bad reference.
+        .filter(|image| macro_uuid::Uuid::parse_str(&image.static_file_id).is_ok())
+        .take(MAX_ATTACHMENTS)
+        .map(|image| NewAttachment {
+            entity_type: ChannelMediaKind::Image.attachment_entity_type().to_owned(),
+            entity_id: image.static_file_id.clone(),
+            width: image.width.and_then(pixels),
+            height: image.height.and_then(pixels),
+        })
+        .collect()
+}
+
+fn pixels(size: u32) -> Option<i32> {
+    i32::try_from(size).ok().filter(|size| *size > 0)
+}
+
+/// Attach a reply's images, leaving the message's attachments alone when
+/// the turn generated none.
+fn attachment_change(images: &[GeneratedImage]) -> AttachmentChange {
+    if images.is_empty() {
+        AttachmentChange::Preserve
+    } else {
+        AttachmentChange::Replace(image_attachments(images))
     }
 }
 
@@ -447,9 +483,11 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
             body,
             AgentChatReplyBody::Markdown { .. } | AgentChatReplyBody::Segments { .. }
         );
+        let attachments = attachment_change(&generated_images(&resolution.segments));
         let patch = |content| MessagePatch {
             notification_policy,
             content: Some(content),
+            attachments: attachments.clone(),
             ..Default::default()
         };
         let content = self.compose_reply(resolution.session_id, body).await?;
@@ -571,6 +609,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
             .await
             .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
         let message_id = presentation.message_id;
+        let attachments = image_attachments(&presentation.images);
         // Posted under its allocated id; a message already there under it is
         // the same reply shown before, and is returned instead.
         let shown = self
@@ -593,14 +632,20 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                     thread_id: presentation.thread_id,
                     anchor: None,
                     mentions: Vec::new(),
-                    attachments: Vec::new(),
+                    attachments: attachments.clone(),
                     nonce: None,
                 },
             )
             .await
             .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
+        let attached = attachments.iter().all(|wanted| {
+            shown.attachments.iter().any(|attachment| {
+                attachment.entity_type == wanted.entity_type
+                    && attachment.entity_id == wanted.entity_id
+            })
+        });
         // A participant deleted it while the agent ran: they did not want it.
-        if shown.deleted_at.is_some() || shown.content == content {
+        if shown.deleted_at.is_some() || (shown.content == content && attached) {
             return Ok(());
         }
         match self
@@ -615,6 +660,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                     } else {
                         PatchMessageNotificationPolicy::Default
                     },
+                    attachments: attachment_change(&presentation.images),
                     ..Default::default()
                 },
             )

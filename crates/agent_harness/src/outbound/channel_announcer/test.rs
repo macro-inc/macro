@@ -533,6 +533,7 @@ async fn shared_thread_and_dm_snapshots_omit_raw_tool_details() {
                 pending: false,
                 outcome: None,
                 notify: false,
+                images: Vec::new(),
             })
             .await
             .unwrap();
@@ -556,4 +557,216 @@ async fn shared_thread_and_dm_snapshots_omit_raw_tool_details() {
         Some("TOKEN=private-value run-report"),
         "snapshot serialization leaves live session details intact"
     );
+}
+
+/// A chat agent's pending reply becomes its answer with every image the turn
+/// generated attached, sized, the way a person's upload is.
+#[tokio::test]
+async fn a_resolved_reply_attaches_the_images_its_turn_generated() {
+    use agent_fold::domain::model::{ActivityRow, Segment};
+    let lexical = wiremock::MockServer::start().await;
+    wiremock::Mock::given(wiremock::matchers::method("POST"))
+        .and(wiremock::matchers::path("/agent-announcement"))
+        .respond_with(
+            wiremock::ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({ "markdown": "composed answer" })),
+        )
+        .expect(1)
+        .mount(&lexical)
+        .await;
+    let parent = MessageParent::Channel(Uuid::from_u128(1));
+    let reply_id = Uuid::from_u128(3);
+    let image_id = Uuid::from_u128(7);
+    let replied = Message {
+        id: reply_id,
+        parent: parent.clone(),
+        thread_id: Some(Uuid::from_u128(2)),
+        sender_id: channel_sender::ChannelSender::new_from_user(
+            MacroUserIdStr::try_from_email("user@example.com").unwrap(),
+        ),
+        triggered_via: None,
+        triggered_by: None,
+        bot_profile: None,
+        mentions: vec![],
+        guest_name: None,
+        imported_author: None,
+        content: "composed answer".to_owned(),
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+        edited_at: None,
+        deleted_at: None,
+        attachments: vec![],
+        reactions: vec![],
+    };
+    let mut messages = messages::domain::api::MockMessageCommands::new();
+    messages
+        .expect_patch()
+        .times(1)
+        .returning(move |_, id, patch| {
+            assert_eq!(id, reply_id);
+            assert_eq!(patch.content.as_deref(), Some("composed answer"));
+            let AttachmentChange::Replace(attachments) = patch.attachments else {
+                panic!("expected the images to replace the reply's attachments");
+            };
+            assert_eq!(
+                attachments,
+                vec![NewAttachment {
+                    entity_type: "static/image".to_owned(),
+                    entity_id: image_id.to_string(),
+                    width: Some(1024),
+                    height: Some(768),
+                }]
+            );
+            Ok(replied.clone())
+        });
+    let announcer = MessageAnnouncer::new(
+        Arc::new(messages),
+        Arc::new(EditingAccess),
+        LexicalClient::new("test-key".to_owned(), lexical.uri()),
+    );
+
+    announcer
+        .resolve(ResolvedReply {
+            session_id: SESSION,
+            bot_id: BotId::TEST_A,
+            is_coding: false,
+            message_id: reply_id,
+            origin_parent: parent,
+            triggered_by: MacroUserIdStr::try_from_email("user@example.com").unwrap(),
+            outcome: ReplyOutcome::Answered("Here is the lighthouse.".to_owned()),
+            turn: TurnId(0),
+            segments: vec![
+                ProjectedSegment {
+                    segment: Segment {
+                        index: 0,
+                        kind: SegmentKind::Activity,
+                        start: 0,
+                        end: 1,
+                        sealed: true,
+                        rows: vec![ActivityRow {
+                            id: "image".into(),
+                            label: "Generate image".into(),
+                            detail: None,
+                            status: ActivityStatus::Completed,
+                        }],
+                    },
+                    text: None,
+                    images: vec![GeneratedImage {
+                        static_file_id: image_id.to_string(),
+                        width: Some(1024),
+                        height: Some(768),
+                    }],
+                },
+                ProjectedSegment {
+                    segment: Segment {
+                        index: 1,
+                        kind: SegmentKind::Prose,
+                        start: 1,
+                        end: 2,
+                        sealed: true,
+                        rows: vec![],
+                    },
+                    text: Some("Here is the lighthouse.".to_owned()),
+                    images: vec![],
+                },
+            ],
+        })
+        .await
+        .expect("the answer replaces the spinner");
+}
+
+/// A reply shown in segments carries the turn's images on its last message,
+/// even when that message was already posted while the turn ran.
+#[tokio::test]
+async fn the_closing_reply_message_attaches_the_turns_images() {
+    let lexical = wiremock::MockServer::start().await;
+    wiremock::Mock::given(wiremock::matchers::method("POST"))
+        .and(wiremock::matchers::path("/agent-announcement"))
+        .respond_with(
+            wiremock::ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({ "markdown": "closing passage" })),
+        )
+        .expect(1)
+        .mount(&lexical)
+        .await;
+    let parent = MessageParent::Channel(Uuid::from_u128(1));
+    let message_id = Uuid::from_u128(3);
+    let image_id = Uuid::from_u128(7);
+    let wanted = vec![NewAttachment {
+        entity_type: "static/image".to_owned(),
+        entity_id: image_id.to_string(),
+        width: Some(768),
+        height: Some(1024),
+    }];
+    let shown = Message {
+        id: message_id,
+        parent: parent.clone(),
+        thread_id: None,
+        sender_id: channel_sender::ChannelSender::new_from_user(
+            MacroUserIdStr::try_from_email("user@example.com").unwrap(),
+        ),
+        triggered_via: None,
+        triggered_by: None,
+        bot_profile: None,
+        mentions: vec![],
+        guest_name: None,
+        imported_author: None,
+        content: "closing passage".to_owned(),
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+        edited_at: None,
+        deleted_at: None,
+        attachments: vec![],
+        reactions: vec![],
+    };
+    let mut messages = messages::domain::api::MockMessageCommands::new();
+    let posted = wanted.clone();
+    let existing = shown.clone();
+    messages
+        .expect_post_from_event()
+        .times(1)
+        .returning(move |_, _, post| {
+            assert_eq!(post.attachments, posted);
+            Ok(existing.clone())
+        });
+    let patched = wanted.clone();
+    messages
+        .expect_patch()
+        .times(1)
+        .returning(move |_, id, patch| {
+            assert_eq!(id, message_id);
+            let AttachmentChange::Replace(attachments) = patch.attachments else {
+                panic!("expected the images to replace the message's attachments");
+            };
+            assert_eq!(attachments, patched);
+            Ok(shown.clone())
+        });
+    let announcer = MessageAnnouncer::new(
+        Arc::new(messages),
+        Arc::new(EditingAccess),
+        LexicalClient::new("test-key".to_owned(), lexical.uri()),
+    );
+
+    announcer
+        .present(ReplyPresentation {
+            session_id: SESSION,
+            bot_id: BotId::TEST_A,
+            triggered_by: MacroUserIdStr::try_from_email("user@example.com").unwrap(),
+            parent,
+            thread_id: None,
+            message_id,
+            turn: TurnId(0),
+            segments: vec![],
+            link: false,
+            pending: false,
+            outcome: Some(ReplyOutcome::Answered("closing passage".to_owned())),
+            notify: true,
+            images: vec![GeneratedImage {
+                static_file_id: image_id.to_string(),
+                width: Some(768),
+                height: Some(1024),
+            }],
+        })
+        .await
+        .expect("the closing message is shown with its images");
 }

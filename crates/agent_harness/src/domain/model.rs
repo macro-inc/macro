@@ -484,6 +484,9 @@ pub struct ReplyPresentation {
     /// Whether this update is news: the reply's last message, once the turn
     /// has ended.
     pub notify: bool,
+    /// Images the turn generated, attached to the reply's last message once
+    /// the turn has ended.
+    pub images: Vec<agent_fold::domain::model::GeneratedImage>,
 }
 
 /// An agent session typing through the bot that speaks for it.

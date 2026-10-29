@@ -749,7 +749,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         mentions: &[SimpleMention],
         attachments: &[NewAttachment],
     ) -> Result<(), MessageError> {
-        if attachments.len() > 10 || mentions.len() > 100 {
+        if attachments.len() > super::models::MAX_ATTACHMENTS || mentions.len() > 100 {
             return Err(MessageError::Invalid("too many message references"));
         }
         for attachment in attachments {
