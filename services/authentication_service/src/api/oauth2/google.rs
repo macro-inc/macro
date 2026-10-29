@@ -6,33 +6,74 @@ use axum::{
     Json,
     response::{IntoResponse, Response},
 };
+use calendar_events::domain::models::GoogleScopeSet;
 use model::response::ErrorResponse;
 use reqwest::StatusCode;
 use tower_cookies::Cookies;
+use uuid::Uuid;
 
-use crate::api::{
-    context::ApiContext,
-    oauth2::{
-        OAuthState,
-        account_link::{
-            build_callback_redirect, cleanup_pending_link, replace_identity_provider_grant,
+use crate::{
+    account_link_state::LinkProvider,
+    api::{
+        context::ApiContext,
+        link::gmail::GMAIL_MAILBOX_SCOPE,
+        oauth2::{
+            OAuthState,
+            account_link::{
+                build_callback_redirect, build_return_redirect, cleanup_pending_link,
+                replace_identity_provider_grant,
+            },
+            format_redirect_uri,
+            login::{self},
+            provider_query_value,
         },
-        format_redirect_uri,
-        login::{self},
     },
 };
 use fusionauth::error::FusionAuthClientError;
+use fusionauth::google::oauth::GoogleExchangeTokenResponse;
 use fusionauth::identity_provider::{IdentityProviderLink, LinkUserRequest};
 
 #[cfg(test)]
 mod test;
 
+/// The `email_link_error` query value the app reads when Google's consent
+/// left out the mailbox permissions.
+const GMAIL_NOT_GRANTED_ERROR: &str = "gmail_not_granted";
+
+/// How a Google account-link callback ended.
+#[derive(Debug, PartialEq, Eq)]
+enum GoogleLinkOutcome {
+    /// The grant is attached to the account's FusionAuth identity and recorded
+    /// on the pending link for `/email/init` to apply.
+    Linked,
+    /// The consent asked for the mailbox but Google's grant lacks it, so the
+    /// account cannot become an inbox. Nothing was attached, and the grant was
+    /// revoked at Google.
+    MailboxNotGranted,
+}
+
+/// Whether a consent that asked for the mailbox came back without it.
+///
+/// Google's granular consent lets the user leave any box unchecked. A
+/// calendar upgrade (`ConsentScopes::Calendar`) never asks for the mailbox, so
+/// its grant is not judged here.
+fn mailbox_grant_missing(requested: &[String], granted: &[String]) -> bool {
+    requested.iter().any(|scope| scope == GMAIL_MAILBOX_SCOPE)
+        && !granted.iter().any(|scope| scope == GMAIL_MAILBOX_SCOPE)
+}
+
+#[tracing::instrument(
+    name = "email.link.google.complete",
+    skip_all,
+    fields(link_id = %link_id, outcome = tracing::field::Empty),
+    err(Debug)
+)]
 async fn link_user(
     ctx: &ApiContext,
     identity_provider_id: &str,
     code: &str,
-    link_id: &uuid::Uuid,
-) -> Result<(), (StatusCode, String)> {
+    link_id: &Uuid,
+) -> Result<GoogleLinkOutcome, (StatusCode, String)> {
     let in_progress =
         macro_db_client::in_progress_user_link::get_in_progress_user_link(&ctx.db, link_id)
             .await
@@ -55,6 +96,27 @@ async fn link_user(
                 format!("unable to exchange code for tokens {e}"),
             )
         })?;
+
+    // Google's actual grant may be a subset of what was requested. Without the
+    // mailbox scope `/email/init` cannot provision the inbox, so the grant is
+    // refused here, before it is attached to anyone's identity. It is also
+    // revoked at Google: consent requests carry `include_granted_scopes=true`,
+    // so a partial grant left behind would ride into every later consent and
+    // Google would stop listing its scopes, leaving the user no way to add the
+    // mailbox on a retry.
+    let requested_scopes = in_progress.requested_google_scopes;
+    let granted_scopes = resolved_granted_scopes(&token_response.scope, requested_scopes.clone());
+    if mailbox_grant_missing(&requested_scopes, &granted_scopes) {
+        let calendar_granted =
+            GoogleScopeSet::from_scopes(granted_scopes.iter().cloned()).has_calendar_capability();
+        tracing::info!(
+            calendar_granted,
+            "Google consent left out the mailbox scope; refusing the link"
+        );
+        revoke_partial_grant(ctx, &token_response).await;
+        tracing::Span::current().record("outcome", GMAIL_NOT_GRANTED_ERROR);
+        return Ok(GoogleLinkOutcome::MailboxNotGranted);
+    }
 
     let user_info = ctx
         .auth_client
@@ -137,8 +199,6 @@ async fn link_user(
     // Stash the linked identity and Google's actual grant (which may be a
     // subset of what was requested). /email/init applies these capabilities
     // atomically to the durable link and schedules any newly unlocked work.
-    let granted_scopes =
-        resolved_granted_scopes(&token_response.scope, in_progress.requested_google_scopes);
     macro_db_client::in_progress_user_link::set_linked_google_grant(
         &ctx.db,
         link_id,
@@ -153,14 +213,64 @@ async fn link_user(
         )
     })?;
 
-    Ok(())
+    tracing::Span::current().record("outcome", "linked");
+    Ok(GoogleLinkOutcome::Linked)
+}
+
+/// Best effort: a partial grant that stays behind only hides its scopes on the
+/// next consent screen; the refusal itself does not depend on the revocation.
+async fn revoke_partial_grant(ctx: &ApiContext, token_response: &GoogleExchangeTokenResponse) {
+    let token = if token_response.refresh_token.is_empty() {
+        &token_response.access_token
+    } else {
+        &token_response.refresh_token
+    };
+    if token.is_empty() {
+        tracing::warn!("Google returned no token to revoke the partial grant with");
+        return;
+    }
+    ctx.auth_client
+        .revoke_google_grant(token)
+        .await
+        .inspect_err(|error| {
+            tracing::warn!(error = ?error, "failed to revoke the partial Google grant");
+        })
+        .ok();
 }
 
 fn resolved_granted_scopes(returned: &str, requested: Vec<String>) -> Vec<String> {
     if returned.trim().is_empty() {
         requested
     } else {
-        calendar_events::domain::models::GoogleScopeSet::parse(returned).into_vec()
+        GoogleScopeSet::parse(returned).into_vec()
+    }
+}
+
+/// Sends a refused consent back to the page that started it, which explains
+/// the outcome and offers a retry. A link flow without a return URL gets the
+/// explanation as the response body instead.
+fn mailbox_not_granted_response(
+    original_url: Option<&str>,
+    link_id: &Uuid,
+) -> Result<Response, Response> {
+    match original_url {
+        Some(original_url) => build_return_redirect(
+            original_url,
+            &[
+                ("link_id", &link_id.to_string()),
+                ("email_link_error", GMAIL_NOT_GRANTED_ERROR),
+                ("provider", provider_query_value(LinkProvider::Google)),
+            ],
+        )
+        .map_err(IntoResponse::into_response),
+        None => Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                message: "Gmail access was not granted; allow the Gmail permissions and try again"
+                    .into(),
+            }),
+        )
+            .into_response()),
     }
 }
 
@@ -179,7 +289,7 @@ pub(in crate::api::oauth2) async fn handler(
             cleanup_pending_link(ctx, link_id).await;
         }
 
-        link_result.map_err(|(status_code, error)| {
+        let outcome = link_result.map_err(|(status_code, error)| {
             tracing::error!(error=?error, "unable to link user");
             (
                 status_code,
@@ -189,6 +299,11 @@ pub(in crate::api::oauth2) async fn handler(
             )
                 .into_response()
         })?;
+
+        if outcome == GoogleLinkOutcome::MailboxNotGranted {
+            cleanup_pending_link(ctx, link_id).await;
+            return mailbox_not_granted_response(state.original_url.as_deref(), link_id);
+        }
 
         if let Some(original_url) = &state.original_url {
             return build_callback_redirect(original_url, link_id)

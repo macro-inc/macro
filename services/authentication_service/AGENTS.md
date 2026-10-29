@@ -104,6 +104,14 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   code redirects a link flow to its `original_url` with `email_link_error`
   (`admin_consent_required`, `cancelled`, `failed`); only the `AADSTS` code
   from `error_description` is logged, never the description.
+- A Google consent that asked for the mailbox but came back without
+  `gmail.modify` (the user left the Gmail boxes unchecked) is refused in the
+  Google callback before any identity-provider link is written or replaced:
+  the pending row is deleted, the partial grant is revoked at Google so the
+  next consent screen lists every scope again, and the flow returns with
+  `email_link_error=gmail_not_granted`. Mirrors Outlook's required-scope check
+  in `src/domain/microsoft.rs`; Macro has no mailbox-less link for either
+  provider.
 
 ## Related
 
