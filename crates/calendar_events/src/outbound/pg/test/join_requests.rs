@@ -36,7 +36,7 @@ async fn join_requests_open_once_and_resolve_once(pool: PgPool) {
     assert_eq!(again, first);
     assert_eq!(
         repo.list_pending_join_requests(event_id).await.unwrap(),
-        [first.clone()]
+        std::slice::from_ref(&first)
     );
 
     let declined = repo
@@ -104,11 +104,13 @@ async fn join_requests_open_once_and_resolve_once(pool: PgPool) {
 
     // An acceptance whose invitation was written while a decline landed
     // still records the grant the guest list now holds.
-    sqlx::query("UPDATE calendar_event_join_requests SET status = 'declined' WHERE id = $1")
-        .bind(second.id)
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::query!(
+        "UPDATE calendar_event_join_requests SET status = 'declined' WHERE id = $1",
+        second.id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     let granted = repo
         .resolve_join_request(second.id, CalendarJoinRequestStatus::Accepted)
         .await
@@ -117,8 +119,7 @@ async fn join_requests_open_once_and_resolve_once(pool: PgPool) {
     assert_eq!(granted.status, CalendarJoinRequestStatus::Accepted);
 
     // Requests go with the shared event.
-    sqlx::query("DELETE FROM calendar_events WHERE id = $1")
-        .bind(event_id)
+    sqlx::query!("DELETE FROM calendar_events WHERE id = $1", event_id)
         .execute(&pool)
         .await
         .unwrap();

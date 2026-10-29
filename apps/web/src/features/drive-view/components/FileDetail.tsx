@@ -2,7 +2,11 @@ import {
   DocumentAccessDenied,
   useSharedAccessUpdates,
 } from '@app/features/access-requests/access-requests';
-import { shareEntity } from '@app/features/access-requests/core/types';
+import {
+  matchesConfirmedAccess,
+  shareEntity,
+} from '@app/features/access-requests/core/types';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import {
   DocumentFileSidePanelSections,
   SidePanel,
@@ -14,11 +18,12 @@ import {
   Permissions,
 } from '@core/component/SharePermissions';
 import { fireAndForget } from '@core/util/fireAndForget';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import { Button } from '@ui';
 import {
+  createEffect,
   createResource,
   ErrorBoundary,
   type JSX,
@@ -69,6 +74,7 @@ function FileDetailBodyState(props: {
       <Switch
         fallback={
           <SpinnerIcon
+            aria-hidden={false}
             aria-label={`Loading ${props.label}`}
             class="size-5 animate-spin"
           />
@@ -83,7 +89,7 @@ function FileDetailBodyState(props: {
             <pre class="max-h-48 max-w-full overflow-auto whitespace-pre-wrap text-left text-failure text-xs">
               {String(props.error)}
             </pre>
-            <Button variant="outline" size="sm" onClick={props.onAction}>
+            <Button variant="secondary" size="sm" onClick={props.onAction}>
               {props.actionLabel ?? 'Reset'}
             </Button>
           </div>
@@ -97,14 +103,31 @@ export function FileDetailLoadGate<
   T extends { userAccessLevel: AccessLevel },
 >(props: {
   documentId: string;
+  /** The block the document opens as, reported on `open_entity`. */
+  entityType: string;
   label: string;
   load: (documentId: string) => Promise<T>;
   children: (data: T) => JSX.Element;
 }) {
+  const analytics = useAnalytics();
   const [document, { refetch, mutate }] = createResource(
     () => props.documentId,
     props.load
   );
+  // Counts the open once per document, as BlockLoader does for blocks; access
+  // changes and retries reload the same document without reopening it.
+  let trackedDocumentId: string | undefined;
+  createEffect(() => {
+    if (document.state !== 'ready') return;
+    const documentId = props.documentId;
+    if (trackedDocumentId === documentId) return;
+    trackedDocumentId = documentId;
+    analytics.pageView(props.entityType);
+    analytics.track('open_entity', {
+      entityType: props.entityType,
+      entityId: documentId,
+    });
+  });
   const reload = () => {
     // Dispose the old editor and its sync source before loading a new token.
     mutate(undefined);
@@ -118,7 +141,7 @@ export function FileDetailLoadGate<
         return;
       }
       const loaded = document.state === 'ready' ? document.latest : undefined;
-      if (loaded?.userAccessLevel !== level) reload();
+      if (!matchesConfirmedAccess(loaded?.userAccessLevel, level)) reload();
     }
   );
   const accessDenied = () => {

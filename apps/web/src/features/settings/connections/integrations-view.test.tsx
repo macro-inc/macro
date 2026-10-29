@@ -13,6 +13,7 @@ import {
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IntegrationsView } from './integrations-view';
+import type { Leftover } from './model';
 import { useConnectionsView } from './view-state';
 
 const mocks = vi.hoisted(() => ({
@@ -21,6 +22,9 @@ const mocks = vi.hoisted(() => ({
   discover: vi.fn(),
   importChannels: vi.fn(),
   failure: vi.fn(),
+  granolaConnected: false,
+  leftovers: [] as Leftover[],
+  overlaysLoading: false,
 }));
 const [state, setState] = createSignal<ImportState>({ runs: [], entities: [] });
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'me' }));
@@ -39,10 +43,23 @@ vi.mock('@service-connection/websocket', () => ({
 }));
 vi.mock('@queries/pipedream-connectors', () => ({
   connectPipedreamApp: mocks.connect,
+  usePipedreamConnectedSlugs: () => ({ slugs: () => new Set<string>() }),
+  usePipedreamOverlaysQuery: () => ({
+    isPending: false,
+    data: [],
+    get isPlaceholderData() {
+      return mocks.overlaysLoading;
+    },
+  }),
+  overlaidAppSlug: () => undefined,
 }));
 vi.mock('./use-connections-model', () => ({
   useConnectionsModel: () => ({
-    model: () => ({}),
+    model: () => ({
+      capabilities: [],
+      leftovers: mocks.leftovers,
+      providers: [],
+    }),
     ready: () => true,
     error: () => false,
     partialError: () => false,
@@ -53,18 +70,59 @@ vi.mock('./model', () => ({
   capabilitiesFor: () =>
     mocks.connected ? [{ mechanism: 'pipedream', status: 'connected' }] : [],
 }));
-vi.mock('./ConnectedView', () => ({
-  ConnectedView: () => {
-    const view = useConnectionsView();
-    return (
-      <button onClick={() => view.openProvider('slack')}>
-        Installed Slack
-      </button>
-    );
-  },
+vi.mock('./add-custom-mcp-dialog', () => ({ AddCustomMcpDialog: () => null }));
+// Stand-ins for rows whose real sources read account, team and email queries.
+vi.mock('./integration-items', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./integration-items')>();
+  const item = (name: string, Actions: () => JSX.Element) => ({
+    id: name,
+    name,
+    icon: null,
+    description: `${name} description`,
+    categories: ['Agent tools'],
+    get status() {
+      return name === 'Granola' && mocks.granolaConnected
+        ? ('connected' as const)
+        : ('available' as const);
+    },
+    Actions,
+  });
+  return {
+    ...actual,
+    useEmailItems: () => [],
+    useGithubItem: () => item('GitHub', () => null),
+    useGranolaItem: () => item('Granola', () => null),
+    useAgentProviderItem: (_model: unknown, provider: 'slack' | 'linear') =>
+      item(provider === 'slack' ? 'Slack' : provider, () => {
+        const view = useConnectionsView();
+        return (
+          <button onClick={() => view.openProvider(provider)}>
+            Manage {provider}
+          </button>
+        );
+      }),
+  };
+});
+// The real row reads connection mutations.
+vi.mock('./leftover-row', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./leftover-row')>()),
+  LeftoverRow: (props: { leftover: Leftover }) => (
+    <div role="row">
+      <span class="font-medium">{props.leftover.title}</span>
+    </div>
+  ),
 }));
-vi.mock('./DiscoverView', () => ({
-  DiscoverView: () => <p>Integration catalog</p>,
+vi.mock('./catalog-rows', () => ({
+  CatalogRows: () => <p>Integration catalog</p>,
+}));
+vi.mock('@core/pipedream/catalog', () => ({
+  createPipedreamCatalogSearch: () => ({
+    search: () => '',
+    searchInput: () => '',
+    onSearchInput: vi.fn(),
+    entries: () => [],
+    query: { isFetching: false },
+  }),
 }));
 vi.mock('./PipedreamAiProvider', () => ({
   PipedreamAiProvider: () => {
@@ -118,12 +176,36 @@ vi.mock('../primitives', () => ({
   SettingsCard: (props: { children: JSX.Element }) => (
     <div>{props.children}</div>
   ),
+  IntegrationRow: (props: {
+    title: JSX.Element;
+    description?: JSX.Element;
+    children?: JSX.Element;
+  }) => (
+    <div>
+      <span>{props.title}</span>
+      <span>{props.description}</span>
+      {props.children}
+    </div>
+  ),
 }));
+
+const CUSTOM_SERVER: Leftover = {
+  kind: 'native-mcp',
+  id: 'mcp:https://tools.example.com/mcp',
+  title: 'Team tools',
+  subtitle: 'tools.example.com',
+  url: 'https://tools.example.com/mcp',
+  enabled: true,
+  authenticated: true,
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
   clearPendingConnectApp();
   mocks.connected = false;
+  mocks.granolaConnected = false;
+  mocks.leftovers = [];
+  mocks.overlaysLoading = false;
   setState({ runs: [], entities: [] });
 });
 afterEach(cleanup);
@@ -131,7 +213,11 @@ afterEach(cleanup);
 function startImport() {
   requestConnectApp('slack', 'import-slack-channels');
   render(() => (
-    <IntegrationsView onOpenMacroMcp={() => {}} onOpenLocalAgents={() => {}} />
+    <IntegrationsView
+      onOpenEmailSettings={() => {}}
+      onOpenMacroMcp={() => {}}
+      onOpenLocalAgents={() => {}}
+    />
   ));
 }
 
@@ -211,6 +297,7 @@ describe('Slack channel import handoff', () => {
     requestConnectApp('linear');
     render(() => (
       <IntegrationsView
+        onOpenEmailSettings={() => {}}
         onOpenMacroMcp={() => {}}
         onOpenLocalAgents={() => {}}
       />
@@ -224,7 +311,12 @@ describe('Slack channel import handoff', () => {
 
 describe('unified Integrations page', () => {
   it('hides local harness setup when no allowed entry point is supplied', () => {
-    render(() => <IntegrationsView onOpenMacroMcp={() => {}} />);
+    render(() => (
+      <IntegrationsView
+        onOpenEmailSettings={() => {}}
+        onOpenMacroMcp={() => {}}
+      />
+    ));
     expect(
       screen.queryByRole('button', { name: 'Set up local agents' })
     ).toBeNull();
@@ -238,6 +330,7 @@ describe('unified Integrations page', () => {
     const onOpenLocalAgents = vi.fn();
     render(() => (
       <IntegrationsView
+        onOpenEmailSettings={() => {}}
         onOpenMacroMcp={onOpenMacroMcp}
         onOpenLocalAgents={onOpenLocalAgents}
       />
@@ -252,30 +345,67 @@ describe('unified Integrations page', () => {
     );
     expect(onOpenLocalAgents).toHaveBeenCalledOnce();
   });
-  it('shows installed tools and the catalog together and restores both after provider details', () => {
+  it('lists custom servers first, then connected integrations, the rest and the catalog', () => {
+    mocks.granolaConnected = true;
+    mocks.leftovers = [CUSTOM_SERVER];
     render(() => (
-      <IntegrationsView onOpenMacroMcp={() => {}} onOpenLocalAgents={() => {}}>
-        <p>Personal accounts</p>
-      </IntegrationsView>
+      <IntegrationsView
+        onOpenEmailSettings={() => {}}
+        onOpenMacroMcp={() => {}}
+      />
     ));
-    expect(screen.getByRole('heading', { name: 'Integrations' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Installed' })).toBeTruthy();
-    expect(screen.queryByRole('heading', { name: 'Discover' })).toBeNull();
-    expect(
-      screen.getByRole('region', { name: 'Available integrations' })
-    ).toBeTruthy();
+    const names = screen
+      .getAllByRole('row')
+      .slice(1)
+      .map((row) => row.querySelector('span.font-medium')?.textContent);
+    expect(names.slice(0, 2)).toEqual(['Team tools', 'Granola']);
+    expect(names).toContain('GitHub');
     expect(screen.getByText('Integration catalog')).toBeTruthy();
-    expect(screen.getByText('Personal accounts')).toBeTruthy();
-    expect(screen.queryByRole('tab')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Installed Slack' }));
+  });
+
+  it('holds native servers back until overlays load', () => {
+    mocks.leftovers = [CUSTOM_SERVER];
+    mocks.overlaysLoading = true;
+    render(() => (
+      <IntegrationsView
+        onOpenEmailSettings={() => {}}
+        onOpenMacroMcp={() => {}}
+      />
+    ));
+    expect(screen.queryByText('Team tools')).toBeNull();
+    expect(screen.getByText('Granola')).toBeTruthy();
+  });
+
+  it('filters every row by search', () => {
+    render(() => (
+      <IntegrationsView
+        onOpenEmailSettings={() => {}}
+        onOpenMacroMcp={() => {}}
+      />
+    ));
+    fireEvent.input(
+      screen.getByRole('searchbox', { name: 'Search integrations' }),
+      { target: { value: 'granola' } }
+    );
+    expect(screen.getByText('Granola')).toBeTruthy();
+    expect(screen.queryByText('GitHub')).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Set up Macro in AI apps' })
+    ).toBeNull();
+  });
+
+  it('returns from provider details to the list', () => {
+    render(() => (
+      <IntegrationsView
+        onOpenEmailSettings={() => {}}
+        onOpenMacroMcp={() => {}}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Manage slack' }));
     expect(screen.queryByText('Integration catalog')).toBeNull();
     fireEvent.click(
       screen.getByRole('button', { name: 'Back to integrations' })
     );
     expect(screen.getByText('Integration catalog')).toBeTruthy();
-    expect(screen.getByText('Personal accounts')).toBeTruthy();
-    expect(
-      screen.getByRole('button', { name: 'Installed Slack' })
-    ).toBeTruthy();
   });
 });

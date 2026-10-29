@@ -29,6 +29,10 @@ pub const DEFAULT_MCP_URL: &str = "https://remote.mcp.pipedream.net";
 /// present a token about to expire mid-request.
 const TOKEN_EXPIRY_MARGIN: Duration = Duration::from_secs(60);
 
+/// The most accounts one listing asks for; a user holds one per app unless a
+/// connect flow went unreported.
+const ACCOUNTS_PAGE_LIMIT: &str = "100";
+
 /// Configuration for [`PipedreamClient`].
 #[derive(Clone, Debug)]
 pub struct PipedreamConfig {
@@ -214,13 +218,32 @@ impl PipedreamConnect for PipedreamClient {
         let account: AccountResponse =
             serde_json::from_value(account).context("parsing Pipedream account")?;
 
-        Ok(Some(PipedreamAccount {
-            id: account.id,
-            external_user_id: account.external_id,
-            app_slug: account.app.name_slug,
-            app_name: account.app.name,
-            healthy: account.healthy.unwrap_or(true),
-        }))
+        Ok(Some(account.into()))
+    }
+
+    #[tracing::instrument(skip(self, external_user_id), err)]
+    async fn list_accounts(
+        &self,
+        external_user_id: &str,
+        app_slug: &str,
+    ) -> anyhow::Result<Vec<PipedreamAccount>> {
+        let response = self
+            .authed(self.http.get(self.connect_api("/accounts")).query(&[
+                ("external_user_id", external_user_id),
+                ("app", app_slug),
+                ("limit", ACCOUNTS_PAGE_LIMIT),
+            ]))
+            .await?
+            .send()
+            .await
+            .context("listing Pipedream accounts")?;
+        let response = error_for_status(response).await?;
+
+        let accounts: AccountsResponse = response
+            .json()
+            .await
+            .context("decoding Pipedream accounts response")?;
+        Ok(accounts.data.into_iter().map(Into::into).collect())
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -536,7 +559,26 @@ struct AccountResponse {
     id: String,
     external_id: Option<String>,
     healthy: Option<bool>,
+    created_at: Option<chrono::DateTime<chrono::Utc>>,
     app: AccountApp,
+}
+
+impl From<AccountResponse> for PipedreamAccount {
+    fn from(account: AccountResponse) -> Self {
+        Self {
+            id: account.id,
+            external_user_id: account.external_id,
+            app_slug: account.app.name_slug,
+            app_name: account.app.name,
+            healthy: account.healthy.unwrap_or(true),
+            created_at: account.created_at,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct AccountsResponse {
+    data: Vec<AccountResponse>,
 }
 
 #[derive(Deserialize)]

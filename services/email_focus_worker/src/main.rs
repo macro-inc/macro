@@ -19,7 +19,7 @@ mod outbound {
 use std::{sync::Arc, time::Duration};
 
 use email::{domain::focus::FocusService, outbound::FocusPgRepository};
-use jev::{domain::JevClassifier, outbound::TypesafeJev};
+use jev::{domain::JevClassifier, outbound::SystemOneJev};
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use memory::outbound::pg_memory_repo::PgMemoryRepo;
 use rootcause::Report;
@@ -42,7 +42,7 @@ async fn main() -> Result<(), Report> {
     let provider = config
         .typesafe_api_key
         .value()
-        .map(TypesafeJev::new)
+        .map(SystemOneJev::typesafe)
         .transpose()?;
     let Some(provider) = provider.filter(|_| !domains.is_empty()) else {
         // Off until both are configured; stay up so the deployment stays healthy.

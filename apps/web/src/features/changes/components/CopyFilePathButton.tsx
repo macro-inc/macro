@@ -1,6 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import CheckIcon from '@phosphor/check.svg';
-import CopyIcon from '@phosphor/copy.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
 import { Button } from '@ui';
 import { createSignal, onCleanup, Show } from 'solid-js';
 
@@ -40,8 +40,13 @@ export function CopyFilePathButton(props: {
         class="motion-safe:transition-transform motion-safe:duration-150 motion-safe:active:scale-95"
         onClick={() => fireAndForget(copy(), 'changes')}
       >
-        <Show when={copied()} fallback={<CopyIcon />}>
-          <CheckIcon class="text-success" />
+        <Show
+          when={copied()}
+          fallback={
+            <CopyIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+          }
+        >
+          <CheckIcon class="text-success size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Show>
       </Button>
       <span class="sr-only" aria-live="polite">

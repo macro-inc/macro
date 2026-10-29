@@ -1,7 +1,8 @@
+import { TimeRangeEditor } from '@app/components/date-time-range/time-range-editor';
 import { fireAndForget } from '@core/util/fireAndForget';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { Popover } from '@kobalte/core/popover';
 import { Tooltip } from '@kobalte/core/tooltip';
-import CaretDownIcon from '@phosphor/caret-down.svg';
 import { PropertyDateSelector } from '@property/editors/selectors/PropertyDateSelector';
 import { Checkbox } from '@ui/components/Checkbox';
 import { Dropdown } from '@ui/components/Dropdown';
@@ -25,6 +26,7 @@ import {
 } from '../../../observability/ui-operation';
 import { useOptionEditing } from '../context/option-editing';
 import { fromCellDate, toCellDate } from '../core/cell-date';
+import { cellTimeRange, toCellTimeRange } from '../core/cell-date-range';
 import {
   type DatabaseEntityType,
   type DatabaseMention,
@@ -153,7 +155,9 @@ export function GridCell(props: GridCellProps) {
   const isBoolean = () =>
     props.column.dataType === 'BOOLEAN' && !props.column.isMultiSelect;
   const isDate = () =>
-    props.column.dataType === 'DATE' && !props.column.isMultiSelect;
+    (props.column.dataType === 'DATE' ||
+      props.column.dataType === 'DATE_RANGE') &&
+    !props.column.isMultiSelect;
   const hasPopupEditor = () =>
     isOptionColumn(props.column) || (isDate() && editable());
   const startsEditing = Boolean(
@@ -593,6 +597,12 @@ function TextCell(props: {
         (!props.isEntity && formatted()) ||
         undefined
       }
+      onContextMenu={(event) => {
+        if (!props.onOpen || !props.editable) return;
+        event.preventDefault();
+        event.stopPropagation();
+        props.onBeginEdit(undefined, event);
+      }}
       onClick={(event) => {
         if (props.onOpen) props.onOpen();
         else if (props.editable) props.onBeginEdit(undefined, event);
@@ -1119,7 +1129,7 @@ function SelectCell(props: GridCellProps) {
   );
 }
 
-/** Date cells edit through the shared property date selector. */
+/** Date and date-range cells edit through the shared property selectors. */
 function DateCell(props: GridCellProps) {
   const opening = createEditorMeasurement(() => props.column.dataType);
   let openingEvent: Event | undefined;
@@ -1218,7 +1228,12 @@ function DateCell(props: GridCellProps) {
           {shown()}
         </Dropdown.Trigger>
         <Dropdown.Content
-          class="flex max-h-96 w-70 flex-col overflow-hidden p-0 text-sm"
+          class={
+            props.column.dataType === 'DATE_RANGE'
+              ? // The range fields open their date and time lists inside.
+                'portal-scope w-max max-w-[calc(100vw-1rem)] overflow-visible p-0 text-sm'
+              : 'flex max-h-96 w-70 flex-col overflow-hidden p-0 text-sm'
+          }
           // A menu's closing animation must not delay Tab into the next cell.
           style={{ animation: 'none' }}
           onKeyDown={(event: KeyboardEvent) => {
@@ -1228,18 +1243,35 @@ function DateCell(props: GridCellProps) {
           }}
           onCloseAutoFocus={keys.onCloseAutoFocus}
         >
-          <PropertyDateSelector
-            property={{ displayName: props.column.name }}
-            selectedDate={fromCellDate(props.value)}
-            initialQuery={query()}
-            onSelectDate={(date) =>
-              fireAndForget(
-                props.onWrite(date ? toCellDate(date) : null),
-                'database'
-              )
+          <Show
+            when={props.column.dataType === 'DATE_RANGE'}
+            fallback={
+              <PropertyDateSelector
+                property={{ displayName: props.column.name }}
+                selectedDate={fromCellDate(props.value)}
+                initialQuery={query()}
+                onSelectDate={(date) =>
+                  fireAndForget(
+                    props.onWrite(date ? toCellDate(date) : null),
+                    'database'
+                  )
+                }
+                onClose={() => setOpen(false)}
+              />
             }
-            onClose={() => setOpen(false)}
-          />
+          >
+            <TimeRangeEditor
+              subject={props.column.name}
+              range={cellTimeRange(props.value)}
+              onChange={(range) =>
+                fireAndForget(
+                  props.onWrite(range ? toCellTimeRange(range) : null),
+                  'database'
+                )
+              }
+              onClear={() => setOpen(false)}
+            />
+          </Show>
         </Dropdown.Content>
       </Dropdown>
     </Show>

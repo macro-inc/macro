@@ -21,8 +21,8 @@ use uuid::Uuid;
 use super::{BODY_CONCURRENCY, Cancel, Progress, WriteItem, folder_once};
 use crate::domain::models::{WrittenKind, WrittenObject};
 use crate::domain::ports::{
-    ImportedDocumentProperties, NewDatabase, NotionLinks, SharedEntity, WorkspaceWriter,
-    WrittenObjects,
+    ImportedDocumentProperties, NewDatabase, NotionLinks, SharedEntity, SourceDates,
+    WorkspaceWriter, WrittenObjects,
 };
 
 use super::super::values::{
@@ -558,6 +558,7 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
                         links,
                         &ImportedDocumentProperties::default(),
                         Some(folder),
+                        Some(SourceDates::from(&row)),
                     )
                     .await?
                     .parse()?;

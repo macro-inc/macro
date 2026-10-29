@@ -4,16 +4,42 @@ import {
   defaultEditorInitialValues,
   type EventEditorInitialValues,
 } from '@app/features/calendar/components/composer/event-form-model';
-import { useCalendarGuestInvitesFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { createGuestInviteController } from '@app/features/calendar/hooks/create-guest-invite-controller';
+import {
+  useCalendarGuestInvitesFlag,
+  useCalendarInvitationForwardFlag,
+} from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { useEventEditor } from '@app/features/calendar/hooks/use-event-editor';
 import { useSyncedCalendarEvent } from '@app/features/calendar/hooks/use-synced-calendar-event';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { viewerReplacesGuests } from '@app/features/calendar/utils/event-guest-editing';
 import { EventReplacementAction } from '@app/features/calendar/views/event-replacement';
+import { EventForwardInvitationAction } from '@app/features/calendar-view/components/EventGuests';
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { type Accessor, createMemo, onMount, Show } from 'solid-js';
+
+/**
+ * Forward invitation beside a guest list the viewer cannot add to, as the
+ * event details offer it there.
+ */
+function EditorForwardInvitation(props: {
+  event: CalendarEvent;
+  guestInvitesEnabled: Accessor<boolean>;
+  forwardEnabled: Accessor<boolean>;
+}) {
+  const invites = createGuestInviteController(
+    () => props.event,
+    props.guestInvitesEnabled,
+    props.forwardEnabled
+  );
+  return (
+    <Show when={invites.canForward()}>
+      <EventForwardInvitationAction event={props.event} invites={invites} />
+    </Show>
+  );
+}
 
 /** Standalone create/edit event composer hosted in a popover split. */
 type EventComposerSplitProps = {
@@ -56,10 +82,13 @@ function EventComposerContent(
   const macroCallsEnabled = props.macroCallsEnabled;
   const [attachHotkeys] = useHotkeyDOMScope('event-composer', true);
   const close = () => panel.handle.close();
+  const guestInvitesEnabled = useCalendarGuestInvitesFlag();
+  const invitationForwardEnabled = useCalendarInvitationForwardFlag();
   const editor = useEventEditor({
     event: () => props.event,
     macroCallsEnabled,
-    guestInvitesEnabled: useCalendarGuestInvitesFlag(),
+    guestInvitesEnabled,
+    invitationForwardEnabled,
     syncedEvent: useSyncedCalendarEvent(() => props.event),
     onDetailsLocked: () => controller.resetDetails(),
     onSaved: () => {
@@ -97,6 +126,17 @@ function EventComposerContent(
         disabledFields={editor.disabledFields()}
         addOnlyGuests={editor.addOnlyGuests()}
         guestsReadOnlyReason={editor.guestsReadOnlyReason()}
+        guestsAction={
+          <Show when={props.event}>
+            {(event) => (
+              <EditorForwardInvitation
+                event={event()}
+                guestInvitesEnabled={guestInvitesEnabled}
+                forwardEnabled={invitationForwardEnabled}
+              />
+            )}
+          </Show>
+        }
         guestListHidden={editor.guestListHidden()}
         guestPolicyEditable={editor.guestPolicyEditable()}
         detailsReadOnlyReason={editor.detailsReadOnlyReason()}

@@ -54,6 +54,15 @@ impl CompaniesRepository for StubRepo {
         Ok(vec![])
     }
 
+    async fn resolve_activity(
+        &self,
+        scope: CrmContactListScope<'_>,
+    ) -> Result<crate::domain::association::CrmRecordAssociation, CrmError> {
+        self.resolve_association(scope, crate::domain::association::CrmAssociation::Activity)
+            .await
+            .map(Option::unwrap_or_default)
+    }
+
     async fn resolve_association(
         &self,
         scope: CrmContactListScope<'_>,

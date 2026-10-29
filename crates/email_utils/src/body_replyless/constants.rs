@@ -49,6 +49,11 @@ lazy_static! {
             ^--+\s*original\s+message\s*--+
         )
         | # OR
+        ( # Outlook's reply rule: a line of underscores, then a From: header.
+          # The cut is the start of this match, so the rule itself is dropped.
+            ^_{10,}[^\S\n]*\n\s*From:
+        )
+        | # OR
         ( # Group 3: Forwarded headers like > From: or From:
             ^>?>?\s*From:
         )
@@ -69,6 +74,10 @@ lazy_static! {
     pub static ref OUTLOOK_DIV_SELECTOR: Selector = Selector::parse("div").unwrap();
     pub static ref OUTLOOK_REPLY_CONTAINER_SELECTOR: Selector = Selector::parse("div#mail-editor-reference-message-container").unwrap();
     pub static ref OUTLOOK_APPENDONSEND_SELECTOR: Selector = Selector::parse("div#appendonsend").unwrap();
+    /// Outlook on the web and Outlook mobile put the quoted thread in this div.
+    /// Nested copies are prefixed (`x_divRplyFwdMsg`); the unsuffixed id is the
+    /// start of the quote on the message being read.
+    pub static ref OUTLOOK_REPLY_HEADER_SELECTOR: Selector = Selector::parse("div#divRplyFwdMsg").unwrap();
     pub static ref BLOCKQUOTE_SELECTOR: Selector = Selector::parse("blockquote").unwrap();
     pub static ref ANY_ELEMENT_SELECTOR: Selector = Selector::parse("*").unwrap();
     pub static ref BODY_SELECTOR: Selector = Selector::parse("body").unwrap();

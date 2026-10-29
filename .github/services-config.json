@@ -304,6 +304,20 @@
     "preview-gateway": {
       "source_paths": [],
       "stack_path": "infra/stacks/preview-gateway/**"
+    },
+    "whatsapp-session-service": {
+      "source_paths": [
+        "services/whatsapp_session_service/**",
+        "crates/whatsapp_linked/**",
+        "crates/whatsapp_store_pg/**",
+        "crates/whatsmeow/**",
+        "crates/whatsmeow_proto/**",
+        "crates/whatsmeow_signal/**"
+      ],
+      "stack_path": "infra/stacks/whatsapp-session-service/**",
+      "deploy_binaries": [
+        "whatsapp_session_service"
+      ]
     }
   }
 }

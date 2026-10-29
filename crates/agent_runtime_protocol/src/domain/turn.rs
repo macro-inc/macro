@@ -46,6 +46,9 @@ pub enum FailureNoticeKind {
     ProviderUsageLimit,
     /// The selected model cannot read image attachments in this conversation.
     UnsupportedImageInput,
+    /// The provider ended the run in failure; its own page for the run is
+    /// where any detail it kept lives.
+    ProviderRunFailed,
 }
 
 /// An external page where the person can act on a [`FailureNotice`].

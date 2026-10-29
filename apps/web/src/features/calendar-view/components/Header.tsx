@@ -9,6 +9,7 @@ import { useCalendarHotkeys } from '@app/features/calendar/hooks/use-calendar-ho
 import { calendarPeriodLabel } from '@app/features/calendar/utils/calendar-label';
 import { CalendarSchedulingActions } from '@app/features/scheduling/calendar-actions';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
   SplitHeaderLeft,
@@ -18,12 +19,12 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import ListIcon from '@phosphor/list.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import ListIcon from '@icon/system/regular/list.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, ButtonGroup, cn } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -38,6 +39,7 @@ import {
 } from 'solid-js';
 import { CALENDAR_TOUR } from '../tour';
 import {
+  CalendarCreateBookingLinkItem,
   CalendarCreateCallItem,
   CalendarCreateEventItem,
 } from './CalendarCreateItems';
@@ -163,6 +165,7 @@ export function Header(props: {
     <>
       <CalendarCreateEventItem />
       <CalendarCreateCallItem />
+      <CalendarCreateBookingLinkItem />
     </>
   );
   const headerCreateMenu = () => (
@@ -189,56 +192,80 @@ export function Header(props: {
     </CalendarCreateMenu>
   );
 
-  const previous = (compact = false) => (
-    <Button
-      variant="ghost"
-      size={compact ? 'icon-md' : 'icon-lg'}
-      class="border-transparent bg-transparent"
-      label={`Previous ${periodLabel()}`}
-      hotkey={TOKENS.calendar.period.previous}
-      onClick={calendarPager.previousPeriod}
-    >
-      <CaretLeftIcon class={compact ? 'size-4' : 'size-5'} />
-    </Button>
-  );
-  const next = (compact = false) => (
-    <Button
-      variant="ghost"
-      size={compact ? 'icon-md' : 'icon-lg'}
-      class="border-transparent bg-transparent"
-      label={`Next ${periodLabel()}`}
-      hotkey={TOKENS.calendar.period.next}
-      onClick={calendarPager.nextPeriod}
-    >
-      <CaretRightIcon class={compact ? 'size-4' : 'size-5'} />
-    </Button>
-  );
-  const todayButton = (mobile: boolean, compact = false) => (
-    <Button
-      variant={mobile || compact ? 'ghost' : 'outline'}
-      size={compact ? (mobile ? 'icon-md' : 'md') : mobile ? 'icon-lg' : 'lg'}
-      class={cn(
-        mobile && 'relative',
-        !mobile && 'bg-transparent text-sm',
-        !mobile && (compact ? 'px-2' : 'px-3'),
-        !mobile && !compact && 'border-edge-button'
-      )}
-      label="Go to today"
-      hotkey={TOKENS.calendar.period.today}
-      onClick={calendarPager.navigateToToday}
-    >
-      <Show when={mobile} fallback="Today">
-        <CalendarBlankIcon aria-hidden="true" />
-        <span
-          aria-hidden="true"
-          class="pointer-events-none absolute inset-0 flex items-center justify-center pt-1 text-[10px] font-bold leading-none"
-        >
-          {today().getDate()}
-        </span>
-      </Show>
-    </Button>
-  );
-
+  const previous = (compact = false) => {
+    const Control = compact ? ButtonGroup.Button : Button;
+    return (
+      <Control
+        aria-label={`Previous ${periodLabel()}`}
+        tooltip={{
+          content: `Previous ${periodLabel()}`,
+          hotkey: TOKENS.calendar.period.previous,
+        }}
+        variant="ghost"
+        size={compact ? 'icon-sm' : 'icon-lg'}
+        class="border-transparent bg-transparent"
+        onClick={calendarPager.previousPeriod}
+      >
+        <CaretLeftIcon class={compact ? 'size-4' : 'size-5'} />
+      </Control>
+    );
+  };
+  const next = (compact = false) => {
+    const Control = compact ? ButtonGroup.Button : Button;
+    return (
+      <Control
+        aria-label={`Next ${periodLabel()}`}
+        tooltip={{
+          content: `Next ${periodLabel()}`,
+          hotkey: TOKENS.calendar.period.next,
+        }}
+        variant="ghost"
+        size={compact ? 'icon-sm' : 'icon-lg'}
+        class="border-transparent bg-transparent"
+        onClick={calendarPager.nextPeriod}
+      >
+        <CaretRightIcon class={compact ? 'size-4' : 'size-5'} />
+      </Control>
+    );
+  };
+  const todayButton = (mobile: boolean, compact = false) => {
+    const Control = compact ? ButtonGroup.Button : Button;
+    const size = () => {
+      if (compact) return mobile ? 'icon-sm' : 'sm';
+      return mobile ? 'icon-lg' : 'lg';
+    };
+    return (
+      <Control
+        aria-label="Go to today"
+        tooltip={{
+          content: 'Go to today',
+          hotkey: TOKENS.calendar.period.today,
+        }}
+        variant={mobile || compact ? 'ghost' : 'secondary'}
+        size={size()}
+        class={cn(
+          mobile && 'relative',
+          !mobile && 'bg-transparent text-sm',
+          !mobile && (compact ? 'px-2' : 'px-3'),
+          !mobile && !compact && 'border-edge-button'
+        )}
+        onClick={calendarPager.navigateToToday}
+      >
+        <Show when={mobile} fallback="Today">
+          <CalendarBlankIcon
+            class="size-4 touch:size-6 shrink-0 pointer-events-none"
+            aria-hidden="true"
+          />
+          <span
+            aria-hidden="true"
+            class="pointer-events-none absolute inset-0 flex items-center justify-center pt-1 text-[10px] font-bold leading-none"
+          >
+            {today().getDate()}
+          </span>
+        </Show>
+      </Control>
+    );
+  };
   return (
     <Switch>
       <Match when={usesSplitHeader()}>
@@ -246,10 +273,11 @@ export function Header(props: {
           <HeaderIsland class="min-w-0 shrink px-1">
             <Show when={!isMobile() && shell?.aside.isCollapsed()}>
               <Button
+                aria-label="Show calendar navigation"
+                tooltip="Show calendar navigation"
                 variant="ghost"
                 size="icon-sm"
                 class="shrink-0"
-                label="Show calendar navigation"
                 ref={tourTarget(CALENDAR_TOUR.sidebarToggle)}
                 aria-expanded={shell?.aside.isOverlay() ?? false}
                 onClick={() => shell?.aside.expand()}
@@ -332,26 +360,14 @@ export function Header(props: {
               <Show when={showBookingLinks()}>
                 <CalendarSchedulingActions compact />
               </Show>
-              <div
-                role="group"
-                aria-label="Calendar navigation"
-                class="flex shrink-0"
-              >
-                <ButtonGroup variant="outline" size="icon-md">
-                  {todayButton(!breakpoints.labeledToday(), true)}
-                  {previous(true)}
-                  {next(true)}
-                </ButtonGroup>
-              </div>
-              <div
-                role="group"
-                aria-label="Calendar view"
-                class="flex shrink-0"
-              >
-                <ButtonGroup variant="outline" size="icon-md">
-                  <PeriodSelector isNarrow={isNarrow()} compact />
-                </ButtonGroup>
-              </div>
+              <HeaderActionGroup label="Calendar navigation">
+                {todayButton(!breakpoints.labeledToday(), true)}
+                {previous(true)}
+                {next(true)}
+              </HeaderActionGroup>
+              <HeaderActionGroup label="Calendar view">
+                <PeriodSelector isNarrow={isNarrow()} compact grouped />
+              </HeaderActionGroup>
               {headerCreateMenu()}
             </div>
             <div

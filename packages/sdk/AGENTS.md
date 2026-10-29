@@ -20,11 +20,17 @@ enforced by the ordinary backend APIs.
 - `src/entities/sharing/`, `messages/`: scoped access requests and message threads.
 - `src/entities/databases/query.ts`: SQL statements, typed table/row references and version guards.
 - `src/entities/crm/pipeline.ts`: pipeline-authorized table/row handles.
+- `src/entities/external-chat/`: added provider chats (`macro.externalChats`, entity type
+  `external_chat`) and their message/send/upload/participant handles.
+- `src/entities/whatsapp/`: the owner's WhatsApp account and chat list; `WhatsAppChat.add()`
+  returns an `ExternalChat`.
 - `services.ts`, `openapi-ts.config.ts`: generated service contract inputs.
 
 ## Boundaries
 
 - Keep handwritten behavior in `src/`; never edit `generated/` or `specs/`.
+- Keep WhatsApp pairing, passkeys, connection setup/disconnect and rollout configuration out of the handwritten public SDK; operate on accounts linked in the app, with personal bearer sessions for account/access controls. External chat sends/uploads accept the connection owner's session or own API token; bots never send.
+- Keep `external-chat/` provider-neutral; provider-specific reads (WhatsApp community chats) branch on `provider` with an exhaustive match.
 - Use existing entity handles for reads and mutations. Follow the
   [SDK rule](../../.agents/rules/sdk.md) and `add-sdk-endpoint` skill.
 - `../sdk-docs/` generates the public TypeDoc reference and static docs Worker.
@@ -57,7 +63,8 @@ the existing gateway prefixes.
 - Calendar notes accept a document handle and the occurrence returned by calendar
   reads. `CalendarNote` owns optional team sharing and unlinking; clearing its team
   sends explicit null and never changes the document's other permissions.
-  `Document.meetingNotes()` discovers durable grants for revocation after losing
+  `Document.meetingNotes()` discovers visible meeting links for readers and
+  durable grants for owners to revoke after losing
   meeting access.
 - Regenerate Rust OpenAPI and web service clients before `bun run sync-specs &&
   bun run generate`; do not copy deployed schemas over a local API change.
@@ -80,6 +87,10 @@ the existing gateway prefixes.
 - Handles must serialize identity or loaded detail, never authenticated clients.
 - Draft writes must select the draft's inbox with `X-Email-Link-Id`; callers
   supply plain HTML and the SDK encodes it for the draft wire contract.
+- Read many task or initiative names with `tasks.summaries` (`/documents/preview`)
+  or `initiatives.summaries` (the list response); `name()` per handle loads each
+  entity. Task create `propertyValues` replace the service defaults (creator
+  assigned, Not started), so `Task.create` spells them out when it sends any.
 - Meeting list lookup only covers the owner's newest 100 standalone meetings;
   handles seeded from invitations retain their token for refetching after writes.
 - Keep access-request resolution snapshots: resolved requests leave pending lists.
@@ -93,3 +104,6 @@ the existing gateway prefixes.
   draft read and explicit reapproval; never refresh the generation to replay an
   old edit.
 - SQL result schemas are dynamic typed-cell unions; inspect `truncatedTables` before interpreting aggregates. Queries can write and are never retried automatically.
+
+- Workspace-import report/cancel endpoints remain app-only review plumbing,
+  explicitly classified alongside the existing Notion routes in coverage skips.

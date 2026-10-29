@@ -89,6 +89,8 @@ export interface LayoutProps {
   titleTrailing?: JSX.Element;
   meta?: JSX.Element;
   metaEnd?: JSX.Element;
+  /** Stored reference values alongside the existing property pills. */
+  referenceProperties?: JSX.Element;
   checked?: boolean;
   authorDisplayName?: string;
   hideCheckbox?: boolean;

@@ -1,12 +1,13 @@
 import { createCrmUserCardAction } from '@app/features/crm/crm-user-action';
+import { createBotSettingsUserCardAction } from '@app/features/settings/bot-settings-user-action';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useUserId } from '@core/context/user';
 import { useIsConnectedSecondaryInbox } from '@core/user';
-import WideChat from '@phosphor/chat.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import WideTask from '@phosphor/list-checks.svg';
+import WideChat from '@icon/system/regular/chat.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import WideTask from '@icon/system/regular/list-checks.svg';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import {
   type Accessor,
@@ -28,6 +29,7 @@ type UserCardActionId =
   | 'copy-email'
   | 'copy-name'
   | 'open-contact'
+  | 'open-settings'
   | 'dm'
   | 'assign-task';
 
@@ -83,6 +85,7 @@ export function useUserCardActions(
     canTreatAsUser() && !isBotPrincipalId(userId());
 
   const contactAction = createCrmUserCardAction(() => target().email);
+  const settingsAction = createBotSettingsUserCardAction(userId);
 
   const copyAction = (
     id: UserCardActionId,
@@ -151,6 +154,9 @@ export function useUserCardActions(
 
     const contact = contactAction();
     if (contact) actions.push(contact);
+
+    const settings = settingsAction();
+    if (settings) actions.push(settings);
 
     if (canDirectMessage() && userId() !== currentUserId()) {
       actions.push({

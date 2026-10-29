@@ -33,6 +33,7 @@ import {
 } from 'solid-js';
 import { Entity } from '../entity';
 import type { EntityRowConfig } from '../extractors-notification';
+import { EntityReferenceProperties } from '../extractors-property/entity-reference-properties';
 import {
   isHitSnippetComplete,
   isHitSnippetEntity,
@@ -72,6 +73,8 @@ interface ListEntityProps extends BaseListEntityProps {
   showUnrollNotifications?: boolean;
   /** Collection-owned schedule metadata for the original entity row. */
   scheduleStatus?: JSX.Element;
+  /** Stored reference properties to show beside the row's other properties. */
+  referencePropertyIds?: readonly string[];
 }
 
 export function MaybeEntityRow(props: {
@@ -169,6 +172,7 @@ export function ListEntity(props: ListEntityProps) {
     meta: meta(),
     metaEnd: metaEnd(),
     scheduleStatus: scheduleStatus(),
+    referenceProperties: referenceProperties(),
     authorDisplayName: props.authorDisplayName,
     checked: props.checked,
     hideCheckbox: props.hideCheckbox,
@@ -195,6 +199,17 @@ export function ListEntity(props: ListEntityProps) {
 
   const listLayout = useListLayout();
   const isWide = listLayout?.isWide ?? (() => true);
+  const referenceProperties = children(() => (
+    <Show when={props.referencePropertyIds}>
+      {(ids) => (
+        <EntityReferenceProperties
+          entity={props.entity}
+          propertyIds={ids()}
+          compact={!isWide()}
+        />
+      )}
+    </Show>
+  ));
   const isCondensedVariant = () => listLayout?.narrowLayout() === 'condensed';
   const usesCondensedNarrowLayout = () => !isWide() && isCondensedVariant();
   const isSingleLineVariant = () =>

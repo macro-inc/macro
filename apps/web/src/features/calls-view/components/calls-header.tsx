@@ -1,6 +1,7 @@
 import {
   ListSortDropdown,
   useViewControlHotkeys,
+  ViewSidebar,
 } from '@app/components/view-shell';
 import {
   ListHeader,
@@ -13,10 +14,11 @@ import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-
 import { NewCallButton } from '@app/features/next-soup/soup-view/NewCallButton';
 import { DEFAULT_SORT_OPTIONS } from '@app/features/next-soup/soup-view/sort-options';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
-import { VIEW_TAB_LISTS } from '@app/features/next-soup/soup-view/tab-lists';
+import { t } from '@app/lib/i18n';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createSignal } from 'solid-js';
+import { match } from 'ts-pattern';
 
 /** Title, list controls, and active filter chips above the Calls list. */
 export function CallsHeader() {
@@ -38,27 +40,23 @@ export function CallsHeader() {
   });
   const { consolidatedFiltersList, resetToTabDefaults } =
     useFilterRefinements();
-  const title = () => {
-    const tab = VIEW_TAB_LISTS.calls.find(
-      (item) => item.value === view.activeTab()
-    );
-    return !tab || tab.value === 'all' ? 'Calls' : `${tab.label} calls`;
-  };
+  const title = () =>
+    match(view.activeTab())
+      .with('missed', () => t('viewMenus.missedCalls'))
+      .with('unattended', () => t('viewMenus.unattendedCalls'))
+      .otherwise(() => t('viewMenus.calls'));
 
   return (
     <>
       <ListHeader
-        title={
-          <h1 class="min-w-0 truncate text-sm font-semibold text-ink">
-            {title()}
-          </h1>
-        }
+        title={<ViewSidebar.Title caret={false}>{title()}</ViewSidebar.Title>}
       >
         <HeaderActionGroup label="Call filters">
-          <UnifiedFilterDropdown hideLabel variant="ghost" />
+          <UnifiedFilterDropdown grouped hideLabel variant="ghost" />
         </HeaderActionGroup>
         <HeaderActionGroup label="Call view options">
           <ListSortDropdown
+            grouped
             label="Sort calls"
             value={
               DEFAULT_SORT_OPTIONS.find(
@@ -74,7 +72,7 @@ export function CallsHeader() {
             open={sortOpen()}
             onOpenChange={setSortOpen}
           />
-          <SoupViewContextGroup hideLabel variant="ghost" />
+          <SoupViewContextGroup grouped hideLabel variant="ghost" />
         </HeaderActionGroup>
         <NewCallButton />
         <ListHeaderSearch

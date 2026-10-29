@@ -1,7 +1,7 @@
 import { formatTimeZoneAbbreviation } from '@core/util/date';
-import ClockIcon from '@phosphor/clock.svg';
-import HashIcon from '@phosphor/hash.svg';
-import UserPlus from '@phosphor/user-plus.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import UserPlus from '@icon/system/regular/user-plus.svg';
 import { cn, HoverCard } from '@ui';
 import { differenceInCalendarDays } from 'date-fns/differenceInCalendarDays';
 import { format } from 'date-fns/format';

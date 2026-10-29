@@ -23,7 +23,13 @@ import { Suspense } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agents } from './Agents';
-import { chooseSelectOption, selectOptions } from './tests/select-helpers';
+import { agentSettingsRequest, requestAgentDetail } from './agentSettingsState';
+import {
+  chooseModelOption,
+  chooseSelectOption,
+  modelOptions,
+  selectOptions,
+} from './tests/select-helpers';
 
 const agentsPageProps = {
   onCursor: vi.fn(),
@@ -900,6 +906,34 @@ describe('Agents', () => {
     });
   });
 
+  it("opens an agent's editor when asked to from its user card", () => {
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-1',
+          kind: 'owned',
+          owner: { type: 'user', user_id: 'macro|user@example.com' },
+          name: 'Bug fixer',
+          handle: 'bug-fixer',
+          has_agent: true,
+          created_at: '2026-08-27T12:00:00Z',
+          updated_at: '2026-08-27T12:00:00Z',
+        },
+        instructions: 'Fix the root cause.',
+        harness: 'in-memory',
+        default_model: Model.sonnet55,
+        channel_scope: 'all',
+        channel_ids: [],
+      },
+    ];
+    requestAgentDetail('agent-1');
+
+    render(() => <Agents {...agentsPageProps} />);
+
+    expect(screen.getByRole('heading', { name: 'Edit agent' })).toBeTruthy();
+    expect(agentSettingsRequest()).toBeUndefined();
+  });
+
   it('lets team members edit without deleting or privatizing another creator agent', () => {
     agentMocks.query.data = [
       {
@@ -1375,13 +1409,9 @@ describe('Agents', () => {
     expect(cursor).toHaveProperty('checked', true);
 
     const defaultModel = within(dialog).getByLabelText('Default model');
-    expect(selectOptions(defaultModel).getAllByRole('option')).toHaveLength(2);
-    expect(
-      selectOptions(defaultModel)
-        .getByRole('option', { name: 'Cursor Small' })
-        .getAttribute('aria-selected')
-    ).toBe('true');
-    chooseSelectOption(defaultModel, 'Cursor Large');
+    expect(modelOptions(defaultModel).getAllByRole('menuitem')).toHaveLength(2);
+    expect(defaultModel.textContent).toBe('Cursor Small');
+    chooseModelOption(defaultModel, 'Cursor Large');
     expect(defaultModel.textContent).toBe('Cursor Large');
     fireEvent.input(within(dialog).getByLabelText('Name'), {
       target: { value: 'Coding agent' },
@@ -1529,7 +1559,7 @@ describe('Agents', () => {
     render(() => <Agents {...agentsPageProps} />);
     fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
-    expect(within(dialog).getByText('Claude Sonnet 4.5')).toBeTruthy();
+    expect(within(dialog).getByText('Sonnet 5.5')).toBeTruthy();
 
     fireEvent.click(within(dialog).getByRole('radio', { name: 'In Cursor' }));
     expect(
@@ -1577,7 +1607,7 @@ describe('Agents', () => {
     const defaultModel = within(dialog).getByLabelText('Default model');
     expect(defaultModel.tagName).toBe('BUTTON');
     expect(defaultModel).toHaveProperty('textContent', 'Codex');
-    expect(selectOptions(defaultModel).getAllByRole('option')).toHaveLength(2);
+    expect(modelOptions(defaultModel).getAllByRole('menuitem')).toHaveLength(2);
   });
 
   it('falls back to the first advertised model when current is absent', () => {
@@ -1623,7 +1653,7 @@ describe('Agents', () => {
       'provider-default (unavailable)'
     );
     expect(
-      selectOptions(defaultModel).getByRole('option', {
+      modelOptions(defaultModel).getByRole('menuitem', {
         name: 'provider-default (unavailable)',
       })
     ).toBeTruthy();
@@ -1739,9 +1769,13 @@ describe('Agents', () => {
       'textContent',
       'retired-model (saved, unavailable)'
     );
+    fireEvent.keyDown(defaultModel, { key: 'Enter' });
+    fireEvent.input(screen.getByRole('textbox', { name: 'Search models' }), {
+      target: { value: 'retired' },
+    });
     expect(
-      selectOptions(defaultModel).getByRole('option', {
-        name: 'retired-model (saved, unavailable)',
+      screen.getByRole('menuitem', {
+        name: /^retired-model \(saved, unavailable\)/,
       })
     ).toBeTruthy();
   });

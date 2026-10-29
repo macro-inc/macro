@@ -6,9 +6,9 @@
 
 import { isCommitKey } from '@app/features/block-fig/core/shortcuts';
 import { fireAndForget } from '@core/util/fireAndForget';
-import FrameCorners from '@phosphor/frame-corners.svg';
-import Plus from '@phosphor/plus.svg';
-import Trash from '@phosphor/trash.svg';
+import FrameCorners from '@icon/system/regular/frame-corners.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, Show } from 'solid-js';
 import { toRect } from '../core/geometry';
@@ -57,15 +57,15 @@ export function ArtboardsPanel(props: { viewer: AiViewer; editor: AiEditor }) {
           {viewer.artboards().length} artboards
         </span>
         <Button
+          aria-label="New artboard"
           variant="ghost"
           size="icon-sm"
-          label="New artboard"
           tooltip="New artboard"
           data-testid="ai-artboard-new"
           disabled={!editor.enabled()}
           onClick={add}
         >
-          <Plus />
+          <Plus class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
       <div class="min-h-0 flex-1 overflow-y-auto py-1">

@@ -2,6 +2,8 @@
 pub mod activity;
 #[cfg(feature = "calendar_invitations")]
 pub mod calendar_invitation_parser;
+#[cfg(all(feature = "calendar_invitations", feature = "ports"))]
+pub mod event_forward;
 pub mod events;
 #[cfg(feature = "ports")]
 pub mod focus;
@@ -11,6 +13,8 @@ pub mod followup;
 pub mod forwarded_attachments;
 #[cfg(feature = "calendar_invitations")]
 pub mod invitation_extraction;
+#[cfg(feature = "calendar_invitations")]
+pub mod invitation_import;
 #[cfg(feature = "calendar_invitations")]
 pub mod invitation_resolution;
 #[cfg(feature = "mailbox")]

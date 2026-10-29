@@ -13,7 +13,7 @@ import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import {
   createSignal,
   type JSX,
@@ -64,7 +64,11 @@ function EmailViewBreadcrumbs(props: ParentProps) {
 function EmailListFallback() {
   return (
     <div class="grid size-full min-h-0 min-w-0 place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
-      <SpinnerIcon aria-label="Loading email" class="size-5 animate-spin" />
+      <SpinnerIcon
+        aria-hidden={false}
+        aria-label="Loading email"
+        class="size-5 animate-spin"
+      />
     </div>
   );
 }

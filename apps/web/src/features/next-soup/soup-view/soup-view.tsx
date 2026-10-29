@@ -48,8 +48,8 @@ import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/Ta
 import { ResponsiveTaskListHeader } from '@app/features/next-soup/soup-view/views/tasks/TaskListHeader';
 import { TaskGroupHeader } from '@app/features/next-soup/soup-view/views/tasks/task-group-header';
 import {
-  markCalendarNotificationSeenOnOpen,
   markChannelNotificationsSeenOnOpen,
+  markRowNotificationsSeenOnOpen,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
   restoreSoupFocus,
@@ -96,12 +96,12 @@ import {
   type SearchLocation,
 } from '@entity';
 import type { SoupRowFamily } from '@entity/composed/list-entity/row-geometry';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import ChevronRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import InfoIcon from '@icon/system/regular/info.svg';
+import Spinner from '@icon/system/regular/spinner.svg';
 import { Telemetry } from '@macro-inc/observability';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import ChevronRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import InfoIcon from '@phosphor/info.svg';
-import Spinner from '@phosphor/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn, Layer } from '@ui';
@@ -418,13 +418,14 @@ export const SoupView = (props: SoupViewProps) => {
                   <Show when={docsUrl()}>
                     {(url) => (
                       <Button
+                        aria-label="View documentation"
+                        tooltip="View documentation"
                         size="icon-sm"
                         variant="ghost"
                         class="@max-[380px]/split-header:hidden"
-                        label="View documentation"
                         onClick={() => openExternalUrl(url())}
                       >
-                        <InfoIcon />
+                        <InfoIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                       </Button>
                     )}
                   </Show>
@@ -475,6 +476,7 @@ export const SoupView = (props: SoupViewProps) => {
                 <Show when={props.filterBarVariant !== 'tag'}>
                   <HeaderActionGroup label="Filters">
                     <UnifiedFilterDropdown
+                      grouped
                       hideLabel
                       variant="ghost"
                       open={filterOpen}
@@ -484,9 +486,9 @@ export const SoupView = (props: SoupViewProps) => {
                 </Show>
                 <HeaderActionGroup label="View options">
                   <Show when={!isComponentListView('home')}>
-                    <SoupViewContextSort />
+                    <SoupViewContextSort grouped />
                   </Show>
-                  <SoupViewContextGroup hideLabel variant="ghost" />
+                  <SoupViewContextGroup grouped hideLabel variant="ghost" />
                 </HeaderActionGroup>
                 <Show when={props.showCreateButton !== false}>
                   <SoupViewCreateButton />
@@ -543,7 +545,12 @@ interface SoupViewListProps {
   groupHeader?: import('solid-js').Component<
     GroupHeaderProps & { highlighted?: boolean }
   >;
-  emptyState?: () => JSX.Element;
+  emptyState?: (state: {
+    filtered: boolean;
+    clearFilters: () => void;
+  }) => JSX.Element;
+  loadingContent?: JSX.Element;
+  errorContent?: (retry: () => void) => JSX.Element;
   emptyContent?: JSX.Element;
   timestamp?: (entity: EntityData) => DateValue | null | undefined;
   navigationKey?: string;
@@ -579,6 +586,8 @@ export const SoupViewList = (props: SoupViewListProps) => (
       timestamp={props.timestamp}
       navigationKey={props.navigationKey}
       emptyState={props.emptyState}
+      loadingContent={props.loadingContent}
+      errorContent={props.errorContent}
       emptyContent={props.emptyContent}
     />
   </SoupRowMetadataProvider>
@@ -823,7 +832,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       return;
     }
 
-    markCalendarNotificationSeenOnOpen(entity, notificationSource);
+    markRowNotificationsSeenOnOpen(entity, notificationSource);
 
     // FIXME: this never gets called because we have overrides
     if (event.metaKey || event.ctrlKey) {
@@ -1122,7 +1131,11 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                     ref={setEmptyStateRef}
                     class="flex-1 min-h-0 flex flex-col touch:pb-(--mobile-content-inset-bottom)"
                   >
-                    <LoadErrorPanel onRetry={retryLoad} />
+                    {props.errorContent ? (
+                      props.errorContent(retryLoad)
+                    ) : (
+                      <LoadErrorPanel onRetry={retryLoad} />
+                    )}
                   </div>
                 </Match>
                 <Match
@@ -1134,7 +1147,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                         panel leaves list views unpadded so rows can
                         under-scroll the status bar. */}
                   <div class="flex-1 min-h-0 flex flex-col touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
-                    <LoadingBlock />
+                    {props.loadingContent ?? <LoadingBlock />}
                   </div>
                 </Match>
                 <Match
@@ -1155,7 +1168,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                     class="flex-1 min-h-0 flex flex-col touch:pb-(--mobile-content-inset-bottom)"
                   >
                     <Show
-                      when={!searchText() && props.emptyState}
+                      when={props.emptyState}
                       fallback={
                         <EmptyState
                           content={props.emptyContent}
@@ -1167,7 +1180,12 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                         />
                       }
                     >
-                      {(emptyState) => emptyState()()}
+                      {(emptyState) =>
+                        emptyState()({
+                          filtered: hasActiveRefinements(),
+                          clearFilters: resetToTabDefaults,
+                        })
+                      }
                     </Show>
                   </div>
                 </Match>
@@ -1208,7 +1226,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                           soupNavigationTouchHighlight(el);
                         }}
                         scrollerRef={setListScrollerRef}
-                        virtualizerClass={'scrollbar-hidden space-y-2'}
+                        virtualizerClass="scrollbar-hidden space-y-2"
                         class="overflow-hidden flex min-w-0"
                         virtualizerRef={registerVirtualizerHandler}
                         onScrollBottom={debouncedFetchMore}
@@ -1304,9 +1322,8 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                           }
                                           fallback={
                                             <Button
-                                              variant="outline"
-                                              size="sm"
-                                              depth={2}
+                                              variant="secondary"
+                                              size="xs"
                                               class={cn({
                                                 'bg-surface': !highlighted(),
                                                 'border-transparent':
@@ -1320,9 +1337,8 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                           }
                                         >
                                           <Button
-                                            variant="outline"
-                                            size="sm"
-                                            depth={2}
+                                            variant="secondary"
+                                            size="xs"
                                             class={cn({
                                               'bg-surface': !highlighted(),
                                               'border-transparent':

@@ -37,6 +37,11 @@ enum CapturedMutation {
         thread_id: Uuid,
         archived: bool,
     },
+    ArchiveMany {
+        user_id: String,
+        thread_ids: Vec<Uuid>,
+        archived: bool,
+    },
     Label {
         user_id: String,
         thread_id: Uuid,
@@ -128,6 +133,29 @@ impl EmailMutationService for CapturingEmailMutationService {
             return Err(EmailErr::ThreadNotFound);
         }
         Ok(())
+    }
+
+    async fn set_email_threads_archived(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        thread_ids: Vec<Uuid>,
+        archived: bool,
+    ) -> Result<SetThreadsArchivedResult, EmailErr> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(CapturedMutation::ArchiveMany {
+                user_id: user_id.to_string(),
+                thread_ids: thread_ids.clone(),
+                archived,
+            });
+        let (failed_thread_ids, updated_thread_ids) = thread_ids
+            .into_iter()
+            .partition(|thread_id| self.reject_archive && *thread_id == TEST_THREAD_ID);
+        Ok(SetThreadsArchivedResult {
+            updated_thread_ids,
+            failed_thread_ids,
+        })
     }
 
     async fn mark_email_thread_seen(

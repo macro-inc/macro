@@ -94,9 +94,9 @@ function RouteMounted(props: { route: string }) {
 
 /**
  * Renders the next route component in the enclosing pane's branch. Its view
- * stays mounted while its route id and `remountKey` are unchanged; params
- * update in place. Outside any pane it renders the first pane's top-level
- * route, whose component decides how the other panes render.
+ * stays mounted while its route id (or shared `mountKey`) and `remountKey` are
+ * unchanged; params update in place. Outside any pane it renders the first
+ * pane's top-level route, whose component decides how the other panes render.
  */
 export function Outlet(props: OutletProps) {
   const router = useSplitRouter();

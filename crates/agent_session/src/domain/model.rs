@@ -22,6 +22,11 @@ pub use agent_fold::domain::model::{
 /// whose string value is the [`AgentSessionId`] the ACP session serves.
 pub const MACRO_AGENT_SESSION_META_KEY: &str = "macro.com/agentSessionId";
 
+/// The `_meta` key on `session/new`, `session/load` and `session/resume`
+/// whose string value is how the session answers permission requests
+/// (`autoAccept` or `prompt`), so a runtime can tell its agent.
+pub const MACRO_PERMISSION_POLICY_META_KEY: &str = "macro.com/permissionPolicy";
+
 /// Identity of one harness participant, minted fresh at construction.
 ///
 /// A restarted process is a new replica: whatever the old identity claimed is
@@ -178,7 +183,8 @@ pub enum SessionStatus {
 }
 
 /// Which Pipedream MCP servers a session is handed: the agent's own choice,
-/// snapshotted onto the session at creation like `instructions`. The servers
+/// plus any apps a routine requires, snapshotted onto the session at creation
+/// like `instructions`. The servers
 /// it resolves to are re-listed before each prompt, so an app the owner
 /// connects mid-session reaches a live agent that can `session/resume`;
 /// editing the agent's selection applies to its next session.

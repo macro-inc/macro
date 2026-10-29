@@ -7,19 +7,19 @@ import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateBut
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import ArchiveIcon from '@phosphor/archive.svg';
-import BellIcon from '@phosphor/bell-simple.svg';
-import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
-import ClockIcon from '@phosphor/clock.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import FileIcon from '@phosphor/file.svg';
-import PaperPlaneTiltIcon from '@phosphor/paper-plane-tilt.svg';
-import StarIcon from '@phosphor/star.svg';
-import FocusIcon from '@phosphor/target.svg';
-import TrayIcon from '@phosphor/tray.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
-import SignalIcon from '@phosphor/wave-sine.svg';
-import NoiseIcon from '@phosphor/waveform.svg';
+import ArchiveIcon from '@icon/system/regular/archive.svg';
+import BellIcon from '@icon/system/regular/bell-simple.svg';
+import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import FocusIcon from '@icon/system/regular/crosshair.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import FileIcon from '@icon/system/regular/file.svg';
+import PaperPlaneTiltIcon from '@icon/system/regular/paper-plane-tilt.svg';
+import StarIcon from '@icon/system/regular/star.svg';
+import TrayIcon from '@icon/system/regular/tray.svg';
+import UsersThreeIcon from '@icon/system/regular/users-three.svg';
+import SignalIcon from '@icon/system/regular/wave-sine.svg';
+import NoiseIcon from '@icon/system/regular/waveform.svg';
 import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import { Badge, pressHandlers } from '@ui';
@@ -29,6 +29,7 @@ import { Dynamic } from 'solid-js/web';
 import { composeEmail } from '../compose-email';
 import {
   EMAIL_FOCUS_TAB,
+  EMAIL_INBOX_TAB_IDS,
   EMAIL_TAB_IDS,
   EMAIL_TAB_LABELS,
   EMAIL_TABS,
@@ -194,13 +195,18 @@ export function EmailSidebar() {
     setSidebarSectionOpen,
   } = useEmailView();
 
+  const tabIds = () =>
+    (isTouchDevice() ? EMAIL_TAB_IDS : DESKTOP_TAB_IDS).filter(isVisible);
+
   useViewTabHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
-    ids: () =>
-      (isTouchDevice() ? EMAIL_TAB_IDS : DESKTOP_TAB_IDS).filter(isVisible),
-    activeId: () =>
-      !isTouchDevice() && isEmailInboxTab(state.tab) ? 'important' : state.tab,
+    ids: tabIds,
+    // Desktop groups the Inbox views under Inbox, so Tab moves between its
+    // header tabs instead of walking the sidebar.
+    sequentialIds: () =>
+      isTouchDevice() ? tabIds() : EMAIL_INBOX_TAB_IDS.filter(isVisible),
+    activeId: () => state.tab,
     setActiveId: setTab,
     shouldHandleSequentialKeyEvent: (event) =>
       !(

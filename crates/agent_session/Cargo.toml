@@ -7,7 +7,7 @@ publish = false
 [features]
 default = ["inbound", "outbound"]
 # Quota contracts and helper orchestration without enabling session adapters.
-admission = ["dep:ai_billing"]
+admission = ["dep:ai_billing", "dep:ai_usage", "dep:jev"]
 ai_tools = ["inbound", "dep:ai_toolset", "dep:async-trait", "dep:schemars"]
 # The `seed_jsonl` replay binary: an argument parser, and the Postgres
 # adapter it writes through.
@@ -58,6 +58,7 @@ agent-client-protocol = { workspace = true }
 harness_id = { path = "../harness_id" }
 agent = { path = "../agent", optional = true }
 ai_usage = { path = "../ai_usage", optional = true }
+jev = { path = "../jev", optional = true }
 dashmap = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
 messages = { path = "../messages", features = ["ports", "schema"] }

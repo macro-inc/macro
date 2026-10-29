@@ -21,7 +21,22 @@ vi.mock('@entity', () => ({
   ListEntityMetadataQueryProvider: (props: ParentProps) => props.children,
   ListLayoutProvider: (props: ParentProps) => props.children,
 }));
-vi.mock('@ui', async () => import('../../../components/ui/components/Avatar'));
+vi.mock('@ui', async () => ({
+  ...(await import('../../../components/ui/components/Avatar')),
+  EmptyStatePanel: (props: {
+    title?: string;
+    primaryAction?: { label: string; onClick: () => void };
+  }) => (
+    <div>
+      {props.title}
+      {props.primaryAction && (
+        <button type="button" onClick={props.primaryAction.onClick}>
+          {props.primaryAction.label}
+        </button>
+      )}
+    </div>
+  ),
+}));
 vi.mock('@app/components/view-shell', () => ({
   SearchBar: (props: {
     label: string;
@@ -98,5 +113,7 @@ it('filters by email and keeps the search available with no results', () => {
   screen.getByRole('button', { name: /procurement@example.com/ });
   fireEvent.input(search, { target: { value: 'missing' } });
   screen.getByText('No matching contacts.');
+  fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+  screen.getByRole('button', { name: /Avery Chen/ });
   expect(screen.getByRole('textbox', { name: 'Search team' })).toBe(search);
 });

@@ -9,6 +9,8 @@ export type CatalogModelOption = {
    * name), also available as a search term.
    */
   group?: string;
+  /** Listed but not selectable on the user's plan; choosing it calls `onLocked`. */
+  locked?: boolean;
 };
 
 export type ModelProviderGroup = {
@@ -20,11 +22,6 @@ export type ModelCatalog = {
   frontier: CatalogModelOption[];
   providers: ModelProviderGroup[];
 };
-
-/** Large third-party catalogs need structure rather than one long flat list. */
-export function isLargeModelCatalog(options: readonly CatalogModelOption[]) {
-  return options.length > 10;
-}
 
 /**
  * A version-looking token: alphanumerics and dots with a digit first or

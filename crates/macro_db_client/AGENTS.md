@@ -31,6 +31,11 @@ bridges old-producer writes during rollout; keep that bridge until legacy
 review producers have retired. Encode empty legacy item lists as JSON arrays so
 the typed notification reader can decode them.
 
+The `agent_session.turn_state` constraint includes `failed` for terminal turn
+errors; extend it additively before services begin writing new turn states.
+Install widened checks as `NOT VALID` and validate in a separate migration so
+the scan does not retain the replacement migration's exclusive table lock.
+
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,
@@ -83,6 +88,13 @@ unreferenced replicas. These additive tables do not change agent-session claims.
   `docs/design/outlook-email-support.md` for failure recovery and deployment order.
 - Quote and alias camelCase columns to Rust field names
   (`SELECT "userId" AS user_id`); don't guess spelling — check `migrations/`.
+- Saved-view sharing uses current team membership and chronological owner/team indexes.
+  Deploy additive revision and team-share columns before service changes. Keep permanent
+  `saved_view_tombstone` IDs and the deletion trigger to prevent delayed creates
+  from resurrecting deleted definitions. Use a fresh disposable database when
+  checking replacement branch migrations.
+
+- External chats (`external_chat*` tables: chats, people, messages, attachments, reactions, poll votes, read state) are provider-neutral; WhatsApp keeps its account, pairing, roster, chat list, membership, alias, observation, receipt and send tables (`whatsapp_*`). Domain queries live in `external_chat` (generic tables) and `whatsapp_linked` (`whatsapp_*` tables and ingest).
 
 ## Related
 
@@ -97,3 +109,7 @@ enabling the independent email outbox; old writers do not enforce these fences.
 content. Bypass retention for inboxes marked `deleting_at` and direct inbox
 cascades; other parent cascades must not destroy unresolved delivery state. Deferred markers retain provider identity and
 draft generation so Undo/resend cannot inherit an old deletion.
+
+The import ledger accepts Jira Cloud sources with `jira_issue`, `jira_project`
+and `jira_epic` kinds. Jira has its own concurrent partial team-claim index; source
+and kind constraints expand without rewriting existing rows and validate separately.

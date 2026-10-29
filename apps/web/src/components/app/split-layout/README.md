@@ -1,5 +1,40 @@
 Split layout should support an arbitrary number of vertical splits.
 
+## Opt-in view restoration
+
+`SplitLayoutProvider` owns a memory-only, account-scoped view-state store.
+A view opts in by calling `useViewRestoration()` in its stable route component.
+The default key comes from the current router location, with Agents conversations
+normalized to `agents`; pass an explicit key to override that grouping.
+
+The hook captures its current location, route state, and entry-state slices in
+`useBeforeLeave`. It stages the snapshot with the navigation's `onCommit`
+callback, so a refused, cancelled, failed, or superseded navigation cannot replace
+the saved snapshot. Solid cleanup only unregisters the hook; it never saves state.
+
+Ordinary rail, Go To, and mobile dock navigation sets `resume: true` on the existing
+layout actions. Only opted-in views resume. A mounted view can supply its current
+state directly, and the last focused instance wins when several splits show a view.
+Explicit links and new-split actions stay fresh. Native dock navigation still
+resets the pane stack, and dock Search starts a fresh session. Reload, sign-out,
+and account changes retire the saved state. Views still unmount normally.
+
+Desktop app switches skip a retained destination claimed by another pane or
+its inline preview, opening the requested root view in the target pane instead.
+Check router claims, including preview owners, before applying the snapshot;
+do not bypass entity deduplication. Native dock stack replacement still resumes
+the retained destination.
+
+Views retain local context through `useEntryState` or `registerEntryStateCaptor`.
+These slices restore through both pane Back/Forward and opted-in app switches;
+route/schema state stays separate. Restores use the existing router, including
+leave guards, middleware, URL updates, and single-owner content claims.
+
+Resolve restoration keys and initial entry-state slices from the current router
+entry, not the layout mirror: an outlet can mount before the mirror updates.
+
+The remaining notes below describe the original split layout.
+
 
 SplitLayoutRouter is responsible for handling the routing of the splits.
 

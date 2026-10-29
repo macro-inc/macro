@@ -156,8 +156,8 @@ impl<'a, H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> RoutedM
                         }),
                 };
                 let (preamble, session_system) = match system_prompt.shared() {
-                    Some(shared) => (shared, Some(system_prompt.rest().to_owned())),
-                    None => (system_prompt.rest(), None),
+                    Some(shared) => (shared, Some(system_prompt.rest())),
+                    None => (system_prompt_text, None),
                 };
                 ProviderAgent::Anthropic(AnthropicAgent {
                     agent: build_agent(

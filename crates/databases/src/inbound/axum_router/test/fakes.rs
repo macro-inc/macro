@@ -42,14 +42,20 @@ const USER: &str = "macro|ops-router@macro.com";
 struct ValidToken;
 
 impl JwtValidator for ValidToken {
-    fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
+    fn validate_credential(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
         match jwt {
-            "valid" => Ok(ValidatedIdentity {
-                agent_id: None,
-                user_id: USER.to_string(),
-                fusion_user_id: "fusion-ops-router".to_string(),
-                organization_id: None,
-                permissions: None,
+            "valid" => Ok(macro_authorization::ValidatedCredential {
+                origin: macro_authorization::CredentialOrigin::Session,
+                identity: ValidatedIdentity {
+                    agent_id: None,
+                    user_id: USER.to_string(),
+                    fusion_user_id: "fusion-ops-router".to_string(),
+                    organization_id: None,
+                    permissions: None,
+                },
             }),
             _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
         }

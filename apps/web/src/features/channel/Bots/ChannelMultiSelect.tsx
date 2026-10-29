@@ -1,12 +1,12 @@
 import { useChannelsContext } from '@core/context/channels';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import {
   Combobox,
   type ComboboxRootItemComponentProps,
 } from '@kobalte/core/combobox';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import HashIcon from '@phosphor/hash.svg';
-import XIcon from '@phosphor/x.svg';
 import { Surface } from '@ui';
 import { type Component, createMemo, For, Show } from 'solid-js';
 import {

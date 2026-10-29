@@ -1,4 +1,4 @@
-import CodeIcon from '@phosphor/code.svg';
+import CodeIcon from '@icon/system/regular/code.svg';
 import type {
   ExecutionActivity,
   ExecutionRecord,

@@ -18,6 +18,12 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
   and notification projection updates applied without a server round-trip.
 - `src/channels.rs`, `src/database_rows.rs`, `src/mail.rs`, `src/properties.rs`:
   per-entity-kind projection/patch logic.
+- `src/mail/reconciliation.rs`: invalidate contradicted Mail facts during an
+  authoritative `Soup` first-page write. Use the supported view/filter and
+  microsecond timestamp/key boundary; never infer thread deletion. Skip
+  backfills, partial/cursor pages, identity switches, and pending optimistic
+  rows. At most 500 local matches are checked per write; later full snapshots
+  restore completeness.
 
 ## Scope
 
@@ -49,6 +55,10 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
 - This crate must stay wasm-compatible — no `sqlx`, no native-only crates in
   default features; native-only test fixtures live under
   `[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]`.
+- Native apps run this crate from their binary while the web bundle updates
+  over the air, so web code meets older versions. Requests use
+  `deny_unknown_fields`: send a new field only once a result shows the engine
+  supports it, as `endCursor` does for a Mail page's `through`.
 
 ## Related
 

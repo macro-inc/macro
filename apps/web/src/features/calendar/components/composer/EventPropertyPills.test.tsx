@@ -1,3 +1,4 @@
+import { DateTimeRangeFields } from '@app/components/date-time-range/date-time-range-fields';
 /**
  * @vitest-environment jsdom
  */
@@ -8,7 +9,6 @@ import userEvent from '@testing-library/user-event';
 import { Dialog } from '@ui';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EventDateTimeRangeFields } from './EventDateTimeRangeFields';
 import {
   EventComposerConferencePill,
   EventComposerGuestsPill,
@@ -146,14 +146,15 @@ describe('composer popovers inside a dialog', () => {
     ).toBe('Meeting room');
   });
 
-  it('selects a nested time without dismissing the date picker or composer', async () => {
+  it('picks a time from its list without dismissing the composer', async () => {
     const user = userEvent.setup();
     render(() => {
       const [start, setStart] = createSignal('2026-10-06T09:00');
       return (
         <Dialog open>
           <input aria-label="Title" />
-          <EventDateTimeRangeFields
+          <DateTimeRangeFields
+            subject="event"
             start={start()}
             end="2026-10-06T10:00"
             allDay={false}
@@ -165,15 +166,12 @@ describe('composer popovers inside a dialog', () => {
       );
     });
     screen.getByLabelText('Title').focus();
-    const trigger = screen.getByRole('button', {
-      name: 'Edit event start date and time',
+    const time = screen.getByRole<HTMLInputElement>('combobox', {
+      name: 'event start time',
     });
-    await user.click(trigger);
-    const time = screen.getByLabelText('Start time');
     await user.click(time);
     await user.click(screen.getByRole('option', { name: '9:30 AM' }));
-    expect((time as HTMLInputElement).value).toBe('09:30');
-    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    expect(time.value).toBe('9:30 AM');
     expect(screen.getByLabelText('Title')).toBeTruthy();
   });
 });

@@ -1,0 +1,86 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH previous AS (\n            SELECT id, values\n            FROM entity_properties\n            WHERE property_definition_id = $1\n              AND values -> 'value' ?| $2::text[]\n            ORDER BY id\n            FOR UPDATE\n        )\n        UPDATE entity_properties AS property\n        SET\n            values = jsonb_set(\n                previous.values,\n                '{value}',\n                COALESCE(\n                    (\n                        SELECT jsonb_agg(elem)\n                        FROM jsonb_array_elements(previous.values -> 'value') AS elem\n                        WHERE NOT (to_jsonb($2::text[]) @> elem)\n                    ),\n                    '[]'::jsonb\n                )\n            ),\n            updated_at = NOW()\n        FROM previous\n        WHERE property.id = previous.id\n        RETURNING\n            property.id,\n            property.entity_id,\n            property.entity_type as \"entity_type: EntityType\",\n            property.property_definition_id,\n            property.values as \"value: serde_json::Value\",\n            previous.values as \"previous: serde_json::Value\",\n            property.created_at,\n            property.updated_at\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "entity_type: EntityType",
+        "type_info": {
+          "Custom": {
+            "name": "property_entity_type",
+            "kind": {
+              "Enum": [
+                "CHANNEL",
+                "CHAT",
+                "DOCUMENT",
+                "PROJECT",
+                "THREAD",
+                "USER",
+                "COMPANY",
+                "TASK",
+                "CALL_RECORD",
+                "CALENDAR_EVENT",
+                "INITIATIVE",
+                "CONTACT",
+                "DATABASE_ROW"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "property_definition_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "value: serde_json::Value",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "previous: serde_json::Value",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "7538979c27bfef441637be91ea6e375d3d9ca18d25fae8717924adf6ccb52416"
+}

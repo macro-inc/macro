@@ -5,11 +5,11 @@ import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useAddInboxFlow } from '@core/email-link';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import GearIcon from '@phosphor/gear.svg';
-import MinusIcon from '@phosphor/minus.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import GearIcon from '@icon/system/regular/gear.svg';
+import MinusIcon from '@icon/system/regular/minus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button, Dropdown } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -197,7 +197,7 @@ function DesktopCalendarSettings(props: {
       >
         <Show when={props.sidebar} fallback={<GearIcon class="size-5" />}>
           <ViewSidebar.Icon>
-            <GearIcon />
+            <GearIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </ViewSidebar.Icon>
           <span class="min-w-0 truncate">Settings</span>
         </Show>
@@ -383,7 +383,7 @@ function MobileCalendarSettings(props: {
       >
         <Show when={props.sidebar} fallback={<GearIcon class="size-6" />}>
           <ViewSidebar.Icon>
-            <GearIcon />
+            <GearIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </ViewSidebar.Icon>
           <span class="min-w-0 truncate">Settings</span>
         </Show>

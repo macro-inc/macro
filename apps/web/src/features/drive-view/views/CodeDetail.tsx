@@ -141,6 +141,7 @@ export function CodeDetail(props: {
   return (
     <FileDetailLoadGate
       documentId={props.documentId}
+      entityType="code"
       label="code document"
       load={loadCodeDocument}
     >

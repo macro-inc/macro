@@ -62,6 +62,18 @@ A channel's `Calls` tab lists that channel's recordings with the same rows, filt
 by the channel id. Its search field matches call names and transcripts in that
 channel.
 
+The desktop Chat sidebar lists every live channel call and quick call in a `Live`
+section above the conversations. Each row reads `Join`, or `Open` when you are
+already in that call, which returns to the channel's Call tab. A channel call that is
+still ringing for you also shows a `Dismiss` button, which declines it like the
+conversation row's Decline. To see the section
+without starting a real call, answer `/call/active` and `/call/<channelId>/active`
+with a fake call through CDP `Fetch` interception.
+
+While you are in a call, a green phone button (`Return to call`,
+`data-sidebar-next-item="active-call"`) sits at the bottom of the desktop rail,
+above Settings. It opens the channel's Call tab, or the meeting page for a quick call.
+
 In the native iOS call drawer, the horizontal participant row excludes the person
 shown in the large video. While holding or scrolling the row (including momentum),
 the displayed primary and row membership stay fixed; speaking indicators still
@@ -71,9 +83,38 @@ does not pin someone, tapping pins the displayed person, and a participant who
 leaves during a held touch cannot be selected. Exercise speaker changes and
 departures during row gestures on a physical iPhone as well as the simulator.
 
+Leaving a native iOS call is final. The drawer's **Leave** and CallKit's end
+button both end the CallKit call, its LiveKit room, the drawer and PiP, even
+when the native session has already lost track of the call. PiP and the drawer appear only while a call is active, so
+restoring a PiP left over from an ended call dismisses it instead of opening
+an empty drawer. A call the user left is never rejoined automatically: a
+native snapshot that still reports it is ended natively, and only tapping
+Join in that channel lets the call back in. A CallKit answer handled more
+than 60 seconds after it was fulfilled is dropped rather than joined. Verify
+on a physical iPhone that Leave from the drawer, from the lock screen, and
+right before backgrounding the app each end the call without a PiP or drawer
+returning, and that tapping Join afterwards still rejoins a call that is
+still running.
+
+Native call logs go to the unified log (subsystem: the app's bundle id,
+category `CallKit`) at notice level, so they survive on the device. Collect
+them from a connected iPhone with
+`sudo log collect --device-udid <udid> --start '<time>' --output calls.logarchive`
+and read them with `log show --predicate 'category == "CallKit"' calls.logarchive`.
+They never contain identities, names, or device names; participants appear
+as LiveKit SIDs. The app's `call_action` analytics record `callId` on `joined`
+and `left`, what started each join (`trigger`: `user`, `deep_link`, `restore`,
+`auto_rejoin`), and why each leave ran (`leaveReason`: `user_initiated`,
+`native_ended`, `join_cancelled`, `stale_native_session`).
+
 If a recording fails to play, reload the page to obtain a fresh recording link,
 or use **Open or download recording**. The playback warning does not assume
 that the failure is caused by an unsupported media format.
+
+Where a call shows the block header's "…" menu (Rename, Delete), that menu
+also offers **Download** when the call has a recording. It saves the recording
+under the call's name with the recording's extension (`<name>.mp4`), through the
+same download flow and confirmations as Drive files.
 
 ### Call links and guests — `/app/meet/join/:shareToken`
 
@@ -141,7 +182,7 @@ Check channel, scheduled, and instant calls with another participant remaining
 and as the last participant, including at phone width. During a delayed leave,
 the page shows `Leaving call…` without flashing setup; navigating elsewhere must
 not be undone when cleanup finishes. Inline channel call controls return to
-Messages on leave and open the record when that hangup ends the call.
+Messages on leave and stay in the channel, even when that hangup ends the call.
 `Copy Meeting Url` is available during the call.
 Rejoining from a new page waits for the prior page's pending leave cleanup before
 requesting another connection, so a slow leave cannot disconnect the replacement.
