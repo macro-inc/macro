@@ -45,6 +45,7 @@ async fn all_mail_excludes_spam_and_trash_before_pagination(
                 [mixed, archived]
             );
             assert_eq!(page[0].name.as_deref(), Some("Mixed normal mail"));
+            assert_eq!(page[0].updated_at, page[0].sort_ts);
             let next = repo
                 .previews_for_view_cursor(
                     PreviewCursorQuery {
@@ -138,6 +139,21 @@ async fn all_mail_keeps_provider_drafts_without_received_or_sent_dates(
     )
     .execute(&pool)
     .await?;
+    let mut conn = pool.acquire().await?;
+    email_db_client::threads::update::recompute_thread_metadata(&mut conn, thread, link).await?;
+    let timestamp = sqlx::query_scalar!(
+        "SELECT latest_non_spam_message_ts FROM email_threads WHERE id = $1",
+        thread
+    )
+    .fetch_one(&pool)
+    .await?;
+    let created_at = sqlx::query_scalar!(
+        "SELECT created_at FROM email_messages WHERE id = $1",
+        message
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(timestamp, Some(created_at));
     let repo = EmailPgRepo::new(pool.clone());
     let viewer = MacroUserIdStr::parse_from_str("macro|user1@test.com")?;
     let projections = repo

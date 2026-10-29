@@ -123,6 +123,12 @@ fn push_thread_candidate_select(
     source: ThreadCandidateSource,
 ) {
     let defer_uh = !uses_view_history(email_filter, &params.sort_method_str);
+    // All Mail displays the latest eligible message date, even when a newer
+    // junk/trash message or a read-state write updates the thread metadata.
+    let updated_at_field = match view {
+        PreviewView::StandardLabel(PreviewViewStandardLabel::All) => sort_ts_field,
+        _ => "t.updated_at",
+    };
 
     // Owned scans fan out one ordered, LIMITed subscan per link.
     // `link_id = ANY(...)` cannot return index order, even for a single id,
@@ -166,7 +172,7 @@ fn push_thread_candidate_select(
         builder.push(format!(
             r#"
                     {field} AS created_at,
-                    t.updated_at AS updated_at,
+                    {updated_at_field} AS updated_at,
                     {field} AS effective_ts"#,
             field = sort_ts_field
         ));
@@ -174,7 +180,7 @@ fn push_thread_candidate_select(
         builder.push(format!(
             r#"
                     {} AS created_at,
-                    t.updated_at AS updated_at,
+                    {updated_at_field} AS updated_at,
                     uh.updated_at AS viewed_at,
                     CASE "#,
             sort_ts_field
