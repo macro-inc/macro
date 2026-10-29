@@ -209,6 +209,8 @@ async fn a_hidden_respondent_is_still_recorded_once_and_left_off_the_row() {
         .unwrap()
         .rows[0];
     assert!(cells.get(&RESPONDENT).is_none());
+    // The row is written as the owner, so its author names nobody either.
+    assert_eq!(world.batches[0].viewer, OWNER);
     assert_eq!(world.ledger.len(), 1);
     assert_eq!(world.ledger[0].respondent.as_deref(), Some(VIEWER));
     assert_eq!(world.event_types(), vec!["form.response_submitted"]);
