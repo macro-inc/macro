@@ -103,8 +103,9 @@ test('a hidden channel chip in a composer converts to its link as plain text', a
   await page.getByRole('button', { name: 'Reference actions' }).click();
   await page.getByRole('menuitem', { name: 'Convert to Plain Text' }).click();
 
+  const origin = new URL(page.url()).origin;
   await expect(composer).toContainText(
-    'after https://dev.macro.com/app/channel/01a16d55-0000-7000-8000-00000000000f end'
+    `after ${origin}/app/channel/01a16d55-0000-7000-8000-00000000000f end`
   );
   await expect(composer.getByText('No Access', { exact: true })).toBeHidden();
 });

@@ -5,6 +5,7 @@ import {
 import { SharedEventActions } from '@app/features/calendar-view/components/SharedEventActions';
 import {
   type CalendarMentionTarget,
+  calendarEventDeepLink,
   copyCalendarEventMentionTarget,
 } from '@app/features/calendar-view/copy-event-mention';
 import { calendarMentionOpen } from '@app/features/calendar-view/mention-open-target';
@@ -40,7 +41,7 @@ import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { parseLocalDate } from '@core/util/local-date';
 import { matches } from '@core/util/match';
-import { openExternalUrl } from '@core/util/url';
+import { buildSimpleEntityUrl, openExternalUrl } from '@core/util/url';
 import MacroEmbed from '@icon/macro-embed.svg';
 import CollapseInlinePreview from '@icon/system/regular/arrows-in-line-horizontal.svg';
 import ExpandInlinePreview from '@icon/system/regular/arrows-out-line-horizontal.svg';
@@ -724,23 +725,12 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
   };
 
   const documentLink = () => {
-    let hostname = window.location.hostname.replace('www.', '').toLowerCase();
-    if (hostname === 'localhost') {
-      hostname = 'dev.macro.com';
-    }
-
-    let link = `https://${hostname}/app/${targetBlockType()}/${props.documentInfo.id}`;
-
-    if (
-      props.documentInfo.params &&
-      Object.keys(props.documentInfo.params).length > 0
-    ) {
-      const queryParams = new URLSearchParams(
-        props.documentInfo.params
-      ).toString();
-      link += `?${queryParams}`;
-    }
-    return link;
+    const mentionTarget = calendarMentionTarget();
+    if (mentionTarget) return calendarEventDeepLink(mentionTarget);
+    return buildSimpleEntityUrl(
+      { type: targetBlockType(), id: props.documentInfo.id },
+      props.documentInfo.params
+    );
   };
 
   const handleCopy = async () => {
