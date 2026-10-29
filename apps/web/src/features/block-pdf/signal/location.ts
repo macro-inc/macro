@@ -7,6 +7,7 @@ import {
 import type { FindController } from '@block-pdf/PdfViewer/FindController';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { waitForSignal } from '@core/util/waitForSignal';
+import { getCurrentWebUrl } from '@core/util/webOrigin';
 import { createCallback } from '@solid-primitives/rootless';
 import type { Accessor } from 'solid-js';
 import { z } from 'zod';
@@ -116,7 +117,7 @@ const useIsViewerReadyForScroll = () => {
  * @returns URL with location parameters
  */
 export function locationToUrl(location: PdfLocation | undefined): string {
-  const url = new URL(window.location.href);
+  const url = new URL(getCurrentWebUrl());
   const params = url.searchParams;
 
   // Clear existing parameters

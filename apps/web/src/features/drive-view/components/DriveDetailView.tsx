@@ -17,6 +17,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useDocumentShareModal } from '@core/component/TopBar/shareModal';
 import { useCopyLink } from '@core/util/useCopyLink';
+import { getCurrentWebUrl } from '@core/util/webOrigin';
 import { ErrorBoundary, For, Match, Show, Switch } from 'solid-js';
 import { useOptionalDriveView } from '../context/drive-context';
 import { driveLocationBreadcrumbs } from '../core/breadcrumbs';
@@ -69,7 +70,7 @@ function DriveDetailTopBar() {
   const navigationStack = useDriveDetailNavigation();
   const panel = useSplitPanelOrThrow();
   const copyViewLink = useCopyLink();
-  const copyLink = () => copyViewLink(window.location.href);
+  const copyLink = () => copyViewLink(getCurrentWebUrl());
   const activeDetail = () => {
     const target = navigationStack.active()?.data;
     const blockType = target ? entityDetailBlockType(target) : undefined;

@@ -41,6 +41,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { parseLocalDate } from '@core/util/local-date';
 import { matches } from '@core/util/match';
 import { openExternalUrl } from '@core/util/url';
+import { getWebOrigin } from '@core/util/webOrigin';
 import MacroEmbed from '@icon/macro-embed.svg';
 import CollapseInlinePreview from '@icon/system/regular/arrows-in-line-horizontal.svg';
 import ExpandInlinePreview from '@icon/system/regular/arrows-out-line-horizontal.svg';
@@ -723,18 +724,13 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
 
   const handleCopy = async () => {
     try {
-      let hostname = window.location.hostname.replace('www.', '').toLowerCase();
-      if (hostname === 'localhost') {
-        hostname = 'dev.macro.com';
-      }
-
       const mentionTarget = calendarMentionTarget();
       if (mentionTarget) {
         await copyCalendarEventMentionTarget(mentionTarget);
         return;
       }
 
-      let link = `https://${hostname}/app/${targetBlockType()}/${props.documentInfo.id}`;
+      let link = `${getWebOrigin()}/app/${targetBlockType()}/${props.documentInfo.id}`;
 
       if (
         props.documentInfo.params &&

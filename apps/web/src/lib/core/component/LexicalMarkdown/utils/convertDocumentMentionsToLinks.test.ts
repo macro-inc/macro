@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { convertDocumentMentionsToLinks } from './convertDocumentMentionsToLinks';
+
+// These links travel in email bodies and calendar descriptions, so they name
+// the web app rather than the origin the native shells serve the app from.
+vi.mock('@core/util/webOrigin', () => ({
+  getWebOrigin: () => 'https://macro.com',
+}));
 
 function convert(html: string) {
   const body = new DOMParser().parseFromString(html, 'text/html').body;
@@ -26,8 +32,6 @@ describe('convertDocumentMentionsToLinks', () => {
     const { mentions, link } = convert(MENTION.replace('%s', ''));
     expect(mentions[0]?.collapsed).toBeUndefined();
     expect(link?.hasAttribute('data-collapsed')).toBe(false);
-    expect(link?.getAttribute('href')).toBe(
-      `${window.location.origin}/app/md/doc-1`
-    );
+    expect(link?.getAttribute('href')).toBe('https://macro.com/app/md/doc-1');
   });
 });

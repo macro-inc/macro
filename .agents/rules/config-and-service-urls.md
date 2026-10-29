@@ -56,7 +56,11 @@ startup loudly.
 ## Other runtimes
 
 - **Web app:** service hosts come from `SERVER_HOSTS` in `servers.ts`; app
-  origin from `getWebOrigin`. Feature switches use `defineFlag` (see the
+  origin from `getWebOrigin`. A link that leaves the app (clipboard, email body,
+  calendar description) takes its origin from `getWebOrigin` and the current
+  view's URL from `getCurrentWebUrl`, never from `window.location`: the native
+  shells serve the app from `tauri.localhost` / `tauri://localhost` and keep the
+  route in the hash. Feature switches use `defineFlag` (see the
   `feature-flags` skill), not raw `VITE_ENABLE_*` reads. Declare new
   `VITE_*` vars in `src/vite-env.d.ts`.
 - **Cloudflare workers:** non-secret config goes in every `[env.*.vars]` block
