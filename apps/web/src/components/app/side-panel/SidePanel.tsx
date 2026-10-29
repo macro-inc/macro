@@ -645,9 +645,8 @@ function Section(
     /** Render order — lower numbers appear first. */
     order?: number;
     /**
-     * Optional controls rendered at the right edge of the header row,
-     * outside the collapse trigger — clicking them doesn't toggle the
-     * section.
+     * Optional controls rendered at the right edge while the section is open,
+     * outside the collapse trigger. Keep them visible without hover.
      */
     actions?: JSX.Element;
     /** Compose header and body beneath a shared provider without a portal. */
@@ -707,7 +706,9 @@ function Section(
               <CollapsibleSection.Indicator class="touch:opacity-100 group-focus-within/sidebar-section:opacity-100" />
             </Accordion.Trigger>
             <Show when={resolvedActions.toArray().length > 0}>
-              <div class="flex shrink-0 items-center pr-3">{resolvedActions()}</div>
+              <div class="hidden shrink-0 items-center pr-3 group-data-expanded/sidebar-section:flex">
+                {resolvedActions()}
+              </div>
             </Show>
           </Accordion.Header>
           <Accordion.Content class="group/content overflow-hidden data-expanded:animate-accordion-down data-closed:animate-accordion-up">

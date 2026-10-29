@@ -59,19 +59,6 @@ export function createEntityCollectionDropTarget(options: {
   const isDragging = () => isEntityDragData(state.active.draggable?.data);
   const canDrop = () =>
     !options.disabled() && Boolean(referenceFor(state.active.draggable?.data));
-  // Rejected targets stay disabled for drops but still need local hover feedback.
-  const isPointerOver = () => {
-    if (!isDragging()) return false;
-    const pointer = state.active.sensor?.coordinates.current;
-    const bounds = state.droppables[id]?.layout;
-    if (!pointer || !bounds) return false;
-    return (
-      pointer.x >= bounds.left &&
-      pointer.x <= bounds.right &&
-      pointer.y >= bounds.top &&
-      pointer.y <= bounds.bottom
-    );
-  };
   const droppable = createDroppable(id, {
     type: 'property-collection',
     isDropTargetDisabled: () => !canDrop(),
@@ -98,8 +85,6 @@ export function createEntityCollectionDropTarget(options: {
     },
     isDragging,
     canDrop,
-    isPointerOver,
-    isRejected: () => isDragging() && !canDrop(),
     isOver: () => state.active.droppable?.id === id && canDrop(),
   };
 }

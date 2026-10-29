@@ -1,7 +1,8 @@
 export default {
   add: 'Add',
   addProperty: 'Add property',
-  emptyCollection: 'No items added yet.',
+  addTags: 'Add tags',
+  emptyCollection: 'No items added yet',
   dropToAdd: 'Drop to add',
   cannotAddDraggedItem: 'Can’t add this item',
   addPhotos: 'Add photos',

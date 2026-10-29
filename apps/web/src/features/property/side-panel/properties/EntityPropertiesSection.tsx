@@ -3,7 +3,6 @@ import {
   SidePanel,
   type SidePanelSectionLayout,
 } from '@components/app/side-panel/SidePanel';
-import { useIsAuthenticated } from '@core/auth';
 import Plus from '@icon/system/regular/plus.svg';
 import PushPinIcon from '@icon/system/regular/push-pin.svg';
 import PushPinSlashIcon from '@icon/system/regular/push-pin-slash.svg';
@@ -40,7 +39,6 @@ import {
   type JSX,
   Match,
   Show,
-  Suspense,
   type Signal,
   Switch,
 } from 'solid-js';
@@ -90,41 +88,10 @@ export interface EntityPropertiesSectionProps {
   hidePropertyDefinitionIds?: string[];
 }
 
-export interface EntityTagsSectionProps {
-  entityId: string;
-  entityType: EntityType;
-  canEdit: boolean;
-  order?: number;
-}
-
-export function EntityTagsSection(props: EntityTagsSectionProps) {
-  const tagsQuery = useTagsQuery();
-  const isAuthenticated = useIsAuthenticated();
-
-  return (
-    <Show when={isTaggableEntityType(props.entityType)}>
-      <SidePanel.Section id="tags" title="Tags" defaultOpen order={props.order}>
-        <Show
-          when={isAuthenticated() !== false && !tagsQuery.isError}
-          fallback={
-            <span class="text-xs text-ink-extra-muted">Tags unavailable</span>
-          }
-        >
-          <Suspense fallback={<SidePanel.Loading />}>
-            <div class="text-xs">
-              <TagsRow
-                entityId={props.entityId}
-                entityType={props.entityType}
-                canEdit={props.canEdit}
-                triggerVariant="pill"
-              />
-            </div>
-          </Suspense>
-        </Show>
-      </SidePanel.Section>
-    </Show>
-  );
-}
+export {
+  EntityTagsSection,
+  type EntityTagsSectionProps,
+} from './EntityTagsSection';
 
 export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
   const { properties, isLoading, error, refetch, addProperty, removeProperty } =

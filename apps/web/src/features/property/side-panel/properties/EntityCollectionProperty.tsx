@@ -8,7 +8,6 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
 import Plus from '@icon/system/regular/plus.svg';
-import ProhibitIcon from '@icon/system/regular/prohibit.svg';
 import DeleteIcon from '@icon/system/regular/x.svg';
 import { Property as PropertyNS, useProperty } from '@property';
 import {
@@ -100,16 +99,7 @@ function EntityCollectionPropertyBody(props: {
   const isDraggingOver = () => dropTarget?.isOver() ?? false;
   const isDragging = () => dropTarget?.isDragging() ?? false;
   const canDrop = () => dropTarget?.canDrop() ?? false;
-  const showRejection = () =>
-    (dropTarget?.isRejected() ?? false) &&
-    (dropTarget?.isPointerOver() ?? false);
   const dropZoneHeight = () => entities().length > 0 ? 'h-18' : 'h-16';
-  const rejectionMessage = () => (
-    <span class="flex items-center gap-1.5 text-xs text-ink-extra-muted">
-      <ProhibitIcon class="size-3.5 shrink-0" />
-      {t('common.cannotAddDraggedItem')}
-    </span>
-  );
   const handleAdd: JSX.EventHandler<HTMLButtonElement, MouseEvent> = (event) => {
     event.stopPropagation();
     if (isReadOnly() || isSaving()) return;
@@ -156,7 +146,7 @@ function EntityCollectionPropertyBody(props: {
         role="group"
         aria-label={props.property.displayName}
         aria-busy={isSaving()}
-        class={cn('mt-1 min-w-0 rounded-lg', showRejection() && 'cursor-not-allowed')}
+        class="mt-1 min-w-0 rounded-lg"
       >
         <div class="flex flex-wrap gap-1.5">
           <For
@@ -164,9 +154,7 @@ function EntityCollectionPropertyBody(props: {
             fallback={
               <Show when={!props.loading && !canDrop()}>
                 <CollectionEmptyState
-                  message={
-                    showRejection() ? rejectionMessage() : t('common.emptyCollection')
-                  }
+                  message={t('common.emptyCollection')}
                   action={
                     <Show when={!isReadOnly() && !isDragging()}>
                       <Button
@@ -207,9 +195,6 @@ function EntityCollectionPropertyBody(props: {
             )}
           </For>
         </div>
-        <Show when={showRejection() && entities().length > 0}>
-          <div class="mt-1">{rejectionMessage()}</div>
-        </Show>
         <div
           aria-hidden={!canDrop()}
           class={cn(
