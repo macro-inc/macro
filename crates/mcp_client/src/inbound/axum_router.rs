@@ -1,7 +1,7 @@
 use crate::domain::{
     models::{MacroUserIdStr, McpServerRecord, OAuthClientMetadata},
     ports::{McpServerStore, OAuthClient},
-    service::{AddServerError, ServerDirectory},
+    service::{AddServerError, AddedBy, ServerDirectory},
 };
 use axum::{
     Json, Router,
@@ -344,12 +344,17 @@ where
 {
     let user = &authorization.authorization.user;
     let added = ServerDirectory::new(state.store.clone())
-        .add(user.macro_user_id.clone(), &body.url, &body.server_name)
+        .add(
+            user.macro_user_id.clone(),
+            &body.url,
+            &body.server_name,
+            AddedBy::User,
+        )
         .await
         .map_err(|error| match error {
-            AddServerError::InvalidUrl(_) | AddServerError::EmptyName => {
-                McpHandlerErr::InvalidRequest(error.to_string())
-            }
+            AddServerError::InvalidUrl(_)
+            | AddServerError::NonPublicDestination(_)
+            | AddServerError::EmptyName => McpHandlerErr::InvalidRequest(error.to_string()),
             AddServerError::Store(error) => McpHandlerErr::Internal(error),
         })?;
 

@@ -1,7 +1,7 @@
 //! AI tools over the user's custom MCP servers.
 
 use crate::domain::ports::McpServerStore;
-use crate::domain::service::{AddServerError, AddedServer, ServerDirectory};
+use crate::domain::service::{AddServerError, AddedBy, AddedServer, ServerDirectory};
 use ai_toolset::{
     AsyncTool, AsyncToolCollection, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations,
     ToolCallError, ToolResult,
@@ -65,7 +65,7 @@ where
 pub struct ConnectMcpServer {
     /// The server's URL.
     #[schemars(
-        description = "The MCP server's streamable HTTP URL, e.g. `https://mcp.linear.app/mcp`."
+        description = "The MCP server's streamable HTTP URL, e.g. `https://mcp.linear.app/mcp`. Must be https on a public host."
     )]
     pub url: String,
     /// Display name for the server.
@@ -119,10 +119,17 @@ where
                 internal_error: anyhow::anyhow!("MCP server store not wired into this host"),
             })?;
         let added = servers
-            .add(request_context.user_id, &self.url, &self.server_name)
+            .add(
+                request_context.user_id,
+                &self.url,
+                &self.server_name,
+                AddedBy::Agent,
+            )
             .await
             .map_err(|error| match error {
-                AddServerError::InvalidUrl(_) | AddServerError::EmptyName => ToolCallError {
+                AddServerError::InvalidUrl(_)
+                | AddServerError::NonPublicDestination(_)
+                | AddServerError::EmptyName => ToolCallError {
                     description: error.to_string(),
                     internal_error: anyhow::anyhow!("invalid ConnectMcpServer arguments: {error}"),
                 },

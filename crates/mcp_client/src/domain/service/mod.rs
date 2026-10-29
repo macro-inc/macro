@@ -10,5 +10,5 @@ pub mod toolset;
 
 pub use persisting_credential_store::PersistingCredentialStore;
 pub use server_access::{ServerAccess, server_access, unexpired_access_token};
-pub use server_directory::{AddServerError, AddedServer, ServerDirectory};
+pub use server_directory::{AddServerError, AddedBy, AddedServer, ServerDirectory};
 pub use toolset::{CombinedToolSet, McpToolSet};

@@ -119,3 +119,23 @@ async fn an_unwired_host_refuses_the_call() {
         "Connecting MCP servers is not available here."
     );
 }
+
+#[tokio::test]
+async fn a_private_destination_is_refused_and_not_stored() {
+    let store = Arc::new(FakeServerStore::default());
+    let context = McpServerToolContext::wired(ServerDirectory::new(store.clone()));
+
+    let error = ConnectMcpServer {
+        url: "https://169.254.169.254/latest/meta-data".to_owned(),
+        server_name: "Metadata".to_owned(),
+    }
+    .call(ServiceContext(context), RequestContext::new(owner()))
+    .await
+    .unwrap_err();
+
+    assert_eq!(
+        error.description,
+        "`https://169.254.169.254/latest/meta-data` is not a public https URL"
+    );
+    assert!(store.records.lock().unwrap().is_empty());
+}

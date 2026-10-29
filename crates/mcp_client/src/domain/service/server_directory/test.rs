@@ -61,7 +61,12 @@ async fn a_new_url_is_stored_enabled_and_without_credentials() {
     let directory = ServerDirectory::new(store.clone());
 
     let added = directory
-        .add(owner(), "  https://mcp.linear.app/mcp ", " Linear ")
+        .add(
+            owner(),
+            "  https://mcp.linear.app/mcp ",
+            " Linear ",
+            AddedBy::User,
+        )
         .await
         .unwrap();
 
@@ -101,7 +106,12 @@ async fn re_adding_a_url_keeps_the_grant_it_holds() {
     let directory = ServerDirectory::new(store.clone());
 
     let added = directory
-        .add(owner(), "https://mcp.linear.app/mcp", "Renamed")
+        .add(
+            owner(),
+            "https://mcp.linear.app/mcp",
+            "Renamed",
+            AddedBy::User,
+        )
         .await
         .unwrap();
 
@@ -118,7 +128,7 @@ async fn a_url_that_is_not_http_is_refused() {
     let directory = ServerDirectory::new(Arc::new(FakeServerStore::default()));
 
     for url in ["linear", "file:///etc/passwd", "ftp://mcp.example.com"] {
-        let result = directory.add(owner(), url, "Linear").await;
+        let result = directory.add(owner(), url, "Linear", AddedBy::User).await;
         assert!(
             matches!(result, Err(AddServerError::InvalidUrl(_))),
             "{url}: {result:?}"
@@ -131,11 +141,69 @@ async fn an_empty_name_is_refused() {
     let directory = ServerDirectory::new(Arc::new(FakeServerStore::default()));
 
     let result = directory
-        .add(owner(), "https://mcp.linear.app/mcp", "   ")
+        .add(owner(), "https://mcp.linear.app/mcp", "   ", AddedBy::User)
         .await;
 
     assert!(
         matches!(result, Err(AddServerError::EmptyName)),
         "{result:?}"
     );
+}
+
+#[tokio::test]
+async fn an_agent_may_not_add_a_non_public_or_cleartext_destination() {
+    let store = Arc::new(FakeServerStore::default());
+    let directory = ServerDirectory::new(store.clone());
+
+    for url in [
+        "http://mcp.linear.app/mcp",
+        "https://localhost/mcp",
+        "https://tools.localhost/mcp",
+        "https://metadata.google.internal/mcp",
+        "https://printer.local/mcp",
+        "https://127.0.0.1/mcp",
+        "https://10.1.2.3/mcp",
+        "https://172.16.0.1/mcp",
+        "https://192.168.1.1/mcp",
+        "https://169.254.169.254/latest/meta-data",
+        "https://100.64.0.1/mcp",
+        "https://0.0.0.0/mcp",
+        "https://[::1]/mcp",
+        "https://[fd00::1]/mcp",
+        "https://[fe80::1]/mcp",
+        "https://[::ffff:127.0.0.1]/mcp",
+    ] {
+        let result = directory
+            .add(owner(), url, "Internal", AddedBy::Agent)
+            .await;
+        assert!(
+            matches!(result, Err(AddServerError::NonPublicDestination(_))),
+            "{url}: {result:?}"
+        );
+    }
+    assert!(store.records.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn an_agent_may_add_a_public_https_destination() {
+    let directory = ServerDirectory::new(Arc::new(FakeServerStore::default()));
+
+    for url in ["https://mcp.linear.app/mcp", "https://8.8.8.8/mcp"] {
+        let result = directory.add(owner(), url, "Public", AddedBy::Agent).await;
+        assert!(
+            matches!(result, Ok(AddedServer::New(_))),
+            "{url}: {result:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_user_may_still_add_a_cleartext_or_local_destination() {
+    let directory = ServerDirectory::new(Arc::new(FakeServerStore::default()));
+
+    let result = directory
+        .add(owner(), "http://localhost:8080/mcp", "Local", AddedBy::User)
+        .await;
+
+    assert!(matches!(result, Ok(AddedServer::New(_))), "{result:?}");
 }

@@ -6247,7 +6247,7 @@ export interface ConfigureBotResponse {
  */
 export interface ConnectMcpServer {
   /**
-   * The MCP server's streamable HTTP URL, e.g. `https://mcp.linear.app/mcp`.
+   * The MCP server's streamable HTTP URL, e.g. `https://mcp.linear.app/mcp`. Must be https on a public host.
    */
   url: string;
   /**
