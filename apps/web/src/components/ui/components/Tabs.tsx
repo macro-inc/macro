@@ -20,6 +20,7 @@ import {
   labeledControlContents,
   labeledControlFrames,
 } from '../utils/control-sizes';
+import { buttonFrameClasses } from './Button';
 import { Layer } from './Layer';
 import { ToggleSwitch } from './ToggleSwitch';
 import { Tooltip } from './Tooltip';
@@ -45,15 +46,15 @@ const tabIconSizes: Record<TabsSize, { square: string; labeled: string }> = {
   xl: { square: 'size-6', labeled: 'size-5' },
 };
 
-// The grouped frame adds 2px of border and 4px of padding around each tab.
+// The grouped frame adds 4px of padding around each tab.
 // Reserve the inset square explicitly; tooltip wrappers cannot resolve h-full
 // against a track that only has a minimum height.
 const joinedIconSizes: Record<TabsSize, string> = {
-  xs: 'size-4.5',
-  sm: 'size-5.5',
-  md: 'size-6.5',
-  lg: 'size-8.5',
-  xl: 'size-10.5',
+  xs: 'size-5',
+  sm: 'size-6',
+  md: 'size-7',
+  lg: 'size-9',
+  xl: 'size-11',
 };
 
 function tabContentClasses(size: TabsSize) {
@@ -116,8 +117,8 @@ export type TabsProps<T extends string> = {
 
 /**
  * One inline single choice: switch a view, a section, or a small set of
- * values. On desktop options share one flat rounded frame,
- * and the selected inset pill takes the pressed fill.
+ * values. On desktop options share the raised frame of a HeaderActionGroup
+ * island, and the selected inset pill takes a borderless pressed fill.
  *
  * @do Use for two to six short options that are all visible at once.
  * @do Put view tabs left of the header controls, after the title.
@@ -150,14 +151,12 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
   const iconOnly = () => (props.iconOnly ?? false) || collapseStage() >= 2;
   const maxCollapseStage = () =>
     props.options.every((option) => option.icon !== undefined) ? 2 : 1;
-  // With a toggle the frame is soft: a borderless filled track whose selected
-  // option and pressed toggle are borderless fills too.
+  // The same raised, borderless frame as a HeaderActionGroup island, so tabs
+  // and islands of one size share a height and a material.
   const frameClass = () =>
     cn(
-      'inline-flex min-w-0 items-stretch overflow-hidden rounded-full',
-      props.toggle
-        ? 'bg-active gap-0.5 p-1'
-        : 'border border-edge-button bg-control gap-0.5 p-0.5',
+      'inline-flex min-w-0 items-stretch gap-0.5 overflow-hidden rounded-full p-0.5',
+      buttonFrameClasses({ variant: 'secondary', finish: 'raised' }),
       labeledControlFrames[props.size ?? 'md'],
       props.fullWidth && 'w-full'
     );
@@ -403,7 +402,7 @@ function PillOption<T extends string>(props: {
   size: TabsSize;
   iconOnly: boolean;
   fullWidth: boolean;
-  /** Size to the label and drop the selected border, beside a toggle. */
+  /** Size to the label, beside a toggle. */
   soft?: boolean;
   joined?: boolean;
 }) {
@@ -413,13 +412,8 @@ function PillOption<T extends string>(props: {
       value={props.option.value}
       disabled={props.option.disabled}
       class={cn(
-        'relative inline-flex min-w-0 shrink-0 rounded-full border text-ink-muted transition-colors duration-120 motion-reduce:transition-none',
-        props.joined
-          ? cn(
-              'self-stretch border-transparent',
-              !props.soft && 'data-checked:border-edge-button'
-            )
-          : 'bg-control border-edge-button',
+        'relative inline-flex min-w-0 shrink-0 rounded-full text-ink-muted transition-colors duration-120 motion-reduce:transition-none',
+        props.joined ? 'self-stretch' : 'border bg-control border-edge-button',
         'shadow-none not-touch:not-data-checked:hover:overlay-hover not-touch:not-data-checked:hover:text-ink',
         'data-checked:overlay-active data-checked:text-ink',
         'has-focus-visible:ring-2 has-focus-visible:ring-inset has-focus-visible:ring-edge-focus',

@@ -21,9 +21,10 @@ semantic control islands on the right. Collection headers use `ListHeader`:
 filters, view options, New, then expandable Search. Related detail actions share
 a `HeaderActionGroup`; keep sharing, item navigation, and detail/view toggles in
 separate groups. View tabs (channel, CRM record, and project sections, Signal and
-Noise) are `Tabs`: separate 32px pills, never inside a group. Action groups use
+Noise) are `Tabs`, never inside a group. Action groups use
 `variant="secondary" finish="raised"`, fully rounded ends, `sm`/`icon-sm` segments
-(28px controls), and 8px gaps. Tabs, New, and Search retain `md` sizing.
+(28px controls), and 8px gaps. Tabs match the size of the islands beside them:
+`sm` in detail headers, `md` in list headers beside New and Search.
 Compose their actions with `ButtonGroup.Button`; the group shares Button's frame
 materials while each segment keeps its own interaction states. Standalone Buttons
 remain independent. Nested shared actions reuse the containing group rather than adding
@@ -67,9 +68,10 @@ draw a full 1px frame edge, menus keep the glass cast shadow, and
 `ComposerSurface` (composers and settings cards) keeps the wide `composer-shadow`
 halo. Touch surfaces retain their existing shadows.
 
-Desktop view tabs share one flat rounded track, with a small inset and a fully
-rounded selected pill. Use borders and selected fills without raised edges,
-gradients, or shadows. Buttons use variant-specific pressed fills. Wrapping
+Desktop view tabs share the raised, borderless frame of a `HeaderActionGroup`
+island, with a small inset and a fully rounded, borderless selected fill. Tabs
+and islands of one size are the same height: detail headers use `sm` tabs
+beside their `sm` islands. Buttons use variant-specific pressed fills. Wrapping
 preset choices can remain separate pills. Keep each surface's existing touch
 treatment and the agent composer's sliding track (`variant="track"`).
 

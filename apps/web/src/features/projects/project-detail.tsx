@@ -257,6 +257,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
         navigation={
           <Tabs
             aria-label="Project sections"
+            size="sm"
             touch="inset"
             class="shrink-0"
             options={[

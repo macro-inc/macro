@@ -42,7 +42,7 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
   view tabs on the left; islands on the right in the order filters, view
   options, New, Search (detail views: entity actions, sharing, navigation,
   detail toggle). Detail-header groups use `sm` labelled segments and `icon-sm`
-  icon-only segments (28px controls); Drive and Tasks list-header groups use
+  icon-only segments (28px controls), with `sm` Tabs beside them; Drive and Tasks list-header groups use
   `md` / `icon-md`, matching Tabs, New, and Search. Keep 8px between islands. Filter, sort, group, and download live in the header, never
   in a second toolbar row; only active filter chips sit below it.
 - **FE-63** Style controls only through their props (`variant`, `size`, `finish`,
@@ -60,14 +60,14 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
 - Primary, accent, secondary, danger, and success Buttons and ButtonGroup frames automatically use the raised desktop finish and shared glass on touch. Use `finish="flat"` to opt out or `finish="raised"` to frame a ghost/link action. Outline variants, bare controls, and grouped segments always stay flat.
 - Follow the [Button and ButtonGroup contract](ui-primitives.md#button-and-buttongroup)
   for accessible names, tooltips, sizing, explicit segments, and activation behavior.
-- **FE-64** Components own their state treatments: desktop Tabs share a flat rounded track with an inset selected pill;
+- **FE-64** Components own their state treatments: desktop Tabs share the raised frame of a `HeaderActionGroup` island with a borderless inset selected pill;
   Button uses the semantic pressed fill for its variant. Mark action toggles with
   `aria-pressed`, and expansion triggers with `aria-expanded`. A toggle whose
   label and icon flip with its state (call mic and camera: Mute/Unmute) omits
   `aria-pressed` and keeps one fill. Do not restyle
   buttons as tabs. The agent composer's Auto/Chat/Code switch remains
-  `Tabs variant="track"`, a flat pill sliding along the composer's tray. Keep all
-  tab treatments flat: use borders and selected fills, not raised edges, gradients, or shadows.
+  `Tabs variant="track"`, a flat pill sliding along the composer's tray. Don't
+  add borders to tab frames or selected options, or restyle the frame from a caller.
 - **FE-65** Let `Tabs` own its touch styling: set its `touch` prop instead of
   swapping tab components or variants. For overflowing touch header sections,
   use a shared `MobileDrawer` selector instead of a scrolling tab strip.

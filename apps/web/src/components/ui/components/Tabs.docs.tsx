@@ -191,14 +191,14 @@ export default defineDoc({
       id: 'view',
       title: 'View tabs',
       description:
-        'Header view tabs sit after the title, left of the controls. The choices share a flat rounded track with an inset selected pill, sized to match neighbouring controls.',
+        'Header view tabs sit after the title, left of the controls. The choices share the raised frame of a HeaderActionGroup island with a borderless inset selected pill; pick the size of the neighbouring islands so both share a height.',
       render: ViewDemo,
     },
     {
       id: 'toggle',
       title: 'View filter toggle',
       description:
-        '`toggle` adds an on/off filter that applies to every view, such as Unread, past a divider in the same frame. The frame turns soft: a borderless filled track, a borderless selected option, and a neutral switch whose segment fills while on. When the frame is too narrow for every label, the switch drops its text into a tooltip first, then options with icons show only their icons. `toggle.icon` sits in the switch track so the switch reads without its text.',
+        '`toggle` adds an on/off filter that applies to every view, such as Unread, past a divider in the same frame. Options size to their labels, and the neutral switch segment fills while on. When the frame is too narrow for every label, the switch drops its text into a tooltip first, then options with icons show only their icons. `toggle.icon` sits in the switch track so the switch reads without its text.',
       render: ToggleDemo,
     },
     {
