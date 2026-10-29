@@ -116,9 +116,10 @@
         };
 
       # Workspace-root files that crates read across crate boundaries: the
-      # .sqlx offline cache (sqlx macros resolve it from the workspace root)
-      # and shared assets under static_assets/ (include_bytes!-ed from workspace
-      # crates). Included in every pruned source, so a
+      # .sqlx offline cache (sqlx macros resolve it from the workspace root),
+      # shared assets under static_assets/ (include_bytes!-ed from workspace
+      # crates), and the [patch.crates-io] crates under vendor/, which
+      # mkDummySrc would otherwise stub out. Included in every pruned source, so a
       # sqlx prepare still invalidates all leaves — coarser than ideal, but
       # the query-to-crate mapping is not recoverable from the file names.
       rootDepsSrc = pkgs.lib.cleanSourceWith {
@@ -137,6 +138,9 @@
           || (pkgs.lib.hasPrefix ".sqlx/" rel)
           || (rel == "static_assets")
           || (pkgs.lib.hasPrefix "static_assets/" rel)
+          || (rel == "vendor")
+          || (rel == "vendor/utoipa-swagger-ui")
+          || (pkgs.lib.hasPrefix "vendor/utoipa-swagger-ui/" rel)
           || (
             type == "regular"
             && !(pkgs.lib.hasInfix "/" rel)
@@ -999,6 +1003,13 @@
               test -s "$source/crates/code_execution/src/outbound/deno/$asset"
             done
           done
+          touch $out
+        '';
+        # Deploy builds compile [patch.crates-io] crates from the pruned
+        # source, so their real code (not mkDummySrc's stubs) must be there.
+        pruned-deploy-src-vendored-patches = pkgs.runCommand "cloud-storage-pruned-vendored-patches" { } ''
+          grep -q "fn write_embed_code" \
+            ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/utoipa-swagger-ui/build.rs
           touch $out
         '';
         fmt = craneLib.cargoFmt {
