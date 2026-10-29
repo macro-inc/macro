@@ -479,10 +479,10 @@ AMI; a schema-5 image cannot boot schema-6 user data.
 
 GoAlert is the source of truth for open alerts: Grafana sends it critical
 alerts, and on-call engineers acknowledge or close them in its UI at
-`https://oncall.macro-internal.com`. It runs on this host so paging keeps working
-while production, its database or Macro itself is down. Today it pages by
-posting to the Macro Alerts channel; phone paging (Twilio), Google login and a
-rotation are follow-ups.
+`https://oncall.macro-internal.com`, signing in with Google. It runs on this host
+so paging keeps working while production, its database or Macro itself is down.
+Today it pages by posting to the Macro Alerts channel; phone paging (Twilio) and
+a rotation are follow-ups.
 
 - `nixos/goalert/package.nix` builds GoAlert from source with `buildGoModule`,
   embedding its web UI. Bump `version` and the hashes together.
@@ -504,6 +504,10 @@ rotation are follow-ups.
   `/health`, `/api/v2/generic/incoming` and `/api/v2/heartbeat/` are reachable
   without a session (GoAlert checks the integration key); other inbound
   integrations return 404. The rest is GoAlert's UI behind its login.
+- Login is Google OIDC with Grafana's OAuth client, whose redirect URIs include
+  `https://oncall.macro-internal.com/api/v2/identity/providers/oidc/callback`.
+  GoAlert cannot restrict OIDC to a domain, so that client must keep the
+  Internal audience. The basic-auth `admin` login is the break-glass account.
 - The ALB sends the on-call host to its own target group, health-checked at
   `/goalert-healthz`. Alarm `observability-goalert` publishes to `alarmTopicArn`
   when it fails, so a GoAlert outage is reported without GoAlert.

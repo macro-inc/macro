@@ -2,8 +2,7 @@
 #
 # Everything here runs in Ohio and talks only to loopback, so paging keeps
 # working while production or its database is down. Pages reach the Macro
-# Alerts channel through the relay; phone paging (Twilio) and Google login are
-# not set up yet.
+# Alerts channel through the relay; phone paging (Twilio) is not set up yet.
 {
   config,
   lib,
@@ -23,8 +22,20 @@ let
   # start. `@name@` strings are replaced with the credential of that name.
   goalertConfig = {
     General.ApplicationName = "Macro On-Call";
-    # One `admin` login, created by apply-config.py from goalert_admin_password.
+    # Google login, with Grafana's OAuth client. GoAlert cannot restrict OIDC
+    # logins to a domain; the client's Internal audience keeps them to Workspace
+    # accounts. Basic auth stays on for the break-glass `admin` login, created
+    # by apply-config.py from goalert_admin_password.
     Auth.DisableBasic = false;
+    OIDC = {
+      Enable = true;
+      NewUsers = true;
+      OverrideName = "Google";
+      IssuerURL = "https://accounts.google.com";
+      ClientID = "@google_client_id@";
+      ClientSecret = "@google_client_secret@";
+      Scopes = "openid profile email";
+    };
     Webhook = {
       Enable = true;
       AllowedURLs = [ relayUrl ];
@@ -93,6 +104,8 @@ in
         LoadCredential = map credential [
           "goalert_encryption_key"
           "goalert_admin_password"
+          "google_client_id"
+          "google_client_secret"
         ];
         ExecStartPre = [
           "${pkgs.python3}/bin/python3 ${./goalert/apply-config.py} ${lib.getExe goalert} ${pkgs.writeText "goalert-config.json" (builtins.toJSON goalertConfig)} ${config.services.postgresql.package}/bin/psql"
