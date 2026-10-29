@@ -125,7 +125,8 @@ checks project ranking and insertion on desktop and phone.
 
 Channel composer draft persistence has a backend-free browser regression:
 `bunx playwright test --config src/features/channel/Input/browser-test/playwright.config.ts`.
-It checks draft blank lines across remounts and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
+It checks draft blank lines across remounts, that a sent message renders its
+lines with the spacing the draft showed, and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
 It also pastes a Macro link and Markdown into a code block, which must keep both as literal text.
 
 Block formatting passes a forward copy of the selection to Lexical's
@@ -228,6 +229,9 @@ Keep persistent list hotkeys free of mounted-view closures, and clear
 virtualizer accessors when their view unmounts.
 Keep editor newline handling local; result-opening handlers must yield
 Shift+Enter while an editor owns focus instead of adding shared hotkey flags.
+A composer renders paragraphs with the spacing its sent message renders with,
+so a draft reads as what it will send; drop only the draft's first and last
+margins, which the compact single-row layout measures.
 
 - Reuse `src/components/WorkspaceTexture.tsx` for the onboarding and Create
   detail panel grain; pass the surface accent and a unique SVG filter ID.
