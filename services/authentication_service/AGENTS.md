@@ -83,6 +83,10 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 
 ## Gotchas
 
+- `/mobile-welcome-email` copies allowlisted ad parameters from the capture
+  request onto the desktop signup link and always sets
+  `signup_flow=mobile_email`. The web app keeps that set on the PostHog person
+  when the account is identified. Do not take `signup_flow` from the request.
 - Fail closed if team cleanup encounters an external chat: external chats require human ownership.
 
 - GitHub reconnect preserves the current link until OAuth completes. A different

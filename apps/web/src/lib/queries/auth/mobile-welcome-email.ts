@@ -8,8 +8,14 @@ import { useMutation } from '@tanstack/solid-query';
  */
 export function useSendMobileWelcomeEmail() {
   return useMutation(() => ({
-    mutationFn: async (email: string) => {
-      return authServiceClient.sendMobileWelcomeEmail(email);
+    mutationFn: async (input: {
+      email: string;
+      attribution?: Record<string, string>;
+    }) => {
+      return authServiceClient.sendMobileWelcomeEmail(
+        input.email,
+        input.attribution
+      );
     },
   }));
 }

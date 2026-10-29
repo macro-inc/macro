@@ -55,6 +55,9 @@ beforeEach(() => {
 
 afterEach(() => {
   document.head.replaceChildren();
+  document.cookie =
+    'macro_mobile_email_attribution=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+  window.history.replaceState({}, '', '/');
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -278,6 +281,37 @@ describe('interface language', () => {
 
     expect(mocks.reset).toHaveBeenCalledTimes(1);
     expect(mocks.setPersonProperties).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('mobile email signup attribution', () => {
+  it('copies the desktop link parameters onto the person when they are identified', async () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/app/signup?signup_flow=mobile_email&utm_source=facebook&utm_campaign=spring'
+    );
+    const { rememberMobileEmailAttribution } = await import(
+      './signupAttribution'
+    );
+    rememberMobileEmailAttribution();
+    window.history.replaceState({}, '', '/app/onboarding');
+
+    const { analytics } = await import('./analytics');
+    analytics.identify('user-id', {});
+
+    expect(mocks.setPersonProperties).toHaveBeenCalledWith(
+      {
+        signup_flow: 'mobile_email',
+        utm_source: 'facebook',
+        utm_campaign: 'spring',
+      },
+      {
+        $initial_signup_flow: 'mobile_email',
+        $initial_utm_source: 'facebook',
+        $initial_utm_campaign: 'spring',
+      }
+    );
   });
 });
 

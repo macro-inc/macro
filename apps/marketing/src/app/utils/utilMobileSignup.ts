@@ -1,5 +1,5 @@
 import { analytics } from './utilAnalytic';
-import { buildAuthServiceUrl } from './utilBaseUrl';
+import { buildAuthServiceUrl, capturedAttribution } from './utilBaseUrl';
 
 /**
  * Mobile-web email capture, served by the site itself.
@@ -104,10 +104,15 @@ export const submitMobileSignup = async (
 
   let response: Response;
   try {
+    const attribution = capturedAttribution();
     response = await fetch(buildAuthServiceUrl('/mobile-welcome-email'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: trimmed }),
+      body: JSON.stringify(
+        Object.keys(attribution).length > 0
+          ? { email: trimmed, attribution }
+          : { email: trimmed }
+      ),
     });
   } catch {
     return { ok: false, message: 'Network error. Please try again.' };
