@@ -117,7 +117,7 @@ describe('UserCardDrawer', () => {
     expect(screen.getByText('jane.doe@example.com')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Copy email' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Copy name' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'DM' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Assign task' })).toBeTruthy();
   });
 
@@ -126,12 +126,12 @@ describe('UserCardDrawer', () => {
     render(() => <UserCardDrawer />);
     openJane();
 
-    await user.click(screen.getByRole('button', { name: 'DM' }));
+    await user.click(screen.getByRole('button', { name: 'Send message' }));
 
     expect(mocks.getOrCreateDm).toHaveBeenCalledWith({
       recipient_id: 'macro|jane.doe@example.com',
     });
-    expect(screen.queryByRole('button', { name: 'DM' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Send message' })).toBeNull();
   });
 
   it('copies the email and closes the sheet, which a toast confirms', async () => {
@@ -200,7 +200,7 @@ describe('UserCardDrawer', () => {
     expect(screen.getByRole('button', { name: 'Copy email' })).toBeTruthy();
   });
 
-  it('offers no DM for an agent, which is mentioned rather than messaged', () => {
+  it('offers no message action for an agent, which is mentioned rather than messaged', () => {
     render(() => <UserCardDrawer />);
     openUserCard({
       displayName: 'Cursor',
@@ -208,7 +208,7 @@ describe('UserCardDrawer', () => {
       id: 'bot|00000000-0000-0000-0000-00000000c5c5',
     });
 
-    expect(screen.queryByRole('button', { name: 'DM' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Send message' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Assign task' })).toBeTruthy();
   });
 });
