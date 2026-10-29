@@ -243,6 +243,40 @@ export function networkRevalidationExchange(
       await Promise.all(pending);
     }
 
+    function confirmRead(key: number, revision: number, data: unknown): void {
+      const confirmed = [...layers.values()].filter(
+        (layer) => layer.confirmed && revision > layer.afterRequest
+      );
+      let projected = data;
+      for (const layer of confirmed)
+        projected = layer.update.project(projected);
+      if (!deepEqual(projected, data)) return;
+      for (const layer of confirmed) layer.queries.delete(key);
+      prune();
+    }
+
+    function acceptQuery(result: OperationResult): OperationResult | undefined {
+      const { operation } = result;
+      const state = queries.get(operation.key);
+      if (
+        enabled() &&
+        state?.requestId !== operation.context[REQUEST_CONTEXT_KEY]
+      )
+        return undefined;
+      if (state) {
+        state.result =
+          result.data == null && state.result?.data != null
+            ? { ...result, data: state.result.data }
+            : result;
+      }
+      if (!result.stale && !result.hasNext) {
+        if (state && result.data != null && !result.error)
+          confirmRead(operation.key, state.requestId, result.data);
+        finish(operation.key);
+      }
+      return project(state?.result ?? result);
+    }
+
     return (operations$) => {
       const results = pipe(
         merge([
@@ -258,44 +292,8 @@ export function networkRevalidationExchange(
           expireLayers();
           const { operation } = result;
           if (operation.kind === 'query') {
-            const state = queries.get(operation.key);
-            if (
-              enabled() &&
-              state?.requestId !== operation.context[REQUEST_CONTEXT_KEY]
-            )
-              return empty;
-            if (state) {
-              state.result =
-                result.data == null && state.result?.data != null
-                  ? { ...result, data: state.result.data }
-                  : result;
-            }
-            if (!result.stale && !result.hasNext) {
-              if (result.data != null && !result.error) {
-                let confirmed = result.data;
-                for (const layer of layers.values()) {
-                  if (
-                    layer.confirmed &&
-                    state &&
-                    state.requestId > layer.afterRequest
-                  )
-                    confirmed = layer.update.project(confirmed);
-                }
-                if (deepEqual(confirmed, result.data)) {
-                  for (const layer of layers.values()) {
-                    if (
-                      layer.confirmed &&
-                      state &&
-                      state.requestId > layer.afterRequest
-                    )
-                      layer.queries.delete(operation.key);
-                  }
-                }
-                prune();
-              }
-              finish(operation.key);
-            }
-            return fromValue(project(state?.result ?? result));
+            const accepted = acceptQuery(result);
+            return accepted ? fromValue(accepted) : empty;
           }
           const disposition = optimisticMutationDispositionOf(result);
           const id = operation.context[MUTATION_CONTEXT_KEY];
