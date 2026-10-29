@@ -1419,7 +1419,8 @@ function AgentEditorPage(props: {
                           when={allowPermissionBypass()}
                           fallback={
                             <p class="text-xs text-ink-muted">
-                              This runtime requires permission prompts.
+                              This runtime requires permission prompts. Allow
+                              bypass in its Runtimes settings.
                             </p>
                           }
                         >

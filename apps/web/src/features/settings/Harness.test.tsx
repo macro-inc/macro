@@ -72,6 +72,7 @@ const harnessMocks = vi.hoisted(() => ({
     isError: false,
   },
   deleteHarness: vi.fn(),
+  patchHarness: vi.fn(),
   approve: vi.fn(),
   pairing: {
     data: {
@@ -112,6 +113,10 @@ vi.mock('@queries/harnesses/harnesses', () => ({
   useHarnessesQuery: () => harnessMocks.query,
   useDeleteHarnessMutation: () => ({
     mutateAsync: harnessMocks.deleteHarness,
+    isPending: false,
+  }),
+  usePatchHarnessMutation: () => ({
+    mutateAsync: harnessMocks.patchHarness,
     isPending: false,
   }),
   useHarnessPairingQuery: (code: () => string | undefined) => ({
@@ -157,6 +162,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
 
 const REGISTERED_HARNESS = {
   id: '3f1c9d2e-8a4b-4c5d-9e6f-1a2b3c4d5e6f',
+  allow_permission_bypass: false,
   kind: 'macrod',
   name: 'Dev box',
   owner: { type: 'team', team_id: 'team-1' },
@@ -446,6 +452,68 @@ describe('Harness', () => {
         harnessId: REGISTERED_HARNESS.id,
       });
       expect(mocks.toastSuccess).toHaveBeenCalledWith('Runtime removed');
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+  });
+
+  it('allows permission bypass on a paired runtime after confirming', async () => {
+    harnessMocks.query.data = [REGISTERED_HARNESS];
+
+    render(() => <Harness />);
+    const toggle = screen.getByRole('switch', {
+      name: 'Allow bypassing permission requests',
+    });
+    expect(toggle).toHaveProperty('checked', false);
+    expect(
+      screen.getByText('Every agent on this runtime must ask for permission.')
+    ).toBeTruthy();
+    fireEvent.click(toggle);
+
+    await waitFor(() =>
+      expect(harnessMocks.patchHarness).toHaveBeenCalledWith({
+        harnessId: REGISTERED_HARNESS.id,
+        allowPermissionBypass: true,
+      })
+    );
+  });
+
+  it('withdraws permission bypass without confirming', async () => {
+    const { confirmDialog } = await import('@ui');
+    harnessMocks.query.data = [
+      { ...REGISTERED_HARNESS, allow_permission_bypass: true },
+    ];
+
+    render(() => <Harness />);
+    fireEvent.click(
+      screen.getByRole('switch', {
+        name: 'Allow bypassing permission requests',
+      })
+    );
+
+    await waitFor(() =>
+      expect(harnessMocks.patchHarness).toHaveBeenCalledWith({
+        harnessId: REGISTERED_HARNESS.id,
+        allowPermissionBypass: false,
+      })
+    );
+    expect(confirmDialog).not.toHaveBeenCalled();
+  });
+
+  it('renames a paired runtime', async () => {
+    harnessMocks.query.data = [REGISTERED_HARNESS];
+
+    render(() => <Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+    const dialog = screen.getByRole('dialog');
+    const input = within(dialog).getByLabelText('Name');
+    fireEvent.input(input, { target: { value: '  Studio  ' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(harnessMocks.patchHarness).toHaveBeenCalledWith({
+        harnessId: REGISTERED_HARNESS.id,
+        name: 'Studio',
+      });
       expect(screen.queryByRole('dialog')).toBeNull();
     });
   });
