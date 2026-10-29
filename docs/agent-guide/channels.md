@@ -420,15 +420,14 @@ event without attendees creates the event right away (unlike AI chat, where crea
 for the user to confirm a composer card). For an event with attendees the bot is prompted to
 ask for confirmation in the thread first, since Google sends the invitations the moment the
 event is created — no invitation goes out from the initial request. It cannot draft or send
-email at all. When that reply links something the rest of the channel may not already open
-(a calendar event, document, or similar chip), it ends by asking "Do you want me to share this
-with the members of the channel?" A yes in the thread — "yes", "please", "go ahead" — is
-enough: the bot replies "Okay." and grants current members access. Private and
-confidential calendar events stay unshared, and a calendar event can only be shared by
-someone who holds it on their own calendar. Any bot or agent reply posted for a person
-shares the items it links or attaches with the channel as that person, the same way a
-person's own message does, so a linked chip is usually shared before the question is asked.
-Bot posts with no person behind them, such as webhook deliveries, share nothing. The bot's prompt carries the current date and time in the mentioning user's
+email at all. Any bot or agent reply posted for a person shares the items it links as chips
+or attachments with the channel as that person, the same way a person's own message does; a
+plain URL shares nothing. So the bot links Macro items only as chips, links only what should
+be shared, and never asks whether to share. It calls `ShareWithChannel` only when asked to
+share something its reply does not link. Private and confidential calendar events stay
+unshared, and a calendar event can only be shared by someone who holds it on their own
+calendar. Bot posts with no person behind them, such as webhook deliveries, share nothing.
+The bot's prompt carries the current date and time in the mentioning user's
 own time zone (their primary calendar's), so it resolves relative times ("tomorrow at 4",
 "EOD") without asking; when no calendar is connected the prompt falls back to UTC and the
 bot asks before scheduling a specific clock time. Within the rollout, `@Macro` — plus
