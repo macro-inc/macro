@@ -61,6 +61,18 @@ export function shareEntity(
   }
 }
 
+/**
+ * Whether confirmed request-state access still matches the level a document
+ * loaded with. Request state can report an owner as edit, so a loaded owner
+ * matches a confirmed edit.
+ */
+export function matchesConfirmedAccess(
+  loaded: AccessLevel | undefined,
+  confirmed: AccessLevel
+): boolean {
+  return loaded === confirmed || (loaded === 'owner' && confirmed === 'edit');
+}
+
 export function requestLevels(state: RequestState | undefined): RequestLevel[] {
   if (!state || state.canReview) return [];
   const rank: Record<AccessLevel, number> = {

@@ -1,6 +1,7 @@
 export type ChannelsTab = 'browse' | 'recents' | 'threads';
 
-export type ChannelsGroup = 'channels' | 'direct_messages';
+/** The All tab's conversation lists, each its own paginated query. */
+export type ChannelsGroup = 'team_channels' | 'channels' | 'direct_messages';
 
 /**
  * Conversation sections of the All tab. Support lists the new users' support

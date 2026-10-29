@@ -10,6 +10,7 @@ import { channelGroup } from '../../../utils';
 import type { useChannelCalls } from './useChannelCalls';
 
 const CHANNEL_GROUPS: ChannelsRailGroup[] = [
+  'team_channels',
   'channels',
   'direct_messages',
   'support',
@@ -50,6 +51,7 @@ export function useChannelRailActivity(
     const unreadChannelIds = new Set<string>();
     const unreadNotificationIds = new Set<string>();
     const unreadCounts: Record<ChannelsRailGroup, number> = {
+      team_channels: 0,
       channels: 0,
       direct_messages: 0,
       support: 0,

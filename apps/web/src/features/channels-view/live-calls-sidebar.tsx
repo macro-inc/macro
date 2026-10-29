@@ -1,3 +1,7 @@
+import {
+  dismissIncomingCallEverywhere,
+  useVisibleIncomingCalls,
+} from '@app/features/block-call/sidebar/incoming-calls';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { getMeetingPath, getMeetingShareToken } from '@channel/Call/call-link';
 import { joinChannelCall } from '@channel/Call/join-channel-call';
@@ -39,6 +43,7 @@ function ChatLiveCalls() {
   const callCtx = useCallContextOptional();
   const channelsCtx = useChannelsContext();
   const channelCalls = useActiveCallsQuery();
+  const incomingCalls = useVisibleIncomingCalls();
   const flag = useQuickCallsFlag();
   const quickCalls = useActiveQuickCallsSource(() =>
     !flag().loading && flag().enabled ? userId() : undefined
@@ -51,6 +56,7 @@ function ChatLiveCalls() {
     const quick = quickCalls.calls();
     const quickCallIds = new Set(quick.map((call) => call.callId));
     const channelsById = channelsCtx.channelsById();
+    const ringingCallIds = new Set(incomingCalls().map((call) => call.callId));
 
     // A quick call is backed by a channel call; list it once, as the meeting.
     const channelRows = (channelCalls.data ?? []).flatMap(
@@ -64,6 +70,7 @@ function ChatLiveCalls() {
             channelId: call.channelId,
             label: channel.name ?? 'Channel call',
             joined: joinedCallId() === call.callId,
+            ringing: ringingCallIds.has(call.callId),
           },
         ];
       }
@@ -96,6 +103,7 @@ function ChatLiveCalls() {
           })
           .exhaustive()
       }
+      onDismiss={(call) => dismissIncomingCallEverywhere(call.id, userId())}
     />
   );
 }

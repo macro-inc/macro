@@ -64,7 +64,9 @@ channel.
 
 The desktop Chat sidebar lists every live channel call and quick call in a `Live`
 section above the conversations. Each row reads `Join`, or `Open` when you are
-already in that call, which returns to the channel's Call tab. To see the section
+already in that call, which returns to the channel's Call tab. A channel call that is
+still ringing for you also shows a `Dismiss` button, which declines it like the
+conversation row's Decline. To see the section
 without starting a real call, answer `/call/active` and `/call/<channelId>/active`
 with a fake call through CDP `Fetch` interception.
 
@@ -180,7 +182,7 @@ Check channel, scheduled, and instant calls with another participant remaining
 and as the last participant, including at phone width. During a delayed leave,
 the page shows `Leaving call…` without flashing setup; navigating elsewhere must
 not be undone when cleanup finishes. Inline channel call controls return to
-Messages on leave and open the record when that hangup ends the call.
+Messages on leave and stay in the channel, even when that hangup ends the call.
 `Copy Meeting Url` is available during the call.
 Rejoining from a new page waits for the prior page's pending leave cleanup before
 requesting another connection, so a slow leave cannot disconnect the replacement.

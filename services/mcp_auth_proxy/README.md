@@ -5,6 +5,28 @@ I believe this is needed because FusionAuth doesn't support DCR
 (Official Docs)[https://modelcontextprotocol.io/docs/tutorials/security/authorization]
 (Useful fusionauth article)[https://fusionauth.io/articles/ai/mcp-connecting-software-ai]
 
+## Origin versus redirect URI
+
+Two different values get checked during sign-in, by two different parties:
+
+- The **origin** is the page a browser request comes from, sent as the `Origin`
+  header or, on a navigation, the `Referer`. FusionAuth checks it against the
+  application's authorized origins (`infra/stacks/fusionauth-instance/origins.ts`)
+  and fails with `invalid_request: Invalid origin uri` when it is not listed.
+  That list is for Macro's own apps that talk to FusionAuth directly.
+- The **redirect URI** is where the authorization code is delivered. The broker
+  checks it, as described in the next two sections. FusionAuth only ever
+  redirects to the broker's own `/oauth/callback`.
+
+MCP clients never talk to FusionAuth directly: the client opens the broker's
+`/authorize`, which redirects the browser to FusionAuth. The browser would carry
+the client page's `Referer` across that redirect, so a client page on an origin
+FusionAuth does not list (`http://127.0.0.1:6274` for MCP Inspector, say) was
+refused even though its redirect URI was fine. The `/authorize` redirect is sent
+with `Referrer-Policy: no-referrer`, so FusionAuth sees no client origin and
+third-party clients need no entry in the FusionAuth origin list. Whether a
+client may sign in is decided only by its redirect URI.
+
 ## Which redirect URIs are usable
 
 Dynamic client registration is open, because MCP clients require it. That means
@@ -24,6 +46,18 @@ A redirect URI is usable when it is either:
   `DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS` in `services/agent_harness_service/src/public_mcp.rs`,
   which holds the browser-based MCP clients Macro supports. Subdomains of a
   listed host are not themselves trusted.
+
+Loopback hosts are interchangeable for this policy, but not for a registration:
+a client that registered `http://localhost:6274/...` cannot have a code sent to
+`http://127.0.0.1:6274/...`.
+
+A new third-party HTTPS client therefore needs exactly one change: its callback
+host added to `DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS` (or the deployment's
+`MCP_ALLOWED_REDIRECT_HOSTS`). It needs no FusionAuth origin. Registering through
+DCR alone is not enough, on purpose: FusionAuth signs in a user with an existing
+session without showing a consent screen, so if any registered HTTPS host were
+usable, anyone could register their own callback and send a Macro user a link
+that hands them that user's code.
 
 A redirect URI carrying a fragment or credentials in its authority is refused
 regardless of host.

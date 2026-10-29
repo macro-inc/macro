@@ -47,7 +47,8 @@ export function createChannelSearchSource(options: {
             is_participant: true,
             channel_types: match(options.scope())
               .with('direct_messages', () => ['direct_message'])
-              .with('channels', 'support', () => ['public', 'private', 'team'])
+              .with('team_channels', () => ['team'])
+              .with('channels', 'support', () => ['public', 'private'])
               .with('recents', 'search', 'threads', () => undefined)
               .exhaustive(() => undefined),
           },

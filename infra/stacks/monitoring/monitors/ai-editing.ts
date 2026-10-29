@@ -14,6 +14,7 @@
 // `documentToken` (macro_sync_service_jwt), so a probe needs somewhere to mint
 // one.
 import * as datadog from '@pulumi/datadog';
+import { goalertWebhooks } from '../goalert';
 import { notify, RENOTIFY_MINUTES } from '../notify';
 
 // The worker's entry span is `http.server.request` with resource_name `POST`.
@@ -46,7 +47,8 @@ ${notify({ pages: false })}`,
     evaluationDelay: 60,
     includeTags: true,
     notifyAudit: false,
-  }
+  },
+  { dependsOn: goalertWebhooks }
 );
 
 // ReqwestEditingWorkerClient::edit reports "editing worker returned" for
@@ -85,5 +87,6 @@ ${notify({ pages: false })}`,
     notifyAudit: false,
     enableLogsSample: true,
     groupbySimpleMonitor: false,
-  }
+  },
+  { dependsOn: goalertWebhooks }
 );

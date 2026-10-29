@@ -107,14 +107,14 @@ describe('channel list query selection', () => {
       return dispose;
     });
     try {
-      // Four channel lists, the Threads rail's threads and their channels,
+      // Five channel lists, the Threads rail's threads and their channels,
       // the Support section's channels, then the selected conversation.
-      expect(useSoupAstItemsQuery).toHaveBeenCalledTimes(8);
-      for (const [, options] of useSoupAstItemsQuery.mock.calls.slice(0, 4)) {
+      expect(useSoupAstItemsQuery).toHaveBeenCalledTimes(9);
+      for (const [, options] of useSoupAstItemsQuery.mock.calls.slice(0, 5)) {
         expect(options?.().graphqlProjection).toBe('channel-list');
         expect(options?.().staleTime).toBe(30_000);
       }
-      for (const [, options] of useSoupAstItemsQuery.mock.calls.slice(4, 7)) {
+      for (const [, options] of useSoupAstItemsQuery.mock.calls.slice(5, 8)) {
         expect(options?.().staleTime).toBe(30_000);
       }
       // The Threads rail's and Support's channels, fetched by id, are rail
@@ -122,11 +122,11 @@ describe('channel list query selection', () => {
       for (const [
         ,
         channelsByIdOptions,
-      ] of useSoupAstItemsQuery.mock.calls.slice(5, 7)) {
+      ] of useSoupAstItemsQuery.mock.calls.slice(6, 8)) {
         expect(channelsByIdOptions?.().graphqlProjection).toBe('channel-list');
       }
       const [selectionArgs, selectionOptions] =
-        useSoupAstItemsQuery.mock.calls[7];
+        useSoupAstItemsQuery.mock.calls[8];
       expect(selectionArgs().transport).toBe('rest');
       expect(selectionOptions?.().graphqlProjection).toBeUndefined();
       expect(selectionOptions?.().staleTime).toBe(0);

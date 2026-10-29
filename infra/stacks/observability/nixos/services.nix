@@ -68,7 +68,7 @@ in
       serviceConfig = {
         EnvironmentFile = [
           "/opt/observability/runtime.env"
-          # Interpolated into the GoAlert contact point by alerting provisioning.
+          # Interpolated into the GoAlert contact points by alerting provisioning.
           "/run/macro-observability/grafana-goalert.env"
         ];
         LoadCredential = map credential [
