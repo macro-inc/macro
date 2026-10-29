@@ -19,7 +19,7 @@ const tabTypes: Record<HomeTab, ReadonlySet<HomeTypeFilter>> = {
     'channels',
     'agents',
     'folders',
-    'projects',
+    'initiatives',
     'github',
     'calendar',
   ]),
@@ -198,7 +198,7 @@ export function buildHomeSearchRequest(
     filters.project_filters = projectFilters;
   }
 
-  if (types.has('projects')) {
+  if (types.has('initiatives')) {
     const initiativeFilters: NonNullable<EntityFilters['initiative_filters']> =
       { include: true };
 

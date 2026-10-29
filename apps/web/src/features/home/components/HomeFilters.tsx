@@ -84,7 +84,7 @@ const FILTER_ICONS = new Map<string, () => JSX.Element>([
     ),
   ],
   [
-    'projects',
+    'initiatives',
     () => (
       <EntityIcon
         targetType="initiative"

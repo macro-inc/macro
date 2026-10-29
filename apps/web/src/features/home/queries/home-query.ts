@@ -173,7 +173,7 @@ export function buildHomeQuery(
   const types = context.facets.type ?? [];
   if (
     context.tab === 'noise' ||
-    (types.length > 0 && !types.includes('projects'))
+    (types.length > 0 && !types.includes('initiatives'))
   ) {
     delete body.if;
   }

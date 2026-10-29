@@ -31,6 +31,9 @@ describe('homeWorkFeedScope', () => {
     expect(homeWorkFeedScope(['documents'], everything)?.types).toEqual([
       'document',
     ]);
+    expect(
+      homeWorkFeedScope(['folders', 'initiatives'], everything)?.types
+    ).toEqual(['project', 'initiative']);
   });
 
   it('leaves documents out when only the Documents filter is off', () => {
@@ -40,7 +43,7 @@ describe('homeWorkFeedScope', () => {
       'channels',
       'agents',
       'folders',
-      'projects',
+      'initiatives',
       'github',
       'calendar',
     ];
@@ -60,10 +63,6 @@ describe('homeWorkFeedScope', () => {
 
   it('has no scope when the filters leave nothing to show', () => {
     expect(homeWorkFeedScope(['none'], everything)).toBeUndefined();
-    expect(homeWorkFeedScope(['projects'], everything)).toBeUndefined();
-    expect(homeWorkFeedScope(['folders'], everything)?.types).toEqual([
-      'project',
-    ]);
     expect(
       homeWorkFeedScope(['calendar'], { ...everything, calendar: false })
     ).toBeUndefined();

@@ -11,6 +11,7 @@ export type WorkFeedItemType =
   | 'task'
   | 'chat'
   | 'project'
+  | 'initiative'
   | 'email'
   | 'channel'
   | 'channel_thread'

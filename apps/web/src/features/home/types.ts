@@ -20,7 +20,7 @@ export type HomeTypeFilter =
   | 'channels'
   | 'agents'
   | 'folders'
-  | 'projects'
+  | 'initiatives'
   | 'github'
   | 'calendar';
 

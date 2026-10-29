@@ -2361,7 +2361,9 @@ export type WorkFeedItemType =
   | 'DOCUMENT'
   /** Email threads. */
   | 'EMAIL'
-  /** Projects. */
+  /** Task projects (initiatives). */
+  | 'INITIATIVE'
+  /** Projects (folders). */
   | 'PROJECT'
   /** GitHub pull requests. */
   | 'PULL_REQUEST'

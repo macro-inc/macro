@@ -117,7 +117,7 @@ describe('home projects', () => {
   });
 
   it('keeps them under the Projects type filter', () => {
-    const body = projectClause({ type: ['projects'] });
+    const body = projectClause({ type: ['initiatives'] });
     expect(body).toContain('"inc"');
     expect(body).toContain('{"ns":"unseen"}');
   });
@@ -149,7 +149,7 @@ describe('home projects', () => {
   it('never asks Noise for projects, whatever the facets say', () => {
     const cases: Record<string, string[]>[] = [
       {},
-      { type: ['projects'] },
+      { type: ['initiatives'] },
       { read: ['unread'] },
     ];
     for (const facets of cases) {

@@ -120,8 +120,8 @@ const typeOptions: Record<HomeTypeFilter, HomeFacetOption> = {
     clause: { pf: clause.not(clause.eq('folderId', NIL_UUID)) },
     predicate: (entity) => entity.type === 'project',
   },
-  projects: {
-    id: 'projects',
+  initiatives: {
+    id: 'initiatives',
     label: 'Projects',
     clause: { if: clause.eq('includeInitiatives', true) },
     predicate: (entity) => entity.type === 'initiative',
