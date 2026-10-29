@@ -161,3 +161,4 @@ scope = "user"
     [Environment]::SetEnvironmentVariable('Path', $userPathBefore, 'User')
     Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
 }
+exit 0

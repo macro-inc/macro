@@ -76,3 +76,6 @@ try {
     [Environment]::SetEnvironmentVariable('Path', $userPathBefore, 'User')
     Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
 }
+# The deliberate failure above leaves $LASTEXITCODE at 2, which pwsh would
+# report as the step's exit code.
+exit 0
