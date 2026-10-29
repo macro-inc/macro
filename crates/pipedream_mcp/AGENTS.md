@@ -48,6 +48,9 @@ AI loop calls their tools through Pipedream's remote MCP server.
 - Discovery answers an overlaid app's connection status through
   `OverlayConnections` (implemented in `mcp_select` over the native store); its
   advertised tools still come from Pipedream's listing for the slug.
+- `github` is overlaid, but its native server is authorized by the GitHub
+  account link (`mcp_client`'s `WithLinkedGithub`), not MCP OAuth; the
+  frontend connects it by linking the account.
 
 ## Checks
 
