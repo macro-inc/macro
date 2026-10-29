@@ -673,6 +673,8 @@ overwriting the saved selection.
 Choose a view in the `Projects` section in Tasks, or open
 `/app/component/tasks-projects` for All projects. Project view links use the Tasks
 search namespace: `tasks.tab=my-projects`, `projects`, or `created-projects`.
+Desktop project-view titles open the same view switcher as Tasks; individual
+project names remain content titles. Mobile keeps the Projects picker.
 Projects use the same list rows, property cells, selection, group headers, and
 keyboard navigation as Tasks. Search (`Cmd/Ctrl+F`), `Sort projects`,
 `Group projects`, and `Filter projects` sit above the list. Groups default to

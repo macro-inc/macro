@@ -12,6 +12,7 @@ import {
   useViewControlHotkeys,
   ViewLayoutDropdown,
   ViewShell,
+  ViewSidebar,
 } from '@app/components/view-shell';
 import {
   ListHeader,
@@ -559,9 +560,9 @@ export function ProjectsCollection(props: {
         fallback={
           <ListHeader
             title={
-              <h1 class="truncate text-sm font-semibold tracking-[-0.03em] text-ink">
+              <ViewSidebar.Title caret={false}>
                 {props.title ?? 'Projects'}
-              </h1>
+              </ViewSidebar.Title>
             }
           >
             <HeaderActionGroup label="Project filters">
