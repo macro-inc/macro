@@ -437,7 +437,7 @@ function HarnessBypassSetting(props: { harness: RegisteredHarness }) {
         disabled={
           setBypass.isPending || (!allowed() && operatorAllows() !== true)
         }
-        onChange={(next) => void change(next)}
+        onChange={(next) => fireAndForget(change(next), 'harness-settings')}
       />
       <p class="text-xs text-ink-extra-muted">{hint()}</p>
     </div>

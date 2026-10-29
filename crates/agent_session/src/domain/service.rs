@@ -78,9 +78,7 @@ use super::ports::{
 };
 use super::retitle::ConversationDigest;
 use super::session::actors::{ActorInput, SessionActor, SessionCommand, SessionMessage, Stepped};
-use super::session::{
-    CloseReason, Input, PermissionPolicy, StopReason as SessionStopReason,
-};
+use super::session::{CloseReason, Input, PermissionPolicy, StopReason as SessionStopReason};
 use crate::domain::events::{AgentSessionLifecycleEvent, SessionRenamedMetadata};
 
 /// Buffered not-yet-accepted commands per session actor.
