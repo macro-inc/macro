@@ -206,7 +206,12 @@ Since Macro already has your CRM, chats, DMs, booking links, and calendar, calls
 
 # Calendar
 
-[Placeholder]
+We built a simple Calendar in Macro so you can manage your week right next to where your work is happening.
+
+- Connect multiple Google and Outlook calendars in one place.
+- Share personal or team booking links. Guests don’t need a Macro account.
+- Set your availability and avoid conflicts across connected calendars.
+- Ask agents to find time, schedule meetings, and update events.
 
 <br />
 
