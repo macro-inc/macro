@@ -49,30 +49,6 @@ impl Store {
         }
         Ok(record)
     }
-
-    pub fn list(&self) -> std::io::Result<Vec<Record>> {
-        let entries = match std::fs::read_dir(self.0.join("sessions")) {
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-            result => result?,
-        };
-        let mut records = Vec::new();
-        for entry in entries {
-            let path = entry?.path();
-            if path
-                .extension()
-                .is_some_and(|extension| extension == "json")
-                && let Some(id) = path.file_stem().and_then(|name| name.to_str())
-            {
-                match self.load(id) {
-                    Ok(record) => records.push(record),
-                    Err(error) => {
-                        tracing::debug!(session_id = id, error_kind = ?error.kind(), "skipping unreadable native session record")
-                    }
-                }
-            }
-        }
-        Ok(records)
-    }
 }
 
 pub(crate) fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {

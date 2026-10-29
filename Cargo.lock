@@ -4591,7 +4591,6 @@ dependencies = [
  "lazy-regex",
  "macro_env_var",
  "macro_event_broker",
- "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
  "messages",

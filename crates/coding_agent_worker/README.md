@@ -16,12 +16,13 @@ ID determines the path and branch, so redelivery reuses existing work without re
 Cached repositories and worktrees live under `~/.macrod/herdr/<harness-id>/`. Each
 paired macrod instance has one configuration and its own storage directory.
 
-Native workspaces use the prompt's visible text until Macro supplies its session
-name; hidden context and mention payloads are excluded from that initial label. While
-macrod is running, it checks the harness's session names every five seconds and
-updates the matching workspace and tab, including later renames made in Macro.
-Only a workspace created for that session is renamed. Older shared workspaces and
-workspaces into which the user moves a session keep their existing names.
+Native workspace names are set once, when the workspace is created, from the
+prompt's visible text. Hidden context and mention payloads are excluded. The
+initial tab keeps Herdr's default label.
+macrod does not rename an existing native workspace or tab: manual Herdr names
+survive later prompts, Macro-generated title changes, moves, and daemon restarts.
+Use Herdr's rename action to change them explicitly. Macro's session title is
+independent and is not copied into Herdr in the background.
 
 ### Reconnecting native sessions
 

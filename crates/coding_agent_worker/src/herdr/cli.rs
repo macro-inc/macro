@@ -240,19 +240,6 @@ impl HerdrCli {
         self.run(&["tab", "rename", tab_id, label]).await.map(drop)
     }
 
-    /// Relabel the session's tab and its dedicated workspace, if it owns one.
-    pub(crate) async fn rename_window(
-        &self,
-        window: &Window,
-        label: &str,
-    ) -> Result<(), HerdrError> {
-        self.rename_tab(&window.tab_id, label).await?;
-        if let Some(workspace) = &window.workspace_id {
-            self.run(&["workspace", "rename", workspace, label]).await?;
-        }
-        Ok(())
-    }
-
     /// Roll back newly opened layout when its session metadata could not be saved.
     pub(crate) async fn close_window(&self, window: &Window) -> Result<(), HerdrError> {
         match &window.workspace_id {
