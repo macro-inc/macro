@@ -1157,6 +1157,42 @@ describe('Quick Access source integration', () => {
     expect(list.items().map((item) => item.id)).toEqual(['initiative-1']);
   });
 
+  it('shows a renamed project by its cached name while the REST feed is stale', async () => {
+    mocks.initiatives = [
+      {
+        id: 'initiative-1',
+        type: 'initiative',
+        name: 'Old name',
+        ownerId: 'owner',
+        updatedAt: '2025-01-01T00:00:00.000Z',
+      },
+    ];
+    mocks.readRecordsByKeys.mockResolvedValue({
+      revision: INITIAL_CACHE_REVISION,
+      records: [
+        {
+          recordKey: 'GraphqlSoupInitiative:initiative-1',
+          record: cachedInitiative,
+        },
+      ],
+    });
+    mocks.search.mockResolvedValue({
+      documents: [initiativeHit],
+      nextCursor: null,
+    });
+    const list = setup((source) =>
+      source.useList({ buckets: ['initiative'], searchTerm: () => 'launch' })
+    );
+    await vi.waitFor(() =>
+      expect(list.items()[0]).toMatchObject({
+        id: 'initiative-1',
+        searchText: 'Launch plan',
+        data: { name: 'Launch plan' },
+      })
+    );
+    expect(list.items()).toHaveLength(1);
+  });
+
   it('does not search cached projects when Projects is disabled', () => {
     mocks.projectsEnabled = () => false;
     const list = setup((source) =>

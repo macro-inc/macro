@@ -1201,7 +1201,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                 materializeCachedGraphqlCrmCompanies(projectionHost, missing),
                 materializeCachedGraphqlCrmContacts(projectionHost, missing),
                 materializeCachedEmailItems(projectionHost, documents),
-                materializeCachedGraphqlInitiatives(projectionHost, missing),
+                materializeCachedGraphqlInitiatives(projectionHost, documents),
               ]);
               const historyById = new Map(
                 historyItems.map((item) => [item.id, item])
@@ -1240,6 +1240,15 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                         channel.viewedAt
                       ),
                     }),
+                  ];
+                }
+                const initiative = initiativesById.get(id);
+                if (initiative) {
+                  return [
+                    initiativeToQuickAccessItem(
+                      initiative,
+                      soupViewedAtMap().get(id)
+                    ),
                   ];
                 }
                 const cached = itemCache.get(id)?.item;
@@ -1294,15 +1303,6 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                     },
                   ];
                 }
-                const initiative = initiativesById.get(id);
-                if (initiative) {
-                  return [
-                    initiativeToQuickAccessItem(
-                      initiative,
-                      soupViewedAtMap().get(id)
-                    ),
-                  ];
-                }
                 return [];
               });
             },
@@ -1328,9 +1328,13 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         .map((item) => {
           const cached = itemCache.get(item.id)?.item;
           if (!cached) return item;
-          // Projected channels carry current cache metadata even when the
-          // complete list still has an older name. Only overlay newer views.
-          if (item.kind === 'entity' && item.data.type === 'channel') {
+          // Projected channels and projects carry current cache metadata even
+          // when their REST list still has an older name. Only overlay newer
+          // views.
+          if (
+            item.kind === 'entity' &&
+            (item.data.type === 'channel' || item.data.type === 'initiative')
+          ) {
             const viewedAt = latestDate(
               item.timestamps.viewedAt,
               cached.timestamps.viewedAt
