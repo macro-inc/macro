@@ -506,6 +506,7 @@ its inline preview, switching apps opens the requested app's list in the target
 split instead of moving focus to the existing detail. For example, with Home on
 the left and a Chat conversation on the right, select the left split and press
 Chat: the left split shows the chat list and the right conversation stays open.
+See the [redacted desktop example](media/navigation/chat-list-left-split.png).
 Verify Chat → open channel → Calendar → Chat restores the same channel, then
 repeat with a filtered list and a nested Drive item. Check mobile dock switching,
 split Back/Forward, refused leave guards, explicit links, and account changes.
