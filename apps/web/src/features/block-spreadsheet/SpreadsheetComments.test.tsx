@@ -56,6 +56,7 @@ vi.mock('@core/signal/permissions', () => ({
 vi.mock('@core/util/url', () => ({ buildSimpleEntityUrl: () => 'link' }));
 vi.mock('@ui/components/Button', () => ({
   Button: (p: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => <button {...p} />,
+  buttonFrameClasses: () => '',
 }));
 vi.mock('@queries/messages/document-messages', () => ({
   useMessageRootsQuery: () => ({ isSuccess: true, data: mocks.data }),
