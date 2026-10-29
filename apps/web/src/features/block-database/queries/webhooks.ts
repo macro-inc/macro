@@ -13,6 +13,7 @@ import { databaseWebhookKeys } from './keys';
 function databaseWebhooksQueryOptions(databaseId: string) {
   return queryOptions({
     queryKey: databaseWebhookKeys.list(databaseId).queryKey,
+    refetchOnMount: 'always',
     queryFn: () =>
       throwOnErr(() =>
         storageServiceClient.databases.listWebhooks({ id: databaseId })
@@ -27,6 +28,7 @@ export function useTableWebhooks(
 ): {
   webhooks: Accessor<DatabaseWebhookResponse[] | undefined>;
   failed: Accessor<boolean>;
+  refreshing: Accessor<boolean>;
 } {
   const query = useQuery(() => databaseWebhooksQueryOptions(databaseId()));
   return {
@@ -35,6 +37,7 @@ export function useTableWebhooks(
         ? query.data.webhooks.filter((webhook) => webhook.tableId === tableId())
         : undefined,
     failed: () => query.isError,
+    refreshing: () => query.isFetching,
   };
 }
 
