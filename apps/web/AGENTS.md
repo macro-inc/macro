@@ -806,7 +806,3 @@ Keep existing tags and apply to the selected rows when the drop row is selected.
 Use the shared scoped drag helpers and overlayIcon for the tag chip.
 The backend-free browser regression is
 `bunx playwright test --config src/features/property/tags/browser-test/playwright.config.ts`.
-
-Keep the Chat sidebar unread-only switches immediately left of each section sort
-control, sharing the persisted rail filter across desktop and touch layouts.
-Recent retains its tab-bar switch because it has no section sort controls.
