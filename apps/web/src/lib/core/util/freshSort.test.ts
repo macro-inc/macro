@@ -387,6 +387,30 @@ describe('freshSort with all exact matches', () => {
   });
 });
 
+describe('name match boosts', () => {
+  it('ranks exact names, then prefixes, then other matches, ignoring case and outer spaces', () => {
+    const viewedAt = new Date();
+    const items: MockItem[] = [
+      { id: 'contains', name: 'Team launch plan', type: 'item', viewedAt },
+      { id: 'prefix', name: 'Launch plan review', type: 'item', viewedAt },
+      { id: 'exact', name: 'Launch Plan', type: 'item', viewedAt },
+    ];
+    const search = createFreshSearch<MockItem>({
+      config: { exactNameBoost: 2, prefixNameBoost: 0.25 },
+      getName: (item) => item.name,
+      getTimestamp: (item) => ({ viewedAt: item.viewedAt }),
+    });
+
+    expect(
+      search(items, '  launch PLAN ').map((result) => result.item.id)
+    ).toEqual(['exact', 'prefix', 'contains']);
+    const browseScores = search(items, '').map(
+      (result) => result.combinedScore
+    );
+    expect(new Set(browseScores).size).toBe(1);
+  });
+});
+
 describe('boostFn functionality', () => {
   interface MockItemWithEmail extends MockItem {
     email?: string;

@@ -1307,8 +1307,9 @@ Relevance uses the same name-match scoring as the @ menu: a name equal to the
 query gets a 3x boost, a name starting with it a smaller one, and matches that
 are spread out or start late in the name score lower. Verify that typing a
 project's full name puts it above recently viewed documents and tasks that only
-contain those words. This shared ranking also applies to mobile name search. Verify an older matching
-channel stays above recent CRM contacts and agent sessions in All, and remains
+contain those words. This shared ranking also applies to mobile name search.
+Verify an older matching channel stays above recent CRM contacts and agent
+sessions in All, and remains
 findable in Channels while its cache entry is absent. Refreshing the cache or
 reopening the menu with unchanged data must not reorder results or duplicate a
 channel when its cache entry arrives. Hydration must also refresh ownership,
