@@ -79,22 +79,26 @@ let attributionParams = captureAttributionParams();
 export const capturedAttribution = (): Record<string, string> => {
   attributionParams = captureAttributionParams();
   const result: Record<string, string> = {};
-  attributionParams.forEach((value, key) => {
+  for (const [key, value] of attributionParams) {
     if (value) result[key] = value;
-  });
+  }
   return result;
 };
 
 /** App URL (e.g. `/app/welcome`) with any captured attribution params appended. */
 export const buildAppUrl = (path: string): string => {
   const url = new URL(`${APP_BASE_URL}${path}`);
-  attributionParams.forEach((value, key) => url.searchParams.set(key, value));
+  for (const [key, value] of attributionParams) {
+    url.searchParams.set(key, value);
+  }
   return url.toString();
 };
 
 /** Google SSO URL with any captured attribution params appended. */
 export const buildGoogleSsoUrl = (): string => {
   const url = new URL(GOOGLE_SSO_URL);
-  attributionParams.forEach((value, key) => url.searchParams.set(key, value));
+  for (const [key, value] of attributionParams) {
+    url.searchParams.set(key, value);
+  }
   return url.toString();
 };
