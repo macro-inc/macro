@@ -1,6 +1,6 @@
 # Type Alias: ApiChannelWithLatest
 
-> **ApiChannelWithLatest** = \{ `agent_dm?`: `null` \| [`AgentDmProfile`](AgentDmProfile.md); `auto_join_team`: `boolean`; `channel_type`: [`ApiChannelListType`](ApiChannelListType.md); `created_at`: `string`; `frecency_score?`: `number` \| `null`; `id`: `string`; `interacted_at?`: `string` \| `null`; `is_participant`: `boolean`; `latest_message?`: `null` \| [`ApiChannelListMessage`](ApiChannelListMessage.md); `latest_non_thread_message?`: `null` \| [`ApiChannelListMessage`](ApiChannelListMessage.md); `name?`: `string` \| `null`; `org_id?`: `number` \| `null`; `owner_id`: `string`; `participants`: [`ApiChannelListParticipant`](ApiChannelListParticipant.md)[]; `team_id?`: `string` \| `null`; `updated_at`: `string`; `viewed_at?`: `string` \| `null`; \}
+> **ApiChannelWithLatest** = \{ `agent_dm?`: `null` \| [`AgentDmProfile`](AgentDmProfile.md); `auto_join_team`: `boolean`; `channel_type`: [`ApiChannelListType`](ApiChannelListType.md); `created_at`: `string`; `frecency_score?`: `number` \| `null`; `id`: `string`; `interacted_at?`: `string` \| `null`; `is_participant`: `boolean`; `is_support`: `boolean`; `latest_message?`: `null` \| [`ApiChannelListMessage`](ApiChannelListMessage.md); `latest_non_thread_message?`: `null` \| [`ApiChannelListMessage`](ApiChannelListMessage.md); `name?`: `string` \| `null`; `org_id?`: `number` \| `null`; `owner_id`: `string`; `participants`: [`ApiChannelListParticipant`](ApiChannelListParticipant.md)[]; `team_id?`: `string` \| `null`; `updated_at`: `string`; `viewed_at?`: `string` \| `null`; \}
 
 Channel list response item.
 
@@ -16,6 +16,7 @@ Channel list response item.
 | <a id="property-id"></a> `id` | `string` | Channel id. |
 | <a id="property-interacted_at"></a> `interacted_at?` | `string` \| `null` | Last interaction timestamp for requesting user. |
 | <a id="property-is_participant"></a> `is_participant` | `boolean` | Whether the requesting user is an active participant of the channel. |
+| <a id="property-is_support"></a> `is_support` | `boolean` | Whether this is a new user's support channel. |
 | <a id="property-latest_message"></a> `latest_message?` | `null` \| [`ApiChannelListMessage`](ApiChannelListMessage.md) | - |
 | <a id="property-latest_non_thread_message"></a> `latest_non_thread_message?` | `null` \| [`ApiChannelListMessage`](ApiChannelListMessage.md) | - |
 | <a id="property-name"></a> `name?` | `string` \| `null` | Channel name. |

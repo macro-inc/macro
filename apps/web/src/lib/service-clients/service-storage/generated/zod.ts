@@ -4269,6 +4269,9 @@ export const getChannelsResponse = zod
               .describe(
                 'Whether the requesting user is an active participant of the channel.'
               ),
+            is_support: zod
+              .boolean()
+              .describe("Whether this is a new user's support channel."),
             latest_message: zod
               .union([
                 zod.null(),
