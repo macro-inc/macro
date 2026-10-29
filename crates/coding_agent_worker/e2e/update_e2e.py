@@ -6,11 +6,14 @@ publishes v2 to the mirror, and checks that macrod replaced itself in place:
 same macrod pid, same agent pid, the agent's background child alive, and no
 gap in the agent's numbered frames across the two gateway connections.
 
-Two more update cases cover the gap between the old image closing its
-gateway socket and the new one dialing: `prompt-in-gap` sends a prompt on the
-closing socket after macrod has said it is disconnecting and checks it is
-answered exactly once, on the new connection; `output-in-gap` checks agent
-output written while no socket is up reaches the gateway.
+Two more update cases cover macrod's half of the gap between the old image
+closing its gateway socket and the new one dialing: `prompt-in-gap` sends a
+prompt on the closing socket after macrod has said it is disconnecting and
+checks it is answered exactly once, on the new connection; `output-in-gap`
+checks agent output written while no socket is up reaches the gateway. The
+fake gateway accepts any frame on any connection; the real harness service
+keys request ids and sessions per connection, so these show macrod loses
+nothing, not that the service keeps a session across the reconnect.
 
 Negative cases run the same way and check that macrod keeps running v1:
 `bad-checksum`, `failing-smoke-test`, `opt-out` and `opt-out-config`.
