@@ -314,6 +314,8 @@ the user's newest account for that app from the last fifteen minutes.
   Sent retain their own canonical membership.
 - Spam and Trash use scoped REST pages without shared preview normalization or
   service search; restore through the provider-neutral thread-state mutation.
+  Refresh these isolated lists after read-state writes, provider sync events, and
+  settled Outlook operations; shared-cache updates cannot reach them.
 
 Agent split headers show live viewers through `BlockLiveIndicators` with the
 resolved session ID; keep the existing `AgentSessionProvider` subscription to

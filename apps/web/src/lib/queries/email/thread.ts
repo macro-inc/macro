@@ -41,6 +41,7 @@ import { invalidateAllSoup } from '../soup/normalized-cache';
 import { type UndoHandle, useUndoableMutation } from '../undo';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { updateEmailThreadState } from './cache-cleanup';
+import { invalidateEmailFolderQueries } from './folder-cache';
 import {
   createGraphqlEmailThreadQuery,
   fetchGraphqlEmailThread,
@@ -384,6 +385,7 @@ export function useMarkThreadAsSeenMutation(
     ...withCallbacks<void, Error, MarkThreadAsSeenParams>(
       {
         onMutate: threadSeenOnMutate,
+        onSettled: () => invalidateEmailFolderQueries(),
         // Note: We intentionally don't invalidate thread messages in onSuccess.
         // The optimistic update already sets isRead in soup, and invalidating
         // thread messages triggers Suspense which resets scroll position.
@@ -442,7 +444,10 @@ export function useMarkThreadAsUnreadMutation(
       );
     },
     ...withCallbacks<void, Error, MarkThreadAsUnreadParams>(
-      { onMutate: threadUnreadOnMutate },
+      {
+        onMutate: threadUnreadOnMutate,
+        onSettled: () => invalidateEmailFolderQueries(),
+      },
       callbacks
     ),
   }));
