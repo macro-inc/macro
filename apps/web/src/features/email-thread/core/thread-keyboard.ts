@@ -34,6 +34,8 @@ type ThreadAction = Exclude<
   | 'isThreadMarkedUnread'
   | 'navigateToPreviousMessage'
   | 'navigateToNextMessage'
+  | 'expandFocusedMessage'
+  | 'expandAllMessages'
 >;
 
 /**
@@ -41,8 +43,9 @@ type ThreadAction = Exclude<
  * thread's keys are registered once even though its handlers arrive after it
  * mounts. While `ready` is false the actions are held: their keys are
  * swallowed so they neither act on this thread nor fall through to another.
- * Escape, the state gates and message navigation always pass through. With no
- * handlers yet, every key falls through.
+ * Escape, the state gates, message navigation and expanding messages always
+ * pass through, since they only change the view. With no handlers yet, every
+ * key falls through.
  */
 export function delegateThreadKeyboard(
   current: () => EmailThreadKeyboardHandlers | undefined,
@@ -75,5 +78,7 @@ export function delegateThreadKeyboard(
     markSenderNoise: action('markSenderNoise'),
     navigateToPreviousMessage: pass('navigateToPreviousMessage'),
     navigateToNextMessage: pass('navigateToNextMessage'),
+    expandFocusedMessage: pass('expandFocusedMessage'),
+    expandAllMessages: pass('expandAllMessages'),
   };
 }

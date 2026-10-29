@@ -23,6 +23,8 @@ function handlers(): EmailThreadKeyboardHandlers {
     markSenderNoise: vi.fn(() => true),
     navigateToPreviousMessage: vi.fn(() => true),
     navigateToNextMessage: vi.fn(() => true),
+    expandFocusedMessage: vi.fn(() => true),
+    expandAllMessages: vi.fn(() => true),
   };
 }
 
@@ -62,7 +64,7 @@ describe('delegateThreadKeyboard', () => {
     expect(thread.markDone).toHaveBeenCalledOnce();
   });
 
-  it('keeps Escape, state gates and message navigation working while held', () => {
+  it('keeps Escape, state gates, message navigation and expanding working while held', () => {
     const thread = handlers();
     const keys = delegateThreadKeyboard(
       () => thread,
@@ -72,10 +74,12 @@ describe('delegateThreadKeyboard', () => {
     keys.cancel();
     keys.isThreadDone();
     keys.navigateToNextMessage();
+    keys.expandFocusedMessage();
 
     expect(thread.cancel).toHaveBeenCalledOnce();
     expect(thread.isThreadDone).toHaveBeenCalledOnce();
     expect(thread.navigateToNextMessage).toHaveBeenCalledOnce();
+    expect(thread.expandFocusedMessage).toHaveBeenCalledOnce();
   });
 
   it('lets every key fall through before the thread registers handlers', () => {
