@@ -1,11 +1,10 @@
 // Datadog monitors and synthetic tests.
 //
 // Every monitor in the org is declared here, and every one notifies through
-// notify.ts. See README.md before deploying — the 35 monitors under `monitors/`
+// notify.ts. See README.md before deploying — the 34 monitors under `monitors/`
 // are adopted, not created, and a program that stops declaring one deletes it.
 
 // Adopted from the Datadog UI.
-import './monitors/apm';
 import './monitors/cache';
 import './monitors/compute';
 import './monitors/dynamodb';

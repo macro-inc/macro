@@ -2,7 +2,7 @@
 
 Datadog monitors and synthetic tests as code.
 
-36 resources here (35 monitors and one synthetic test) already exist in
+35 resources here (34 monitors and one synthetic test) already exist in
 Datadog. This stack **adopts** them — it does not recreate them. `import.json`
 lists every one by id. Everything else is declared here first and is created
 on deploy: the prod threshold and anomaly monitors (`monitors/macrodb.ts`,
@@ -62,9 +62,9 @@ need the key, and paging monitors reference them:
 pulumi config set --secret goalertIntegrationKey '<Generic API key of the Datadog service in GoAlert>'
 ```
 
-**Run the import before the first `pulumi up`.** The program declares 35
+**Run the import before the first `pulumi up`.** The program declares 34
 monitors that already exist in Datadog. Until `pulumi import` has told Pulumi
-they exist, a deploy would create 35 duplicates — duplicate pages
+they exist, a deploy would create 34 duplicates — duplicate pages
 included.
 
 Adoption is a one-time local run. `pulumi import` reads Datadog and writes
@@ -92,7 +92,7 @@ and records options omitted during import.
 
 The gate is that preview:
 
-- **35 monitors + 1 synthetic test updated, in `message` and
+- **34 monitors + 1 synthetic test updated, in `message` and
   `renotifyInterval` only** — the routing move. The two AI-editing monitors,
   already deployed from this stack, update the same way.
 - **73 resources to create**: 64 monitors (25 prod threshold and anomaly, 19 GraphQL soup, 9
