@@ -309,3 +309,7 @@ call arrives. While Android 14+ blocks full-screen notifications, a toast
 offers **Allow** (system setting) or **Hide**. PiP is a native, device-dependent
 flow. Browser-only tests cannot validate Telecom, FCM wakeup or background media;
 follow the hardware matrix in [Android development](../development/android.md#native-calling).
+
+Synthetic emulator captures: [incoming screen](media/calls/android-incoming-call.png),
+[notification fallback](media/calls/android-call-notification.png), and
+[microphone permission after Answer](media/calls/android-call-microphone-permission.png).
