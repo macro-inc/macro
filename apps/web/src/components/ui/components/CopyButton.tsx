@@ -1,16 +1,21 @@
 import CheckCircle from '@icon/system/fill/check-circle-fill.svg';
+import type { PolymorphicProps } from '@kobalte/core/polymorphic';
 import { mergeRefs } from '@solid-primitives/refs';
 import {
+  children,
   createSignal,
   type JSX,
   onCleanup,
   onMount,
   Show,
   splitProps,
+  type ValidComponent,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { Button, type ButtonProps } from './Button';
 
-export type CopyButtonProps = ButtonProps;
+export type CopyButtonProps<T extends ValidComponent = 'button'> =
+  PolymorphicProps<T, Omit<ButtonProps, 'as'>>;
 
 const TRANSITION_MS = 160;
 const SUCCESS_MS = 1400;
@@ -21,10 +26,13 @@ const SUCCESS_MS = 1400;
  *
  * @do Return the clipboard promise from onClick so feedback waits for success.
  * @do Return false (or reject) when copying fails; report errors in the handler.
+ * @do Use as={ButtonGroup.Button} to render a segment in an action group.
  * @dont Discard the promise with `void` inside onClick.
  */
-export function CopyButton(props: CopyButtonProps) {
-  const [local, rest] = splitProps(props, ['onClick', 'children', 'ref']);
+export function CopyButton<T extends ValidComponent = 'button'>(
+  props: CopyButtonProps<T>
+) {
+  const [local, rest] = splitProps(props, ['onClick', 'children', 'ref', 'as']);
   const [feedback, setFeedback] = createSignal<JSX.CSSProperties>();
   let button!: HTMLButtonElement;
   let check: SVGSVGElement | undefined;
@@ -122,16 +130,22 @@ export function CopyButton(props: CopyButtonProps) {
     );
   }
 
-  return (
-    <Button
-      {...rest}
-      ref={mergeRefs((element) => (button = element), local.ref)}
-      on:click={onClick}
-    >
+  const content = children(() => (
+    <>
       {local.children}
       <Show when={feedback()}>
         {(style) => <FeedbackIcon style={style()} />}
       </Show>
-    </Button>
+    </>
+  ));
+  return (
+    <Dynamic
+      component={local.as ?? Button}
+      {...rest}
+      ref={mergeRefs((element) => (button = element), local.ref)}
+      on:click={onClick}
+    >
+      {content()}
+    </Dynamic>
   );
 }

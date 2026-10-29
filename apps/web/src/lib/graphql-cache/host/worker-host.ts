@@ -67,6 +67,7 @@ import { isUnambiguousCacheScope } from '../worker/stale-databases';
 import {
   CacheBootstrapExhaustedError,
   COORDINATOR_CONNECT_ATTEMPTS,
+  COORDINATOR_CONNECT_RETRY_DELAYS_MS,
   COORDINATOR_CONNECT_TIMEOUT_MS,
   STARTUP_RESPONSE_GRACE_MS,
 } from '../worker/startup';
@@ -594,6 +595,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         attempt < COORDINATOR_CONNECT_ATTEMPTS;
         attempt += 1
       ) {
+        // Cancellation may arrive after a retry timer fires, before this continuation.
+        if (initializationId !== initializationAttempt)
+          throw new CacheNavigationError();
+        if (state !== 'initializing')
+          throw new Error('cache worker host was disposed during startup');
         const current = getAdapter();
         let timer: ReturnType<typeof setTimeout> | undefined;
         try {
@@ -624,6 +630,28 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
             attempt + 1 === COORDINATOR_CONNECT_ATTEMPTS
           )
             throw error;
+          if (timer !== undefined) clearTimeout(timer);
+          const retryStartedAt = now();
+          let completed = false;
+          try {
+            await new Promise<void>((resolve, reject) => {
+              cancelRegistration = reject;
+              timer = setTimeout(
+                resolve,
+                COORDINATOR_CONNECT_RETRY_DELAYS_MS[attempt]
+              );
+            });
+            completed = true;
+          } finally {
+            telemetry.record({
+              name: 'graphql_cache.registration_retry',
+              operationCategory: 'initialization',
+              outcome: completed ? 'success' : 'abrupt',
+              errorCode: classifyCacheError(error),
+              count: attempt + 1,
+              durationMs: now() - retryStartedAt,
+            });
+          }
         } finally {
           if (timer !== undefined) clearTimeout(timer);
           cancelRegistration = undefined;

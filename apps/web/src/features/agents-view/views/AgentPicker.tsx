@@ -173,7 +173,7 @@ function DesktopAgentPicker(props: AgentPickerProps) {
             </Show>
             <For each={groups()}>
               {(group) => (
-                <Dropdown.Group class="bg-transparent py-0">
+                <Dropdown.Group class="py-0">
                   <Dropdown.GroupLabel class="h-6 font-medium text-ink-muted">
                     {group.label}
                   </Dropdown.GroupLabel>
@@ -215,20 +215,16 @@ function DesktopAgentPicker(props: AgentPickerProps) {
               </p>
             </Show>
             <Show when={props.loading}>
-              <div
-                role="status"
-                class="bg-menu px-3 py-2 text-xs text-ink-muted"
-              >
+              <div role="status" class="px-3 py-2 text-xs text-ink-muted">
                 Loading agents…
               </div>
             </Show>
-            <Dropdown.Group class="items-end bg-transparent px-1.5 pt-1 pb-0">
+            <Dropdown.Group class="items-end px-1.5 pt-1 pb-0">
               <Dropdown.Item
                 closeOnSelect
                 class={buttonClasses({
-                  variant: 'strong',
+                  variant: 'secondary',
                   size: 'sm',
-                  glass: false,
                   class: 'w-auto gap-1.5 data-highlighted:overlay-hover',
                 })}
                 onSelect={() => {

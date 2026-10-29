@@ -307,9 +307,7 @@ it('leaves before opening the calendar so a dialog around the card can close fir
       onNavigate={() => order.push('leave')}
     />
   ));
-  // The mocked Button forwards `label` as an attribute, not an accessible name.
-  const open = document.querySelector('button[label="Open in calendar"]');
-  if (!open) throw new Error('Open in calendar is missing');
+  const open = screen.getByRole('button', { name: 'Open in calendar' });
   fireEvent.click(open);
   expect(order).toEqual(['leave', 'open event']);
 });
@@ -327,8 +325,7 @@ it('asks for a new split when Open in calendar is shift-clicked', () => {
       openCalendar={(target) => opened.push(target.openInNewSplit)}
     />
   ));
-  const open = document.querySelector('button[label="Open in calendar"]');
-  if (!open) throw new Error('Open in calendar is missing');
+  const open = screen.getByRole('button', { name: 'Open in calendar' });
   fireEvent.click(open);
   fireEvent.click(open, { shiftKey: true });
   expect(opened).toEqual([false, true]);

@@ -12,6 +12,9 @@ vi.mock('@service-storage/client', () => ({
   storageServiceClient: { reminders: { getEmailFollowup: read } },
 }));
 vi.mock('../soup/cache', () => ({ refetchSoupEntity: vi.fn() }));
+vi.mock('@service-storage/graphql-soup', () => ({
+  graphqlCacheEnabled: () => true,
+}));
 vi.mock('../soup/graphql/active-queries', () => ({
   refreshActiveGraphqlSoupQueries: vi.fn(),
 }));

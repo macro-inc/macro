@@ -9,7 +9,7 @@ use crate::calendar_refresh::ConnectionGatewayCalendarRefresh;
 use crate::calendar_request_gate::RedisCalendarRequestGate;
 use crate::calendar_tokens::CalendarTokenProviderAdapter;
 use crate::outbound::email_api::{
-    EmailServiceTokenSource, GmailApi, RateBudget, RedisProviderRateLimiter,
+    EmailServiceTokenSource, GmailApi, RateBudget, RedisGmailRequestGate,
 };
 use anyhow::Context;
 use calendar_events::{
@@ -91,6 +91,7 @@ pub async fn run() -> anyhow::Result<()> {
         .gmail_inbox_sync_queue(&gmail_inbox_sync_queue)
         .gmail_inbox_sync_retry_queue(&gmail_inbox_sync_retry_queue)
         .gmail_ops_queue(&gmail_ops_queue)
+        .gmail_label_write_batches(config.gmail_label_write_batches_enabled)
         .email_backfill_queue(&backfill_queue)
         .email_scheduled_queue(&email_scheduled_queue)
         .sfs_uploader_queue(&sfs_uploader_queue)
@@ -121,8 +122,6 @@ pub async fn run() -> anyhow::Result<()> {
 
     let redis_client = crate::util::redis::RedisClient::new(
         redis_inner_client,
-        config.redis_rate_limit_reqs,
-        config.redis_rate_limit_reqs_backfill,
         config.redis_rate_limit_window_secs,
     );
 
@@ -203,7 +202,12 @@ pub async fn run() -> anyhow::Result<()> {
             auth_service_client.as_ref().clone(),
             sqs_client.as_ref().clone(),
         ),
-        RedisProviderRateLimiter::new(redis_client.clone(), RateBudget::Live),
+        RedisGmailRequestGate::new(
+            redis_client.inner.get_connection_manager().await.context(
+                "failed to get reconnecting redis connection for the gmail request gate",
+            )?,
+            RateBudget::Live,
+        ),
     );
     let redis_client = Arc::new(redis_client);
     let gmail_token_state = GmailTokenState::new(GmailTokenProviderImpl::new(
@@ -351,6 +355,16 @@ pub async fn run() -> anyhow::Result<()> {
             },
             access: entity_access_service.as_ref().clone(),
         }),
+        event_forward_sender: Arc::new(
+            email::domain::service::attachments::StagedAttachmentSender::new(
+                email_service.service(),
+                EmailPgRepo::new(db.clone()),
+                crate::outbound::draft_attachment_storage::DraftAttachmentS3 {
+                    s3: s3_client.clone(),
+                    bucket: config.attachment_bucket.to_string(),
+                },
+            ),
+        ),
         draft_attachments: Arc::new(email::domain::draft_attachments::DraftAttachmentService {
             repository: email::outbound::EmailPgRepo::new(db.clone()),
             storage: crate::outbound::draft_attachment_storage::DraftAttachmentS3 {

@@ -6,7 +6,7 @@ use std::time::Duration;
 fn provider_backoff_is_preserved_and_auth_failure_does_not_hot_loop() {
     let error = EmailApiError::RateLimited {
         retry_after: Some(Duration::from_secs(73)),
-        origin: RateLimitOrigin::Provider,
+        origin: RateLimitOrigin::Provider { concurrency: false },
     };
     assert_eq!(retry_seconds(&error), 73);
     assert!(retry_seconds(&EmailApiError::AuthRequired) >= 300);

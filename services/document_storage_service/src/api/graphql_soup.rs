@@ -144,6 +144,9 @@ fn insert_graphql_context_data(
     viewer_id: Option<Uuid>,
 ) {
     data.insert(state.clone());
+    let saved_views: std::sync::Arc<dyn saved_views::domain::SavedViewApi> =
+        std::sync::Arc::new(crate::service::saved_views::service(state.db.clone()));
+    data.insert(saved_views);
 
     let Some(macro_user_id) = macro_user_id else {
         return;

@@ -2,7 +2,9 @@
 
 `useBeforeLeave` runs when a navigation leaves the registering route, closes its
 pane, or changes an explicitly watched search namespace. Returning `false` keeps
-the current destination. Solid cleanup only unregisters the guard.
+the current destination. Solid cleanup only unregisters the guard. Routes that
+share a `mountKey` count as one route: moving between them keeps the view
+mounted and does not leave it.
 
 Use `context.onCommit(callback)` to stage a synchronous side effect that must run
 only after the navigation commits. Capture outgoing state while the guard runs;

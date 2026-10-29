@@ -365,7 +365,7 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
               We’re applying your Google permissions. Calendar events may take a
               few minutes to sync after you return.
             </p>
-            <Button variant="outline" size="sm" onClick={navigateAfterLink}>
+            <Button variant="secondary" size="sm" onClick={navigateAfterLink}>
               Back to app
             </Button>
           </div>

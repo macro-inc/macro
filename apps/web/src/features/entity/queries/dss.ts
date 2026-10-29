@@ -1,7 +1,10 @@
 /** Document-storage mutations used by entity surfaces. */
 
+import { databaseEntityMessage } from '@app/features/database/core/write-failure';
 import { scheduledActionKeys } from '@app/features/routines/queries/keys';
+import { trashDatabase } from '@block-database/queries/trash-database';
 import {
+  canDuplicateItemType,
   copyItem,
   deleteItem,
   moveToFolder,
@@ -35,6 +38,7 @@ import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
 import { permanentlyDeleteEntity } from '@queries/storage/entity-mutations';
 import { callServiceClient } from '@service-call/client';
 import { scheduledActionClient } from '@service-scheduled-action/client';
+import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
 import { useMutation } from '@tanstack/solid-query';
 import { batch } from 'solid-js';
 import { type EntityData, getEntityProjectId } from '../types/entity';
@@ -104,7 +108,8 @@ export function createBulkDeleteDssItemsMutation() {
       type === 'document' ||
       type === 'project' ||
       type === 'call' ||
-      type === 'routine'
+      type === 'routine' ||
+      type === 'database'
     );
   };
   const isCurrentContext = (context: unknown) =>
@@ -139,6 +144,17 @@ export function createBulkDeleteDssItemsMutation() {
           return throwOnErr(() =>
             scheduledActionClient.deleteSchedule({ scheduleId: e.id })
           ).then(() => true);
+        }
+        if (e.type === 'database') {
+          await throwOnErr(() =>
+            trashDatabase(getEntityGraphqlClient(), e.id).mapErr((failure) => [
+              {
+                code: failure.kind,
+                message: databaseEntityMessage(failure, 'delete'),
+              },
+            ])
+          );
+          return true;
         }
         return deleteItem({ id: e.id, itemType: e.type });
       });
@@ -401,11 +417,11 @@ function getSoupEntityProjectId(entityId: string): string | undefined {
 }
 
 export function createBulkCopyDssEntityMutation() {
-  // Only support chat + document, same as single-copy version
-  const isUnsupportedEntity = (entity: EntityData) => {
-    const type = entity.type;
-    return type !== 'chat' && type !== 'document';
-  };
+  const isUnsupportedEntity = (entity: EntityData) =>
+    (entity.type !== 'chat' &&
+      entity.type !== 'document' &&
+      entity.type !== 'project') ||
+    !canDuplicateItemType(entity.type);
 
   return useMutation(() => ({
     mutationFn: async ({
@@ -422,7 +438,7 @@ export function createBulkCopyDssEntityMutation() {
       const results = await Promise.all(
         entities.map((e) =>
           copyItem({
-            itemType: e.type as 'document' | 'chat',
+            itemType: e.type,
             id: e.id,
             name: typeof name === 'function' ? name(e.name) : name,
           })
@@ -448,8 +464,8 @@ export function createBulkCopyDssEntityMutation() {
 
     onSettled: (data, error, { entities }) => {
       if (error) {
+        // The copy action shows the failure, with the folder-size hint.
         console.error(`Failed bulk copy`, entities, data, error);
-        toast.failure('Failed to copy items');
       }
 
       // Trigger refetch so new items appear

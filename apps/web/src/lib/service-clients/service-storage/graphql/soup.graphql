@@ -393,6 +393,10 @@ fragment SoupPropertyValueFields on GraphqlPropertyValue {
 	... on GraphqlDatePropertyValue {
 		dateValue: value
 	}
+	... on GraphqlDateRangePropertyValue {
+		rangeStart: start
+		rangeEnd: end
+	}
 	... on GraphqlSelectOptionPropertyValue {
 		optionIds
 	}
@@ -429,7 +433,10 @@ fragment SoupNotificationStateFields on GraphqlNotification {
 	__typename
 	id
 	eventType
+	# The Soup cache reads `entityType` by its schema name; never alias it.
 	entityType
+	# The canonical type also covers entities outside Soup (external chats).
+	targetEntityType
 	entityId
 	sent
 	state
@@ -466,6 +473,11 @@ fragment SoupNotificationMetadataFields on GraphqlNotifEvent {
 # REST metadata (including mention/reply content) remains available to consumers.
 fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 	__typename
+	... on GraphqlExternalChatMessageMetadata {
+		externalChatProvider: provider
+		externalChatName: chatName
+		externalChatMessageId: messageId
+	}
 	... on GraphqlChannelMentionMetadata {
 		channelMentionMessageId: messageId
 		channelMentionMessageContent: messageContent

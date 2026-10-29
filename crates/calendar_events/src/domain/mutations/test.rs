@@ -322,6 +322,14 @@ impl CalendarRepository for FakeRepo {
         Ok(self.export.clone())
     }
 
+    async fn forwarded_copy(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+    ) -> Result<Option<crate::domain::ics::ForwardedCopy>, rootcause::Report> {
+        Ok(None)
+    }
+
     async fn open_join_request(
         &self,
         event_id: Uuid,

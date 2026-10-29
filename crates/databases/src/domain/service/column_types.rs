@@ -6,6 +6,7 @@ use crate::domain::catalog::PropertyType;
 use crate::domain::models::{ConversionRefusal, Misfit, MisfitGroup, RowId};
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_properties::service::property_value::PropertyValue;
+use models_properties::shared::DateRange;
 
 /// The most characters of a value quoted in a refusal.
 const MAX_EXAMPLE_LEN: usize = 40;
@@ -253,6 +254,12 @@ impl<'a> Converter<'a> {
                 PropertyValue::Str(value) => date(&value).map(PropertyValue::Date),
                 _ => Err(Misfit::NotDate),
             },
+            DataType::DateRange => match value {
+                PropertyValue::DateRange(range) => Ok(PropertyValue::DateRange(range)),
+                PropertyValue::Date(date) => Ok(PropertyValue::DateRange(DateRange::at(date))),
+                PropertyValue::Str(value) => date_range(&value).map(PropertyValue::DateRange),
+                _ => Err(Misfit::NotDateRange),
+            },
             DataType::Entity => Err(Misfit::OtherReference),
             DataType::Link | DataType::SelectString | DataType::SelectNumber | DataType::Tag => {
                 unreachable!("options and links are converted by convert")
@@ -315,6 +322,11 @@ fn text(value: PropertyValue) -> Option<String> {
             Some(value.date_naive().to_string())
         }
         PropertyValue::Date(value) => Some(value.to_rfc3339()),
+        PropertyValue::DateRange(range) => Some(format!(
+            "{}/{}",
+            text(PropertyValue::Date(range.start()))?,
+            text(PropertyValue::Date(range.end()))?
+        )),
         _ => None,
     }
 }
@@ -332,6 +344,17 @@ fn date(value: &str) -> Result<chrono::DateTime<Utc>, Misfit> {
                 .map(|date| date.and_utc())
         })
         .ok_or(Misfit::NotDate)
+}
+
+/// `start/end`, two dates or date-times as [`date`] reads them, ending no
+/// earlier than it starts; or one date, the range of that instant.
+fn date_range(value: &str) -> Result<DateRange, Misfit> {
+    match models_databases::DateRange::parse_interval(value, |end| date(end).ok()) {
+        Some(range) => DateRange::new(range.start, range.end).map_err(|_| Misfit::NotDateRange),
+        None => date(value)
+            .map(DateRange::at)
+            .map_err(|_| Misfit::NotDateRange),
+    }
 }
 
 /// A complete http or https URL.

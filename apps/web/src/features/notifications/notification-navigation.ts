@@ -9,7 +9,7 @@ import {
 import { prefetchChannelTarget } from '@channel/queries/prefetch-channel-target';
 import { contentReference } from '@components/app/split-layout/content-reference';
 import type {
-  OpenSplitResult,
+  SplitContent,
   SplitHandle,
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
@@ -20,6 +20,7 @@ import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import {
   enableCalendarUi,
   enableProjects,
+  enableWhatsappLinked,
   isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
@@ -35,6 +36,7 @@ import type { PushNotificationNavigation } from '@service-notification/generated
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import { shareEntity } from '../access-requests/core/types';
+import { externalChatContent } from '../external-view/hosted-content';
 import { projectRouteId } from '../projects/core/route';
 import {
   getDocumentCommentLocation,
@@ -66,16 +68,16 @@ async function goToLocationInSplit(
 }
 
 /** Opens or activates the requested content from the source split. */
-function openSplitIfNotOpen(
+type OpenOptions = {
+  newSplit?: boolean;
+  sourceHandle?: SplitHandle;
+  onApplied?: VoidFunction;
+};
+
+function openContent(
   layoutManager: SplitManager,
-  type: BlockName | BlockAlias | 'component',
-  id: string,
-  options: {
-    newSplit?: boolean;
-    params?: Record<string, unknown>;
-    sourceHandle?: SplitHandle;
-    onApplied?: VoidFunction;
-  } = {}
+  content: SplitContent,
+  options: OpenOptions
 ) {
   let onApplied = options.onApplied;
   const reportApplied = () => {
@@ -83,25 +85,38 @@ function openSplitIfNotOpen(
     onApplied = undefined;
     callback?.();
   };
-  const reportImmediateResult = (result: OpenSplitResult | undefined) => {
-    if (!result) return;
-    if (result.status === 'opened' || result.status === 'reused') {
-      reportApplied();
-    }
-  };
+  const result = layoutManager.openWithSplit(content, {
+    activate: true,
+    referredFrom: null,
+    preferNewSplit: options.newSplit,
+    handle: options.sourceHandle,
+    ...(options.onApplied ? { onApplied: reportApplied } : {}),
+  });
+  if (result?.status === 'opened' || result?.status === 'reused')
+    reportApplied();
+}
+
+/** Chats open in External's main pane; the chat's route claim reuses an open one. */
+function openExternalChat(
+  layoutManager: SplitManager,
+  chatId: string,
+  options: OpenOptions
+) {
+  openContent(layoutManager, externalChatContent(chatId), options);
+}
+
+function openSplitIfNotOpen(
+  layoutManager: SplitManager,
+  type: BlockName | BlockAlias | 'component',
+  id: string,
+  options: OpenOptions & { params?: Record<string, unknown> } = {}
+) {
   const existing = layoutManager.getSplitByContent(type, id);
   if (existing) {
     existing.activate();
-    reportApplied();
+    options.onApplied?.();
   } else {
-    const result = layoutManager.openWithSplit(contentReference(type, id), {
-      activate: true,
-      referredFrom: null,
-      preferNewSplit: options.newSplit,
-      handle: options.sourceHandle,
-      ...(options.onApplied ? { onApplied: reportApplied } : {}),
-    });
-    reportImmediateResult(result);
+    openContent(layoutManager, contentReference(type, id), options);
   }
   if (options.params && type !== 'component') {
     goToLocationInSplit(layoutManager, type, id, options.params).catch(
@@ -226,6 +241,15 @@ function getSupportedHandler(
               onApplied,
             })
       )
+      .with('external_chat_message', () => {
+        if (!isFeatureEnabled(enableWhatsappLinked)) return null;
+        return async (lm: SplitManager, newSplit: boolean = false) =>
+          openExternalChat(lm, notification.entity_id, {
+            newSplit,
+            sourceHandle,
+            onApplied,
+          });
+      })
       .with('new_email', () => {
         const meta = notification.notification_metadata;
         if (meta.tag !== 'new_email') return null;
@@ -258,7 +282,12 @@ function getSupportedHandler(
           notification.entity_type,
           notification.entity_id
         );
-        if (!target) return null;
+        if (
+          !target ||
+          (target.entityType === 'external_chat' &&
+            !isFeatureEnabled(enableWhatsappLinked))
+        )
+          return null;
         return async (lm: SplitManager, newSplit = false) =>
           Telemetry.span('access_requests.notification.open', async (span) => {
             span.setAttr('entity.id', target.entityId);
@@ -318,24 +347,26 @@ function getSupportedHandler(
                     )
                   : undefined;
               const block =
-                target.entityType === 'initiative'
-                  ? 'initiative'
-                  : itemToBlockName({
-                      type:
-                        target.entityType === 'email_thread'
-                          ? 'email'
-                          : target.entityType,
-                      fileType:
-                        document?.fileType ??
-                        entity?.fileType ??
-                        meta.content.fileType ??
-                        undefined,
-                      subType:
-                        document?.subType &&
-                        document.subType !== 'initiative_description'
-                          ? { type: document.subType }
-                          : undefined,
-                    });
+                target.entityType === 'external_chat'
+                  ? 'external_chat'
+                  : target.entityType === 'initiative'
+                    ? 'initiative'
+                    : itemToBlockName({
+                        type:
+                          target.entityType === 'email_thread'
+                            ? 'email'
+                            : target.entityType,
+                        fileType:
+                          document?.fileType ??
+                          entity?.fileType ??
+                          meta.content.fileType ??
+                          undefined,
+                        subType:
+                          document?.subType &&
+                          document.subType !== 'initiative_description'
+                            ? { type: document.subType }
+                            : undefined,
+                      });
               const applied = () => {
                 onApplied?.();
                 if (meta.tag === 'entity_access_requested')
@@ -354,14 +385,24 @@ function getSupportedHandler(
                   });
               };
               span.setAttr('access_requests.outcome', 'navigation_requested');
-              openSplitIfNotOpen(
-                lm,
-                block === 'initiative' ? 'component' : block,
-                block === 'initiative'
-                  ? projectRouteId({ id: target.entityId, section: 'overview' })
-                  : target.entityId,
-                { newSplit, sourceHandle, onApplied: applied }
-              );
+              if (block === 'external_chat')
+                openExternalChat(lm, target.entityId, {
+                  newSplit,
+                  sourceHandle,
+                  onApplied: applied,
+                });
+              else
+                openSplitIfNotOpen(
+                  lm,
+                  block === 'initiative' ? 'component' : block,
+                  block === 'initiative'
+                    ? projectRouteId({
+                        id: target.entityId,
+                        section: 'overview',
+                      })
+                    : target.entityId,
+                  { newSplit, sourceHandle, onApplied: applied }
+                );
             } catch {
               span.setAttr('access_requests.outcome', 'error');
               span.error('Access-request notification could not be opened');

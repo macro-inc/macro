@@ -105,6 +105,7 @@ impl<C: CustomerRepository> PlanGateway for StripePlanGateway<C> {
         Ok(PersonalSubscription {
             id: subscription.id.to_string(),
             plan,
+            trialing: subscription.status == stripe::SubscriptionStatus::Trialing,
         })
     }
     async fn apply(
@@ -125,7 +126,11 @@ impl<C: CustomerRepository> PlanGateway for StripePlanGateway<C> {
                     .await
             }
             PlanAction::KeepCurrent => self.customer.schedule_seat_plan(&id, user, None).await,
-            PlanAction::Upgrade => self.customer.upgrade_personal_plan(&id, target).await,
+            PlanAction::Upgrade { end_trial } => {
+                self.customer
+                    .upgrade_personal_plan(&id, target, end_trial)
+                    .await
+            }
         }
         .map_err(anyhow::Error::from)?;
         Ok(())

@@ -13,7 +13,7 @@ it('pairs the homepage unification video with its clean image and X image card',
   }).join('');
   expect(
     document.querySelector('meta[property="og:video"]')?.getAttribute('content')
-  ).toMatch(/\/og\/home-unified-2026-10-23\.mp4$/);
+  ).toMatch(/\/og\/home-unified-2026-10-27\.mp4$/);
   expect(
     document
       .querySelector('meta[property="og:video:type"]')

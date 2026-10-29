@@ -227,11 +227,13 @@ const InlineFormatButton = (props: {
   const isActive = () => isInlineFormatActive(props.selection(), props.format);
   return (
     <Button
-      label={InlineLabels[props.format]}
-      shortcut={InlineShortcuts[props.format]}
+      aria-label={InlineLabels[props.format]}
+      tooltip={{
+        content: InlineLabels[props.format],
+        shortcut: InlineShortcuts[props.format],
+      }}
       size={props.size ?? 'icon-sm'}
-      variant={isActive() ? 'accent' : 'ghost'}
-      depth={3}
+      variant={isActive() ? 'primary' : 'ghost'}
       onClick={(e: MouseEvent | KeyboardEvent) =>
         props.onClick(e as MouseEvent)
       }
@@ -281,10 +283,9 @@ export const ElementFormatButton = (props: {
     <Button
       tooltip={name}
       size={props.size ?? 'icon-sm'}
-      depth={3}
       variant={
         isElementFormatActive(props.selection(), props.format)
-          ? 'accent'
+          ? 'primary'
           : 'ghost'
       }
       onClick={(e: MouseEvent | KeyboardEvent) =>
@@ -523,14 +524,13 @@ export function FormatTools(props: {
     return (
       <Dropdown open={menuOpen()} onOpenChange={setMenuOpen}>
         <Dropdown.Trigger
-          variant={isActive() ? 'accent' : 'ghost'}
+          variant={isActive() ? 'primary' : 'ghost'}
           size={buttonSize()}
-          depth={3}
-          tooltip={'Text Styles'}
+          tooltip="Text Styles"
           disabled={buttonIsDisabled()}
           tabIndex={-1}
         >
-          <TextAA />
+          <TextAA class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Dropdown.Trigger>
         <Dropdown.Content
           onCloseAutoFocus={() => {
@@ -586,14 +586,13 @@ export function FormatTools(props: {
     return (
       <Dropdown open={menuOpen()} onOpenChange={setMenuOpen}>
         <Dropdown.Trigger
-          variant={isActive() ? 'accent' : 'ghost'}
+          variant={isActive() ? 'primary' : 'ghost'}
           size={buttonSize()}
-          depth={3}
           tooltip="Text Styles"
           disabled={props.buttonIsDisabled()}
           tabIndex={-1}
         >
-          <TextAA />
+          <TextAA class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Dropdown.Trigger>
         <Show when={!props.buttonIsDisabled()}>
           <Dropdown.Content
@@ -642,11 +641,10 @@ export function FormatTools(props: {
               (format) => !props.excludes?.includes(format)
             )
           )
-            ? 'accent'
+            ? 'primary'
             : 'ghost'
         }
         size={buttonSize()}
-        depth={3}
         tooltip={props.label ?? 'More Formats'}
         disabled={buttonIsDisabled()}
         tabIndex={-1}
@@ -690,11 +688,10 @@ export function FormatTools(props: {
       <Dropdown.Trigger
         variant={
           hasActiveElementFormat(selection(), props.elements)
-            ? 'accent'
+            ? 'primary'
             : 'ghost'
         }
         size={buttonSize()}
-        depth={3}
         tooltip={props.label ?? 'More Formats'}
         disabled={buttonIsDisabled()}
         tabIndex={-1}
@@ -755,12 +752,11 @@ export function FormatTools(props: {
         <Dropdown.Trigger
           variant="ghost"
           size={buttonSize()}
-          depth={3}
           tooltip="More formatting"
           disabled={buttonIsDisabled()}
           tabIndex={-1}
         >
-          <DotsThreeLarge />
+          <DotsThreeLarge class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Dropdown.Trigger>
         <Show when={!buttonIsDisabled()}>
           <Dropdown.Content
@@ -822,7 +818,6 @@ export function FormatTools(props: {
           variant="ghost"
           size="sm"
           class="gap-1"
-          depth={3}
           tooltip="Text style"
           disabled={buttonIsDisabled()}
           tabIndex={-1}
@@ -889,7 +884,6 @@ export function FormatTools(props: {
           <Button
             variant="ghost"
             size={buttonSize()}
-            depth={3}
             onPointerDown={(e: PointerEvent) => e.preventDefault()}
             onClick={(e) => {
               if (!selection()?.hasLinks && props.onRequestLink) {
@@ -914,24 +908,22 @@ export function FormatTools(props: {
             <Button
               variant="ghost"
               size={buttonSize()}
-              depth={3}
               tooltip="Merge cells"
               onClick={handleMergeCells}
               disabled={buttonIsDisabled()}
             >
-              <CornersIn />
+              <CornersIn class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </Show>
           <Show when={selection()?.onSplittableCells}>
             <Button
               variant="ghost"
               size={buttonSize()}
-              depth={3}
               tooltip="Split cell"
               onClick={handleSplitCell}
               disabled={buttonIsDisabled()}
             >
-              <CornersOut />
+              <CornersOut class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </Show>
         </Show>
@@ -1054,7 +1046,6 @@ export function FormatTools(props: {
             <Button
               variant="ghost"
               size="icon-sm"
-              depth={3}
               onPointerDown={(e: PointerEvent) => e.preventDefault()}
               onClick={handleLink}
               tooltip={selection()?.hasLinks ? 'Remove Link' : 'Insert Link'}
@@ -1069,7 +1060,6 @@ export function FormatTools(props: {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                depth={3}
                 tooltip="Comment"
                 onClick={(e) => {
                   e.preventDefault();
@@ -1078,7 +1068,7 @@ export function FormatTools(props: {
                 }}
                 disabled={commentButtonIsDisabled()}
               >
-                <ChatTeardrop />
+                <ChatTeardrop class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               </Button>
             </Show>
             <VerticalBar />
@@ -1089,12 +1079,11 @@ export function FormatTools(props: {
               <Dropdown.Trigger
                 variant="ghost"
                 size="icon-sm"
-                depth={3}
                 tooltip="More"
                 disabled={buttonIsDisabled()}
                 tabIndex={-1}
               >
-                <PlusSquare />
+                <PlusSquare class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               </Dropdown.Trigger>
               <Show when={!buttonIsDisabled()}>
                 <Dropdown.Content
@@ -1165,7 +1154,6 @@ export function FormatTools(props: {
           <Button
             variant="ghost"
             size="icon-sm"
-            depth={3}
             tooltip="Comment"
             onClick={(e) => {
               e.preventDefault();
@@ -1174,7 +1162,7 @@ export function FormatTools(props: {
             }}
             disabled={commentButtonIsDisabled()}
           >
-            <ChatTeardrop />
+            <ChatTeardrop class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </Show>
       </>

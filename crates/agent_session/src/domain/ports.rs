@@ -530,7 +530,8 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         visibility: SessionVisibility,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Persist the user-facing session name. Idempotent.
+    /// Persist a name a person chose. Idempotent. The name stops being
+    /// generated, so retitling never replaces it.
     fn set_name(&self, id: AgentSessionId, name: &str) -> impl Future<Output = Result<()>> + Send;
 
     /// Archive or unarchive a session. Idempotent.
@@ -553,6 +554,24 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     fn set_name_if_default(
         &self,
         id: AgentSessionId,
+        name: &str,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// The session's name while it is a generated one that retitling may
+    /// replace: `None` once a person named the session, while it still has
+    /// the default, or when it is archived.
+    fn generated_name(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<String>>> + Send;
+
+    /// Replace a generated name only while the session is still called
+    /// `current`, that name is still generated, and the session is not
+    /// archived. Whether the name changed.
+    fn replace_generated_name(
+        &self,
+        id: AgentSessionId,
+        current: &str,
         name: &str,
     ) -> impl Future<Output = Result<bool>> + Send;
 
@@ -1122,7 +1141,8 @@ impl SessionTurnObserver for LateBoundTurnObserver {
     }
 }
 
-/// Generates a concise display name from a session's first prompt.
+/// Generates a concise display name from a session's first prompt, and
+/// replaces it once the conversation has outgrown it.
 pub trait AgentSessionNameGenerator: Send + Sync + 'static {
     /// Generate a name, or `None` when naming is disabled for this service.
     fn generate_name(
@@ -1130,6 +1150,19 @@ pub trait AgentSessionNameGenerator: Send + Sync + 'static {
         session: &AgentSession,
         initial_prompt: &str,
     ) -> impl Future<Output = Result<Option<String>, rootcause::Report>> + Send;
+
+    /// A name that describes the conversation better than `current`, or
+    /// `None` to keep it. Asked after every finished turn of a session whose
+    /// name was generated, so a name should change only when it has clearly
+    /// stopped fitting. Keeps every name by default.
+    fn retitle(
+        &self,
+        _session: &AgentSession,
+        _current: &str,
+        _conversation: &super::retitle::ConversationDigest,
+    ) -> impl Future<Output = Result<Option<String>, rootcause::Report>> + Send {
+        async { Ok(None) }
+    }
 }
 
 /// Disables automatic agent-session naming.

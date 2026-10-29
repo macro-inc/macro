@@ -1,0 +1,1 @@
+Physical venue, street address or video meeting platform explicitly named for the event. Null if no location was supplied.

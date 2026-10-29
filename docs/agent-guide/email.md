@@ -37,10 +37,13 @@ Chat sidebar tabs. Selecting Inbox
 from another mailbox opens Signal; selecting it while in Noise keeps Noise.
 The desktop sidebar continues with `Favorites`, `Drafts`, `Sent`, `Scheduled`,
 and `Reminders` (when reminders are enabled), followed by a **Library** section containing `All mail`,
-`Archived`, and `Shared`, then **Tags**. Sidebar number and sequential shortcuts
-follow that order. Calendar mail remains available through the calendar filter
-and existing Calendar route. Mobile keeps its original tabs and order, including
-separate Signal, Noise, and Calendar tabs.
+`Archived`, and `Shared`, then **Tags**. Sidebar number shortcuts follow that
+order; `Tab` and `Shift+Tab` toggle between Signal and Noise (from another
+mailbox, `Tab` opens Signal and `Shift+Tab` Noise). While the email list itself
+has focus, `Tab` moves browser focus instead; use `g i` or `g o`. Calendar
+mail remains available through the calendar filter and existing Calendar route.
+Mobile keeps its original tabs and order, including separate Signal, Noise, and
+Calendar tabs.
 Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email`; Gmail/Google Workspace and enabled Outlook connections
 use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` or `/` within the surface.
@@ -145,6 +148,15 @@ that start within 40px of the left edge are left to swipe-back navigation.
 Search results use the same reserved column, with actions aligned to the first
 line; snippets, highlighted matches, and expanded hits remain unobstructed.
 
+The list holds still while mail changes under it. Scrolled down, new mail or a
+thread marked done elsewhere above the viewport leaves the rows on screen where
+they are; at the top, new mail appears at the top. Cache writes (the mail
+backfill, read marks, thread loads) and mutation refreshes keep the list as deep
+as it was loaded, and Load More keeps working while they land. Verify by
+scrolling past the first 100 threads, then marking a thread done and letting new
+mail arrive (locally: insert a thread and publish `email.message_received` on
+`macro.email`).
+
 When switching email tabs or inboxes, the list shows current-query cached results
 or a scoped `Loading email` spinner until they arrive—not the previous tab's rows
 under the new heading. Active searches also hide retained results and show loading
@@ -214,20 +226,28 @@ the server resolves that inbox's UNREAD label and returns the canonical thread
 (`__typename`, `id`, `isRead`) to reconcile the cache. The row should flip immediately
 even when the client labels cache is missing or stale—no label fetch precedes the
 optimistic update. Queued read/unread writes retain revalidation descriptors for
-active flat and grouped lists, including loaded continuation pages. Once replay
-commits (even after a reload), those queries refresh from the server; they should
-not refetch over the optimistic state merely because a write was queued. Trash
+the active lists the cache does not maintain (grouped lists, filters it cannot
+evaluate, a Mail page the cache cannot evaluate locally), including loaded
+continuation pages. Once replay commits (even after a reload), only those queries
+refresh from the server; they should not refetch over the optimistic state merely
+because a write was queued. Trash
 and its Undo refresh mounted GraphQL lists after the server operation finishes.
 The GraphQL-disabled REST path is unchanged. With GraphQL enabled, archive-based
 Mark Done, Mark Not Done, and Undo/Redo use `setEmailThreadArchived`: `inboxVisible`
 updates optimistically in the normalized cache, and each reversal is a distinct
 ordered queue entry. The server resolves the thread's owning/delegated inbox;
-no client INBOX-label lookup is needed. Confirmed writes revalidate mounted lists,
-including continuation pages; queued writes retain those descriptors for replay
-without refetching over optimism. Callers preserve the queued disposition and
+no client INBOX-label lookup is needed. Confirmed writes revalidate the mounted
+lists the cache does not maintain, including continuation pages; queued writes
+retain those descriptors for replay without refetching over optimism. Callers preserve the queued disposition and
 skip REST/TanStack email invalidations as well, including Done/Undo batches and
 thread archive replay. Committed writes and failed non-queued batches still
 reconcile. Permanent failures roll back the failed intent.
+Mark Done and Mark Not Done on a selection, even of one row, send one
+`setEmailThreadsArchived` per 100 threads (REST: `PATCH /email/threads/archived`).
+The server sends Gmail one label write per inbox, for only the messages whose
+labels change, and lists the threads it could not change; those settle as
+rejected, with their unchanged state reloaded, while their siblings stay done.
+A database or queue outage that changes nothing fails the whole request.
 Check Signal/Noise removal and All's done indicator, then Undo/Redo, including an
 offline action followed by reconnect. Also wait for provider/metadata synchronization
 before Undo, and repeat after reloading: an archived received thread can lose its
@@ -239,9 +259,17 @@ remain restored. Only accepted
 threads get their notifications restored. Notification or list-refresh failures
 warn without rolling back accepted unarchives. Verify mixed committed/queued/
 rejected selections, partial-success counts, and that a queued sibling prevents
-shared-list refetch even when notification restoration fails. GraphQL reversals
-rely on normalized writes and their durable revalidation, not an extra REST Soup
-refetch after rows settle. Verify the open-thread header too: with GraphQL enabled,
+shared-list refetch even when notification restoration fails. With the normalized
+cache, a list the cache maintains is not read again after Done, Not Done, Undo,
+read/unread, an entity notification update or a draft save: the optimistic write
+and the returned records update it, and it re-evaluates from the cache (FE-58).
+Every Mail tab is maintained once its local evaluation succeeds; grouped lists and
+filters the cache cannot evaluate are still read again. A reminder reads its
+thread again plus Home's unread presence, whose `unreadReminders` edge no cached
+write fills. Home's work-feed Done and Undo return no notification rows, so they
+still read every notification reader again. In the
+network panel one `e` in the Email view sends its two mutations and no `Soup`,
+`SoupNotifications` or `ChannelUnreadPresence` query. Verify the open-thread header too: with GraphQL enabled,
 Mark Not Done remains available for an archived thread whose inbox timestamp is
 missing; the server decides whether its received-message history allows restoration.
 The REST path retains its timestamp preflight, whole-batch handling, notification
@@ -267,7 +295,8 @@ from mutation reply correctness. GraphQL application errors, including a failed
 post-commit reply load, release the queued mutation rather than retrying forever.
 Transport failures retain the existing retry policy. Draft recovery preserves local
 content and offers explicit Retry using the original handle. Deploy
-the backend schema containing `setEmailThreadArchived` before this client.
+the backend schema containing `setEmailThreadArchived` and
+`setEmailThreadsArchived` before this client.
 Browser WASM and native cache builds must include the regenerated schema metadata;
 native offline archive support therefore requires a full app build, not just OTA.
 
@@ -296,8 +325,8 @@ retain their Inbox scope, so archived mail is found in Archived (All + Done).
 
 A `Showing cached mail` notice identifies results over synchronized metadata, not a
 claim of complete mailbox coverage. These lists paginate locally beyond the first
-page without a server cursor. Filter, revision, or engine-generation changes restart
-the local page chain; online server results take over again when available. After
+page without a server cursor. Filter or engine-generation changes restart
+the local page chain, and a cache write re-reads it through the last row already loaded; online server results take over again when available. After
 reconnecting, `Load more` follows the same server page chain as the displayed rows,
 not a leftover local cursor. Account choices are cached in the viewer-scoped GraphQL catalog. Timestamp ordering and date
 headers use the selected Mail view's indexed timestamps, not a preview cached from
@@ -329,7 +358,7 @@ schema additions before the client: it selects canonical message eligibility/rec
 fields, body-free canonical preview references, and viewer-relative share facts.
 The `soup-mail-v3` property-aware profile and new backfill checkpoint rebuild Mail proof without
 changing the persisted mutation queue format. Native Tauri maintains the same
-predicate projections and revision-bound local page contract as the browser.
+predicate projections and local page contract as the browser.
 Checkpoint v14 restarts older scans to populate property-aware indexes without wiping
 queued work. A background network failure does not hide a usable current-query
 cached Mail page; server-reported GraphQL errors still surface.
@@ -381,7 +410,11 @@ where the list is already beside the thread). The subject, tags and
 participants stay put while only the messages scroll. Pressing `Escape` in the open thread
 with focus outside any input does the same once there is nothing left to unwind
 (an open reply, an expanded body, or a focused message each take one `Escape`
-first); the list keeps the row you came from focused. The `⋯` email title menu
+first); the list keeps the row you came from focused and comes back at the same
+scroll position, scrolling only if j/k in the thread moved focus off screen. If
+the focused row leaves the list without a list `e` (a reply in Signal marks it
+done, or another device archives it), focus moves to the row that took its
+place, not the first row. The `⋯` email title menu
 right after the subject's last word, in place of Copy subject, holds **Ask AI**,
 **Create a Task**, and the other thread actions. On desktop, **Mark as unread**, **Mark done**,
 and reminders share one outlined group at the right of that header. Separate
@@ -525,7 +558,23 @@ syncing text appears, including offline. A failure shows a banner inside the
 composer, above the recipients, with **Retry** (or **Retry discard**); it never
 appears in the toolbar or the mobile header actions. Verify the banner on mobile
 sits below the header and that editing while failed continues saving locally
-without repeatedly submitting the rejected request.
+without repeatedly submitting the rejected request. If sender metadata is still
+unavailable, the local draft is retained; reconnect and select an inbox before
+editing to resume synchronization.
+
+Unqueued first-use drafts also appear in mobile name search and the current Mail
+view's Drafts search, without requiring a cached thread record. A working copy
+preserves confirmed thread flags for facet filters, and a subject mismatch never
+hides a matching server body or cached sender hit. Inbox, alias, and facet
+selections still apply; a draft without an inbox is visible with All inboxes
+selected. Sender metadata warms alongside GraphQL backfill, before opening a
+composer. Test an empty sender catalog too: create a draft offline, restart, find
+it in Drafts/name search, and reopen its subject and body. Reconnect, select the
+sending inbox, edit, and verify it syncs without a duplicate row. Reopen an
+unqueued local draft while online too: its temporary thread's server 404 must
+not hide the local composer or mark that temporary ID read. Confirmed server
+threads still respect deletion/access errors; local working copies do not
+override authentication or permission failures.
 Local draft storage reopens unexpectedly closed IndexedDB connections. If creating
 a transaction fails because the connection is closing, it retries once before
 running any writes. When WebKit aborts a started transaction (typically while the
@@ -1095,3 +1144,10 @@ Storage/schema failures that cannot prove preservation show recovery/update
 instructions instead of repeatedly reopening potentially damaged storage.
 
 Date-grouped email lists start directly with today's messages; Today is not shown as a leading group heading. Older date headings remain visible and ordering still uses the server's thread activity timestamp.
+
+## Dragging sidebar tags
+
+On desktop, drag a tag from the sidebar onto an email row. Its existing tags
+remain; dropping onto a selected row applies the tag to every taggable selected
+row. The dragged chip shows the tag color and name, and the target gets an outline.
+Clicking the tag still filters the list. Mobile uses the existing tag menu.

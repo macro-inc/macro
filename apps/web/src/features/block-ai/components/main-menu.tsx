@@ -28,16 +28,16 @@ export function MainMenu(props: { items: (MenuItem | 'divider')[] }) {
       }}
     >
       <Button
+        aria-label="Main menu"
         variant="ghost"
         size="icon-md"
-        label="Main menu"
         tooltip={open() ? undefined : 'Main menu'}
         aria-haspopup="menu"
         aria-expanded={open()}
         data-testid="ai-main-menu"
         onClick={() => setOpen((o) => !o)}
       >
-        <List />
+        <List class="size-4 touch:size-6 shrink-0 pointer-events-none" />
       </Button>
       <Show when={open()}>
         <div

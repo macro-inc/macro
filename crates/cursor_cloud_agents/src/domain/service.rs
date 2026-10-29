@@ -39,7 +39,7 @@
 mod test;
 
 use crate::domain::artifact::{ArtifactListing, CollectedArtifact, inline_text, mime_type};
-use crate::domain::error::{PromptRefusal, SessionError};
+use crate::domain::error::{PromptRefusal, RunFailed, SessionError};
 use crate::domain::event::CursorEvent;
 use crate::domain::journal::{CursorJournal, JournalEntry, JournalInput, ReplayMachine};
 use crate::domain::model::{
@@ -47,9 +47,10 @@ use crate::domain::model::{
     ModelChoice, RepoUrl, RunStatus,
 };
 use crate::domain::ports::{
-    ArtifactStore, CursorAgents, CursorArtifacts, RepositoryChooser, RunStream, SessionIntent,
-    SessionNotifier, StreamConnectError,
+    ArtifactStore, CursorAgents, CursorArtifacts, NoPromptImageFetcher, PromptImageFetcher,
+    RepositoryChooser, RunStream, SessionIntent, SessionNotifier, StreamConnectError,
 };
+use crate::domain::prompt_image::{self, CursorPromptImage};
 use agent_client_protocol::schema::v1::{
     ContentBlock, SessionId, SessionUpdate, StopReason, TextContent,
 };
@@ -319,6 +320,57 @@ fn captured_content(
         .collect()
 }
 
+/// The turn's failure for a run Cursor ended in neither finished nor
+/// cancelled.
+///
+/// The span and the log keep everything Cursor said about the run: its
+/// terminal status and the last `error` event journaled for it. The person
+/// gets a notice pointing at the run's page, the only place the reason is.
+/// Read from the journal rather than the stream loop so a run whose terminal
+/// status was recovered after a restart is reported the same way.
+fn run_failure(
+    session: &Session,
+    agent: &CursorAgentId,
+    run: &CursorRunId,
+    status: RunStatus,
+) -> SessionError {
+    let reported = session
+        .state
+        .lock()
+        .expect("session state poisoned")
+        .journal_entries
+        .iter()
+        .rev()
+        .filter(|entry| entry.run.as_ref() == Some(run))
+        .find_map(|entry| match &entry.input {
+            JournalInput::Sse(record) => match record.decode() {
+                CursorEvent::Error { code, message } => Some((code, message)),
+                _ => None,
+            },
+            _ => None,
+        });
+    let (code, message) = reported.unzip();
+    let code = code.flatten();
+    let span = tracing::Span::current();
+    span.record("cursor.run.error.code", code.as_deref());
+    span.record("cursor.run.error.message", message.as_deref());
+    tracing::warn!(
+        %agent,
+        cursor.run.id = %run,
+        cursor.run.status = ?status,
+        cursor.run.error.code = code.as_deref(),
+        cursor.run.error.message = message.as_deref(),
+        "Cursor ended the run in failure"
+    );
+    SessionError::Rejected(
+        RunFailed {
+            agent: agent.clone(),
+            status,
+        }
+        .refusal(),
+    )
+}
+
 /// Restate a rejection the person who prompted can act on - a repository
 /// Cursor cannot reach, a Cursor account out of budget - in their terms,
 /// leaving every other failure exactly as it arrived.
@@ -356,6 +408,18 @@ fn explain_rejection(error: SessionError) -> SessionError {
     error
 }
 
+/// A user chunk that restates the prompt the client already sent.
+///
+/// An image frame does not: it was fetched from a pasted link, and the live
+/// transcript learns the picture from this update.
+fn restates_the_prompt(update: &SessionUpdate) -> bool {
+    matches!(
+        update,
+        SessionUpdate::UserMessageChunk(chunk)
+            if !matches!(chunk.content, ContentBlock::Image(_))
+    )
+}
+
 /// Whether a failed create is a definite refusal — the prompt never ran, so
 /// it is journalled as aborted rather than left as an accepted turn.
 fn is_prompt_rejection(error: &SessionError) -> bool {
@@ -382,9 +446,9 @@ struct RejectedPrompt {
 /// The prompt that finally mints an agent, carrying the ones Cursor refused
 /// before it so the agent reads the whole conversation the person had.
 ///
-/// Plain text rather than structure because that is all `create_agent`
-/// takes; the framing tells the agent which message is current and that the
-/// earlier ones were never acted on, so it neither re-does nor ignores them.
+/// The framing tells the agent which message is current and that the earlier
+/// ones were never acted on, so it neither re-does nor ignores them. Images
+/// travel beside this text, on the prompt that is actually sent.
 fn prompt_with_rejected(rejected: &[RejectedPrompt], prompt: &str) -> String {
     if rejected.is_empty() {
         return prompt.to_owned();
@@ -576,6 +640,8 @@ pub struct CursorSessionService<Cursor, Notifier, Chooser, Store> {
     /// `GET /v1/models`, fetched once. The table is static for the life of a
     /// process and every `session/new` would otherwise re-fetch it.
     models: tokio::sync::Mutex<Option<Vec<CursorModel>>>,
+    /// Resolves pasted links into prompt images. Absent means links stay text.
+    images: Arc<dyn PromptImageFetcher>,
 }
 
 impl<Cursor, Notifier, Chooser, Store> CursorSessionService<Cursor, Notifier, Chooser, Store>
@@ -604,7 +670,15 @@ where
             default_model_id: None,
             host_model_id: None,
             models: tokio::sync::Mutex::new(None),
+            images: Arc::new(NoPromptImageFetcher),
         }
+    }
+
+    /// Fetch pasted links and attach the ones that are images.
+    #[must_use]
+    pub fn with_image_fetcher(mut self, images: Arc<dyn PromptImageFetcher>) -> Self {
+        self.images = images;
+        self
     }
     /// Pin the model every new session starts on, by id.
     ///
@@ -964,6 +1038,47 @@ where
         outcome
     }
 
+    /// Fetch links in `blocks` and keep the ones that are images.
+    ///
+    /// Returns new ACP image frames to append to the original blocks and all
+    /// images to send to Cursor. A failed fetch leaves the link as text.
+    #[tracing::instrument(name = "cursor.prompt_images.resolve", skip_all, fields(image.count = tracing::field::Empty))]
+    async fn resolve_prompt_images(
+        &self,
+        blocks: &[ContentBlock],
+    ) -> (Vec<ContentBlock>, Vec<CursorPromptImage>) {
+        let mut images = prompt_image::images_in_blocks(blocks);
+        if images.len() == prompt_image::MAX_PROMPT_IMAGES {
+            return (Vec::new(), images);
+        }
+        let mut fetched = Vec::new();
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+        let urls = prompt_image::linked_image_urls(blocks);
+        let fetcher = Arc::clone(&self.images);
+        let fetches = futures::stream::iter(urls)
+            .map(move |url| {
+                let fetcher = Arc::clone(&fetcher);
+                async move { fetcher.fetch_image(&url).await }
+            })
+            .buffered(prompt_image::MAX_PROMPT_IMAGES);
+        futures::pin_mut!(fetches);
+        while images.len() + fetched.len() < prompt_image::MAX_PROMPT_IMAGES {
+            let Ok(Some(image)) = tokio::time::timeout_at(deadline, fetches.next()).await else {
+                break;
+            };
+            if let Some(image) = image {
+                fetched.push(image);
+            }
+        }
+        tracing::Span::current().record("image.count", images.len() + fetched.len());
+        let blocks = fetched
+            .iter()
+            .map(CursorPromptImage::to_content_block)
+            .collect();
+        images.extend(fetched);
+        (blocks, images)
+    }
+
     async fn run_turn(
         &self,
         session_id: &SessionId,
@@ -1080,6 +1195,15 @@ where
             self.backfill_foreign_runs(session_id, &session, agent, None, &cancel, Emit::Silent)
                 .await?;
         }
+        // Links are fetched before the prompt is journaled, so the record
+        // holds the image frames and not only the URLs they came from.
+        let (fetched, images) = tokio::select! {
+            biased;
+            () = cancel.cancelled() => (Vec::new(), Vec::new()),
+            resolved = self.resolve_prompt_images(&blocks) => resolved,
+        };
+        let mut blocks = blocks;
+        blocks.extend(fetched);
         // Preserve original content before the provider creates remote work.
         self.capture(
             session_id,
@@ -1116,9 +1240,16 @@ where
             Some(agent) => {
                 // Queue behind any run still going (the same agent advances
                 // from cursor.com too) instead of failing the prompt.
-                self.create_run_when_free(&session, &agent, prompt, model.as_ref(), &cancel)
-                    .await
-                    .map(|run| (agent, run))
+                self.create_run_when_free(
+                    &session,
+                    &agent,
+                    prompt,
+                    model.as_ref(),
+                    &images,
+                    &cancel,
+                )
+                .await
+                .map(|run| (agent, run))
             }
             None => {
                 // Snapshotted out of the lock: `create_agent` is a network
@@ -1167,6 +1298,7 @@ where
                                 intent.open_pull_request,
                                 &mcp_servers,
                                 model.as_ref(),
+                                &images,
                             )
                             .await
                             .map_err(SessionError::from)
@@ -1554,6 +1686,9 @@ where
             cursor.ingest.emit = ?mode.emit,
             cursor.ingest.strict = mode.strict,
             cursor.ingest.attempt = mode.attempt,
+            cursor.run.status = tracing::field::Empty,
+            cursor.run.error.code = tracing::field::Empty,
+            cursor.run.error.message = tracing::field::Empty,
             cursor.stream.reconnects = tracing::field::Empty,
             cursor.stream.fell_back_to_poll = tracing::field::Empty,
         ),
@@ -1583,6 +1718,7 @@ where
             .machine
             .terminal_status(run);
         if let Some(status) = terminal {
+            tracing::Span::current().record("cursor.run.status", tracing::field::debug(&status));
             if strict
                 && !session
                     .state
@@ -1607,7 +1743,7 @@ where
                 RunStatus::Cancelled => Ok(StopReason::Cancelled),
                 RunStatus::Finished => Ok(StopReason::EndTurn),
                 _ if strict => Ok(StopReason::EndTurn),
-                status => Err(rootcause::report!("cursor run {run} ended in {status:?}").into()),
+                status => Err(run_failure(session, agent, run, status)),
             };
         }
         let mut captured = captured_content(session, run);
@@ -1890,7 +2026,15 @@ where
                             }
                             // Cursor said its piece about this run; a fresh
                             // connection would only be told the same thing.
-                            CursorEvent::Error { .. } => break None,
+                            CursorEvent::Error { code, message } => {
+                                tracing::warn!(
+                                    cursor.run.id = %run,
+                                    cursor.run.error.code = code,
+                                    cursor.run.error.message = %message,
+                                    "Cursor stream reported an error"
+                                );
+                                break None;
+                            }
                             CursorEvent::Done => break None,
                             _ => {}
                         }
@@ -2065,6 +2209,9 @@ where
                 sleep_unless_cancelled(cancel, poll_delay(attempt)).await;
             }
         }
+        if let Some(status) = &terminal {
+            span.record("cursor.run.status", tracing::field::debug(status));
+        }
         let Some(status) = terminal else {
             // Not a failure to describe in provider terms: the run is still
             // going as far as Cursor is concerned, and this turn has simply
@@ -2111,7 +2258,7 @@ where
         match status {
             RunStatus::Finished => Ok(StopReason::EndTurn),
             RunStatus::Cancelled => Ok(StopReason::Cancelled),
-            status => Err(rootcause::report!("cursor run {run} ended in {status:?}").into()),
+            status => Err(run_failure(session, agent, run, status)),
         }
     }
 
@@ -2212,6 +2359,7 @@ where
         agent: &CursorAgentId,
         prompt: &str,
         model: Option<&ModelChoice>,
+        images: &[CursorPromptImage],
         cancel: &tokio_util::sync::CancellationToken,
     ) -> Result<CursorRunId, SessionError> {
         let mut released = false;
@@ -2224,7 +2372,7 @@ where
                     .into_dynamic(),
                 ));
             }
-            match self.cursor.create_run(agent, prompt, model).await {
+            match self.cursor.create_run(agent, prompt, model, images).await {
                 Ok(run) => return Ok(run),
                 Err(error) if error.to_string().contains("agent_busy") => {
                     // A run this session already gave up on still holds the
@@ -2877,7 +3025,7 @@ where
                     })
             });
             for update in updates {
-                if local_prompt && matches!(update, SessionUpdate::UserMessageChunk(_)) {
+                if local_prompt && restates_the_prompt(&update) {
                     continue;
                 }
                 self.notifier.notify(id, update).await.map_err(|error| {

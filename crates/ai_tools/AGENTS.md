@@ -24,9 +24,13 @@ execution, display) that don't belong to a single domain.
   user), sharing its document/task paths with `EntityCreator`; Notion bodies
   go through `DocumentCreator::create_notion_markdown`. `share_with_team`
   shares a folder through `ProjectService::edit_project` (edit level) and a
-  document through `DocumentService::set_team_share`; Notion tasks are created
-  unshared and reached through their shared folder, while single tracked tasks
-  (Linear) stay team-shared at creation.
+  document through `DocumentService::set_team_share`. Notion pages and tasks
+  are created with their page's dates (`NewDocumentMetadata::created_at` /
+  `updated_at`), and folders through
+  `ProjectService::create_project_dated_by_contents`, so the copy keeps
+  Notion's dates. Notion tasks are created unshared and reached through their
+  shared folder, while single tracked tasks (Linear) stay team-shared at
+  creation.
 - `src/import_jobs.rs`: `ImportJobs`, the shutdown token and tracker every
   host passes to `build_tool_service_context_from_env` (or its own import
   service) and calls `hand_over` on at shutdown, so running Notion imports
@@ -77,6 +81,7 @@ edit capability but calls no nested model and emits no additional model charge; 
 - `cargo test -p ai_tools` (`SQLX_OFFLINE` unset).
 - After adding/changing a tool: `cargo run -p ai_tools --bin gen_tool_schemas`
   and `--bin gen_ai_request_schemas` to refresh generated frontend schemas.
+- Regenerate DisplayResults entity-reference enums from `apps/web` with `bun run gen-dynamic-ui-schema` after canonical entity changes.
 
 ## Related
 

@@ -1,4 +1,5 @@
 import './MobileCreateMenu.css';
+import { t } from '@app/lib/i18n';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { Layer } from '@ui/components/Layer';
@@ -24,7 +25,10 @@ export type MobileCreateMenuItem = {
 /** Floating create actions that unfold from the mobile New button. */
 export function MobileCreateMenu(props: {
   items: readonly MobileCreateMenuItem[];
+  /** The trigger's text; New by default. */
+  label?: string;
 }) {
+  const label = () => props.label ?? t('mobile.new');
   const [open, setOpen] = createSignal(false);
   const [position, setPosition] = createSignal({
     right: 12,
@@ -74,11 +78,11 @@ export function MobileCreateMenu(props: {
       <MobileDockIsland class="shrink-0">
         <Dialog.Trigger
           ref={triggerRef}
-          aria-label="New"
+          aria-label={label()}
           class="relative flex h-(--mobile-chrome-button-size) items-center justify-center gap-1.5 rounded-full pl-3 pr-4 text-base font-medium whitespace-nowrap"
         >
           <PlusIcon class="size-5.5 shrink-0" />
-          <span>New</span>
+          <span>{label()}</span>
         </Dialog.Trigger>
       </MobileDockIsland>
       <Dialog.Portal>
@@ -99,9 +103,9 @@ export function MobileCreateMenu(props: {
               if (action) queueMicrotask(action);
             }}
           >
-            <Dialog.Title class="sr-only">Create new</Dialog.Title>
+            <Dialog.Title class="sr-only">{t('mobile.createNew')}</Dialog.Title>
             <Dialog.Description class="sr-only">
-              Choose what to create.
+              {t('mobile.chooseWhatToCreate')}
             </Dialog.Description>
             <div class="-m-1 flex min-h-0 flex-col items-end gap-2 overflow-y-auto p-1">
               <For each={props.items}>
@@ -133,12 +137,12 @@ export function MobileCreateMenu(props: {
             </div>
             <MobileDockIsland class="shrink-0">
               <Dialog.CloseButton
-                aria-label="Close create menu"
+                aria-label={t('mobile.closeCreateMenu')}
                 style={{ width: `${position().width}px` }}
                 class="flex h-(--mobile-chrome-button-size) items-center justify-center gap-1.5 rounded-full pl-3 pr-4 text-base font-medium outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <PlusIcon class="mobile-create-menu-plus size-5.5 shrink-0" />
-                <span>New</span>
+                <span>{label()}</span>
               </Dialog.CloseButton>
             </MobileDockIsland>
           </Dialog.Content>

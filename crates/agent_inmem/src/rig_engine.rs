@@ -3,10 +3,9 @@
 //!
 //! Consumption mirrors the scheduled-action executor
 //! (`crates/scheduled_action/src/outbound/inprocess_executor/agent_task.rs`):
-//! the full static toolset, the agent's name and handle, the agent-session
-//! preamble, the static Macro prompt (immediately before any session
-//! instructions), and the owner's memory, with usage recorded per turn
-//! against the session owner.
+//! the full static toolset, the agent-session preamble, the static Macro
+//! prompt, the agent's name and handle, any session instructions, and the
+//! owner's memory, with usage recorded per turn against the session owner.
 //!
 //! User tools (`SendEmail`, `CreateCalendarEvent`) are the chat host's
 //! deferring ones, finished inside the turn: the turn's [`TurnRequest`]
@@ -23,7 +22,7 @@
 
 use std::sync::Arc;
 
-use agent::{AgentError, AgentLoop, StreamPart, SystemPrompt};
+use agent::{AgentError, AgentLoop, ReadToolResult, StreamPart, SystemPrompt, ToolResultLimit};
 use ai_tools::user_tool_review::{ReviewError, UserToolAuthorizer, authorized_user_tool_finisher};
 use ai_tools::{AiHost, DeferredToolSet, ToolServiceContext, tools_for};
 use ai_toolset::{AsyncToolCollection, ToolSet as AiToolSet};
@@ -64,11 +63,13 @@ const EAGER_INTERNAL_MCP_TOOLS: &[&str] = &[
     "mcp__macro_internal__DecideReview",
     "mcp__macro_internal__ExecuteCode",
     "mcp__macro_internal__DescribeCodeTools",
+    "mcp__macro_internal__ReadCodeDocs",
 ];
 
 const CODE_MODE_MCP_TOOLS: &[&str] = &[
     "mcp__macro_internal__ExecuteCode",
     "mcp__macro_internal__DescribeCodeTools",
+    "mcp__macro_internal__ReadCodeDocs",
 ];
 
 /// [`TurnEngine`] backed by [`agent::AgentLoop`] and
@@ -126,8 +127,9 @@ impl RigTurnEngine {
 }
 
 /// Native tools never gated: asking the user something, and finding or
-/// loading a connected app's tools, spend nobody's access.
-const UNGATED_NATIVE_TOOLS: [&str; 3] = ["AskUser", "SearchTools", "LoadTools"];
+/// loading a connected app's tools, or reading the rest of a result the
+/// turn already got, spend nobody's access.
+const UNGATED_NATIVE_TOOLS: [&str; 4] = ["AskUser", "SearchTools", "LoadTools", "ReadToolResult"];
 
 /// A turn's tools, each call to one of Macro's own asked of the gate first.
 /// Remote MCP tools are left to the egress proxy, which gates them already.
@@ -230,6 +232,7 @@ fn add_native_actor_schema(name: &str, schema: &mut schemars::Schema) {
 struct InMemToolContext {
     base: ToolServiceContext,
     ask_user: AskUserContext,
+    tool_results: ToolResultLimit,
 }
 
 impl FromRef<InMemToolContext> for ToolServiceContext {
@@ -244,11 +247,19 @@ impl FromRef<InMemToolContext> for AskUserContext {
     }
 }
 
+impl FromRef<InMemToolContext> for ToolResultLimit {
+    fn from_ref(context: &InMemToolContext) -> Self {
+        context.tool_results.clone()
+    }
+}
+
 fn tools_for_turn(
     base_tools: ai_tools::AiToolSet,
     supports_user_input: bool,
 ) -> AsyncToolCollection<InMemToolContext> {
-    let tools = AsyncToolCollection::<InMemToolContext>::new().add_subtoolset(base_tools);
+    let tools = AsyncToolCollection::<InMemToolContext>::new()
+        .add_subtoolset(base_tools)
+        .add_tool::<ReadToolResult, ToolResultLimit>();
     if supports_user_input {
         tools.add_tool::<AskUser, AskUserContext>()
     } else {
@@ -555,9 +566,9 @@ async fn drive_turn(
             }
         };
         let (user_memory, sdk_docs) = tokio::join!(fetch_user_memory(memory, &owner), docs);
-        let tools_prompt = format!("{}{}", native_tools.prompt, sdk_docs);
         let prompt = system_prompt(
-            &tools_prompt,
+            &native_tools.prompt,
+            &sdk_docs,
             session_id,
             identity.as_ref(),
             instructions.as_deref(),
@@ -579,22 +590,31 @@ async fn drive_turn(
             .with_actor(identity.bot)
             .with_actor_name(&identity.name);
     }
+    // Results too long for the model to read whole are cut, the turn's as
+    // they arrive and earlier ones as history is replayed below, and kept
+    // here for `ReadToolResult`.
+    let tool_results = ToolResultLimit::default();
     let tool_context = InMemToolContext {
         base: tool_context,
         ask_user: AskUserContext {
             requester: user_input,
         },
+        tool_results: tool_results.clone(),
     };
 
     // GenAI telemetry stays off here: this runtime's turns and tool calls
     // reach the session actor as ACP frames, and the actor projects those onto
     // `invoke_agent` / `execute_tool` spans for every harness alike. Enriching
     // rig's spans too would report each turn twice.
+    // Calls stream as the model writes them, so the transcript shows a call
+    // from the moment it is named rather than once its arguments are whole.
     let mut agent_loop = AgentLoop::new(base_context.recorder.clone())
         .with_model(&model)
         .with_reasoning_effort(reasoning_effort)
         .with_speed(speed)?
-        .with_genai_telemetry(false);
+        .with_genai_telemetry(false)
+        .with_streamed_tool_calls()
+        .with_tool_result_limit(tool_results.clone());
     // Only the loop's own model calls run on the agent's key, so only they are
     // recorded against it; tools keep `usage_ctx`, since they call models on
     // Macro's keys.
@@ -688,7 +708,7 @@ async fn drive_turn(
         }
     }));
 
-    let rig_messages = agent::to_rig_messages(&messages);
+    let rig_messages = agent::to_rig_messages_limited(&messages, &tool_results);
     let result = async {
         let mut stream = session.send_message(rig_messages).await?;
         let mut turn_spoke = false;
@@ -820,43 +840,43 @@ fn elapsed_ms(since: tokio::time::Instant) -> u64 {
     u64::try_from(since.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
-/// The turn's system prompt: the agent's identity, the agent-session
-/// preamble, the note that an opening line is already out (see [`opener`]),
-/// the static Macro prompt (how to use the product: mentions,
-/// tools, terminology), then the session's own instructions when there are
-/// any, which session this is, and the owner's memory when there is any.
+/// The turn's system prompt, ordered so the longest possible prefix is
+/// cached: the agent-session preamble (which notes that an opening line may
+/// already be out, see [`opener`]) and the static Macro prompt (how to use the
+/// product: mentions, tools, terminology), which are the same for every
+/// session of every agent; then the agent's identity, the session's own
+/// instructions when there are any, which session this is, and the owner's
+/// memory when there is any; and last the SDK documentation picked for this
+/// turn.
 ///
-/// Identity comes first so a named agent (even one with no instructions)
-/// knows who it is before reading anything else. The static Macro prompt
-/// sits immediately before `<session_instructions>` so it is the preamble
-/// the model reads as it takes in the caller's word — the same reason DCS
-/// puts `additional_instructions` after the standing prompt. Memory stays
-/// last so a remembered fact is never read as an instruction.
-///
-/// The prompt is split after the static Macro prompt: everything before is
-/// the same for every session of the agent and is cached on its own, so a
-/// session whose instructions name its own task still reads it back.
+/// The prompt is split after the static Macro prompt, so every session reads
+/// it back from the cache whatever its agent or instructions. Identity opens
+/// the session's part so a named agent (even one with no instructions) knows
+/// who it is before its instructions, and `<session_instructions>` follows
+/// the standing prompt so the model reads it as the caller's word — the same
+/// reason DCS puts `additional_instructions` after the standing prompt.
+/// Memory stays after the instructions so a remembered fact is never read as
+/// an instruction. The turn's documentation goes after everything the loop
+/// adds, because each turn picks different documentation.
 fn system_prompt(
     tools_prompt: &impl std::fmt::Display,
+    sdk_docs: &str,
     session_id: agent_session::domain::model::AgentSessionId,
     identity: Option<&AgentIdentity>,
     instructions: Option<&str>,
     user_memory: Option<&str>,
 ) -> SystemPrompt {
     let mut shared = String::new();
+    shared.push_str(&prompt::agent_session::PROMPT.to_string());
+    shared.push_str(&tools_prompt.to_string());
+    let mut rest = String::new();
     if let Some(identity) = identity {
-        shared.push_str(&prompt::agent_identity::render(
+        rest.push('\n');
+        rest.push_str(&prompt::agent_identity::render(
             &identity.name,
             &identity.handle,
         ));
-        shared.push('\n');
     }
-    shared.push_str(&prompt::agent_session::PROMPT.to_string());
-    shared.push('\n');
-    shared.push_str(opener::ALREADY_OPENED);
-    shared.push('\n');
-    shared.push_str(&tools_prompt.to_string());
-    let mut rest = String::new();
     // Blank instructions are "none" stated clumsily. A delimited section with
     // nothing in it is worse than no section: the model has to decide what an
     // empty instruction means.
@@ -876,7 +896,7 @@ fn system_prompt(
         rest.push_str(memory);
         rest.push_str("\n</user_memory>");
     }
-    SystemPrompt::split(shared, rest)
+    SystemPrompt::split(shared, rest).with_turn(sdk_docs)
 }
 
 /// The owner's memory block, or `None` when it is missing or failed to load.

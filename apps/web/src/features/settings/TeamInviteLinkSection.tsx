@@ -86,7 +86,7 @@ export function TeamInviteLinkSection(props: {
           when={!unknown()}
           fallback={
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               class="shrink-0"
               onClick={() =>
@@ -98,7 +98,7 @@ export function TeamInviteLinkSection(props: {
           }
         >
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             class="shrink-0"
             disabled={busy()}

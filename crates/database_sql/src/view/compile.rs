@@ -4,8 +4,9 @@
 mod test;
 
 use models_databases::views::{
-    Conjunction, DatabaseView, DateOperator, FilterCondition, FilterGroup, FilterNode, FilterTest,
-    NumberOperator, PresenceOperator, SetOperator, SortDirection, TextOperator, ViewProblem,
+    Conjunction, DatabaseView, DateOperator, DateRangeOperator, FilterCondition, FilterGroup,
+    FilterNode, FilterTest, NumberOperator, PresenceOperator, SetOperator, SortDirection,
+    TextOperator, ViewProblem,
 };
 
 use crate::catalog::{Catalog, Table};
@@ -174,6 +175,32 @@ fn condition_filter(table: &Table, condition: &FilterCondition) -> Filter {
             },
             Value::Date(*value),
         ),
+        // The test is of a whole day: a range compared to the day's first
+        // instant tells whether it ends before it, and compared to its last
+        // whether it starts after it.
+        FilterTest::DateRange { operator, value } => {
+            let first = Value::Date(*value);
+            let last =
+                Value::Date(*value + chrono::Duration::days(1) - chrono::Duration::microseconds(1));
+            match operator {
+                DateRangeOperator::Contains => Filter::And(vec![
+                    compare(ComparisonOperator::GreaterOrEqual, first),
+                    compare(ComparisonOperator::LessOrEqual, last),
+                ]),
+                DateRangeOperator::DoesNotContain => or_empty(Filter::Or(vec![
+                    compare(ComparisonOperator::Less, first),
+                    compare(ComparisonOperator::Greater, last),
+                ])),
+                DateRangeOperator::EndsBefore => compare(ComparisonOperator::Less, first),
+                DateRangeOperator::EndsOnOrAfter => {
+                    compare(ComparisonOperator::GreaterOrEqual, first)
+                }
+                DateRangeOperator::StartsAfter => compare(ComparisonOperator::Greater, last),
+                DateRangeOperator::StartsOnOrBefore => {
+                    compare(ComparisonOperator::LessOrEqual, last)
+                }
+            }
+        }
         FilterTest::Checkbox { checked: true } => {
             compare(ComparisonOperator::Equal, Value::Bool(true))
         }

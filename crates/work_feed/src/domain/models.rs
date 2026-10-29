@@ -40,8 +40,10 @@ pub enum WorkFeedMode {
 /// The kinds of item a caller can narrow the feed to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum WorkFeedItemType {
-    /// Documents and tasks.
+    /// Documents other than tasks.
     Document,
+    /// Tasks.
+    Task,
     /// AI chats.
     Chat,
     /// Projects (folders).
@@ -62,8 +64,9 @@ pub enum WorkFeedItemType {
 
 impl WorkFeedItemType {
     /// Every item type, the default selection.
-    pub const ALL: [WorkFeedItemType; 9] = [
+    pub const ALL: [WorkFeedItemType; 10] = [
         Self::Document,
+        Self::Task,
         Self::Chat,
         Self::Project,
         Self::Email,
@@ -77,7 +80,7 @@ impl WorkFeedItemType {
     /// The candidate entity type items of this kind are keyed on.
     pub fn entity_type(self) -> EntityType {
         match self {
-            Self::Document => EntityType::Document,
+            Self::Document | Self::Task => EntityType::Document,
             Self::Chat => EntityType::Chat,
             Self::Project => EntityType::Project,
             Self::Email => EntityType::EmailThread,
@@ -350,6 +353,9 @@ impl WorkFeedScope {
 pub struct WorkFeedQuery {
     /// Which items the feed shows.
     pub scope: WorkFeedScope,
+    /// Only items in this state, when set. Live changes and undo place items
+    /// in every state, so an item that changes state where it is shown stays.
+    pub state: Option<WorkFeedItemState>,
     /// Maximum items on the page.
     pub limit: u16,
     /// Resume after this position; `None` for the first page.

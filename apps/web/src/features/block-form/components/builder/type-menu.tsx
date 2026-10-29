@@ -93,7 +93,7 @@ export function TypeMenu(props: {
   return (
     <Dropdown>
       <Dropdown.Trigger
-        variant="outline"
+        variant="secondary"
         size="sm"
         disabled={props.disabled}
         aria-label={`Question type: ${props.label}`}
@@ -132,7 +132,7 @@ export function AddQuestionMenu(props: {
   return (
     <Dropdown>
       <Dropdown.Trigger
-        variant="outline"
+        variant="secondary"
         size="md"
         class={`w-full justify-start gap-2 ${props.triggerClass ?? ''}`}
         ref={props.triggerRef}

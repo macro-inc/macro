@@ -14,6 +14,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use chrono::Utc;
+use tracing::Instrument;
 
 use crate::binary::{Node, NodeContent};
 use crate::client::Client;
@@ -21,6 +22,7 @@ use crate::errors::ClientError;
 use crate::prekeys::MIN_PRE_KEY_COUNT;
 use crate::request::{InfoQuery, IqType};
 use crate::store::get_wa_version;
+use crate::telemetry::ConnectReason;
 use crate::types::events::{
     ClientOutdated, ConnectFailure, ConnectFailureReason, Connected, Event, LoggedOut,
     ManualLoginReconnect, OfflineSyncCompleted, OfflineSyncPreview, QrScannedWithoutMultidevice,
@@ -32,6 +34,8 @@ impl Client {
     pub(crate) async fn handle_stream_error(self: &Arc<Self>, node: &Node) {
         self.set_logged_in(false);
         self.clear_response_waiters(node);
+        // A 515 restart (after pairing) is expected, not a failed login.
+        self.finish_login_span("stream_error", code_is_not_515(node));
         let code = node
             .attrs
             .get("code")
@@ -50,17 +54,21 @@ impl Client {
                     .await;
                 return;
             }
-            tracing::info!("got 515 code, reconnecting");
+            tracing::info!(
+                disconnect_reason = ConnectReason::Restart515.as_str(),
+                "got 515 code, reconnecting"
+            );
             let client = Arc::clone(self);
             self.spawn(async move {
                 client.disconnect().await;
-                if let Err(error) = client.connect().await {
+                if let Err(error) = client.connect_with_reason(ConnectReason::Restart515).await {
                     tracing::error!(error = %error, "failed to reconnect after 515 code");
                 }
             });
         } else if code == "401" && conflict_type == "device_removed" {
             self.expect_disconnect();
             tracing::info!(
+                disconnect_reason = "logged_out",
                 "got device removed stream error, sending LoggedOut event and deleting session"
             );
             self.spawn_dispatch(Event::LoggedOut(LoggedOut {
@@ -72,7 +80,10 @@ impl Client {
             }
         } else if conflict_type == "replaced" {
             self.expect_disconnect();
-            tracing::info!("got replaced stream error, sending StreamReplaced event");
+            tracing::info!(
+                disconnect_reason = "conflict_replaced",
+                "got replaced stream error, sending StreamReplaced event"
+            );
             self.spawn_dispatch(Event::StreamReplaced(StreamReplaced));
         } else if code == "503" {
             // The server wants to restart; the disconnect is emitted as
@@ -122,6 +133,9 @@ impl Client {
         let mut attrs = node.attr_getter();
         let reason = ConnectFailureReason(attrs.int("reason"));
         let message = attrs.optional_string("message");
+        if let Some(login) = self.finish_login_span("failure", true) {
+            login.record("failure_reason", reason.0);
+        }
         let will_auto_reconnect = reason == ConnectFailureReason::SERVICE_UNAVAILABLE
             || reason == ConnectFailureReason::INTERNAL_SERVER_ERROR
             || reason == ConnectFailureReason::CAT_INVALID
@@ -134,7 +148,7 @@ impl Client {
             tracing::debug!("got 403 connect failure");
         }
         if reason.is_logged_out() {
-            tracing::info!(reason = %reason, "got logged out connect failure, sending LoggedOut event and deleting session");
+            tracing::info!(reason = %reason, disconnect_reason = "logged_out", "got logged out connect failure, sending LoggedOut event and deleting session");
             self.spawn_dispatch(Event::LoggedOut(LoggedOut {
                 on_connect: true,
                 reason,
@@ -173,6 +187,11 @@ impl Client {
         }
         tracing::info!("successfully authenticated");
         self.mark_connect_success();
+        // Macro addition: the login span covers the post-login requests
+        // below and ends when `Connected` is dispatched.
+        let login = crate::client::lock(&self.pending_login)
+            .take()
+            .unwrap_or_else(tracing::Span::current);
         let mut attrs = node.attr_getter();
         let node_lid = attrs.jid("lid");
         if let Some(server_time) = attrs.unix_time("t") {
@@ -237,7 +256,9 @@ impl Client {
             }
             client.dispatch_event(Event::Connected(Connected)).await;
             client.close_socket_wait_chan();
-        });
+            tracing::Span::current().record("outcome", "ok");
+        }
+        .instrument(login));
     }
 
     /// Tells the server whether this device is passive. The client sends
@@ -257,4 +278,11 @@ impl Client {
         .await
         .map(|_| ())
     }
+}
+
+/// Macro addition: whether a stream error isn't the 515 restart.
+fn code_is_not_515(node: &Node) -> bool {
+    node.attrs
+        .get("code")
+        .is_none_or(|code| code.to_string() != "515")
 }

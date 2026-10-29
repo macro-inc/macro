@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT lease_epoch\n        FROM whatsapp_linked_account\n        WHERE id = $1\n        FOR SHARE\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "lease_epoch",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3665ba05801dda1cf017023d6e6f89eb2f93b09087aef6e243c54ed1b79ddad9"
+}

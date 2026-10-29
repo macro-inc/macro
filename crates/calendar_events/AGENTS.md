@@ -68,6 +68,9 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   occurrence projections, not separate events — don't model them as new entities.
 - Imported point (non-recurring) events must survive sync and cache round-trips
   unchanged (#7762) — a regression here silently drops user events.
+- Normalize imported Google all-day events with matching start/end dates to one
+  day in the adapter, including recurring instances and overrides; preserve the
+  raw provider payload and keep reversed dates invalid.
 - Only an organizer (or a guest the organizer lets modify) may replace an
   event's attendee list. Everyone else adds guests through `invite_guests`
   (`src/domain/mutations/invite.rs`); a guest's `update_event` attendees are
@@ -78,7 +81,9 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   copy lacks the guests it would drop. Microsoft Graph has no attendee-side
   write either: an Outlook organizer adds guests with the same full-list write
   (`email_api_client`'s `outlook/calendar/invite.rs`), and an Outlook guest may
-  only answer (`guests_cannot_invite`).
+  only answer (`guests_cannot_invite`). An Outlook organizer may not answer:
+  Graph fixes the organizer's response, so `ViewerCapabilities::rsvp` is false
+  and the adapter refuses an answer with `NotAttendee`.
 - A guest without `edit_details` may change only what Google keeps on each
   guest's copy (reminders, availability) and add guests where allowed:
   `update_event` drops details the patch repeats at their stored value
@@ -149,6 +154,27 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   forwarded by email takes the same import through
   `CalendarSnapshotImporter::import_snapshot`, fed an `EventSnapshot` that
   `crates/email`'s `invitation_import` builds from the email's saved snapshot.
+  Only the channel-share path strips the Macro call
+  (`EventSnapshot::without_macro_call`); a forwarded file keeps the join link
+  it carries.
+  The other direction, a guest forwarding their copy of an event, renders it
+  through `CalendarEventForwardSource::event_forward`, which also names the
+  inbox holding that copy (`meeting_copies`), and is `None` for a channel
+  share or a delegated inbox's copy; `crates/email`'s `event_forward` sends
+  it. The copy decides the kind (`ForwardedCopy::outside_organizer`, read by
+  `forwarded_copy` from every source of the copy): Google's private copy
+  (`privateCopy` in the stored raw payload, which Google sets on every
+  invitation from another calendar system) that is not a snapshot, whose UID
+  Google did not mint (`…@google.com`), and that names its organizer becomes a
+  `METHOD:REQUEST` invitation naming only the recipients, answered to that
+  organizer, as Google's own Add guests sends there. Anything else, a Google
+  organizer who turned inviting off above all, keeps the `METHOD:PUBLISH`
+  file naming no attendees, so a recipient can only add it to their calendar
+  and nothing reaches the organizer; missing evidence falls back to it. One
+  renderer serves every use: `render_event_ics` takes an `IcsPurpose`, and
+  only `Forward` keeps the Macro call and adds the copy's conference link
+  (`JoinLink`), which `Share` (the .ics download) and channel shares never
+  carry.
 - Asking to join a channel-shared event (`src/domain/join_requests.rs`) is a
   Macro-stored request, not an `entity_access` row: the grant is a provider guest
   write. Eligibility is the invite path's own `copy_capabilities` on the

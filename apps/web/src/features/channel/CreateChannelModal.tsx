@@ -285,10 +285,11 @@ export function CreateChannelModal() {
                 </Show>
               </div>
               <Dialog.CloseButton
+                aria-label="Close"
+                tooltip="Close"
                 as={Button}
                 variant="ghost"
                 size="icon-sm"
-                label="Close"
                 tabIndex={-1}
                 disabled={
                   createChannelMutation.isPending ||
@@ -297,7 +298,7 @@ export function CreateChannelModal() {
                   addAgentMutation.isPending
                 }
               >
-                <XIcon />
+                <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               </Dialog.CloseButton>
             </div>
 
@@ -456,7 +457,7 @@ export function CreateChannelModal() {
                     if (step() === 'invite')
                       fireAndForget(finishInvites(), 'create-channel');
                   }}
-                  variant="strong"
+                  variant="primary"
                   disabled={
                     (step() !== 'invite' && !channelName()) ||
                     createChannelMutation.isPending ||

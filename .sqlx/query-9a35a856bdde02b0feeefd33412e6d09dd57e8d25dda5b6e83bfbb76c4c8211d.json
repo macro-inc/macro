@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM external_chat WHERE provider = 'whatsapp' AND (remote_id = ANY($1)\n        OR ($2 AND remote_id IN (SELECT group_jid FROM whatsapp_roster WHERE account_id = $3)))\n        ORDER BY id FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Bool",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9a35a856bdde02b0feeefd33412e6d09dd57e8d25dda5b6e83bfbb76c4c8211d"
+}

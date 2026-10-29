@@ -191,6 +191,9 @@ function InputGroupRoot(props: InputGroupProps) {
           isTouchDevice() ? 'rounded-lg' : 'rounded-full',
           grouped() &&
             'flex-1 rounded-none border-0 bg-transparent outline-none has-[[data-slot=input-group-control]:focus-visible]:ring-0',
+          grouped() &&
+            buttonGroup?.orientation === 'horizontal' &&
+            'h-full min-h-0',
           local.class
         )}
         {...rest}
@@ -284,21 +287,13 @@ function InputGroupAddon(props: InputGroupAddonProps) {
 export type InputGroupButtonProps = ButtonProps;
 
 function InputGroupButton(props: InputGroupButtonProps) {
-  const [local, rest] = splitProps(props, [
-    'class',
-    'noTouchResize',
-    'size',
-    'square',
-    'variant',
-  ]);
+  const [local, rest] = splitProps(props, ['class', 'size', 'variant']);
   const group = useInputGroupContext();
 
   return (
     <Button
       variant={local.variant ?? 'ghost'}
       size={local.size ?? INPUT_GROUP_BUTTON_SIZE[group.size]}
-      square={local.square}
-      noTouchResize={local.noTouchResize ?? true}
       class={local.class}
       {...rest}
     />
@@ -314,7 +309,7 @@ function InputGroupClearButton(props: InputGroupClearButtonProps) {
     <Show when={group.hasValue() && group.canClear()}>
       <InputGroupButton
         type="button"
-        square
+        size={INPUT_GROUP_BUTTON_SIZE[group.size]}
         aria-label="Clear input"
         class={props.class}
         onPointerDown={(event) => event.preventDefault()}

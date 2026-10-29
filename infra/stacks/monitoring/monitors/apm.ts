@@ -3,6 +3,7 @@
 // Adopted from monitors created by hand in the Datadog UI. Do not edit a
 // monitor here and in the UI at the same time — this file wins on deploy.
 import { adopted } from '../adopted';
+import { notify } from '../notify';
 
 // https://us5.datadoghq.com/monitors/19271629
 adopted('apm-get-channel-messages-p95', {
@@ -28,7 +29,9 @@ p95 response time has exceeded **100ms** (threshold). During the Apr 17 incident
 
 ### Useful Links
 - [Slow spans explorer](https://us5.datadoghq.com/apm/traces?query=service%3Acloud-storage-service+resource_name%3Aget_channel_messages+env%3Aprod+%40duration%3A%3E100000000)
-- [Investigation notebook](https://us5.datadoghq.com/notebook/277323)`,
+- [Investigation notebook](https://us5.datadoghq.com/notebook/277323)
+
+${notify({ pages: false })}`,
   priority: '5',
   tags: [
     'service:cloud-storage-service',

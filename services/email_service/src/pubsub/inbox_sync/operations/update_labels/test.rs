@@ -70,3 +70,54 @@ fn ignores_diffs_without_spam_changes() {
 fn spam_remains_excluded_from_user_label_events() {
     assert!(!is_user_label(service::label::system_labels::SPAM));
 }
+
+#[test]
+fn pending_archive_keeps_inbox_removed_while_gmail_still_has_it() {
+    let gmail = vec!["INBOX".to_string(), "UNREAD".to_string()];
+    let db = vec!["UNREAD".to_string()];
+    let pending = vec!["INBOX".to_string()];
+
+    assert_eq!(
+        label_diff(&gmail, &db, &pending),
+        LabelDiff {
+            labels_to_add: vec![],
+            labels_to_delete: vec![],
+            kept_pending: vec!["INBOX".to_string()],
+        }
+    );
+}
+
+#[test]
+fn pending_label_add_is_kept_while_other_provider_changes_apply() {
+    let gmail = vec!["INBOX".to_string(), "STARRED".to_string()];
+    let db = vec![
+        "INBOX".to_string(),
+        "UNREAD".to_string(),
+        "TRASH".to_string(),
+    ];
+    let pending = vec!["TRASH".to_string()];
+
+    assert_eq!(
+        label_diff(&gmail, &db, &pending),
+        LabelDiff {
+            labels_to_add: vec!["STARRED".to_string()],
+            labels_to_delete: vec!["UNREAD".to_string()],
+            kept_pending: vec!["TRASH".to_string()],
+        }
+    );
+}
+
+#[test]
+fn without_pending_writes_the_database_follows_gmail() {
+    let gmail = vec!["INBOX".to_string()];
+    let db = vec!["TRASH".to_string()];
+
+    assert_eq!(
+        label_diff(&gmail, &db, &[]),
+        LabelDiff {
+            labels_to_add: vec!["INBOX".to_string()],
+            labels_to_delete: vec!["TRASH".to_string()],
+            kept_pending: vec![],
+        }
+    );
+}

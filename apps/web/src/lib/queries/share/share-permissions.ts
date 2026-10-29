@@ -6,6 +6,7 @@ import { storageServiceClient } from '@service-storage/client';
 import { queryOptions } from '@tanstack/solid-query';
 import { fetchAgentSessionSharePermissions } from '../agent-session/share-permissions';
 import { queryClient } from '../client';
+import { fetchExternalChatPermissions } from '../external-chats/share-permissions';
 import { fetchInitiativeSharePermissions } from '../initiative/share-permissions';
 import { getDatabaseSharePermissions } from '../storage/databases';
 import { getFormSharePermissions } from '../storage/forms';
@@ -20,6 +21,7 @@ export async function fetchSharePermissions(
   id: string,
   itemType: ShareItemType
 ) {
+  if (itemType === 'external_chat') return fetchExternalChatPermissions(id);
   if (itemType === 'crm_pipeline') return fetchPipelineSharePermissions(id);
   if (itemType === 'agent_session') {
     return fetchAgentSessionSharePermissions(id);

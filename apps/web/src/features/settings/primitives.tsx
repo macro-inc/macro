@@ -51,7 +51,7 @@ export function SettingsPage(props: {
     <div
       data-settings-page
       data-drawer-scroll-body={inSheet ? true : undefined}
-      class="@container/settings-page h-full min-h-0 overflow-y-auto [overflow-anchor:none] select-children bg-panel [&_[data-variant=cta]]:bg-ink [&_[data-variant=cta]]:text-panel [&_[data-variant=cta]]:focus-visible:ring-panel/70 [&_:has(>input[type=checkbox])]:[--color-accent:var(--color-ink)] [&_input[type=checkbox]]:accent-ink"
+      class="@container/settings-page h-full min-h-0 overflow-y-auto [overflow-anchor:none] select-children bg-panel"
     >
       {/* On mobile/tablet the page is full-frame: the chrome insets live inside the
           scroll content (plus the usual breathing room) so pages scroll under
@@ -120,7 +120,14 @@ export function SettingsPage(props: {
  */
 export function SettingsSection(props: {
   title?: JSX.Element;
+  /**
+   * The settings search target, when the title is translated or not a plain
+   * string. Defaults to the title.
+   */
+  target?: string;
   description?: string;
+  /** Collapsible sections keep their heading visible when the body is closed. */
+  expanded?: boolean;
   /** Right-aligned controls beside the section heading. */
   actions?: JSX.Element;
   class?: string;
@@ -130,9 +137,11 @@ export function SettingsSection(props: {
   return (
     <section
       data-settings-target={
-        typeof props.title === 'string'
-          ? settingsTarget(props.title)
-          : undefined
+        props.target
+          ? settingsTarget(props.target)
+          : typeof props.title === 'string'
+            ? settingsTarget(props.title)
+            : undefined
       }
       tabIndex={-1}
       class={cn('scroll-mt-4 outline-none', props.class)}
@@ -154,9 +163,11 @@ export function SettingsSection(props: {
           </Show>
         </div>
       </Show>
-      <SettingsSurface class="flex flex-col gap-2 p-4">
-        {props.children}
-      </SettingsSurface>
+      <Show when={props.expanded ?? true}>
+        <SettingsSurface class="flex flex-col gap-2 p-4">
+          {props.children}
+        </SettingsSurface>
+      </Show>
     </section>
   );
 }
@@ -395,6 +406,7 @@ export function IntegrationRow(props: {
 export function SettingsButton(props: ButtonProps) {
   return (
     <Button
+      variant="ghost"
       {...props}
       class={cn('rounded-full font-normal gap-1.5', props.class)}
     />

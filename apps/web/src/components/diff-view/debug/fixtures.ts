@@ -222,3 +222,28 @@ export function generatedChanges(fileCount: number): {
   }
   return { files, patch: `${parts.join('\n')}\n` };
 }
+
+/** Files at and just above the default expansion limit. */
+export const COLLAPSE_FILES: DiffFile[] = [40, 41].map((additions) => ({
+  path: `example/added-${additions}.ts`,
+  kind: 'added',
+  additions,
+  deletions: 0,
+  binary: false,
+  patchOmitted: false,
+}));
+
+export const COLLAPSE_PATCH = COLLAPSE_FILES.map((file) =>
+  [
+    `diff --git a/${file.path} b/${file.path}`,
+    'new file mode 100644',
+    '--- /dev/null',
+    `+++ b/${file.path}`,
+    `@@ -0,0 +1,${file.additions} @@`,
+    ...Array.from(
+      { length: file.additions },
+      (_, index) => `+export const value${index + 1} = ${index + 1};`
+    ),
+    '',
+  ].join('\n')
+).join('');

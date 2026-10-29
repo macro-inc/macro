@@ -24,11 +24,15 @@ git clone https://github.com/macro-inc/macro.git
 cd macro
 ```
 
-The Nix shell provides `just`, Cargo, the Rust toolchain, Bun, `wasm-pack`, sqlx, zig, and cargo-zigbuild. You do not need to install these tools separately.
+The Nix shell provides `just`, Cargo, the Rust toolchain, Bun, `wasm-pack`, sqlx, zig, cargo-zigbuild, `prek`, and `gitleaks`. You do not need to install these tools separately.
 
 ```bash
 nix develop
 ```
+
+Entering the shell installs git hooks (`prek install`). A pre-commit hook
+scans staged added lines for customer emails, phones, addresses, and secrets.
+See `tooling/pii/exceptions` and the `git` skill.
 
 If `nix develop` fails, enable the experimental features:
 
@@ -121,7 +125,7 @@ Local authentication includes a working signing key pair for Macro API tokens,
 which settings actions such as enabling CRM require. New teams start with CRM
 disabled; enable it in Settings > CRM before creating pipelines.
 
-The stack boots with stubbed values for every config the services require, including the third-party integrations (Google, GitHub, Stripe, CloudFront). Those flows do not work against real services with the stubs. The rest of the stack is fully functional: auth, documents, email, and search.
+The stack supplies stubbed values for required configuration, including third-party integrations (Google, GitHub, Stripe, CloudFront). Those flows do not work against real services with the stubs. Local auth, documents, and search work independently. The agent harness currently also requires a configured Google Gmail identity provider for its public MCP routes; without real Google OAuth configuration, it exits during startup.
 
 To use a real integration locally, supply its keys via `--env-file` — see [Integration Secrets](#integration-secrets) below.
 
@@ -154,7 +158,8 @@ compiled worker; rebuild the sync image after backend protocol changes.
 Open the frontend URL in your browser.
 
 The local environment supplies both `LOCAL_AWS_URL` (the container endpoint)
-and `LOCAL_AWS_PUBLIC_URL` (the app's HTTPS origin with `/local-storage`).
+and `LOCAL_AWS_PUBLIC_URL` (this machine's hostname on the proxy port, with
+`/local-storage`, in both the hot and the static-frontend flavor).
 Document downloads and presigned uploads use this storage proxy, so remote
 browsers do not need a separate localhost storage connection. Container clients
 translate that public endpoint back to LocalStack internally. If a download or
@@ -221,11 +226,12 @@ persona accounts it created. It is safe to run against a stack that you tested i
 
 ## Integration Secrets
 
-A `--no-doppler` stack boots with deterministic stubs for every value the services' config loaders require. The stubs are enough to start the services. The third-party integrations they back do not work until you supply real values:
+A `--no-doppler` stack supplies deterministic stubs for required configuration. External integrations still need real values, and the agent harness additionally needs the Google Gmail identity provider created from real Google OAuth configuration:
 
 | Integration | Keys | Stub behavior |
 | --- | --- | --- |
-| Google login / Gmail | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET_KEY` | Google SSO and Gmail inbox linking are unavailable. Local signup still works. The email service reports no Gmail grant and skips inbox syncing. |
+| Google login / Gmail | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET_KEY` | Google SSO and Gmail inbox linking are unavailable. Local signup still works. The email service skips inbox syncing without a Gmail grant. The agent harness cannot start its public MCP routes without the Google Gmail identity provider. |
+| Pipedream | `PIPEDREAM_CLIENT_ID`, `PIPEDREAM_CLIENT_SECRET`, `PIPEDREAM_PROJECT_ID` | Placeholders satisfy the harness configuration loader; Pipedream integrations require real credentials. |
 | GitHub login | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_IDP_ID` | Login with GitHub is unavailable |
 | Stripe billing | `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` | Checkout and subscription endpoints fail. Signup skips Stripe and leaves profile billing unset, so free-team creation works. Only the required legacy account field stores a local placeholder. |
 | CloudFront signed URLs | `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY` | Document download URLs are unsigned (fine against local S3) |
@@ -445,6 +451,11 @@ If you started without the flag and suspect a stale image, press `q`. Then start
 ## Headless Mode
 
 `just stack` runs the same stack without an attached terminal. There is no hotkey loop and no dev server. The frontend is built once and served statically by the proxy. The whole product lives behind one origin. A finished `up` leaves only Docker containers running.
+
+Both headless and attached startup prepare the browser WebAssembly packages
+through `bun run dev:prepare`. A fresh worktree builds them before serving the app;
+later starts reuse the generated packages when they are current. See
+[Integration Secrets](#integration-secrets) for credential-free startup limitations.
 
 ```bash
 just stack up                  # bring everything up, print URLs, return

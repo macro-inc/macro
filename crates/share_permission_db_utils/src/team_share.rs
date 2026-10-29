@@ -104,6 +104,7 @@ fn entity_uuid(entity: &Entity<'_>) -> TeamShareResult<Uuid> {
             | EntityType::AgentSession
             | EntityType::Initiative
             | EntityType::Database
+            | EntityType::ExternalChat
     ) {
         return Err(report!(TeamShareError::InvalidEntity));
     }
@@ -150,6 +151,9 @@ async fn load_state(connection: &mut PgConnection, entity: &Entity<'_>) -> TeamS
             UNION ALL
             SELECT i.owner_user_id, i.share_permission_id FROM initiative i
             WHERE $2 = 'initiative' AND i.id = $3
+            UNION ALL
+            SELECT g.user_id, g.share_permission_id FROM external_chat g
+            WHERE $2 = 'external_chat' AND g.id = $3
             UNION ALL
             SELECT s.owner_id, s.share_permission_id FROM agent_session s
             WHERE $2 = 'agent_session' AND s.id = $3

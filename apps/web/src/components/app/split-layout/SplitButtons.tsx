@@ -1,5 +1,5 @@
 import { LIST_VIEW_ID } from '@app/constants/list-views';
-
+import { t } from '@app/lib/i18n';
 import ArrowLeft from '@icon/system/regular/arrow-left.svg';
 import ArrowRight from '@icon/system/regular/arrow-right.svg';
 import SplitIcon from '@icon/system/regular/square-half.svg';
@@ -13,13 +13,14 @@ export function SplitBackButton() {
   if (!context) return '';
   return (
     <Button
+      aria-label={t('splitMenu.goBack')}
+      tooltip={t('splitMenu.goBack')}
       variant="ghost"
       size="icon-md"
-      label="Go Back"
       disabled={!context.handle.canGoBack()}
       onClick={context.handle.goBack}
     >
-      <ArrowLeft />
+      <ArrowLeft class="size-4 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
   );
 }
@@ -29,13 +30,14 @@ export function SplitForwardButton() {
   if (!context) return '';
   return (
     <Button
+      aria-label={t('splitMenu.goForward')}
+      tooltip={t('splitMenu.goForward')}
       variant="ghost"
       size="icon-md"
-      label="Go Forward"
       disabled={!context.handle.canGoForward()}
       onClick={context.handle.goForward}
     >
-      <ArrowRight />
+      <ArrowRight class="size-4 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
   );
 }
@@ -45,9 +47,10 @@ export function SplitCreateButton() {
   if (!context) return '';
   return (
     <Button
+      aria-label={t('splitMenu.createNewSplit')}
+      tooltip={t('splitMenu.createNewSplit')}
       variant="ghost"
       size="icon-md"
-      label="Create new split"
       onClick={() => {
         context.manager.createNewSplit({
           content: {
@@ -58,7 +61,7 @@ export function SplitCreateButton() {
         });
       }}
     >
-      <SplitIcon />
+      <SplitIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
   );
 }
@@ -68,12 +71,13 @@ export function SplitCloseButton() {
   if (!context) return '';
   return (
     <Button
+      aria-label={t('splitMenu.close')}
+      tooltip={t('splitMenu.close')}
       variant="ghost"
-      size="icon-md"
-      label="Close"
+      size="icon-sm"
       onClick={context.handle.close}
     >
-      <CloseIcon />
+      <CloseIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
   );
 }

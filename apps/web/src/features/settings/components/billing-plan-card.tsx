@@ -47,7 +47,12 @@ export function BillingPlanCard(props: {
   plan: PaidPlanTier;
   state: Pick<
     BillingState,
-    'hasPaid' | 'teamRole' | 'aiUsageEnabled' | 'pending' | 'trialEligible'
+    | 'hasPaid'
+    | 'teamRole'
+    | 'aiUsageEnabled'
+    | 'pending'
+    | 'trialEligible'
+    | 'trialing'
   >;
   onSelectPlan?: (plan: PaidPlanTier) => void;
 }) {
@@ -87,8 +92,7 @@ export function BillingPlanCard(props: {
           <Show when={props.onSelectPlan}>
             <Button
               class="w-full py-1.5 px-3 @sm/plan-card:w-auto @sm/plan-card:justify-self-end"
-              depth={2}
-              variant="cta"
+              variant="neutral"
               disabled={
                 props.state.pending ||
                 (!props.state.hasPaid &&
@@ -122,7 +126,9 @@ export function BillingPlanCard(props: {
         >
           <p class="text-xs text-ink-extra-muted">
             <Show when={props.plan === 'max'}>
-              Prorated for the rest of this period.
+              {props.state.trialing
+                ? 'Charged today. The Pro trial ends.'
+                : 'Prorated for the rest of this period.'}
             </Show>
             <Show when={props.state.teamRole === 'owner'}>
               {' '}

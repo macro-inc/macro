@@ -26,6 +26,7 @@ const editorMocks = vi.hoisted(() => ({
   onEnter: undefined as (() => boolean) | undefined,
   inlineMenuOpen: false,
   onEscape: undefined as ((event?: KeyboardEvent) => boolean) | undefined,
+  ignoredActions: [] as string[],
 }));
 
 vi.mock(
@@ -103,6 +104,11 @@ vi.hoisted(() => {
 });
 
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: vi.fn(() => false) }));
+
+const device = vi.hoisted(() => ({ touch: false }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => device.touch,
+}));
 
 vi.mock('@core/component/LexicalMarkdown/utils/create-composer-layout', () => ({
   createComposerLayout: (
@@ -276,7 +282,10 @@ vi.mock(
           return builder;
         },
         withEmojis: () => builder,
-        withActions: () => builder,
+        withActions: (options?: { ignoreActionIds?: string[] }) => {
+          editorMocks.ignoredActions.push(...(options?.ignoreActionIds ?? []));
+          return builder;
+        },
         withLinks: () => builder,
         withHistory: () => builder,
         withCode: () => builder,
@@ -408,6 +417,8 @@ describe('Input slots', () => {
     editorMocks.inlineMenuOpen = false;
     editorMocks.onEscape = undefined;
     editorMocks.mentionUsers = undefined;
+    device.touch = false;
+    editorMocks.ignoredActions = [];
     vi.mocked(isMobile).mockReturnValue(false);
   });
 
@@ -466,23 +477,23 @@ describe('Input slots', () => {
     expect(editorMocks.onEscape?.()).toBe(false);
   });
 
-  it('starts dictation from the collapsed channel composer', async () => {
+  it('omits the microphone on touch devices, whose keyboards dictate', () => {
+    device.touch = true;
     vi.mocked(isMobile).mockReturnValue(true);
-    const user = userEvent.setup();
-    const { container } = render(() => (
+    const collapsed = render(() => (
       <ChannelInput input={baseInput} collapsible />
     ));
-    const collapsed = container.querySelector('[data-composer-collapsed]');
-    expect(collapsed).toBeTruthy();
-    const microphone = collapsed?.querySelector(
-      'button[aria-label="Start dictation"]'
-    );
-    expect(microphone).toBeTruthy();
-    await user.click(microphone!);
-    expect(container.querySelector('[data-composer-collapsed]')).toBeNull();
-    expect(screen.getByRole('group', { name: 'Dictation' })).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: 'Cancel dictation' }));
-    expect(screen.queryByRole('group', { name: 'Dictation' })).toBeNull();
+    expect(
+      collapsed.container.querySelector('[data-composer-collapsed]')
+    ).toBeTruthy();
+    expect(
+      collapsed.queryByRole('button', { name: 'Start dictation' })
+    ).toBeNull();
+
+    const expanded = render(() => <ChannelInput input={baseInput} />);
+    expect(
+      expanded.queryByRole('button', { name: 'Start dictation' })
+    ).toBeNull();
   });
 
   it('offers Cursor and Codex within their rollouts before account setup', () => {
@@ -709,6 +720,29 @@ describe('Input slots', () => {
     expect(onToggleFormatRibbon).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledOnce();
     expect(onSend.mock.calls[0]?.[0]?.value).toBe('reply');
+  });
+
+  it('offers only text, formatting and files when a host switches features off', async () => {
+    const user = userEvent.setup();
+    render(() => (
+      <ChannelInput
+        input={baseInput}
+        features={{
+          mentions: false,
+          createItems: false,
+          gifs: false,
+          richBlocks: false,
+        }}
+      />
+    ));
+    expect(editorMocks.mentionUsers).toBeUndefined();
+    expect(editorMocks.ignoredActions).toEqual(
+      expect.arrayContaining(['task', 'document', 'gif', 'table', 'heading1'])
+    );
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+    expect(
+      screen.getAllByRole('menuitem').map((item) => item.textContent)
+    ).toEqual(['Attach files']);
   });
 
   it('omits the reply action for channel mode', () => {

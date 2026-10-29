@@ -99,7 +99,7 @@ export function ReviewNotesChip(props: {
                     tooltip="Remove note"
                     onClick={() => props.onRemove(note().id)}
                   >
-                    <XIcon />
+                    <XIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
                   </Button>
                 </div>
                 <textarea

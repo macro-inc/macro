@@ -51,4 +51,25 @@ describe('openGlobalShareModal', () => {
       })
     );
   });
+
+  it('opens the share dialog for a database at the viewer’s grant', async () => {
+    const database = {
+      type: 'database',
+      id: 'database-1',
+      name: 'Roadmap',
+      ownerId: 'macro|owner@example.com',
+      grant: 'edit',
+    } as Extract<EntityData, { type: 'database' }>;
+    await openGlobalShareModal({ entity: database });
+    expect(openFormShareModal).not.toHaveBeenCalled();
+    expect(openShareModal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'database-1',
+        itemType: 'database',
+        name: 'Roadmap',
+        userPermissions: Permissions.CAN_EDIT,
+        owner: 'macro|owner@example.com',
+      })
+    );
+  });
 });

@@ -41,6 +41,46 @@ pub async fn insert_user_mapping(
     Ok(())
 }
 
+/// Map peers that wrote operations to `user_id`, keeping any mapping a peer
+/// already has: a peer that registered explicitly stays with its owner.
+pub async fn insert_missing_user_mappings(
+    db: &D1Database,
+    document_id: &str,
+    user_id: &str,
+    peer_ids: &[u64],
+) -> worker::Result<()> {
+    for chunk in peer_ids.chunks(BATCH_CHUNK_SIZE) {
+        let statements = chunk
+            .iter()
+            .map(|peer_id| {
+                db.prepare(
+                    "INSERT OR IGNORE INTO peer_user_map (document_id, peer_id, user_id) VALUES (?, ?, ?);",
+                )
+                .bind(&[document_id.into(), peer_id.to_string().into(), user_id.into()])
+            })
+            .collect::<worker::Result<Vec<_>>>()?;
+        db.batch(statements).await?;
+    }
+    Ok(())
+}
+
+/// Give a copied document the source document's peer mappings. Existing
+/// mappings on the target are kept.
+pub async fn copy_user_mappings(
+    db: &D1Database,
+    source_document_id: &str,
+    target_document_id: &str,
+) -> worker::Result<()> {
+    db.prepare(
+        "INSERT OR IGNORE INTO peer_user_map (document_id, peer_id, user_id) \
+         SELECT ?, peer_id, user_id FROM peer_user_map WHERE document_id = ?;",
+    )
+    .bind(&[target_document_id.into(), source_document_id.into()])?
+    .run()
+    .await?;
+    Ok(())
+}
+
 pub async fn get_user_id_from_peer_id(
     db: D1Database,
     document_id: &str,

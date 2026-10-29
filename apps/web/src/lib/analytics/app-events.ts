@@ -218,7 +218,11 @@ export type AppEvents = {
   /** An existing subscriber moved between Premium and Max. */
   plan_changed: { plan: 'premium' | 'max'; from?: string };
 
-  email_message_sent: Record<string, unknown>;
+  /**
+   * An email the user sent, counted once when the outbox accepts it. Undo
+   * does not retract it. Older events have no properties.
+   */
+  email_message_sent: { isReply: boolean };
   /**
    * How the inbox-link OAuth callback ended. `already_connected` is a plain add
    * whose account chooser returned an inbox the user already had; `connected`
@@ -261,6 +265,8 @@ export type AppEvents = {
       | 'screen_share_toggled';
     channelId: string;
     callId?: string;
+    /** On `left`: seconds since this client joined the call. */
+    secondsInCall?: number;
   } & Record<string, unknown>;
   // Mic audio-processing state transitions (noise suppression attach /
   // detach / fallback). `constraintMismatch` flags engines that report

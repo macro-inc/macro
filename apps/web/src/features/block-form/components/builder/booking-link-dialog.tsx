@@ -72,7 +72,7 @@ export function BookingLinkDialog(props: {
                 </Match>
               </Switch>
             </div>
-            <Button variant="outline" onClick={props.onCreate}>
+            <Button variant="secondary" onClick={props.onCreate}>
               <ArrowSquareOut class="size-4" />
               Create a booking link
             </Button>

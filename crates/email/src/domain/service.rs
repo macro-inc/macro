@@ -425,6 +425,16 @@ where
             .await
     }
 
+    async fn set_threads_archived(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
+        thread_ids: Vec<Uuid>,
+        archived: bool,
+    ) -> Result<crate::domain::models::SetThreadsArchivedResult, EmailErr> {
+        self.set_threads_archived_impl(macro_id, thread_ids, archived)
+            .await
+    }
+
     async fn mark_thread_unread(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
