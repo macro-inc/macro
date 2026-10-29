@@ -230,7 +230,7 @@ where
         };
         if let Some(chart) = chart {
             check_chart(
-                &database_sql::result_columns(catalog.catalog(), &select),
+                &database_sql::result_columns(catalog.catalog(), &select)?,
                 chart,
             )?;
         }

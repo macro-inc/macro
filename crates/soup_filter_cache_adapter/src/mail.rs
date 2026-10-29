@@ -3,6 +3,7 @@ use super::*;
 use cache_core::{
     engine::{Engine, EngineError},
     normalize::normalize,
+    predicate::reconciliation::PredicateBaselineEntry,
     predicate::{PredicateIndexStorage, ProjectionState},
     store::Storage,
     value::{CacheValue, EntityKey, Record},
@@ -16,6 +17,9 @@ use soup_filter_projection::{
     decode_cache_projection_supplement,
 };
 use std::borrow::Cow;
+
+pub(crate) mod reconciliation;
+mod retention;
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod test;
@@ -670,6 +674,8 @@ pub enum PageResult {
         revision: String,
         /// Normalized matching email keys.
         keys: Vec<String>,
+        /// Server-confirmed rows retained while their local projection is unknown.
+        retained_keys: Vec<String>,
         /// View-correct display timestamps, aligned with keys.
         sort_timestamps: Vec<String>,
         /// Query-bound local continuation.
@@ -723,11 +729,13 @@ pub async fn page<S: PredicateIndexStorage>(
         limit,
         request,
         false,
+        &[],
     )
     .await
 }
 
 /// Evaluate Mail using complete property-aware projections.
+#[expect(clippy::too_many_arguments, reason = "shared host page boundary")]
 pub async fn page_current<S: PredicateIndexStorage>(
     engine: &mut Engine<S>,
     generation: &str,
@@ -736,6 +744,7 @@ pub async fn page_current<S: PredicateIndexStorage>(
     direction: &str,
     limit: u16,
     request: PageRequest,
+    baseline: &[PredicateBaselineEntry],
 ) -> Result<PageResult, PageError<S::Error>> {
     page_impl(
         engine,
@@ -746,6 +755,7 @@ pub async fn page_current<S: PredicateIndexStorage>(
         limit,
         request,
         true,
+        baseline,
     )
     .await
 }
@@ -763,6 +773,7 @@ async fn page_impl<S: PredicateIndexStorage>(
     limit: u16,
     request: PageRequest,
     current: bool,
+    baseline: &[PredicateBaselineEntry],
 ) -> Result<PageResult, PageError<S::Error>> {
     let revision = engine.current_revision().to_string();
     // A read through a position takes `limit` as its fewest rows and pages
@@ -778,6 +789,12 @@ async fn page_impl<S: PredicateIndexStorage>(
             predicate_index::MAX_QUERY_LIMIT - 1
         ))
         .into());
+    }
+    if baseline.len() > cache_core::predicate::reconciliation::MAX_RECONCILIATION_BASELINE {
+        return Err(error("Mail reconciliation baseline is too large").into());
+    }
+    if !baseline.is_empty() && request.cursor.is_some() {
+        return Err(error("Mail continuation pages do not accept a server baseline").into());
     }
     let Some(viewer) = engine.current_identity().await? else {
         return Ok(PageResult::Incomplete { revision });
@@ -875,15 +892,6 @@ async fn page_impl<S: PredicateIndexStorage>(
         }
         (None, None) => read_page(engine, &query, limit).await?,
     };
-    let sort_timestamps = window
-        .values
-        .iter()
-        .map(|value| {
-            chrono::DateTime::from_timestamp_micros(*value)
-                .map(|ts| ts.to_rfc3339())
-                .ok_or_else(|| error("invalid page timestamp"))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
     let end_cursor = window
         .keys
         .last()
@@ -898,6 +906,19 @@ async fn page_impl<S: PredicateIndexStorage>(
             .map_err(error)
         })
         .transpose()?;
+    // Keep local cursors tied to the indexed window. A retained server row can
+    // be outside it and must not cause continuation pages to skip cached mail.
+    let (window, retained_keys) =
+        retention::reconcile_window(engine, &query, window, baseline).await?;
+    let sort_timestamps = window
+        .values
+        .iter()
+        .map(|value| {
+            chrono::DateTime::from_timestamp_micros(*value)
+                .map(|ts| ts.to_rfc3339())
+                .ok_or_else(|| error("invalid page timestamp"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(PageResult::MailPage {
         revision,
         keys: window
@@ -905,6 +926,7 @@ async fn page_impl<S: PredicateIndexStorage>(
             .into_iter()
             .map(|key| key.as_str().to_owned())
             .collect(),
+        retained_keys,
         sort_timestamps,
         next_cursor: end_cursor.clone().filter(|_| window.more),
         end_cursor,

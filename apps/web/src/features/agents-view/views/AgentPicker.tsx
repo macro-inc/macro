@@ -95,8 +95,9 @@ function DesktopAgentPicker(props: AgentPickerProps) {
             : `${props.selected?.name ?? 'Choose agent'} · ${label()}`
         }
         class={cn(
-          'h-[33.75px] min-w-0 max-w-full gap-[5.625px] px-[7.5px] text-base font-normal text-ink-muted light-mode:text-composer-placeholder',
-          props.triggerClass
+          'h-[33.75px] min-w-0 gap-[5.625px] px-[7.5px] text-base font-normal text-ink-muted light-mode:text-composer-placeholder',
+          props.triggerClass,
+          'max-w-[min(18rem,100%)]'
         )}
       >
         <Show when={!rawModel()}>

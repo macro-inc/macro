@@ -26,6 +26,7 @@ const ButtonGroupContext = createContext<ButtonGroupContextValue>();
 export const useButtonGroupContext = () => useContext(ButtonGroupContext);
 
 export type ButtonGroupProps = Omit<ComponentProps<'div'>, 'size'> & {
+  /** Softer secondary frame by default; primary is solid neutral and accent is explicit. */
   variant?: ButtonVariant;
   /** The shared frame adapts by default; segments always stay flat. */
   finish?: ButtonFinish;

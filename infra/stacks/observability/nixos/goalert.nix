@@ -108,7 +108,7 @@ in
           "google_client_secret"
         ];
         ExecStartPre = [
-          "${pkgs.python3}/bin/python3 ${./goalert/apply-config.py} ${lib.getExe goalert} ${pkgs.writeText "goalert-config.json" (builtins.toJSON goalertConfig)} ${config.services.postgresql.package}/bin/psql"
+          "${pkgs.python3}/bin/python3 ${./goalert/apply-config.py} ${lib.getExe goalert} ${pkgs.writeText "goalert-config.json" (builtins.toJSON goalertConfig)} ${config.services.postgresql.package}/bin/psql ${./goalert/workspace-admins.sql}"
         ];
         ExecStart = start;
         MemoryMax = "768M";
@@ -118,7 +118,7 @@ in
     };
 
     macro-alerts-relay = needsSecrets // {
-      description = "Forward GoAlert and Grafana notifications to Macro Alerts";
+      description = "Forward GoAlert notifications to Macro Alerts";
       wantedBy = [ "multi-user.target" ];
       serviceConfig = {
         DynamicUser = true;

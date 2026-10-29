@@ -2394,8 +2394,12 @@ split. A PR mention always stays on one line: a long title truncates with an
 ellipsis before the `#N`, so read the full title from the hover card. In a sent
 message, a mention an agent wrote by URL alone shows `owner/repo#N` until its
 title loads and keeps the same width either way. A PR Macro has not synced
-stays an ordinary link, and pasting inside a code block or over a selection
-keeps the default behavior.
+stays an ordinary link, and pasting over a selection keeps the default
+behavior.
+
+Pasting inside a code block inserts the clipboard's plain text verbatim: links
+stay text instead of becoming mentions, long pastes do not collapse into a
+**pasted** chip, and Markdown syntax is kept. Pasted files still attach.
 
 1. `Create` → `Document D`. The app navigates to `/app/md/<uuid>` with the **title field
    focused**.
@@ -2601,7 +2605,10 @@ after an expanded reference remains in separate paragraphs.
 Hover a document reference chip to open its preview without navigating. With
 the preview open, the compact header shows a tinted icon, title, and author/time
 byline. Click the title to open the document; the Reference actions ellipsis menu contains copy
-link, split, embed/collapse, AI, and delete actions when applicable. The preview
+link, split, embed/collapse, AI, and delete actions when applicable. In an editable
+editor it also offers **Convert to Plain Text**, which replaces the chip with the
+item's link as ordinary text, so sending it shares nothing; the `No Access` and
+`Deleted` cards show the menu there too. The preview
 stays open while this menu is active, and moving over other reference chips must
 not open their previews. Click outside or press Escape to dismiss the menu;
 other references can then be hovered again. Images use an inset frame and task chips
@@ -3001,6 +3008,10 @@ Scrub the graph to preview a point in time, or select a session to see its chang
 selected version into a separate document. **Close history** or Escape returns
 to the mounted editor without losing its scroll position. The two columns scroll
 independently, and other app splits remain available.
+
+Sessions, diffs, and blame tooltips name AI edits by who made them: an agent's
+edits show the agent's name, and other AI-editor writes show
+`<user> (AI)` for the user they were made for.
 
 ## Side panel
 

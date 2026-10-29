@@ -1,8 +1,10 @@
-"""Forward GoAlert and Grafana webhooks to the Macro Alerts channel.
+"""Forward GoAlert webhooks to the Macro Alerts channel.
 
-Macro's channel webhook takes `{"content": ...}` and a bot-token header. GoAlert
-cannot set headers, so both senders post here over loopback and the token stays
-in this one service. Each request is forwarded once; the sender owns retries.
+GoAlert is the only sender: Grafana and Datadog alert GoAlert, whose escalation
+policies post each alert, acknowledgement and close here. Macro's channel webhook
+takes `{"content": ...}` and a bot-token header; GoAlert cannot set headers, so it
+posts here over loopback and the token stays in this one service. Each request is
+forwarded once; GoAlert owns retries.
 """
 import json
 import logging
@@ -19,17 +21,32 @@ BOT_TOKEN = (CREDENTIALS / 'macro_alerts_bot_token').read_text()
 FORWARD_TIMEOUT_SECONDS = 2.5
 MAX_BODY_BYTES = 256 * 1024
 MAX_CONTENT_CHARS = 4000
+MAX_DETAILS_CHARS = 1500
+
+
+def service_prefix(service: str) -> str:
+    """`Notify` only posts to the channel; every other service pages."""
+    marker = '🔔' if 'Notify' in service else '🚨 PAGE'
+    return f"{marker} [{service}]" if service else marker
 
 
 def goalert_content(payload: dict) -> str | None:
     kind = payload.get('Type')
     link = payload.get('GoAlertURL', '')
+    service = payload.get('ServiceName', '')
     if kind == 'Alert':
-        return f"🚨 Paging on-call: {payload.get('Summary', '')}\n{link}"
+        details = payload.get('Details', '').strip()
+        if len(details) > MAX_DETAILS_CHARS:
+            details = details[:MAX_DETAILS_CHARS].rstrip() + '\n…'
+        lines = [f"{service_prefix(service)} {payload.get('Summary', '')}"]
+        if details:
+            lines.append(details)
+        lines.append(f"Acknowledge: {link}")
+        return '\n\n'.join(lines)
     if kind == 'AlertStatus':
         return f"{payload.get('LogEntry', '')}: {payload.get('Summary', '')}\n{link}"
     if kind == 'AlertBundle':
-        return f"🚨 Paging on-call: {payload.get('Count')} alerts for {payload.get('ServiceName', '')}\n{link}"
+        return f"{service_prefix(service)} {payload.get('Count')} alerts\nAcknowledge: {link}"
     if kind == 'AlertStatusBundle':
         return f"{payload.get('LogEntry', '')} ({payload.get('Count')} alerts)\n{link}"
     if kind == 'ScheduleOnCallUsers':
@@ -40,30 +57,21 @@ def goalert_content(payload: dict) -> str | None:
     return None
 
 
-def grafana_content(payload: dict) -> str | None:
-    title = payload.get('title')
-    message = payload.get('message')
-    if not isinstance(title, str) or not isinstance(message, str):
-        return None
-    return f"{title}\n{message}"
-
-
-SOURCES = {'/goalert': goalert_content, '/grafana': grafana_content}
-
-
 class Relay(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
-        format_content = SOURCES.get(self.path)
         length = int(self.headers.get('Content-Length', '0'))
-        if format_content is None or length <= 0 or length > MAX_BODY_BYTES:
-            self.send_error(404 if format_content is None else 400)
+        if self.path != '/goalert':
+            self.send_error(404)
+            return
+        if length <= 0 or length > MAX_BODY_BYTES:
+            self.send_error(400)
             return
         try:
             payload = json.loads(self.rfile.read(length))
         except json.JSONDecodeError:
             self.send_error(400)
             return
-        content = format_content(payload) if isinstance(payload, dict) else None
+        content = goalert_content(payload) if isinstance(payload, dict) else None
         if content is None:
             logging.warning('unrecognised %s payload', self.path)
             self.send_error(422)

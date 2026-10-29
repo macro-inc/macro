@@ -1931,6 +1931,12 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
     >,
 >;
 
+/// The custom MCP server tools, wired by hosts holding the MCP credentials
+/// key.
+pub type ToolMcpServerToolContext = mcp_client::inbound::toolset::McpServerToolContext<
+    mcp_client::outbound::pg_server_repo::PgServerRepo,
+>;
+
 /// Type alias for the import tool context, wired by hosts with connector access.
 pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<ToolImportService>;
 
@@ -2008,6 +2014,9 @@ pub struct ToolServiceContext {
     /// Import staging/tracking tools. `unwired` in hosts that can't build
     /// the import service — calls there fail with a clear error.
     pub import_tool_context: ToolImportToolContext,
+    /// Custom MCP server tools. `unwired` in hosts without the MCP
+    /// credentials key — calls there fail with a clear error.
+    pub mcp_server_tool_context: ToolMcpServerToolContext,
     /// Built per-request via a manual `FromRef` below so it can carry the
     /// running chat's id — the derive's field-clone would freeze it at
     /// startup with no chat id set.
@@ -2113,6 +2122,28 @@ impl ToolServiceContext {
         self.pipeline_tool_context.actor = actor;
         self.crm_transfer_tool_context.actor = actor;
         self.databases_sql_tool_context = self.databases_sql_tool_context.with_actor(actor);
+        self
+    }
+
+    /// Run the tools for `caller`, as the public MCP authenticated it: an
+    /// agent writes as itself; an MCP client writes as the Macro bot with its
+    /// name on the post ("via Claude Code"); a pasted API key writes as the
+    /// Macro bot.
+    pub fn for_caller(self, caller: &ai_toolset::ToolCaller) -> Self {
+        match caller {
+            ai_toolset::ToolCaller::Agent(agent) => self.with_actor(*agent),
+            ai_toolset::ToolCaller::McpClient { name: Some(name) } => self.with_via(name),
+            ai_toolset::ToolCaller::McpClient { name: None } | ai_toolset::ToolCaller::ApiKey => {
+                self
+            }
+        }
+    }
+
+    /// Label the posts the tools make with the client the user works
+    /// through.
+    fn with_via(mut self, client: &str) -> Self {
+        self.message_tool_context = self.message_tool_context.with_via(client.to_owned());
+        self.channel_tool_context = self.channel_tool_context.with_via(client.to_owned());
         self
     }
 

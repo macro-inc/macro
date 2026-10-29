@@ -167,9 +167,9 @@ internal rollout. Model usage continues through the existing session metering.
 ## Imported Slack history
 
 Import starts from the **Create or import channels** card's **Import Slack**
-button at the bottom of the Chat sidebar, or **Settings → Team → Connections →
-Import from Slack**. The card's **New channel** button beside it opens the new
-channel dialog instead. The card is
+button at the bottom of the Chat sidebar, or **Import** on the Slack row in
+**Settings → Integrations** (team admins). The card's **New channel** button
+beside it opens the new channel dialog instead. The card is
 the shared connector-import card (see
 [Import from connected apps](setup-cards.md#import-from-connected-apps)) and is
 visible to team admins and owners when Slack archive import is enabled. It
@@ -285,6 +285,17 @@ be loaded or exceeds the inline limit, its URL remains available. To check this,
 ask the agent to inspect an image on a channel message and a video on a reply;
 verify that its tool response includes the matching attachment URLs.
 
+## Messages sent through an MCP client
+
+A message a user's MCP client (Claude Code, Cursor, ChatGPT) sends through
+Macro MCP's `SendChannelMessage` is posted by the Macro bot with a
+**from <user> via <client>** pill under the sender name, where the client is the
+name it registered with Macro's OAuth broker. A self-hosted agent's message
+shows the agent as the sender with **from <user>**, and a message sent with a
+pasted Macro API key shows the Macro bot with **from <user>**. To check this,
+connect an MCP client over OAuth, ask it to post in a channel, and confirm the
+pill names both you and the client on desktop and at phone width.
+
 ## Message composer
 
 Channel messages and thread replies have a microphone next to Send on pointer
@@ -322,6 +333,10 @@ wrapping paragraph should stay expanded without briefly collapsing; check this
 after reopening the channel with a draft already saved. Open reply composers always place the editor
 above the action row, including for empty and single-line drafts, so the
 attachment, delete-reply, and send controls have their own space.
+Shift+Enter adds a line to the draft; Enter sends. The composer spaces its
+paragraphs the way the sent message does, so a multi-line draft reads as what
+it will send. Check a multi-line message against the draft that wrote it: the
+spacing must not change on send.
 Both the expanded and collapsed composers start with a `+` button (`Add`). It
 opens a menu on desktop and a bottom drawer on mobile: `Mention` (opens the `@` typeahead), `Attach files` (the file
 picker; the iOS media picker on iOS), `GIF` (the same picker as `/gif`), then under `Create` the same actions as
@@ -433,6 +448,12 @@ bot asks before scheduling a specific clock time. Within the rollout, `@Macro` �
 `@cursor` / `@codex` when available — opens
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
+An agent mentioned in a thread reply gets, on its first turn, the images and
+videos on the mentioning message and then on the thread root and earlier
+replies (at most 8, no duplicates); follow-ups carry only their own files.
+Files elsewhere in the channel appear only as `<attachment>` entries in its
+context. To check, post an image on a thread root, mention an agent in a
+reply without attaching anything, and confirm it describes the image.
 Macro Coding Agent (`@coder`) is unavailable in mention suggestions, including
 when it appears among existing participants or bots. Check with the agents
 rollout both enabled and disabled.
@@ -557,6 +578,9 @@ session header (and the side panel's **Task** row) shows a task chip before the
 PR chip: the task title, or `Task` while loading or without access. Clicking it
 opens the task in a new split (in place on touch devices). Linking a different
 task sends the same session-update notification, so mounted headers refresh.
+When the agent names that task in a reply — after creating or linking it, or
+later — the reply includes an `<m-document-mention>` task chip, not a URL or
+`MACRO-` id.
 
 When the agent stops to ask a question the question takes the area in the passage's
 place, cropped and expandable the same way: the prompt, then what is asked - a form's
@@ -812,7 +836,11 @@ aligned with New. Choices use equal widths, a transparent outlined track with
 1px padding, and fully rounded pill shapes. The 32px selected state matches
 New's fill and border without an extra shadow. All contains an optional
 `Favorites` section and the
-independently paginated `Channels` and `DMs` sections. Favorites appears when
+independently paginated `Team channels`, `Channels`, and `DMs` sections, in
+that order. `Team channels` lists team channels; `Channels` lists every other
+non-DM channel (public and private). Each section collapses on its own and
+keeps its own sort; open sections split the column evenly, and the bottom-most
+open one takes any remaining height. Favorites appears when
 the user has channel favorites and only lists channels. Channel favorites open
 in the shared channel detail. Shift-clicking a favorite, channel, or DM opens that
 conversation in a new split instead. Shift-click refreshes the notification
@@ -822,7 +850,7 @@ Deferred navigation waits until the destination is applied; an unavailable split
 must leave unread state unchanged. Join-only channels remain
 blocked after hydration, including on mobile.
 
-With GraphQL caching enabled, a current-query cached Channels or DMs page
+With GraphQL caching enabled, a current-query cached Team channels, Channels, or DMs page
 (including an empty page) remains quiet on a response-free refresh failure.
 Hold or fail the refresh before local filtering finishes: cached rows must not
 flash **Couldn’t load conversations** while awaiting reconciliation. Changing
@@ -871,7 +899,7 @@ until explicitly enabled, including in development. For a local frontend,
 `VITE_ENABLE_CHANNEL_TAGS=true` enables it and `VITE_ENABLE_CHANNEL_TAGS=false`
 forces it off; restart the frontend after changing the environment override.
 
-With the flag off, Channels remains a flat list in its selected sort order.
+With the flag off, Team channels remains a flat list in its selected sort order.
 The heading's `+` creates a channel directly. Label headings, creation dialogs,
 channel-menu label actions, and label drag targets are absent, and the app makes
 no channel-label list or smart-label preview requests. Existing saved labels
@@ -891,7 +919,8 @@ dialog and cancel to check the controls without changing shared data. The
 creation, assignment, and persistence checks below require the label backend
 and an account where those changes are safe.
 
-Labels group channels inside the `Channels` section. Team members share the
+Labels group channels inside the `Team channels` section; the `Channels`
+section's `+` only creates a channel. Team members share the
 same labels and can create, rename, delete, or move their channels between them.
 Users without a team have labels private to their account. The naming and delete
 dialogs explain which scope applies. Collapse/expand state is per user.
@@ -910,7 +939,7 @@ row has an unread count, a `···` menu (`Rename`, `Mark all as read`, `Delete 
 Clicking the row or pressing Enter toggles it; `h` / `l` on a label or one of its
 channels collapses or expands that label. `[` / `]` jump between section headings.
 
-Creating: use the `Channels` heading's `+` → `New label`, including when the
+Creating: use the `Team channels` heading's `+` → `New label`, including when the
 account has no team. The name field receives focus on opening and reopening.
 Enter or `Create label` saves; Escape or Cancel dismisses without saving.
 The dialog stays open while saving and shows a failure inline, preserving the
@@ -922,7 +951,7 @@ private ones. Channels remain accessible after deleting their label.
 Moving: right-click a team channel for `Add to label` / `Move to label`, including a
 `New label…` option, or use `Ungroup from “<label>”`. Drag a channel onto a label
 heading or one of its channels to move in. Drag a grouped channel onto a plain
-team channel, the Channels heading, or empty space below the list to ungroup it.
+team channel, the Team channels heading, or empty space below the list to ungroup it.
 Dragging one ungrouped team channel onto another opens a name dialog; saving creates
 the label with both channels atomically. A failed save changes neither channel.
 Dropping on the source channel or its current label does nothing; Escape from

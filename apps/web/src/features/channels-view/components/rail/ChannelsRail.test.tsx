@@ -234,6 +234,7 @@ const source = {
   refresh: async () => {},
 };
 const sources: ChannelsSources = {
+  team_channels: { ...source, items: () => [] },
   channels: source,
   direct_messages: source,
   recents: source,

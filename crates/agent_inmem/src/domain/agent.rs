@@ -47,7 +47,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
 use crate::domain::admission::admit_turn;
-use crate::domain::engine::{AgentIdentity, AwaitingUser, TurnEngine, TurnPurpose, TurnRequest};
+use crate::domain::engine::{
+    AgentIdentity, AwaitingUser, ReplyDelivery, TurnEngine, TurnPurpose, TurnRequest,
+};
 use crate::domain::mcp::{DynMcpToolConnector, dialable_servers};
 use crate::domain::model_options::REASONING_EFFORT_CONFIG_ID;
 use crate::domain::session::{HistoryEntry, SessionStore, UserPrompt, messages_for_turn};
@@ -123,6 +125,8 @@ pub struct AgentState {
     pub session_id: AgentSessionId,
     /// The session's owner; turns run on their behalf.
     pub owner: Owner,
+    /// How the session's replies reach their reader.
+    pub delivery: ReplyDelivery,
     /// Runs the actual turns.
     pub engine: Arc<dyn TurnEngine>,
     /// Admission for new provider-backed turns, including direct ACP requests.
@@ -720,6 +724,7 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                         "agent.acp.prompt",
                         agent.session.id = %state.session_id,
                         gen_ai.conversation.id = %state.session_id,
+                        agent.turn.reply_delivery = ?state.delivery,
                         agent.turn.ttft_ms = tracing::field::Empty,
                         agent.turn.first_text_ms = tracing::field::Empty,
                         agent.turn.admission_wait_ms = tracing::field::Empty,
@@ -1014,6 +1019,7 @@ async fn run_turn(
     let requester = user_input_requester(state, connection, acp_session_id.clone(), &awaiting);
     let mut parts = state.engine.run_turn(TurnRequest {
         purpose: TurnPurpose::Conversation,
+        delivery: state.delivery,
         session_id: state.session_id,
         awaiting: Arc::clone(&awaiting),
         owner: state.owner.clone(),

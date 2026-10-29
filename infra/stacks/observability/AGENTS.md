@@ -45,6 +45,8 @@ From `infra/`: `bun run check`, then Biome on changed `.ts`.
 - GoAlert's application config lives in its database; `goalert/apply-config.py`
   overwrites it on every start from `goalert.nix`. `set-config` accepts invalid
   values silently, so check the journal for `validate config`.
+- Grafana keeps a provisioned contact point removed from `alerting.nix`; list
+  its uid in `deleteContactPoints` to delete it.
 - Grafana provisioning expands `$VAR` in contact point settings, but not in rule
   queries or annotations, so `$B` and `$values` work there and secrets must come
   in through the Grafana unit's environment.

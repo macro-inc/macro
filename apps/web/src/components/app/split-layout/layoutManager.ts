@@ -10,6 +10,7 @@ import type {
   SplitRouter,
   SplitSearchUpdate,
 } from '@app/lib/split-router';
+import { claimOf } from '@app/lib/split-router';
 import { trackNavigationLifecycle } from '@app/observability/navigation-lifecycle';
 import type {
   BlockAlias,
@@ -1618,17 +1619,26 @@ export function createSplitLayout(
 
   /** Resolve a retained entry before the destination mounts, never by redirecting after mount. */
   function resumeView(
-    content: SplitContent
+    content: SplitContent,
+    targetPane?: PaneId
   ): { content: SplitContent; routeState: unknown } | undefined {
     const span = Telemetry.span('navigation.view.resume');
     span.setAttr('view.id', content.id);
     try {
       const snapshot =
         content.type === 'component' ? viewState.get(content.id) : undefined;
-      span.setAttr('view.restored', snapshot !== undefined);
+      span.setAttr('view.restored', false);
       if (!snapshot) return;
       const restored = toContent(snapshot.location);
       if (restored.type !== 'component') return;
+      // Restoring a detail must not redirect a desktop app switch to another
+      // pane. Keep the requested list when that detail is already open there.
+      const claim = claimOf(router.routes, snapshot.location.route);
+      if (targetPane && claim && router.claims.holderOf(claim, targetPane)) {
+        span.setAttr('view.restore_skipped', 'open_elsewhere');
+        return;
+      }
+      span.setAttr('view.restored', true);
       return {
         content: {
           ...restored,
@@ -1650,7 +1660,11 @@ export function createSplitLayout(
   ): OpenSplitResult {
     const sourceOwner = options.handle?.id;
     if (options.resume && !options.preferNewSplit) {
-      const restored = resumeView(content);
+      const source = options.handle ?? activeSplit();
+      const restored = resumeView(
+        content,
+        !stacked() && source ? paneOf(source.id) : undefined
+      );
       if (restored) {
         content = restored.content;
         options = {
