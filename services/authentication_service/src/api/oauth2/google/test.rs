@@ -3,7 +3,10 @@ use reqwest::StatusCode;
 use url::Url;
 use uuid::Uuid;
 
-use super::{mailbox_grant_missing, mailbox_not_granted_response, resolved_granted_scopes};
+use super::{
+    PartialGrantDisposition, mailbox_grant_missing, mailbox_not_granted_response,
+    partial_grant_disposition, resolved_granted_scopes,
+};
 
 const GMAIL: &str = "https://www.googleapis.com/auth/gmail.modify";
 const CALENDAR: &str = "https://www.googleapis.com/auth/calendar.events";
@@ -73,4 +76,27 @@ fn a_refused_consent_without_a_return_url_keeps_the_error_body() {
     let response = mailbox_not_granted_response(None, &Uuid::now_v7());
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[test]
+fn a_refused_grant_is_revoked_when_no_inbox_works_on_it() {
+    assert_eq!(
+        partial_grant_disposition(None),
+        PartialGrantDisposition::Revoke,
+        "an account with no inbox loses nothing"
+    );
+    assert_eq!(
+        partial_grant_disposition(Some(true)),
+        PartialGrantDisposition::Revoke,
+        "an inbox whose grant already stopped yielding tokens loses nothing"
+    );
+}
+
+#[test]
+fn a_refused_grant_keeps_a_working_inbox_grant() {
+    assert_eq!(
+        partial_grant_disposition(Some(false)),
+        PartialGrantDisposition::Keep,
+        "revoking would take the whole grant, and with it the inbox's mail and calendar sync"
+    );
 }

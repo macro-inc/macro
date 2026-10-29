@@ -488,9 +488,10 @@ and calendar connect together). A Google consent that leaves the email
 permissions unchecked connects nothing: the callback returns to the calendar
 with a persistent `Email access required` prompt whose `Try again` reopens
 `Connect email` asking for the same permissions. The auth service also tries
-to revoke the partial grant at Google; when that succeeds, Google lists every
-permission again on the retry instead of folding the earlier calendar grant
-into an "already has some access" notice.
+to revoke the partial grant at Google, unless an inbox for that address still
+works on it; when the revocation succeeds, Google lists every permission again
+on the retry instead of folding the earlier calendar grant into an "already
+has some access" notice.
 
 `Turn off` keeps its confirmation open with `Turning off…` until removal finishes;
 re-enabling is not offered while the old calendar is still being deleted. Reconnecting

@@ -41,7 +41,8 @@ A consent that ends without a usable grant returns to the callback with
 quietly, `admin_consent_required` shows the Microsoft approval dialog,
 `gmail_not_granted` (the email permissions were left unchecked on Google's
 screen, so nothing was connected and the auth service tried, best effort, to
-revoke the partial grant at Google) shows a persistent `Email access required`
+revoke the partial grant at Google unless an inbox for that address still
+works on it) shows a persistent `Email access required`
 prompt whose `Try again` reopens `Connect email`, and anything else shows a
 failure toast.
 

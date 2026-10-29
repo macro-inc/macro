@@ -32,6 +32,7 @@ use crate::{
 use fusionauth::error::FusionAuthClientError;
 use fusionauth::google::oauth::GoogleExchangeTokenResponse;
 use fusionauth::identity_provider::{IdentityProviderLink, LinkUserRequest};
+use models_email::service::link::UserProvider;
 
 #[cfg(test)]
 mod test;
@@ -48,8 +49,30 @@ enum GoogleLinkOutcome {
     Linked,
     /// The consent asked for the mailbox but Google's grant lacks it, so the
     /// account cannot become an inbox. Nothing was attached, and the grant was
-    /// revoked at Google.
+    /// revoked at Google unless an inbox already works on it.
     MailboxNotGranted,
+}
+
+/// What to do with the grant behind a refused consent.
+#[derive(Debug, PartialEq, Eq)]
+enum PartialGrantDisposition {
+    /// Revoke it at Google, so the next consent screen lists every scope again.
+    Revoke,
+    /// Leave it alone: an inbox already works on it.
+    Keep,
+}
+
+/// Google's revocation endpoint revokes the account's whole grant to Macro,
+/// not only the token it is handed. An inbox that still works on that
+/// account's grant would lose its mail and calendar sync, so its grant is kept
+/// and only the refusal stands. An inbox whose grant already stopped yielding
+/// tokens has nothing to lose, and revoking lets the retry start from a clean
+/// consent screen.
+fn partial_grant_disposition(existing_inbox_needs_reauth: Option<bool>) -> PartialGrantDisposition {
+    match existing_inbox_needs_reauth {
+        Some(false) => PartialGrantDisposition::Keep,
+        Some(true) | None => PartialGrantDisposition::Revoke,
+    }
 }
 
 /// Whether a consent that asked for the mailbox came back without it.
@@ -97,27 +120,6 @@ async fn link_user(
             )
         })?;
 
-    // Google's actual grant may be a subset of what was requested. Without the
-    // mailbox scope `/email/init` cannot provision the inbox, so the grant is
-    // refused here, before it is attached to anyone's identity. It is also
-    // revoked at Google: consent requests carry `include_granted_scopes=true`,
-    // so a partial grant left behind would ride into every later consent and
-    // Google would stop listing its scopes, leaving the user no way to add the
-    // mailbox on a retry.
-    let requested_scopes = in_progress.requested_google_scopes;
-    let granted_scopes = resolved_granted_scopes(&token_response.scope, requested_scopes.clone());
-    if mailbox_grant_missing(&requested_scopes, &granted_scopes) {
-        let calendar_granted =
-            GoogleScopeSet::from_scopes(granted_scopes.iter().cloned()).has_calendar_capability();
-        tracing::info!(
-            calendar_granted,
-            "Google consent left out the mailbox scope; refusing the link"
-        );
-        revoke_partial_grant(ctx, &token_response).await;
-        tracing::Span::current().record("outcome", GMAIL_NOT_GRANTED_ERROR);
-        return Ok(GoogleLinkOutcome::MailboxNotGranted);
-    }
-
     let user_info = ctx
         .auth_client
         .parse_google_id_token(&token_response.id_token)
@@ -136,6 +138,48 @@ async fn link_user(
                 format!("unable to normalize email {}", user_info.email),
             )
         })?;
+
+    // Google's actual grant may be a subset of what was requested. Without the
+    // mailbox scope `/email/init` cannot provision the inbox, so the grant is
+    // refused here, before it is attached to anyone's identity. Consent
+    // requests carry `include_granted_scopes=true`, so a partial grant left
+    // behind would ride into every later consent and Google would stop
+    // listing its scopes, leaving the user no way to add the mailbox on a
+    // retry; it is revoked unless an inbox already works on the account's
+    // grant (see `partial_grant_disposition`).
+    let requested_scopes = in_progress.requested_google_scopes;
+    let granted_scopes = resolved_granted_scopes(&token_response.scope, requested_scopes.clone());
+    if mailbox_grant_missing(&requested_scopes, &granted_scopes) {
+        let calendar_granted =
+            GoogleScopeSet::from_scopes(granted_scopes.iter().cloned()).has_calendar_capability();
+        // A failed lookup keeps the grant: refusing is still right, and a
+        // revocation that might hit a working inbox is not worth the risk.
+        let disposition = match email_db_client::links::get::fetch_link_by_email(
+            &ctx.db,
+            &user_info_email,
+            UserProvider::Gmail,
+        )
+        .await
+        {
+            Ok(existing_inbox) => {
+                partial_grant_disposition(existing_inbox.map(|inbox| inbox.needs_reauth))
+            }
+            Err(error) => {
+                tracing::warn!(error = ?error, "unable to look up the inbox of a refused Google grant; keeping the grant");
+                PartialGrantDisposition::Keep
+            }
+        };
+        tracing::info!(
+            calendar_granted,
+            revoke = disposition == PartialGrantDisposition::Revoke,
+            "Google consent left out the mailbox scope; refusing the link"
+        );
+        if disposition == PartialGrantDisposition::Revoke {
+            revoke_partial_grant(ctx, &token_response).await;
+        }
+        tracing::Span::current().record("outcome", GMAIL_NOT_GRANTED_ERROR);
+        return Ok(GoogleLinkOutcome::MailboxNotGranted);
+    }
 
     // The IdP link doubles as the linked email's LOGIN identity: a Google identity binds to
     // exactly one FusionAuth user, and sign-in resolves through that link. When the linked
