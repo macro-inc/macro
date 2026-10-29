@@ -1933,9 +1933,8 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
 
 /// The custom MCP server tools, wired by hosts holding the MCP credentials
 /// key.
-pub type ToolMcpServerToolContext = mcp_client::inbound::toolset::McpServerToolContext<
-    mcp_client::outbound::pg_server_repo::PgServerRepo,
->;
+pub type ToolMcpServerToolContext =
+    mcp_client::inbound::toolset::McpServerToolContext<mcp_client::outbound::NativeServerStore>;
 
 /// Type alias for the import tool context, wired by hosts with connector access.
 pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<ToolImportService>;
