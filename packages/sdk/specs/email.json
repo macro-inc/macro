@@ -2735,12 +2735,7 @@
             "content": {
               "message/rfc822": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "integer",
-                    "format": "int32",
-                    "minimum": 0
-                  }
+                  "$ref": "#/components/schemas/EmlFile"
                 }
               }
             }
@@ -5820,6 +5815,10 @@
             "description": "Local label. Pending provider creation is reported by settings operations."
           }
         }
+      },
+      "EmlFile": {
+        "type": "string",
+        "format": "binary"
       },
       "EmptyResponse": {
         "type": "object",

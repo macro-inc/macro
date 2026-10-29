@@ -1048,6 +1048,8 @@ export type CreateLabelResponse = {
     label: Label;
 };
 
+export type EmlFile = Blob | File;
+
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
  */
@@ -3126,7 +3128,7 @@ export type GetMessageEmlErrors = {
 export type GetMessageEmlError = GetMessageEmlErrors[keyof GetMessageEmlErrors];
 
 export type GetMessageEmlResponses = {
-    200: Array<number>;
+    200: EmlFile;
 };
 
 export type GetMessageEmlResponse = GetMessageEmlResponses[keyof GetMessageEmlResponses];

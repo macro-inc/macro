@@ -27,6 +27,7 @@ import type {
   CreateLabelResponse,
   DeleteDraftParams,
   DeleteScheduledDraftParams,
+  EmlFile,
   EmptyResponse,
   ErrorResponse,
   ForwardCalendarEventError,
@@ -2999,7 +3000,7 @@ export const getMessage = async (
  * @summary Download a message's original source as an `.eml` file.
  */
 export type getMessageEmlResponse200 = {
-  data: number[];
+  data: EmlFile;
   status: 200;
 };
 

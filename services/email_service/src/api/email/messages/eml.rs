@@ -11,6 +11,21 @@ use uuid::Uuid;
 
 const EML_CONTENT_TYPE: &str = "message/rfc822";
 
+/// The message's original RFC 822 bytes.
+pub(crate) struct EmlFile;
+
+impl utoipa::PartialSchema for EmlFile {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+        use utoipa::openapi::schema::{KnownFormat, ObjectBuilder, SchemaFormat, Type};
+        ObjectBuilder::new()
+            .schema_type(Type::String)
+            .format(Some(SchemaFormat::KnownFormat(KnownFormat::Binary)))
+            .into()
+    }
+}
+
+impl utoipa::ToSchema for EmlFile {}
+
 /// Download a message's original source as an `.eml` file.
 #[utoipa::path(
     get,
@@ -21,7 +36,7 @@ const EML_CONTENT_TYPE: &str = "message/rfc822";
         ("id" = Uuid, Path, description = "Message ID."),
     ),
     responses(
-            (status = 200, content_type = "message/rfc822", body = Vec<u8>),
+            (status = 200, content_type = "message/rfc822", body = EmlFile),
             (status = 401, body=ErrorResponse),
             (status = 403, body=ErrorResponse),
             (status = 404, body=ErrorResponse),
