@@ -8,102 +8,88 @@
  */
 
 import { match } from 'ts-pattern';
-import type { Random } from './rng';
 
-export type BlockType =
-  | 'p'
-  | 'h1'
-  | 'h2'
-  | 'h3'
-  | 'quote'
-  | 'ul'
-  | 'ol'
-  | 'code';
+type BlockType = 'p' | 'h1' | 'h2' | 'h3' | 'quote' | 'ul' | 'ol' | 'code';
 export type Block = { type: BlockType; text: string };
 
-export const SHORTCUTS = {
+export const SHORTCUT_PREFIXES = [
+  '# ',
+  '## ',
+  '### ',
+  '> ',
+  '- ',
+  '1. ',
+] as const;
+type Shortcut = (typeof SHORTCUT_PREFIXES)[number];
+
+/** The block each markdown shortcut turns an empty paragraph into. */
+const SHORTCUTS: Record<Shortcut, BlockType> = {
   '# ': 'h1',
   '## ': 'h2',
   '### ': 'h3',
   '> ': 'quote',
   '- ': 'ul',
   '1. ': 'ol',
-} as const satisfies Record<string, BlockType>;
-type Shortcut = keyof typeof SHORTCUTS;
+};
 
-export type Action =
+/** One thing a person does at the keyboard. */
+export type Key =
   | { kind: 'type'; text: string; delay: number }
   | { kind: 'enter' }
   | { kind: 'linebreak' }
   | { kind: 'backspace' }
   | { kind: 'shortcut'; prefix: Shortcut }
-  | { kind: 'code' }
-  | { kind: 'offline' }
-  | { kind: 'online' }
-  | { kind: 'pause'; ms: number };
+  | { kind: 'code' };
 
 export class PeerModel {
   readonly blocks: Block[];
   online = true;
+  /** Keys pressed, for the undo phase's step budget. */
+  keys = 0;
 
   constructor(readonly marker: string) {
     this.blocks = [{ type: 'p', text: marker }];
   }
 
   get current(): Block {
-    return this.blocks[this.blocks.length - 1];
+    const last = this.blocks.at(-1);
+    if (!last) throw new Error(`${this.marker} region has no blocks`);
+    return last;
   }
 
-  /** A random action that is legal here. */
-  generate(random: Random): Action {
+  /** Whether the model knows what `key` does here. */
+  allows(key: Key): boolean {
     const current = this.current;
     const emptyParagraph = current.type === 'p' && current.text === '';
-    const canDelete = !(
-      this.blocks.length === 1 && current.text.length <= this.marker.length
+    return (
+      match(key)
+        .with(
+          { kind: 'type' },
+          ({ text }) => current.type === 'code' || !text.startsWith(' ')
+        )
+        .with({ kind: 'enter' }, () => true)
+        // normalizeEnterPlugin splits instead at an empty line, which the model skips.
+        .with(
+          { kind: 'linebreak' },
+          () =>
+            current.type !== 'code' &&
+            current.text !== '' &&
+            !current.text.endsWith('\n')
+        )
+        .with(
+          { kind: 'backspace' },
+          () =>
+            this.blocks.length > 1 || current.text.length > this.marker.length
+        )
+        .with({ kind: 'shortcut' }, { kind: 'code' }, () => emptyParagraph)
+        .exhaustive()
     );
-    const options: [number, () => Action][] = [
-      [
-        45,
-        () => ({
-          kind: 'type',
-          text: word(random, current.type === 'code'),
-          delay: random.chance(0.8) ? 0 : random.int(25),
-        }),
-      ],
-      [15, () => ({ kind: 'enter' })],
-      // Shift+Enter; normalizeEnterPlugin splits instead at an empty line, which the model skips.
-      [
-        current.type !== 'code' &&
-        current.text !== '' &&
-        !current.text.endsWith('\n')
-          ? 5
-          : 0,
-        () => ({ kind: 'linebreak' }),
-      ],
-      [canDelete ? 14 : 0, () => ({ kind: 'backspace' })],
-      [
-        emptyParagraph ? 12 : 0,
-        () => ({
-          kind: 'shortcut',
-          prefix: random.pick(Object.keys(SHORTCUTS) as Shortcut[]),
-        }),
-      ],
-      [emptyParagraph ? 4 : 0, () => ({ kind: 'code' })],
-      [3, () => (this.online ? { kind: 'offline' } : { kind: 'online' })],
-      [4, () => ({ kind: 'pause', ms: random.int(60) })],
-    ];
-    const total = options.reduce((sum, [weight]) => sum + weight, 0);
-    let roll = random.next() * total;
-    for (const [weight, make] of options) {
-      roll -= weight;
-      if (roll < 0) return make();
-    }
-    return options[0][1]();
   }
 
-  apply(action: Action): void {
+  apply(key: Key): void {
+    this.keys++;
     const current = this.current;
-    match(action)
+    match(key)
       .with({ kind: 'type' }, ({ text }) => {
         current.text += text;
       })
@@ -125,13 +111,6 @@ export class PeerModel {
           current.type = 'p';
         else this.blocks.pop();
       })
-      .with({ kind: 'offline' }, () => {
-        this.online = false;
-      })
-      .with({ kind: 'online' }, () => {
-        this.online = true;
-      })
-      .with({ kind: 'pause' }, () => {})
       .exhaustive();
   }
 
@@ -145,7 +124,8 @@ export class PeerModel {
         this.blocks.push({ type: 'p', text: '' });
       } else {
         const line = current.text.slice(current.text.lastIndexOf('\n') + 1);
-        current.text += `\n${line.match(/^ */)?.[0] ?? ''}`;
+        const indentation = line.length - line.trimStart().length;
+        current.text += `\n${' '.repeat(indentation)}`;
       }
     } else if (current.type !== 'p' && current.text === '') {
       // Lists exit, and normalizeEnterPlugin turns an empty heading or quote
@@ -157,13 +137,4 @@ export class PeerModel {
       this.blocks.push({ type: 'p', text: '' });
     }
   }
-}
-
-const LETTERS = 'abcdefghijklmnopqrstuvwxyz';
-
-function word(random: Random, code: boolean): string {
-  let text = code && random.chance(0.2) ? '  ' : '';
-  const length = 1 + random.int(8);
-  for (let i = 0; i < length; i++) text += random.pick([...LETTERS]);
-  return random.chance(0.5) ? `${text} ` : text;
 }

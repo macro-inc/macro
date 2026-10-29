@@ -2,10 +2,11 @@
  * One fuzz peer: the real collaborative markdown editor (`CollabMarkdownEditor`,
  * so the real CollabProvider, sync engine, WAL, reconcile, and cursors) over a
  * `LiveSyncSource` whose other end is the Playwright process. Every byte this
- * peer sends or receives goes through `window.fuzz*` bindings the test exposes,
- * so the test decides when, and in what order, each peer sees each update.
+ * peer sends or receives goes through the `FuzzWire` bindings the test exposes
+ * and `LexFuzzApi.deliver`, so the test decides when, and in what order, each
+ * peer sees each update.
  *
- * `window.lexFuzz` reads this peer's state back for the oracles.
+ * `window.lexFuzz` also reads this peer's state back for the oracles.
  */
 
 import '../../../../../index.css';
@@ -16,7 +17,12 @@ import { UserContextProvider } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { $isCodeNode } from '@lexical/code';
 import { createHeadlessEditor } from '@lexical/headless';
-import { $isListItemNode, $isListNode } from '@lexical/list';
+import {
+  $isListItemNode,
+  $isListNode,
+  type ListItemNode,
+  type ListNode,
+} from '@lexical/list';
 import {
   $convertFromMarkdownString,
   $convertToMarkdownString,
@@ -31,6 +37,7 @@ import {
   SyncSourceStatus,
 } from '@macro-inc/collaboration/collab/source';
 import {
+  $getId,
   $isCustomCodeNode,
   createPeerIdValidator,
   INTERNAL_TRANSFORMERS,
@@ -48,9 +55,9 @@ import {
   $isElementNode,
   $isParagraphNode,
   $isRangeSelection,
+  type ElementNode,
   type LexicalEditor,
   type LexicalNode,
-  type SerializedEditorState,
 } from 'lexical';
 import type { VersionVector } from 'loro-crdt';
 import { okAsync, ResultAsync } from 'neverthrow';
@@ -62,10 +69,12 @@ import {
   Show,
 } from 'solid-js';
 import { render } from 'solid-js/web';
+import { match } from 'ts-pattern';
 import { CollabProvider } from '../collaboration/CollabProvider';
 import type { MarkdownEditorErrors } from '../constants';
 import {
   createLexicalWrapper,
+  isWrapperWithIds,
   LexicalWrapperContext,
 } from '../context/LexicalWrapperContext';
 import { registerMarkdownEditing } from '../editing/registerMarkdownEditing';
@@ -74,43 +83,22 @@ import {
   editorStateAsMarkdown,
   loroSyncState,
 } from '../utils';
+import type {
+  FuzzBlock,
+  FuzzCaret,
+  FuzzWindow,
+  FuzzWire,
+  LexFuzzApi,
+} from './bridge';
 
-type WireEvent = { type: 'update' | 'awareness'; bytes: string };
+const fuzzWindow: FuzzWindow = window;
 
-/** A top-level block as the oracle sees it. */
-export type FuzzBlock = { type: string; text: string; indent?: number };
-
-declare global {
-  interface Window {
-    // Bindings the Playwright test exposes.
-    fuzzConnect: () => Promise<string>;
-    fuzzPush: (bytes: string) => Promise<boolean>;
-    fuzzAwareness: (bytes: string) => Promise<void>;
-    fuzzSince: (version: string) => Promise<string>;
-    // Called by the test to hand this peer a message.
-    fuzzDeliver: (event: WireEvent) => void;
-    lexFuzz?: {
-      /** A server snapshot holding `markdown`, as a new document's would. */
-      seed: (markdown: string) => Promise<string>;
-      ready: () => boolean;
-      peerId: () => string;
-      editorMarkdown: () => string;
-      loroMarkdown: () => string;
-      editorJson: () => string;
-      loroJson: () => string;
-      blocks: () => FuzzBlock[];
-      invariants: () => string[];
-      errors: () => string[];
-      /** Caret at the end of the top-level block whose text starts with `prefix`. */
-      placeAtEnd: (prefix: string) => boolean;
-      /** Internal markdown of any serialized state (the server's, say). */
-      toMarkdown: (json: string) => string;
-      /** Internal markdown → state → internal markdown. */
-      roundTrip: (markdown: string) => string;
-      /** Lexical's caret: the text of its block, and how much of it is before the caret. */
-      selection: () => FuzzCaret | null;
-    };
-  }
+/** The test's bindings, which it exposes before the page loads. */
+function wire(): FuzzWire {
+  const { fuzzConnect, fuzzPush, fuzzAwareness, fuzzSince } = fuzzWindow;
+  if (!fuzzConnect || !fuzzPush || !fuzzAwareness || !fuzzSince)
+    throw new Error('the fuzz test did not expose its bindings');
+  return { fuzzConnect, fuzzPush, fuzzAwareness, fuzzSince };
 }
 
 const toBase64 = (bytes: Uint8Array) => {
@@ -139,12 +127,26 @@ console.error = (...args: unknown[]) => {
   );
   originalError(...args);
 };
+const describe = (error: unknown) =>
+  error instanceof Error ? `${error.message}\n${error.stack}` : String(error);
 window.addEventListener('error', (e) =>
-  errors.push(`uncaught: ${e.message} ${e.error?.stack ?? ''}`)
+  errors.push(`uncaught: ${describe(e.error)}`)
 );
 window.addEventListener('unhandledrejection', (e) =>
-  errors.push(`unhandled rejection: ${String(e.reason?.stack ?? e.reason)}`)
+  errors.push(`unhandled rejection: ${describe(e.reason)}`)
 );
+
+/** Starts `work`, recording a rejection where the oracles will see it. */
+function background(work: Promise<unknown>): void {
+  const settle = async () => {
+    try {
+      await work;
+    } catch (error) {
+      errors.push(`background: ${describe(error)}`);
+    }
+  };
+  fireAndForget(settle(), 'lexical-fuzz');
+}
 
 const headless = () =>
   createHeadlessEditor({
@@ -155,9 +157,9 @@ const headless = () =>
   });
 
 /** As lexical-service's `toMarkdownText(state, 'internal')`. */
-function stateToMarkdown(state: SerializedEditorState): string {
+function stateToMarkdown(json: string): string {
   const editor = headless();
-  editor.setEditorState(editor.parseEditorState(state));
+  editor.setEditorState(editor.parseEditorState(json));
   return editor.read(() => $convertToMarkdownString(INTERNAL_TRANSFORMERS));
 }
 
@@ -170,52 +172,60 @@ function markdownRoundTrip(markdown: string): string {
   return editor.read(() => $convertToMarkdownString(INTERNAL_TRANSFORMERS));
 }
 
-function $blockOf(node: LexicalNode): FuzzBlock[] {
-  if ($isListNode(node)) {
-    const kind =
-      node.getListType() === 'number'
-        ? 'ol'
-        : node.getListType() === 'check'
-          ? 'check'
-          : 'ul';
-    const items: FuzzBlock[] = [];
-    for (const item of node.getChildren()) {
-      if (!$isListItemNode(item)) {
-        items.push({
-          type: `${kind}>${item.getType()}`,
-          text: item.getTextContent(),
-        });
-        continue;
-      }
-      const nested = item.getChildren().find($isListNode);
-      if (nested)
-        items.push(
-          ...$blockOf(nested).map((b) => ({
-            ...b,
-            indent: (b.indent ?? 0) + 1,
-          }))
-        );
-      else items.push({ type: kind, text: item.getTextContent() });
-    }
-    return items;
+const listKind = (list: ListNode) =>
+  match(list.getListType())
+    .with('number', () => 'ol')
+    .with('check', () => 'check')
+    .with('bullet', () => 'ul')
+    .exhaustive();
+
+/** The oracle's name for a block's type. */
+function $blockType(block: ElementNode): string {
+  if ($isListItemNode(block)) {
+    const list = block.getParent();
+    return $isListNode(list)
+      ? listKind(list)
+      : `listitem in ${list?.getType()}`;
   }
-  if ($isHeadingNode(node))
-    return [{ type: node.getTag(), text: node.getTextContent() }];
-  if ($isQuoteNode(node))
-    return [{ type: 'quote', text: node.getTextContent() }];
-  if ($isCodeNode(node) || $isCustomCodeNode(node))
-    return [{ type: 'code', text: node.getTextContent() }];
-  if ($isParagraphNode(node))
-    return [{ type: 'p', text: node.getTextContent() }];
-  return [{ type: node.getType(), text: node.getTextContent() }];
+  if ($isHeadingNode(block)) return block.getTag();
+  if ($isQuoteNode(block)) return 'quote';
+  if ($isCodeNode(block) || $isCustomCodeNode(block)) return 'code';
+  if ($isParagraphNode(block)) return 'p';
+  return block.getType();
 }
 
-export type FuzzCaret = {
-  collapsed: boolean;
-  blockType: string;
-  text: string;
-  before: string;
-};
+function $listItems(list: ListNode, indent: number): FuzzBlock[] {
+  return list.getChildren().flatMap((item) => {
+    if (!$isListItemNode(item))
+      return [
+        {
+          type: `${listKind(list)}>${item.getType()}`,
+          text: item.getTextContent(),
+        },
+      ];
+    const nested = item.getChildren().find($isListNode);
+    if (nested) return $listItems(nested, indent + 1);
+    return [$listItem(item, indent)];
+  });
+}
+
+function $listItem(item: ListItemNode, indent: number): FuzzBlock {
+  const block: FuzzBlock = {
+    type: $blockType(item),
+    text: item.getTextContent(),
+  };
+  return indent > 0 ? { ...block, indent } : block;
+}
+
+function $blocks(node: LexicalNode): FuzzBlock[] {
+  if ($isListNode(node)) return $listItems(node, 0);
+  return [
+    {
+      type: $isElementNode(node) ? $blockType(node) : node.getType(),
+      text: node.getTextContent(),
+    },
+  ];
+}
 
 function $caret(): FuzzCaret | null {
   const selection = $getSelection();
@@ -223,45 +233,32 @@ function $caret(): FuzzCaret | null {
   const anchor = selection.anchor.getNode();
   const block = $findMatchingParent(
     anchor,
-    (n) =>
-      $isListItemNode(n) ||
-      $isHeadingNode(n) ||
-      $isQuoteNode(n) ||
-      $isCodeNode(n) ||
-      $isCustomCodeNode(n) ||
-      $isParagraphNode(n)
+    (node) =>
+      $isListItemNode(node) ||
+      $isHeadingNode(node) ||
+      $isQuoteNode(node) ||
+      $isCodeNode(node) ||
+      $isCustomCodeNode(node) ||
+      $isParagraphNode(node)
   );
   if (!$isElementNode(block)) return null;
-  let before = '';
-  if ($isElementNode(anchor)) {
-    for (const child of anchor.getChildren().slice(0, selection.anchor.offset))
-      before += child.getTextContent();
-    let node: LexicalNode = anchor;
-    while (node !== block) {
-      before =
-        node
-          .getPreviousSiblings()
-          .map((s) => s.getTextContent())
-          .join('') + before;
-      node = node.getParentOrThrow();
-    }
-  } else {
-    before = anchor.getTextContent().slice(0, selection.anchor.offset);
-    let node: LexicalNode = anchor;
-    while (node !== block) {
-      before =
-        node
-          .getPreviousSiblings()
-          .map((s) => s.getTextContent())
-          .join('') + before;
-      node = node.getParentOrThrow();
-    }
-  }
+  const offset = selection.anchor.offset;
+  let before = $isElementNode(anchor)
+    ? anchor
+        .getChildren()
+        .slice(0, offset)
+        .map((child) => child.getTextContent())
+        .join('')
+    : anchor.getTextContent().slice(0, offset);
+  for (let node = anchor; node !== block; node = node.getParentOrThrow())
+    before =
+      node
+        .getPreviousSiblings()
+        .map((sibling) => sibling.getTextContent())
+        .join('') + before;
   return {
     collapsed: selection.isCollapsed(),
-    blockType: $isListItemNode(block)
-      ? ($blockOf(block.getParentOrThrow())[0]?.type ?? 'listitem')
-      : ($blockOf(block)[0]?.type ?? block.getType()),
+    blockType: $blockType(block),
     text: block.getTextContent(),
     before,
   };
@@ -271,60 +268,37 @@ function $invariants(): string[] {
   const problems: string[] = [];
   const root = $getRoot();
   if (root.getChildrenSize() === 0) problems.push('root has no children');
-  for (const child of root.getChildren()) {
-    if (
-      !$isElementNode(child) &&
-      child.getType() !== 'horizontalrule' &&
-      !child.isInline?.()
-    )
-      continue;
-    if ($isElementNode(child) && child.isInline())
+  for (const child of root.getChildren())
+    if (child.isInline())
       problems.push(`inline ${child.getType()} directly under root`);
-    if (!$isElementNode(child) && child.isInline?.())
-      problems.push(`inline ${child.getType()} directly under root`);
-  }
-  const walk = (node: LexicalNode) => {
+  const ids = new Map<string, string>();
+  const walk = (node: LexicalNode, path: string) => {
+    if (node !== root) {
+      const id = $getId(node);
+      const seen = id === null ? undefined : ids.get(id);
+      if (id === null) problems.push(`no id at ${path} (${node.getType()})`);
+      else if (seen) problems.push(`duplicate id ${id} at ${path} and ${seen}`);
+      else ids.set(id, path);
+    }
     if ($isListNode(node))
-      for (const c of node.getChildren())
-        if (!$isListItemNode(c)) problems.push(`list holds ${c.getType()}`);
+      for (const child of node.getChildren())
+        if (!$isListItemNode(child))
+          problems.push(`list holds ${child.getType()}`);
     if ($isListItemNode(node) && !$isListNode(node.getParent()))
       problems.push(`listitem under ${node.getParent()?.getType()}`);
-    if ($isElementNode(node)) for (const c of node.getChildren()) walk(c);
+    if ($isElementNode(node))
+      node.getChildren().forEach((child, i) => walk(child, `${path}/${i}`));
   };
-  walk(root);
-  return problems;
-}
-
-function idProblems(state: SerializedEditorState): string[] {
-  const seen = new Map<string, string>();
-  const problems: string[] = [];
-  const walk = (node: Record<string, unknown>, path: string) => {
-    const id = (node.$ as { id?: string } | undefined)?.id;
-    if (node.type !== 'root') {
-      if (!id) problems.push(`no id at ${path} (${String(node.type)})`);
-      else if (seen.has(id))
-        problems.push(`duplicate id ${id} at ${path} and ${seen.get(id)}`);
-      else seen.set(id, path);
-    }
-    const children = node.children as Record<string, unknown>[] | undefined;
-    children?.forEach((c, i) => walk(c, `${path}/${i}`));
-  };
-  walk(state.root as unknown as Record<string, unknown>, 'root');
+  walk(root, 'root');
   return problems;
 }
 
 function Peer() {
-  const documentId = new URLSearchParams(location.search).get('doc') ?? 'fuzz';
+  const documentId = new URLSearchParams(location.search).get('doc');
+  if (!documentId) throw new Error('the fuzz page needs ?doc=<id>');
   const loroManager = createLoroManager(MARKDOWN_LORO_SCHEMA, { documentId });
+  const server = wire();
   const listeners = new Set<(event: SyncSourceEvent) => void>();
-  window.fuzzDeliver = (event) => {
-    const bytes = fromBase64(event.bytes);
-    const message: SyncSourceEvent =
-      event.type === 'update'
-        ? { type: 'update', update: bytes }
-        : { type: 'awareness', awareness: bytes };
-    for (const listener of listeners) listener(message);
-  };
   const source: LiveSyncSource = {
     documentId,
     status: () => SyncSourceStatus.Connected,
@@ -334,17 +308,17 @@ function Peer() {
     },
     pushUpdate: async (updates) => {
       const acks = await Promise.all(
-        updates.map((u) => window.fuzzPush(toBase64(u)))
+        updates.map((update) => server.fuzzPush(toBase64(update)))
       );
       return acks.every(Boolean);
     },
     pushAwareness: (value) => {
-      fireAndForget(window.fuzzAwareness(toBase64(value)), 'lexical-fuzz');
+      background(server.fuzzAwareness(toBase64(value)));
     },
     registerPeerId: () => {},
     requestUpdatesSince: (version: VersionVector) =>
       ResultAsync.fromPromise(
-        window.fuzzSince(toBase64(version.encode())),
+        server.fuzzSince(toBase64(version.encode())),
         (error): SyncError => SyncError.unknown(new Error(String(error)))
       ).map(fromBase64),
     requestSnapshot: () => okAsync(new Uint8Array()),
@@ -353,53 +327,57 @@ function Peer() {
   };
   const [syncSource, setSyncSource] = createSignal<LiveSyncSource>();
   const [ready, setReady] = createSignal(false);
-  let editor: LexicalEditor | undefined;
-
-  const connect = async () => {
-    const snapshot = await window.fuzzConnect();
-    await loroManager.ingest({ kind: 'dss', snapshot: fromBase64(snapshot) });
-    setSyncSource(source);
+  let mounted: LexicalEditor | undefined;
+  const editor = () => {
+    if (!mounted) throw new Error('the editor has not mounted yet');
+    return mounted;
   };
-  fireAndForget(connect(), 'lexical-fuzz');
 
-  const loroState = () =>
-    loroManager.doc.toJSON() as unknown as SerializedEditorState;
+  background(
+    (async () => {
+      const snapshot = await server.fuzzConnect();
+      await loroManager.ingest({ kind: 'dss', snapshot: fromBase64(snapshot) });
+      setSyncSource(source);
+    })()
+  );
 
-  window.lexFuzz = {
+  const loroJson = () => JSON.stringify(loroManager.doc.toJSON());
+
+  const api: LexFuzzApi = {
+    deliver: (event) => {
+      const bytes = fromBase64(event.bytes);
+      const message: SyncSourceEvent = match(event.type)
+        .with('update', () => ({ type: 'update' as const, update: bytes }))
+        .with('awareness', () => ({
+          type: 'awareness' as const,
+          awareness: bytes,
+        }))
+        .exhaustive();
+      for (const listener of listeners) listener(message);
+    },
     seed: async (markdown) => {
       const snapshot = await markdownToLoroSnapshot(markdown);
-      if (!snapshot) throw new Error('no snapshot');
+      if (!snapshot) throw new Error('markdownToLoroSnapshot returned nothing');
       return toBase64(snapshot);
     },
     ready,
-    peerId: () => loroManager.peerIdStr,
-    editorMarkdown: () =>
-      editor ? editorStateAsMarkdown(editor, 'internal') : '',
-    loroMarkdown: () => stateToMarkdown(loroState()),
-    editorJson: () =>
-      editor ? JSON.stringify(loroSyncState(editor.getEditorState())) : '',
-    loroJson: () => JSON.stringify(loroState()),
+    editorMarkdown: () => editorStateAsMarkdown(editor(), 'internal'),
+    loroMarkdown: () => stateToMarkdown(loroJson()),
+    editorJson: () => JSON.stringify(loroSyncState(editor().getEditorState())),
+    loroJson,
     blocks: () =>
-      editor
-        ?.getEditorState()
-        .read(() => $getRoot().getChildren().flatMap($blockOf)) ?? [],
-    invariants: () => {
-      if (!editor) return ['no editor'];
-      const lexical = editor.getEditorState().read($invariants);
-      const ids = idProblems(
-        loroSyncState(editor.getEditorState()) as SerializedEditorState
-      );
-      return [...lexical, ...ids];
-    },
+      editor()
+        .getEditorState()
+        .read(() => $getRoot().getChildren().flatMap($blocks)),
+    invariants: () => editor().getEditorState().read($invariants),
     errors: () => errors.slice(),
     placeAtEnd: (prefix) => {
-      if (!editor) return false;
       let found = false;
-      editor.update(
+      editor().update(
         () => {
           const block = $getRoot()
             .getChildren()
-            .find((c) => c.getTextContent().startsWith(prefix));
+            .find((child) => child.getTextContent().startsWith(prefix));
           if ($isElementNode(block)) {
             block.selectEnd();
             found = true;
@@ -407,13 +385,14 @@ function Peer() {
         },
         { discrete: true }
       );
-      editor.focus();
+      editor().focus();
       return found;
     },
-    toMarkdown: (json) => stateToMarkdown(JSON.parse(json)),
+    toMarkdown: stateToMarkdown,
     roundTrip: markdownRoundTrip,
-    selection: () => editor?.getEditorState().read($caret) ?? null,
+    selection: () => editor().getEditorState().read($caret),
   };
+  fuzzWindow.lexFuzz = api;
 
   return (
     <main class="p-4 text-ink bg-page">
@@ -422,8 +401,8 @@ function Peer() {
           documentId={documentId}
           loroManager={loroManager}
           syncSource={syncSource}
-          onEditor={(e) => {
-            editor = e;
+          onEditor={(created) => {
+            mounted = created;
           }}
           onReady={() => setReady(true)}
         />
@@ -454,6 +433,8 @@ function FuzzEditor(props: {
     isInteractable: isContentEditable,
     withIds: true,
   });
+  if (!isWrapperWithIds(lexicalWrapper))
+    throw new Error('the fuzz editor needs node ids');
   const { editor, plugins, cleanup } = lexicalWrapper;
   onCleanup(cleanup);
   props.onEditor(editor);
@@ -486,12 +467,12 @@ function FuzzEditor(props: {
   createEffect(() => {
     if (editorReady()) props.onReady();
   });
-  let container!: HTMLDivElement;
+  const [container, setContainer] = createSignal<HTMLDivElement>();
   return (
     <LexicalWrapperContext.Provider value={lexicalWrapper}>
       <div
         class="relative min-h-[300px] border border-edge-muted p-2"
-        ref={container}
+        ref={setContainer}
       >
         <div
           ref={(el) => onElementConnect(el, () => editor.setRootElement(el))}
@@ -500,27 +481,33 @@ function FuzzEditor(props: {
           aria-multiline="true"
           class="w-full outline-none"
         />
-        <CollabProvider
-          editor={editor}
-          pluginManager={plugins}
-          editorContainerRef={container}
-          highlightLayerRef={container}
-          mappings={lexicalWrapper.mapping!}
-          editorFocus={editorFocus}
-          setEditorReady={setEditorReady}
-          setEditorError={setEditorError}
-          loroManager={props.loroManager}
-          syncSource={props.syncSource}
-          sourceReady={() => true}
-          canEdit={() => true}
-          canComment={() => false}
-          editorError={editorError}
-        />
+        <Show when={container()}>
+          {(element) => (
+            <CollabProvider
+              editor={editor}
+              pluginManager={plugins}
+              editorContainerRef={element()}
+              highlightLayerRef={element()}
+              mappings={lexicalWrapper.mapping}
+              editorFocus={editorFocus}
+              setEditorReady={setEditorReady}
+              setEditorError={setEditorError}
+              loroManager={props.loroManager}
+              syncSource={props.syncSource}
+              sourceReady={() => true}
+              canEdit={() => true}
+              canComment={() => false}
+              editorError={editorError}
+            />
+          )}
+        </Show>
       </div>
     </LexicalWrapperContext.Provider>
   );
 }
 
+const root = document.getElementById('root');
+if (!root) throw new Error('index.html has no #root');
 const client = new QueryClient();
 render(
   () => (
@@ -536,5 +523,5 @@ render(
       </PosthogProvider>
     </AnalyticsContextProvider>
   ),
-  document.getElementById('root')!
+  root
 );
