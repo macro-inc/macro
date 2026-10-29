@@ -4520,6 +4520,8 @@ async fn a_managed_open_delivers_its_first_prompt_under_the_callers_id() {
             bot_id: bot_id::CODEX_BOT_ID,
             profile: None,
         }),
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
     });
     let drive = async {
         let container = containers
