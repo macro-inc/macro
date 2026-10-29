@@ -26,6 +26,31 @@ function ViewDemo() {
 }
 // #endregion
 
+// #region demo:toggle
+function ToggleDemo() {
+  const [value, setValue] = createSignal<'all' | 'recent' | 'threads'>('all');
+  const [unreadOnly, setUnreadOnly] = createSignal(false);
+  return (
+    <Tabs
+      aria-label="Conversation views"
+      size="md"
+      options={[
+        { value: 'all', label: 'All' },
+        { value: 'recent', label: 'Recent' },
+        { value: 'threads', label: 'Threads' },
+      ]}
+      value={value()}
+      onChange={setValue}
+      toggle={{
+        label: 'Unread',
+        checked: unreadOnly(),
+        onChange: setUnreadOnly,
+      }}
+    />
+  );
+}
+// #endregion
+
 // #region demo:counts
 function CountsDemo() {
   const [value, setValue] = createSignal<'upcoming' | 'past' | 'canceled'>(
@@ -156,7 +181,7 @@ export default defineDoc({
   status: 'stable',
   exports: ['Tabs'],
   import: "import { Tabs } from '@ui';",
-  propTypes: ['TabsProps', 'TabOption'],
+  propTypes: ['TabsProps', 'TabOption', 'TabsToggle'],
   demos: [
     {
       id: 'view',
@@ -164,6 +189,13 @@ export default defineDoc({
       description:
         'Header view tabs sit after the title, left of the controls. The choices share a flat rounded track with an inset selected pill, sized to match neighbouring controls.',
       render: ViewDemo,
+    },
+    {
+      id: 'toggle',
+      title: 'View filter toggle',
+      description:
+        '`toggle` adds an on/off filter that applies to every view, such as Unread, past a divider in the same frame. The frame turns soft: a borderless filled track, a borderless selected option, and a neutral switch whose segment fills while on. When the frame is too narrow for every label, the switch drops its text into a tooltip first.',
+      render: ToggleDemo,
     },
     {
       id: 'counts',

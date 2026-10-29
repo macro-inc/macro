@@ -44,27 +44,6 @@ function SizesDemo() {
 }
 // #endregion
 
-// #region demo:track-label
-function TrackLabelDemo() {
-  const [unreadOnly, setUnreadOnly] = createSignal(false);
-
-  return (
-    <div class="flex flex-wrap items-center gap-6">
-      <For each={['xs', 'sm', 'md'] as const}>
-        {(size) => (
-          <ToggleSwitch
-            size={size}
-            trackLabel="Unread"
-            checked={unreadOnly()}
-            onChange={setUnreadOnly}
-          />
-        )}
-      </For>
-    </div>
-  );
-}
-// #endregion
-
 // #region demo:disabled
 function DisabledDemo() {
   return (
@@ -159,13 +138,6 @@ export default defineDoc({
       description:
         '`sm` is the default toolbar size (32×16px); `md` is for settings rows (40×20px); `xs` is for dense inline chrome (28×14px).',
       render: SizesDemo,
-    },
-    {
-      id: 'track-label',
-      title: 'Track label',
-      description:
-        '`trackLabel` puts a short name inside the track, opposite the thumb, for tight toolbars. It is also the accessible name when there is no `label`.',
-      render: TrackLabelDemo,
     },
     {
       id: 'disabled',

@@ -1,18 +1,6 @@
 import EmptyStateChannelsGraphic from '@design/empty-state-channels.svg';
-import { EmptyStatePanel, ToggleSwitch } from '@ui';
+import { EmptyStatePanel } from '@ui';
 import { useChannelsRail } from './ChannelsRailContext';
-
-export function ChannelUnreadFilterToggle() {
-  const rail = useChannelsRail();
-
-  return (
-    <ToggleSwitch
-      trackLabel="Unread"
-      checked={rail.unreadOnly()}
-      onChange={rail.setUnreadOnly}
-    />
-  );
-}
 
 /** Shown in place of a list the Unread filter has emptied. */
 export function ChannelUnreadEmptyState() {

@@ -85,10 +85,7 @@ import {
   RailListLoading,
   RailListLoadingMore,
 } from './ChannelsRailSection';
-import {
-  ChannelUnreadEmptyState,
-  ChannelUnreadFilterToggle,
-} from './ChannelUnreadFilter';
+import { ChannelUnreadEmptyState } from './ChannelUnreadFilter';
 import {
   CHANNEL_LIST_GROUPS,
   useChannelRailItemState,
@@ -442,13 +439,18 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
         <ViewSidebar.Toolbar class={!isTouchDevice() ? 'px-0' : undefined}>
           <Tabs
             aria-label="Chat sidebar views"
-            size="sm"
+            size="md"
             fullWidth={!isTouchDevice()}
             options={
               rail.threadsEnabled() ? CHANNEL_TABS_WITH_THREADS : CHANNEL_TABS
             }
             value={rail.tab()}
             onChange={selectTab}
+            toggle={{
+              label: 'Unread',
+              checked: rail.unreadOnly(),
+              onChange: rail.setUnreadOnly,
+            }}
           />
           <Show when={isTouchDevice()}>
             <ViewSidebar.Control
@@ -467,9 +469,6 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
             </ViewSidebar.Control>
           </Show>
         </ViewSidebar.Toolbar>
-        <div class="-mt-1 flex justify-end">
-          <ChannelUnreadFilterToggle />
-        </div>
       </ViewSidebar.Primary>
       <Show when={isTouchDevice() && props.search.isOpen()}>
         <div class="px-(--sidebar-content-inset) pt-(--sidebar-gutter)">

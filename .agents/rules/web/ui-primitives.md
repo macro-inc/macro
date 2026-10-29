@@ -79,8 +79,7 @@ Applies to `apps/web/src/components/ui`, including ports from shadcn-solid.
   accent Button's `button-accent-ink` token.
 - Set checkbox/radio size on the root: `sm` is 14px, `md` (default) is 16px,
   and `lg` is 20px. `ToggleSwitch` tracks use `xs` 28×14px, `sm` (default)
-  32×16px, and `md` 40×20px; `trackLabel` widens the track to fit its short
-  text. Do not resize internal SVGs or override selection
+  32×16px, and `md` 40×20px. Do not resize internal SVGs or override selection
   colors from callers or enclosing pages; checked controls use the theme accent.
 - Switch thumbs stay fixed white in both states and every theme, with a secondary border.
   Only the track changes to the theme accent when checked; do not apply accent-contrast to the thumb.

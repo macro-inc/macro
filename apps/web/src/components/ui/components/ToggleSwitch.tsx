@@ -14,12 +14,6 @@ export type ToggleSwitchProps = Omit<
 > & {
   labelClass?: string;
   label?: JSX.Element;
-  /**
-   * Short text inside the track, opposite the thumb, for toolbars without
-   * room for a label beside the switch. It names the switch when there is no
-   * `label`.
-   */
-  trackLabel?: string;
   /** Compact toolbar sizes are xs/sm; use md in settings rows. */
   size?: ToggleSwitchSize;
   controlClass?: string;
@@ -31,33 +25,18 @@ const SWITCH_SIZES = {
     thumb: '-left-0.5 -top-px size-3.5 data-checked:translate-x-4',
     pressed:
       'group-active/switch:w-4 data-checked:group-active/switch:translate-x-3.5',
-    labelled: {
-      text: 'pl-4 pr-1.5 text-[0.5rem] group-data-checked/control:pl-1.5 group-data-checked/control:pr-4',
-      thumb:
-        'transition-[left] data-checked:left-[calc(100%-0.75rem)] data-checked:translate-x-0',
-    },
   },
   sm: {
     control: 'h-4 w-8',
     thumb: '-left-0.5 -top-px size-4 data-checked:translate-x-4.5',
     pressed:
       'group-active/switch:w-5 data-checked:group-active/switch:translate-x-3.5',
-    labelled: {
-      text: 'pl-4.5 pr-1.5 text-[0.5625rem] group-data-checked/control:pl-1.5 group-data-checked/control:pr-4.5',
-      thumb:
-        'transition-[left] data-checked:left-[calc(100%-0.875rem)] data-checked:translate-x-0',
-    },
   },
   md: {
     control: 'h-5 w-10',
     thumb: '-left-0.5 -top-px size-5 data-checked:translate-x-5.5',
     pressed:
       'group-active/switch:w-6 data-checked:group-active/switch:translate-x-4.5',
-    labelled: {
-      text: 'pl-5.5 pr-2 text-xxs group-data-checked/control:pl-2 group-data-checked/control:pr-5.5',
-      thumb:
-        'transition-[left] data-checked:left-[calc(100%-1.125rem)] data-checked:translate-x-0',
-    },
   },
 } as const;
 
@@ -83,7 +62,6 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
     'class',
     'controlClass',
     'label',
-    'trackLabel',
     'size',
   ]);
   const sizing = () => SWITCH_SIZES[local.size ?? 'sm'];
@@ -112,47 +90,20 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
       <KobalteSwitch.Input class="peer sr-only" />
       <KobalteSwitch.Control
         class={cn(
-          'group/control relative shrink-0 rounded-full border border-border-secondary bg-border-tertiary transition-colors duration-150 ease-out data-checked:border-accent data-checked:bg-accent data-invalid:border-failure peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent motion-reduce:transition-none',
+          'relative shrink-0 rounded-full border border-border-secondary bg-border-tertiary transition-colors duration-150 ease-out data-checked:border-accent data-checked:bg-accent data-invalid:border-failure peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent motion-reduce:transition-none',
           sizing().control,
-          local.trackLabel !== undefined && 'inline-flex w-auto items-center',
           local.controlClass
         )}
       >
-        <Show when={local.trackLabel}>
-          {(text) => (
-            <span
-              aria-hidden="true"
-              class={cn(
-                'font-medium leading-none whitespace-nowrap text-ink-muted transition-[padding] duration-150 ease-out select-none group-data-checked/control:text-accent-contrast motion-reduce:transition-none',
-                sizing().labelled.text
-              )}
-            >
-              {text()}
-            </span>
-          )}
-        </Show>
         <KobalteSwitch.Thumb
           class={cn(
             'absolute rounded-full border border-border-secondary bg-[white] transition-[width,translate] duration-150 ease-out motion-reduce:transition-none',
             sizing().thumb,
-            local.trackLabel !== undefined
-              ? sizing().labelled.thumb
-              : !local.disabled && !others.readOnly && sizing().pressed
+            !local.disabled && !others.readOnly && sizing().pressed
           )}
         />
       </KobalteSwitch.Control>
-      <Show
-        when={local.label != null}
-        fallback={
-          <Show when={local.trackLabel}>
-            {(text) => (
-              <KobalteSwitch.Label class="sr-only">
-                {text()}
-              </KobalteSwitch.Label>
-            )}
-          </Show>
-        }
-      >
+      <Show when={local.label != null}>
         <KobalteSwitch.Label class={cn(local.labelClass)}>
           {local.label}
         </KobalteSwitch.Label>
