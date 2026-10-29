@@ -426,7 +426,8 @@ export function useChannelsSources(
     team_channels: useChannelsDataSource(
       'team_channels',
       () => enabled('team_channels'),
-      () => sortBy('team_channels')
+      () => sortBy('team_channels'),
+      hideSupportChannels
     ),
     channels: useChannelsDataSource(
       'channels',
