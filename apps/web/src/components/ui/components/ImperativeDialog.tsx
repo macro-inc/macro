@@ -1,4 +1,5 @@
 import { useFocusLock } from '@core/util/createControlledOpenSignal';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
   type Component,
@@ -198,9 +199,12 @@ export function useImperativeDialog<P extends ManagedDialogProps>(
 
     const next = openDialog(component, props, { owner });
     setHandle(next);
-    void next.closed.then(() => {
-      if (handle() === next) setHandle(undefined);
-    });
+    fireAndForget(
+      next.closed.then(() => {
+        if (handle() === next) setHandle(undefined);
+      }),
+      'imperative-dialog'
+    );
     return next;
   };
 

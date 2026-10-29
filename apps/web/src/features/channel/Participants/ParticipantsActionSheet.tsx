@@ -1,5 +1,5 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import type { ParentProps } from 'solid-js';
 
@@ -25,12 +25,13 @@ export function ParticipantsActionSheet(
               {props.title}
             </MobileDrawer.Title>
             <Button
+              aria-label="Close"
+              tooltip="Close"
               variant="ghost"
               size="icon-md"
-              label="Close"
               onClick={() => props.onOpenChange(false)}
             >
-              <XIcon />
+              <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </div>
           <MobileDrawer.ScrollBody>

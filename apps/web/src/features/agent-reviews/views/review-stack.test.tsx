@@ -16,6 +16,7 @@ const editor = vi.hoisted(() => ({
   ready: true,
   valid: true,
   submitReady: undefined as Promise<void> | undefined,
+  executed: undefined as Promise<boolean> | undefined,
 }));
 const mobile = vi.hoisted(() => ({ value: false }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => mobile.value }));
@@ -53,7 +54,9 @@ vi.mock('@core/component/AI/component/tool/email/DraftComposer', () => ({
         <button
           type="button"
           disabled={!props.sink.canAct()}
-          onClick={() => void props.sink.onExecute(read())}
+          onClick={() => {
+            editor.executed = props.sink.onExecute(read());
+          }}
         >
           Send draft
         </button>
@@ -78,6 +81,7 @@ beforeEach(() => {
   editor.ready = true;
   editor.valid = true;
   editor.submitReady = undefined;
+  editor.executed = undefined;
   mobile.value = false;
   motionStyles = document.createElement('style');
   motionStyles.textContent =
@@ -468,6 +472,42 @@ describe('review deck', () => {
     expect(screen.queryByText('Second email')).toBeNull();
     expect(decide).not.toHaveBeenCalled();
   });
+  it('says when the agent started a review at the account holder’s request', async () => {
+    render(() => (
+      <ReviewStack
+        review={{
+          id: 'review',
+          sessionId: 'session',
+          kind: 'email',
+          title: 'Follow-ups',
+          revision: 2,
+          updatedAt: 1,
+          presentedAt: 1,
+          decision: { via: 'chat' },
+          items: [
+            {
+              id: 'first',
+              status: 'completed',
+              draft: {
+                subject: 'First email',
+                body: 'Hello',
+                to: [{ email: 'first@example.com' }],
+              },
+            },
+          ],
+        }}
+        canAct
+        actions={{
+          decide: vi.fn(),
+          reload: vi.fn(),
+        }}
+      />
+    ));
+    await screen.findByText('Sent');
+    expect(
+      screen.getByText('Started by the agent at your request')
+    ).toBeTruthy();
+  });
   it('opens an invalid unvisited draft without dispatching any email', async () => {
     const decide = setup({
       items: [
@@ -540,6 +580,7 @@ describe('review deck', () => {
     expect(
       screen.getByLabelText<HTMLTextAreaElement>('Draft body').disabled
     ).toBe(true);
+    await editor.executed;
   });
   it.each([false, true])(
     'searches and selects a draft with mobile=%s',

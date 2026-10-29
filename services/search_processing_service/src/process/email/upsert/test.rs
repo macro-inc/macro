@@ -47,3 +47,14 @@ fn classifies_mixed_thread_messages() {
         ]
     );
 }
+
+#[test]
+fn indexes_a_message_without_a_from_contact() {
+    let message = message(Some(system_labels::INBOX), None);
+    let now = EpochMillis::new(0).expect("epoch is a valid timestamp");
+
+    let args = upsert_args(message, "body".into(), "owner", Vec::new(), now);
+
+    assert_eq!(args.sender, "");
+    assert_eq!(args.content, "body");
+}

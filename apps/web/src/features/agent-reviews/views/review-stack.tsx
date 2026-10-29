@@ -1,6 +1,7 @@
 import { CalendarDraftComposer } from '@core/component/AI/component/tool/calendar/DraftComposer';
 import { EmailDraftComposer } from '@core/component/AI/component/tool/email/DraftComposer';
 import type { UserToolReviewSink } from '@core/component/AI/component/tool/user-tool-review';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   CreateCalendarEvent,
   SendEmail,
@@ -8,6 +9,7 @@ import {
 import { Button } from '@ui/components/Button';
 import { ConfirmDialog } from '@ui/components/ConfirmDialog';
 import { createEffect, createSignal, Match, on, Show, Switch } from 'solid-js';
+import { match } from 'ts-pattern';
 import { ReviewDeck } from '../components/review-deck';
 import {
   ReviewNavigation,
@@ -48,7 +50,6 @@ export function ReviewStack(props: {
     Boolean(controller.error()) ||
     controller.stale() ||
     record().presentedAt == null ||
-    Boolean(record().notificationId) ||
     record().items.some((item) => item.status === 'submitting');
 
   function capture(): boolean {
@@ -157,7 +158,7 @@ export function ReviewStack(props: {
       record().items.find((item) => item.id === id)?.status === 'pending',
     lockedNotice: () =>
       !props.canAct
-        ? 'Only the session owner can submit this review.'
+        ? 'Only the person whose account this review uses can submit it.'
         : undefined,
     onEdit: (draft) => {
       controller.edit(id, draft);
@@ -183,7 +184,7 @@ export function ReviewStack(props: {
   const progress = () =>
     [
       completed() > 0
-        ? `${completed()} ${record().kind === 'email' ? 'sent' : record().kind === 'calendar' ? 'created' : 'answered'}`
+        ? `${completed()} ${reviewWording(record().kind).done.toLowerCase()}`
         : '',
       dismissed() > 0 ? `${dismissed()} dismissed` : '',
       needsAttention() > 0
@@ -228,10 +229,10 @@ export function ReviewStack(props: {
       <Show when={controller.stale() || controller.error()}>
         <div class="mb-3 flex flex-wrap items-center gap-2">
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             disabled={working()}
-            onClick={() => void reload()}
+            onClick={() => fireAndForget(reload(), 'agent-reviews')}
           >
             Reload saved review
           </Button>
@@ -253,6 +254,11 @@ export function ReviewStack(props: {
       <Show when={current()?.status !== 'pending'}>
         <p role="status" class="mb-2 px-1 text-xs text-ink-muted">
           {statusLabel(current()?.status, record().kind)}
+        </p>
+      </Show>
+      <Show when={startedByAgent(record(), current())}>
+        <p class="mb-2 px-1 text-xs text-ink-muted">
+          Started by the agent at your request
         </p>
       </Show>
       <ReviewDeck
@@ -317,63 +323,94 @@ export function ReviewStack(props: {
           <span class="min-w-0 text-xs text-ink-muted" role="status">
             {progress()}
           </span>
-          <Show
-            when={record().kind === 'email' || record().kind === 'calendar'}
+          <Button
+            variant="secondary"
+            size="sm"
+            class="ml-auto"
+            disabled={locked() || pending() === 0}
+            onClick={() => {
+              setConfirmingBatch(
+                record()
+                  .items.filter((item) => item.status === 'pending')
+                  .map((item) => item.id)
+              );
+              setConfirmationOpen(true);
+            }}
           >
-            <Button
-              variant="strong"
-              size="sm"
-              class="ml-auto"
-              disabled={locked() || pending() === 0}
-              onClick={() => {
-                setConfirmingBatch(
-                  record()
-                    .items.filter((item) => item.status === 'pending')
-                    .map((item) => item.id)
-                );
-                setConfirmationOpen(true);
-              }}
-            >
-              {record().kind === 'email' ? 'Send all' : 'Create all'} (
-              {pending()})
-            </Button>
-          </Show>
+            {reviewWording(record().kind).verb} all ({pending()})
+          </Button>
         </footer>
         <ConfirmDialog
           open={confirmationOpen()}
           onOpenChange={setConfirmationOpen}
-          title={`${record().kind === 'email' ? 'Send' : 'Create'} ${confirmingBatch().length} ${record().kind === 'email' ? 'email' : 'event'}${confirmingBatch().length === 1 ? '' : 's'}?`}
-          body={
-            record().kind === 'email'
-              ? 'Each email will be sent to the recipients shown in its draft.'
-              : 'These events will be created and guests will receive invitations.'
-          }
-          confirmLabel={`${record().kind === 'email' ? 'Send' : 'Create'} ${confirmingBatch().length} ${record().kind === 'email' ? 'email' : 'event'}${confirmingBatch().length === 1 ? '' : 's'}`}
+          title={`${batchLabel(record().kind, confirmingBatch().length)}?`}
+          body={reviewWording(record().kind).batchBody}
+          confirmLabel={batchLabel(record().kind, confirmingBatch().length)}
           onConfirm={() => {
             const items = confirmingBatch();
             if (items.length === 0 || !confirmationOpen()) return;
             setConfirmationOpen(false);
-            void submitAll(items);
+            fireAndForget(submitAll(items), 'agent-reviews');
           }}
         />
       </Show>
     </section>
   );
 }
+function startedByAgent(review: Review, item: ReviewItem | undefined) {
+  return (
+    review.decision?.via === 'chat' &&
+    (item?.status === 'submitting' || item?.status === 'completed')
+  );
+}
 function neverDraft(): never {
   throw new Error('Invalid review draft');
+}
+function reviewWording(kind: Review['kind']) {
+  return match(kind)
+    .with('email', () => ({
+      verb: 'Send',
+      noun: 'email',
+      working: 'Sending…',
+      done: 'Sent',
+      batchBody:
+        'Each email will be sent to the recipients shown in its draft.',
+    }))
+    .with('calendar', () => ({
+      verb: 'Create',
+      noun: 'event',
+      working: 'Creating…',
+      done: 'Created',
+      batchBody:
+        'These events will be created and guests will receive invitations.',
+    }))
+    .with('import', () => ({
+      verb: 'Import',
+      noun: 'import',
+      working: 'Importing…',
+      done: 'Imported',
+      batchBody: 'These imports will start right away.',
+    }))
+    .exhaustive();
+}
+function batchLabel(kind: Review['kind'], count: number): string {
+  const wording = reviewWording(kind);
+  return `${wording.verb} ${count} ${wording.noun}${count === 1 ? '' : 's'}`;
 }
 function statusLabel(
   status: ReviewItem['status'] | undefined,
   kind: Review['kind']
 ): string {
-  if (status === 'submitting')
-    return kind === 'email' ? 'Sending…' : 'Creating…';
-  if (status === 'completed') return kind === 'email' ? 'Sent' : 'Created';
-  if (status === 'dismissed') return 'Dismissed';
-  if (status === 'unknown')
-    return 'Outcome unknown — check the destination before trying again.';
-  return 'Draft';
+  return match(status)
+    .with('submitting', () => reviewWording(kind).working)
+    .with('completed', () => reviewWording(kind).done)
+    .with('dismissed', () => 'Dismissed')
+    .with(
+      'unknown',
+      () => 'Outcome unknown — check the destination before trying again.'
+    )
+    .with('pending', undefined, () => 'Draft')
+    .exhaustive();
 }
 function reviewSummary(item: ReviewItem, kind: Review['kind']): ReviewSummary {
   const summary = {
@@ -387,41 +424,48 @@ function reviewSummary(item: ReviewItem, kind: Review['kind']): ReviewSummary {
         : statusLabel(item.status, kind),
     needsAttention: Boolean(item.error) || item.status === 'unknown',
   };
-  if (kind === 'email') {
-    const email = SendEmail.safeParse(item.draft);
-    if (!email.success) return summary;
-    return {
-      ...summary,
-      title: email.data.subject || '(No subject)',
-      description:
-        email.data.to
-          ?.map((recipient) =>
-            recipient.name
-              ? `${recipient.name} <${recipient.email}>`
-              : recipient.email
-          )
-          .join(', ') || 'No recipients',
-    };
-  }
-  if (kind === 'calendar') {
-    const calendar = CreateCalendarEvent.safeParse(item.draft);
-    if (!calendar.success) return summary;
-    const time = calendar.data.time;
-    const description =
-      time.kind === 'allDay'
-        ? `${time.startDate} · All day`
-        : new Date(time.startsAt).toLocaleString(undefined, {
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            timeZoneName: 'short',
-          });
-    return {
-      ...summary,
-      title: calendar.data.title || '(Untitled event)',
-      description,
-    };
-  }
-  return summary;
+  return match(kind)
+    .with('email', () => emailSummary(item, summary))
+    .with('calendar', () => calendarSummary(item, summary))
+    .with('import', () => ({ ...summary, title: 'Import plan' }))
+    .exhaustive();
+}
+function emailSummary(item: ReviewItem, summary: ReviewSummary): ReviewSummary {
+  const email = SendEmail.safeParse(item.draft);
+  if (!email.success) return summary;
+  return {
+    ...summary,
+    title: email.data.subject || '(No subject)',
+    description:
+      email.data.to
+        ?.map((recipient) =>
+          recipient.name
+            ? `${recipient.name} <${recipient.email}>`
+            : recipient.email
+        )
+        .join(', ') || 'No recipients',
+  };
+}
+function calendarSummary(
+  item: ReviewItem,
+  summary: ReviewSummary
+): ReviewSummary {
+  const calendar = CreateCalendarEvent.safeParse(item.draft);
+  if (!calendar.success) return summary;
+  const time = calendar.data.time;
+  const description =
+    time.kind === 'allDay'
+      ? `${time.startDate} · All day`
+      : new Date(time.startsAt).toLocaleString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          timeZoneName: 'short',
+        });
+  return {
+    ...summary,
+    title: calendar.data.title || '(Untitled event)',
+    description,
+  };
 }

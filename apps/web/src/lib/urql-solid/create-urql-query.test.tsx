@@ -667,13 +667,14 @@ describe('createUrqlQuery refetch', () => {
     expect(reentrant).toBeDefined();
 
     let reentrantSettled = false;
-    void reentrant?.then(() => {
+    const reentrantSettledFlag = reentrant?.then(() => {
       reentrantSettled = true;
     });
     await Promise.resolve();
     expect(reentrantSettled).toBe(false);
     fake.executions[3]?.next({ data: { value: 'inner' } });
     await expect(reentrant).resolves.toBe(query);
+    await reentrantSettledFlag;
     consoleError.mockRestore();
   });
 

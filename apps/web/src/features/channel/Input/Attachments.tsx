@@ -7,8 +7,8 @@ import {
   staticFileIdEndpoint,
   staticFileSizedEndpoint,
 } from '@core/constant/servers';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
-import XIcon from '@phosphor/x.svg';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { cn } from '@ui';
 import {
   children,

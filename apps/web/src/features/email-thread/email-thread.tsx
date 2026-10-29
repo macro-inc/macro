@@ -2,6 +2,7 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useEmail, useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useContacts } from '@core/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { InlineFetchedEntityTagsPill } from '@property/tags';
 import { clearSavedDraftThreadCache } from '@queries/email/draft-cache';
@@ -17,11 +18,20 @@ import { useCalendarPreferences } from '../calendar/utils/preferences';
 import { createEmailComposeContext } from '../email-compose/compose-adapter';
 import { createEmailComposeHost } from '../email-compose/compose-host-adapter';
 import { convertContactInfoToEmailRecipient } from '../email-compose/core/recipient-conversion';
-import { createEmailAttachmentOpener } from '../email-message/attachment-action-adapter';
+import {
+  createEmailAttachmentOpener,
+  downloadEmailAttachment,
+} from '../email-message/attachment-action-adapter';
 import type { CalendarInvitation } from '../email-message/core/calendar-invitation';
-import type { EmailMessage } from '../email-message/core/email-message';
+import type {
+  EmailAttachment,
+  EmailMessage,
+} from '../email-message/core/email-message';
+import { operationSettled } from '../email-message/core/message-operation';
+import { EmailMessageOperation } from '../email-message/email-message-operation';
 import { createEmailRenderingContext } from '../email-message/rendering-adapter';
 import { EmailSenderIcon } from '../email-message/sender-icon-adapter';
+import type { InvitationRenderOptions } from '../email-message/views/email-message';
 import {
   type CalendarInvitationOpenTarget,
   EmailCalendarInvitation,
@@ -30,6 +40,8 @@ import type {
   EmailThreadContext,
   EmailThreadSource,
 } from './context/email-thread-context';
+import type { EmailThreadOrganizationStatus } from './context/email-thread-view-context';
+import { EmailThreadOperations } from './email-thread-operations';
 import { createOptimisticThreadSend } from './primitives/optimistic-send';
 import { createThreadActionAdapter } from './thread-action-adapter';
 import {
@@ -54,14 +66,10 @@ export function EmailThread(props: EmailThreadProps) {
   const contacts = useContacts();
   const viewerEmail = useEmail();
   const user = useUserContext();
-  const composeContext = createEmailComposeContext({
+  const compose = createEmailComposeContext({
     threadTransport: props.threadTransport,
   });
-  const { source, delivery } = createOptimisticThreadSend(
-    props.source,
-    composeContext
-  );
-  const compose = { ...composeContext, delivery };
+  const source = createOptimisticThreadSend(props.source, compose);
   const threadContext: EmailThreadContext = {
     source,
     viewerEmail,
@@ -87,6 +95,17 @@ export function EmailThread(props: EmailThreadProps) {
     compose,
     composeHost: createEmailComposeHost(),
     rendering: {
+      renderOrganizationStatus: (status: EmailThreadOrganizationStatus) => (
+        <EmailThreadOperations
+          threadId={source.id()}
+          enabled={source.thread()?.access_level === 'owner'}
+          announceRead={status.announceRead()}
+        />
+      ),
+      renderOperation: (message: EmailMessage) =>
+        message.operation && !operationSettled(message.operation) ? (
+          <EmailMessageOperation message={message} />
+        ) : undefined,
       renderTags: () => (
         <Suspense
           fallback={
@@ -103,7 +122,8 @@ export function EmailThread(props: EmailThreadProps) {
       ),
       renderInvitation: (
         message: EmailMessage,
-        invitation: CalendarInvitation
+        invitation: CalendarInvitation,
+        options?: InvitationRenderOptions
       ) => (
         <EmailCalendarInvitation
           threadId={props.threadId()}
@@ -111,9 +131,14 @@ export function EmailThread(props: EmailThreadProps) {
           invitation={invitation}
           hour12={calendarPreferences.timeFormat !== '24-hour'}
           openCalendar={props.openCalendar}
+          onNavigate={options?.onNavigate}
+          inCalendarFile={options?.inCalendarFile}
         />
       ),
       openAttachment: createEmailAttachmentOpener(),
+      downloadAttachment: (attachment: EmailAttachment) => {
+        fireAndForget(downloadEmailAttachment(attachment), 'email-attachment');
+      },
       renderAvatar: (message: EmailMessage) => (
         <EmailSenderIcon message={message} />
       ),

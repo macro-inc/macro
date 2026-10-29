@@ -44,9 +44,25 @@ link flow, following the hexagonal architecture pattern.
 ## Checks
 
 - `cargo test -p github --all-features` (`SQLX_OFFLINE` unset).
+- Start local PostgreSQL and Redis first (`docs/development/database.md`);
+  `REDIS_URL` overrides the Redis test endpoint. Keep the token-cache race test
+  enabled in CI, which provisions Redis.
 - `just check` (from this directory) runs `cargo check --all-features`.
 
 ## Gotchas
+
+- Missing FusionAuth identities/grants require reauthentication; infrastructure
+  errors remain errors. After OAuth proves GitHub identity, refresh the grant
+  before returning an existing link. Reassign every sharer when its grant owner
+  is gone, using the old owner as a compare-and-swap condition. Hold the user
+  guard then the GitHub account guard through OAuth grant writes and DB changes;
+  disconnect follows the same order. Cache tokens by identity and GitHub account.
+- Keep lock-pool acquisition and advisory waits bounded at five seconds; only
+  the dedicated lock connections use the five-second lock and ten-second
+  statement timeouts. Never expire idle transactions while grant writes run.
+- Grant replacement is unlink/relink with best-effort restoration. A timeout
+  leaves the remote result uncertain; a crash can leave no grant. Preserve
+  Macro links so a later verified OAuth attempt can recreate it.
 
 - Webhook signature verification uses `hmac`/`subtle` for constant-time
   comparison — don't swap in a plain `==` when touching

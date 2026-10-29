@@ -44,6 +44,94 @@ describe('email soup entities', () => {
       });
     }
   );
+
+  it.each([
+    ['no attachments', [], false],
+    [
+      'an attached PDF',
+      [{ filename: 'contract.pdf', mimeType: 'application/pdf' }],
+      true,
+    ],
+    [
+      'a PDF that carries a Content-ID',
+      [
+        {
+          filename: 'contract.pdf',
+          mimeType: 'application/pdf',
+          contentId: '<contract@outlook>',
+        },
+      ],
+      true,
+    ],
+    [
+      'an attached photo',
+      [{ filename: 'photo.jpg', mimeType: 'image/jpeg' }],
+      true,
+    ],
+    [
+      'only an inline signature logo',
+      [
+        {
+          filename: 'logo.png',
+          mimeType: 'image/png',
+          contentId: '<logo@signature>',
+        },
+      ],
+      false,
+    ],
+    [
+      'only a calendar invite',
+      [{ filename: 'invite.ics', mimeType: 'text/calendar' }],
+      false,
+    ],
+    [
+      'an inline logo alongside a spreadsheet',
+      [
+        {
+          filename: 'logo.png',
+          mimeType: 'image/png',
+          contentId: '<logo@signature>',
+        },
+        {
+          filename: 'budget.xlsx',
+          mimeType:
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        },
+      ],
+      true,
+    ],
+  ])('flags a file attachment for %s', (_case, files, hasFileAttachment) => {
+    const item = {
+      tag: 'emailThread',
+      frecency_score: 0,
+      is_favorited: false,
+      data: {
+        id: 'email',
+        ownerId: 'owner',
+        properties: [],
+        attachments: files.map((file, index) => ({
+          ...file,
+          id: `attachment-${index}`,
+          messageId: 'message',
+          createdAt: '2026-09-01T00:00:00Z',
+        })),
+        labels: [],
+        participants: [],
+        createdAt: '2026-09-01T00:00:00Z',
+        updatedAt: '2026-09-01T00:00:00Z',
+        sortTs: '2026-09-01T00:00:00Z',
+        inboxVisible: true,
+        isDraft: false,
+        isRead: false,
+        isImportant: false,
+        isSignal: false,
+      },
+    } satisfies SoupApiItem;
+    expect(mapApiSoupItemToEntity(item)).toMatchObject({
+      type: 'email',
+      hasFileAttachment,
+    });
+  });
 });
 
 describe('initiative soup entities', () => {
@@ -187,4 +275,16 @@ describe('document soup entities', () => {
       });
     }
   );
+});
+
+describe('unknown soup entities', () => {
+  it('maps a tag from a newer server to a placeholder row instead of throwing', () => {
+    const fromNewerServer = JSON.parse(
+      '{"tag":"whiteboard","frecency_score":0,"is_favorited":false,"data":{"id":"board"}}'
+    );
+    expect(mapApiSoupItemToEntity(fromNewerServer)).toMatchObject({
+      type: 'document',
+      id: 'board',
+    });
+  });
 });

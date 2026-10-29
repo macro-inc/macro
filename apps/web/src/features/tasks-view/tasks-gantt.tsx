@@ -9,6 +9,7 @@ import { SoupEntityContextMenu } from '@app/features/soup';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { getTaskStatusOptionId, type TaskEntityWithProperties } from '@entity';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { usePropertyUserDisplay } from '@property/hooks/usePropertyUserDisplay';
@@ -18,6 +19,7 @@ import { TASK_SORT_DEFINITIONS } from './constants';
 import { taskGanttDates } from './queries/task-gantt';
 import { createTaskGanttQueries } from './queries/task-gantt-queries';
 import { useTasksView } from './tasks-view-context';
+import type { TaskCreateOptions } from './types';
 import { TaskGanttView } from './views/task-gantt-view';
 
 /** Reuses the host's filtered task source and task-opening capability. */
@@ -26,11 +28,14 @@ export function TasksGantt(props: { ref?: (element: HTMLDivElement) => void }) {
   const { source, state, setState, openTask } = context;
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
-  const createTask = (dueDate?: Date) =>
+  const createTask = (options?: TaskCreateOptions) =>
     layout.popoverSplit({
       type: 'component',
       id: 'task-compose',
-      params: { initialDueDate: dueDate },
+      params: {
+        initialDueDate: options?.dueDate,
+        composerContext: options?.composerContext,
+      },
     });
   const onCreate = () =>
     context.createTask ?? (!context.scopeKey ? createTask : undefined);
@@ -52,12 +57,15 @@ export function TasksGantt(props: { ref?: (element: HTMLDivElement) => void }) {
 
     if (opened) return;
 
-    void openEntityInSplitFromUnifiedList(task, {
-      splitHandle: panel.handle,
-      referredFrom: 'tasks',
-      openInNewSplit:
-        event.shiftKey || event.metaKey || event.ctrlKey || event.altKey,
-    });
+    fireAndForget(
+      openEntityInSplitFromUnifiedList(task, {
+        splitHandle: panel.handle,
+        referredFrom: 'tasks',
+        openInNewSplit:
+          event.shiftKey || event.metaKey || event.ctrlKey || event.altKey,
+      }),
+      'open-entity-in-split'
+    );
   };
   const renderEntity = (
     task: Accessor<TaskEntityWithProperties>,
@@ -152,7 +160,7 @@ export function TasksGantt(props: { ref?: (element: HTMLDivElement) => void }) {
             : [...ids, id]
         )
       }
-      onCreate={onCreate() && ((dates) => onCreate()?.(dates.end))}
+      onCreate={onCreate() && ((dates) => onCreate()?.({ dueDate: dates.end }))}
       onOpen={onOpen}
       renderEntity={renderEntity}
     />

@@ -1,9 +1,9 @@
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { getDisplayName, tryMacroId } from '@core/user';
 import LogoIcon from '@icon/macro-logo.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import { useUserInfo } from '@queries/auth';
 import {
   useJoinTeamMutation,
@@ -14,6 +14,7 @@ import { useCurrentTeamQuery, useTeamQuery } from '@queries/team/teams';
 import { useNavigate, useSearchParams } from '@solidjs/router';
 import { Button, Surface } from '@ui';
 import { createMemo, Match, Show, Switch } from 'solid-js';
+import { TeamInviteLinkAcceptance } from './TeamInviteLinkAcceptance';
 
 export function TeamInviteAcceptance() {
   const [searchParams] = useSearchParams();
@@ -21,6 +22,9 @@ export function TeamInviteAcceptance() {
   const userInfo = useUserInfo();
 
   const inviteId = () => searchParams.id as string | undefined;
+  // A team's shareable invite link opens this page with `link` instead of an
+  // emailed invite's `id`.
+  const inviteLink = () => searchParams.link as string | undefined;
 
   const invitesQuery = useUserInvitesQuery();
 
@@ -71,7 +75,12 @@ export function TeamInviteAcceptance() {
 
   const handleLogin = () => {
     const id = inviteId();
-    const returnUrl = id ? `/team-invite?id=${encodeURIComponent(id)}` : '/';
+    const link = inviteLink();
+    const returnUrl = link
+      ? `/team-invite?link=${encodeURIComponent(link)}`
+      : id
+        ? `/team-invite?id=${encodeURIComponent(id)}`
+        : '/';
     navigate(`/login?redirect=${encodeURIComponent(returnUrl)}`);
   };
 
@@ -103,12 +112,16 @@ export function TeamInviteAcceptance() {
             </div>
             <div class="flex flex-col items-center">
               <Switch>
-                <Match when={!inviteId()}>
+                <Match when={!inviteId() && !inviteLink()}>
                   <NoInviteId />
                 </Match>
 
                 <Match when={!userInfo()?.authenticated}>
                   <UnauthenticatedView onLogin={handleLogin} />
+                </Match>
+
+                <Match when={inviteLink()}>
+                  {(token) => <TeamInviteLinkAcceptance token={token()} />}
                 </Match>
 
                 <Match when={isLoading()}>
@@ -150,7 +163,7 @@ function NoInviteId() {
         This invite link appears to be invalid or incomplete.
       </p>
       <Button
-        variant="outline"
+        variant="secondary"
         size="md"
         class="w-full"
         onClick={() => navigate('/')}
@@ -172,7 +185,7 @@ function UnauthenticatedView(props: { onLogin: () => void }) {
         Sign in or create an account to view and accept this team invitation.
       </p>
       <Button
-        variant="outline"
+        variant="secondary"
         size="md"
         class="w-full"
         onClick={props.onLogin}
@@ -197,7 +210,7 @@ function AlreadyOnTeam(props: { teamName: string }) {
         to do here.
       </p>
       <Button
-        variant="outline"
+        variant="secondary"
         size="md"
         class="w-full"
         onClick={() => navigate('/')}
@@ -218,7 +231,7 @@ function InviteNotFound() {
         a different email address.
       </p>
       <Button
-        variant="outline"
+        variant="secondary"
         size="md"
         class="w-full"
         onClick={() => navigate('/')}
@@ -262,7 +275,7 @@ function InviteDetails(props: {
 
       <div class="flex flex-col gap-2 w-full">
         <Button
-          variant="outline"
+          variant="secondary"
           size="md"
           class="w-full"
           onClick={props.onAccept}

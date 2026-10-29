@@ -148,8 +148,8 @@ export class EmailService extends pulumi.ComponentResource {
               name: BASE_NAME,
               image: image.image.imageUri,
               stopTimeout: 10, // 10 seconds to force kill the task
-              cpu: stack === 'prod' ? 1024 : 256,
-              memory: stack === 'prod' ? 4096 : 717,
+              cpu: stack === 'prod' ? 512 : 256,
+              memory: stack === 'prod' ? 1024 : 717,
               environment: [...containerEnvVars],
               secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {

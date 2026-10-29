@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH editable AS (\n                SELECT id FROM email_messages\n                WHERE id = $2 AND link_id = $8 AND is_draft AND NOT is_sent\n                FOR UPDATE\n            )\n            INSERT INTO email_attachments_drafts (\n                id, draft_id, file_name, content_type, sha, size, s3_key\n            )\n            -- if the message belongs to a different link_id, nothing will be returned from this\n            -- and thus nothing will be inserted\n                SELECT $1, $2, $3, $4, $5, $6, $7\n                FROM editable\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Int4",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f91a7963ecfdfc6940be755ad615f71034bc0c6c5fc57ee6e1a794f929488115"
+}

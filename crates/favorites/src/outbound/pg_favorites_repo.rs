@@ -169,12 +169,16 @@ impl FavoritesRepo for PgFavoritesRepo {
             LEFT JOIN "Project" p ON f.entity_type = 'project' AND p.id = f.entity_id
             LEFT JOIN comms_channels ch ON f.entity_type = 'channel' AND ch.id = fid.entity_uuid
             LEFT JOIN comms_messages cm ON f.entity_type = 'channel_message' AND cm.id = fid.entity_uuid AND cm.parent_entity_type = 'channel'
+            -- Agent sessions are hard-deleted, so the row's absence is the
+            -- deletion check that `deletedAt` is for the item tables.
+            LEFT JOIN agent_session ags ON f.entity_type = 'agent_session' AND ags.id = fid.entity_uuid
             WHERE f.user_id = $1
                 AND ($2::text[] IS NULL OR f.entity_type = ANY($2))
                 AND ($3::text[] IS NULL OR f.entity_id = ANY($3))
                 AND (f.entity_type <> 'document' OR (d.id IS NOT NULL AND d."deletedAt" IS NULL))
                 AND (f.entity_type <> 'chat' OR (c.id IS NOT NULL AND c."deletedAt" IS NULL))
                 AND (f.entity_type <> 'project' OR (p.id IS NOT NULL AND p."deletedAt" IS NULL))
+                AND (f.entity_type <> 'agent_session' OR ags.id IS NOT NULL)
             ORDER BY f.sort_order ASC, f.created_at ASC
             "#,
             user_id.as_ref(),

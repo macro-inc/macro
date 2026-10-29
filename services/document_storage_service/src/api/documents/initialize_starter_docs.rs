@@ -10,10 +10,10 @@ use documents_hex::domain::{
     starter::seed_starter_documents,
 };
 use entity_access::domain::{
-    models::{BotAccessScope, EditAccessLevel, ViewAccessLevel},
+    models::{BotAccessScope, EditAccessLevel},
     ports::EntityAccessService,
 };
-use favorites::domain::ports::FavoritesService;
+use favorites::domain::ports::{FavoriteView, FavoritesService};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document_storage_service_internal::{
@@ -378,7 +378,7 @@ pub async fn handler(
         let favorite_result = async {
             let how_to_guide_receipt = state
                 .entity_access_service
-                .generate_entity_access_receipt::<ViewAccessLevel>(
+                .generate_entity_access_receipt::<FavoriteView>(
                     user_id,
                     organization_id,
                     &guide_id,

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE github_links\n            SET fusionauth_user_id = $3, updated_at = NOW()\n            WHERE github_user_id = $1 AND fusionauth_user_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "74001908e096c8a385879654ad39d78ab16d62661412e0023d2f50cd7025a222"
+}

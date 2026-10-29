@@ -1,19 +1,22 @@
-import { toast } from '@core/component/Toast/Toast';
 import { subscribeNativeNetworkStatus } from '@core/mobile/native-network-status';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import type { Client, OperationResult } from '@urql/core';
 import type { Result } from 'neverthrow';
 import {
   channelNotificationRefresh,
   disposeChannelNotificationRefresh,
 } from '../../queries/channel/notification-refresh';
+import { revalidateCallListsForSoupUpdates } from '../../queries/soup/graphql/call-list-revalidation';
 import {
   ActivityUpdatesDocument,
   type ActivityUpdatesSubscription,
   NotificationUpdatesDocument,
   type NotificationUpdatesSubscription,
   SoupUpdatesDocument,
+  type SoupUpdatesSubscription,
 } from './graphql/generated/graphql';
 import { createActivityUpdatesHandler } from './graphql-activity-updates';
 import { createChannelListUpdatesHandler } from './graphql-channel-list-updates';
@@ -168,7 +171,7 @@ type NotificationPatchListener = (patch: GraphqlNotificationPatch) => void;
 
 const notificationPatchListeners = new Set<NotificationPatchListener>();
 
-/** Subscribes to typed notification patches received from GraphQL. */
+/** Subscribes to live notification receipt, without waiting for persistence. */
 export function subscribeToGraphqlNotificationPatches(
   listener: NotificationPatchListener
 ): () => void {
@@ -176,8 +179,18 @@ export function subscribeToGraphqlNotificationPatches(
   return () => notificationPatchListeners.delete(listener);
 }
 
-function publishNotificationPatch(patch: GraphqlNotificationPatch): void {
-  for (const listener of notificationPatchListeners) listener(patch);
+export function publishNotificationPatch(
+  patch: GraphqlNotificationPatch,
+  span: Pick<Span, 'error'>
+): void {
+  for (const listener of notificationPatchListeners) {
+    try {
+      listener(patch);
+    } catch (error) {
+      span.error(error);
+      Telemetry.error(error, { surface: 'graphql-notifications' });
+    }
+  }
 }
 
 const LIVE_UPDATE_SUBSCRIPTIONS: readonly {
@@ -287,26 +300,38 @@ export function createGraphqlSoupSubscriptionsLifecycle(
                 result as OperationResult<ActivityUpdatesSubscription>
               );
             }
+            if (document === SoupUpdatesDocument && result.data != null) {
+              fireAndForget(
+                revalidateCallListsForSoupUpdates(
+                  (result.data as SoupUpdatesSubscription).soupUpdates
+                ),
+                'graphql-soup-subscriptions'
+              );
+            }
             if (
               document === NotificationUpdatesDocument &&
               result.data != null
             ) {
               const patch = (result.data as NotificationUpdatesSubscription)
                 .notificationUpdates;
-              publishNotificationPatch(patch);
+              // Cache-dependent channel reconciliation stays behind persistence;
+              // notificationReceiptExchange already dispatched the live event.
               const metadata = normalizedCacheResultMetadata(result);
-              void channelHandler.onPatch(
-                patch,
-                metadata?.source === 'live-network' &&
-                  metadata.cacheEffectsApplied === true
+              fireAndForget(
+                channelHandler.onPatch(
+                  patch,
+                  metadata?.source === 'live-network' &&
+                    metadata.cacheEffectsApplied === true
+                ),
+                'graphql-soup-subscriptions'
               );
             }
             if (result.error) {
               console.warn(errorMessage, result.error);
               if (!signaledFailure) {
                 signaledFailure = true;
-                toast.failure('Live updates disconnected', {
-                  subtext: 'Refresh to reconnect.',
+                Telemetry.error(result.error, {
+                  'error.source': 'graphql-soup-websocket',
                 });
               }
             }

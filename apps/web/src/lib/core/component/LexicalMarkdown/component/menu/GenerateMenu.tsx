@@ -99,7 +99,7 @@ function GenerateActionMenu(props: GenerateMenuProps) {
   });
 
   return (
-    <div class="w-fit flex flex-col border border-edge rounded-md p-1 bg-surface shadow-md space-y-1">
+    <div class="menu-surface w-fit flex flex-col p-1 space-y-1">
       <MenuItem
         onClick={() => {
           props.editor.dispatchCommand(ACCEPT_COMPLETION, undefined);

@@ -3,7 +3,8 @@ import { useHasPaidAccess } from '@core/auth';
 import { enableAiUsageBilling } from '@core/constant/featureFlags';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
 import { useSettingsState } from '@core/constant/SettingsState';
-import { useUserId } from '@core/context/user';
+import { useLicenseStatus, useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   useAiBillingSummaryQuery,
   useTrialEligibilityQuery,
@@ -22,6 +23,7 @@ export interface PaywallProps {
 const PaywallComponent = (props: PaywallProps) => {
   const { openSettings } = useSettingsState();
   const hasPaid = useHasPaidAccess();
+  const licenseStatus = useLicenseStatus();
   const userId = useUserId();
   const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
   const team = useCurrentTeamQuery();
@@ -58,6 +60,7 @@ const PaywallComponent = (props: PaywallProps) => {
         trialEligibility.isSuccess && queryReadyGate(trialEligibility)
           ? trialEligibility.data.eligible
           : undefined,
+      trialing: licenseStatus() === 'trialing',
     });
   };
 
@@ -72,8 +75,8 @@ const PaywallComponent = (props: PaywallProps) => {
         openSettings('Billing');
       }}
       onRetry={() => {
-        void team.refetch();
-        void summary.refetch();
+        fireAndForget(team.refetch(), 'paywall');
+        fireAndForget(summary.refetch(), 'paywall');
       }}
     />
   );

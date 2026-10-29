@@ -127,8 +127,6 @@ export function HomepageGithub(props: { motion?: 'bubbles' } = {}) {
       </h2>
       <p class="homepage-open-source-subtext">
         #1 on GitHub Trending in August.
-        <br />
-        Read the code. Make it your own.
       </p>
       <HomepageTrustBadges />
     </section>

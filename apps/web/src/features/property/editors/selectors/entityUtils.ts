@@ -21,7 +21,7 @@ import type {
 } from '@entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Accessor } from 'solid-js';
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 
 export type EntityTypeItemMap = {
   USER: UserItem;
@@ -59,7 +59,7 @@ function entityTypeToBuckets(entityType: EntityType): readonly Bucket[] {
     .with('CALL_RECORD', () => [] as const) // Call records aren't in quickAccess
     .with('CALENDAR_EVENT', () => [] as const) // Calendar events aren't in quickAccess
     .with('DATABASE_ROW', () => [] as const) // Database rows aren't in quickAccess
-    .exhaustive();
+    .exhaustive(() => [] as const);
   return buckets;
 }
 
@@ -149,34 +149,43 @@ export function getEntitySearchText(entity: CombinedEntity): string {
   return entity.data.name ?? '';
 }
 
-/** Gets the EntityType string for an entity */
-export function getEntityType(entity: CombinedEntity): EntityType {
+/**
+ * The properties-service entity type for an entity, or `undefined` when the
+ * properties service can't reference it.
+ */
+export function getEntityType(entity: CombinedEntity): EntityType | undefined {
   if (entity.kind === 'user') {
     return 'USER';
   }
 
-  const data = entity.data;
-  switch (data.type) {
-    case 'channel':
-      return 'CHANNEL';
-    case 'document':
-      if (data.subType?.type === 'task') {
-        return 'TASK';
-      }
-      return 'DOCUMENT';
-    case 'chat':
-      return 'CHAT';
-    case 'project':
-      return 'PROJECT';
-    case 'email':
-      return 'THREAD';
-    case 'crm_company':
-      return 'COMPANY';
-    case 'crm_contact':
-      return 'CONTACT';
-    default:
-      return (data as EntityData).type.toUpperCase() as EntityType;
-  }
+  return match<EntityData, EntityType | undefined>(entity.data)
+    .with({ type: 'channel' }, () => 'CHANNEL')
+    .with({ type: 'document' }, (data) =>
+      data.subType?.type === 'task' ? 'TASK' : 'DOCUMENT'
+    )
+    .with({ type: 'chat' }, () => 'CHAT')
+    .with({ type: 'project' }, () => 'PROJECT')
+    .with({ type: 'email' }, () => 'THREAD')
+    .with({ type: 'crm_company' }, () => 'COMPANY')
+    .with({ type: 'crm_contact' }, () => 'CONTACT')
+    .with({ type: 'initiative' }, () => 'INITIATIVE')
+    .with({ type: 'call' }, () => 'CALL_RECORD')
+    .with({ type: 'calendar_event' }, () => 'CALENDAR_EVENT')
+    .with(
+      {
+        type: P.union(
+          'agent_session',
+          'channel_message',
+          'channel_thread',
+          'database',
+          'form',
+          'routine',
+          'foreign'
+        ),
+      },
+      () => undefined
+    )
+    .exhaustive(() => undefined);
 }
 
 /** Check if entity is a channel */

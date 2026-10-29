@@ -42,6 +42,11 @@ checkboxes inserted, toggled by click and Space, counted by formulas, removed
 with Delete and the cell menu, and downloaded in Excel's checkbox format,
 date calendars on typed, imported and date-validated cells (keys, clicks and
 the stored form of the picked day),
+Dropdowns added, used and removed from the toolbar and cell menus, a block
+converted to a table at once (filtered by values and by condition, sorted,
+totaled in its footer, typed with a mismatch flag, grown by typing, its header
+and name renamed with their formulas, formula completion, recolored, grouped,
+converted back to a range that keeps its look, and deleted),
 imported conditional formatting, validation lists and notes, imported charts
 and images (drawn over their cells, following edits, deleted and restored with
 undo, and kept in the download), radar, bubble, stock and contour charts

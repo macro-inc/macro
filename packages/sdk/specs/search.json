@@ -504,6 +504,11 @@
           }
         }
       },
+      "CalendarEventSearchScope": {
+        "type": "string",
+        "description": "Which calendar events a unified search covers.\n\nSharing an event with a channel lets its members see the sharer's copy,\nwhich is on none of their own calendars, so the default scope never finds\nit. Shared events are a separate scope rather than part of the default, so\na caller can list them after the caller's own events without reordering\nthose.",
+        "enum": ["own", "shared_with_you"]
+      },
       "CalendarEventSearchTime": {
         "oneOf": [
           {
@@ -1495,6 +1500,7 @@
         "enum": [
           "BOOLEAN",
           "DATE",
+          "DATE_RANGE",
           "NUMBER",
           "STRING",
           "SELECT_NUMBER",
@@ -1503,6 +1509,21 @@
           "ENTITY",
           "LINK"
         ]
+      },
+      "DateRange": {
+        "type": "object",
+        "description": "A span of time from `start` to `end`, both included. The end is never\nbefore the start: a range that would end earlier does not deserialize.",
+        "required": ["start", "end"],
+        "properties": {
+          "end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       },
       "DocumentFilters": {
         "type": "object",
@@ -3226,6 +3247,21 @@
           },
           {
             "type": "object",
+            "description": "Date range value\nSerializes as: {\"type\": \"DateRange\", \"value\": {\"start\": \"2025-01-01T00:00:00Z\", \"end\": \"2025-01-31T00:00:00Z\"}}",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["DateRange"]
+              },
+              "value": {
+                "$ref": "#/components/schemas/DateRange",
+                "description": "Date range value\nSerializes as: {\"type\": \"DateRange\", \"value\": {\"start\": \"2025-01-01T00:00:00Z\", \"end\": \"2025-01-31T00:00:00Z\"}}"
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)",
             "required": ["value", "type"],
             "properties": {
@@ -4674,6 +4710,10 @@
         "type": "object",
         "required": ["query", "match_type"],
         "properties": {
+          "calendar_event_scope": {
+            "$ref": "#/components/schemas/CalendarEventSearchScope",
+            "description": "Which calendar events to search. Defaults to `own`: events on the\ncaller's own and delegated calendars. `shared_with_you` searches only\nevents shared with a channel the caller belongs to that are on none of\ntheir calendars."
+          },
           "collapse": {
             "type": ["boolean", "null"]
           },

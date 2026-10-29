@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { queryClient } from '@queries/client';
 import { invalidateCalendarInvitations } from './invitations';
 import { calendarKeys, RSVP_MUTATION_KEY } from './keys';
@@ -12,9 +13,9 @@ import { refreshTeamCalendarQueries } from './team-cache';
  * calendar mention chips.
  */
 export function invalidateCalendarViews(): void {
-  void refreshTeamCalendarQueries();
-  void invalidateCalendarInvitations();
-  invalidateCalendarOccurrences();
+  fireAndForget(refreshTeamCalendarQueries(), 'calendar-sync');
+  fireAndForget(invalidateCalendarInvitations(), 'calendar-sync');
+  fireAndForget(invalidateCalendarOccurrences(), 'calendar-sync');
   invalidateCalendarEventPreviews();
   queryClient.invalidateQueries({
     queryKey: calendarKeys.visibleCalendars.queryKey,
@@ -39,23 +40,29 @@ export function handleRefreshCalendar(payload: unknown): void {
         })
       : undefined;
   if (event?.event === 'team_sharing_changed') {
-    void refreshTeamCalendarQueries({
-      outOfOfficeChanged: event.team_ooo_changed !== false,
-    });
+    fireAndForget(
+      refreshTeamCalendarQueries({
+        outOfOfficeChanged: event.team_ooo_changed !== false,
+      }),
+      'calendar-sync'
+    );
     return;
   }
   if (event?.event !== 'synced' || typeof event.link_id !== 'string') return;
   // Old servers and unknown hints retain immediate revocation behavior.
-  void refreshTeamCalendarQueries({
-    outOfOfficeChanged: event.team_ooo_changed !== false,
-  });
+  fireAndForget(
+    refreshTeamCalendarQueries({
+      outOfOfficeChanged: event.team_ooo_changed !== false,
+    }),
+    'calendar-sync'
+  );
 
   // An in-flight RSVP holds optimistic occurrence state a refetch would
   // clobber; the last RSVP to settle re-invalidates occurrences itself, so
   // only the caches without optimistic writes refresh meanwhile.
   if (queryClient.isMutating({ mutationKey: RSVP_MUTATION_KEY }) === 0) {
-    void invalidateCalendarInvitations();
-    invalidateCalendarOccurrences();
+    fireAndForget(invalidateCalendarInvitations(), 'calendar-sync');
+    fireAndForget(invalidateCalendarOccurrences(), 'calendar-sync');
   }
   invalidateCalendarEventPreviews();
   queryClient.invalidateQueries({

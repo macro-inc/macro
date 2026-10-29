@@ -104,4 +104,11 @@ describe('thread reply placement', () => {
     state.setAllMessages([]);
     expect(state.area.info()).toBeUndefined();
   });
+
+  it('never reports an in-flow reply input on touch', () => {
+    const state = setup(true);
+    state.setMessages([]);
+    state.setAllMessages([state.draft]);
+    expect(state.area.inFlow()).toBe(false);
+  });
 });

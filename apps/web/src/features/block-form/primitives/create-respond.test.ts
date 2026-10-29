@@ -118,7 +118,7 @@ function offsite(): FormDetail {
 const now = () => new Date('2026-10-01T12:00:00Z');
 
 describe('createRespond', () => {
-  it('previews a closed form, validates required answers and screeners, and never reads or writes a response', async () => {
+  it('previews a closed form, validates required answers and gates, and never reads or writes a response', async () => {
     const detail: FormDetail = {
       form: {
         id: 'preview-form',
@@ -156,7 +156,7 @@ describe('createRespond', () => {
             ],
           },
           {
-            id: 'screener',
+            id: 'gate',
             kind: 'gate',
             title: 'Eligibility',
             description: '',

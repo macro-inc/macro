@@ -1,7 +1,10 @@
 /** Document-storage mutations used by entity surfaces. */
 
+import { databaseEntityMessage } from '@app/features/database/core/write-failure';
 import { scheduledActionKeys } from '@app/features/routines/queries/keys';
+import { trashDatabase } from '@block-database/queries/trash-database';
 import {
+  canDuplicateItemType,
   copyItem,
   deleteItem,
   moveToFolder,
@@ -32,8 +35,10 @@ import {
 } from '@queries/soup/graphql/optimistic-deletions';
 import { soupKeys } from '@queries/soup/keys';
 import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
+import { permanentlyDeleteEntity } from '@queries/storage/entity-mutations';
 import { callServiceClient } from '@service-call/client';
 import { scheduledActionClient } from '@service-scheduled-action/client';
+import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
 import { useMutation } from '@tanstack/solid-query';
 import { batch } from 'solid-js';
 import { type EntityData, getEntityProjectId } from '../types/entity';
@@ -41,7 +46,7 @@ import { BulkDeleteFailure } from './bulk-delete-result';
 
 function invalidateDeletedDssItems(entities: EntityData[]): void {
   if (entities.some((e) => e.type === 'call')) {
-    void queryClient.invalidateQueries({ queryKey: callKeys._def });
+    queryClient.invalidateQueries({ queryKey: callKeys._def });
   }
   if (entities.some((e) => e.type === 'routine')) {
     const deletedIds = new Set(
@@ -56,7 +61,7 @@ function invalidateDeletedDssItems(entities: EntityData[]): void {
         );
       }
     );
-    void queryClient.invalidateQueries({
+    queryClient.invalidateQueries({
       queryKey: scheduledActionKeys.list.queryKey,
     });
     for (const scheduleId of deletedIds) {
@@ -103,7 +108,8 @@ export function createBulkDeleteDssItemsMutation() {
       type === 'document' ||
       type === 'project' ||
       type === 'call' ||
-      type === 'routine'
+      type === 'routine' ||
+      type === 'database'
     );
   };
   const isCurrentContext = (context: unknown) =>
@@ -126,6 +132,10 @@ export function createBulkDeleteDssItemsMutation() {
           return true;
         }
         if (e.type === 'call') {
+          if (isFeatureEnabled(enableGraphqlSoup)) {
+            await permanentlyDeleteEntity({ type: 'CALL', id: e.id });
+            return true;
+          }
           return throwOnErr(() =>
             callServiceClient.deleteCallRecord(e.id)
           ).then(() => true);
@@ -134,6 +144,17 @@ export function createBulkDeleteDssItemsMutation() {
           return throwOnErr(() =>
             scheduledActionClient.deleteSchedule({ scheduleId: e.id })
           ).then(() => true);
+        }
+        if (e.type === 'database') {
+          await throwOnErr(() =>
+            trashDatabase(getEntityGraphqlClient(), e.id).mapErr((failure) => [
+              {
+                code: failure.kind,
+                message: databaseEntityMessage(failure, 'delete'),
+              },
+            ])
+          );
+          return true;
         }
         return deleteItem({ id: e.id, itemType: e.type });
       });
@@ -396,11 +417,11 @@ function getSoupEntityProjectId(entityId: string): string | undefined {
 }
 
 export function createBulkCopyDssEntityMutation() {
-  // Only support chat + document, same as single-copy version
-  const isUnsupportedEntity = (entity: EntityData) => {
-    const type = entity.type;
-    return type !== 'chat' && type !== 'document';
-  };
+  const isUnsupportedEntity = (entity: EntityData) =>
+    (entity.type !== 'chat' &&
+      entity.type !== 'document' &&
+      entity.type !== 'project') ||
+    !canDuplicateItemType(entity.type);
 
   return useMutation(() => ({
     mutationFn: async ({
@@ -417,7 +438,7 @@ export function createBulkCopyDssEntityMutation() {
       const results = await Promise.all(
         entities.map((e) =>
           copyItem({
-            itemType: e.type as 'document' | 'chat',
+            itemType: e.type,
             id: e.id,
             name: typeof name === 'function' ? name(e.name) : name,
           })
@@ -433,18 +454,18 @@ export function createBulkCopyDssEntityMutation() {
 
     onMutate: async () => {
       // For copy, no optimistic update — new IDs unknown until server
-      queryClient.cancelQueries({
+      await queryClient.cancelQueries({
         queryKey: soupKeys.items._def,
       });
-      queryClient.cancelQueries({
+      await queryClient.cancelQueries({
         queryKey: soupKeys.astItems._def,
       });
     },
 
     onSettled: (data, error, { entities }) => {
       if (error) {
+        // The copy action shows the failure, with the folder-size hint.
         console.error(`Failed bulk copy`, entities, data, error);
-        toast.failure('Failed to copy items');
       }
 
       // Trigger refetch so new items appear

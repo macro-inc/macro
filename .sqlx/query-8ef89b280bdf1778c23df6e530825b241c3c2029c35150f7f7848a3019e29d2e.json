@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM whatsapp_store_value\n            WHERE account_id = $1 AND store = $2 AND key = ANY($3)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8ef89b280bdf1778c23df6e530825b241c3c2029c35150f7f7848a3019e29d2e"
+}

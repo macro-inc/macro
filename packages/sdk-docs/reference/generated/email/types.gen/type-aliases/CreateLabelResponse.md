@@ -8,4 +8,4 @@ The response returned from the create label endpoint
 
 | Property | Type | Description |
 | ------ | ------ | ------ |
-| <a id="property-label"></a> `label` | [`Label`](Label.md) | the thread, with messages inside |
+| <a id="property-label"></a> `label` | [`Label`](Label.md) | Local label. Pending provider creation is reported by settings operations. |

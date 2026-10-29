@@ -59,6 +59,7 @@ fn a_form_detail_reads_as_the_web_client_expects() {
             confirmation_message: "".into(),
             created_at: Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap(),
             updated_at: Utc.with_ymd_and_hms(2026, 9, 2, 9, 0, 0).unwrap(),
+            is_hidden_in_drive: false,
         },
         access: FormAccess::Edit,
         table_gone: false,
@@ -120,6 +121,7 @@ fn a_form_detail_reads_as_the_web_client_expects() {
                 "confirmationMessage": "",
                 "createdAt": "2026-09-01T09:00:00Z",
                 "updatedAt": "2026-09-02T09:00:00Z",
+                "isHiddenInDrive": false,
             },
             "access": "edit",
             "tableGone": false,
@@ -236,7 +238,23 @@ fn a_layout_put_reads_sections_by_kind_and_a_missing_widget_as_default() {
 fn a_create_request_names_its_source_by_kind() {
     let new: CreateForm =
         serde_json::from_value(json!({"name": "RSVP", "source": {"kind": "new"}})).unwrap();
-    assert_eq!(new.source, FormSource::New);
+    assert_eq!(
+        new.source,
+        FormSource::New {
+            is_hidden_in_drive: false
+        }
+    );
+
+    let hidden: CreateForm = serde_json::from_value(
+        json!({"name": "Lunch?", "source": {"kind": "new", "isHiddenInDrive": true}}),
+    )
+    .unwrap();
+    assert_eq!(
+        hidden.source,
+        FormSource::New {
+            is_hidden_in_drive: true
+        }
+    );
 
     let table: CreateForm = serde_json::from_value(json!({
         "name": "RSVP",
@@ -393,6 +411,7 @@ fn a_form_takes_responses_while_open_and_before_it_closes() {
         confirmation_message: "".into(),
         created_at: now,
         updated_at: now,
+        is_hidden_in_drive: false,
     };
     assert!(form(FormStatus::Open, None).accepts_responses_at(now));
     assert!(
@@ -422,6 +441,7 @@ fn a_listed_form_names_the_callers_access_beside_the_form() {
             confirmation_message: "Thanks".into(),
             created_at: now,
             updated_at: now,
+            is_hidden_in_drive: false,
         },
         access: FormAccess::View,
     };
@@ -444,6 +464,7 @@ fn a_listed_form_names_the_callers_access_beside_the_form() {
                 "confirmationMessage": "Thanks",
                 "createdAt": "2026-09-01T09:00:00Z",
                 "updatedAt": "2026-09-01T09:00:00Z",
+                "isHiddenInDrive": false,
             },
             "access": "view",
         })
@@ -509,6 +530,7 @@ fn form_and_response_schemas_require_every_field_they_always_serialize() {
         confirmation_message: "".into(),
         created_at: now,
         updated_at: now,
+        is_hidden_in_drive: false,
     };
     let response = FormResponse {
         id: FormResponseId::from_uuid(Uuid::from_u128(0xe1)),

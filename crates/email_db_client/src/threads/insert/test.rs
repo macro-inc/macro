@@ -112,9 +112,9 @@ async fn blank_upsert_preserves_populated_timestamp(pool: Pool<Postgres>) -> any
 
     // A redelivered backfill blank insert must not wipe the timestamp or
     // rewrite the row.
-    let upserted_thread_id = insert_blank_thread(&pool, "prov1", link_id).await?;
+    let inserted = insert_blank_thread(&pool, "prov1", link_id).await?;
 
-    assert_eq!(upserted_thread_id, existing_thread_id);
+    assert_eq!(inserted, None, "the mailbox already had the thread");
     let after = get_thread_by_id_and_link_id(&pool, existing_thread_id, link_id)
         .await?
         .expect("provider thread should still exist");
@@ -137,7 +137,9 @@ async fn blank_upsert_preserves_populated_timestamp(pool: Pool<Postgres>) -> any
 async fn blank_insert_creates_new_thread(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
 
-    let thread_id = insert_blank_thread(&pool, "prov-brand-new", link_id).await?;
+    let thread_id = insert_blank_thread(&pool, "prov-brand-new", link_id)
+        .await?
+        .expect("the thread is new");
 
     let thread = get_thread_by_id_and_link_id(&pool, thread_id, link_id)
         .await?
@@ -145,6 +147,28 @@ async fn blank_insert_creates_new_thread(pool: Pool<Postgres>) -> anyhow::Result
     assert_eq!(thread.provider_id.as_deref(), Some("prov-brand-new"));
     assert_eq!(thread.latest_inbound_message_ts, None);
 
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("links"))
+)]
+async fn only_one_of_two_concurrent_blank_inserts_creates_the_thread(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
+
+    let (first, second) = tokio::join!(
+        insert_blank_thread(&pool, "prov-raced", link_id),
+        insert_blank_thread(&pool, "prov-raced", link_id)
+    );
+
+    assert_eq!(
+        [first?, second?].iter().flatten().count(),
+        1,
+        "only the winning insert backfills the thread's messages"
+    );
     Ok(())
 }
 
@@ -321,6 +345,273 @@ async fn oversized_provider_values_do_not_block_the_thread_insert(
     .fetch_one(&pool)
     .await?;
     assert_eq!(recipient_count, Some(0));
+
+    Ok(())
+}
+
+fn backfilled_messages(link_id: Uuid) -> Vec<message::Message> {
+    use crate::messages::insert::test::{PARENT_GLOBAL_ID, SyncedMessage};
+
+    let parent = SyncedMessage {
+        provider_id: "backfill-parent",
+        global_id: PARENT_GLOBAL_ID,
+        in_reply_to: None,
+        to: &["user1@macro.com"],
+        cc: &[],
+        labels: &[],
+        body: "parent body",
+    };
+    let reply = SyncedMessage {
+        provider_id: "backfill-reply",
+        global_id: "<backfill-reply@macro.com>",
+        in_reply_to: Some(PARENT_GLOBAL_ID),
+        to: &["sender@macro.com"],
+        cc: &["cc@macro.com"],
+        labels: &[],
+        body: "reply body",
+    };
+    // Backfill writes the thread row itself, so the messages' own thread id is unused.
+    let unused_thread_id = Uuid::now_v7();
+    vec![
+        parent.build(link_id, unused_thread_id),
+        reply.build(link_id, unused_thread_id),
+    ]
+}
+
+/// Postgres "data exception" (SQLSTATE class 22): the value itself can't be stored.
+fn data_exception(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        cause
+            .downcast_ref::<sqlx::Error>()
+            .and_then(|error| error.as_database_error())
+            .and_then(|error| error.code())
+            .is_some_and(|code| code.starts_with("22"))
+    })
+}
+
+async fn thread_message_count(pool: &Pool<Postgres>, thread_id: Uuid) -> anyhow::Result<i64> {
+    Ok(sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM email_messages WHERE thread_id = $1"#,
+        thread_id
+    )
+    .fetch_one(pool)
+    .await?)
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("links"))
+)]
+async fn a_backfilled_thread_is_written_with_all_of_its_messages(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
+    let mut messages = backfilled_messages(link_id);
+
+    let (thread_id, skipped) = insert_backfilled_thread(
+        &pool,
+        "backfill-thread",
+        link_id,
+        &mut messages,
+        data_exception,
+    )
+    .await?
+    .expect("the thread is new");
+
+    assert!(skipped.is_empty());
+
+    assert_eq!(thread_message_count(&pool, thread_id).await?, 2);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("links"))
+)]
+async fn a_thread_another_copy_already_wrote_gets_no_messages_from_this_one(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
+    let existing_id = insert_blank_thread(&pool, "backfill-thread", link_id)
+        .await?
+        .expect("the thread is new");
+    let mut messages = backfilled_messages(link_id);
+
+    let inserted = insert_backfilled_thread(
+        &pool,
+        "backfill-thread",
+        link_id,
+        &mut messages,
+        data_exception,
+    )
+    .await?;
+
+    assert!(
+        inserted.is_none(),
+        "only the copy that wrote the thread finishes it"
+    );
+    assert_eq!(thread_message_count(&pool, existing_id).await?, 0);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("links"))
+)]
+async fn missing_messages_are_written_into_their_existing_thread(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
+    let thread_id = insert_blank_thread(&pool, "backfill-thread", link_id)
+        .await?
+        .expect("the thread is new");
+    let mut messages = backfilled_messages(link_id);
+
+    let skipped = crate::messages::insert::insert_thread_messages(
+        &pool,
+        thread_id,
+        link_id,
+        &mut messages,
+        data_exception,
+    )
+    .await?;
+
+    assert!(skipped.is_empty());
+
+    assert_eq!(thread_message_count(&pool, thread_id).await?, 2);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("links"))
+)]
+async fn a_message_that_cannot_be_stored_is_skipped_and_the_rest_of_its_thread_is_written(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
+    let mut messages = backfilled_messages(link_id);
+    // Postgres text can't hold NUL, so this message fails identically every time.
+    messages[0].body_text = Some("broken \0 body".to_string());
+
+    let (thread_id, skipped) = insert_backfilled_thread(
+        &pool,
+        "backfill-thread",
+        link_id,
+        &mut messages,
+        data_exception,
+    )
+    .await?
+    .expect("the thread is new");
+
+    assert_eq!(
+        skipped
+            .iter()
+            .map(|skipped| skipped.index)
+            .collect::<Vec<_>>(),
+        vec![0]
+    );
+    assert_eq!(thread_message_count(&pool, thread_id).await?, 1);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("links"))
+)]
+async fn whole_thread_resync_recomputes_thread_state_from_stored_labels(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::messages::insert::test::SyncedMessage;
+
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
+    sqlx::query!(
+        "INSERT INTO email_labels (id, link_id, provider_label_id, name) VALUES ($1, $2, 'INBOX', 'INBOX')",
+        Uuid::now_v7(),
+        link_id
+    )
+    .execute(&pool)
+    .await?;
+    let archived = SyncedMessage {
+        provider_id: "pending-archive",
+        global_id: "<pending-archive@macro.com>",
+        in_reply_to: None,
+        to: &["user1@macro.com"],
+        cc: &[],
+        labels: &["INBOX"],
+        body: "archived body",
+    };
+    let reply = SyncedMessage {
+        provider_id: "new-reply",
+        global_id: "<new-reply@macro.com>",
+        in_reply_to: None,
+        to: &["user1@macro.com"],
+        cc: &[],
+        labels: &["INBOX"],
+        body: "reply body",
+    };
+    let gmail_thread = |messages: &[&SyncedMessage]| {
+        let thread_db_id = Uuid::now_v7();
+        let ts =
+            chrono::DateTime::<Utc>::from_timestamp(1_790_000_000, 0).expect("valid timestamp");
+        thread::Thread {
+            db_id: thread_db_id,
+            provider_id: Some("pending-archive-thread".to_string()),
+            link_id,
+            inbox_visible: true,
+            is_read: false,
+            latest_inbound_message_ts: Some(ts),
+            latest_outbound_message_ts: None,
+            latest_non_spam_message_ts: Some(ts),
+            created_at: ts,
+            updated_at: ts,
+            messages: messages
+                .iter()
+                .map(|message| message.build(link_id, thread_db_id))
+                .collect(),
+        }
+    };
+    let first_sync = gmail_thread(&[&archived]);
+    let message_id = first_sync.messages[0].db_id;
+    let thread_id = insert_thread_and_messages(&pool, first_sync, link_id).await?;
+
+    // Archived in Macro; Gmail has not applied it yet.
+    let mut tx = pool.begin().await?;
+    crate::labels::delete::delete_message_labels_batch(
+        &mut *tx,
+        &vec![message_id],
+        "INBOX",
+        link_id,
+    )
+    .await?;
+    sqlx::query!(
+        "UPDATE email_threads SET inbox_visible = false WHERE id = $1",
+        thread_id
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    crate::labels::pending_writes::mark_pending_label_writes(
+        &pool,
+        link_id,
+        &[message_id],
+        "INBOX",
+        false,
+        Uuid::now_v7(),
+    )
+    .await?;
+    let inbox_visible = || async {
+        get_thread_by_id_and_link_id(&pool, thread_id, link_id)
+            .await
+            .map(|thread| thread.expect("thread should exist").inbox_visible)
+    };
+
+    insert_thread_and_messages(&pool, gmail_thread(&[&archived]), link_id).await?;
+    assert!(!inbox_visible().await?);
+
+    // A new reply lands in the inbox, so the thread shows again.
+    insert_thread_and_messages(&pool, gmail_thread(&[&archived, &reply]), link_id).await?;
+    assert!(inbox_visible().await?);
 
     Ok(())
 }

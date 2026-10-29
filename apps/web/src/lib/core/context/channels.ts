@@ -7,7 +7,7 @@ import { ChannelTypeEnum } from '@service-storage/client';
 import type { ApiActivity as ChannelsActivity } from '@service-storage/generated/schemas/apiActivity';
 import { type Accessor, createMemo } from 'solid-js';
 import { createAssertedContextProvider } from './createContext';
-import { useUserId } from './user';
+import { useIsAuthenticated, useUserId } from './user';
 
 type ChannelsContextValue = {
   channels: Accessor<ApiChannelWithLatest[]>;
@@ -20,16 +20,18 @@ type ChannelsContextValue = {
 
 export const [ChannelsContextProvider, useChannelsContext] =
   createAssertedContextProvider('ChannelsContext', (): ChannelsContextValue => {
-    const channelsQuery = useListChannelsQuery();
-    const activityQuery = useChannelsActivityQuery();
+    const authenticated = useIsAuthenticated();
+    const enabled = () => authenticated() === true;
+    const channelsQuery = useListChannelsQuery(enabled);
+    const activityQuery = useChannelsActivityQuery(enabled);
 
     const channels = () =>
-      queryReadyGate(channelsQuery) ? channelsQuery.data : [];
+      enabled() && queryReadyGate(channelsQuery) ? channelsQuery.data : [];
     const activity = () =>
-      queryReadyGate(activityQuery) ? activityQuery.data : [];
+      enabled() && queryReadyGate(activityQuery) ? activityQuery.data : [];
 
     const channelsById = createMemo(() => {
-      if (!queryReadyGate(channelsQuery)) return {};
+      if (!enabled() || !queryReadyGate(channelsQuery)) return {};
       return channelsQuery.data.reduce<Record<string, ApiChannelWithLatest>>(
         (acc, ch) => {
           acc[ch.id] = ch;
@@ -40,7 +42,7 @@ export const [ChannelsContextProvider, useChannelsContext] =
     });
 
     const activityByChannelId = createMemo(() => {
-      if (!queryReadyGate(activityQuery)) return {};
+      if (!enabled() || !queryReadyGate(activityQuery)) return {};
       return activityQuery.data.reduce<Record<string, ChannelsActivity>>(
         (acc, a) => {
           acc[a.channel_id] = a;

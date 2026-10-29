@@ -21,6 +21,7 @@ import { getCallJoinTab } from '@channel/Call/call-tabs';
 import { useCall } from '@channel/Call/use-call';
 import { ChannelCallsTab } from '@channel/Calls/ChannelCallsTab';
 import type { MessageTimelineStateSnapshot } from '@channel/Channel/Channel';
+import { ChannelLoading } from '@channel/Channel/ChannelLoading';
 import {
   ChannelMessages,
   ChannelSurface,
@@ -44,6 +45,7 @@ import {
   toChannelTargetRequest,
 } from '@channel/Channel/link';
 import {
+  CallTabLabel,
   canUseInlineCallTab,
   normalizeChannelTab,
   useChannelTabItems,
@@ -75,10 +77,11 @@ import { isMobile } from '@core/mobile/isMobile';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData, canEditChannelIdentity } from '@entity';
-import PictureIcon from '@phosphor/image.svg';
-import RenameIcon from '@phosphor/pencil-line.svg';
-import TrashIcon from '@phosphor/trash.svg';
+import PictureIcon from '@icon/system/regular/image.svg';
+import RenameIcon from '@icon/system/regular/pencil-line.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { useSearchParams } from '@solidjs/router';
@@ -184,8 +187,8 @@ function NewTop(props: { channelId: string }) {
     title: 'View',
     options: tabs().map((tab) => ({
       value: tab.value,
-      label: tab.label,
-      icon: CHANNEL_TAB_ICONS[tab.value as ChannelTabId],
+      label: tab.value === 'call' ? <CallTabLabel /> : tab.label,
+      icon: CHANNEL_TAB_ICONS[tab.value],
     })),
     value: activeTab(),
     onSelect: (value: string) => setActiveTab(value as ChannelTabId),
@@ -219,7 +222,7 @@ function NewTop(props: { channelId: string }) {
               action: () => {
                 const entity = askMacroEntity();
                 if (!entity) return;
-                void openChatWithAgent(entity);
+                fireAndForget(openChatWithAgent(entity), 'channel-header');
               },
               // Desktop gets a header button instead (see below).
               condition: () => isMobile() && !!askMacroEntity(),
@@ -232,7 +235,7 @@ function NewTop(props: { channelId: string }) {
               action: () => {
                 const entity = channelEntity();
                 if (!entity) return;
-                void renameAction.execute([entity]);
+                fireAndForget(renameAction.execute([entity]), 'channel-header');
               },
               condition: () => {
                 const entity = channelEntity();
@@ -560,9 +563,11 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
           <div class="flex min-h-0 flex-1 flex-col" data-channel-tab-content>
             <Switch>
               <Match when={activeTab() === 'messages'}>
-                <ChannelMessages
-                  autofocus={canAutofocusSplitContent && !navigatedFromJK()}
-                />
+                <Suspense fallback={<ChannelLoading />}>
+                  <ChannelMessages
+                    autofocus={canAutofocusSplitContent && !navigatedFromJK()}
+                  />
+                </Suspense>
               </Match>
               <Match when={activeTab() === 'attachments'}>
                 <ChannelAttachmentsTab channelId={channelId} />

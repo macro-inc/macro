@@ -1617,7 +1617,10 @@ fn email_envelope_decodes_round_trip() {
 
 #[test]
 fn agent_session_lifecycle_decodes_and_routes_by_session() {
-    use ::agent_session::domain::{events::*, model::AgentSessionId};
+    use ::agent_session::domain::{
+        events::*,
+        model::{AgentSessionId, SessionSource},
+    };
     use macro_event_topics::MacroAgentSessionLifecycleTopic;
 
     let id = AgentSessionId::new_from_uuid(Uuid::from_u128(10));
@@ -1629,6 +1632,7 @@ fn agent_session_lifecycle_decodes_and_routes_by_session() {
         owner_id: user_id(),
         origin: None,
         audience: vec![],
+        source: SessionSource::User,
     };
     for event in [
         AgentSessionLifecycleEvent::Renamed(SessionRenamedMetadata {

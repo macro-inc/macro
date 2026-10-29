@@ -36,7 +36,13 @@ Clients key cache records by `__typename:id`. Consequences:
   edge it represents, never facts about an entity — entity facts belong on
   the entity record where every view shares them. Soup pages therefore
   return entities directly (there is no per-item wrapper type), and
-  per-view state is limited to list membership and order.
+  per-view state is limited to list membership and order. A value derived
+  per view (the Soup email thread's `sortTs`, which depends on the query's
+  `emailView`) is not an entity fact either: clients must not select it into
+  the shared record, because the last view to fetch the thread would win.
+  Expose the facts it derives from (`latestInboundMessageTs`,
+  `reminderReturnedAt`, `latestOutboundMessageTs`, `latestNonSpamMessageTs`)
+  and let each view recompute its key.
 - `id` fields must be exactly `ID!` (non-null, non-list); the cache build
   (`crates/client/cache-core/build.rs`) fails otherwise, and fails if
   the query root exposes an `id`.
@@ -106,3 +112,14 @@ The exported `static_assets/schema.graphql` feeds both the client codegen
 (`apps/web && bun gen-graphql`) and the cache metadata codegen. Additive changes
 keep persisted client caches; a change that makes stored records unsafe needs a
 bump of `CACHE_SCHEMA_COMPATIBILITY_EPOCH` in `crates/client/cache-core/src/codec.rs`.
+
+Email send admission, cancellation and status are exposed by `graphql_email`;
+`GraphqlUser.pendingEmailSends` lists authorized inbox attempts with cursor pagination.
+Keep this viewer-scoped listing independent of normalized-cache initialization.
+
+Never remove or narrow anything deployed clients send without a dated
+deprecation (`Remove after YYYY-MM-DD`, at least 30 days out).
+`cargo x graphql-schema-compat` checks the SDL against `origin/main`, and CI runs
+it; see [step 8 of the field guide](../../docs/guides/add-graphql-field.md#8-compatibility-and-rollout).
+
+Saved-view definitions live under authenticated `GraphqlUser`; mutations use the authenticated request user and a domain service from request data. Run `cargo test -p complete_graph --lib saved_view_contract` after changing the saved-view contract.

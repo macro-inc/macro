@@ -3,8 +3,10 @@ import {
   formatBoolean,
   formatDate,
   formatNumber,
+  formatTimeRange,
 } from '@property/utils/formatting';
 import { fromCellDate } from './cell-date';
+import { cellTimeRange } from './cell-date-range';
 import type { DatabaseColumnType } from './column-inference';
 import { relatedRowIds } from './database-relations';
 import {
@@ -87,6 +89,7 @@ export function canEditCell(column: DatabaseViewColumn): boolean {
       'NUMBER',
       'BOOLEAN',
       'DATE',
+      'DATE_RANGE',
       'LINK',
       'SELECT_STRING',
       'SELECT_NUMBER',
@@ -118,6 +121,10 @@ export function formatCellValue(
   if (column.dataType === 'DATE') {
     const date = fromCellDate(value);
     if (date) return formatDate(date);
+  }
+  if (column.dataType === 'DATE_RANGE') {
+    const range = cellTimeRange(value);
+    if (range) return formatTimeRange(range);
   }
   if (column.dataType === 'NUMBER' && typeof value === 'number')
     return formatNumber(value);

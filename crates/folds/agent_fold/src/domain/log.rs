@@ -79,6 +79,9 @@ impl std::fmt::Display for AgentSessionId {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "direction", content = "content", rename_all = "snake_case")]
 pub enum Message {
+    /// A trusted system-event invocation. Its ACP request is preserved for
+    /// correlation and replay, while it never becomes a user message.
+    Notification(ToRuntimeMessage),
     /// Runtime → server traffic.
     ToServer(ToServerMessage),
     /// Server → runtime traffic.

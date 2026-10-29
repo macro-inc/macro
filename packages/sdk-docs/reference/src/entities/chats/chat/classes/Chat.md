@@ -14,6 +14,7 @@ A Macro AI chat.
 
 | Property | Modifier | Type | Default value | Description | Overrides | Inherited from |
 | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
+| <a id="property-access"></a> `access` | `readonly` | [`EntityAccess`](../../../sharing/access/classes/EntityAccess.md) | `...` | Access requests and direct user grants. | - | - |
 | <a id="property-createdat"></a> `createdAt` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | `...` | When the chat was created. | - | - |
 | <a id="property-entitytype"></a> `entityType` | `readonly` | `"chat"` | `'chat'` | Favorites identify chats as `chat`. | [`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`entityType`](../../../entity/classes/PropertiedEntity.md#property-entitytype) | - |
 | <a id="property-id"></a> `id` | `public readonly` | `string` | `undefined` | - | - | [`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`id`](../../../entity/classes/PropertiedEntity.md#property-id) |
@@ -110,6 +111,22 @@ The chat's conversation history: titled records of messages with attachment ids.
 
 ***
 
+### permission()
+
+> **permission**(): `Promise`\<\{ `permission`: [`EntityPermission`](../../../../../generated/storage/types.gen/type-aliases/EntityPermission.md); `status`: `"access"`; \} \| \{ `status`: `"no_access"`; \}\>
+
+Read the caller's effective permission on this entity.
+
+#### Returns
+
+`Promise`\<\{ `permission`: [`EntityPermission`](../../../../../generated/storage/types.gen/type-aliases/EntityPermission.md); `status`: `"access"`; \} \| \{ `status`: `"no_access"`; \}\>
+
+#### Inherited from
+
+[`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`permission`](../../../entity/classes/PropertiedEntity.md#permission)
+
+***
+
 ### properties()
 
 > **properties**(`opts?`): `Promise`\<[`EntityPropertyWithDefinition`](../../../../../generated/properties/types.gen/type-aliases/EntityPropertyWithDefinition.md)[]\>
@@ -176,6 +193,24 @@ Restore a soft-deleted chat.
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### send()
+
+> **send**(`options`): `Promise`\<[`ChatGeneration`](../../generation/classes/ChatGeneration.md)\>
+
+Send a message and start a background generation. Tools may perform writes.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `options` | `Omit`\<[`HttpSendChatMessageRequest`](../../../../../generated/cognition/types.gen/type-aliases/HttpSendChatMessageRequest.md), `"chat_id"` \| `"attachments"` \| `"additional_instructions"`\> & \{ `additionalInstructions?`: `string`; `attachments?`: [`EntityReference`](../../../reference/type-aliases/EntityReference.md)[]; \} |
+
+#### Returns
+
+`Promise`\<[`ChatGeneration`](../../generation/classes/ChatGeneration.md)\>
 
 ***
 

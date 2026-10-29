@@ -125,3 +125,4 @@ properties = { path = "../properties", default-features = false, features = [
 rootcause = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 tower = { workspace = true }
+wiremock = { workspace = true }

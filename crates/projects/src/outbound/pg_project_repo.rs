@@ -7,6 +7,7 @@ mod edit;
 mod revert_delete;
 mod share;
 mod team_share;
+mod tree;
 mod upload_folder;
 
 #[cfg(test)]
@@ -25,8 +26,8 @@ use models_permissions::share_permission::{LinkShare, TeamLinkShareDefault};
 use sqlx::{PgPool, Postgres, Transaction};
 
 use crate::domain::models::{
-    CreateProjectArgs, EditProjectArgs, MarkedUploadedTree, ProjectError, PurgedProjectTree,
-    RevertDeleteResult, SoftDeleteResult, UploadFolderRepoArgs,
+    CreateProjectArgs, EditProjectArgs, MarkedUploadedTree, ProjectError, ProjectTree,
+    PurgedProjectTree, RevertDeleteResult, SoftDeleteResult, UploadFolderRepoArgs,
 };
 use crate::domain::ports::ProjectRepo;
 
@@ -307,6 +308,15 @@ impl<B: BotFacts + 'static> ProjectRepo for PgProjectRepo<B> {
         project_id: &str,
     ) -> Result<Vec<model::item::Item>, Self::Err> {
         content::get_project_children(&self.pool, project_id).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_project_tree(
+        &self,
+        project_id: &str,
+        limit: usize,
+    ) -> Result<ProjectTree, Self::Err> {
+        tree::get_project_tree(&self.pool, project_id, limit).await
     }
 
     #[tracing::instrument(err, skip(self))]

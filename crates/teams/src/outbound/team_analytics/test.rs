@@ -53,7 +53,7 @@ fn maps_team_events_to_expected_posthog_names() {
 }
 
 #[test]
-fn mapped_team_events_include_team_id_in_properties() {
+fn mapped_team_events_include_team_id_and_team_group() {
     let team_id = uuid::Uuid::from_u128(1).to_string();
 
     for event in test_events() {
@@ -61,6 +61,7 @@ fn mapped_team_events_include_team_id_in_properties() {
         let properties = serde_json::to_value(&posthog_event.properties).unwrap();
 
         assert_eq!(properties["team_id"], team_id);
+        assert_eq!(properties["$groups"], json!({ "team": team_id }));
     }
 }
 
@@ -79,6 +80,7 @@ fn maps_team_created_context() {
         properties,
         json!({
             "team_id": uuid::Uuid::from_u128(1),
+            "$groups": { "team": uuid::Uuid::from_u128(1) },
             "team_name": "Acme",
             "owner_id": "macro|owner@example.com",
         })
@@ -101,6 +103,7 @@ fn maps_team_invited_context() {
         properties,
         json!({
             "team_id": uuid::Uuid::from_u128(1),
+            "$groups": { "team": uuid::Uuid::from_u128(1) },
             "team_name": "Acme",
             "team_invite_id": uuid::Uuid::from_u128(2),
             "inviter_id": "macro|inviter@example.com",
@@ -124,6 +127,7 @@ fn maps_team_joined_context() {
         properties,
         json!({
             "team_id": uuid::Uuid::from_u128(1),
+            "$groups": { "team": uuid::Uuid::from_u128(1) },
             "team_invite_id": uuid::Uuid::from_u128(2),
             "member_id": "macro|member@example.com",
             "role": "member",
@@ -146,6 +150,7 @@ fn maps_team_left_context() {
         properties,
         json!({
             "team_id": uuid::Uuid::from_u128(1),
+            "$groups": { "team": uuid::Uuid::from_u128(1) },
             "member_id": "macro|member@example.com",
             "removed_by_id": "macro|admin@example.com",
             "role": "admin",

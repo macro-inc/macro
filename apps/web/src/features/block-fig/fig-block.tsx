@@ -1,3 +1,4 @@
+import { reloadApp } from '@app/observability/reload';
 /**
  * The `.fig` block: app chrome (header, file menu, sharing) around the
  * viewer, wired to the worker engine and document storage.
@@ -40,10 +41,11 @@ import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { Button } from '@ui/components/Button';
 import type { LoroDoc } from 'loro-crdt';
 import {
@@ -130,7 +132,7 @@ function FigHost(props: {
           message:
             'This design was replaced by a newer file (an upload or an AI edit). Reload to edit the latest version.',
           action: 'Reload',
-          onAction: () => window.location.reload(),
+          onAction: () => reloadApp('user_recovery'),
         }
       : props.notice;
   onMount(() => {
@@ -165,7 +167,7 @@ function FigHost(props: {
         setFailure(e instanceof Error ? e.message : String(e));
       }
     };
-    void open();
+    fireAndForget(open(), 'fig-viewer');
     onCleanup(() => {
       disposed = true;
       shared?.close();
@@ -191,7 +193,8 @@ function FigHost(props: {
                 context={{
                   engine: e(),
                   fileName: props.fileName,
-                  download: (blob, name) => void downloadFile(blob, name),
+                  download: (blob, name) =>
+                    fireAndForget(downloadFile(blob, name), 'fig-viewer'),
                   notifyError: (message) => toast.failure(message),
                   notifyInfo: (message) => toast.success(message),
                   canEdit,
@@ -266,7 +269,7 @@ function DesignSession(props: {
 }) {
   const userId = useUserId();
   const opening = prepareFigEngine(props.bytes);
-  onCleanup(() => void opening.dispose());
+  onCleanup(() => fireAndForget(opening.dispose(), 'fig-viewer'));
   const session = createDesignCollabSession({
     documentId: props.documentId,
     userId: userId(),
@@ -326,8 +329,8 @@ function DownloadOnly(props: { onDownload: () => void }): JSX.Element {
   return (
     <div class="flex size-full flex-col items-center justify-center gap-3 p-6 text-ink-muted text-sm">
       Figma files can't be previewed here yet.
-      <Button variant="outline" size="sm" onClick={props.onDownload}>
-        <DownloadSimple />
+      <Button variant="secondary" size="sm" onClick={props.onDownload}>
+        <DownloadSimple class="size-3 touch:size-6 shrink-0 pointer-events-none" />
         Download
       </Button>
     </div>
@@ -375,7 +378,7 @@ export default function FigBlock(props: { share?: string; present?: string }) {
       const url = data()?.blobUrl;
       if (!url) return;
       const response = await fetch(url);
-      void downloadFile(await response.blob(), downloadName());
+      await downloadFile(await response.blob(), downloadName());
     } catch {
       toast.failure('Error downloading file');
     }
@@ -404,7 +407,7 @@ export default function FigBlock(props: { share?: string; present?: string }) {
                 group: 'file',
                 label: 'Download',
                 icon: DownloadSimple,
-                action: () => void download(),
+                action: () => fireAndForget(download(), 'fig-viewer'),
               },
               { op: 'delete' },
             ]}
@@ -424,7 +427,11 @@ export default function FigBlock(props: { share?: string; present?: string }) {
               {(d) => (
                 <Show
                   when={d.bytes}
-                  fallback={<DownloadOnly onDownload={() => void download()} />}
+                  fallback={
+                    <DownloadOnly
+                      onDownload={() => fireAndForget(download(), 'fig-viewer')}
+                    />
+                  }
                 >
                   {(bytes) => (
                     <CollaborativeFigHost

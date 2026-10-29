@@ -1,4 +1,4 @@
-//! DuplicateItem tool for copying documents and AI chats.
+//! DuplicateItem tool for copying documents.
 
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
@@ -10,7 +10,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::entity_receipts::{first_updated, mutation_failed, user_receipt};
-use super::{ChatCapabilities, DocumentCapabilities, ProjectCapabilities, ProjectToolContext};
+use super::{DocumentCapabilities, ProjectCapabilities, ProjectToolContext};
 
 /// The kind of item to duplicate.
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Copy, PartialEq, Eq)]
@@ -18,15 +18,12 @@ use super::{ChatCapabilities, DocumentCapabilities, ProjectCapabilities, Project
 pub enum DuplicableEntityType {
     /// A document (includes tasks).
     Document,
-    /// An AI chat conversation.
-    Chat,
 }
 
 impl DuplicableEntityType {
     fn entity_type(self) -> EntityType {
         match self {
             Self::Document => EntityType::Document,
-            Self::Chat => EntityType::Chat,
         }
     }
 }
@@ -72,7 +69,7 @@ pub struct DuplicateItemResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "DuplicateItem",
-    description = "Make a copy of a document (including a task) or an AI chat, owned by the user, as the Duplicate action in the app does. Requires view access to the original. Returns the copy's id."
+    description = "Make a copy of a document (including a task), owned by the user, as the Duplicate action in the app does. Requires view access to the original. Returns the copy's id."
 )]
 pub struct DuplicateItem {
     /// The kind of item to duplicate.
@@ -85,7 +82,7 @@ pub struct DuplicateItem {
 
     /// Optional name for the copy.
     #[schemars(
-        description = "Name for the copy of a document. Omit to use \"<original name> copy\". AI chat copies always keep the original name."
+        description = "Name for the copy of a document. Omit to use \"<original name> copy\"."
     )]
     #[serde(default)]
     pub name: Option<String>,
@@ -96,13 +93,12 @@ impl ToolAnnotated for DuplicateItem {
 }
 
 #[async_trait]
-impl<PSvc, ESvc, DSvc, CSvc, EmSvc> AsyncTool<ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>>
+impl<PSvc, ESvc, DSvc, EmSvc> AsyncTool<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>>
     for DuplicateItem
 where
     PSvc: ProjectCapabilities,
     ESvc: EntityAccessService,
     DSvc: DocumentCapabilities,
-    CSvc: ChatCapabilities,
     EmSvc: MoveEntity + Send + Sync + 'static,
 {
     type Output = DuplicateItemResponse;
@@ -110,7 +106,7 @@ where
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id, entity_type=?self.entity_type, entity_id=?self.entity_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>>,
+        service_context: ServiceContext<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         let entity = self
@@ -132,17 +128,6 @@ where
                     &request_context,
                     entity,
                     name,
-                )
-                .await?
-            }
-            // Chat copies keep the source name; the domain rejects a custom one.
-            DuplicableEntityType::Chat => {
-                duplicate_with(
-                    &*service_context.chat_move_service,
-                    access,
-                    &request_context,
-                    entity,
-                    None,
                 )
                 .await?
             }

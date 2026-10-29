@@ -43,11 +43,17 @@ events to the `macro.properties` Kafka topic.
   `README.md`'s event table.
 - Add a query: `src/outbound/<concern>_queries.rs` → its sibling `_test.rs`.
 
+## Tool contracts
+
+- AI property/tag adapters omit legacy chat targets; this does not change persisted property entity types.
+
 ## Checks
 
 - `cargo test -p properties` (`SQLX_OFFLINE` unset; requires local MacroDB).
 - `cargo test -p properties --no-default-features --features outbound` to
   check the outbound-only build other services depend on.
+
+- `ExternalChat` currently has no property-storage mapping.
 
 ## Related
 

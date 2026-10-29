@@ -13,27 +13,33 @@ import {
   ViewLayoutDropdown,
   ViewShell,
 } from '@app/components/view-shell';
+import {
+  ListHeader,
+  ListHeaderSearch,
+} from '@app/components/view-shell/ListHeader';
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
+import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import {
   getSoupMenuEntities,
   getSoupRowEntities,
 } from '@app/features/soup/collection/rows';
 import { TaskGroupHeader } from '@app/features/tasks-view/components/task-list/TaskGroupHeader';
 import { taskGridColumnCount } from '@app/features/tasks-view/components/task-list/task-grid-template';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { compareDateDesc } from '@core/util/date';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { EntitySelectionToolbarModal } from '@entity/EntitySelectionToolbarModal';
-import CalendarIcon from '@phosphor/calendar.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import CalendarIcon from '@icon/system/regular/calendar.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import {
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
 } from '@property/identifiers';
 import type { Property, PropertyApiValues } from '@property/types';
-import { Button, Dropdown, Input } from '@ui';
+import { Button, ButtonGroup, Dropdown, Input } from '@ui';
 import {
   type Accessor,
   batch,
@@ -73,6 +79,7 @@ export function ProjectsCollection(props: {
   onOpen(id: string, metadata?: ProjectListActivation): void;
   createAssigneeName: (id: Accessor<string>) => Accessor<string>;
   onCreate(draft?: ProjectComposerDraft): void;
+  createAction?: JSX.Element;
   scopeId: string;
   isActive: Accessor<boolean>;
   collection: ReturnType<typeof createProjectCollection>;
@@ -92,6 +99,7 @@ export function ProjectsCollection(props: {
   let grid: HTMLDivElement | undefined;
   let timeline: HTMLDivElement | undefined;
   let searchInput: HTMLInputElement | undefined;
+  let focusSearch: (() => void) | undefined;
   const [openMenu, setOpenMenu] = createSignal<'filters' | 'sort'>();
   const isGantt = () =>
     props.ganttEnabled && !isTouchDevice() && collection.layout() === 'gantt';
@@ -182,7 +190,7 @@ export function ProjectsCollection(props: {
           !collection.loadingMore() &&
           (!event.result || list.items.count() - event.result.index <= 4)
         )
-          void collection.loadMore();
+          fireAndForget(collection.loadMore(), 'projects');
       },
     },
   });
@@ -297,7 +305,7 @@ export function ProjectsCollection(props: {
         }
         onRename={(row) => setRenaming(row)}
         onSetOption={(rows, property, optionId) =>
-          void setOption(rows, property, optionId)
+          fireAndForget(setOption(rows, property, optionId), 'projects')
         }
         onCopyLink={(row) => props.onCopyLink(row.project.id)}
         onCopyId={(row) => props.onCopyId(row.project.id)}
@@ -386,7 +394,8 @@ export function ProjectsCollection(props: {
     search: {
       description: 'Search projects',
       run: () => {
-        searchInput?.focus();
+        if (isTouchDevice()) searchInput?.focus();
+        else focusSearch?.();
         return true;
       },
     },
@@ -414,7 +423,7 @@ export function ProjectsCollection(props: {
       collection.hasMore() &&
       !collection.loadingMore()
     )
-      void collection.loadMore();
+      fireAndForget(collection.loadMore(), 'projects');
   };
   const sourceError = () => {
     const state = collection.state();
@@ -424,151 +433,198 @@ export function ProjectsCollection(props: {
     const state = collection.state();
     return state.kind === 'ready' ? state.backgroundError : undefined;
   };
+  const layoutControl = () => (
+    <Show when={!isTouchDevice()}>
+      <ViewLayoutDropdown
+        grouped
+        label="Project layout"
+        layouts={props.ganttEnabled ? ['list', 'gantt'] : ['list']}
+        value={isGantt() ? 'gantt' : 'list'}
+        onChange={(layout) => {
+          if (layout !== 'board') collection.setLayout(layout);
+        }}
+      />
+    </Show>
+  );
+  const sortControl = () => (
+    <ListSortDropdown
+      grouped
+      label="Sort projects"
+      value={collection.sort()}
+      options={[
+        { id: 'updated', label: 'Updated' },
+        { id: 'created', label: 'Created' },
+      ]}
+      onChange={collection.setSort}
+      open={openMenu() === 'sort'}
+      onOpenChange={(open) => setOpenMenu(open ? 'sort' : undefined)}
+    />
+  );
+  const groupControl = () => (
+    <ListGroupDropdown
+      grouped
+      label="Group projects"
+      value={collection.groupBy()}
+      options={[
+        { id: 'none', label: 'None' },
+        { id: 'status', label: 'Status' },
+        { id: 'priority', label: 'Priority' },
+        { id: 'assignee', label: 'Assignee' },
+      ]}
+      onChange={collection.setGroupBy}
+    />
+  );
+  const filterControl = () => (
+    <div class="relative shrink-0">
+      <ListFilterDropdown
+        grouped
+        label="Filter projects"
+        groups={filters()}
+        open={openMenu() === 'filters'}
+        onOpenChange={(open) => setOpenMenu(open ? 'filters' : undefined)}
+        isSelected={(group, id) =>
+          group === 'assignee'
+            ? collection.mine()
+            : (group === 'status'
+                ? collection.status()
+                : collection.priority()) === id
+        }
+        onSelectionChange={(group, id, selected) => {
+          if (group === 'assignee') collection.setMine(selected);
+          else if (group === 'status') collection.setStatus(selected ? id : '');
+          else collection.setPriority(selected ? id : '');
+        }}
+        onClear={clearFilters}
+      />
+      <Show when={activeCount()}>
+        <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-4 translate-x-1/2 not-touch:top-0.5 not-touch:right-0.5 not-touch:size-3.5 not-touch:translate-x-0 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
+          {activeCount()}
+        </span>
+      </Show>
+    </div>
+  );
+  const dueDateControl = () => (
+    <Dropdown>
+      <Dropdown.Trigger
+        as={ButtonGroup.Button}
+        aria-label="Filter due date"
+        tooltip="Filter due date"
+        variant="ghost"
+        size="icon-sm"
+      >
+        <CalendarIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+      </Dropdown.Trigger>
+      <Dropdown.Content>
+        <div class="flex flex-col gap-3 p-2">
+          <label class="flex flex-col gap-1 text-xs">
+            From
+            <Input
+              type="date"
+              value={collection.dueAfter()}
+              onInput={(event) =>
+                collection.setDueAfter(event.currentTarget.value)
+              }
+            />
+          </label>
+          <label class="flex flex-col gap-1 text-xs">
+            Through
+            <Input
+              type="date"
+              value={collection.dueBefore()}
+              onInput={(event) =>
+                collection.setDueBefore(event.currentTarget.value)
+              }
+            />
+          </label>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              collection.setDueAfter('');
+              collection.setDueBefore('');
+            }}
+          >
+            Clear dates
+          </Button>
+        </div>
+      </Dropdown.Content>
+    </Dropdown>
+  );
   return (
     <>
-      <ViewShell.Header>
-        <div class="flex min-w-0 flex-col gap-3">
-          <div class="hidden h-8 min-w-0 items-center touch:flex @max-[720px]/view-shell:flex">
-            <h1 class="min-w-0 truncate text-xl font-semibold tracking-[-0.03em] text-ink">
-              Projects
-            </h1>
-            <div class="ml-auto shrink-0">
-              <SidebarCreateButton
-                label="New"
-                onCreate={() => props.onCreate()}
+      <Show
+        when={isTouchDevice()}
+        fallback={
+          <ListHeader
+            title={
+              <h1 class="truncate text-sm font-semibold tracking-[-0.03em] text-ink">
+                Projects
+              </h1>
+            }
+          >
+            <HeaderActionGroup label="Project filters">
+              {filterControl()}
+              {dueDateControl()}
+            </HeaderActionGroup>
+            <HeaderActionGroup label="Project view options">
+              {layoutControl()}
+              {sortControl()}
+              {groupControl()}
+            </HeaderActionGroup>
+            {props.createAction ?? (
+              <ViewCreateButton
+                aria-label="New project"
+                onClick={() => props.onCreate()}
               />
-            </div>
-          </div>
-          <div class="flex min-w-0 items-center justify-between gap-3">
-            <SearchBar
-              ref={(element) => {
-                searchInput = element;
-              }}
+            )}
+            <ListHeaderSearch
               label="Search projects"
-              placeholder="Search projects"
               value={collection.search()}
               onValueChange={collection.setSearch}
               onEscape={() => grid?.focus()}
-              class="max-w-md flex-1"
-              hotkey="cmd+f"
+              registerFocus={(focus) => {
+                focusSearch = focus;
+              }}
             />
-            <div class="flex shrink-0 items-center gap-2">
-              <Show when={!isTouchDevice()}>
-                <ViewLayoutDropdown
-                  label="Project layout"
-                  layouts={props.ganttEnabled ? ['list', 'gantt'] : ['list']}
-                  value={isGantt() ? 'gantt' : 'list'}
-                  onChange={(layout) => {
-                    if (layout !== 'board') collection.setLayout(layout);
-                  }}
+          </ListHeader>
+        }
+      >
+        <ViewShell.Header>
+          <div class="flex min-w-0 flex-col gap-3">
+            <div class="hidden h-8 min-w-0 items-center touch:flex @max-[720px]/view-shell:flex">
+              <h1 class="min-w-0 truncate text-xl font-semibold tracking-[-0.03em] text-ink">
+                Projects
+              </h1>
+              <div class="ml-auto shrink-0">
+                <SidebarCreateButton
+                  label="New"
+                  onCreate={() => props.onCreate()}
                 />
-              </Show>
-              <ListSortDropdown
-                label="Sort projects"
-                value={collection.sort()}
-                options={[
-                  { id: 'updated', label: 'Updated' },
-                  { id: 'created', label: 'Created' },
-                ]}
-                onChange={collection.setSort}
-                open={openMenu() === 'sort'}
-                onOpenChange={(open) => setOpenMenu(open ? 'sort' : undefined)}
-              />
-              <ListGroupDropdown
-                label="Group projects"
-                value={collection.groupBy()}
-                options={[
-                  { id: 'none', label: 'None' },
-                  { id: 'status', label: 'Status' },
-                  { id: 'priority', label: 'Priority' },
-                  { id: 'assignee', label: 'Assignee' },
-                ]}
-                onChange={collection.setGroupBy}
-              />
-              <div class="relative shrink-0">
-                <ListFilterDropdown
-                  label="Filter projects"
-                  groups={filters()}
-                  open={openMenu() === 'filters'}
-                  onOpenChange={(open) =>
-                    setOpenMenu(open ? 'filters' : undefined)
-                  }
-                  isSelected={(group, id) =>
-                    group === 'assignee'
-                      ? collection.mine()
-                      : (group === 'status'
-                          ? collection.status()
-                          : collection.priority()) === id
-                  }
-                  onSelectionChange={(group, id, selected) => {
-                    if (group === 'assignee') collection.setMine(selected);
-                    else if (group === 'status')
-                      collection.setStatus(selected ? id : '');
-                    else collection.setPriority(selected ? id : '');
-                  }}
-                  onClear={clearFilters}
-                />
-                <Show when={activeCount()}>
-                  <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-4 translate-x-1/2 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
-                    {activeCount()}
-                  </span>
-                </Show>
               </div>
-              <Dropdown>
-                <Dropdown.Trigger
-                  variant="ghost"
-                  size="md"
-                  square
-                  label="Filter due date"
-                >
-                  <CalendarIcon />
-                </Dropdown.Trigger>
-                <Dropdown.Content>
-                  <div class="flex flex-col gap-3 p-2">
-                    <label class="flex flex-col gap-1 text-xs">
-                      From
-                      <Input
-                        type="date"
-                        value={collection.dueAfter()}
-                        onInput={(event) =>
-                          collection.setDueAfter(event.currentTarget.value)
-                        }
-                      />
-                    </label>
-                    <label class="flex flex-col gap-1 text-xs">
-                      Through
-                      <Input
-                        type="date"
-                        value={collection.dueBefore()}
-                        onInput={(event) =>
-                          collection.setDueBefore(event.currentTarget.value)
-                        }
-                      />
-                    </label>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        collection.setDueAfter('');
-                        collection.setDueBefore('');
-                      }}
-                    >
-                      Clear dates
-                    </Button>
-                  </div>
-                </Dropdown.Content>
-              </Dropdown>
-              <Button
-                variant="outline"
-                class="touch:hidden @max-[720px]/view-shell:hidden"
-                onClick={() => props.onCreate()}
-              >
-                <PlusIcon class="size-4" />
-                New project
-              </Button>
+            </div>
+            <div class="flex min-w-0 items-center justify-between gap-3">
+              <SearchBar
+                ref={(element) => {
+                  searchInput = element;
+                }}
+                label="Search projects"
+                placeholder="Search projects"
+                value={collection.search()}
+                onValueChange={collection.setSearch}
+                onEscape={() => grid?.focus()}
+                class="max-w-md flex-1"
+                hotkey="cmd+f"
+              />
+              <div class="ml-auto flex shrink-0 items-center gap-2">
+                {sortControl()}
+                {groupControl()}
+                {filterControl()}
+                {dueDateControl()}
+              </div>
             </div>
           </div>
-        </div>
-      </ViewShell.Header>
+        </ViewShell.Header>
+      </Show>
       <ViewShell.Content>
         <Show
           when={isGantt()}
@@ -594,6 +650,7 @@ export function ProjectsCollection(props: {
                 <Match when={collection.state().kind === 'loading'}>
                   <div class="grid flex-1 place-items-center text-ink-muted">
                     <SpinnerIcon
+                      aria-hidden={false}
                       class="size-5 animate-spin"
                       aria-label="Loading projects"
                     />
@@ -605,7 +662,12 @@ export function ProjectsCollection(props: {
                     class="grid flex-1 place-items-center gap-3 text-sm text-ink-muted"
                   >
                     <span>Projects couldn’t be loaded.</span>
-                    <Button onClick={() => void collection.refresh()}>
+                    <Button
+                      variant="ghost"
+                      onClick={() =>
+                        fireAndForget(collection.refresh(), 'projects')
+                      }
+                    >
                       Try again
                     </Button>
                   </div>
@@ -616,7 +678,10 @@ export function ProjectsCollection(props: {
                       {filtered() ? 'No matching projects' : 'No projects yet'}
                     </span>
                     <Show when={!filtered()}>
-                      <Button onClick={() => props.onCreate()}>
+                      <Button
+                        variant="secondary"
+                        onClick={() => props.onCreate()}
+                      >
                         New project
                       </Button>
                     </Show>
@@ -718,6 +783,7 @@ export function ProjectsCollection(props: {
                                 class="flex justify-center py-2"
                               >
                                 <Button
+                                  variant="secondary"
                                   disabled={collection.loadingMore()}
                                   onClick={() =>
                                     list.activate.key(more().id, {
@@ -843,7 +909,9 @@ export function ProjectsCollection(props: {
               onOpenChange={(open) => {
                 if (!open) setDeleting(undefined);
               }}
-              onDelete={() => void deleteProjects(request().rows)}
+              onDelete={() =>
+                fireAndForget(deleteProjects(request().rows), 'projects')
+              }
               onCloseAutoFocus={returnFocusToList}
             />
           )}

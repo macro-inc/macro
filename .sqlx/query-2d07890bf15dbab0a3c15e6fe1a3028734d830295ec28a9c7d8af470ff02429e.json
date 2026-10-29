@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO whatsapp_app_state_mutation_mac (\n                account_id, name, index_mac, version, nonce, value\n            )\n            SELECT $1, $2, entry.index_mac, $3, entry.nonce, entry.value\n            FROM UNNEST($4::bytea[], $5::bytea[], $6::bytea[]) AS entry(index_mac, nonce, value)\n            ON CONFLICT (account_id, name, index_mac, version) DO UPDATE SET\n                nonce = EXCLUDED.nonce,\n                value = EXCLUDED.value\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "ByteaArray",
+        "ByteaArray",
+        "ByteaArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2d07890bf15dbab0a3c15e6fe1a3028734d830295ec28a9c7d8af470ff02429e"
+}

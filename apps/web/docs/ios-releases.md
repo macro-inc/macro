@@ -1,5 +1,15 @@
 # iOS releases and breaking Tauri changes
 
+Native reload history and UIKit memory-warning diagnostics require an App Store
+binary update. Their IPC is optional: OTA-only clients retain frontend reload
+markers and instance IDs, with missing native coverage explicitly reported.
+See [reload diagnostics](../tauri/src-tauri/README.md#diagnosing-unexpected-webview-reloads).
+
+The optional `file_export_plugin` adds the native file save picker and share
+sheet. The web bundle probes availability and keeps Web Share on older binaries,
+so it does not raise the native floor. The picker itself still needs an App Store
+release; see [file exports](../tauri/file_export_plugin/AGENTS.md).
+
 (The Android counterpart — `android-update`, `Android Native Check`, Google
 Play as the source of truth — is described in `docs/development/android.md`.)
 
@@ -13,6 +23,10 @@ be pushed to update before they receive that bundle.
 Four generated workflows (plus a gate job in the web app PR checks) and a
 checked-in `min-native-build.json` enforce this end to end.
 
+Keep the iOS app named `macro` and retain its unbadged icon assets in
+`tauri/src-tauri/gen/apple/Assets.xcassets/AppIcon.appiconset`; the Alpha
+icon and app-name branding are Android-only.
+
 ## The flow for a PR with breaking native changes
 
 1. **`iOS Native Check`**, a job of the web app PR checks
@@ -23,7 +37,14 @@ checked-in `min-native-build.json` enforce this end to end.
    - the iOS release numbers to be bumped relative to `main`, and
    - that exact version + build to be **live on the App Store**.
 
-   Until both hold, the check fails and the PR cannot merge.
+   Until both hold, the check fails and the PR cannot merge. On same-repo
+   PRs, the gate maintains one status comment with the version/build, current
+   App Store state, next steps, and a workflow link. Infrastructure failures,
+   including an unavailable native-tree hash, are reported as an inability
+   to verify the release without instructions to release again, separately from a
+   confirmed release requirement. Each gate run refreshes the comment; a
+   successful watcher-triggered recheck marks the release verified. Fork PRs
+   retain the check logs because their token cannot write PR comments.
 2. You bump the numbers locally and commit the result:
 
    ```bash
@@ -58,6 +79,14 @@ checked-in `min-native-build.json` enforce this end to end.
    itself: that would need a user token, because a merge set up by the
    Actions token doesn't trigger the push-to-`main` workflows such as the
    dev redeploy.) To retry after a failure, remove and re-add the label.
+   The label only works on a PR that is mergeable: GitHub does not run
+   `pull_request` workflows on a PR that conflicts with `main`, so the
+   release never starts there. The **`Release Label Check`** workflow
+   (`.github/workflows/release-label-check.yml`, a `pull_request_target`
+   workflow, which GitHub does run) then comments and removes the label;
+   resolve the conflicts and re-add it. On a mergeable PR that workflow
+   instead comments that the release started, with the version in flight
+   and a link to the run.
 4. Wait for Apple to approve. The version releases automatically, and the
    **`iOS Release Watch`** workflow (`.github/workflows/ios-release-watch.yml`,
    every 30 minutes) notices: for each open PR labeled `ios-update` it asks
@@ -86,13 +115,31 @@ a CI-pushed bump commit would wedge the PR.
 
 If the tauri change doesn't break the native/web contract (comments, dev-only
 tooling, desktop-only config), add the **`skip-ios-update`** label instead;
-the **`iOS Native Check Label`** workflow re-runs just the gate job (and the
+the **`Native Check Label`** workflow re-runs just the gate job (and the
 status check that depends on it) when that label is added or removed, so the
 gate passes without a release and without re-running the whole web suite.
 That workflow is not a required check: it waits for the web suite run to
 finish first (up to 25 minutes), and the release preconditions ignore it. For a non-breaking change you still want
 to ship to the App Store, `just ios-bump --no-min` bumps the versions without
 raising the floor.
+
+### Notification launch handoff compatibility
+
+The local `tauri/ios_push_plugin` exposes
+`window.__MACRO_IOS_NOTIFICATION_LAUNCH__` at document start. Web bundles use
+the durable pending-intent, acknowledgment and native-cover commands only
+when that capability exists; older iOS binaries keep their legacy push path.
+New watchers pass `launchAware: true`. Older web bundles omit it, so the native
+plugin delivers with the legacy contract and does not wait behind a cover for
+an acknowledgment those bundles cannot send. This opt-in contract does not
+require raising the OTA native floor; the improved cold-launch handoff still
+requires shipping the new native binary.
+
+Run `swift test --package-path tauri/ios_push_plugin/store` from `apps/web`
+for persisted intent/acknowledgment regressions. A simulator build checks the
+UIKit bridge; device verification must include notification launches after
+termination/WebContent eviction and ordinary icon resume, as well as auth
+failures, account switching, and rapid successive taps.
 
 ## What counts as native code
 
@@ -102,7 +149,8 @@ Two things:
   Android-only by Tauri's naming convention (a path component `android`,
   `android_*`, `android.*` or `*.android.*` — the `android_*` plugins, every
   `android/` directory, `android.rs`, `tauri.android.conf.json` and so on),
-  `desktop-release.json`, and `.helix/`.
+  `desktop-release.json`, `.helix/`, and Markdown docs. Desktop, macOS,
+  Linux, and Windows-only paths are excluded too.
 - **A bump of the client cache wasm package version** in
   `crates/client/cache-wasm/Cargo.toml`. The app compiles the cache crates
   (`crates/client/cache-core`, `cache-turso` and what they pull in)
@@ -214,6 +262,11 @@ ios-release --config prd -- just ios-release` covers them), and
 `scripts/ios-app-store.mjs` for the underlying App Store Connect commands
 (`wait-build`, `submit`, `status`).
 
+`just ios-build` and `just ios-release` export frontend traces and logs to the
+production OTLP proxy
+(`ios_production_telemetry` in `scripts/ios-native-env.sh`); set
+`VITE_OTEL_EXPORTER_URL` and `VITE_OTEL_ENV` to send them elsewhere.
+
 ## One-time repository setup
 
 - **Labels**: create `ios-update` and `skip-ios-update`.
@@ -230,7 +283,16 @@ ios-release --config prd -- just ios-release` covers them), and
   - optional `APPLE_DISTRIBUTION_CERTIFICATE_BASE64` /
     `APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD` — a base64-encoded Apple
     Distribution `.p12`; without it the release workflow relies on Xcode
-    cloud signing through the API key.
+    cloud signing through the API key. With it, the runner imports the
+    identity and `prepare-signing` downloads (or creates) an App Store
+    provisioning profile for every target, including both extensions,
+    using that exact certificate. Export uses manual signing so Xcode does
+    not request a cloud certificate. The key needs access to Certificates,
+    Identifiers & Profiles. Profiles are reused until expired or invalid;
+    replacing the certificate creates matching profiles on the next run.
+    Temporary project/export settings are restored after the build, including
+    failures. For local manual signing, import the `.p12` into Keychain first
+    and set `APPLE_DISTRIBUTION_CERTIFICATE_PATH` and its password.
 - **GitHub secrets**:
   - `IOS_RELEASE_DOPPLER_TOKEN` — a Doppler service token with read access to
     `ios-release/prd`, used by the iOS workflows

@@ -6,6 +6,7 @@ import {
   sqrefBounds,
   subtractBounds,
 } from './sheet-rules';
+import type { SheetTable } from './sheet-tables';
 import {
   columnName,
   formatCellAddress,
@@ -14,6 +15,7 @@ import {
   SPREADSHEET_MAX_ROWS,
   type SpreadsheetCells,
 } from './spreadsheet-document';
+import { protectStructuredReferences } from './structured-references';
 import type { SpreadsheetWorkbookSheet } from './workbook-document';
 import type { WorkbookSheetMetadata } from './workbook-metadata';
 
@@ -201,6 +203,72 @@ function withSheetFormulas(
   return result;
 }
 
+/**
+ * A table after rows or columns move: it grows when they are inserted inside
+ * it (not directly below or right of it) and shrinks when some of its own
+ * are deleted. Deleting its header row or all its columns removes it, and
+ * deleting its total row removes that row. Filters follow their columns.
+ */
+function movedTable(
+  table: SheetTable,
+  change: AxisChange,
+  move: (index: number) => number | undefined
+): SheetTable | undefined {
+  const [start, end] = table.range.split(':').map(parseCellAddress);
+  if (!start || !end) return;
+  const axis = change.axis;
+  const first = start[axis];
+  const last = end[axis];
+  let low = move(first);
+  let high = move(last);
+  let totalsRow = table.totalsRow;
+  if (axis === 'row') {
+    if (low === undefined) return;
+    if (totalsRow && high === undefined) totalsRow = false;
+    high ??= change.index - 1;
+    if (high - low < (totalsRow ? 2 : 1))
+      throw new Error(
+        `Keep at least one data row in the table “${table.name}”, or delete its header row too to remove it.`
+      );
+  } else {
+    if (low === undefined && high === undefined) return;
+    low ??= change.index;
+    high ??= change.index - 1;
+    if (high < low) return;
+  }
+  start[axis] = low;
+  end[axis] = high;
+  const limit = axis === 'row' ? SPREADSHEET_MAX_ROWS : SPREADSHEET_MAX_COLUMNS;
+  if (end[axis] >= limit)
+    throw new Error(
+      `This change would move the table “${table.name}” outside the supported sheet size.`
+    );
+  const moved: SheetTable = {
+    ...table,
+    totalsRow,
+    range: `${formatCellAddress(start.row, start.column)}:${formatCellAddress(end.row, end.column)}`,
+  };
+  const movedColumns = <T>(record: Record<string, T>) =>
+    Object.fromEntries(
+      Object.entries(record).flatMap(([offset, value]) => {
+        if (axis === 'row') return [[offset, value]];
+        const column = move(first + Number(offset));
+        return column === undefined ? [] : [[String(column - low), value]];
+      })
+    );
+  if (table.filters) {
+    const filters = movedColumns(table.filters);
+    if (Object.keys(filters).length) moved.filters = filters;
+    else delete moved.filters;
+  }
+  if (table.columnTypes) {
+    const columnTypes = movedColumns(table.columnTypes);
+    if (Object.keys(columnTypes).length) moved.columnTypes = columnTypes;
+    else delete moved.columnTypes;
+  }
+  return moved;
+}
+
 /** Keep cell identity, styles and all sheet references together during a structural edit. */
 export function changeWorkbookAxis(
   sheets: SpreadsheetWorkbookSheet[],
@@ -277,6 +345,7 @@ export function changeWorkbookAxis(
     return parts.length ? parts.join(' ') : undefined;
   };
   const model = new Model('Sheet structure', 'en', 'UTC', 'en');
+  const restorers = new Map<string, (text: string) => string>();
   try {
     model.pauseEvaluation();
     sheets.forEach((_, index) => {
@@ -320,13 +389,22 @@ export function changeWorkbookAxis(
       }
       for (const [address, cell] of Object.entries(sheet.cells)) {
         const position = parseCellAddress(address)!;
-        if (cell.value.startsWith('=') && cell.format !== 'text')
-          model.setUserInput(
-            index,
-            position.row + 1,
-            position.column + 1,
-            prepareDeletion(cell.value, sheet.name, sheets[target].name, change)
-          );
+        if (!cell.value.startsWith('=') || cell.format === 'text') continue;
+        // Table references follow their table, which moves below.
+        const references = protectStructuredReferences(cell.value);
+        if (references.formula !== cell.value)
+          restorers.set(`${index}:${address}`, references.restore);
+        model.setUserInput(
+          index,
+          position.row + 1,
+          position.column + 1,
+          prepareDeletion(
+            references.formula,
+            sheet.name,
+            sheets[target].name,
+            change
+          )
+        );
       }
     }
     if (change.axis === 'row') {
@@ -349,16 +427,19 @@ export function changeWorkbookAxis(
             );
           position[change.axis] = next;
         }
+        const restore = restorers.get(`${index}:${address}`);
+        let value = cell.value;
+        if (cell.value.startsWith('=') && cell.format !== 'text') {
+          value = model.getCellContent(
+            index,
+            position.row + 1,
+            position.column + 1
+          );
+          if (restore) value = restore(value);
+        }
         cells[formatCellAddress(position.row, position.column)] = {
           ...cell,
-          value:
-            cell.value.startsWith('=') && cell.format !== 'text'
-              ? model.getCellContent(
-                  index,
-                  position.row + 1,
-                  position.column + 1
-                )
-              : cell.value,
+          value,
         };
       }
       // IronCalc moves formula references but not its named-range definitions.
@@ -442,6 +523,12 @@ export function changeWorkbookAxis(
             return location ? [{ ...pivot, location }] : [];
           });
           if (!metadata.pivotTables.length) delete metadata.pivotTables;
+        }
+        if (metadata.tables) {
+          metadata.tables = metadata.tables.flatMap(
+            (table) => movedTable(table, change, move) ?? []
+          );
+          if (!metadata.tables.length) delete metadata.tables;
         }
         const hidden = change.axis === 'row' ? 'hiddenRows' : 'hiddenColumns';
         if (metadata[hidden])

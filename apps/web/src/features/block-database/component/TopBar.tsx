@@ -1,4 +1,10 @@
+import {
+  makeCopyEntityIdAction,
+  makeCopyLinkAction,
+  makeFavoriteAction,
+} from '@app/features/next-soup/actions';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { ResponsivePermissionsBadge } from '@components/app/ResponsiveBlockToolbar';
 import {
   SplitHeaderLeft,
@@ -11,11 +17,13 @@ import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { enableForms } from '@core/constant/featureFlags';
 import { useGetPermissions } from '@core/signal/permissions';
-import SparkleIcon from '@phosphor/sparkle.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import type { DatabaseEntity } from '@entity';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
 import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
-import { Button } from '@ui';
+import { ButtonGroup } from '@ui';
 import type { ResultAsync } from 'neverthrow';
 import { lazy, Show, Suspense } from 'solid-js';
 import { DatabaseTitle } from '../../database/components/database-title';
@@ -24,7 +32,10 @@ import {
   databaseEntityMessage,
 } from '../../database/core/write-failure';
 import { renameDatabase } from '../queries/rename-database';
-import { DatabasePageActions } from '../views/database-page-actions';
+import {
+  type DatabaseEntityActions,
+  DatabasePageActions,
+} from '../views/database-page-actions';
 import { TableTabs } from './TableTabs';
 
 // Forms load only when the flag is on, and only through this boundary.
@@ -72,10 +83,39 @@ export function TopBar(props: {
         : undefined,
     };
   });
-  const rename = (next: string) =>
-    void renameDatabase(getEntityGraphqlClient(), databaseId, next).mapErr(
+  const favoriteAction = makeFavoriteAction();
+  const copyLinkAction = makeCopyLinkAction();
+  const copyEntityIdAction = makeCopyEntityIdAction();
+  const entity = (detail: DatabaseDetail): DatabaseEntity => ({
+    type: 'database',
+    id: databaseId,
+    name: detail.database.name,
+    ownerId: detail.database.owner_id,
+    grant: detail.grant,
+  });
+  const entityActions = (detail: DatabaseDetail): DatabaseEntityActions => ({
+    favorited: favoriteAction.isFavorited(entity(detail)),
+    onToggleFavorite: () =>
+      fireAndForget(
+        favoriteAction.execute([entity(detail)]),
+        'database-actions'
+      ),
+    onCopyLink: () =>
+      fireAndForget(
+        copyLinkAction.execute([entity(detail)]),
+        'database-actions'
+      ),
+    onCopyId: () =>
+      fireAndForget(
+        copyEntityIdAction.executeById(databaseId),
+        'database-actions'
+      ),
+  });
+  const rename = (next: string) => {
+    renameDatabase(getEntityGraphqlClient(), databaseId, next).mapErr(
       (failure) => toast.failure(databaseEntityMessage(failure, 'rename'))
     );
+  };
 
   return (
     <>
@@ -99,6 +139,7 @@ export function TopBar(props: {
               <DatabasePageActions
                 detail={detail()}
                 table={props.activeTable}
+                entityActions={entityActions(detail())}
                 onRename={() => editTitle?.()}
                 onDelete={props.onDelete}
                 onImported={props.onSelectTable}
@@ -133,25 +174,27 @@ export function TopBar(props: {
       </SplitHeaderLeft>
       <SplitHeaderRight>
         <BlockLiveIndicators />
-        <div class="order-[1000] flex items-center gap-1">
+        <div class="order-[1000] flex items-center gap-2">
           <ShareTrigger onClick={openShare} />
         </div>
       </SplitHeaderRight>
       <ResponsivePermissionsBadge />
       <Show when={props.detail}>
         <SplitHeaderRight>
-          <Button
-            variant="ghost"
-            size="sm"
-            class="gap-1.5 px-2 text-xs"
-            disabled={props.openingChat}
-            aria-label="Database AI"
-            aria-busy={props.openingChat}
-            onClick={props.onOpenChat}
-          >
-            <SparkleIcon class="size-4" />
-            <span>AI</span>
-          </Button>
+          <HeaderActionGroup label="Database actions">
+            <ButtonGroup.Button
+              variant="ghost"
+              size="sm"
+              class="gap-1.5 touch:px-2 touch:text-xs"
+              disabled={props.openingChat}
+              aria-label="Database AI"
+              aria-busy={props.openingChat}
+              onClick={props.onOpenChat}
+            >
+              <SparkleIcon class="size-4" />
+              <span>AI</span>
+            </ButtonGroup.Button>
+          </HeaderActionGroup>
         </SplitHeaderRight>
       </Show>
     </>

@@ -1,6 +1,6 @@
 # Type Alias: AddForwardedAttachmentData
 
-> **AddForwardedAttachmentData** = \{ `body`: [`AddForwardedAttachmentRequest`](AddForwardedAttachmentRequest.md); `path`: \{ `id`: `string`; \}; `query?`: `never`; `url`: `"/email/drafts/{id}/forwarded-attachments"`; \}
+> **AddForwardedAttachmentData** = \{ `body`: [`AddForwardedAttachmentRequest`](AddForwardedAttachmentRequest.md); `path`: \{ `id`: `string`; \}; `query?`: \{ `draft_generation?`: `number`; \}; `url`: `"/email/drafts/{id}/forwarded-attachments"`; \}
 
 ## Properties
 
@@ -9,5 +9,6 @@
 | <a id="property-body"></a> `body` | [`AddForwardedAttachmentRequest`](AddForwardedAttachmentRequest.md) | - |
 | <a id="property-path"></a> `path` | \{ `id`: `string`; \} | - |
 | `path.id` | `string` | The ID of the draft to add the forwarded attachment to. |
-| <a id="property-query"></a> `query?` | `never` | - |
+| <a id="property-query"></a> `query?` | \{ `draft_generation?`: `number`; \} | - |
+| `query.draft_generation?` | `number` | Generation from the last loaded draft. Legacy clients use zero. |
 | <a id="property-url"></a> `url` | `"/email/drafts/{id}/forwarded-attachments"` | - |

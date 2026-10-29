@@ -8,7 +8,9 @@
 	"oauth_config": {
 		"redirect_urls": [
 			"https://document-cognition.macro.com/mcp/servers/auth/callback",
-			"https://document-cognition-dev.macro.com/mcp/servers/auth/callback"
+			"https://document-cognition-dev.macro.com/mcp/servers/auth/callback",
+			"https://gateway.macro.com/cognition/mcp/servers/auth/callback",
+			"https://dev-gateway.macro.com/cognition/mcp/servers/auth/callback"
 		],
 		"scopes": {
 			"user": [

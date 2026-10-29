@@ -335,6 +335,48 @@ describe('the GraphQL row source', () => {
     });
   });
 
+  it('reads a property value type from a newer server as an empty cell', async () => {
+    const fromNewerServer = JSON.parse(
+      '{"__typename":"GraphqlRatingPropertyValue","rating":4}'
+    );
+    const server = fakeClient(() =>
+      soupPage(
+        [
+          row(ACME, DEALS, '80', [
+            property(NAME, {
+              __typename: 'GraphqlStringPropertyValue',
+              stringValue: 'Acme',
+            }),
+            property(AMOUNT, fromNewerServer),
+          ]),
+        ],
+        null
+      )
+    );
+    const source = createGraphqlRowSource({
+      client: server.client,
+      catalog: { tables: [] },
+      requestPolicy: 'network-only',
+      people: noPeople,
+    });
+
+    const page = await source.page(
+      { type: 'soup', table: DEALS, propf: null, keyHint: null },
+      [],
+      null,
+      500,
+      { request: () => {}, headers: () => ({}) }
+    );
+
+    expect(page._unsafeUnwrap().rows).toEqual([
+      {
+        id: ACME,
+        position: '80',
+        cells: { [NAME]: { type: 'text', value: 'Acme' } },
+      },
+    ]);
+  });
+
   it('follows the Soup cursor page by page', async () => {
     const transcript = readTranscript('paging');
     const server = fakeClient((operation) =>

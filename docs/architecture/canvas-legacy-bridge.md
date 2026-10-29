@@ -30,7 +30,9 @@ format cannot represent.
 
 Canvas Next opens all saved canvases without a rollout flag. Supported legacy
 files migrate in memory and retain their original JSON in migration metadata.
-The first committed edit saves version 2; opening a file alone does not save it.
+The first editor opening a canvas initializes its shared version 2 scene in
+SyncService; viewers never seed it. The original JSON remains a migration seed
+and is never replayed over shared edits. Downloads export the current scene.
 Unsupported records and unknown versions show an error without changing the
 saved document. Validate any expanded import support against representative
 fixtures before allowing write-back.

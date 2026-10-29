@@ -8,6 +8,8 @@ import type { UpdateCalendarEventRequestAttendees } from './updateCalendarEventR
 import type { UpdateCalendarEventRequestCalendarId } from './updateCalendarEventRequestCalendarId';
 import type { UpdateCalendarEventRequestConference } from './updateCalendarEventRequestConference';
 import type { UpdateCalendarEventRequestDescription } from './updateCalendarEventRequestDescription';
+import type { UpdateCalendarEventRequestGuestPolicy } from './updateCalendarEventRequestGuestPolicy';
+import type { UpdateCalendarEventRequestInbox } from './updateCalendarEventRequestInbox';
 import type { UpdateCalendarEventRequestLocation } from './updateCalendarEventRequestLocation';
 import type { UpdateCalendarEventRequestOutOfOffice } from './updateCalendarEventRequestOutOfOffice';
 import type { UpdateCalendarEventRequestRecurrenceId } from './updateCalendarEventRequestRecurrenceId';
@@ -31,6 +33,12 @@ more than one calendar. Omit to patch the canonical copy. */
   conference?: UpdateCalendarEventRequestConference;
   /** Replacement description; an empty string clears it. */
   description?: UpdateCalendarEventRequestDescription;
+  guestPolicy?: UpdateCalendarEventRequestGuestPolicy;
+  /** Inbox address holding the copy this request changes. An agent run
+must name it when the meeting is on more than one of the requester's
+inboxes, and it must be the inbox holding the addressed copy; a
+mismatch is refused whoever sends it. */
+  inbox?: UpdateCalendarEventRequestInbox;
   /** Replacement location; an empty string clears it. */
   location?: UpdateCalendarEventRequestLocation;
   outOfOffice?: UpdateCalendarEventRequestOutOfOffice;

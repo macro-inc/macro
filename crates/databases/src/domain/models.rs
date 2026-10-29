@@ -134,7 +134,8 @@ pub(crate) fn cell_has_value(value: &PropertyValue) -> bool {
         PropertyValue::Bool(_)
         | PropertyValue::Num(_)
         | PropertyValue::Str(_)
-        | PropertyValue::Date(_) => true,
+        | PropertyValue::Date(_)
+        | PropertyValue::DateRange(_) => true,
     }
 }
 

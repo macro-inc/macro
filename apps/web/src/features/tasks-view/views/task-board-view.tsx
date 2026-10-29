@@ -1,8 +1,17 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { hasValue } from '@property/utils/typeGuards';
 import { Button } from '@ui/components/Button';
-import { type Accessor, createSignal, For, Show, Suspense } from 'solid-js';
+import {
+  type Accessor,
+  createSignal,
+  For,
+  type JSX,
+  Show,
+  Suspense,
+} from 'solid-js';
 import { TaskBoard } from '../components/task-board';
 import {
   TaskBoardColumnIcon,
@@ -29,9 +38,15 @@ const CARD_PROPERTY_IDS = [
 export function TaskBoardView(props: {
   data: TaskBoardData;
   onOpen(task: TaskBoardTask, event: MouseEvent): void;
+  onCreate?: (columnId: string) => void;
+  /** Wraps a card's content, such as in the host's context menu. */
+  renderCard: (
+    task: Accessor<TaskBoardTask>,
+    content: JSX.Element
+  ) => JSX.Element;
   ref?: (element: HTMLDivElement) => void;
 }) {
-  const { state, source, projectsEnabled, setFacets } = useTasksView();
+  const { state, source, showTaskProject, setFacets } = useTasksView();
   const grouping = () => toTaskBoardGrouping(state.groupBy);
   const scope = () =>
     JSON.stringify([
@@ -61,7 +76,7 @@ export function TaskBoardView(props: {
         return false;
       }
 
-      return id !== SYSTEM_PROPERTY_IDS.PROJECT || projectsEnabled();
+      return id !== SYSTEM_PROPERTY_IDS.PROJECT || showTaskProject();
     });
 
   const revealHiddenColumns = () => {
@@ -137,7 +152,7 @@ export function TaskBoardView(props: {
     </Show>
   );
 
-  const renderCard = (
+  const renderCardContent = (
     task: Accessor<TaskBoardTask>,
     readOnly: Accessor<boolean>
   ) => (
@@ -191,7 +206,11 @@ export function TaskBoardView(props: {
           class="flex items-center gap-2 px-4 py-2 text-sm text-failure"
         >
           Could not load all tasks.
-          <Button size="sm" onClick={() => void read(source.refresh)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => fireAndForget(read(source.refresh), 'tasks-view')}
+          >
             Retry
           </Button>
         </div>
@@ -200,8 +219,11 @@ export function TaskBoardView(props: {
         <div role="alert" class="px-4 py-2 text-sm text-failure">
           Could not load task properties. Moving tasks is unavailable.
           <Button
+            variant="ghost"
             size="sm"
-            onClick={() => void read(props.data.retryDefinitions)}
+            onClick={() =>
+              fireAndForget(read(props.data.retryDefinitions), 'tasks-view')
+            }
           >
             Retry
           </Button>
@@ -244,6 +266,19 @@ export function TaskBoardView(props: {
                   grouping={grouping()}
                   createAssigneeName={props.data.createAssigneeName}
                 />
+                <Show when={props.onCreate}>
+                  <div class="ml-auto flex shrink-0">
+                    <Button
+                      aria-label={`Add task to ${column().label}`}
+                      tooltip={`Add task to ${column().label}`}
+                      size="icon-sm"
+                      variant="ghost"
+                      onClick={() => props.onCreate?.(column().id)}
+                    >
+                      <PlusIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+                    </Button>
+                  </div>
+                </Show>
               </TaskBoard.Header>
               <TaskBoard.DropOverlay>
                 Board sorted by {sortLabel()}
@@ -259,8 +294,14 @@ export function TaskBoardView(props: {
                     <div class="py-3">
                       <Button
                         size="sm"
+                        variant="secondary"
                         disabled={column().loadingMore}
-                        onClick={() => void read(() => loadMore(column().id))}
+                        onClick={() =>
+                          fireAndForget(
+                            read(() => loadMore(column().id)),
+                            'tasks-view'
+                          )
+                        }
                       >
                         {column().loadingMore ? 'Loading…' : 'Load more tasks'}
                       </Button>
@@ -280,7 +321,10 @@ export function TaskBoardView(props: {
                       pending={board.pending(task().id)}
                       onOpen={props.onOpen}
                     >
-                      {renderCard(task, readOnly)}
+                      {props.renderCard(
+                        task,
+                        renderCardContent(task, readOnly)
+                      )}
                     </TaskBoard.Card>
                   );
                 }}
@@ -293,8 +337,14 @@ export function TaskBoardView(props: {
         <div class="p-3">
           <Button
             size="sm"
+            variant="secondary"
             disabled={source.isLoadingMore()}
-            onClick={() => void read(() => loadMore())}
+            onClick={() =>
+              fireAndForget(
+                read(() => loadMore()),
+                'tasks-view'
+              )
+            }
           >
             {source.isLoadingMore() ? 'Loading…' : 'Load more tasks'}
           </Button>

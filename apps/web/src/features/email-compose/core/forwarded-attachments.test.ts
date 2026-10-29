@@ -10,6 +10,16 @@ function attachment(
 }
 
 describe('forwardedAttachments', () => {
+  it('excludes Outlook cloud references while retaining binary attachments', () => {
+    const forwarded = forwardedAttachments({
+      attachments: [
+        attachment('cloud', { reference_url: 'https://example.com/shared' }),
+        attachment('binary'),
+      ],
+    });
+    expect(forwarded.map((a) => a.db_id)).toEqual(['binary']);
+  });
+
   it('leaves out inline images the quoted body links to their static-file copy', () => {
     const forwarded = forwardedAttachments({
       body_html_sanitized: '<img src="cid:logo"><img src="cid:chart">',

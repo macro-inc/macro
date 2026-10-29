@@ -330,6 +330,14 @@ async fn gateway_egress_keeps_authentication_and_git_basic_challenge() {
 }
 
 impl CodingAgentService for RoutineSessionsSpy {
+    fn create(
+        &self,
+        command: DispatchCodingAgentRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>
+    {
+        self.dispatch(command)
+    }
+
     fn list(
         &self,
         user_id: macro_user_id::user_id::MacroUserIdStr<'static>,

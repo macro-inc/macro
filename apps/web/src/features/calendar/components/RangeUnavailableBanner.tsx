@@ -1,4 +1,4 @@
-import InfoIcon from '@phosphor/info.svg';
+import InfoIcon from '@icon/system/regular/info.svg';
 import { cn } from '@ui';
 import { createMemo, Show } from 'solid-js';
 import { Transition } from 'solid-transition-group';

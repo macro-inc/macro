@@ -1,17 +1,18 @@
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import ArrowUpIcon from '@icon/system/regular/arrow-up.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import ColumnsPlusLeftIcon from '@icon/system/regular/columns-plus-left.svg';
+import ColumnsPlusRightIcon from '@icon/system/regular/columns-plus-right.svg';
+import FunctionIcon from '@icon/system/regular/function.svg';
+import ListBulletsIcon from '@icon/system/regular/list-bullets.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { Popover } from '@kobalte/core/popover';
-import ArrowDownIcon from '@phosphor/arrow-down.svg';
-import ArrowLeftIcon from '@phosphor/arrow-left.svg';
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import ArrowUpIcon from '@phosphor/arrow-up.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import ColumnsPlusLeftIcon from '@phosphor/columns-plus-left.svg';
-import ColumnsPlusRightIcon from '@phosphor/columns-plus-right.svg';
-import FunctionIcon from '@phosphor/function.svg';
-import ListBulletsIcon from '@phosphor/list-bullets.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import XIcon from '@phosphor/x.svg';
 import { Key } from '@solid-primitives/keyed';
 import { ConfirmDialog } from '@ui/components/ConfirmDialog';
 import { DeleteDialog } from '@ui/components/DeleteDialog';
@@ -149,9 +150,12 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
   };
   const save = (restoreFocus: boolean) => {
     if (canRename())
-      void columnRename.save(
-        restoreFocus,
-        restoreFocus ? props.onEnter : undefined
+      fireAndForget(
+        columnRename.save(
+          restoreFocus,
+          restoreFocus ? props.onEnter : undefined
+        ),
+        'database'
       );
   };
   props.registerRename?.(rename);
@@ -474,7 +478,9 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
                                 loadCasts={(open) =>
                                   props.columnCasts?.(props.column.id, open)
                                 }
-                                onChange={(change) => void changeType(change)}
+                                onChange={(change) =>
+                                  fireAndForget(changeType(change), 'database')
+                                }
                                 onFormula={
                                   formulas &&
                                   (() => {
@@ -724,7 +730,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
         confirmLabel="Convert into a new column"
         onConfirm={() => {
           const choice = converting();
-          if (choice) void convert(choice);
+          if (choice) fireAndForget(convert(choice), 'database');
         }}
         body={
           <>
@@ -748,7 +754,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
         title="Delete column?"
         deleteLabel="Delete column"
         pending={pending()}
-        onDelete={() => void remove()}
+        onDelete={() => fireAndForget(remove(), 'database')}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           restoreFocus();

@@ -11,16 +11,16 @@ export type {
 } from '../core/team-config';
 
 /**
- * Team-shared CRM configuration (permissions, closed-stage set, team saved
- * views, display defaults).
+ * Team-shared CRM configuration (permissions, team saved views, display
+ * defaults).
  *
  * Stored on `team_crm_settings` and served by GET/PUT `/crm/settings`
  * (document storage service). Any team member can read and can update
  * the views fields (`teamViews`, `defaultTeamViewId`); the governance
- * fields (permission thresholds, `closedStageIds`) are admin/owner-gated
- * server-side. Updates are field-wise partial: omitted fields keep their
- * current values, `null` clears the nullable ones, and `teamViews` is
- * replaced whole (last write wins).
+ * fields (permission thresholds) are admin/owner-gated server-side.
+ * Updates are field-wise partial: omitted fields keep their current
+ * values, `null` clears the nullable ones, and `teamViews` is replaced
+ * whole (last write wins).
  */
 
 import { throwOnErr } from '@core/util/result';
@@ -56,7 +56,6 @@ export function useTeamCrmConfig(deps: CrmQueryDependencies) {
         moveClosedDeals: data.move_closed_deals_role,
         deleteRecords: data.delete_records_role,
       },
-      closedStageIds: data.closed_stage_ids ?? undefined,
       legacyStageIds: data.legacy_stage_ids ?? undefined,
       teamViews: parseTeamViews(data.team_views),
       defaultTeamViewId: data.default_team_view_id ?? undefined,
@@ -85,9 +84,6 @@ export function useTeamCrmConfig(deps: CrmQueryDependencies) {
           edit_stages_role: patch.permissions?.editStages,
           move_closed_deals_role: patch.permissions?.moveClosedDeals,
           delete_records_role: patch.permissions?.deleteRecords,
-          ...(patch.closedStageIds !== undefined
-            ? { closed_stage_ids: patch.closedStageIds }
-            : {}),
           ...(teamViews !== undefined ? { team_views: teamViews } : {}),
           ...(patch.defaultTeamViewId !== undefined
             ? { default_team_view_id: patch.defaultTeamViewId }

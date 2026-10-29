@@ -14,6 +14,7 @@ import { PropertyText } from '../extractors/PropertyText';
 import {
   formatDate,
   formatPropertyValue,
+  formatTimeRange,
   getEntityValues,
   getSelectValues,
   hasValue,
@@ -33,7 +34,7 @@ type PropertyDisplayProps = {
  *
  * Routes by valueType:
  * - STRING / NUMBER / BOOLEAN / LINK: <Property.InlineEditor>
- * - DATE / SELECT (single): button with formatted text + RemoveButton on
+ * - DATE / DATE_RANGE / SELECT (single): button with formatted text + RemoveButton on
  *   hover, opens popover
  * - SELECT (multi): chip list with per-chip RemoveButton + AddButton
  * - ENTITY: legacy EntityIcon per value (handles entity-name resolution and
@@ -55,7 +56,12 @@ export function PropertyDisplay(props: PropertyDisplayProps) {
       <Match when={isInline()}>
         <InlineEditor />
       </Match>
-      <Match when={property().valueType === 'DATE'}>
+      <Match
+        when={
+          property().valueType === 'DATE' ||
+          property().valueType === 'DATE_RANGE'
+        }
+      >
         <DateDisplay />
         <PopoverEditor entitySelfFilter={props.entitySelfFilter} />
       </Match>
@@ -89,10 +95,14 @@ export function PropertyDisplay(props: PropertyDisplayProps) {
 function DateDisplay() {
   const ctx = useProperty();
   const property = () => ctx.property();
-  const display = () =>
-    property().valueType === 'DATE' && property().value != null
-      ? formatDate(property().value as Date)
-      : '';
+  const display = () => {
+    const current = property();
+    if (current.valueType === 'DATE' && current.value)
+      return formatDate(current.value);
+    if (current.valueType === 'DATE_RANGE' && current.value)
+      return formatTimeRange(current.value);
+    return '';
+  };
 
   return (
     <div

@@ -83,6 +83,7 @@ describe('installed Solid Query resource behavior', () => {
       trigger: { type: 'cron', schedule: '0 0 9 * * 2', timezone: 'UTC' },
       task: {},
       enabled: true,
+      run_visibility: 'unlisted',
       configuration_revision: 1,
       created_at: '2026-09-22T12:00:00Z',
       updated_at: '2026-09-22T12:00:00Z',

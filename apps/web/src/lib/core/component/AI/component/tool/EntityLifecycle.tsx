@@ -1,8 +1,8 @@
 import { ItemPreview } from '@core/component/ItemPreview';
-import Copy from '@phosphor-icons/core/regular/copy.svg';
-import PencilSimple from '@phosphor-icons/core/regular/pencil-simple.svg';
-import ShareNetwork from '@phosphor-icons/core/regular/share-network.svg';
-import Trash from '@phosphor-icons/core/regular/trash.svg';
+import Copy from '@icon/system/regular/copy.svg';
+import PencilSimple from '@icon/system/regular/pencil-simple.svg';
+import ShareNetwork from '@icon/system/regular/share-network.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import type {
   DuplicableEntityType,
   RenameableEntityType,

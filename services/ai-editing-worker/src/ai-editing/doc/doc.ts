@@ -615,24 +615,9 @@ export class Doc implements DocReader, DocWriter {
 
   private moveNode(node: NodeRef, at: Position): void {
     this.tx(() => {
-      const block = this.block(node);
-      if ('after' in at)
-        blocks.$moveBlock(
-          block,
-          { placement: 'after', id: at.after },
-          this.session
-        );
-      else if ('before' in at)
-        blocks.$moveBlock(
-          block,
-          { placement: 'before', id: at.before },
-          this.session
-        );
-      else {
-        block.remove();
-        if ('appendToRoot' in at) blocks.$appendBlock(block);
-        else blocks.$prependBlock(block);
-      }
+      const block = this.anchor(node);
+      block.remove();
+      this.place(block, at);
     });
   }
 

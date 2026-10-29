@@ -1,5 +1,6 @@
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { BlockOrchestrator } from '@core/orchestrator';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createContextProvider } from '@solid-primitives/context';
 import deepEqual from 'fast-deep-equal';
 import {
@@ -45,6 +46,8 @@ export type PreviewFrameProps = {
   onFocusOut?: VoidFunction;
   ref?: (el: HTMLElement) => void;
   headerLeading?: JSX.Element;
+  /** The hosted view supplies its own header while retaining preview focus. */
+  hideHeader?: boolean;
   /** A new value marks a new location, which hands focus back to the host. */
   locationKey?: Accessor<unknown>;
   children: JSX.Element;
@@ -97,33 +100,35 @@ export function PreviewFrame(props: PreviewFrameProps) {
       onPointerDown={() => setInteractedWith(true)}
       tabIndex={-1}
     >
-      <ViewShell.TopBar
-        ref={headerCollapseController.setRow}
-        class="relative w-full py-0 touch:flex"
-      >
-        <Show when={props.headerLeading}>
-          <div class="flex shrink-0 items-center">{props.headerLeading}</div>
-        </Show>
-        <PriorityCollapseOverflowSensor
-          controller={headerCollapseController}
-          truncateAsLastResort
-          class="relative h-full min-w-0 shrink overflow-hidden"
-          contentClass={
-            props.headerLeading
-              ? 'flex h-full items-center gap-1 pl-0.5'
-              : 'flex h-full items-center gap-1'
-          }
-          contentRef={(element) => {
-            scopedLayoutRefs.headerLeft = element;
-          }}
-        />
-        <div
-          class="flex h-full grow shrink items-center justify-end gap-1"
-          ref={(ref) => {
-            scopedLayoutRefs.headerRight = ref;
-          }}
-        />
-      </ViewShell.TopBar>
+      <Show when={!props.hideHeader}>
+        <ViewShell.TopBar
+          ref={headerCollapseController.setRow}
+          class="relative w-full py-0 touch:flex"
+        >
+          <Show when={props.headerLeading}>
+            <div class="flex shrink-0 items-center">{props.headerLeading}</div>
+          </Show>
+          <PriorityCollapseOverflowSensor
+            controller={headerCollapseController}
+            truncateAsLastResort
+            class="relative h-full min-w-0 shrink overflow-hidden"
+            contentClass={
+              props.headerLeading
+                ? 'flex h-full items-center gap-1 pl-0.5'
+                : 'flex h-full items-center gap-1'
+            }
+            contentRef={(element) => {
+              scopedLayoutRefs.headerLeft = element;
+            }}
+          />
+          <div
+            class="flex h-full grow shrink items-center justify-end gap-1"
+            ref={(ref) => {
+              scopedLayoutRefs.headerRight = ref;
+            }}
+          />
+        </ViewShell.TopBar>
+      </Show>
       <div
         ref={toolbarCollapseController.setRow}
         class="relative flex min-h-0 w-full shrink-0 items-center justify-between px-2"
@@ -225,7 +230,7 @@ function PreviewBlock(
   createRenderEffect(
     on(navigation, ({ target }) => {
       if (!blockInstance()) return;
-      void locate(target);
+      fireAndForget(locate(target), 'preview-panel');
     })
   );
 

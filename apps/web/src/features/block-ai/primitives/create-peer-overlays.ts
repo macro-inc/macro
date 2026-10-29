@@ -6,6 +6,7 @@
 
 import { paletteColor } from '@app/features/block-fig/primitives/create-peer-overlays';
 import type { AiEngine } from '@core/ai-engine/client';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type Accessor, createEffect, createSignal, on } from 'solid-js';
 import { type Rect, toRect } from '../core/geometry';
 import type { AiPeer, PeerOverlay } from '../core/presence';
@@ -38,7 +39,7 @@ export function createPeerOverlays(
         const ids = peer.presence.selection;
         const key = `${version}|${ids.join(',')}`;
         if (bounds().get(peer.peerId)?.key === key) continue;
-        void load(peer.peerId, key, ids);
+        fireAndForget(load(peer.peerId, key, ids), 'ai-collab');
       }
     })
   );

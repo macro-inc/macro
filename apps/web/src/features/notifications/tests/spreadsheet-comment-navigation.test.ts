@@ -316,3 +316,6 @@ it('does not open project notifications when the rollout is disabled', async () 
   expect(open).not.toHaveBeenCalled();
   expect(activate).not.toHaveBeenCalled();
 });
+vi.mock('@channel/queries/prefetch-channel-target', () => ({
+  prefetchChannelTarget: vi.fn(async () => {}),
+}));

@@ -3,10 +3,16 @@ import { useAccessRequestState } from '@queries/access-requests/requests';
 import { type Accessor, createEffect, createMemo, on } from 'solid-js';
 import type { AccessLevel, ShareEntity } from '../core/types';
 
-/** Bridges refreshed server access to a host's existing permission adapter. */
+/**
+ * Bridges refreshed server access to a host's existing permission adapter.
+ * The previous level is undefined until this entity has confirmed access.
+ */
 export function useSharedAccessUpdates(
   entity: Accessor<ShareEntity | undefined>,
-  apply: (level: AccessLevel | null) => void
+  apply: (
+    level: AccessLevel | null,
+    previous: AccessLevel | null | undefined
+  ) => void
 ) {
   const authenticated = useIsAuthenticated();
   const state = useAccessRequestState(entity, () => !!authenticated());
@@ -22,12 +28,13 @@ export function useSharedAccessUpdates(
     return previous?.key === key ? previous : undefined;
   });
   createEffect(
-    on(
-      () => confirmed()?.level,
-      (level) => {
-        if (level !== undefined) apply(level);
-      }
-    )
+    on(confirmed, (current, previous) => {
+      if (current)
+        apply(
+          current.level,
+          previous?.key === current.key ? previous.level : undefined
+        );
+    })
   );
   return () => confirmed()?.level;
 }

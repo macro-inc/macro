@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { QueryKey } from '@tanstack/query-core';
 import { RecoverableIDB } from '../../persistence/recoverable-idb';
 
@@ -132,7 +133,7 @@ export function createPerQueryIDBStore(
     if (timer) return;
     timer = setTimeout(() => {
       timer = null;
-      void flush();
+      fireAndForget(flush(), 'query-persistence');
     }, debounceMs);
   };
 

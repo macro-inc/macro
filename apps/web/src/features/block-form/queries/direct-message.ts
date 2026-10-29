@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { invalidateListChannels } from '@queries/channel/channels';
 import { storageServiceClient } from '@service-storage/client';
 import { ResultAsync } from 'neverthrow';
@@ -11,7 +12,7 @@ export function directMessageWith(
     storageServiceClient.getOrCreateDirectMessage({ recipient_id: recipientId })
   )
     .map(({ channel_id }) => {
-      void invalidateListChannels();
+      fireAndForget(invalidateListChannels(), 'form-share');
       return channel_id;
     })
     .mapErr(([error]) => ({

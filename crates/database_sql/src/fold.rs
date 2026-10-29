@@ -19,7 +19,7 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
 use models_databases::position::Position;
-use models_databases::{Formula, OptionId, RowId};
+use models_databases::{DateRange, Formula, OptionId, RowId};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use uuid::Uuid;
@@ -32,6 +32,8 @@ use crate::split::{Plan, Shape};
 
 /// A cell as fetched. An absent cell is `NULL`; an absent multi-valued cell
 /// is the empty set.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "openapi", schema(as = SqlCell))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "type", content = "value", rename_all = "camelCase")]
@@ -44,6 +46,8 @@ pub enum Cell {
     Bool(bool),
     /// A date-time.
     Date(DateTime<Utc>),
+    /// A span from one date-time to another.
+    DateRange(DateRange),
     /// The selected option ids; one for single-select columns.
     Options(Vec<OptionId>),
     /// The referenced entity ids; one for single-valued columns.
@@ -68,6 +72,7 @@ pub(crate) enum CellKey {
     Number(u64),
     Bool(bool),
     Date(DateTime<Utc>),
+    DateRange(DateRange),
     Options(Vec<OptionId>),
     Entities(Vec<String>),
     Row(RowId),
@@ -81,6 +86,7 @@ impl From<&Cell> for CellKey {
             Cell::Number(number) => CellKey::Number(number.to_bits()),
             Cell::Bool(checked) => CellKey::Bool(*checked),
             Cell::Date(date) => CellKey::Date(*date),
+            Cell::DateRange(range) => CellKey::DateRange(*range),
             Cell::Options(ids) => CellKey::Options(ids.clone()),
             Cell::Entities(ids) => CellKey::Entities(ids.clone()),
             Cell::Row(id) => CellKey::Row(*id),

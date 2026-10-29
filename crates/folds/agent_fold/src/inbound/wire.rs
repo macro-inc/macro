@@ -1,4 +1,4 @@
-//! The browser-facing envelopes around the serializable domain vocabulary.
+//! The reader-facing envelopes around the serializable domain vocabulary.
 //!
 //! The renderable message, tool, permission, and metadata types live in
 //! [`crate::domain::model`] and define their wire representation directly.
@@ -20,7 +20,7 @@ use specta::Type;
 #[cfg(test)]
 mod test;
 
-/// One renderable message, scoped to its agent session for the browser.
+/// One renderable message, scoped to its agent session for its reader.
 #[derive(Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct FoldedMessage {

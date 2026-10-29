@@ -5,29 +5,35 @@
 //! map domain errors to agent-readable failures. Authorization and business
 //! policy live behind those ports, exactly as for the HTTP routers.
 
+mod add_shared_calendar_event;
 mod create_calendar_event;
 mod create_confirmed_calendar_event;
 mod delete_calendar_event;
 mod list_calendar_events;
 mod list_calendars;
+mod read_calendar_event;
 mod update_calendar_event;
 
 #[cfg(test)]
 mod test;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use ai_toolset::{AsyncToolCollection, ToolCallError};
 use chrono::NaiveDate;
 use chrono::{DateTime, Utc};
+use rootcause::compat::boxed_error::IntoBoxedError;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::domain::{
+    copies::{CopyChange, check_copy},
     meeting_links::{CreateEventWithMacroCallError, EventWithMacroCall, MeetingLinkError},
     models::{
         CalendarAttendeeInput, CalendarEvent, EventReminderOverride, EventReminders, EventTime,
-        OutOfOfficeAutoDeclineMode, OutOfOfficeProperties,
+        OutOfOfficeAutoDeclineMode, OutOfOfficeProperties, VisibleCalendar,
     },
     ports::{
         CalendarMutationError, CalendarMutationService, CalendarOccurrenceService,
@@ -35,6 +41,7 @@ use crate::domain::{
     },
 };
 
+pub use add_shared_calendar_event::AddSharedCalendarEvent;
 pub use create_calendar_event::CreateCalendarEvent;
 pub use create_confirmed_calendar_event::CreateConfirmedCalendarEvent;
 pub use delete_calendar_event::{
@@ -44,6 +51,7 @@ pub use list_calendar_events::{
     CalendarEventListItem, ListCalendarEvents, ListCalendarEventsResponse,
 };
 pub use list_calendars::{ListCalendars, ListCalendarsToolResponse, ToolCalendar};
+pub use read_calendar_event::{CalendarEventAccess, ReadCalendarEvent, ReadCalendarEventResponse};
 pub use update_calendar_event::{
     ConferenceChangeInput, RsvpResponseInput, UpdateCalendarEvent, UpdateScopeInput,
 };
@@ -61,6 +69,10 @@ where
     pub occurrences: Arc<O>,
     /// Macro meetings minted for events that carry a Macro call.
     pub meeting_links: Arc<L>,
+    /// Whether AddSharedCalendarEvent adds copies of channel-shared events:
+    /// the `ENABLE_CALENDAR_ADD_SHARED_EVENT` deployment switch, off unless
+    /// set, like the event card's Add to calendar.
+    pub shared_event_copies: bool,
 }
 
 impl<M, O, L> Clone for CalendarToolContext<M, O, L>
@@ -74,6 +86,7 @@ where
             mutations: Arc::clone(&self.mutations),
             occurrences: Arc::clone(&self.occurrences),
             meeting_links: Arc::clone(&self.meeting_links),
+            shared_event_copies: self.shared_event_copies,
         }
     }
 }
@@ -91,6 +104,15 @@ where
             mutations,
             occurrences,
             meeting_links,
+            shared_event_copies: false,
+        }
+    }
+
+    /// Let AddSharedCalendarEvent add copies of channel-shared events.
+    pub fn with_shared_event_copies(self, enabled: bool) -> Self {
+        Self {
+            shared_event_copies: enabled,
+            ..self
         }
     }
 }
@@ -104,16 +126,18 @@ where
     AsyncToolCollection::new()
         .add_tool::<ListCalendarEvents, CalendarToolContext<M, O, L>>()
         .add_tool::<ListCalendars, CalendarToolContext<M, O, L>>()
+        .add_tool::<ReadCalendarEvent, CalendarToolContext<M, O, L>>()
         .add_tool::<UpdateCalendarEvent, CalendarToolContext<M, O, L>>()
         .add_tool::<DeleteCalendarEvent, CalendarToolContext<M, O, L>>()
+        .add_tool::<AddSharedCalendarEvent, CalendarToolContext<M, O, L>>()
 }
 
 /// The full calendar toolset, for hosts that finish user tools: the deferring
 /// `CreateCalendarEvent`, which a composer or review card confirms, beside
 /// `CreateConfirmedCalendarEvent`, which creates on a confirmation the user
 /// already gave in conversation. Both are always registered; the prompt
-/// decides which fits the surface the prompt came from. Reads, updates, and
-/// deletions execute in the agent loop.
+/// decides which fits the surface the prompt came from. Reads, updates,
+/// deletions, and copies of shared events execute in the agent loop.
 pub fn calendar_toolset<M, O, L>() -> AsyncToolCollection<CalendarToolContext<M, O, L>>
 where
     M: CalendarMutationService,
@@ -369,6 +393,123 @@ pub struct ToolCalendarEvent {
     pub is_read_only: bool,
     /// Calendar the event belongs to, when known.
     pub calendar_id: Option<uuid::Uuid>,
+    /// Display name of that calendar, when known.
+    pub calendar_name: Option<String>,
+    /// Connected inbox address the calendar belongs to, when known.
+    pub inbox: Option<String>,
+    /// Whether the user organizes this event or is a guest on it, through
+    /// that inbox; absent when they are neither.
+    pub my_role: Option<ToolEventRole>,
+}
+
+/// What the user is on one copy of an event, through the inbox holding it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolEventRole {
+    /// The inbox organizes the event, or the event has no guests and is the
+    /// user's own.
+    Organizer,
+    /// The inbox is invited to the event.
+    Guest,
+}
+
+impl ToolEventRole {
+    /// The role of the copy's inbox, read the way clients read it: `organize`
+    /// marks the organizer, and only the copy's own inbox row is `is_self`.
+    fn of(event: &CalendarEvent) -> Option<Self> {
+        let own_row = event.attendees.iter().find(|attendee| attendee.is_self);
+        if event.viewer_can.organize || own_row.is_some_and(|attendee| attendee.is_organizer) {
+            Some(Self::Organizer)
+        } else {
+            own_row.map(|_| Self::Guest)
+        }
+    }
+}
+
+/// The calendars the user can see, to name the calendar and inbox each
+/// event copy belongs to.
+#[derive(Default)]
+struct CalendarLabels {
+    by_calendar: HashMap<Uuid, VisibleCalendar>,
+    inbox_by_link: HashMap<Uuid, String>,
+}
+
+impl CalendarLabels {
+    /// Load the requester's visible calendars. Labels only describe a result,
+    /// so a failure leaves them out rather than failing a call whose change
+    /// may already have reached the provider.
+    async fn load<M: CalendarMutationService>(mutations: &M, requester_id: &str) -> Self {
+        let Ok(calendars) = mutations
+            .list_visible_calendars(requester_id)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(error = ?error, "failed to load calendar names for a tool result");
+            })
+        else {
+            return Self::default();
+        };
+        Self::from_calendars(calendars)
+    }
+
+    /// Labels from calendars the tool already listed.
+    fn from_calendars(calendars: Vec<VisibleCalendar>) -> Self {
+        let inbox_by_link = calendars
+            .iter()
+            .map(|calendar| (calendar.email_link_id, calendar.email_address.clone()))
+            .collect();
+        let by_calendar = calendars
+            .into_iter()
+            .map(|calendar| (calendar.id, calendar))
+            .collect();
+        Self {
+            by_calendar,
+            inbox_by_link,
+        }
+    }
+
+    fn calendar_name(&self, calendar_id: Option<Uuid>) -> Option<String> {
+        calendar_id
+            .and_then(|id| self.by_calendar.get(&id))
+            .map(|calendar| calendar.name.clone())
+    }
+
+    /// The inbox holding a copy: its calendar's inbox, else the inbox whose
+    /// grant backs it.
+    fn inbox(&self, calendar_id: Option<Uuid>, link_id: Option<Uuid>) -> Option<String> {
+        calendar_id
+            .and_then(|id| self.by_calendar.get(&id))
+            .map(|calendar| calendar.email_address.clone())
+            .or_else(|| link_id.and_then(|id| self.inbox_by_link.get(&id)).cloned())
+    }
+}
+
+/// Make sure the agent chose which copy to change when the meeting is on
+/// several of the user's inboxes (`copies::check_copy`): a refusal comes
+/// back with each copy's inbox and role, so the agent asks the user instead
+/// of picking one.
+async fn confirm_copy<O: CalendarOccurrenceService>(
+    occurrences: &O,
+    requester_id: &str,
+    event_id: Uuid,
+    inbox: Option<&str>,
+    change: CopyChange,
+) -> Result<(), ToolCallError> {
+    let copies = occurrences
+        .meeting_copies(requester_id, event_id)
+        .await
+        .map_err(|error| ToolCallError {
+            description: "Failed to check which of the user's inboxes hold this meeting. Try \
+                          again shortly."
+                .to_string(),
+            internal_error: anyhow::Error::from_boxed(error.into_boxed_error()),
+        })?;
+    match check_copy(&copies, event_id, inbox, change) {
+        None => Ok(()),
+        Some(refusal) => Err(ToolCallError {
+            description: refusal.message().to_string(),
+            internal_error: anyhow::anyhow!("the call did not confirm which copy it changes"),
+        }),
+    }
 }
 
 const DESCRIPTION_PREVIEW_CHARS: usize = 280;
@@ -410,7 +551,7 @@ fn time_fields(time: &EventTime) -> (String, String, bool, Option<String>) {
 }
 
 impl ToolCalendarEvent {
-    fn from_event(event: &CalendarEvent) -> Self {
+    fn from_event(event: &CalendarEvent, labels: &CalendarLabels) -> Self {
         let (start, end, is_all_day, time_zone) = time_fields(&event.time);
         Self {
             event_id: event.id,
@@ -441,13 +582,16 @@ impl ToolCalendarEvent {
             macro_call_url: None,
             is_read_only: event.is_read_only,
             calendar_id: event.calendar_id,
+            calendar_name: labels.calendar_name(event.calendar_id),
+            inbox: labels.inbox(event.calendar_id, None),
+            my_role: ToolEventRole::of(event),
         }
     }
 
-    fn from_event_with_macro_call(created: &EventWithMacroCall) -> Self {
+    fn from_event_with_macro_call(created: &EventWithMacroCall, labels: &CalendarLabels) -> Self {
         Self {
             macro_call_url: Some(created.meeting_link.url.clone()),
-            ..Self::from_event(&created.event)
+            ..Self::from_event(&created.event, labels)
         }
     }
 }
@@ -461,7 +605,7 @@ fn mutation_tool_error(action: &str, error: CalendarMutationError) -> ToolCallEr
                 .to_string()
         }
         CalendarMutationError::OccurrenceNotFound => {
-            "That occurrence does not exist on the recurring event at Google — the calendar \
+            "That occurrence does not exist on the recurring event at the provider — the calendar \
              copy was out of date and has now been refreshed. Nothing was changed. Run \
              ListCalendarEvents again and retry with a current occurrence."
                 .to_string()
@@ -470,12 +614,58 @@ fn mutation_tool_error(action: &str, error: CalendarMutationError) -> ToolCallEr
             "This event's calendar is read-only for the user, so it cannot be modified.".to_string()
         }
         CalendarMutationError::NoWritableCalendar => {
-            "No connected calendar can accept events. The user has not connected a Google \
-             Calendar with write access, or calendar sync is not enabled for their account."
+            "No connected calendar can accept events. The user has not connected a calendar with write access, or calendar sync is not enabled for their account."
                 .to_string()
         }
         CalendarMutationError::NotAttendee => {
             "The user's connected account is not an attendee of this event.".to_string()
+        }
+        CalendarMutationError::NotOrganizer => {
+            "Only the event's organizer can change its guest permissions \
+             (`viewerCan.setGuestPolicy` from ListCalendarEvents), so leave `guestPolicy` out."
+                .to_string()
+        }
+        CalendarMutationError::GuestsCannotInvite => {
+            "Only the organizer can invite guests to this event: the organizer doesn't let \
+             guests invite others, or it is an Outlook meeting, where guests cannot add anyone. \
+             Suggest asking the organizer to add them."
+                .to_string()
+        }
+        CalendarMutationError::GuestListHidden => {
+            "The organizer hides this event's guest list, so the user cannot add guests to it. \
+             Suggest asking the organizer to add them."
+                .to_string()
+        }
+        CalendarMutationError::GuestsCannotModify => {
+            "The organizer doesn't let guests change this event, so the user can only change \
+             their own reminders, add guests where the organizer allows it, and answer the \
+             invitation. Suggest asking the organizer to make the change."
+                .to_string()
+        }
+        CalendarMutationError::AlreadyOnCalendar => {
+            "The user already has this meeting on one of their calendars, so nothing was \
+             added. It cannot be added to another of their calendars either: a copy is refused \
+             on every calendar while they hold the meeting. Tell the user it is already on \
+             their calendar, and do not offer another calendar."
+                .to_string()
+        }
+        CalendarMutationError::JoinRequestOpen => {
+            "The user has asked the person who shared this event to add them as a guest, and \
+             that request is pending or already accepted. Either way the event reaches their \
+             calendar as the organizer's invitation, and a copy added meanwhile would take that \
+             invitation in, so nothing was added. Tell the user they asked to join this event; a \
+             copy can be added only if the request is declined."
+                .to_string()
+        }
+        CalendarMutationError::CopyRefused(_) => {
+            "Google Calendar refused to add a copy of this event to that calendar. Suggest \
+             downloading the event's .ics file instead."
+                .to_string()
+        }
+        CalendarMutationError::Snapshot => {
+            "This event is the user's own copy of a meeting shared with them, so an answer or a \
+             new guest would never reach the organizer. Suggest asking the organizer instead."
+                .to_string()
         }
         CalendarMutationError::InvalidInput(message) => message.clone(),
         CalendarMutationError::ReauthRequired(_) => {
@@ -484,13 +674,13 @@ fn mutation_tool_error(action: &str, error: CalendarMutationError) -> ToolCallEr
                 .to_string()
         }
         CalendarMutationError::ProviderRejected(message) => {
-            format!("Google Calendar rejected the change: {message}")
+            format!("The calendar provider rejected the change: {message}")
         }
         CalendarMutationError::Retryable(_) => {
             "The calendar service is temporarily unavailable. Try again shortly.".to_string()
         }
         CalendarMutationError::PersistFailed(_) => {
-            "The change reached Google Calendar, but Macro's copy lagged behind. It will appear \
+            "The change reached the calendar provider, but Macro's copy lagged behind. It will appear \
              after the next sync."
                 .to_string()
         }
@@ -516,7 +706,7 @@ fn macro_call_create_tool_error(error: CreateEventWithMacroCallError) -> ToolCal
                 }
                 MeetingLinkError::Unavailable => {
                     "Macro calls cannot be created from here. Retry with `addMacroCall` false, \
-                     or use `addGoogleMeet` for video conferencing."
+                     or use `addConference` for video conferencing."
                         .to_string()
                 }
                 MeetingLinkError::Failed(_) => {

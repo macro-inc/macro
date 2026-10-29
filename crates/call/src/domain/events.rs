@@ -112,6 +112,15 @@ pub struct CallRecordingReadyMetadata {
     pub channel_id: Option<Uuid>,
 }
 
+/// Metadata for [`CallTopicEvent::RecordImported`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CallRecordImportedMetadata {
+    /// Identifier of the created or refreshed call record.
+    pub call_id: Uuid,
+    /// Connected Macro user who owns the imported record.
+    pub owner: MacroUserIdStr<'static>,
+}
+
 /// Lifecycle and recording events published to [`MacroCallsTopic`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event_type", content = "metadata")]
@@ -134,6 +143,9 @@ pub enum CallTopicEvent {
     /// A call record's recording became available.
     #[serde(rename = "call.recording_ready")]
     RecordingReady(CallRecordingReadyMetadata),
+    /// An integration created or refreshed a call record.
+    #[serde(rename = "call.record_imported")]
+    RecordImported(CallRecordImportedMetadata),
 }
 
 impl TopicEvent for CallTopicEvent {
@@ -183,6 +195,12 @@ impl CallMacroEvent {
     pub fn recording_ready(metadata: CallRecordingReadyMetadata) -> Self {
         let key = metadata.call_id.to_string();
         Self::new(key, CallTopicEvent::RecordingReady(metadata))
+    }
+
+    /// Build a record-imported event keyed by the call id.
+    pub fn record_imported(metadata: CallRecordImportedMetadata) -> Self {
+        let key = metadata.call_id.to_string();
+        Self::new(key, CallTopicEvent::RecordImported(metadata))
     }
 
     fn new(key: String, event: CallTopicEvent) -> Self {

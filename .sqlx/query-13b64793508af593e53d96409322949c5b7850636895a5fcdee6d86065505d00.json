@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_draft_organization_versions(message_id,versions)\n            SELECT m.id,ARRAY[$3::text,$4::text] FROM email_messages m WHERE m.id=$1 AND m.link_id=$2 AND m.is_draft\n                AND (m.provider_version=$3 OR EXISTS(SELECT 1 FROM email_draft_organization_versions v\n                    WHERE v.message_id=m.id AND v.versions[cardinality(v.versions)]=$3))\n                AND NOT EXISTS(SELECT 1 FROM email_mailbox_drafts d WHERE d.message_id=m.id)\n            ON CONFLICT(message_id) DO UPDATE SET versions=array_append(email_draft_organization_versions.versions,$4)\n                WHERE email_draft_organization_versions.versions[cardinality(email_draft_organization_versions.versions)]=$3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "13b64793508af593e53d96409322949c5b7850636895a5fcdee6d86065505d00"
+}

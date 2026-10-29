@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ActionDialogShell, Button, Dialog, TextField } from '@ui';
 import { createSignal, Show } from 'solid-js';
 
@@ -46,7 +47,7 @@ export function RenameProjectDialog(props: {
         <form
           class="flex min-h-0 flex-col"
           aria-busy={pending()}
-          onSubmit={(event) => void submit(event)}
+          onSubmit={(event) => fireAndForget(submit(event), 'projects')}
         >
           <ActionDialogShell.Body>
             <ActionDialogShell.Header>
@@ -70,18 +71,12 @@ export function RenameProjectDialog(props: {
             <Button
               type="button"
               variant="ghost"
-              depth={2}
               disabled={pending()}
               onClick={() => props.onOpenChange(false)}
             >
               Cancel
             </Button>
-            <Button
-              type="submit"
-              variant="strong"
-              depth={2}
-              disabled={!canSubmit()}
-            >
+            <Button type="submit" variant="primary" disabled={!canSubmit()}>
               {pending() ? 'Saving…' : 'Save name'}
             </Button>
           </ActionDialogShell.Footer>

@@ -51,6 +51,13 @@ ledger decisions, plus a flexible admin query API.
 - `UsageRecorder` (analytics) is best-effort and never fails the
   originating call; `FinancialUsage` (billable) is awaited and fail-closed
   — don't conflate the two when adding a new recording path.
+- Read prices from the `ai_effective_pricing` view, never `ai_pricing`
+  directly: it applies `ai_pricing_discount`, a per-model input and output
+  percent off (input's also covers cache and audio rates). Gemini 3.8 Flash
+  is discounted to DeepSeek V4.1 Flash's $0.30 / $1.20.
+- `UsageContext::with_agent_api_key` marks usage an agent's own API key paid
+  for: it is stored with `agent_api_key_id` and never counted. Set it only
+  on calls that actually authenticate with that key.
 
 ## Related
 

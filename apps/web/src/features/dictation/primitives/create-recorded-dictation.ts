@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { Span } from '@macro-inc/observability';
 import { createSignal, onCleanup } from 'solid-js';
 import type {
@@ -116,7 +117,7 @@ export function createRecordedDictation(options: {
     audio = blob;
     if (commitOnStop) {
       commitOnStop = false;
-      void transcribe(blob);
+      fireAndForget(transcribe(blob), 'dictation');
       return;
     }
     setPhase('review');
@@ -185,7 +186,7 @@ export function createRecordedDictation(options: {
       if (phase() === 'review' && audio) {
         trace?.event('dictation.confirmed');
         pendingConfirm = resolve;
-        void transcribe(audio);
+        fireAndForget(transcribe(audio), 'dictation');
         return;
       }
       if (phase() === 'listening' && recorder) {

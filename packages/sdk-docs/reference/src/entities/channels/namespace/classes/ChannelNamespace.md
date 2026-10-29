@@ -24,6 +24,18 @@
 
 ## Methods
 
+### activity()
+
+> **activity**(): `Promise`\<[`ChannelActivity`](../../activity/classes/ChannelActivity.md)[]\>
+
+Recent channel activity, with channel and user handles.
+
+#### Returns
+
+`Promise`\<[`ChannelActivity`](../../activity/classes/ChannelActivity.md)[]\>
+
+***
+
 ### byId()
 
 > **byId**(`id`): [`Channel`](../../channel/classes/Channel.md)

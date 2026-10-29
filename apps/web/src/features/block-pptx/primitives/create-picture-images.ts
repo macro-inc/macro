@@ -5,6 +5,7 @@
  * decoded once.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { PresentationEngine } from '../context/pptx-editor-context';
 import { pictureImagePart } from '../core/picture';
 import type { PresentationSession } from './create-presentation-session';
@@ -85,7 +86,7 @@ export function createPictureImages(options: {
           Promise<PictureImage | null>,
         ];
         decoded.delete(oldest);
-        void release(value);
+        fireAndForget(release(value), 'pptx-editor');
       }
     }
     return entry;

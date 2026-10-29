@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createSignal } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import { ScheduleEditorForm } from '../components/schedule-editor';
@@ -45,7 +46,7 @@ export function ScheduleEditor(props: {
       creating={props.creating}
       editingRange={editingRange()}
       error={error()}
-      onSubmit={(event) => void save(event)}
+      onSubmit={(event) => fireAndForget(save(event), 'scheduling')}
       onCancel={props.onCancel}
     >
       <ScheduleFields

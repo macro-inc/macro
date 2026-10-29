@@ -148,12 +148,13 @@ describe('createPreview', () => {
       expect(events).toEqual([]);
       blocked = false;
       const opening = preview.open();
-      void preview.open();
+      const reopening = preview.open();
       await layout.asked;
       expect(events).toEqual(['layout']);
       layout.settle(ok(undefined));
       await opening;
       expect(events).toEqual(['layout', `show ${URL}`]);
+      await reopening;
       dispose();
     });
   });

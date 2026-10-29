@@ -1,5 +1,6 @@
 import { createRenderQueue } from '@app/lib/utils/create-render-queue';
 import { createAssertedContextProvider } from '@core/context/createContext';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { Calendar, DatesSetArg } from '@fullcalendar/core';
 import { createPager, type PagerController } from '@ui/components/Pager';
 import {
@@ -303,7 +304,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     setRequestedDate(target);
     const transition =
       direction === 'previous' ? pager.previous() : pager.next();
-    void finishDateNavigation(transition, target);
+    fireAndForget(finishDateNavigation(transition, target), 'calendar-pager');
   };
 
   const navigateToDate = (date: Date) => {
@@ -352,7 +353,10 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
 
     const transition =
       direction === 'previous' ? pager.previous() : pager.next();
-    void finishDateNavigation(transition, date, synchronizeBuffers);
+    fireAndForget(
+      finishDateNavigation(transition, date, synchronizeBuffers),
+      'calendar-pager'
+    );
   };
 
   const changeView = (view: CalendarPeriodView) => {

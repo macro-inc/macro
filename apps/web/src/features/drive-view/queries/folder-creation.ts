@@ -1,9 +1,14 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { uploadFiles } from '@core/util/upload';
+import { Telemetry } from '@macro-inc/observability';
 import { refetchHistory } from '@queries/history/history';
 import { refetchSoupEntity } from '@queries/soup/cache';
 import { createProject } from '@queries/storage/projects';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { FolderCreationCommands } from '../core/folder-composer';
+
+const reportRefetchError = (error: unknown) =>
+  Telemetry.error(error, { surface: 'drive-folder-creation' });
 
 export function createFolderCommands(options: {
   parentId?: string;
@@ -31,7 +36,9 @@ export function createFolderCommands(options: {
           body: { properties },
         });
       if (result.isErr()) throw result.error;
-      refetchSoupEntity(id, 'project', { refreshGraphql: true });
+      refetchSoupEntity(id, 'project', { refreshGraphql: true }).catch(
+        reportRefetchError
+      );
     },
     async upload(id, file) {
       const [result] = await uploadFiles([file], 'dss', { projectId: id });
@@ -39,11 +46,15 @@ export function createFolderCommands(options: {
       if (result.type === 'folder') {
         const folderId = await result.projectId;
         if (!folderId) throw new Error('Folder upload failed');
-        refetchSoupEntity(folderId, 'project', { includeRoot: true });
+        refetchSoupEntity(folderId, 'project', { includeRoot: true }).catch(
+          reportRefetchError
+        );
       } else {
-        refetchSoupEntity(result.documentId, 'document');
+        refetchSoupEntity(result.documentId, 'document').catch(
+          reportRefetchError
+        );
       }
-      refetchHistory();
+      fireAndForget(refetchHistory(), 'drive-folder-creation');
     },
   };
 }

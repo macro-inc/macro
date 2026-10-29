@@ -1,6 +1,5 @@
 use bot_id::BotIdStr;
 use channel_sender::ChannelSender;
-use either::Either;
 use nom::{
     Finish, IResult, Parser,
     branch::alt,
@@ -468,9 +467,12 @@ impl XmlFormatter for PlainTextFormatter {
     }
 
     fn format_user(user: &ParsedUserMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match &user.user_id.0 {
-            Either::Left(bot) => write!(f, "{}", user.bot_display_name(bot)),
-            Either::Right(r) => write!(f, "{}", r.email_part().as_ref()),
+        if let Some(bot) = user.user_id.as_bot() {
+            write!(f, "{}", user.bot_display_name(bot))
+        } else if let Some(account) = user.user_id.as_user() {
+            write!(f, "{}", account.email_part().as_ref())
+        } else {
+            write!(f, "Guest")
         }
     }
 

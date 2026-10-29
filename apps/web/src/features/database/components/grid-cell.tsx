@@ -1,6 +1,8 @@
+import { TimeRangeEditor } from '@app/components/date-time-range/time-range-editor';
+import { fireAndForget } from '@core/util/fireAndForget';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { Popover } from '@kobalte/core/popover';
 import { Tooltip } from '@kobalte/core/tooltip';
-import CaretDownIcon from '@phosphor/caret-down.svg';
 import { PropertyDateSelector } from '@property/editors/selectors/PropertyDateSelector';
 import { Checkbox } from '@ui/components/Checkbox';
 import { Dropdown } from '@ui/components/Dropdown';
@@ -24,6 +26,7 @@ import {
 } from '../../../observability/ui-operation';
 import { useOptionEditing } from '../context/option-editing';
 import { fromCellDate, toCellDate } from '../core/cell-date';
+import { cellTimeRange, toCellTimeRange } from '../core/cell-date-range';
 import {
   type DatabaseEntityType,
   type DatabaseMention,
@@ -53,6 +56,8 @@ export type DatabaseMentionPickerProps = {
   onSearchChange?: (search: string) => void;
   onSelect: (mention: DatabaseMention, direction?: 1 | -1) => void;
   onClose: (restoreFocus?: boolean) => void;
+  /** Where the picker mounts in place of the page body. */
+  mount?: HTMLElement;
 };
 
 export type DatabaseTextEditorProps = CellTextEditorProps & {
@@ -64,11 +69,15 @@ export type GridCellProps = GridCellEditorOptions & {
   column: DatabaseViewColumn;
   value: DatabaseCellValue;
   emptyLabel?: string;
+  /** Text values wrap onto as many lines as they need instead of truncating to one. */
+  wrap?: boolean;
   canEdit: boolean;
   renderTextEditor?: (props: DatabaseTextEditorProps) => JSX.Element;
   renderTextValue?: (value: string) => JSX.Element;
   renderMentionPicker?: (props: DatabaseMentionPickerProps) => JSX.Element;
   renderMentionValue?: (id: string, type: DatabaseEntityType) => JSX.Element;
+  /** Where the cell's popups mount in place of the page body, such as inside a modal dialog. */
+  popupMount?: HTMLElement;
   onMention?: (mention: DatabaseMention) => Promise<boolean>;
   /** Click and Enter open the cell's mention instead of editing it; F2 and typing still edit. */
   onOpenMention?: (id: string, type: DatabaseEntityType) => void;
@@ -146,7 +155,9 @@ export function GridCell(props: GridCellProps) {
   const isBoolean = () =>
     props.column.dataType === 'BOOLEAN' && !props.column.isMultiSelect;
   const isDate = () =>
-    props.column.dataType === 'DATE' && !props.column.isMultiSelect;
+    (props.column.dataType === 'DATE' ||
+      props.column.dataType === 'DATE_RANGE') &&
+    !props.column.isMultiSelect;
   const hasPopupEditor = () =>
     isOptionColumn(props.column) || (isDate() && editable());
   const startsEditing = Boolean(
@@ -265,7 +276,7 @@ export function GridCell(props: GridCellProps) {
     setSelectedMention(preview);
     setEditing(false);
     setMentionOpen(false);
-    void writeMention(onMention, preview);
+    fireAndForget(writeMention(onMention, preview), 'database');
     if (direction && props.onNavigate?.(direction)) return;
     queueMicrotask(() => {
       if (direction) focusAdjacent(trigger, direction);
@@ -346,7 +357,7 @@ export function GridCell(props: GridCellProps) {
   );
 
   return (
-    <div ref={cell} class="relative min-w-0" style={editorStyle()}>
+    <div ref={cell} class="relative grid min-w-0" style={editorStyle()}>
       <Switch>
         <Match when={cellKind() === 'editing'}>{renderEditor()}</Match>
         <Match when={cellKind() === 'boolean'}>
@@ -397,9 +408,10 @@ export function GridCell(props: GridCellProps) {
           </div>
         </Match>
         <Match when={cellKind() === 'text'}>
-          <div class="relative">
+          <div class="relative grid">
             {/* Keep the resolved label and its subscription alive while picking. */}
             <div
+              class="grid"
               inert={isEntity() && editing()}
               classList={{
                 invisible: isEntity() && editing() && draft() !== '',
@@ -409,6 +421,7 @@ export function GridCell(props: GridCellProps) {
                 column={props.column}
                 value={props.value}
                 emptyLabel={props.emptyLabel}
+                wrap={props.wrap}
                 editable={editable()}
                 isEntity={isEntity()}
                 mentionPreview={mentionPreview()}
@@ -423,7 +436,7 @@ export function GridCell(props: GridCellProps) {
                 onBeginEdit={beginEdit}
                 onClear={() => {
                   setSelectedMention(undefined);
-                  void write(null);
+                  fireAndForget(write(null), 'database');
                 }}
               />
             </div>
@@ -448,6 +461,9 @@ export function GridCell(props: GridCellProps) {
           },
           get search() {
             return mentionSearch();
+          },
+          get mount() {
+            return props.popupMount;
           },
           onSearchChange: (value) => {
             setMentionSearch(value);
@@ -509,12 +525,14 @@ function BooleanCell(props: {
       class="flex min-h-9 items-center px-3 outline-none focus-visible:ring-2 focus-visible:ring-ink/50"
       checked={Boolean(props.value)}
       disabled={!props.editable}
-      onChange={(checked) => void props.onWrite(checked ? 1 : 0)}
+      onChange={(checked) =>
+        fireAndForget(props.onWrite(checked ? 1 : 0), 'database')
+      }
       onKeyDown={(event: KeyboardEvent) => {
         if (props.editable && isClearCellKey(event)) {
           event.preventDefault();
           event.stopPropagation();
-          void props.onWrite(null);
+          fireAndForget(props.onWrite(null), 'database');
           return;
         }
         if (!isComposingKey(event)) navigateOnTab(event, props.onNavigate);
@@ -536,6 +554,7 @@ function TextCell(props: {
   column: DatabaseViewColumn;
   value: DatabaseCellValue;
   emptyLabel?: string;
+  wrap?: boolean;
   editable: boolean;
   isEntity: boolean;
   mentionPreview: MentionPreview | undefined;
@@ -578,6 +597,12 @@ function TextCell(props: {
         (!props.isEntity && formatted()) ||
         undefined
       }
+      onContextMenu={(event) => {
+        if (!props.onOpen || !props.editable) return;
+        event.preventDefault();
+        event.stopPropagation();
+        props.onBeginEdit(undefined, event);
+      }}
       onClick={(event) => {
         if (props.onOpen) props.onOpen();
         else if (props.editable) props.onBeginEdit(undefined, event);
@@ -627,7 +652,12 @@ function TextCell(props: {
       <Show when={props.hasResolvedMentionLabel}>
         <span class="sr-only">{props.column.name}: </span>
       </Show>
-      <span class="truncate">
+      <span
+        classList={{
+          truncate: !props.wrap,
+          'min-w-0 wrap-break-word': props.wrap,
+        }}
+      >
         <Switch
           fallback={
             (props.column.dataType === 'STRING' &&
@@ -727,7 +757,7 @@ function InlineEditor(props: {
     }
     finishing = true;
     props.onClose(restoreFocus);
-    void props.onWrite(value);
+    fireAndForget(props.onWrite(value), 'database');
     return true;
   }
   const onKeyDown = (event: KeyboardEvent) => {
@@ -947,14 +977,17 @@ function SelectCell(props: GridCellProps) {
     event.preventDefault();
     event.stopPropagation();
     if (chosen !== undefined && chosen !== label())
-      void props.onWrite(withOption(chosen));
+      fireAndForget(props.onWrite(withOption(chosen)), 'database');
     keys.leave(event.shiftKey ? -1 : 1);
   }
   function pick(option: string) {
     if (props.column.isMultiSelect)
-      void props.onWrite(withOption(option, !selected().includes(option)));
+      fireAndForget(
+        props.onWrite(withOption(option, !selected().includes(option))),
+        'database'
+      );
     else {
-      void props.onWrite(option);
+      fireAndForget(props.onWrite(option), 'database');
       setOpen(false);
     }
   }
@@ -990,7 +1023,7 @@ function SelectCell(props: GridCellProps) {
       if (isClearCellKey(event)) {
         event.preventDefault();
         event.stopPropagation();
-        void props.onWrite(null);
+        fireAndForget(props.onWrite(null), 'database');
         return;
       }
       if (
@@ -1010,7 +1043,15 @@ function SelectCell(props: GridCellProps) {
       <Show
         when={label()}
         fallback={
-          <span class="text-xs text-ink-placeholder opacity-40">—</span>
+          <span
+            class="text-ink-placeholder opacity-40"
+            classList={{
+              'text-xs': !props.emptyLabel,
+              'text-[13px] leading-5': !!props.emptyLabel,
+            }}
+          >
+            {props.emptyLabel || '—'}
+          </span>
         }
       >
         <span class="flex min-w-0 flex-wrap gap-1">
@@ -1051,9 +1092,9 @@ function SelectCell(props: GridCellProps) {
         gutter={4}
       >
         <Popover.Trigger {...trigger}>{shown()}</Popover.Trigger>
-        <Popover.Portal>
+        <Popover.Portal mount={props.popupMount}>
           <Popover.Content
-            class="menu-surface z-action-menu p-1 outline-none"
+            class="menu-surface z-action-menu min-w-[var(--kb-popper-anchor-width)] max-w-[min(32rem,calc(100vw-16px))] p-1.5 outline-none"
             onOpenAutoFocus={(event) => {
               event.preventDefault();
               searchInput?.focus();
@@ -1070,10 +1111,10 @@ function SelectCell(props: GridCellProps) {
               }}
               onPick={pick}
               onClear={() => {
-                void props.onWrite(null);
+                fireAndForget(props.onWrite(null), 'database');
                 setOpen(false);
               }}
-              onCreate={(value) => void create(value)}
+              onCreate={(value) => fireAndForget(create(value), 'database')}
               onKeyDown={tabAway}
               editing={editing}
               inputRef={(element) => {
@@ -1088,7 +1129,7 @@ function SelectCell(props: GridCellProps) {
   );
 }
 
-/** Date cells edit through the shared property date selector. */
+/** Date and date-range cells edit through the shared property selectors. */
 function DateCell(props: GridCellProps) {
   const opening = createEditorMeasurement(() => props.column.dataType);
   let openingEvent: Event | undefined;
@@ -1137,7 +1178,7 @@ function DateCell(props: GridCellProps) {
       if (isClearCellKey(event)) {
         event.preventDefault();
         event.stopPropagation();
-        void props.onWrite(null);
+        fireAndForget(props.onWrite(null), 'database');
       } else if (
         event.key.length === 1 &&
         !event.ctrlKey &&
@@ -1187,7 +1228,12 @@ function DateCell(props: GridCellProps) {
           {shown()}
         </Dropdown.Trigger>
         <Dropdown.Content
-          class="flex max-h-96 w-70 flex-col overflow-hidden p-0 text-sm"
+          class={
+            props.column.dataType === 'DATE_RANGE'
+              ? // The range fields open their date and time lists inside.
+                'portal-scope w-max max-w-[calc(100vw-1rem)] overflow-visible p-0 text-sm'
+              : 'flex max-h-96 w-70 flex-col overflow-hidden p-0 text-sm'
+          }
           // A menu's closing animation must not delay Tab into the next cell.
           style={{ animation: 'none' }}
           onKeyDown={(event: KeyboardEvent) => {
@@ -1197,15 +1243,35 @@ function DateCell(props: GridCellProps) {
           }}
           onCloseAutoFocus={keys.onCloseAutoFocus}
         >
-          <PropertyDateSelector
-            property={{ displayName: props.column.name }}
-            selectedDate={fromCellDate(props.value)}
-            initialQuery={query()}
-            onSelectDate={(date) =>
-              void props.onWrite(date ? toCellDate(date) : null)
+          <Show
+            when={props.column.dataType === 'DATE_RANGE'}
+            fallback={
+              <PropertyDateSelector
+                property={{ displayName: props.column.name }}
+                selectedDate={fromCellDate(props.value)}
+                initialQuery={query()}
+                onSelectDate={(date) =>
+                  fireAndForget(
+                    props.onWrite(date ? toCellDate(date) : null),
+                    'database'
+                  )
+                }
+                onClose={() => setOpen(false)}
+              />
             }
-            onClose={() => setOpen(false)}
-          />
+          >
+            <TimeRangeEditor
+              subject={props.column.name}
+              range={cellTimeRange(props.value)}
+              onChange={(range) =>
+                fireAndForget(
+                  props.onWrite(range ? toCellTimeRange(range) : null),
+                  'database'
+                )
+              }
+              onClear={() => setOpen(false)}
+            />
+          </Show>
         </Dropdown.Content>
       </Dropdown>
     </Show>

@@ -16,9 +16,13 @@ const mocks = vi.hoisted(() => ({
   startAddInbox: vi.fn(),
   execute: vi.fn(),
   quickCalls: () => ({ loading: false, enabled: true }),
+  guestInvites: (): boolean => true,
 }));
 vi.mock('@app/features/meetings/use-quick-calls-flag', () => ({
   useQuickCallsFlag: () => () => mocks.quickCalls(),
+}));
+vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
+  useCalendarGuestInvitesFlag: () => () => mocks.guestInvites(),
 }));
 vi.mock('@queries/calendar/calendars', () => ({
   useVisibleCalendarsQuery: () => ({
@@ -117,6 +121,15 @@ const calendar = (id: string): VisibleCalendar => ({
   isPrimary: true,
   isWritable: true,
   isSubscription: false,
+  provider: 'google',
+  capabilities: {
+    autoDecline: true,
+    emailReminders: true,
+    customRecurrence: false,
+    removeConference: false,
+    resetRsvp: false,
+    guestPolicy: true,
+  },
   defaultReminders: [],
 });
 
@@ -156,6 +169,7 @@ beforeEach(() => {
   mocks.execute.mockResolvedValue(true);
   mocks.startAddInbox.mockResolvedValue(undefined);
   mocks.quickCalls = () => ({ loading: false, enabled: true });
+  mocks.guestInvites = () => true;
   mocks.calendarError = false;
   mocks.linksError = false;
   mocks.links = [link('personal'), link('work')];
@@ -293,7 +307,7 @@ describe('AI calendar draft Macro calls', () => {
   it('executes the tool with addMacroCall when the user picks a Macro call', async () => {
     showDraft(undefined, {
       attendees: [{ email: 'guest@example.com' }],
-      addGoogleMeet: false,
+      addConference: false,
     });
     expect(screen.getByLabelText('Conference').textContent).toBe('none');
     await fireEvent.click(
@@ -304,10 +318,34 @@ describe('AI calendar draft Macro calls', () => {
     expect(mocks.execute).toHaveBeenCalledWith(
       expect.objectContaining({
         addMacroCall: true,
-        addGoogleMeet: false,
+        addConference: false,
         attendees: [{ email: 'guest@example.com' }],
       })
     );
+  });
+});
+
+describe('AI calendar draft guest permissions', () => {
+  const agentPolicy = {
+    canModify: false,
+    canInviteOthers: false,
+    canSeeOtherGuests: true,
+  };
+
+  it('creates the event with the guest permissions the agent drafted', async () => {
+    showDraft(undefined, { guestPolicy: agentPolicy });
+    await fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
+    expect(mocks.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ guestPolicy: agentPolicy })
+    );
+  });
+
+  it('leaves the drafted guest permissions out while the rollout is off', async () => {
+    mocks.guestInvites = () => false;
+    showDraft(undefined, { guestPolicy: agentPolicy });
+    await fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
+    expect(mocks.execute).toHaveBeenCalledOnce();
+    expect(mocks.execute.mock.calls[0][0].guestPolicy).toBeUndefined();
   });
 });
 

@@ -1,6 +1,7 @@
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { HotkeyRegistrationOptions } from '@core/hotkey/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { nudgeCommand, selectAllCommand } from '@macro-inc/graphics';
 import { onCleanup } from 'solid-js';
 import type { CanvasClipboard } from './clipboard';
@@ -86,7 +87,7 @@ export function registerCanvasNextHotkeys(
     'cmd+c',
     'Copy selection',
     () => {
-      void clipboard.copy();
+      fireAndForget(clipboard.copy(), 'canvas-clipboard');
     },
     TOKENS.canvas.copy,
     true
@@ -95,7 +96,7 @@ export function registerCanvasNextHotkeys(
     'cmd+x',
     'Cut selection',
     () => {
-      void clipboard.cut();
+      fireAndForget(clipboard.cut(), 'canvas-clipboard');
     },
     TOKENS.canvas.cut,
     true
@@ -104,7 +105,7 @@ export function registerCanvasNextHotkeys(
     'cmd+v',
     'Paste shapes',
     () => {
-      void clipboard.paste();
+      fireAndForget(clipboard.paste(), 'canvas-clipboard');
     },
     TOKENS.canvas.paste,
     true
@@ -114,7 +115,7 @@ export function registerCanvasNextHotkeys(
     'shift+cmd+v',
     'Paste in place',
     () => {
-      void clipboard.paste(true);
+      fireAndForget(clipboard.paste(true), 'canvas-clipboard');
     },
     undefined,
     true

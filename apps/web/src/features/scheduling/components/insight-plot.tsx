@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { PlotOptions } from '@observablehq/plot';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
@@ -27,7 +28,7 @@ export function InsightPlot(props: {
     disposed = true;
   });
   onMount(() => {
-    void load();
+    fireAndForget(load(), 'scheduling');
   });
   async function load() {
     try {

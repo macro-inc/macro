@@ -87,6 +87,8 @@ for (const [service, directory] of Object.entries({
   notification: 'notification',
   properties: 'properties',
   search: 'search',
+  'scheduled-action': 'scheduled-action',
+  unfurl: 'unfurl',
   storage: 'storage',
 })) {
   const { Sdk } = await import(

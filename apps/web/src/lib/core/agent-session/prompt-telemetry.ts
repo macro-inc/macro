@@ -149,6 +149,10 @@ const CREATE_PATH = /\/agent-sessions$/;
 const CONTROL_PATH = /\/agent-sessions\/[^/]+\/control$/;
 
 export class PromptTrace {
+  /** The prompt opens a new session rather than continuing one. */
+  readonly newSession: boolean;
+  /** The bounded UI origin the prompt was submitted from. */
+  readonly submitSurface: PromptSubmitSurface;
   readonly #span: Span | undefined;
   readonly #sessionId: string;
   readonly #startedAt = performance.now();
@@ -170,7 +174,10 @@ export class PromptTrace {
 
   constructor(sessionId: string, options: PromptTraceOptions) {
     this.#sessionId = sessionId;
-    this.#span = start(sessionId, options);
+    this.newSession = options.newSession;
+    this.submitSurface =
+      options.submitSurface ?? submitSurface(options.newSession);
+    this.#span = start(sessionId, options, this.submitSurface);
     this.#recordInputDelay();
     if (options.newSession) this.#watchResponse('created', CREATE_PATH);
     this.#stallTimer = setTimeout(
@@ -511,16 +518,14 @@ function messagesOf(event: FoldedStreamEvent): FoldedMessage[] {
 
 function start(
   sessionId: string,
-  options: PromptTraceOptions
+  options: PromptTraceOptions,
+  surface: PromptSubmitSurface
 ): Span | undefined {
   try {
     const span = Telemetry.span('agent.prompt');
     span.setAttr('agent.session.id', sessionId);
     span.setAttr('agent.prompt.new_session', options.newSession);
-    span.setAttr(
-      'agent.prompt.submit_surface',
-      options.submitSurface ?? submitSurface(options.newSession)
-    );
+    span.setAttr('agent.prompt.submit_surface', surface);
     if (options.create) {
       const { warmClaim, modelOverride, modelFallback, effort } =
         options.create;

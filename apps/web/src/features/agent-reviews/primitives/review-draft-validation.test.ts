@@ -64,7 +64,7 @@ describe('review submission preflight', () => {
         },
       },
       { ...event, attendees: [{ email: 'invalid' }] },
-      { ...event, addGoogleMeet: true, addMacroCall: true },
+      { ...event, addConference: true, addMacroCall: true },
     ])
       expect(validateReviewDraft(item(draft), 'calendar')).toBeTruthy();
   });

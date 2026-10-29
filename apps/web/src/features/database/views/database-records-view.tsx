@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { until } from '@solid-primitives/promise';
 import { Button } from '@ui/components/Button';
 import { DeleteDialog } from '@ui/components/DeleteDialog';
@@ -11,6 +12,7 @@ import {
   Switch,
   untrack,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { DatabaseBoardControls } from '../components/database-board';
 import {
   DatabaseLoadFailure,
@@ -32,6 +34,7 @@ import { filterConditionCount } from '../components/database-view-filters';
 import { GridCell, type GridCellProps } from '../components/grid-cell';
 import { RecordPanel } from '../components/record-panel';
 import type { DatabaseRowsSource } from '../context/table-source';
+import { toCellTimeRange } from '../core/cell-date-range';
 import type {
   DatabaseColumnType,
   DatabaseEntityType,
@@ -63,14 +66,20 @@ import {
 import { createColumnLayout } from '../primitives/column-layout';
 import { createDraftRows } from '../primitives/draft-rows';
 import { createHeldGridRows } from '../primitives/held-grid-rows';
-import { createRecordActions } from '../primitives/record-actions';
+import {
+  createRecordActions,
+  type RecordCreation,
+} from '../primitives/record-actions';
 import { createTableController } from '../primitives/table-controller';
 import { type BoardPositions, DatabaseBoardView } from './database-board-view';
 import { DatabaseTableView } from './database-table-view';
+import { DatabaseTimelineView } from './database-timeline-view';
 
 /** What the toolbar and the block can ask of the records on screen. */
 export type DatabaseRecordsActions = {
   createRecord: () => Promise<boolean>;
+  /** Saves a record with its values set; resolves whether it was saved. */
+  createRow: (creation: RecordCreation) => Promise<boolean>;
   focusFirstCell: () => Promise<void>;
   focusColumn: (columnId: string) => boolean;
   openRecord: (rowId: string) => void;
@@ -93,7 +102,7 @@ export type RelationCellProps = GridCellEditorOptions & {
   onWrite: (value: DatabaseCellValue) => Promise<boolean>;
 };
 
-/** A table's records in the view's layout — a grid or a board — with the record panel over them. */
+/** A table's records in the view's layout — a grid, a board or a timeline — with the record panel over them. */
 export type DatabaseRecordsViewProps = {
   /** Host framing for the records area, below the toolbar. */
   contentClass?: string;
@@ -110,10 +119,14 @@ export type DatabaseRecordsViewProps = {
   onClearConstraints?: () => void;
   /** A board's card places. */
   boardPositions?: BoardPositions;
+  /** Starts a record in the host's own form in place of a board's inline card, with its lane's values. */
+  onComposeRecord?: (values: Record<string, DatabaseCellValue>) => void;
   renderTextEditor?: GridCellProps['renderTextEditor'];
   renderTextValue?: GridCellProps['renderTextValue'];
   renderMentionPicker?: GridCellProps['renderMentionPicker'];
   renderMentionValue?: GridCellProps['renderMentionValue'];
+  /** Opens document/file references in any column, including record panel fields. */
+  onOpenDocumentMention?: (id: string) => void;
   /** Opens what a record's title mentions, such as a pipeline row's company, in place of editing it. */
   onOpenTitleMention?: (id: string, type: DatabaseEntityType) => void;
   renderRelationCell?: (props: RelationCellProps) => JSX.Element;
@@ -191,7 +204,9 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
     get createColumn() {
       return props.createColumn;
     },
-    renameColumn: (columnId) => void focusColumn(columnId),
+    renameColumn: (columnId) => {
+      focusColumn(columnId);
+    },
   });
   const visibleColumns = columnLayout.visibleColumns;
   const filtered = () => filterConditionCount(props.view.query.filter) > 0;
@@ -223,17 +238,38 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
       .filter((rowId): rowId is string => rowId !== undefined)
   );
   let boardControls: DatabaseBoardControls | undefined;
+  /** A timeline's new record starts today, so its bar shows where it can be dragged. */
+  const timelineStart = (): Record<string, DatabaseCellValue> => {
+    const layout = props.view.layout;
+    if (layout.kind !== 'timeline') return {};
+    const range = columns().find((column) => column.id === layout.range);
+    if (!range?.writable) return {};
+    const today = new Date();
+    return {
+      [range.id]: toCellTimeRange({ allDay: true, start: today, end: today }),
+    };
+  };
   const actions: DatabaseRecordsActions = {
     createRecord: async () =>
-      layoutKind() === 'table'
-        ? records.focusBlankRow()
-        : boardControls?.addCard() || records.createRow({ open: true }),
+      match(layoutKind())
+        .with('table', () => records.focusBlankRow())
+        .with(
+          'board',
+          async () =>
+            boardControls?.addCard() || records.createRow({ open: true })
+        )
+        .with('timeline', () =>
+          records.createRow({ values: timelineStart(), open: true })
+        )
+        .exhaustive(),
+    createRow: records.createRow,
     focusFirstCell: records.focusFirstCell,
     focusColumn,
     // A grid just mounted for a record from elsewhere has no rows to find it in yet.
     openRecord: (rowId) =>
-      void until(() => props.source.snapshot()).then(() =>
-        records.reveal(rowId)
+      fireAndForget(
+        until(() => props.source.snapshot()).then(() => records.reveal(rowId)),
+        'database'
       ),
     pending: controller.pending,
   };
@@ -259,6 +295,18 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
       { label: column.name, option }
     );
     return saved.isOk();
+  }
+  /** One cell of a saved record, by ids, as a timeline moves or regroups it. */
+  function writeRowCell(
+    rowId: string,
+    columnId: string,
+    value: DatabaseCellValue
+  ) {
+    const row = controller.knownRows().find((row) => row.rowId === rowId);
+    const column = columns().find((column) => column.id === columnId);
+    return row && column
+      ? writeValue(row, column, value)
+      : Promise.resolve(false);
   }
   /** A draft row's cells go to its draft; a saved row's to the table. */
   function writeValue(
@@ -301,7 +349,14 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
             renderTextValue={props.renderTextValue}
             renderMentionPicker={props.renderMentionPicker}
             renderMentionValue={props.renderMentionValue}
-            onOpenMention={isTitle() ? props.onOpenTitleMention : undefined}
+            onOpenMention={
+              column().specificEntityType === 'DOCUMENT' &&
+              props.onOpenDocumentMention
+                ? props.onOpenDocumentMention
+                : isTitle()
+                  ? props.onOpenTitleMention
+                  : undefined
+            }
             onMention={(mention) =>
               writeValue(row(), column(), mention.id, undefined, {
                 dataType: 'ENTITY',
@@ -388,7 +443,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
               }
               actionLabel={outcomeUnknown() ? 'Refresh' : 'Retry'}
               pending={controller.pending()}
-              onAction={() => void records.retry()}
+              onAction={() => fireAndForget(records.retry(), 'database')}
               onDiscard={
                 uncertainDraft() ? records.dismissSaveFailure : undefined
               }
@@ -402,7 +457,9 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
             (props.source.error() && controller.snapshot())
           }
         >
-          <RefreshNotice onRefresh={() => void controller.refresh()} />
+          <RefreshNotice
+            onRefresh={() => fireAndForget(controller.refresh(), 'database')}
+          />
         </Show>
         <Show when={records.hiddenRecord()}>
           {(row) => (
@@ -437,9 +494,12 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
               }
               pending={controller.pending()}
               onAction={() =>
-                void (draftRows.isUncertain(failure().id)
-                  ? controller.refresh()
-                  : records.retry())
+                fireAndForget(
+                  draftRows.isUncertain(failure().id)
+                    ? controller.refresh()
+                    : records.retry(),
+                  'database'
+                )
               }
               onDiscard={
                 draftRows.isUncertain(failure().id)
@@ -457,7 +517,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
             <DatabaseLoadFailure
               title="This table could not be loaded"
               message={loadFailureMessage()}
-              onRetry={() => void controller.refresh()}
+              onRetry={() => fireAndForget(controller.refresh(), 'database')}
             />
           </Match>
           <Match when={layoutKind() === 'board'}>
@@ -483,10 +543,30 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
               createComplete={controller.createComplete}
               onOpen={records.open}
               onCreate={records.createRow}
+              onCompose={props.onComposeRecord}
               controlsRef={(controls) => {
                 boardControls = controls;
               }}
               onAddGroup={props.canEdit ? controller.addGroup : undefined}
+            />
+          </Match>
+          <Match when={layoutKind() === 'timeline'}>
+            <DatabaseTimelineView
+              view={props.view}
+              rows={rows()}
+              columns={columns()}
+              canEdit={props.canEdit}
+              filtered={filtered()}
+              onViewChange={
+                !props.stored || props.canEdit ? props.onViewChange : undefined
+              }
+              rowPending={controller.rowPending}
+              onOpen={records.open}
+              onCreate={records.createRow}
+              onWrite={writeRowCell}
+              onDuplicate={records.duplicateRow}
+              onRequestDelete={records.requestDelete}
+              renderMentionValue={props.renderMentionValue}
             />
           </Match>
           <Match when={layoutKind() === 'table'}>
@@ -569,7 +649,10 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
               onInsertColumn={
                 props.canEdit && props.createColumn
                   ? (columnId, side) =>
-                      void columnLayout.insertColumn(columnId, side)
+                      fireAndForget(
+                        columnLayout.insertColumn(columnId, side),
+                        'database'
+                      )
                   : undefined
               }
               emptyState={
@@ -615,7 +698,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
                   : undefined
               }
               saveError={recordSaveError(row().rowId)}
-              onRetry={() => void records.retry()}
+              onRetry={() => fireAndForget(records.retry(), 'database')}
               position={records.selectedPosition()}
               total={rows().length}
               renderCell={renderCell}
@@ -635,7 +718,8 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
           pending={controller.pending()}
           onDelete={() => {
             const target = records.deleteTarget();
-            if (target) void records.deleteRow(target.rowId);
+            if (target)
+              fireAndForget(records.deleteRow(target.rowId), 'database');
           }}
           onCloseAutoFocus={(event) => {
             const target = records.deleteDialogReturnFocus();

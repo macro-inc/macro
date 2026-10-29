@@ -22,6 +22,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import {
   type EntityData,
   EntitySelectionToolbar,
@@ -31,9 +32,9 @@ import {
 } from '@entity';
 import { useListLayout } from '@entity/composed/list-entity/shared';
 import { soupPropertyToProperty } from '@entity/extractors-property';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -42,6 +43,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  type JSX,
   Match,
   type Setter,
   Show,
@@ -64,6 +66,7 @@ import { TaskListHeader } from './TaskListHeader';
 import { taskGridColumnCount } from './task-grid-template';
 import './task-list.css';
 import { ProjectAssignmentDialog } from '@app/features/projects/projects';
+import { fireAndForget } from '@core/util/fireAndForget';
 
 function ResponsiveTaskListHeader() {
   const layout = useListLayout();
@@ -90,6 +93,11 @@ const getStatusProperty = (task: TaskEntityWithProperties) => {
 export type TaskListProps = {
   /** The focusable list root, for callers that hand keyboard focus back. */
   ref?: (element: HTMLDivElement) => void;
+  /** Optional list-state content; defaults remain unchanged for other callers. */
+  emptyContent?: JSX.Element;
+  loadingContent?: JSX.Element;
+  errorContent?: JSX.Element;
+  referencePropertyIds?: readonly string[];
 };
 
 export function TaskList(props: TaskListProps) {
@@ -97,6 +105,7 @@ export function TaskList(props: TaskListProps) {
   const {
     state,
     projectsEnabled,
+    showTaskProject,
     setState,
     source,
     list,
@@ -125,11 +134,14 @@ export function TaskList(props: TaskListProps) {
       mergeHistory?: boolean;
     } = {}
   ) {
-    void openEntityInSplitFromUnifiedList(entity, {
-      splitHandle: panel.handle,
-      referredFrom: 'tasks',
-      ...options,
-    });
+    fireAndForget(
+      openEntityInSplitFromUnifiedList(entity, {
+        splitHandle: panel.handle,
+        referredFrom: 'tasks',
+        ...options,
+      }),
+      'open-entity-in-split'
+    );
   }
 
   function onActivate({
@@ -144,15 +156,18 @@ export function TaskList(props: TaskListProps) {
 
     if (item.kind === 'load-more' && item.groupId !== undefined) {
       const focusIndex = list.items.indexOf(item.id);
-      void source.loadMoreGroup(item.groupId).then(() => {
-        if (list.focus.requestedKey() !== item.id) return;
+      fireAndForget(
+        source.loadMoreGroup(item.groupId).then(() => {
+          if (list.focus.requestedKey() !== item.id) return;
 
-        list.focus.restore(item.id, {
-          fallback: 'nearest',
-          nearestIndex: focusIndex,
-          retainUnavailable: false,
-        });
-      });
+          list.focus.restore(item.id, {
+            fallback: 'nearest',
+            nearestIndex: focusIndex,
+            retainUnavailable: false,
+          });
+        }),
+        'tasks-view'
+      );
 
       return;
     }
@@ -188,6 +203,7 @@ export function TaskList(props: TaskListProps) {
       activeTab: state.tab,
     });
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
+  createScrollTopFade(viewport);
   const [grid, setGrid] = createSignal<HTMLDivElement>();
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
 
@@ -220,7 +236,7 @@ export function TaskList(props: TaskListProps) {
   );
 
   const visibleRows = source.items;
-  const columnCount = () => taskGridColumnCount(projectsEnabled());
+  const columnCount = () => taskGridColumnCount(showTaskProject());
   const [assigningProjectTasks, setAssigningProjectTasks] =
     createSignal<string[]>();
   const tasksById = createMemo(() => {
@@ -299,7 +315,7 @@ export function TaskList(props: TaskListProps) {
           : 0;
         if (distanceFromEnd > 3) return;
 
-        void source.loadMore();
+        fireAndForget(source.loadMore(), 'tasks-view');
       },
     },
     activation: {
@@ -391,7 +407,7 @@ export function TaskList(props: TaskListProps) {
       handle.scrollSize - handle.scrollOffset - handle.viewportSize;
     if (distance >= 300 || source.isLoadingMore()) return;
 
-    void source.loadMore();
+    fireAndForget(source.loadMore(), 'tasks-view');
   }
 
   const emptyMessage = () => {
@@ -425,33 +441,56 @@ export function TaskList(props: TaskListProps) {
           >
             <Switch>
               <Match when={!forceEmptyState() && source.isLoading()}>
-                <div class="grid min-h-0 flex-1 place-items-center text-ink-muted">
-                  <SpinnerIcon class="size-5 animate-spin" />
-                </div>
+                <Show
+                  when={props.loadingContent !== undefined}
+                  fallback={
+                    <div class="grid min-h-0 flex-1 place-items-center text-ink-muted">
+                      <SpinnerIcon class="size-5 animate-spin" />
+                    </div>
+                  }
+                >
+                  {props.loadingContent}
+                </Show>
               </Match>
 
               <Match when={!forceEmptyState() && source.error()}>
-                <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted">
-                  <span>Tasks couldn’t be loaded.</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void source.refresh()}
-                  >
-                    Try again
-                  </Button>
-                </div>
+                <Show
+                  when={props.errorContent !== undefined}
+                  fallback={
+                    <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted">
+                      <span>Tasks couldn’t be loaded.</span>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          fireAndForget(source.refresh(), 'tasks-view')
+                        }
+                      >
+                        Try again
+                      </Button>
+                    </div>
+                  }
+                >
+                  {props.errorContent}
+                </Show>
               </Match>
 
               <Match when={forceEmptyState() || visibleRows().length === 0}>
                 <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted">
-                  <span>{emptyMessage()}</span>
+                  <Show
+                    when={props.emptyContent !== undefined}
+                    fallback={<span>{emptyMessage()}</span>}
+                  >
+                    {props.emptyContent}
+                  </Show>
                   <Show when={!forceEmptyState() && source.hasMore()}>
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       disabled={source.isLoadingMore()}
-                      onClick={() => void source.loadMore()}
+                      onClick={() =>
+                        fireAndForget(source.loadMore(), 'tasks-view')
+                      }
                     >
                       <Show
                         when={source.isLoadingMore()}
@@ -515,7 +554,8 @@ export function TaskList(props: TaskListProps) {
                             }}
                           >
                             <TaskListEntity
-                              showProject={projectsEnabled()}
+                              referencePropertyIds={props.referencePropertyIds}
+                              showProject={showTaskProject()}
                               rowId={entityRow().id}
                               entity={entityRow().entity}
                               highlighted={list.focus.key() === entityRow().id}
@@ -625,9 +665,8 @@ export function TaskList(props: TaskListProps) {
                                   when={!loadMore().isLoading}
                                   fallback={
                                     <Button
-                                      variant="outline"
-                                      size="sm"
-                                      depth={2}
+                                      variant="secondary"
+                                      size="xs"
                                       class={buttonClass()}
                                       disabled
                                     >
@@ -637,9 +676,8 @@ export function TaskList(props: TaskListProps) {
                                   }
                                 >
                                   <Button
-                                    variant="outline"
-                                    size="sm"
-                                    depth={2}
+                                    variant="secondary"
+                                    size="xs"
                                     class={buttonClass()}
                                   >
                                     <CaretDownIcon class="size-2.5" />

@@ -76,8 +76,8 @@ where
 #[derive(Debug, Deserialize, JsonSchema, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum NotificationEntityType {
+    AgentSession,
     User,
-    Chat,
     Channel,
     #[serde(alias = "message")]
     ChannelMessage,
@@ -102,8 +102,8 @@ pub enum NotificationEntityType {
 impl From<NotificationEntityType> for EntityType {
     fn from(value: NotificationEntityType) -> Self {
         match value {
+            NotificationEntityType::AgentSession => Self::AgentSession,
             NotificationEntityType::User => Self::User,
-            NotificationEntityType::Chat => Self::Chat,
             NotificationEntityType::Channel => Self::Channel,
             NotificationEntityType::ChannelMessage => Self::ChannelMessage,
             NotificationEntityType::Document => Self::Document,
@@ -119,6 +119,51 @@ impl From<NotificationEntityType> for EntityType {
             NotificationEntityType::Reminder => Self::Reminder,
             NotificationEntityType::Skill => Self::Skill,
             NotificationEntityType::ScheduledAction => Self::ScheduledAction,
+        }
+    }
+}
+
+/// Notification categories available to agents.
+#[derive(Debug, Deserialize, JsonSchema, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ToolNotificationCategory {
+    /// Email notifications.
+    Email,
+    /// Channel message notifications.
+    Message,
+    /// Channel notifications.
+    Channel,
+    /// Document notifications.
+    Document,
+    /// Folder notifications.
+    Project,
+    /// Call notifications.
+    Call,
+    /// Task notifications.
+    Task,
+    /// GitHub notifications.
+    Github,
+    /// Reminder notifications.
+    Reminder,
+    /// Calendar notifications.
+    Calendar,
+    /// Agent session notifications.
+    Agent,
+}
+impl From<ToolNotificationCategory> for NotificationCategory {
+    fn from(value: ToolNotificationCategory) -> Self {
+        match value {
+            ToolNotificationCategory::Email => Self::Email,
+            ToolNotificationCategory::Message => Self::Message,
+            ToolNotificationCategory::Channel => Self::Channel,
+            ToolNotificationCategory::Document => Self::Document,
+            ToolNotificationCategory::Project => Self::Project,
+            ToolNotificationCategory::Call => Self::Call,
+            ToolNotificationCategory::Task => Self::Task,
+            ToolNotificationCategory::Github => Self::Github,
+            ToolNotificationCategory::Reminder => Self::Reminder,
+            ToolNotificationCategory::Calendar => Self::Calendar,
+            ToolNotificationCategory::Agent => Self::Agent,
         }
     }
 }
@@ -165,7 +210,7 @@ pub struct ListNotifications {
         description = "Filter to specific notification item types. If omitted, returns all types. Example: [\"email\", \"message\"] returns only email and message notifications."
     )]
     #[serde(default)]
-    pub include_types: Option<Vec<NotificationCategory>>,
+    pub include_types: Option<Vec<ToolNotificationCategory>>,
 
     /// Filter to notifications for specific entities. If omitted, returns notifications for all entities.
     #[schemars(
@@ -253,7 +298,26 @@ where
                     states: self.states.clone().unwrap_or_else(|| {
                         crate::domain::models::NotificationState::ACTIVE.to_vec()
                     }),
-                    include_types: self.include_types.clone().unwrap_or_default(),
+                    include_types: self
+                        .include_types
+                        .clone()
+                        .filter(|types| !types.is_empty())
+                        .map(|types| types.into_iter().map(Into::into).collect())
+                        .unwrap_or_else(|| {
+                            vec![
+                                NotificationCategory::Email,
+                                NotificationCategory::Message,
+                                NotificationCategory::Channel,
+                                NotificationCategory::Document,
+                                NotificationCategory::Project,
+                                NotificationCategory::Call,
+                                NotificationCategory::Task,
+                                NotificationCategory::Github,
+                                NotificationCategory::Reminder,
+                                NotificationCategory::Calendar,
+                                NotificationCategory::Agent,
+                            ]
+                        }),
                     entities: self
                         .entities
                         .clone()

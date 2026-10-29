@@ -3,6 +3,8 @@ import {
   enableGraphqlSoup,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type {
   PostSoupRequest,
@@ -64,7 +66,10 @@ type SoupSearchInfiniteData = InfiniteData<
 function cancelSoupQueries() {
   const predicate = (query: Query) => query.state.data !== undefined;
   queryClient.cancelQueries({ queryKey: soupKeys.items._def, predicate });
-  queryClient.cancelQueries({ queryKey: soupKeys.astItems._def, predicate });
+  queryClient.cancelQueries({
+    queryKey: soupKeys.astItems._def,
+    predicate,
+  });
 }
 
 /**
@@ -146,6 +151,14 @@ function updateSoupEntity<T extends SoupEntityTag>(
       restoreSnapshot(previousAllSoup);
     },
   };
+}
+
+/** Apply a row read from the server to every list holding it, without
+ * cancelling a list revalidation it may accompany. */
+export function hydrateSoupEntity<T extends SoupEntityTag>(
+  partial: SoupEntityPartial<T>
+): void {
+  updateSoupEntity(partial, false);
 }
 
 export function getSoupEntityById(entityId: string): SoupApiItem | undefined {
@@ -250,7 +263,7 @@ export function invalidateSoupEntity(entityId: string): void {
   for (const queryKey of keys) {
     // Normy JSON-roundtrips complete keys, turning undefined array slots into
     // null. Exact matching uses the same hash; partial matching misses them.
-    void queryClient.invalidateQueries({ queryKey, exact: true });
+    queryClient.invalidateQueries({ queryKey, exact: true });
   }
 }
 
@@ -519,7 +532,7 @@ export function restoreSoupEntityToDoneFilteredQueries(
     if (flatMeta.itemFilter && !flatMeta.itemFilter(item)) continue;
     if (flatMeta.insertFilter && !flatMeta.insertFilter(item)) continue;
 
-    cancelQuery(key);
+    fireAndForget(cancelQuery(key), 'soup-normalized-cache');
     queryClient.setQueryData<SoupItemsInfiniteData>(key, {
       ...prev,
       pages: prev.pages.map((page, index) =>
@@ -553,7 +566,7 @@ export function restoreSoupEntityToDoneFilteredQueries(
         continue;
       }
 
-      cancelQuery(key);
+      fireAndForget(cancelQuery(key), 'soup-normalized-cache');
       queryClient.setQueryData<SoupAstItemsInfiniteData>(key, {
         ...prev,
         pages: prev.pages.map((page, index) =>
@@ -580,7 +593,7 @@ export function restoreSoupEntityToDoneFilteredQueries(
       continue;
     }
 
-    cancelQuery(key);
+    fireAndForget(cancelQuery(key), 'soup-normalized-cache');
     queryClient.setQueryData<SoupAstItemsInfiniteData>(key, {
       ...prev,
       pages: [nextPage, ...prev.pages.slice(1)],
@@ -737,7 +750,7 @@ export async function refetchSoupEntity(
   }
 ): Promise<void> {
   if (options?.refreshGraphql) {
-    void refreshActiveGraphqlSoupQueries();
+    fireAndForget(refreshActiveGraphqlSoupQueries(), 'soup-normalized-cache');
   }
 
   // GraphQL lists never read this cache, so a miss means no REST list shows
@@ -879,7 +892,18 @@ export function buildSingleEntityFilter(
     .with('crmContact', () => {
       throw new Error('CRM contacts are read through GraphQL Soup only');
     })
-    .exhaustive();
+    .exhaustive(() => {
+      throw new Error(`Unknown soup entity type: ${entityType}`);
+    });
+}
+
+async function updateRecentlyViewedItemLazily(
+  itemId: string,
+  viewedAt: string
+): Promise<void> {
+  // Lazy import to break circular dependency
+  const { updateRecentlyViewedItem } = await import('../recently-viewed');
+  updateRecentlyViewedItem(itemId, viewedAt);
 }
 
 /**
@@ -889,10 +913,9 @@ export function buildSingleEntityFilter(
 export function optimisticUpdateSoupItemViewedAt(itemId: string) {
   const now = new Date().toISOString();
 
-  // Lazy import to break circular dependency
-  import('../recently-viewed').then(({ updateRecentlyViewedItem }) => {
-    updateRecentlyViewedItem(itemId, now);
-  });
+  updateRecentlyViewedItemLazily(itemId, now).catch((error) =>
+    Telemetry.error(error, { surface: 'soup-normalized-cache' })
+  );
 
   const current = getSoupEntityById(itemId);
   if (!current) return;
@@ -990,7 +1013,7 @@ function getSearchResultId(result: UnifiedSearchResponseItem): string {
     .with({ type: 'company' }, (r) => r.id)
     .with({ type: 'calendarEvent' }, (r) => r.id)
     .with({ type: 'agentSession' }, (r) => r.id)
-    .exhaustive();
+    .exhaustive(() => '');
 }
 
 /** @private Captures every soup-list-shaped query (legacy items, parent

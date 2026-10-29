@@ -38,6 +38,7 @@ export function EntityActionSelection(props: {
           </For>
           <Show when={props.entities.length > 2}>
             <Button
+              variant="ghost"
               type="button"
               size="sm"
               disabled={props.disabled}

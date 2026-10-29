@@ -1,16 +1,9 @@
-import PlusIcon from '@phosphor/plus.svg';
-import XIcon from '@phosphor/x.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import XIcon from '@icon/system/regular/x.svg';
+import { Input, type InputProps } from '@ui';
 import { Button } from '@ui/components/Button';
 import { Dropdown } from '@ui/components/Dropdown';
-import {
-  createSignal,
-  For,
-  Index,
-  type JSX,
-  Match,
-  Show,
-  Switch,
-} from 'solid-js';
+import { createSignal, For, Index, Match, Show, Switch } from 'solid-js';
 import type {
   Conjunction,
   FilterGroup,
@@ -279,26 +272,21 @@ function ConditionEditor(props: {
           </>
         )}
       </Show>
-      <button
-        type="button"
+      <Button
         aria-label="Remove filter"
-        class="rounded-md p-1.5 text-ink-muted hover:bg-hover focus-visible:ring-2 focus-visible:ring-ink/50"
+        tooltip="Remove filter"
+        variant="ghost"
+        size="icon-md"
         onClick={props.onRemove}
       >
-        <XIcon class="size-3.5" />
-      </button>
+        <XIcon class="size-4 touch:size-3.5" />
+      </Button>
     </div>
   );
 }
 
-function FilterValueInput(props: JSX.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      aria-label="Filter value"
-      class="h-8 min-w-28 flex-1 rounded-md border border-edge-muted bg-input px-2 text-xs outline-none placeholder:text-ink-placeholder focus:border-ink/50"
-      {...props}
-    />
-  );
+function FilterValueInput(props: InputProps) {
+  return <Input aria-label="Filter value" class="min-w-28 flex-1" {...props} />;
 }
 
 /** What a test compares against: text, a number, a day, or options. */
@@ -309,7 +297,10 @@ function TestValue(props: {
 }) {
   const text = () => (props.test.kind === 'text' ? props.test : undefined);
   const number = () => (props.test.kind === 'number' ? props.test : undefined);
-  const date = () => (props.test.kind === 'date' ? props.test : undefined);
+  const date = () =>
+    props.test.kind === 'date' || props.test.kind === 'dateRange'
+      ? props.test
+      : undefined;
   const options = () =>
     props.test.kind === 'options' ? props.test : undefined;
   return (

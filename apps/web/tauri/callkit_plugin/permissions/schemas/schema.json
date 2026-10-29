@@ -307,6 +307,18 @@
           "markdownDescription": "Denies the abort_join command without any pre-configured scope."
         },
         {
+          "description": "Enables the can_use_full_screen_intent command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-can-use-full-screen-intent",
+          "markdownDescription": "Enables the can_use_full_screen_intent command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the can_use_full_screen_intent command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-can-use-full-screen-intent",
+          "markdownDescription": "Denies the can_use_full_screen_intent command without any pre-configured scope."
+        },
+        {
           "description": "Enables the end_active_call command without any pre-configured scope.",
           "type": "string",
           "const": "allow-end-active-call",
@@ -353,6 +365,18 @@
           "type": "string",
           "const": "deny-get-voip-token",
           "markdownDescription": "Denies the get_voip_token command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the open_full_screen_intent_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-full-screen-intent-settings",
+          "markdownDescription": "Enables the open_full_screen_intent_settings command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open_full_screen_intent_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-full-screen-intent-settings",
+          "markdownDescription": "Denies the open_full_screen_intent_settings command without any pre-configured scope."
         },
         {
           "description": "Enables the prepare_join command without any pre-configured scope.",

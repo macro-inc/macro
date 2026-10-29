@@ -1,169 +1,41 @@
-import {
-  defineQueryFilters,
-  NIL_UUID,
-  type Query,
-} from '@app/features/next-soup/filters/filter-store';
+import { NIL_UUID } from '@app/features/next-soup/filters/filter-store';
 import {
   type CallStatus,
   callStatusFromAttended,
-  type FieldFilters,
   type PropertyFilter,
   type TagFilterMode,
 } from '@app/features/next-soup/filters/filter-store/types';
-import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
-import { batch, createMemo } from 'solid-js';
+import { type Accessor, batch, createMemo } from 'solid-js';
 
-export type SearchIndexId =
-  | 'channels'
-  | 'document-or-file'
-  | 'task'
-  | 'email'
-  | 'calls'
-  | 'folders'
-  | 'agent'
-  | 'calendar';
+import {
+  DEFAULT_SECTIONS,
+  type SearchFiltersSections,
+  type SearchFiltersState,
+  type SearchIndexId,
+  type SearchTypeValue,
+} from '../../../core/search-filters';
 
-export type SearchTypeValue = SearchIndexId | 'all';
+export type {
+  SearchFiltersSections,
+  SearchFiltersState,
+  SearchIndexId,
+  SearchTypeValue,
+} from '../../../core/search-filters';
+export { DEFAULT_SECTIONS } from '../../../core/search-filters';
 
-/** Search types where tag filtering applies: documents/tasks, emails, chats,
- * calls, folders, plus the mixed `all` view (tags there narrow the taggable
- * result types and leave the rest untouched). */
-export const TAG_SEARCH_TYPES = new Set<SearchTypeValue>([
-  'all',
-  'task',
-  'document-or-file',
-  'email',
-  'agent',
-  'calls',
-  'folders',
-]);
+import {
+  compileSearchQuery,
+  SEARCH_INDEX_SEEDS,
+  TAG_SEARCH_TYPES,
+} from '../../../core/search-query';
 
-/**
- * Server-side narrowing for each index type. `defineQueryFilters` NIL-fills
- * the id field of every target the input doesn't reference, so each seed
- * matches only its own entity type. Sub-facet values (importance, channel
- * ids, ...) are layered on top by `compileSearchQuery`.
- */
-export const SEARCH_INDEX_SEEDS: Record<SearchIndexId, Query> = {
-  channels: defineQueryFilters({ exclude: { channelId: [NIL_UUID] } }),
-  'document-or-file': defineQueryFilters({ exclude: { subType: ['task'] } }),
-  task: defineQueryFilters({ include: { subType: ['task'] } }),
-  email: defineQueryFilters({}, { skipTargets: ['ef'] }),
-  calls: defineQueryFilters({}, { skipTargets: ['callf'] }),
-  folders: defineQueryFilters({ exclude: { folderId: [NIL_UUID] } }),
-  agent: defineQueryFilters({ exclude: { chatId: [NIL_UUID] } }),
-  calendar: defineQueryFilters({}, { skipTargets: ['calf'] }),
-};
-
-export type SearchFiltersSections = {
-  // inboxIds: `undefined` = all inboxes (default), `[]` = explicitly none,
-  // a subset = those inboxes — same model as the mail view's inbox filter.
-  email: { importance: boolean | undefined; inboxIds: string[] | undefined };
-  channels: { in: string[]; from: string[] };
-  calls: { in: string[]; from: string[]; status: CallStatus | undefined };
-  task: {
-    status: string[];
-    priority: string[];
-    assignees: string[];
-    createdBy: string[];
-  };
-};
-
-export type SearchFiltersState = SearchFiltersSections & {
-  type: SearchTypeValue;
-  // Selected tags. Applied only on the TAG_SEARCH_TYPES types and read live
-  // from the compiled query, so they persist across those types but clear
-  // when switching to a type where tags do not apply (channels/etc).
-  // Each entry carries its owning definition id and option id.
-  tags: PropertyFilter[];
-  // How the selected tags combine: match any of them (default) or all.
-  tagMode: TagFilterMode;
-};
-
-export const DEFAULT_SECTIONS: SearchFiltersSections = {
-  email: { importance: undefined, inboxIds: undefined },
-  channels: { in: [], from: [] },
-  calls: { in: [], from: [], status: undefined },
-  task: { status: [], priority: [], assignees: [], createdBy: [] },
-};
-
-/**
- * Single compile path: facet state → query filters. Both data paths (soup
- * AST feed and search-service request) derive from the resulting store
- * state, so this is the only place facet semantics turn into filters.
- *
- * `'all'` compiles to just the search preset baseline — no index narrowing
- * and no email-importance bias. Only the active type's section is compiled;
- * inactive sections never constrain results.
- */
-export function compileSearchQuery(state: SearchFiltersState): Query {
-  const baseline = getViewPreset('search')?.filters ?? {};
-  const include: FieldFilters = { ...baseline.include };
-  const exclude: FieldFilters = { ...baseline.exclude };
-
-  // Tags apply on the TAG_SEARCH_TYPES types only, so a tag filter never
-  // silently empties a search narrowed to channels.
-  if (TAG_SEARCH_TYPES.has(state.type) && state.tags.length) {
-    include.tagFilters = state.tags;
-    if (state.tagMode === 'all') {
-      include.tagFilterMode = 'all';
-    }
-  }
-
-  if (state.type === 'all') return { include, exclude };
-
-  const seed = SEARCH_INDEX_SEEDS[state.type];
-  Object.assign(include, seed.include);
-  Object.assign(exclude, seed.exclude);
-
-  if (state.type === 'email') {
-    if (state.email.importance !== undefined) {
-      include.emailImportance = state.email.importance;
-    }
-    if (state.email.inboxIds !== undefined) {
-      include.emailLinkId = state.email.inboxIds.length
-        ? state.email.inboxIds
-        : [NIL_UUID];
-    }
-  } else if (state.type === 'channels') {
-    if (state.channels.in.length) include.channelId = state.channels.in;
-    if (state.channels.from.length) {
-      include.channelSenderId = state.channels.from;
-    }
-  } else if (state.type === 'calls') {
-    if (state.calls.in.length) include.callChannelId = state.calls.in;
-    if (state.calls.from.length) include.callSpeakerId = state.calls.from;
-    if (state.calls.status !== undefined) {
-      include.callStatus = state.calls.status;
-    }
-  } else if (state.type === 'task') {
-    const properties: PropertyFilter[] = [
-      ...state.task.status.map((value) => ({
-        propertyId: SYSTEM_PROPERTY_IDS.STATUS,
-        type: 'select' as const,
-        value,
-      })),
-      ...state.task.priority.map((value) => ({
-        propertyId: SYSTEM_PROPERTY_IDS.PRIORITY,
-        type: 'select' as const,
-        value,
-      })),
-      ...state.task.assignees.map((value) => ({
-        propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
-        type: 'entity' as const,
-        value,
-      })),
-    ];
-    if (properties.length) include.properties = properties;
-    if (state.task.createdBy.length) {
-      include.documentOwnerId = state.task.createdBy;
-    }
-  }
-
-  return { include, exclude };
-}
+export {
+  compileSearchQuery,
+  SEARCH_INDEX_SEEDS,
+  TAG_SEARCH_TYPES,
+} from '../../../core/search-query';
 
 /**
  * Facet state is derived from the soup view's `queryFilters` +
@@ -172,17 +44,28 @@ export function compileSearchQuery(state: SearchFiltersState): Query {
  * Setters recompile the full state through `compileSearchQuery` and replace
  * the store wholesale.
  */
-export function createSearchFiltersController() {
-  const { soup, queryFilters } = useSoupView();
+export function createSearchFiltersController(binding?: {
+  state: Accessor<SearchFiltersState>;
+  onChange: (state: SearchFiltersState) => void;
+}) {
+  const view = binding ? undefined : useSoupView();
+  const boundQuery = binding
+    ? createMemo(() => compileSearchQuery(binding.state()))
+    : undefined;
 
   const type = createMemo<SearchTypeValue>(
     () =>
-      soup.predicates
+      binding?.state().type ??
+      view!.soup.predicates
         .orIds()
-        .find((id): id is SearchIndexId => id in SEARCH_INDEX_SEEDS) ?? 'all'
+        .find((id): id is SearchIndexId => id in SEARCH_INDEX_SEEDS) ??
+      'all'
   );
 
-  const include = () => queryFilters.state.include;
+  const include = () =>
+    boundQuery
+      ? (boundQuery().include ?? {})
+      : view!.queryFilters.state.include;
   const withoutNil = (ids: string[] | undefined) =>
     (ids ?? []).filter((id) => id !== NIL_UUID);
 
@@ -236,14 +119,16 @@ export function createSearchFiltersController() {
   let stashedTags: PropertyFilter[] = [];
   let stashedTagMode: TagFilterMode = 'any';
 
-  const apply = (state: SearchFiltersState) =>
+  const apply = (state: SearchFiltersState) => {
+    if (binding) return binding.onChange(state);
     batch(() => {
-      queryFilters.replace(compileSearchQuery(state));
-      soup.predicates.set(({ andIds }) => ({
+      view!.queryFilters.replace(compileSearchQuery(state));
+      view!.soup.predicates.set(({ andIds }) => ({
         and: andIds,
         or: state.type === 'all' ? [] : [state.type],
       }));
     });
+  };
 
   const applySections = (sections: Partial<SearchFiltersSections>) =>
     apply({

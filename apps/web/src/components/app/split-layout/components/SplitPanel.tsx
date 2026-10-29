@@ -11,13 +11,14 @@ import { SplitPanelControllerProvider } from '@components/app/split-panel';
 import { splitContainerAttribute } from '@core/dom-selectors';
 import { EVENT_MODIFIER_KEYS } from '@core/hotkey/constants';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getSafeAreaInset } from '@core/mobile/safeAreaInsets';
-import { isPlatform } from '@core/util/platform';
-import CloseIcon from '@phosphor/x.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn, Panel } from '@ui';
 import { createEffect, createSignal, Show, Suspense } from 'solid-js';
+import { createMutable } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
 import { splitBackInterceptor } from '../back-interceptor';
 import {
@@ -51,6 +52,7 @@ export function SplitPanel(props: SplitPanelProps) {
   );
   const [panelRef, setPanelRef] = createSignal<HTMLDivElement | null>(null);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
+  const navigationCollapsed = createSignal(true);
   const [titleFileMenuRef, setTitleFileMenuRef] =
     createSignal<HTMLDivElement>();
   const [titleFileMenuTrigger, setTitleFileMenuTrigger] =
@@ -62,7 +64,7 @@ export function SplitPanel(props: SplitPanelProps) {
   const panelSize = createElementSize(panelRef);
   let pointerTarget: Element | undefined;
 
-  const layoutRefs: SplitPanelContextType['layoutRefs'] = {};
+  const layoutRefs = createMutable<SplitPanelContextType['layoutRefs']>({});
   const headerCollapseController = createPriorityCollapseController();
   const toolbarCollapseController = createPriorityCollapseController();
   const ownedSlots = createOwnedSlots();
@@ -119,7 +121,10 @@ export function SplitPanel(props: SplitPanelProps) {
   createEffect(() => {
     const safeTop = isTouchDevice() ? getSafeAreaInset('top') : 0;
     const offset =
-      safeTop + (headerSize.height ?? 0) + (toolbarSize.height ?? 0);
+      safeTop +
+      (hasSplitHeader()
+        ? (headerSize.height ?? 0) + (toolbarSize.height ?? 0)
+        : 0);
     setContentOffsetTop(offset);
   });
 
@@ -141,6 +146,24 @@ export function SplitPanel(props: SplitPanelProps) {
     props.split.mount.kind === 'component' &&
     props.split.mount.meta.splitPanelLayout === 'composable';
 
+  const canCloseSplit = () => {
+    const manager = globalSplitManager();
+    return manager ? shouldShowSplitCloseButton(manager) : false;
+  };
+
+  const hasSplitHeader = () => {
+    const content = props.handle.content();
+    return (
+      !usesComposableLayout() &&
+      !(
+        isTouchDevice() &&
+        content.type === 'component' &&
+        (content.id === LIST_VIEW_ID.search ||
+          content.id === LIST_VIEW_ID.channels)
+      )
+    );
+  };
+
   const MountedContent = () => (
     <SplitPanelControllerProvider
       controller={{
@@ -151,11 +174,11 @@ export function SplitPanel(props: SplitPanelProps) {
         },
         canGoForward: props.handle.canGoForward,
         goForward: props.handle.goForward,
-        canClose: () => {
-          const manager = globalSplitManager();
-          return manager ? shouldShowSplitCloseButton(manager) : false;
-        },
+        canClose: canCloseSplit,
         close: props.handle.close,
+        get closeButtonPlacement() {
+          return isTouchDevice() ? 'header' : 'frame';
+        },
       }}
     >
       <Suspense>
@@ -193,6 +216,7 @@ export function SplitPanel(props: SplitPanelProps) {
             handle: props.handle,
             setContentOffsetTop,
             contentOffsetTop,
+            navigationCollapsed,
             splitHotkeyScope,
             bottomPanel,
             registerBottomPanel: (panel) => {
@@ -236,7 +260,7 @@ export function SplitPanel(props: SplitPanelProps) {
                 'relative size-full touch:isolate': !props.handle.isSpotLight(),
               }}
               style={{
-                '--split-header-height': `${headerSize.height ?? 0}px`,
+                '--split-header-height': `${hasSplitHeader() ? (headerSize.height ?? 0) : 0}px`,
                 // The hard spacer for top-anchored content on full-frame
                 // mobile/tablet: status bar + floating header strip.
                 '--mobile-content-inset-top':
@@ -272,11 +296,7 @@ export function SplitPanel(props: SplitPanelProps) {
               <Panel
                 class={cn(
                   'touch:rounded-none touch:after:hidden touch:border-0! bg-panel transition-none',
-                  props.handle.isSpotLight()
-                    ? 'rounded-xl'
-                    : isPlatform('desktop') || multipleSplits()
-                      ? 'rounded-md'
-                      : 'rounded-none',
+                  props.handle.isSpotLight() ? 'rounded-xl' : 'rounded-lg',
                   splitUnfocusedStyling() && 'split-panel-inactive',
                   {
                     'shadow-sm shadow-drop-shadow/50': splitUnfocusedStyling(),
@@ -284,13 +304,9 @@ export function SplitPanel(props: SplitPanelProps) {
                   }
                 )}
                 depth={isTouchDevice() ? 0 : 1}
-                hideBorder={
-                  !props.handle.isSpotLight() &&
-                  !isPlatform('desktop') &&
-                  !multipleSplits()
-                }
+                hideBorder={isTouchDevice()}
               >
-                <Show when={!usesComposableLayout()}>
+                <Show when={hasSplitHeader()}>
                   <Panel.Header
                     class={cn(
                       'relative block min-h-12 p-0 overflow-visible border-b-0!',
@@ -342,12 +358,13 @@ export function SplitPanel(props: SplitPanelProps) {
                               {panel().title}
                             </h3>
                             <Button
+                              aria-label="Close"
+                              tooltip="Close"
                               variant="ghost"
                               size="icon-sm"
-                              label="Close"
                               onClick={() => panel().onClose?.()}
                             >
-                              <CloseIcon />
+                              <CloseIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                             </Button>
                           </div>
                           <div class="min-h-0 flex-1 overflow-hidden">
@@ -362,6 +379,30 @@ export function SplitPanel(props: SplitPanelProps) {
                   </Show>
                 </Panel.Body>
               </Panel>
+              <Show when={!isTouchDevice() && canCloseSplit()}>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="Close split"
+                  tooltip={{
+                    content: 'Close split',
+                    hotkey: TOKENS.split.close,
+                  }}
+                  class={cn(
+                    'absolute top-0 left-0 z-split-panel-chrome origin-top-left scale-[1.15] size-4 p-0 rounded-none border-0 border-r border-b border-edge-frame bg-panel text-ink-muted/70 hover:bg-hover hover:text-ink',
+                    props.handle.isSpotLight()
+                      ? 'rounded-tl-xl rounded-br-xl'
+                      : 'rounded-tl-md rounded-br-md'
+                  )}
+                  data-split-frame-close=""
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    props.handle.close();
+                  }}
+                >
+                  <CloseIcon class="size-2.5" />
+                </Button>
+              </Show>
               <Show when={isTouchDevice()}>
                 <Suspense>
                   <MobilePageActionRow />

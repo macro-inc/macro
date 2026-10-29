@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use ::axum::{
     extract::{FromRef, FromRequestParts, Query},
     http::{header, request::Parts},
@@ -53,7 +56,7 @@ where
 
     #[cfg(feature = "local_auth")]
     if let Some(user_context) = local_user_context() {
-        return authenticated_user(user_context).map(Some);
+        return authenticated_user(user_context, crate::CredentialOrigin::Session).map(Some);
     }
 
     let Some(token) = extract_ambient_user_token(parts, state).await else {
@@ -135,13 +138,24 @@ where
     Svc: MacroAuthorizationService,
 {
     let authorization = MacroAuthorizationState::<Svc>::from_ref(state);
-    let user_context = authorization
+    let credential = authorization
         .service
-        .authorize(token)
+        .authorize_identity(token)
         .await
         .map_err(authorization_rejection)?;
 
-    authenticated_user(user_context)
+    let identity = credential.identity;
+    let mut user = authenticated_user(
+        model_user::UserContext {
+            user_id: identity.user_id,
+            fusion_user_id: identity.fusion_user_id,
+            organization_id: identity.organization_id,
+            permissions: identity.permissions,
+        },
+        credential.origin,
+    )?;
+    user.agent_id = identity.agent_id;
+    Ok(user)
 }
 
 fn authorization_rejection(error: Report<MacroAuthorizationError>) -> MacroAuthorizationRejection {

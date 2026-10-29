@@ -1,6 +1,6 @@
 //! Axum router for the databases endpoints: typed reads and batched ops,
 //! the one write surface of a database's schema and data; SQL runs in the
-//! browser engine or the `databases_sql` tools.
+//! browser engine or the `databases_sql` HTTP/agent adapters.
 
 /// What a column's values would do under each type (`GET …/casts`), and
 /// what they become under one (`POST …/conversion`).
@@ -46,7 +46,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::models::{
     Awareness, ColumnId, CreateDatabase, Database, DatabaseDetail, DatabaseError, InferColumnType,
-    InferColumnTypeOutcome, ListedDatabase, SavedQueryError, Table, TableVersion, Viewer,
+    InferColumnTypeOutcome, ListedDatabase, SavedQueryError, SharingError, Table, TableVersion,
+    Viewer,
 };
 use crate::domain::ports::DatabasesService;
 use ops::OpRefusalResponse;
@@ -416,7 +417,8 @@ impl IntoResponse for DatabaseError {
             DatabaseError::Unauthorized => StatusCode::FORBIDDEN,
             DatabaseError::VersionConflict
             | DatabaseError::OptionInUse
-            | DatabaseError::RowInUse => StatusCode::CONFLICT,
+            | DatabaseError::RowInUse
+            | DatabaseError::InvalidSharing(SharingError::Changed) => StatusCode::CONFLICT,
             DatabaseError::InvalidSchemaOperation(_)
             | DatabaseError::InvalidSharing(_)
             | DatabaseError::InvalidOp(_) => StatusCode::BAD_REQUEST,

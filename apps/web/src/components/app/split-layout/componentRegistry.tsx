@@ -101,6 +101,10 @@ const ProjectView = lazyNamed(
   () => import('@app/features/projects/project-view'),
   'ProjectView'
 );
+const ExternalRouteView = lazyNamed(
+  () => import('@app/features/external-view/route-views'),
+  'ExternalRouteView'
+);
 const ReviewsRouteView = lazyNamed(
   () => import('@app/features/reviews-view/route-views'),
   'ReviewsRouteView'
@@ -338,7 +342,11 @@ registerComponent(
   () => <DriveRouteView />,
   () => composableLayout(true)
 );
-registerComponent('reviews', () => <ReviewsRouteView />);
+registerComponent(
+  'reviews',
+  () => <ReviewsRouteView />,
+  () => composableLayout(true)
+);
 registerComponent(
   'tasks',
   () => <TasksRouteView />,
@@ -400,11 +408,27 @@ registerComponent('email-compose', (params) => {
     typeof params.initialInboxId === 'string'
       ? params.initialInboxId
       : undefined;
+  const initialSubject =
+    typeof params.initialSubject === 'string'
+      ? params.initialSubject
+      : undefined;
+  const initialBodyText =
+    typeof params.initialBodyText === 'string'
+      ? params.initialBodyText
+      : undefined;
+  const initialAttachments = Array.isArray(params.initialAttachments)
+    ? params.initialAttachments.filter(
+        (value): value is File => value instanceof File
+      )
+    : undefined;
   return (
     <EmailCompose
       draftId={draftID}
       initialTo={initialTo}
       initialInboxId={initialInboxId}
+      initialSubject={initialSubject}
+      initialBodyText={initialBodyText}
+      initialAttachments={initialAttachments}
     />
   );
 });
@@ -467,6 +491,11 @@ registerComponent(
 registerComponent(
   'booking-links',
   () => <BookingLinksRouteView />,
+  () => composableLayout()
+);
+registerComponent(
+  'external',
+  () => <ExternalRouteView />,
   () => composableLayout()
 );
 

@@ -1,5 +1,6 @@
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import { Key } from '@solid-primitives/keyed';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn, Dropdown } from '@ui';
 import type { SelectionDismissal } from '@ui/utils/selectionDismissal';
@@ -7,7 +8,6 @@ import {
   type Accessor,
   createEffect,
   createSignal,
-  For,
   type JSX,
   onCleanup,
   Show,
@@ -208,16 +208,10 @@ export function FilterOptionItem(props: {
   disabled?: boolean;
   closeOnSelect?: SelectionDismissal;
   onSelect: () => void;
+  onOnly?: () => void;
 }) {
-  return (
-    <Dropdown.Item
-      role="menuitemcheckbox"
-      aria-checked={props.active}
-      disabled={props.disabled}
-      onSelect={props.onSelect}
-      closeOnSelect={props.closeOnSelect}
-    >
-      <TypeIndicator active={props.active} />
+  const content = () => (
+    <>
       <Show when={props.icon}>
         {(icon) => (
           <span class="size-4 flex items-center justify-center shrink-0">
@@ -233,7 +227,38 @@ export function FilterOptionItem(props: {
       >
         {props.content?.() ?? props.label}
       </span>
-    </Dropdown.Item>
+    </>
+  );
+  return (
+    <Show
+      when={props.onOnly}
+      fallback={
+        <Dropdown.Item
+          role="menuitemcheckbox"
+          aria-checked={props.active}
+          disabled={props.disabled}
+          onSelect={props.onSelect}
+          closeOnSelect={props.closeOnSelect}
+        >
+          <TypeIndicator active={props.active} />
+          {content()}
+        </Dropdown.Item>
+      }
+    >
+      {(onOnly) => (
+        <Dropdown.MultiSelectItem
+          checked={props.active}
+          label={props.label}
+          disabled={props.disabled}
+          onChange={(checked) => {
+            if (checked !== props.active) props.onSelect();
+          }}
+          onOnly={onOnly()}
+        >
+          {content()}
+        </Dropdown.MultiSelectItem>
+      )}
+    </Show>
   );
 }
 
@@ -265,6 +290,7 @@ export function FilterSubmenu<TId extends string>(props: {
   isSelected: (id: TId) => boolean;
   onSelect: (id: TId) => void;
   closeOnSelect?: SelectionDismissal;
+  onOnly?: (id: TId) => void;
   contentClass?: string;
   selectionMode?: 'single' | 'multiple';
 }) {
@@ -285,19 +311,23 @@ export function FilterSubmenu<TId extends string>(props: {
           <Show
             when={props.selectionMode === 'single'}
             fallback={
-              <For each={props.options}>
+              // Keyed by option id, not by reference: callers rebuild their
+              // option arrays whenever an upstream query or flag settles, and
+              // disposing a row mid-press would swallow the selection.
+              <Key each={props.options} by="id">
                 {(option) => (
                   <FilterOptionItem
-                    label={option.label}
-                    icon={option.icon}
-                    content={option.content}
-                    disabled={option.disabled}
-                    active={props.isSelected(option.id)}
-                    onSelect={() => props.onSelect(option.id)}
+                    label={option().label}
+                    icon={option().icon}
+                    content={option().content}
+                    disabled={option().disabled}
+                    active={props.isSelected(option().id)}
+                    onSelect={() => props.onSelect(option().id)}
+                    onOnly={props.onOnly && (() => props.onOnly?.(option().id))}
                     closeOnSelect={props.closeOnSelect}
                   />
                 )}
-              </For>
+              </Key>
             }
           >
             <Dropdown.RadioGroup
@@ -309,31 +339,31 @@ export function FilterSubmenu<TId extends string>(props: {
                 if (option) props.onSelect(option.id);
               }}
             >
-              <For each={props.options}>
+              <Key each={props.options} by="id">
                 {(option) => (
                   <Dropdown.RadioItem
-                    value={option.id}
-                    disabled={option.disabled}
+                    value={option().id}
+                    disabled={option().disabled}
                     closeOnSelect={
                       props.closeOnSelect === 'unless-shift'
                         ? true
                         : props.closeOnSelect
                     }
                   >
-                    <Show when={option.icon}>
+                    <Show when={option().icon}>
                       <span class="size-4 flex items-center justify-center shrink-0">
-                        {option.icon?.()}
+                        {option().icon?.()}
                       </span>
                     </Show>
                     <span class="flex-1">
-                      {option.content?.() ?? option.label}
+                      {option().content?.() ?? option().label}
                     </span>
                     <Dropdown.ItemIndicator>
                       <CheckIcon class="size-3.5 text-accent" />
                     </Dropdown.ItemIndicator>
                   </Dropdown.RadioItem>
                 )}
-              </For>
+              </Key>
             </Dropdown.RadioGroup>
           </Show>
         </Dropdown.Group>

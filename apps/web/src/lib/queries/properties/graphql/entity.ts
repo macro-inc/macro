@@ -29,6 +29,7 @@ import {
   SetEntityPropertyDocument,
   type SetEntityPropertyMutation,
   type SetEntityPropertyMutationVariables,
+  type SoupEntityInput,
 } from '@service-storage/graphql/generated/graphql';
 import {
   getGraphqlCacheHost,
@@ -39,7 +40,6 @@ import { CombinedError, type OperationResult } from '@urql/core';
 import { type Accessor, createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
 import { v5 as uuidv5 } from 'uuid';
-import { buildGraphqlEntitySoupInput } from '../../soup/graphql/entity-input';
 import {
   type buildOptimisticGroupedPropertyUpdates,
   createGroupedPropertyPreparation,
@@ -50,8 +50,28 @@ import { buildOptimisticSetEntityProperty } from '../graphql-optimistic';
 import { buildPropertyAssignmentLinks } from './assignment-links';
 import { observePropertyMutationSettlements } from './mutation-settlements';
 
-/** Builds the exact Soup input used to load one entity's properties. */
-export const buildEntityPropertiesInput = buildGraphqlEntitySoupInput;
+/** Builds the input used to load one entity's properties. */
+export function buildEntityPropertiesInput(
+  entityType: EntityType,
+  entityId: string
+): SoupEntityInput | undefined {
+  const soupEntityType = match(entityType)
+    .returnType<SoupEntityInput['entityType'] | undefined>()
+    .with('DOCUMENT', 'TASK', () => 'DOCUMENT')
+    .with('PROJECT', () => 'PROJECT')
+    .with('CHAT', () => 'CHAT')
+    .with('THREAD', () => 'EMAIL_THREAD')
+    .with('CHANNEL', () => 'CHANNEL')
+    .with('CALL_RECORD', () => 'CALL')
+    .with('COMPANY', () => 'CRM_COMPANY')
+    .with('CALENDAR_EVENT', () => 'CALENDAR_EVENT')
+    .with('INITIATIVE', () => 'INITIATIVE')
+    .with('DATABASE_ROW', () => 'DATABASE_ROW')
+    // Users and CRM contacts carry no Soup properties.
+    .with('USER', 'CONTACT', () => undefined)
+    .exhaustive(() => undefined);
+  return soupEntityType && { entityType: soupEntityType, entityId };
+}
 
 type GraphqlEntityPropertiesQueryOptions = {
   entityType: Accessor<EntityType>;
@@ -179,6 +199,7 @@ export function toGraphqlSetPropertyValue(
   return match(value)
     .with({ type: 'boolean' }, (v) => ({ boolean: v.value }))
     .with({ type: 'date' }, (v) => ({ date: v.value }))
+    .with({ type: 'date_range' }, (v) => ({ dateRange: v.value }))
     .with({ type: 'number' }, (v) => ({ number: v.value }))
     .with({ type: 'string' }, (v) => ({ string: v.value }))
     .with({ type: 'select_option' }, (v) => ({ selectOption: v.option_id }))
@@ -193,7 +214,9 @@ export function toGraphqlSetPropertyValue(
     }))
     .with({ type: 'link' }, (v) => ({ link: v.url }))
     .with({ type: 'multi_link' }, (v) => ({ multiLink: v.urls }))
-    .exhaustive();
+    .exhaustive(() => {
+      throw new Error(`Unsupported property value type: ${value.type}`);
+    });
 }
 
 /** Maps a REST property target type onto its GraphQL enum. */
@@ -610,9 +633,7 @@ export function mapGraphqlEntityProperties(
   data: EntityPropertiesQuery | undefined,
   entityId: string
 ): SoupProperty[] | undefined {
-  if (!data) return undefined;
-  const items = data.user?.soup?.items;
-  if (!items) return undefined;
-  const item = items.find((candidate) => candidate.id === entityId);
-  return mapGraphqlProperties(item?.properties ?? []);
+  const entity = data?.user?.soupEntity;
+  if (entity === undefined) return undefined;
+  return mapGraphqlProperties(entity?.id === entityId ? entity.properties : []);
 }

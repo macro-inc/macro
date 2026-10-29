@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import { type Accessor, Show } from 'solid-js';
 import { useMaybeNativeCallState } from '../native-call-state';
@@ -25,11 +26,19 @@ export function CallControls(props: CallControlsProps) {
         <div class="flex gap-2">
           <button
             type="button"
-            onClick={() => void setNativeCallKitVideoOverlayMode('expanded')}
+            onClick={() =>
+              fireAndForget(
+                setNativeCallKitVideoOverlayMode('expanded'),
+                'channel-call'
+              )
+            }
           >
             Open call controls
           </button>
-          <button type="button" onClick={() => void props.onLeave()}>
+          <button
+            type="button"
+            onClick={() => fireAndForget(props.onLeave(), 'channel-call')}
+          >
             End call
           </button>
         </div>

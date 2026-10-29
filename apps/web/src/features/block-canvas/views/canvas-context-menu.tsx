@@ -5,21 +5,22 @@ import {
   SubTrigger,
 } from '@core/component/ContextMenu';
 import { TOKENS } from '@core/hotkey/tokens';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowLineDown from '@icon/system/regular/arrow-line-down.svg';
+import ArrowLineUp from '@icon/system/regular/arrow-line-up.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
+import Clipboard from '@icon/system/regular/clipboard.svg';
+import Copy from '@icon/system/regular/copy.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
+import Scissors from '@icon/system/regular/scissors.svg';
+import SelectionAll from '@icon/system/regular/selection-all.svg';
+import SelectionPlus from '@icon/system/regular/selection-plus.svg';
+import SelectionSlash from '@icon/system/regular/selection-slash.svg';
+import Stack from '@icon/system/regular/stack.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { selectAllCommand } from '@macro-inc/graphics';
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowLineDown from '@phosphor/arrow-line-down.svg';
-import ArrowLineUp from '@phosphor/arrow-line-up.svg';
-import ArrowUp from '@phosphor/arrow-up.svg';
-import Clipboard from '@phosphor/clipboard.svg';
-import Copy from '@phosphor/copy.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
-import Scissors from '@phosphor/scissors.svg';
-import SelectionAll from '@phosphor/selection-all.svg';
-import SelectionPlus from '@phosphor/selection-plus.svg';
-import SelectionSlash from '@phosphor/selection-slash.svg';
-import Stack from '@phosphor/stack.svg';
-import Trash from '@phosphor/trash.svg';
 import { Show } from 'solid-js';
 import type { CanvasClipboard } from '../clipboard';
 import type { CanvasState } from '../primitives/create-canvas-state';
@@ -50,26 +51,34 @@ export function CanvasContextMenu(props: {
           icon={Scissors}
           hotkeyToken={TOKENS.canvas.cut}
           disabled={!selected()}
-          onClick={() => void props.clipboard.cut()}
+          onClick={() =>
+            fireAndForget(props.clipboard.cut(), 'canvas-clipboard')
+          }
         />
         <MenuItem
           text="Copy"
           icon={Copy}
           hotkeyToken={TOKENS.canvas.copy}
           disabled={!selected()}
-          onClick={() => void props.clipboard.copy()}
+          onClick={() =>
+            fireAndForget(props.clipboard.copy(), 'canvas-clipboard')
+          }
         />
         <MenuItem
           text="Paste"
           icon={Clipboard}
           hotkeyToken={TOKENS.canvas.paste}
-          onClick={() => void props.clipboard.paste()}
+          onClick={() =>
+            fireAndForget(props.clipboard.paste(), 'canvas-clipboard')
+          }
         />
         <MenuItem
           text="Paste in place"
           icon={Clipboard}
           shortcut="shift+cmd+v"
-          onClick={() => void props.clipboard.paste(true)}
+          onClick={() =>
+            fireAndForget(props.clipboard.paste(true), 'canvas-clipboard')
+          }
         />
         <MenuItem
           text="Duplicate"

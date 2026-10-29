@@ -38,9 +38,7 @@ vi.mock('@core/directive/touchHandler', () => ({
       options().onLongPress?.()
     ),
 }));
-vi.mock('@app/components/ui/components/Tooltip', () => ({
-  Tooltip: (props: ParentProps) => props.children,
-}));
+
 // The shell, list engine, and row cells have their own coverage; this suite
 // exercises what a row's context menu does to the list.
 vi.mock('@app/components/view-shell', () => ({
@@ -52,6 +50,7 @@ vi.mock('@app/components/view-shell', () => ({
   ListSortDropdown: () => null,
   ListGroupDropdown: () => null,
   ListFilterDropdown: () => null,
+  ListFilterCountBadge: () => null,
   ViewLayoutDropdown: (props: {
     label: string;
     layouts: ('list' | 'board' | 'gantt')[];
@@ -73,6 +72,10 @@ vi.mock('@app/components/view-shell', () => ({
     </div>
   ),
   useViewControlHotkeys: () => {},
+}));
+vi.mock('@app/components/view-shell/ListHeader', () => ({
+  ListHeader: (props: ParentProps) => props.children,
+  ListHeaderSearch: () => null,
 }));
 vi.mock('@app/components/view-shell/SidebarCreateButton', () => ({
   SidebarCreateButton: () => null,

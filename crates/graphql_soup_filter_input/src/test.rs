@@ -190,6 +190,33 @@ fn initiative_property_filters_preserve_entity_scope() {
 }
 
 #[test]
+fn database_row_include_materializes_and_false_is_rejected() {
+    let input = json!({"databaseRowFilter": {"literal": {"include": true}}});
+    let ast = materialize_graphql_filter(input.clone()).unwrap();
+    assert_eq!(
+        ast.database_row_filter.as_deref(),
+        Some(&Expr::val(DatabaseRowLiteral::Include))
+    );
+    let graphql: GraphqlEntityFilterAst = serde_json::from_value(input).unwrap();
+    assert_eq!(
+        serde_json::to_value(ast).unwrap(),
+        serde_json::to_value(graphql.into_ast().unwrap()).unwrap()
+    );
+    assert!(
+        materialize_graphql_filter(json!({
+            "databaseRowFilter": {"literal": {"include": false}}
+        }))
+        .is_err()
+    );
+    assert!(
+        materialize_graphql_filter(json!({}))
+            .unwrap()
+            .database_row_filter
+            .is_none()
+    );
+}
+
+#[test]
 fn a_database_row_filter_names_a_table_or_a_row() {
     use item_filters::ast::database_row::DatabaseRowLiteral;
 
@@ -347,4 +374,15 @@ fn contacts_are_opt_in_and_normalize_full_email_filters() {
         )
         .is_err()
     );
+}
+
+#[test]
+fn activity_association_accepts_only_true() {
+    let ast = materialize_graphql_filter(json!({"crmAssociation": {"activity": true}})).unwrap();
+    assert_eq!(ast.crm_association, Some(CrmAssociation::Activity));
+    assert_eq!(
+        serde_json::to_value(CrmAssociation::Activity).unwrap(),
+        json!("activity")
+    );
+    assert!(materialize_graphql_filter(json!({"crmAssociation": {"activity": false}})).is_err());
 }

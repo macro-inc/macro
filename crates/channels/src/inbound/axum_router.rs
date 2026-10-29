@@ -6,9 +6,10 @@ pub mod profile_picture;
 pub use profile_picture::{SetChannelPictureRequest, set_channel_picture_handler};
 
 use crate::domain::models::{
-    Activity, ActivityType, AttachmentChannelReference, AttachmentEntityReference,
-    AttachmentGenericReference, ChannelAttachment, ChannelAttachmentType, ChannelParticipant,
-    ChannelType, CreateEntityMentionOptions, ParticipantRole, Sender,
+    Activity, ActivityType, AttachmentChannelReference, AttachmentCommentReference,
+    AttachmentEntityReference, AttachmentGenericReference, ChannelAttachment,
+    ChannelAttachmentType, ChannelParticipant, ChannelType, CreateEntityMentionOptions,
+    ParticipantRole, Sender,
 };
 pub use crate::domain::models::{
     AddParticipantsRequest, ChannelJoinCodeResponse, ChannelPreview, ChannelPreviewData,
@@ -1146,6 +1147,8 @@ pub struct GetAttachmentReferencesResponse {
 pub enum ApiAttachmentEntityReference {
     /// Referenced from a channel message.
     Channel(ApiAttachmentChannelReference),
+    /// Referenced from a comment on a document, initiative, CRM record, or call.
+    Comment(ApiAttachmentCommentReference),
     /// Referenced from any non-message source entity.
     Generic(ApiAttachmentGenericReference),
 }
@@ -1156,9 +1159,49 @@ impl From<AttachmentEntityReference> for ApiAttachmentEntityReference {
             AttachmentEntityReference::Channel(c) => {
                 Self::Channel(ApiAttachmentChannelReference::from(c))
             }
+            AttachmentEntityReference::Comment(c) => {
+                Self::Comment(ApiAttachmentCommentReference::from(c))
+            }
             AttachmentEntityReference::Generic(g) => {
                 Self::Generic(ApiAttachmentGenericReference::from(g))
             }
+        }
+    }
+}
+
+/// A reference to an attachment entity from a comment on a non-channel entity.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ApiAttachmentCommentReference {
+    /// Stored type of the entity the comment belongs to
+    /// (`document`, `initiative`, `crm_company`, `crm_contact`, or `call`).
+    pub parent_entity_type: String,
+    /// Id of the entity the comment belongs to.
+    pub parent_entity_id: String,
+    /// Message that contains the reference.
+    pub message_id: Uuid,
+    /// If the message belongs to a thread this is the parent id.
+    pub thread_id: Option<Uuid>,
+    /// Sender of the message.
+    pub sender_id: String,
+    /// Full message content (might be used for preview/snippet).
+    pub message_content: String,
+    /// When the message itself was created.
+    pub message_created_at: DateTime<Utc>,
+    /// When the mention or attachment row was created.
+    pub attachment_created_at: DateTime<Utc>,
+}
+
+impl From<AttachmentCommentReference> for ApiAttachmentCommentReference {
+    fn from(r: AttachmentCommentReference) -> Self {
+        Self {
+            parent_entity_type: r.parent_entity_type,
+            parent_entity_id: r.parent_entity_id,
+            message_id: r.message_id,
+            thread_id: r.thread_id,
+            sender_id: r.sender_id,
+            message_content: r.message_content,
+            message_created_at: r.message_created_at,
+            attachment_created_at: r.attachment_created_at,
         }
     }
 }

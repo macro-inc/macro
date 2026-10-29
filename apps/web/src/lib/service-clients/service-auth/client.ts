@@ -12,7 +12,7 @@ import {
 import { Telemetry } from '@macro-inc/observability';
 
 import { makePersisted } from '@solid-primitives/storage';
-import { err, ok } from 'neverthrow';
+import { ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import type {
   AiPlanCatalog,
@@ -26,6 +26,7 @@ import type {
   CheckoutSessionV2Response,
   CursorApiKeyStatus,
   CursorModelsResponse,
+  EmailConnectionProviders,
   EnrichGithubPullRequestsProxyRequest,
   EnrichGithubPullRequestsResponse,
   GithubLinkStatusResponse,
@@ -34,16 +35,21 @@ import type {
   GmailLinkStatusResponse,
   InitGithubLinkResponse,
   InitGmailLinkResponse,
+  InitOutlookLinkResponse,
   MergeGithubPullRequestRequest,
   MergeGithubPullRequestResponse,
   PatchUserTutorialRequest,
   SendMobileWelcomeEmailResponse,
   SetGithubPullRequestDraftRequest,
   SetGithubPullRequestDraftResponse,
+  SetGithubPullRequestStateRequest,
+  SetGithubPullRequestStateResponse,
   TrialEligibility,
   UserQuota,
 } from './generated/schemas';
+import type { AgentApiKey } from './generated/schemas/agentApiKey';
 import type { AppleLoginRequest } from './generated/schemas/appleLoginRequest';
+import type { CreatedTeamInviteLinkResponse } from './generated/schemas/createdTeamInviteLinkResponse';
 import type { CreateGtmInviteLinkRequest } from './generated/schemas/createGtmInviteLinkRequest';
 import type { CreateTeamRequest } from './generated/schemas/createTeamRequest';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
@@ -56,6 +62,7 @@ import type { GtmInviteLinkList } from './generated/schemas/gtmInviteLinkList';
 import type { GtmInviteOffer } from './generated/schemas/gtmInviteOffer';
 import type { GtmInviteOfferStatus } from './generated/schemas/gtmInviteOfferStatus';
 import type { InviteToTeamRequest } from './generated/schemas/inviteToTeamRequest';
+import type { JoinTeamByInviteLinkResponse } from './generated/schemas/joinTeamByInviteLinkResponse';
 import type { MacroApiTokenResponse } from './generated/schemas/macroApiTokenResponse';
 import type { PasswordRequest } from './generated/schemas/passwordRequest';
 import type { PatchTeamRequest } from './generated/schemas/patchTeamRequest';
@@ -67,10 +74,13 @@ import type { PublicGtmInviteLink } from './generated/schemas/publicGtmInviteLin
 import type { PutProfilePictureParams } from './generated/schemas/putProfilePictureParams';
 import type { PutUserNameQueryParams } from './generated/schemas/putUserNameQueryParams';
 import type { Team } from './generated/schemas/team';
+import type { TeamInviteLinkResponse } from './generated/schemas/teamInviteLinkResponse';
+import type { TeamInviteLinkTeam } from './generated/schemas/teamInviteLinkTeam';
 import type { TeamInvitesResponse } from './generated/schemas/teamInvitesResponse';
 import type { TeamWithMembers } from './generated/schemas/teamWithMembers';
 import type { ToggleAutoJoinDomainResponse } from './generated/schemas/toggleAutoJoinDomainResponse';
 import type { ToggleNonAdminInvitesResponse } from './generated/schemas/toggleNonAdminInvitesResponse';
+import type { UserLanguage } from './generated/schemas/userLanguage';
 import type { UserLinkResponse } from './generated/schemas/userLinkResponse';
 import type { UserName } from './generated/schemas/userName';
 import type { UserNames } from './generated/schemas/userNames';
@@ -220,6 +230,12 @@ const cursorApiKeyErrorResponseHandler: ErrorResponseHandler<'CURSOR_API_KEY_ERR
     };
   };
 
+const agentApiKeyErrorResponseHandler: ErrorResponseHandler<'AGENT_API_KEY_ERROR'> =
+  async function handleAgentApiKeyErrorResponse(response) {
+    const { message } = await cursorApiKeyErrorResponseHandler(response);
+    return { code: 'AGENT_API_KEY_ERROR', message };
+  };
+
 /**
  * Errors a merge can end in beyond the shared GitHub ones: the user has no
  * GitHub account linked, or GitHub declined the merge and said why.
@@ -278,7 +294,8 @@ const githubMergeErrorResponseHandler = githubChangeErrorResponseHandler({
   rejected: 'GitHub declined to merge the pull request',
 });
 
-const githubDraftErrorResponseHandler = githubChangeErrorResponseHandler({
+/** Shared by the draft and open/closed state routes, which fail the same ways. */
+const githubUpdateErrorResponseHandler = githubChangeErrorResponseHandler({
   noLink: 'Connect GitHub in Settings to change pull requests',
   rejected: 'GitHub declined to change the pull request',
 });
@@ -312,6 +329,19 @@ const githubErrorResponseHandler: ErrorResponseHandler<GithubReauthenticationErr
   };
 
 export const authServiceClient = {
+  /**
+   * Which providers this deployment can connect. Pass `originalUrl` to also
+   * receive the Microsoft tenant-wide admin-consent URL that returns there.
+   */
+  async emailConnectionProviders(originalUrl?: string) {
+    const params = new URLSearchParams();
+    if (originalUrl) params.set('original_url', originalUrl);
+    const query = params.size > 0 ? `?${params}` : '';
+    return fetchWithAuth<EmailConnectionProviders>(
+      `${authHost}/link/email/providers${query}`,
+      { method: 'GET' }
+    );
+  },
   async logout() {
     setAccessTokenData(null);
     return (
@@ -453,6 +483,21 @@ export const authServiceClient = {
       })
     ).map((result) => result);
   },
+  async getUserLanguage() {
+    return (
+      await fetchWithAuth<UserLanguage>(`${authHost}/user/language`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+  async putUserLanguage(args: UserLanguage) {
+    return (
+      await fetchWithAuth<EmptyResponse>(`${authHost}/user/language`, {
+        method: 'PUT',
+        body: JSON.stringify(args),
+      })
+    ).map((result) => result);
+  },
   async getUserNames(args: PostGetNamesRequestBody) {
     return (
       await fetchWithAuth<UserNames>(`${authHost}/user/get_names`, {
@@ -543,7 +588,19 @@ export const authServiceClient = {
       >(`${authHost}/github_pull_requests/draft`, {
         method: 'POST',
         body: JSON.stringify(args),
-        errorResponseHandler: githubDraftErrorResponseHandler,
+        errorResponseHandler: githubUpdateErrorResponseHandler,
+      })
+    ).map((result) => result);
+  },
+  async setGithubPullRequestState(args: SetGithubPullRequestStateRequest) {
+    return (
+      await fetchWithAuth<
+        SetGithubPullRequestStateResponse,
+        GithubMergeErrorCode
+      >(`${authHost}/github_pull_requests/state`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+        errorResponseHandler: githubUpdateErrorResponseHandler,
       })
     ).map((result) => result);
   },
@@ -893,6 +950,49 @@ export const authServiceClient = {
   },
 
   /**
+   * The agent's own API key, if it has one, and whether its owner's plan
+   * lets it run on one. Never returns a key or any part of one.
+   */
+  async getAgentApiKey(agentId: string) {
+    return (
+      await fetchWithAuth<AgentApiKey, 'AGENT_API_KEY_ERROR'>(
+        `${authHost}/agents/${agentId}/api-key`,
+        {
+          method: 'GET',
+          errorResponseHandler: agentApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /** Stores the agent's own API key, for its model's provider, replacing any. */
+  async putAgentApiKey(agentId: string, apiKey: string) {
+    return (
+      await fetchWithAuth<AgentApiKey, 'AGENT_API_KEY_ERROR'>(
+        `${authHost}/agents/${agentId}/api-key`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ apiKey }),
+          errorResponseHandler: agentApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /** Forgets the agent's API key. Does not revoke it at the provider. */
+  async deleteAgentApiKey(agentId: string) {
+    return (
+      await fetchWithAuth<AgentApiKey, 'AGENT_API_KEY_ERROR'>(
+        `${authHost}/agents/${agentId}/api-key`,
+        {
+          method: 'DELETE',
+          errorResponseHandler: agentApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /**
    * Stores a Cursor API key for the signed-in user, replacing any existing one.
    *
    * The key is validated on shape alone, so a typo that still starts with
@@ -1014,7 +1114,7 @@ export const authServiceClient = {
    */
   async initGmailLink(
     originalUrl?: string,
-    options?: { scopes?: ConsentScopes }
+    options?: { scopes?: ConsentScopes; reconnectLinkId?: string }
   ) {
     const params = new URLSearchParams();
     if (originalUrl) {
@@ -1023,6 +1123,8 @@ export const authServiceClient = {
     if (options?.scopes) {
       params.set('scopes', options.scopes);
     }
+    if (options?.reconnectLinkId)
+      params.set('reconnect_link_id', options.reconnectLinkId);
     const query = params.toString();
     const url = query
       ? `${authHost}/link/gmail?${query}`
@@ -1056,6 +1158,40 @@ export const authServiceClient = {
     ).map((result) => result);
   },
 
+  /** Connect a personal Outlook.com or Microsoft 365 inbox. */
+  async initOutlookLink(
+    originalUrl: string,
+    options?: { calendar?: boolean; reconnectLinkId?: string }
+  ) {
+    const params = new URLSearchParams({
+      original_url: encodeURIComponent(originalUrl),
+      scopes: options?.calendar ? 'mail_and_calendar' : 'mail',
+    });
+    if (options?.reconnectLinkId)
+      params.set('reconnect_link_id', options.reconnectLinkId);
+    return fetchWithAuth<
+      InitOutlookLinkResponse,
+      'PAYMENT_REQUIRED' | 'TOO_MANY_PENDING_LINKS'
+    >(`${authHost}/link/outlook?${params}`, {
+      method: 'POST',
+      errorResponseHandler: async (response) => {
+        if (response.status === 402) {
+          return { code: 'PAYMENT_REQUIRED', message: 'Payment required' };
+        }
+        if (response.status === 429) {
+          return {
+            code: 'TOO_MANY_PENDING_LINKS',
+            message: 'Too many pending inbox connections',
+          };
+        }
+        return {
+          code: 'HTTP_ERROR',
+          message: `HTTP error! status: ${response.status}`,
+        };
+      },
+    });
+  },
+
   /**
    * Deletes a github link for a user
    * NOTE: this does not delete the github application from being installed on a teams repository
@@ -1069,11 +1205,7 @@ export const authServiceClient = {
   },
 
   async reauthenticateGithub(originalUrl?: string) {
-    const deleteResult = await authServiceClient.deleteGithubLink();
-    if (deleteResult.isErr()) {
-      return err(deleteResult.error);
-    }
-
+    // The OAuth callback refreshes the grant after verifying the GitHub account.
     return authServiceClient.initGithubLink(originalUrl);
   },
 
@@ -1239,6 +1371,69 @@ export const authServiceClient = {
         {
           method: 'POST',
         }
+      )
+    ).map((result) => result);
+  },
+
+  /**
+   * The caller's team invite link token, or null when the team has none.
+   * Anyone who may invite people to the team may read it.
+   */
+  async getTeamInviteLink() {
+    return (
+      await fetchWithAuth<TeamInviteLinkResponse>(
+        `${authHost}/team/invite-link`,
+        { method: 'GET' }
+      )
+    ).map((result) => result);
+  },
+
+  /**
+   * Creates the team's invite link, replacing any existing one so links
+   * already shared stop working. Replacing a link is admin-only.
+   */
+  async createTeamInviteLink() {
+    return (
+      await fetchWithAuth<CreatedTeamInviteLinkResponse>(
+        `${authHost}/team/invite-link`,
+        { method: 'POST' }
+      )
+    ).map((result) => result);
+  },
+
+  /** Turns off the team's invite link. Admin/Owner only. */
+  async deleteTeamInviteLink() {
+    return (
+      await fetchWithAuth<{}>(`${authHost}/team/invite-link`, {
+        method: 'DELETE',
+      })
+    ).map(() => undefined);
+  },
+
+  /** The team an invite link joins, shown before the user joins it. */
+  async getTeamByInviteLink(token: string) {
+    return (
+      await fetchWithAuth<TeamInviteLinkTeam>(
+        `${authHost}/team/invite-link/team`,
+        {
+          method: 'POST',
+          // In the body, not the path, so request telemetry never records it.
+          body: JSON.stringify({ token }),
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /**
+   * Joins the team an invite link belongs to. Fails with NOT_FOUND when the
+   * link was reset or turned off, and CONFLICT when the user is on another
+   * team.
+   */
+  async joinTeamByInviteLink(token: string) {
+    return (
+      await fetchWithAuth<JoinTeamByInviteLinkResponse>(
+        `${authHost}/team/invite-link/join`,
+        { method: 'POST', body: JSON.stringify({ token }) }
       )
     ).map((result) => result);
   },

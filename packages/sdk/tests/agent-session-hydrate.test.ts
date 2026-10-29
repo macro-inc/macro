@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 import type { AgentSessionLifecycleEvent } from '../generated/storage/types.gen';
 import { hydrateAgentSessionEvent } from '../src/events/hydrate/agentSession';
 import type { MacroClient } from '../src/utils/client';
@@ -41,8 +41,8 @@ const settled: AgentSessionLifecycleEvent = {
 describe('hydrateAgentSessionEvent', () => {
   test('settled hands out the session, owner, origin, chip, and actor', () => {
     const event = hydrateAgentSessionEvent(client, settled);
-    if (event.event_type !== 'agent_session.settled')
-      throw new Error(event.event_type);
+    if (event?.event_type !== 'agent_session.settled')
+      throw new Error(event?.event_type);
 
     expect(event.session.id).toBe(identity.session_id);
     expect(event.owner.id).toBe(identity.owner_id);
@@ -64,8 +64,8 @@ describe('hydrateAgentSessionEvent', () => {
         question: 'Tea or coffee?',
       },
     });
-    if (event.event_type !== 'agent_session.waiting_for_input')
-      throw new Error(event.event_type);
+    if (event?.event_type !== 'agent_session.waiting_for_input')
+      throw new Error(event?.event_type);
 
     expect(event.session.id).toBe(identity.session_id);
     expect(event.channel).toBeUndefined();
@@ -91,8 +91,8 @@ describe('hydrateAgentSessionEvent', () => {
       event_type: 'agent_session.command_rejected',
       metadata,
     });
-    if (event.event_type !== 'agent_session.command_rejected')
-      throw new Error(event.event_type);
+    if (event?.event_type !== 'agent_session.command_rejected')
+      throw new Error(event?.event_type);
 
     expect(event.session.id).toBe(identity.session_id);
     expect(event.owner.id).toBe(identity.owner_id);
@@ -116,8 +116,8 @@ describe('hydrateAgentSessionEvent', () => {
         },
       },
     });
-    if (event.event_type !== 'agent_session.command_rejected')
-      throw new Error(event.event_type);
+    if (event?.event_type !== 'agent_session.command_rejected')
+      throw new Error(event?.event_type);
 
     expect(event.session.id).toBe(identity.session_id);
     expect(event.owner.id).toBe(identity.owner_id);
@@ -133,8 +133,8 @@ describe('hydrateAgentSessionEvent', () => {
       event_type: 'agent_session.deleted',
       metadata: { identity },
     });
-    if (event.event_type !== 'agent_session.deleted')
-      throw new Error(event.event_type);
+    if (event?.event_type !== 'agent_session.deleted')
+      throw new Error(event?.event_type);
 
     expect(event.session.id).toBe(identity.session_id);
     expect(event.owner.id).toBe(identity.owner_id);
@@ -151,8 +151,8 @@ describe('hydrateAgentSessionEvent', () => {
         mentioned: ['macro|reviewer@example.com', 'macro|lead@example.com'],
       },
     });
-    if (event.event_type !== 'agent_session.mentioned')
-      throw new Error(event.event_type);
+    if (event?.event_type !== 'agent_session.mentioned')
+      throw new Error(event?.event_type);
 
     expect(event.session.id).toBe(identity.session_id);
     expect(event.mentionedBy?.id).toBe('macro|owner@example.com');
@@ -160,5 +160,16 @@ describe('hydrateAgentSessionEvent', () => {
       'macro|reviewer@example.com',
       'macro|lead@example.com',
     ]);
+  });
+
+  test('an event type from a newer server is skipped instead of throwing', () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => {});
+    const fromNewerServer = JSON.parse(
+      '{"event_type":"agent_session.paused","metadata":{}}',
+    );
+
+    expect(hydrateAgentSessionEvent(client, fromNewerServer)).toBeUndefined();
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
   });
 });

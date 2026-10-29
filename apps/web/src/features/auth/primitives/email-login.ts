@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createSignal, onCleanup } from 'solid-js';
 import type {
   AuthContext,
@@ -112,7 +113,7 @@ export function createEmailLogin(
           startResendCountdown();
           if (result.autoCode) {
             setCode(result.autoCode);
-            void verify(result.autoCode);
+            fireAndForget(verify(result.autoCode), 'email-login');
           }
           return true;
         case 'password-required':
@@ -132,7 +133,8 @@ export function createEmailLogin(
     }
   };
 
-  if (options.autoStart && options.initialEmail) void send();
+  if (options.autoStart && options.initialEmail)
+    fireAndForget(send(), 'email-login');
 
   return {
     step,
@@ -154,8 +156,8 @@ export function createEmailLogin(
         context.track('sign_up_click', { method: 'email' });
       setStep('email');
     },
-    submitEmail: () => void send(),
-    verify: (value?: string) => void verify(value),
+    submitEmail: () => fireAndForget(send(), 'email-login'),
+    verify: (value?: string) => fireAndForget(verify(value), 'email-login'),
     resend: async () => {
       setVerifyError();
       // A failed resend may be retried at once; a sent one restarts the wait.

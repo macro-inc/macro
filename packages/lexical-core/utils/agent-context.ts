@@ -1373,9 +1373,7 @@ function sessionNode(
 ): FxpNode {
   const isOwner = sender?.id === owner.id;
   const prompter = sender?.name ?? 'A bot acting for nobody';
-  const policy = isOwner
-    ? `${owner.name} owns this session and sent this prompt.`
-    : `${prompter} sent this prompt, but ${owner.name} owns this session. You act with the access of ${owner.name} - their email, calendar, documents, and connected apps. Every tool call that uses that access waits for ${owner.name} to approve it, so use the tools the request needs and let ${owner.name} decide. Do not refuse on ${owner.name}'s behalf: the approval request is how they say yes or no. Looking things up on the public web needs no approval. Do not repeat anything private to ${owner.name} that you saw in earlier turns. If a call is declined or not approved, say so and do not look for another way to do it.`;
+  const policy = `${prompter} sent this prompt. ${owner.name} owns this session. Choose acting_as explicitly on each tool that accepts it. Prefer requester: this uses the access and connected apps of the person who sent this prompt, without an extra account approval. Choose owner only when the request calls for ${owner.name}'s access; when someone else prompted this turn, those calls wait for ${owner.name}'s approval. Public web lookups need no account selection. A bot or system event with no authenticated acting user has no requester account. If the selected account lacks a connection, offer the connect action returned by the tool; never silently switch accounts. Do not repeat private information from another person's earlier tool results. If a call is declined or not approved, say so and do not try another way to perform it. Existing email/calendar draft confirmations still apply.`;
   return el(
     'session',
     [

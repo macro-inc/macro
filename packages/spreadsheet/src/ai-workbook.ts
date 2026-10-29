@@ -10,6 +10,7 @@ import type {
   SpreadsheetReadResponse,
   SpreadsheetReadValidation,
   SpreadsheetSheetSummary,
+  SpreadsheetTableSummary,
   SpreadsheetValue,
 } from './ai-types';
 import type {
@@ -33,6 +34,7 @@ import {
   selectionBounds,
 } from './grid-selection';
 import { qualifyScratchFormula } from './scratch-formula';
+import { tableColumnNames } from './sheet-tables';
 import {
   appendSpreadsheetRows,
   formatCellAddress,
@@ -52,6 +54,7 @@ import {
 } from './spreadsheet-document';
 import {
   addSpreadsheetSheet,
+  createSpreadsheetTable,
   deleteSpreadsheetSheet,
   duplicateSpreadsheetSheet,
   readSpreadsheetWorkbook,
@@ -179,26 +182,55 @@ function usedRange(
   return bounds ? rangeName(bounds) : null;
 }
 
+function tableSummaries(
+  sheet: SpreadsheetWorkbookSheet
+): SpreadsheetTableSummary[] {
+  return (sheet.metadata?.tables ?? []).map((table) => {
+    const columns = tableColumnNames(table, sheet.cells);
+    const filteredColumns = Object.keys(table.filters ?? {}).flatMap(
+      (offset) => columns[Number(offset)] ?? []
+    );
+    const columnTypes = Object.entries(table.columnTypes ?? {})
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .flatMap(([offset, type]) => {
+        const column = columns[Number(offset)];
+        return column === undefined ? [] : [{ column, type }];
+      });
+    return {
+      name: table.name,
+      range: table.range,
+      columns,
+      totalsRow: table.totalsRow,
+      ...(filteredColumns.length && { filteredColumns }),
+      ...(columnTypes.length && { columnTypes }),
+    };
+  });
+}
+
 function summaries(
   workbook: SpreadsheetWorkbookSheet[],
   results: WorkbookCalculation
 ): SpreadsheetSheetSummary[] {
-  return workbook.map((sheet) => ({
-    id: sheet.id,
-    name: sheet.name,
-    rowCount: sheet.layout.rowCount,
-    columnCount: sheet.layout.columnCount,
-    usedRange: usedRange(sheet, results[sheet.id] ?? {}),
-    populatedCells: Object.values(sheet.cells).filter(
-      (cell) => cell.value !== ''
-    ).length,
-    formulaCells: Object.values(sheet.cells).filter(
-      (cell) => cell.format !== 'text' && cell.value.startsWith('=')
-    ).length,
-    errorCells: Object.values(results[sheet.id] ?? {}).filter(
-      (cell) => cell.error
-    ).length,
-  }));
+  return workbook.map((sheet) => {
+    const tables = tableSummaries(sheet);
+    return {
+      id: sheet.id,
+      name: sheet.name,
+      rowCount: sheet.layout.rowCount,
+      columnCount: sheet.layout.columnCount,
+      usedRange: usedRange(sheet, results[sheet.id] ?? {}),
+      populatedCells: Object.values(sheet.cells).filter(
+        (cell) => cell.value !== ''
+      ).length,
+      formulaCells: Object.values(sheet.cells).filter(
+        (cell) => cell.format !== 'text' && cell.value.startsWith('=')
+      ).length,
+      errorCells: Object.values(results[sheet.id] ?? {}).filter(
+        (cell) => cell.error
+      ).length,
+      ...(tables.length && { tables }),
+    };
+  });
 }
 
 function readCell(
@@ -617,6 +649,30 @@ export function prepareSpreadsheetEdit(
             count(Object.keys(edits).length);
             writeSpreadsheetCells(fork, edits, sheet.id);
             summary = `Added checkboxes to ${rangeName(selection)} in “${sheet.name}”.`;
+            break;
+          }
+          case 'create_table': {
+            const selection = checkedRange(operation.range, sheet);
+            const range = rangeName(selection);
+            const { top, bottom, left, right } = selectionBounds(selection);
+            // A conversion writes the header and total rows, and the data
+            // cells of the columns it types.
+            count(
+              (right - left + 1) * (operation.totalsRow ? 2 : 1) +
+                (operation.columnTypes?.length ?? 0) * (bottom - top)
+            );
+            const name = createSpreadsheetTable(fork, sheet.id, {
+              range,
+              name: operation.name,
+              totalsRow: operation.totalsRow,
+              columnTypes: Object.fromEntries(
+                (operation.columnTypes ?? []).map(({ column, type }) => [
+                  column,
+                  type,
+                ])
+              ),
+            });
+            summary = `Converted ${range} in “${sheet.name}” to the table “${name}”.`;
             break;
           }
         }

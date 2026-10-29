@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Button, Dialog, Panel } from '@ui';
 import { Show } from 'solid-js';
 import type { PipelineTransfer } from '../context/pipelines';
@@ -40,7 +41,9 @@ export function PipelineImport(props: {
               type="file"
               accept=".csv,text/csv"
               disabled={reading() || pending()}
-              onChange={(e) => void read(e.currentTarget.files?.[0])}
+              onChange={(e) =>
+                fireAndForget(read(e.currentTarget.files?.[0]), 'crm')
+              }
               class="text-sm"
             />
             <Show when={plan()}>
@@ -103,9 +106,9 @@ export function PipelineImport(props: {
                 Close
               </Button>
               <Button
-                variant="strong"
+                variant="secondary"
                 disabled={reading() || pending() || !plan()}
-                onClick={() => void run()}
+                onClick={() => fireAndForget(run(), 'crm')}
               >
                 {pending()
                   ? `Importing… ${resolved().toLocaleString()} ${records()} matched`

@@ -1,0 +1,16 @@
+[package]
+description = "xtask graphql-schema-compat: fail on GraphQL schema changes that break deployed clients"
+edition = "2024"
+name = "xtask_graphql_schema_compat"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "xtask_graphql_schema_compat"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+apollo-compiler = { workspace = true }
+chrono = { workspace = true }
+xtask_paths = { path = "../xtask_paths" }

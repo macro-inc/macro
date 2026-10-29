@@ -2,16 +2,17 @@ import type { GanttCreation } from '@app/components/gantt/create-gantt-creation'
 import { Gantt } from '@app/components/gantt/gantt';
 import { deriveGanttRange } from '@app/components/gantt/gantt-date';
 import { UserIcon } from '@core/component/UserIcon';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   getPropertyOptionLabel,
   getTaskStatusOptionId,
   type TaskEntityWithProperties,
 } from '@entity';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CircleDashedIcon from '@phosphor/circle-dashed.svg';
-import FolderIcon from '@phosphor/folder-simple.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
+import FolderIcon from '@icon/system/regular/folder-simple.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { Button, cn, Layer } from '@ui';
 import type { ComponentProps } from 'solid-js';
@@ -69,11 +70,11 @@ export function TaskGanttView(props: {
     if (row.kind !== 'load-more') return;
 
     if (row.groupId !== undefined) {
-      void props.source.loadMoreGroup(row.groupId);
+      fireAndForget(props.source.loadMoreGroup(row.groupId), 'tasks-view');
       return;
     }
 
-    void props.source.loadMore?.();
+    fireAndForget(props.source.loadMore?.(), 'tasks-view');
   };
 
   return (
@@ -82,6 +83,7 @@ export function TaskGanttView(props: {
         <Match when={props.source.isLoading?.()}>
           <div class="grid flex-1 place-items-center text-ink-muted">
             <SpinnerIcon
+              aria-hidden={false}
               aria-label="Loading timeline"
               class="size-5 animate-spin"
             />
@@ -93,7 +95,12 @@ export function TaskGanttView(props: {
             class="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted"
           >
             Tasks couldn’t be loaded.
-            <Button onClick={() => void props.source.refresh?.()}>
+            <Button
+              variant="ghost"
+              onClick={() =>
+                fireAndForget(props.source.refresh?.(), 'tasks-view')
+              }
+            >
               Try again
             </Button>
           </div>
@@ -356,7 +363,12 @@ export function TaskGanttView(props: {
                           size="sm"
                           variant="ghost"
                           disabled={props.source.isLoadingMore?.()}
-                          onClick={() => void props.source.loadMore?.()}
+                          onClick={() =>
+                            fireAndForget(
+                              props.source.loadMore?.(),
+                              'tasks-view'
+                            )
+                          }
                         >
                           <Show when={props.source.isLoadingMore?.()}>
                             <SpinnerIcon class="size-3 animate-spin" />
@@ -372,7 +384,9 @@ export function TaskGanttView(props: {
                         size="sm"
                         variant="ghost"
                         disabled={props.source.isLoadingMore?.()}
-                        onClick={() => void props.source.loadMore?.()}
+                        onClick={() =>
+                          fireAndForget(props.source.loadMore?.(), 'tasks-view')
+                        }
                       >
                         <Show when={props.source.isLoadingMore?.()}>
                           <SpinnerIcon class="size-3 animate-spin" />

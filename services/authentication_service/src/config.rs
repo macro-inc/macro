@@ -91,6 +91,9 @@ maybe_env_vars! {
 // #[macro_config::from_ref_all]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Admit new Outlook accounts only after the deployment is ready. Reconnect is separate.
+    #[macro_config_default(false)]
+    pub outlook_connections_enabled: bool,
     /// Default-off quota admission and prospective usage counting.
     #[macro_config_default(ai_billing::AiUsageEnforcement::Disabled)]
     pub enable_ai_usage_enforcement: ai_billing::AiUsageEnforcement,

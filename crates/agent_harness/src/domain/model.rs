@@ -108,9 +108,8 @@ pub struct OpenSession {
 /// session so resume and teardown keep routing correctly after a restart.
 ///
 /// A session's instructions are stored on its row whichever kind serves it.
-/// [`Self::InMemory`] builds its system prompt from them in this process and
-/// [`Self::ClaudeCloud`] passes them to Claude at create; every other kind
-/// talks ACP or a prompt-only API, neither of which has a system prompt, so
+/// [`Self::InMemory`] builds its system prompt from them in this process; every other
+/// kind talks ACP or a prompt-only API, neither of which has a system prompt, so
 /// they ride in the first prompt's hidden agent-context node instead. See
 /// [`Self::folds_instructions`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -122,8 +121,6 @@ pub enum AgentKind {
     Cursor,
     /// A per-owner Codex cloud conversation served over ACP.
     CodexCloud,
-    /// Anthropic-hosted Claude Code using the session owner's subscription.
-    ClaudeCloud,
     /// The in-process (in-memory) Macro agent bot, served by `agent_inmem`.
     InMemory,
     /// The bot's operator hosts the runtime and dials the gateway; no
@@ -141,8 +138,6 @@ impl AgentKind {
             Self::Cursor
         } else if bot == bot_id::CODEX_BOT_ID {
             Self::CodexCloud
-        } else if bot == bot_id::CLAUDE_BOT_ID {
-            Self::ClaudeCloud
         } else if bot == bot_id::MACRO_NEW_BOT_ID {
             Self::InMemory
         } else {
@@ -156,7 +151,6 @@ impl AgentKind {
         match harness {
             "cursor" => Self::Cursor,
             "codex-cloud" => Self::CodexCloud,
-            "claude-cloud" => Self::ClaudeCloud,
             "in-memory" | "macro-inmem" => Self::InMemory,
             // Registered macrod harnesses are the deliberate external case:
             // the agent's `harness_id` names whose daemon serves it.
@@ -177,7 +171,7 @@ impl AgentKind {
 
     /// Fixed harness slug for kinds that map one-to-one onto one.
     ///
-    /// Inverse of [`Self::from_harness`] for Cursor, Codex, and Claude — a
+    /// Inverse of [`Self::from_harness`] for Cursor and Codex — a
     /// session of those bots is always stored under that slug, even when the
     /// open path fell through to a deployment default (`opencode`). The
     /// sandboxed coder's slug is deployment configuration, in-memory accepts
@@ -188,7 +182,6 @@ impl AgentKind {
         match self {
             Self::Cursor => Some("cursor"),
             Self::CodexCloud => Some("codex-cloud"),
-            Self::ClaudeCloud => Some("claude-cloud"),
             Self::SandboxedCoder | Self::InMemory | Self::External => None,
         }
     }
@@ -197,7 +190,7 @@ impl AgentKind {
     /// whose runtime has no system prompt to put them in.
     #[must_use]
     pub const fn folds_instructions(self) -> bool {
-        !matches!(self, Self::InMemory | Self::ClaudeCloud)
+        !matches!(self, Self::InMemory)
     }
 
     /// Whether this kind's runtime starts on the session row's model by itself.
@@ -205,7 +198,7 @@ impl AgentKind {
     /// first prompt.
     #[must_use]
     pub const fn starts_on_session_model(self) -> bool {
-        matches!(self, Self::InMemory | Self::Cursor | Self::ClaudeCloud)
+        matches!(self, Self::InMemory | Self::Cursor)
     }
 
     /// Whether a deployment provisions this kind's runtimes itself.
@@ -221,8 +214,9 @@ impl AgentKind {
     /// Whether this kind's agent is handed the session's whole egress server
     /// list ([`SandboxEgress::acp_servers`]) when it attaches - the list a
     /// live session is refreshed to when the owner's connections change.
-    /// Codex is handed none, and an external runtime only the internal and
-    /// preview servers.
+    /// Codex Cloud is handed none. External runtimes receive the whole list
+    /// through `SandboxEgressProvisioner::external_mcp_servers` when they bind,
+    /// but do not participate in live refresh.
     #[must_use]
     pub fn takes_egress_mcp_servers(self) -> bool {
         !matches!(self, Self::CodexCloud | Self::External)
@@ -254,11 +248,9 @@ impl AgentKind {
     #[must_use]
     pub fn default_permission_policy(self) -> PermissionPolicy {
         match self {
-            Self::SandboxedCoder
-            | Self::Cursor
-            | Self::CodexCloud
-            | Self::ClaudeCloud
-            | Self::InMemory => PermissionPolicy::AutoAccept,
+            Self::SandboxedCoder | Self::Cursor | Self::CodexCloud | Self::InMemory => {
+                PermissionPolicy::AutoAccept
+            }
             Self::External => PermissionPolicy::Prompt,
         }
     }
@@ -523,6 +515,8 @@ pub struct DeliverAction {
 /// it.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum HarnessCommand {
+    /// Drain durable system events when this session is idle.
+    DrainNotifications,
     /// Open or continue the durably reserved session of an agent's conversation.
     ConversationMessage(OpenSession),
     /// Persist a nonblocking tool card on the replica owning this session.
@@ -703,8 +697,6 @@ pub enum SessionBlocker {
     CodexNotConnected,
     /// Codex is connected, but no cloud environment has been selected.
     CodexEnvironmentNotConfigured,
-    /// The mentioner has not connected their Claude account.
-    ClaudeNotConnected,
 }
 
 /// A mention that opened no session, and why. Posted back into the mention's

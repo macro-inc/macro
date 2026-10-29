@@ -1,6 +1,6 @@
 # Type Alias: Message
 
-> **Message** = \{ `attachments`: [`MessageAttachment`](MessageAttachment.md)[]; `bot_profile?`: `null` \| [`BotSenderProfile`](BotSenderProfile.md); `content`: `string`; `created_at`: `string`; `deleted_at?`: `string` \| `null`; `edited_at?`: `string` \| `null`; `id`: `string`; `imported_author?`: `null` \| [`ImportedAuthor`](ImportedAuthor.md); `mentions`: [`SimpleMention`](SimpleMention.md)[]; `parent`: [`MessageParent`](MessageParent.md); `reactions`: [`CountedReaction`](CountedReaction.md)[]; `sender_id`: `string`; `thread_id?`: `string` \| `null`; `triggered_by?`: `string` \| `null`; `updated_at`: `string`; \}
+> **Message** = \{ `attachments`: [`MessageAttachment`](MessageAttachment.md)[]; `bot_profile?`: `null` \| [`BotSenderProfile`](BotSenderProfile.md); `content`: `string`; `created_at`: `string`; `deleted_at?`: `string` \| `null`; `edited_at?`: `string` \| `null`; `guest_name?`: `string` \| `null`; `id`: `string`; `imported_author?`: `null` \| [`ImportedAuthor`](ImportedAuthor.md); `mentions`: [`SimpleMention`](SimpleMention.md)[]; `parent`: [`MessageParent`](MessageParent.md); `reactions`: [`CountedReaction`](CountedReaction.md)[]; `sender_id`: `string`; `thread_id?`: `string` \| `null`; `triggered_by?`: `string` \| `null`; `updated_at`: `string`; \}
 
 Shared message representation for channel timelines and entity discussions.
 
@@ -14,6 +14,7 @@ Shared message representation for channel timelines and entity discussions.
 | <a id="property-created_at"></a> `created_at` | `string` | Creation time. |
 | <a id="property-deleted_at"></a> `deleted_at?` | `string` \| `null` | Message tombstone, independent of thread deletion. |
 | <a id="property-edited_at"></a> `edited_at?` | `string` \| `null` | Last content edit, if any. |
+| <a id="property-guest_name"></a> `guest_name?` | `string` \| `null` | Display name of a verified call guest, retained after the call ends. |
 | <a id="property-id"></a> `id` | `string` | Message UUID. |
 | <a id="property-imported_author"></a> `imported_author?` | `null` \| [`ImportedAuthor`](ImportedAuthor.md) | - |
 | <a id="property-mentions"></a> `mentions` | [`SimpleMention`](SimpleMention.md)[] | Tracked mentions, retained when a caller changes attachments only. |

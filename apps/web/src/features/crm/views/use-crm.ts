@@ -20,9 +20,6 @@ export const useCrmPermissions = (
 export const useDealStages = (
   ...args: Parameters<CrmContext['createDealStages']>
 ) => useCrmContext().createDealStages(...args);
-export const useClosedStageIds = (
-  ...args: Parameters<CrmContext['createClosedStageIds']>
-) => useCrmContext().createClosedStageIds(...args);
 export const usePersonalCrmViews = (
   ...args: Parameters<CrmContext['createPersonalViews']>
 ) => useCrmContext().createPersonalViews(...args);
@@ -78,3 +75,6 @@ export const useResetCrmStagesMutation = (
 export const useQuickAccessCrmCompaniesQuery = (
   ...args: Parameters<CrmContext['createCompanySuggestions']>
 ) => useCrmContext().createCompanySuggestions(...args);
+export const useQuickAccessCrmContactsQuery = (
+  ...args: Parameters<CrmContext['createContactSuggestions']>
+) => useCrmContext().createContactSuggestions(...args);

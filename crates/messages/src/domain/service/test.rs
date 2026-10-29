@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 
 mod call_retries;
 mod event_posts;
+mod guest_chat;
 mod initiative;
 
 #[derive(Clone)]
@@ -149,6 +150,7 @@ impl MessageRepository for Repo {
         message.id = command.input.id.unwrap_or(message.id);
         message.parent = command.parent.clone();
         message.sender_id = command.actor.clone();
+        message.guest_name = command.guest_name.clone();
         message.content = command.input.content.clone();
         message.mentions = command.input.mentions.clone();
         message.triggered_by = command.triggered_by.clone();
@@ -248,6 +250,7 @@ fn fixture() -> Repo {
             sender_id: ChannelSender::try_from(user.to_owned()).unwrap(),
             bot_profile: None,
             mentions: vec![],
+            guest_name: None,
             imported_author: Some(ImportedAuthor {
                 name: "External PDF author".into(),
             }),
@@ -290,6 +293,7 @@ fn reply_from(root: &Message, id: u128, sender: &str) -> Message {
         id: Uuid::from_u128(id),
         thread_id: Some(root.id),
         sender_id: ChannelSender::try_from(sender.to_owned()).unwrap(),
+        guest_name: None,
         imported_author: None,
         content: "reply".into(),
         ..root.clone()

@@ -1,6 +1,6 @@
 import { PLAN_BY_TIER, type PlanTier } from '@app/features/paywall/plans';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CreditCardIcon from '@phosphor/credit-card.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CreditCardIcon from '@icon/system/regular/credit-card.svg';
 import { Show } from 'solid-js';
 import { IntegrationRow, SettingsCard } from '../primitives';
 

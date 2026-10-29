@@ -14,7 +14,7 @@ import type {
 import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas';
 import { fireEvent, render } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const respond = vi.fn<(answer: ElicitationAnswer) => Promise<boolean>>();
 let pending: PendingElicitation | undefined;
@@ -104,6 +104,8 @@ type StubSink = {
   onExecute: (args: unknown) => Promise<boolean>;
   onReject: () => Promise<boolean>;
 };
+// The stubs' sink calls, awaited after each test so a rejection fails it.
+const sinkCalls: Promise<boolean>[] = [];
 function composerStub(kind: string) {
   return (props: { initialData: unknown; sink: StubSink }) => (
     <div data-testid={`${kind}-composer`} data-can-act={props.sink.canAct()}>
@@ -111,12 +113,16 @@ function composerStub(kind: string) {
       <button
         type="button"
         data-testid="composer-execute"
-        onClick={() => void props.sink.onExecute(props.initialData)}
+        onClick={() => {
+          sinkCalls.push(props.sink.onExecute(props.initialData));
+        }}
       />
       <button
         type="button"
         data-testid="composer-reject"
-        onClick={() => void props.sink.onReject()}
+        onClick={() => {
+          sinkCalls.push(props.sink.onReject());
+        }}
       />
     </div>
   );
@@ -197,6 +203,10 @@ function live(): PendingElicitation {
     request: colourForm,
   };
 }
+
+afterEach(async () => {
+  await Promise.all(sinkCalls.splice(0));
+});
 
 beforeEach(() => {
   respond.mockReset();
@@ -409,7 +419,7 @@ describe('ElicitationPart', () => {
       },
       attendees: [],
       recurrenceLines: [],
-      addGoogleMeet: false,
+      addConference: false,
       eventType: 'default',
     };
     const emptySchema = {

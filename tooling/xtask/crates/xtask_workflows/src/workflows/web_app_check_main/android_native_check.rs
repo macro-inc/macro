@@ -8,7 +8,7 @@
 //!    which shares its definition of "native code" with the release
 //!    workflow through `android-native.mjs`: every tracked file under
 //!    `apps/web/tauri` minus iOS/desktop-only paths, plus the client cache
-//!    wasm version). This part always runs.
+//!    wasm version).
 //! 2. When it changed, asks Google Play whether that version code is a
 //!    published production release (through review and rolled out) built
 //!    from the native code of the PR's current merge result (the provenance
@@ -20,9 +20,12 @@
 //!
 //! Play access is keyless (Workload Identity Federation), so the job needs
 //! `id-token: write`; fork PRs don't get that and fail closed at the auth
-//! step. The `skip-android-update` label bypasses the live check for native
-//! changes that don't break the native/web contract; labels are read at run
-//! time (a re-run keeps the original event payload). The job name must stay
+//! step. The `skip-android-update` label bypasses the whole gate, bump
+//! included, for native changes that don't break the native/web contract,
+//! like `skip-ios-update`: the bump only feeds the Play release, which
+//! re-checks it before building, and a PR that skips the gate never
+//! releases. Labels are read at run time (a re-run keeps the original event
+//! payload). The job name must stay
 //! stable: the release preconditions, the watcher and the label workflow
 //! find it by name.
 
@@ -49,8 +52,8 @@ pub(super) fn job() -> Job {
         )
         .add_step(super::checkout("Checkout PR merge commit", false))
         .add_step(setup_bun())
-        .add_step(version_check())
         .add_step(read_labels())
+        .add_step(version_check())
         .add_step(play_auth())
         .add_step(require_live())
         .add_step(skip_notice())
@@ -70,8 +73,9 @@ fn setup_bun() -> Step<Use> {
         .add_with(("bun-version", "1.3.13"))
 }
 
-/// Always runs: the version code must exceed the base whenever the Android
-/// native code changed. Outputs `changed` and `version_code`.
+/// Unless the label skips the gate, the version code must exceed the base
+/// whenever the Android native code changed. Outputs `changed` and
+/// `version_code`.
 ///
 /// The base is the merge commit's first parent — the main the merge result
 /// was actually built on — not the event payload's `base.sha`: GitHub can
@@ -88,6 +92,7 @@ fn version_check() -> Step<Run> {
             bun scripts/android-version-check.mjs "$base"
         "#})
         .id("android-version")
+        .if_condition(Expression::new(NOT_SKIPPED))
         .shell("bash")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
@@ -105,7 +110,6 @@ fn read_labels() -> Step<Run> {
             fi
         "#})
         .id("labels")
-        .if_condition(Expression::new(NATIVE_CHANGED))
         .shell("bash")
         .add_env(("GH_TOKEN", "${{ github.token }}"))
         .add_env(("GH_REPO", "${{ github.repository }}"))
@@ -172,8 +176,8 @@ bun scripts/android-play-status.mjs --version-code "$VERSION_CODE" --require-liv
 fn skip_notice() -> Step<Run> {
     Step::new("Skipped via label")
         .run(
-            "echo \"Android native changes detected, but the skip-android-update label says they \
-             don't break the native/web contract — skipping the Play release gate.\"",
+            "echo \"The skip-android-update label says this PR's Android native changes don't \
+             break the native/web contract — skipping the version bump and Play release gate.\"",
         )
-        .if_condition(Expression::new(format!("{NATIVE_CHANGED} && {SKIP_LABEL}")))
+        .if_condition(Expression::new(SKIP_LABEL))
 }
