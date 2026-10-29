@@ -7,11 +7,14 @@ import {
   SplitPanelContext,
   type SplitPanelContextType,
 } from '@components/app/split-layout/context';
-import { createSignal } from 'solid-js';
+import BookmarkIcon from '@phosphor/bookmark-simple.svg';
+import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { ViewSidebar, ViewSwitcherContext } from '../ViewSidebar';
 
 function Fixture() {
+  const search = new URLSearchParams(window.location.search);
+  const title = search.get('title') ?? 'Chat';
   const [content, setContent] = createSignal({
     type: 'component',
     id: 'chat',
@@ -31,7 +34,10 @@ function Fixture() {
           <SplitPanelContext.Provider value={panel}>
             <ViewSwitcherContext.Provider value={ViewSwitcher}>
               <div class="min-h-screen bg-page p-8 text-ink">
-                <aside class="w-[280px] rounded-xl border border-edge-muted bg-panel">
+                <aside
+                  class="rounded-xl border border-edge-muted bg-panel"
+                  style={{ width: `${search.get('width') ?? 280}px` }}
+                >
                   <ViewSidebar.Header
                     searchLabel="Search conversations"
                     search={() => (
@@ -39,7 +45,15 @@ function Fixture() {
                     )}
                   >
                     <div class="flex min-w-0 items-center gap-1">
-                      <ViewSidebar.Title>Chat</ViewSidebar.Title>
+                      <ViewSidebar.Title>
+                        <Show when={search.has('saved')} fallback={title}>
+                          <BookmarkIcon
+                            class="size-4 shrink-0"
+                            aria-hidden="true"
+                          />
+                          <span class="truncate">{title}</span>
+                        </Show>
+                      </ViewSidebar.Title>
                     </div>
                   </ViewSidebar.Header>
                 </aside>

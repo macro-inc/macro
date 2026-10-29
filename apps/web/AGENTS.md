@@ -20,8 +20,8 @@ During iterative visual tweaks, use focused browser verification; defer full typ
 
 Any user-visible change should be exercised in a browser before you call it fixed — type-check, biome, and vitest all pass on code that still has the interaction bug.
 
-Desktop sidebar view titles staying whole at a typical rail width have a
-backend-free regression:
+Desktop sidebar view titles, saved-view icon alignment, and narrowed switcher
+labels have a backend-free regression:
 `bunx playwright test --config src/components/view-shell/browser-test/playwright.config.ts sidebar-title.browser.e2e.ts`.
 
 Agent image attachments preserve external and inline image URLs; only configured
