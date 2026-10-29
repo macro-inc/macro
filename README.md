@@ -66,7 +66,7 @@ Each surface is purpose-built for its job rather than composed from a generic bl
 
 Macro Mail is inspired by Superhuman's keyboard-first interface with a few key additions:
 
-1. Multi-account. Triage all your Google accounts in a single inbox, with the same tagging and sharing system. Or triage individually.
+1. Multi-account. Triage all your email accounts in a single inbox, with the same tagging and sharing system. Or triage individually.
 2. Unified inbox: emails, messages, @mentions, and tasks to complete, all in the same list. Use `j` `k` and `e` to navigate everything.
 3. Better AI, with a tools/MCP surface designed to work across inboxes and to help your agents more accurately retrieve information. For example, we expose a unified search tool that allows agents to search all file attachment PDFs (parsed out of email) directly, rather than pulling email threads then attachments. You can also draft, edit and send emails right from AI chats, without opening your email.
 
