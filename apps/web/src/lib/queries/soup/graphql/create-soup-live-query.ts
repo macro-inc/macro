@@ -718,7 +718,7 @@ export function createSoupLiveQuery(
               sortDirection,
               baseline,
               ...(!mailView
-                ? { limit, baseline }
+                ? { limit }
                 : through
                   ? {
                       // At least as deep as the server pages already shown.
