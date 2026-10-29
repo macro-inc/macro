@@ -112,8 +112,9 @@ export function WebhooksDialog(props: {
                           onFocus={(event) => event.currentTarget.select()}
                         />
                         <CopyButton
-                          variant="outline"
-                          label="Copy webhook URL"
+                          aria-label="Copy webhook URL"
+                          tooltip="Copy webhook URL"
+                          variant="secondary"
                           onClick={() => copy(url())}
                         >
                           <CopyIcon />
@@ -129,9 +130,10 @@ export function WebhooksDialog(props: {
                       <div class="flex items-center justify-between">
                         Example
                         <CopyButton
+                          aria-label="Copy example"
+                          tooltip="Copy example"
                           size="sm"
                           variant="ghost"
-                          label="Copy example"
                           onClick={() => copy(curl())}
                         >
                           <CopyIcon />
@@ -164,9 +166,10 @@ export function WebhooksDialog(props: {
                         {new Date(webhook.createdAt).toLocaleDateString()}
                       </span>
                       <Button
+                        aria-label="Delete webhook"
+                        tooltip="Delete webhook"
                         variant="ghost"
                         size="icon-sm"
-                        label="Delete webhook"
                         onClick={() =>
                           fireAndForget(remove(webhook), 'database-webhooks')
                         }
@@ -184,7 +187,7 @@ export function WebhooksDialog(props: {
               </Button>
               <Button
                 type="button"
-                variant="accent"
+                variant="primary"
                 disabled={pending()}
                 onClick={() => fireAndForget(create(), 'database-webhooks')}
               >

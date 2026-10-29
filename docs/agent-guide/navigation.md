@@ -191,6 +191,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/tasks/projects/<uuid>/overview` | Project detail in Tasks, with breadcrumbs, properties, description, and discussions; replace `overview` with `tasks` for the task list |
 | `/app/component/project-compose` | Native project composer, sharing the task composer layout and property controls |
 | `/app/component/new-project` | Alias for the project composer; existing links remain valid |
+| `/app/initiative/<uuid>` | Shared project link; opens the project in Tasks |
 | `/app/component/initiative-view~<uuid>~overview` | Compatibility link that opens the project in Tasks |
 | `/app/agents/<uuid>` | Chat agent session with the Agents sidebar |
 | `/app/coders/<uuid>` | Code session with the Agents sidebar |
@@ -473,7 +474,9 @@ apps of a customized sidebar), starts shown, and can be hidden like other apps.
   its surface and item styling with the sidebar right-click menus.
 - Nav: `Home`, `Drive`, `Email`, `Chat`, `Tasks`, `Calendar`,
   `Agents`, `Customers`. Calendar and Customers appear only when
-  their features are enabled.
+  their features are enabled. Calendar shows a next-meeting badge (`Now`, or
+  minutes under an hour away) unless **Next meeting countdown** is off in
+  **Settings → Calendar**.
 - Bottom: `Settings` (`Ctrl ;`) — a gear with the signed-in account's profile
   photo as a badge in its corner. It opens Settings directly in the active
   split (Shift-click for a new split); there is no account menu. Log out lives
@@ -794,8 +797,9 @@ uploading or moving anything.
 ## Favorites
 
 Use an entity's command/context menu to add or remove it from Favorites. Documents, chats,
-agent sessions, projects, email threads, channels, calls, CRM companies, and CRM
-contacts support toggling. Individual channel messages are not favoritable. A
+agent sessions, projects, email threads, channels, calls, CRM companies, CRM contacts,
+databases, and forms support toggling; database and form favorites appear in Drive's
+sidebar. Individual channel messages and pull requests are not favoritable. A
 favorited agent session disappears from the list once the session is deleted.
 
 With the GraphQL local cache enabled, cached favorites remain visible when offline
@@ -959,7 +963,10 @@ on desktop, including task, project, calendar event, skill, and agent session co
 
 Hovering an `@user` mention or a profile picture on desktop opens the user card:
 the person's name and email above Copy email, Copy name, Open contact (CRM teams
-only), DM, and Assign task. Touch devices have no hover, so tapping the mention
+only), DM, and Assign task. An agent's or bot's card offers Settings instead of
+DM when the viewer can configure it: Macro opens Settings → Agents, an agent the
+viewer manages opens straight into its Edit agent form, and a plain bot opens
+its page under Settings → Bots. Touch devices have no hover, so tapping the mention
 or the picture opens that same card as a bottom sheet; any action there runs and
 dismisses the sheet. Desktop keeps click-to-DM on the picture itself, which touch
 drops in favour of the card's DM action.
@@ -1109,10 +1116,45 @@ An `m-document-mention` with `blockName: "routine"`, the returned routine ID,
 and the saved name renders as a clickable mention in an agent reply. Once the
 routine is deleted the mention reads `Deleted` and clicking it shows a card
 instead of opening the routine. Routines do not appear in the mention menu.
-Anyone signed in with the link can view its settings, instructions, and
-triggers. Only the owner can edit, enable, run,
-duplicate, delete, or view run history; other users do not see those controls.
+Only the owner sees a routine's editor and can edit, enable, run, duplicate,
+delete, or view run history. Anyone else who opens a routine link sees its
+template when the owner shared one, and otherwise "isn't shared as a template".
 Run conversations keep their own permissions.
+
+### Routine templates
+
+A routine runs as its owner, so it is shared as a template, never directly.
+The three-dot menu's **Share as template** opens **Share: name**. It explains
+what people get, takes a **Description**, and lists **What changes for each
+person**: every mention in the instructions plus the schedules' time zone, each
+with tabs. People can be **The person activating** (the owner's own mention
+starts here), **Same for everyone**, or **They choose**; items are **Same for
+everyone** or **They choose**; the time zone is **Their time zone** or **Keep** the owner's
+zone. **Share template** publishes a snapshot of the saved routine;
+**Update template** re-snapshots it. Once shared, the dialog shows how many
+routines were activated from it, a channel-or-people picker with **Send** that
+posts the routine mention, **Copy template link** (the routine's own URL), and
+**Stop sharing**, which hides the template while activated routines keep
+running.
+
+Opening a shared routine someone else owns shows the template laid out like a
+routine's Overview: **Activate for me** at the right of the top bar, then the
+name, description, **Template by author**, activation count, triggers (marked
+"Doesn't run until you activate it"), read-only instructions, and
+**References**: dashed chips fill in as the viewer, amber ones they can't open. **Activate for me** opens **Activate for me: name**: the routine
+as it will run on the left, and on the right **Your call · N left** for each
+reference they can't open or must choose (**Keep it** / **Leave out**),
+**Filled in as you**, and **Works for you as is**. **Activate** stays disabled
+until every reference is decided, then creates the viewer's own enabled
+routine and opens it. A left-out reference becomes plain text. That routine
+behaves like any other, with a **Created from template ↗** chip beside its
+model chip that opens the template.
+
+A channel message that mentions a shared routine shows a template card under
+its text: name, author, description, triggers, activation count, **View
+template**, and **Activate for me** (hidden for the author). Mentions of
+routines that aren't shared show no card. On phones both dialogs open as
+bottom sheets.
 
 **Run History** shows outcome, duration, and firing time. History loads fifty
 rows at a time; **Load more runs** reveals older records. Accessible run rows
@@ -1173,13 +1215,27 @@ between buckets must still appear without retyping in every affected view.
 Older cache runtimes without bucket metadata, mutations, and identity resets
 refresh conservatively. For an empty search, scroll toward the end (or use
 Down); mentions offer **View all** for a category and then load more local pages.
+The @ menu ranks loaded projects and cached document/task matches together
+before choosing preview rows, with the same ranking on desktop and phone.
+Exact and prefix name matches get boosts, task projects get a type boost, and
+viewed recency and shorter names contribute. Empty-query browsing remains
+recency-led; existing People preview slots and phone pinning remain. Tuning lives
+in `MENTION_RANKING_CONFIG` in the mention menu's `utils/mention-ranking.ts`.
+Broader cache/server matches remain reachable even when the local fuzzy matcher
+would omit them. To verify, type `@task` with a project named `Task planning`
+and many recent tasks containing “task”: the project should appear in the first
+preview rows and stay near the top in **View all**. Select it with Enter or a
+phone tap and confirm a project mention is inserted.
+
 Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
 navigating/scrolling, or narrow the query, to resume from the saved cursor.
 A failed local refresh keeps displayed rows and their continuation available for
-another pagination attempt. Missing items may still be uncached, but should appear
-after hydration without retyping, including channels outside the first cached
-page. Cmd+K's
+another pagination attempt. Quick Access merges the complete channel list with
+cached channels, so known channels remain searchable before cache hydration and
+outside its recent page. Cached metadata wins for duplicate channels while newer
+viewed timestamps from either source are retained. Other uncached items should
+appear after hydration without retyping. Cmd+K's
 local search explicitly excludes email hits before limiting entity results;
 email mentions keep their separate search-service path. Text search loads only
 its requested cache buckets, so a document-only category must not read the email
@@ -1200,11 +1256,21 @@ Typed Cmd+K **People** and **All** queries find known Macro users, including
 teammates supplied by the contacts service, before their first DM and without a
 CRM record or the CRM feature. Search by name or email. Selecting a person opens
 their direct message; an existing one-to-one DM replaces the person row without
-losing name/email matches. Group DMs stay separate, and the viewer is excluded
+losing name/email matches, including DMs found by typed search beyond the recent
+channel list. Group DMs stay separate, and the viewer is excluded
 from person results. Empty queries keep the existing recency lists. Verify a
 teammate with no DM or CRM record in both categories, including with CRM disabled,
 then verify that loading their DM produces one row and that Files/Channels do not
-show that person.
+show that person. Also verify a typed match whose DM is absent from the recent
+list: desktop and mobile should show one DM row, including after a same-email CRM
+contact arrives, with its alias still searchable.
+
+Duplicate-row verification: [desktop](media/command/deduplicated-person-desktop.png)
+and [phone](media/command/deduplicated-person-mobile.png) use the real command and
+mobile search views in the backend-free universal-input fixture, with a synthetic
+person and a DM available only to typed searches. All/People each show one row;
+Enter and tap select that DM through recording-only navigation adapters. These
+captures verify result composition, not a live account's cache or backend.
 
 Browser examples: [desktop](media/command/teammate-desktop.png) and
 [mobile](media/command/teammate-mobile.png), using a known-user fixture with no DM
@@ -1236,9 +1302,20 @@ contacts.
 
 Cmd+K merges cached and locally available items before applying recency order.
 An empty query prefers when an item was last viewed, falling back to its update
-time; equal timestamps have a stable entity-type and ID order. Searching retains the menu's
-relevance/recency ranking and DM boost with GraphQL enabled. Verify that refreshing
-the cache or reopening the menu with unchanged data does not reorder the results.
+time; equal timestamps have a stable entity-type and ID order. Typed searches give
+channels (including DMs) the same 3x boost as the main search view, with the menu's
+additional 1.8x DM boost; relevance and viewed recency still order those results.
+This shared ranking also applies to mobile name search. Verify an older matching
+channel stays above recent CRM contacts and agent sessions in All, and remains
+findable in Channels while its cache entry is absent. Refreshing the cache or
+reopening the menu with unchanged data must not reorder results or duplicate a
+channel when its cache entry arrives. Hydration must also refresh ownership,
+participants, and channel type when the name and timestamps are unchanged.
+
+The `quick_access.search` trace includes `search.channel_index` attributes for
+complete-list, cached-recent-page, and merged channel counts. `last_build_ms`
+records the most recent shared channel-index build duration; that build can
+precede the search and is not a child phase of the cache request.
 
 Pending or failed Quick Access history, recently-viewed, skills, and cached-channel
 lookups must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation
@@ -1361,6 +1438,36 @@ than creating duplicate panes. If pane-history navigation reaches content owned
 by another pane, it focuses that owner without advancing the requesting pane's
 history cursor. Restoring a saved layout preserves existing duplicate panes;
 search-only updates within those panes do not collapse them.
+
+## Entity menus
+
+List rows (Search, Home, Email, Drive, Tasks, Recent, folders, Agents, Calls)
+share one right-click menu, and the mobile long-press drawer shows the same
+items. It offers an item only where its action works for the row's type:
+Rename for documents, chats, folders, calls, agent sessions, and channels you
+take part in (not DMs); Duplicate for
+documents, chats, and folders (with GraphQL Soup); Move to folder for documents, chats, folders, and email you own (a folder is
+one location shared by everyone, and its sharing passes to what it holds, so
+only the owner moves an item; the server enforces the same);
+Delete for email and owned documents, chats, folders, calls, agent sessions, and
+routines. **Download** saves uploaded files (images, video, code, PowerPoint,
+Photoshop, Illustrator, Figma, other uploads) and Word documents as `.docx`;
+Markdown documents, canvases, native spreadsheets, and PDFs download from their
+open view instead, since their download needs the loaded editor (a PDF's
+includes its markup). Tasks add **Set status**, **Set priority**, and **Set assignee**,
+which open the property editor like their shortcuts. Agent sessions add
+**Archive** / **Unarchive** for their owner. Calls offer **Share**. Pull
+requests offer **Open in new split**, **Copy GitHub Link**, **Open on GitHub**,
+and **Copy Branch Name** when the head branch is stored. Rows inside a Drive
+folder offer **Remove from folder**, as in a folder's own view. Channel message
+rows have no **Copy ID**. Email rows and the email "…" menu offer **Sender →
+Signal** for a sender in Noise and **Sender → Noise** for one in Signal, read
+from the email itself (falling back to the view's tab); when neither says, as
+for some Search rows or an email opened directly, both are offered, with
+**Block Sender**. **Mark Done** (and `e`) works in Home, the triaged
+Email tabs, and Search, where a marked row stays listed as done. On Home,
+right-click **Mark Done** moves the preview to the next item, like the `e` key. A detail view's "…" menu also offers
+**Snooze notifications…** beside Mute.
 
 ## Entity action dialogs
 

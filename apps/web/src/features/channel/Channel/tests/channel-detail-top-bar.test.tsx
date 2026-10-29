@@ -25,9 +25,9 @@ vi.mock('@app/features/soup/entity-notifications', () => ({
 vi.mock('@app/features/soup/SoupEntityActionsDropdown', () => ({
   SoupEntityActionsDropdown: (props: {
     entity: ChannelEntity;
-    triggerProps?: { label?: string };
+    triggerProps?: { 'aria-label'?: string };
   }) => (
-    <button type="button" aria-label={props.triggerProps?.label}>
+    <button type="button" aria-label={props.triggerProps?.['aria-label']}>
       {props.entity.id}
     </button>
   ),

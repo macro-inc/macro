@@ -236,7 +236,7 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
                         <p class="text-sm text-ink-muted">
                           {t('settingsNav.pageLoadFailed')}
                         </p>
-                        <Button onClick={reset}>
+                        <Button variant="ghost" onClick={reset}>
                           {t('settingsNav.tryAgain')}
                         </Button>
                       </div>
@@ -263,7 +263,7 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
                             <p role="status" class="text-sm text-ink-muted">
                               {t('settingsNav.sectionUnavailable')}
                             </p>
-                            <Button onClick={() => navigate()}>
+                            <Button variant="ghost" onClick={() => navigate()}>
                               {t('settingsNav.backToSettings')}
                             </Button>
                           </div>

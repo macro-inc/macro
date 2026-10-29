@@ -129,15 +129,43 @@
   }
 }
 
-/* The close button straddles the corner on every notification. */
+/* The close button is a notch tucked into the top-right corner, like the
+   close notch on splits: it shares the surface's edge on its inner sides and
+   follows the card's radius on its outer corner. */
 .macro-toast .macro-toast-corner-close {
   position: absolute;
   top: 0;
   right: 0;
-  transform: translate(50%, -50%);
   z-index: 1;
-  border: 1px solid var(--color-edge-muted);
-  border-radius: 50%;
+  width: 23px;
+  height: 23px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid var(--color-edge-muted);
+  border-bottom: 1px solid var(--color-edge-muted);
+  border-radius: 0 13px 0 6px;
   background: var(--color-toast);
-  box-shadow: 0 2px 6px rgb(0 0 0 / 12%);
+  color: color-mix(in oklch, var(--color-ink-muted) 70%, transparent);
+}
+
+/* The notch is smaller than the shared touch target, so extend its hit area
+   to the Button's 36px touch minimum without growing the visible notch. */
+html[data-touch-device='true'] .macro-toast .macro-toast-corner-close::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+}
+
+[data-theme-light='false'] .macro-toast .macro-toast-corner-close {
+  border-color: color-mix(in oklch, var(--color-ink) 8%, transparent);
+  background: color-mix(in oklch, var(--color-toast), var(--color-ink) 3%);
+}
+
+@media (hover: hover) {
+  .macro-toast .macro-toast-corner-close:hover {
+    background: color-mix(in oklch, var(--color-toast), var(--color-ink) 6%);
+    color: var(--color-ink);
+  }
 }

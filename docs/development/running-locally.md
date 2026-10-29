@@ -24,11 +24,15 @@ git clone https://github.com/macro-inc/macro.git
 cd macro
 ```
 
-The Nix shell provides `just`, Cargo, the Rust toolchain, Bun, `wasm-pack`, sqlx, zig, and cargo-zigbuild. You do not need to install these tools separately.
+The Nix shell provides `just`, Cargo, the Rust toolchain, Bun, `wasm-pack`, sqlx, zig, cargo-zigbuild, `prek`, and `gitleaks`. You do not need to install these tools separately.
 
 ```bash
 nix develop
 ```
+
+Entering the shell installs git hooks (`prek install`). A pre-commit hook
+scans staged added lines for customer emails, phones, addresses, and secrets.
+See `tooling/pii/exceptions` and the `git` skill.
 
 If `nix develop` fails, enable the experimental features:
 

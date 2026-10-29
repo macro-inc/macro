@@ -34,25 +34,35 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
   `TabSelector` inside a `HeaderActionGroup` or `ButtonGroup`, and never render
   a tab as a `Button`. A split button (`ButtonGroup` with a menu trigger) is
   its own island; never nest it inside another, including through
-  `SidePanel.HeaderActions`. Enforced by ast-grep `tsx-tabs-not-in-action-group`
+  `SidePanel.HeaderActions`. Use `ButtonGroup.Button` for explicit segments and
+  `variant="secondary" finish="raised"` for action frames; ordinary Buttons stay
+  independent. Enforced by ast-grep `tsx-tabs-not-in-action-group`
   and `tsx-no-button-as-tab`, CI error.
 - **FE-62** Lay out a desktop header as one row: title or breadcrumbs, then
   view tabs on the left; islands on the right in the order filters, view
   options, New, Search (detail views: entity actions, sharing, navigation,
-  detail toggle). Every control in the row is 32px: `Tabs` `md`, `icon-md` for
-  icon-only buttons (16px glyph), `md` for labelled ones (14px glyph), 8px
-  between islands. Filter, sort, group, and download live in the header, never
+  detail toggle). Detail-header groups use `sm` labelled segments and `icon-sm`
+  icon-only segments (28px controls); Drive and Tasks list-header groups use
+  `md` / `icon-md`, matching Tabs, New, and Search. Keep 8px between islands. Filter, sort, group, and download live in the header, never
   in a second toolbar row; only active filter chips sit below it.
-- **FE-63** Style controls only through their props (`variant`, `size`,
-  `fullWidth`, `iconOnly`); `class` on a control is for placement (margin,
+- **FE-63** Style controls only through their props (`variant`, `size`, `finish`,
+  `fullWidth`); `class` on a control is for placement (margin,
   width, order, shrink). Never resize or recolor a control from a wrapper
-  (`[&_button]:size-8`), and don't use `square` for new icon buttons. Enforced
+  (`[&_button]:size-8`); use an explicit `icon-*` size for icon actions. Put glyph
+  sizing on the rendered icon, not on Button or ancestor SVG selectors. Enforced
   for wrappers by ast-grep `tsx-no-descendant-button-styles`, warning.
-- **FE-64** Keep one selected state: desktop view tabs share one rounded track with an inset selected pill; a selected tab and a pressed button share
-  the pressed fill; the inset selected pill has a subtle edge and shadow, while unselected options sit within the shared outer frame. No
-  accent text, underlines, or bespoke tints for selection on desktop. The one
-  exception is the agent composer's Auto/Chat/Code switch: `Tabs variant="track"`,
-  a raised pill sliding along the composer tray's track.
+- Use `variant="primary"` for the main create, save, submit, invite, approve, or continue action. Primary uses the theme accent; the separate accent variant stays removed. Use `neutral` for solid monochrome emphasis: black with white text in light themes, white with black text in dark themes. Home/AI chat, channel, and email Send actions use the shared neutral `SendButton`. Keep the shared New launcher (`ViewCreateButton`) on `variant="secondary" finish="raised"`, and retain secondary, outline, ghost, and danger variants for their own roles.
+- Current application Button usages trial `secondary` instead of `outline`, including shared wrappers and groups. Keep the outline API and canonical Button gallery examples; do not change outline variants on badges, inputs, or other components.
+- Settings actions that previously used inverse-filled `cta` styling use explicit `variant="neutral"`, including creation, runtime setup, billing, invitation, and signature-save actions. Keep existing accent, ghost, and destructive actions in their own roles; do not recolor Button descendants from `SettingsPage`.
+- Primary, neutral, secondary, danger, and success Buttons and ButtonGroup frames automatically use the raised desktop finish and shared glass on touch. Use `finish="flat"` to opt out or `finish="raised"` to frame a ghost/link action. Outline variants, bare controls, and grouped segments always stay flat.
+- Follow the [Button and ButtonGroup contract](ui-primitives.md#button-and-buttongroup)
+  for accessible names, tooltips, sizing, explicit segments, and activation behavior.
+- **FE-64** Components own their state treatments: desktop Tabs share a flat rounded track with an inset selected pill;
+  Button uses the semantic pressed fill for its variant. Mark action toggles with
+  `aria-pressed`, and expansion triggers with `aria-expanded`. Do not restyle
+  buttons as tabs. The agent composer's Auto/Chat/Code switch remains
+  `Tabs variant="track"`, a flat pill sliding along the composer's tray. Keep all
+  tab treatments flat: use borders and selected fills, not raised edges, gradients, or shadows.
 - **FE-65** Components own their touch treatment. Never branch on
   `isTouchDevice()` to choose a tab component or variant; set `Tabs`' `touch`
   to the style that surface already uses on touch.

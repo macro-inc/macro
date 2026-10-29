@@ -71,30 +71,31 @@ export function AnimationPane(props: {
       <div class="flex h-9 items-center justify-between border-edge-muted border-b px-3">
         <span class="font-semibold text-ink text-sm">Animation Pane</span>
         <Button
+          aria-label="Close"
+          tooltip="Close"
           size="icon-sm"
           variant="ghost"
-          label="Close"
           onClick={props.onClose}
         >
-          <X />
+          <X class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
       <div class="flex items-center gap-1 border-edge-muted border-b px-2 py-1.5">
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           data-testid="pptx-animation-play"
           disabled={animations().length === 0}
           onClick={anim.preview}
         >
-          <Play />
+          <Play class="size-3 touch:size-6 shrink-0 pointer-events-none" />
           Play All
         </Button>
         <div class="flex-1" />
         <Button
+          aria-label="Move earlier"
           size="icon-sm"
           variant="ghost"
-          label="Move earlier"
           tooltip="Move Earlier"
           disabled={ro() || (anim.picked() ?? 0) === 0}
           onClick={() => {
@@ -106,12 +107,12 @@ export function AnimationPane(props: {
               );
           }}
         >
-          <ArrowUp />
+          <ArrowUp class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
         <Button
+          aria-label="Move later"
           size="icon-sm"
           variant="ghost"
-          label="Move later"
           tooltip="Move Later"
           disabled={
             ro() ||
@@ -127,7 +128,7 @@ export function AnimationPane(props: {
               );
           }}
         >
-          <ArrowDown />
+          <ArrowDown class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
       <div class="min-h-0 flex-1 overflow-y-auto p-1" role="listbox">

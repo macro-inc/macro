@@ -72,9 +72,11 @@ Choose **Save signature** to save edits and return to the canonical preview.
 after clearing, reopening Rich text starts empty. It leaves the inbox connected, while
 **Remove inbox** in Accounts uses the existing inbox removal confirmation.
 **Add to replies & forwards** saves that preference immediately. On desktop,
-**Import from Gmail** in each inbox's header fetches that account's Gmail
+**Import from Gmail** in each Gmail inbox's header fetches that account's Gmail
 signature and saves it right away, replacing any unsaved draft; a toast reports
-when Gmail has no signature. Unsaved drafts
+when Gmail has no signature. Outlook inboxes offer Rich text and HTML editing
+without a Gmail import action. The import action uses the inbox's provider,
+not its email domain. Unsaved drafts
 survive switching settings pages. On phones, the signature preview, replies/forwards
 toggle, and clear action are available; editing and import remain desktop-only.
 Email accounts can also be managed from **Integrations**. Its **Email settings**
@@ -90,6 +92,9 @@ conversion and verify the saved HTML is unchanged. Check the preview on a phone
 and ensure a wide signature scrolls inside its own preview instead of the page.
 Save a signature created in Rich text, reopen settings, and confirm Rich text
 editing resumes without a conversion prompt.
+With Gmail and Outlook inboxes connected, confirm only Gmail offers import
+(including Gmail accounts on a custom domain), while both support HTML and Rich
+text editing. Empty Outlook signatures must not suggest Gmail import.
 Type an unsaved Rich text draft and clear it, both with and without an existing
 saved signature. Reopen settings and confirm the editor stays empty and the
 composer no longer includes a signature. A delayed clear must preserve a newer
@@ -282,14 +287,18 @@ Left nav (feature and platform gates still apply):
 - **Developer**: Runtimes, MCP server, API Keys, Bots.
 
 **Desktop App** (`/app/settings/desktop-app`) is titled
-**Desktop App (Alpha)** and shows a compact version and build-date card in the
-desktop app. The date is when the running app bundle was built, not when it was
-installed on the computer. In the browser it links to the latest desktop release
+**Desktop App (Alpha)** and shows a compact Version, Build date, and Bundle
+date card in the desktop app. Build date is when the running JavaScript was
+built, not when it was installed on the computer. Bundle date is when the active
+OTA bundle was built (from `get_bundle_debug_info`), or **No OTA update** while
+the app's embedded bundle runs. In the browser it links to the latest desktop release
 on GitHub, and only appears when the `desktop-app` PostHog flag is enabled. Native desktop always shows this section regardless of the flag;
 native mobile never shows it.
 
-The **Mobile App** page is titled **Mobile app** and offers a QR code
-to download **Macro** from the App Store.
+The **Mobile App** page is titled **Mobile app**. In the browser it offers a QR
+code to download **Macro** from the App Store; inside the iOS and Android apps
+it shows the same Version, Build date, and Bundle date card as the desktop app,
+and the sidebar's **Get the mobile app** button stays hidden.
 
 Search checks individual setting titles and keywords, tolerates common typos,
 and shows the parent page below each control result. Selecting a result opens
@@ -360,7 +369,11 @@ only; without a team it is the only dropdown. A browser language the app isn't
 offered in falls back to English. Menus, navigation, the command and
 create menus, and settings navigation switch language as soon as the setting
 saves; page contents and user data stay as written. The choice is remembered on
-the device, so the next launch starts in the same language.
+the device, so the next launch starts in the same language. Once that resolved
+language has loaded, PostHog stores it on the person as `interface_language`
+(a tag such as `en` or `zh-Hans`). A usage pie is a Trends insight on
+`$pageview`, unique users, broken down by the person property
+`interface_language`.
 
 Existing settings URLs remain valid; `connections` still opens Integrations,
 `agent-connections` aliases Integrations, and `harness` aliases Runtimes.

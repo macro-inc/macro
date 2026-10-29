@@ -18,15 +18,14 @@ import {
 } from 'solid-js';
 import type { Swatch } from '../../core/palette';
 
-/** An icon button; `active` shows a pressed state. */
-export function RibbonButton(props: ButtonProps & { active?: boolean }) {
-  const [local, rest] = splitProps(props, ['active', 'class']);
+/** An icon button; `aria-pressed` shows a pressed state. */
+export function RibbonButton(props: ButtonProps) {
+  const [local, rest] = splitProps(props, ['aria-pressed', 'class']);
   return (
     <Button
-      variant={local.active ? 'accent' : 'ghost'}
+      variant={local['aria-pressed'] ? 'primary' : 'ghost'}
       size="icon-sm"
-      square
-      aria-pressed={local.active === undefined ? undefined : local.active}
+      aria-pressed={local['aria-pressed']}
       class={cn('size-7 rounded-md p-1', local.class)}
       {...rest}
     />
@@ -39,8 +38,7 @@ export function RibbonTextButton(props: ButtonProps) {
   return (
     <Button
       variant="ghost"
-      size="sm"
-      square
+      size="icon-sm"
       class={cn('h-7 gap-1 rounded-md px-1.5 text-xs', local.class)}
       {...rest}
     />
@@ -83,12 +81,11 @@ export function RibbonPopover(props: {
       gutter={4}
     >
       <Popover.Trigger
+        aria-label={props.label}
         as={Button}
         variant="ghost"
-        size="sm"
-        square
+        size="icon-sm"
         class="h-7 gap-0.5 rounded-md px-1.5 text-xs"
-        label={props.label}
         tooltip={props.label}
         disabled={props.disabled}
         data-testid={props.testId}

@@ -49,12 +49,12 @@ function StreamDebuggerWithControlsInner(props: {
             setStream(stream);
             chat.setStream(stream);
           }}
-          variant="accent"
+          variant="primary"
         >
           Stream
         </Button>
         <Button
-          variant="accent"
+          variant="primary"
           onClick={() => {
             setStream(undefined);
             chat.setMessages([]);

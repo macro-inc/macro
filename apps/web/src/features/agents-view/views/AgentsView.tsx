@@ -1,5 +1,6 @@
 import { ViewShell } from '@app/components/view-shell';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
+import { markAgentSessionNotificationsSeenOnOpen } from '@app/features/block-agent/mark-session-notifications-seen';
 import { AgentSettings } from '@app/features/settings/AgentSettings';
 import { IntegrationsPage } from '@app/features/settings/IntegrationsPage';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
@@ -366,9 +367,14 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       onSearchChange={setSearch}
       showUnlistedRuns={showUnlistedRuns()}
       onShowUnlistedRunsChange={setShowUnlistedRuns}
-      onOpenConversation={(conversation, event) =>
-        openConversation(conversation, event, modeForConversation(conversation))
-      }
+      onOpenConversation={(conversation, event) => {
+        markAgentSessionNotificationsSeenOnOpen(conversation, notifications);
+        openConversation(
+          conversation,
+          event,
+          modeForConversation(conversation)
+        );
+      }}
       onRetry={() => fireAndForget(query.refetch(), 'agents-view')}
       onLoadMore={() => fireAndForget(query.fetchNextPage(), 'agents-view')}
     />

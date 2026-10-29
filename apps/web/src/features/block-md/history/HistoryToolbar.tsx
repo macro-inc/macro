@@ -49,7 +49,7 @@ export function HistoryToolbar(props: { onClose: () => void }) {
         onClick={props.onClose}
         aria-label="Close history"
       >
-        <XIcon />
+        <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
       </Button>
       <div class="min-w-0 flex-1">
         <h2 class="text-sm font-medium">Document history</h2>
@@ -68,7 +68,7 @@ export function HistoryToolbar(props: { onClose: () => void }) {
         Current version
       </Button>
       <Button
-        variant="outline"
+        variant="secondary"
         size="sm"
         onClick={handleFork}
         disabled={

@@ -1,5 +1,7 @@
 use super::*;
-use crate::domain::error::{PromptRefusal, SessionError};
+use crate::domain::error::{
+    FailureLink, FailureNotice, FailureNoticeKind, PromptRefusal, SessionError,
+};
 use crate::domain::event::{CursorEvent, InteractionUpdate, ToolCallEvent, Truncation};
 use crate::domain::journal::NativeRecord;
 use crate::domain::model::{
@@ -647,12 +649,22 @@ async fn an_error_run_status_fails_the_turn() {
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
 
-    assert!(
-        matches!(
-            service.prompt(&session, "hi").await,
-            Err(SessionError::Cursor(_))
-        ),
-        "a run that ended in Error must not report a stop reason"
+    let Err(SessionError::Rejected(refusal)) = service.prompt(&session, "hi").await else {
+        panic!("a run that ended in Error must not report a stop reason");
+    };
+    assert_eq!(
+        refusal.notice.map(|notice| *notice),
+        Some(FailureNotice {
+            kind: FailureNoticeKind::ProviderRunFailed,
+            title: "Cursor run failed".to_owned(),
+            body: "Cursor stopped this run with an error. Open the run in Cursor to see why, \
+                   then send another message to continue."
+                .to_owned(),
+            link: Some(FailureLink {
+                label: "Open in Cursor".to_owned(),
+                url: "https://cursor.com/agents/bc-fake".to_owned(),
+            }),
+        })
     );
 }
 

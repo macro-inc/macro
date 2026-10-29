@@ -33,6 +33,30 @@ test('a menu under a composer near the top still opens below it', async ({
   expect(menu.height).toBeGreaterThanOrEqual(256);
 });
 
+async function formatMenuGap(page: Page, query: string) {
+  await page.goto(`${fixture}?fixture=clipped-selection${query}`);
+  const menu = page.getByTestId('format-menu');
+  await expect.poll(() => menu.evaluate((el) => el.style.top)).toMatch(/px$/);
+  const menuBox = await menu.boundingBox();
+  const shell = await page.getByTestId('editor-shell').boundingBox();
+  if (!menuBox || !shell) throw new Error('menu or editor not laid out');
+  return menuBox.y - (shell.y + shell.height);
+}
+
+test('a format menu over a selection clipped by a scrolling editor stays beside the editor', async ({
+  page,
+}) => {
+  const gap = await formatMenuGap(page, '');
+  expect(gap).toBeGreaterThanOrEqual(0);
+  expect(gap).toBeLessThanOrEqual(16);
+});
+
+test('without clipping, the menu follows the hidden end of the selection', async ({
+  page,
+}) => {
+  expect(await formatMenuGap(page, '&clip=0')).toBeGreaterThan(200);
+});
+
 test('a picker that focuses its search field stays visible above a bottom composer', async ({
   page,
 }) => {

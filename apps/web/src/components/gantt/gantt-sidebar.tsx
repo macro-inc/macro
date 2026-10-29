@@ -19,14 +19,16 @@ export function GanttSidebarToggle() {
   return (
     <div class="absolute left-3 top-2 z-40">
       <Button
-        depth={2}
-        ref={gantt.sidebar.setTrigger}
-        size="icon-md"
-        variant="outline"
-        class="bg-surface shadow-sm"
-        label={
+        aria-label={
           gantt.sidebar.open() ? 'Hide timeline items' : 'Show timeline items'
         }
+        tooltip={
+          gantt.sidebar.open() ? 'Hide timeline items' : 'Show timeline items'
+        }
+        ref={gantt.sidebar.setTrigger}
+        size="icon-md"
+        variant="secondary"
+        class="bg-surface shadow-sm"
         aria-expanded={gantt.sidebar.open()}
         disabled={gantt.editing()}
         onClick={() => gantt.sidebar.setOpen(!gantt.sidebar.open())}

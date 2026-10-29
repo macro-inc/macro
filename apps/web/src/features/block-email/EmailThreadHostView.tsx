@@ -12,6 +12,7 @@ import {
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildMentionMarkdownString } from '@macro-inc/lexical-core';
 import type { Accessor, JSX } from 'solid-js';
@@ -97,16 +98,22 @@ function ThreadActions(props: { title: string; onCreateTask: () => void }) {
   const context = useEmailThreadState();
   return (
     <SidePanel.HeaderActions>
-      <HeaderActionGroup label="Actions">
+      <HeaderActionGroup label="Actions" size="md">
         <Show when={context.thread()?.db_id}>
           {(id) => (
             <AskMacroButton
+              grouped
+              size={isTouchDevice() ? undefined : 'icon-md'}
               entity={{ type: 'email', id: id(), name: props.title }}
             />
           )}
         </Show>
         <Show when={context.thread()?.db_id}>
-          <EmailTaskButton onClick={props.onCreateTask} />
+          <EmailTaskButton
+            grouped
+            size={isTouchDevice() ? undefined : 'icon-md'}
+            onClick={props.onCreateTask}
+          />
         </Show>
       </HeaderActionGroup>
     </SidePanel.HeaderActions>

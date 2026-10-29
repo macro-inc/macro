@@ -19,9 +19,11 @@ use worker::{
 
 use crate::{
     auth::{AccessLevel, TokenFrom, WriteAccess, decode_jwt, socket_access},
-    constants::USER_PEER_D1_BINDING,
-    d1::{PeerWithUserId, get_user_id_from_peer_id, insert_user_mapping},
-    domain::document::DocumentAttribution,
+    constants::{SYSTEM_AUTHOR_ID, USER_PEER_D1_BINDING},
+    d1::{
+        PeerWithUserId, get_user_id_from_peer_id, insert_missing_user_mappings, insert_user_mapping,
+    },
+    domain::document::{DocumentAttribution, writing_peers},
     dss_internal::InteractionReason,
     error::ResultExt,
     generated::schema::InitializeFromSnapshotRequest,
@@ -145,6 +147,9 @@ pub struct DocumentSyncSession {
     pending_blame: Arc<Mutex<Vec<crate::d1::BlameEvent>>>,
     /// Distinct editors since the last snapshot notification.
     pending_editors: Arc<Mutex<BTreeSet<DocumentAttribution>>>,
+    /// Writing peers already recorded in D1 since this object woke, so
+    /// updates skip remapping them.
+    mapped_writing_peers: Mutex<BTreeSet<u64>>,
     surface_lifecycle: Mutex<Option<SurfaceLifecycle>>,
     source_migration: Mutex<Option<surface_migration::SourceState>>,
     // Serialize whole callbacks, including persistence awaits. A freeze must
@@ -503,6 +508,13 @@ impl DocumentSyncSession {
             debug!(document_id = document_id, "Initializing snapshot");
             let body_raw = req.bytes().await?;
             let body = InitializeFromSnapshotRequest::deserialize(&body_raw).with_context(|| format!("Failed to deserialize InitializeFromSnapshotRequest with document_id: [{document_id}]"))?;
+            // Services initialize documents (imports, uploads, copies), so the
+            // snapshot's peers belong to the system author unless already mapped.
+            // Mapped before storing: a failed store is retried, a stored one is not.
+            let writers = writing_peers(&body.snapshot)
+                .map_err(|error| Error::from(format!("invalid initial snapshot: {error}")))?;
+            let db = self.env.d1(USER_PEER_D1_BINDING)?;
+            insert_missing_user_mappings(&db, document_id, SYSTEM_AUTHOR_ID, &writers).await?;
             storage.store_snapshot(&body.snapshot).await?;
             *self
                 .document_id
@@ -1007,6 +1019,7 @@ impl DurableObject for DocumentSyncSession {
             inbound: Arc::new(Mutex::new(HashMap::new())),
             pending_blame: Arc::new(Mutex::new(Vec::new())),
             pending_editors: Arc::new(Mutex::new(Default::default())),
+            mapped_writing_peers: Mutex::new(Default::default()),
             surface_lifecycle: Mutex::new(None),
             source_migration: Mutex::new(None),
             mutation_barrier: futures::lock::Mutex::new(()),

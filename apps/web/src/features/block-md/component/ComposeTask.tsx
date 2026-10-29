@@ -20,7 +20,9 @@ import type { PortalScope } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { onElementConnect } from '@core/util/onElementConnect';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
@@ -38,7 +40,7 @@ import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { useUserTeamsQuery } from '@queries/team/teams';
 import { debounce } from '@solid-primitives/scheduled';
 import { useQueryClient } from '@tanstack/solid-query';
-import { Button, EntityComposer, Scroll, ToggleSwitch, Tooltip } from '@ui';
+import { Button, cn, EntityComposer, Scroll, ToggleSwitch, Tooltip } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import {
   createEffect,
@@ -61,6 +63,7 @@ import {
 } from '../util/taskComposerProperties';
 import {
   clearTaskComposerDraft,
+  createTaskComposerLinkInSource,
   createTaskComposerSharing,
   loadTaskComposerDraft,
   saveTaskComposerDraft,
@@ -125,6 +128,14 @@ export interface ComposeTaskProps {
    * Pairs with onCreateStart for placeholder cleanup.
    */
   onCreateFailure?: () => void;
+  /**
+   * Offers a toggle that links the created task back where it was composed
+   * from; `insert` runs after creation while the toggle is on.
+   */
+  linkInSource?: {
+    label: string;
+    insert: (result: ComposeTaskSuccess) => void;
+  };
 }
 
 export function ComposeTask(props: ComposeTaskProps) {
@@ -231,6 +242,11 @@ export function ComposeTask(props: ComposeTaskProps) {
   const [shareWithTeam, setShareWithTeam] = createTaskComposerSharing(
     recovered?.shareWithTeam
   );
+  const [linkInSourceEnabled, setLinkInSourceEnabled] =
+    createTaskComposerLinkInSource();
+  const linkCreatedTask = (result: ComposeTaskSuccess) => {
+    if (linkInSourceEnabled()) props.linkInSource?.insert(result);
+  };
   const [errorMessage, setErrorMessage] = createSignal<string>('');
   const userTeams = useUserTeamsQuery();
   const team = () =>
@@ -578,6 +594,7 @@ export function ComposeTask(props: ComposeTaskProps) {
         'compose-task'
       );
     }
+    linkCreatedTask({ documentId, title: taskTitle, content: taskContent });
     props.onCreateTask?.(taskTitle, taskContent);
   };
   const handleCreateTask = () => createTask(false);
@@ -705,6 +722,30 @@ export function ComposeTask(props: ComposeTaskProps) {
   const portalScope = (): PortalScope =>
     splitPanel.handle.isPopover() ? 'local' : 'block';
 
+  // In the phone sheet the keyboard leaves too little room for the whole
+  // composer, so the footer pins to the bottom of the sheet's scroll. It only
+  // takes a background while pinned over content; at rest it would show as a
+  // band against the glass sheet.
+  const pinsFooter = () => isTouchDevice() && splitPanel.handle.isPopover();
+  const [footerPinned, setFooterPinned] = createSignal(false);
+  const observeFooter = (footer: HTMLElement) => {
+    if (!pinsFooter()) return;
+    onElementConnect(footer, () => {
+      const observer = new IntersectionObserver(
+        ([entry]) => setFooterPinned(!!entry && entry.intersectionRatio < 1),
+        {
+          root: footer.closest('[data-drawer-scroll-body]'),
+          // At rest the footer ends 16px above the viewport's bottom edge;
+          // pinned, it reaches the edge.
+          rootMargin: '0px 0px -15px 0px',
+          threshold: 1,
+        }
+      );
+      observer.observe(footer);
+      onCleanup(() => observer.disconnect());
+    });
+  };
+
   return (
     <EntityComposer.Root tabIndex={-1} ref={setContainerRef}>
       <EntityComposer.Header>
@@ -715,9 +756,10 @@ export function ComposeTask(props: ComposeTaskProps) {
               disabled={isCreating()}
               tabIndex={-1}
               tooltip="Continue editing in split"
-              size="icon-composer"
+              variant="ghost"
+              size="icon-md"
             >
-              <ArrowsOutIcon />
+              <ArrowsOutIcon class="size-4 shrink-0 pointer-events-none" />
             </Button>
           </Show>
         </div>
@@ -727,10 +769,8 @@ export function ComposeTask(props: ComposeTaskProps) {
             disabled={isCreating()}
             tabIndex={-1}
             tooltip="Clear Draft"
-            size="sm"
-            variant="outline"
-            depth={3}
-            class="bg-surface px-3"
+            size="xs"
+            variant="secondary"
           >
             Clear Draft
           </Button>
@@ -740,9 +780,10 @@ export function ComposeTask(props: ComposeTaskProps) {
             onMouseDown={handleClose}
             tabIndex={-1}
             tooltip="Close"
-            size="icon-composer"
+            variant="ghost"
+            size="icon-md"
           >
-            <XIcon />
+            <XIcon class="size-4 shrink-0 pointer-events-none" />
           </Button>
         </Show>
       </EntityComposer.Header>
@@ -763,6 +804,8 @@ export function ComposeTask(props: ComposeTaskProps) {
             <TaskTitleAccessory>
               <InlineTagsPill
                 docTags={composerTags}
+                variant="secondary"
+                size="xs"
                 showPlaceholder
                 class="shrink-0"
                 onActiveChange={handleTitleTagPickerActive}
@@ -811,7 +854,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           </Scroll>
         </EntityComposer.Body>
 
-        <div class="shrink-0 flex items-center py-2 -ml-1 touch:-ml-[3px]">
+        <div class="shrink-0 flex items-center py-2">
           <input
             ref={(el) => {
               attachInputRef = el;
@@ -826,9 +869,10 @@ export function ComposeTask(props: ComposeTaskProps) {
             onMouseDown={() => attachInputRef?.click()}
             tabIndex={-1}
             tooltip="Attach image or video"
-            size="icon-composer"
+            variant="ghost"
+            size="icon-md"
           >
-            <PaperclipIcon />
+            <PaperclipIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </div>
 
@@ -883,7 +927,12 @@ export function ComposeTask(props: ComposeTaskProps) {
                 )}
               </For>
               <Show when={tagLayoutMode() === 'bottom'}>
-                <InlineTagsPill docTags={composerTags} showPlaceholder />
+                <InlineTagsPill
+                  docTags={composerTags}
+                  variant="secondary"
+                  size="xs"
+                  showPlaceholder
+                />
               </Show>
               <TaskComposerPropertyEditor
                 name={title()}
@@ -909,7 +958,17 @@ export function ComposeTask(props: ComposeTaskProps) {
 
       {/* The team switch, Create More and Create Task need about 400px; a
           phone is narrower, so the actions wrap to their own row. */}
-      <EntityComposer.Footer class="flex-wrap items-center">
+      <EntityComposer.Footer
+        ref={observeFooter}
+        class={cn(
+          'flex-wrap items-center',
+          // -bottom-4 offsets the scroll body's bottom padding, which sticky
+          // positioning insets from.
+          pinsFooter() &&
+            'sticky -bottom-4 z-1 -mx-4 -mt-3 -mb-4 px-4 pt-3 pb-4',
+          footerPinned() && 'bg-menu'
+        )}
+      >
         <Show when={team()}>
           {(team) => (
             <Tooltip label={sharingHint()} tabIndex={0}>
@@ -925,6 +984,16 @@ export function ComposeTask(props: ComposeTaskProps) {
           )}
         </Show>
         <div class="ml-auto flex items-center gap-3">
+          <Show when={props.linkInSource}>
+            {(linkInSource) => (
+              <ToggleSwitch
+                labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
+                onChange={setLinkInSourceEnabled}
+                checked={linkInSourceEnabled()}
+                label={linkInSource().label}
+              />
+            )}
+          </Show>
           <ToggleSwitch
             labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
             onChange={setCreateMore}
@@ -933,7 +1002,8 @@ export function ComposeTask(props: ComposeTaskProps) {
             label="Create More"
           />
           <EntityComposer.Submit
-            variant="strong"
+            variant="primary"
+            size="sm"
             onClick={handleCreateTask}
             disabled={title().trim().length === 0 || isCreating()}
             hasContent={title().trim().length > 0}

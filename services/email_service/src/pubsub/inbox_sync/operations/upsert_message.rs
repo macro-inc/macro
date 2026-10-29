@@ -1,3 +1,4 @@
+use super::pending_labels;
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::inbox_sync::email_api_error::handle_operation_error;
 use crate::pubsub::util::{
@@ -17,10 +18,11 @@ use email::domain::events::{
 use email::domain::models::{PreviewCursorQuery, PreviewView, PreviewViewStandardLabel};
 use email::domain::ports::EmailRepo;
 use email::outbound::EmailPgRepo;
-use email_api_client::domain::models::EmailApiError;
+use email_api_client::domain::models::{EmailApiError, MessageWithCalendarParts};
 use email_db_client::attachments::provider::upload_filters::{
     attachment_is_document, attachment_is_media,
 };
+use email_db_client::messages::insert::ResyncSnapshot;
 use email_db_client::threads;
 use email_utils::{dedupe_emails, is_macro_notification_sender};
 use filter_ast::Expr;
@@ -81,6 +83,28 @@ fn select_message_sync_event(
     }
 }
 
+/// Fetches the message from Gmail, or `None` when Gmail no longer has it.
+async fn fetch_provider_message(
+    ctx: &PubSubContext,
+    link: &link::Link,
+    payload: &UpsertMessagePayload,
+) -> result::Result<Option<MessageWithCalendarParts>, ProcessingError> {
+    match ctx
+        .email_api
+        .get_message(link.id, &payload.provider_message_id)
+        .await
+    {
+        Ok(fetched) => Ok(fetched),
+        Err(error) => Err(handle_operation_error(
+            ctx,
+            link.id,
+            InboxSyncOperation::UpsertMessage(payload.clone()),
+            error,
+        )
+        .await),
+    }
+}
+
 // upsert a message into the db. could be a new message or an existing one that had changes
 #[tracing::instrument(skip(ctx))]
 pub async fn upsert_message(
@@ -88,26 +112,47 @@ pub async fn upsert_message(
     link: &link::Link,
     payload: &UpsertMessagePayload,
 ) -> result::Result<(), ProcessingError> {
-    let provider_message = ctx
-        .email_api
-        .get_message(link.id, &payload.provider_message_id)
-        .await;
-    let fetched = match provider_message {
-        Ok(Some(fetched)) => fetched,
-        Ok(None) => {
-            tracing::debug!(provider_message_id = %payload.provider_message_id, link_id = %link.id,
-                "Message not found in gmail when attempting to upsert");
-            return Ok(());
-        }
-        Err(error) => {
-            return Err(handle_operation_error(
-                ctx,
-                link.id,
-                InboxSyncOperation::UpsertMessage(payload.clone()),
-                error,
+    // Snapshot the previous draft state before the upsert. Provider drafts are mutable,
+    // and this state distinguishes a draft-to-sent transition from an unchanged message.
+    let existing_message =
+        email_db_client::messages::get_simple_messages::get_simple_message_by_provider_and_link(
+            &ctx.db,
+            &payload.provider_message_id,
+            &link.id,
+        )
+        .await
+        .map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e
+                    .context("Failed to fetch existing message before provider upsert".to_string()),
+            })
+        })?;
+    let existing_message_was_draft = existing_message.as_ref().map(|message| message.is_draft);
+    let message_already_exists = existing_message.is_some();
+
+    let (fetched, resync) = match &existing_message {
+        Some(existing) => {
+            let (fetched, snapshot) = pending_labels::resync_around(
+                &ctx.db,
+                existing.db_id,
+                Box::pin(fetch_provider_message(ctx, link, payload)),
             )
-            .await);
+            .await
+            .map_err(|e| {
+                ProcessingError::Retryable(DetailedError {
+                    reason: FailureReason::DatabaseQueryFailed,
+                    source: e.context("Failed to read the stored message before its re-sync"),
+                })
+            })?;
+            (fetched?, Some(snapshot))
         }
+        None => (fetch_provider_message(ctx, link, payload).await?, None),
+    };
+    let Some(fetched) = fetched else {
+        tracing::debug!(provider_message_id = %payload.provider_message_id, link_id = %link.id,
+            "Message not found in gmail when attempting to upsert");
+        return Ok(());
     };
     let mut message = fetched.message;
 
@@ -194,25 +239,6 @@ pub async fn upsert_message(
         })
     })?;
 
-    // Snapshot the previous draft state before the upsert. Provider drafts are mutable,
-    // and this state distinguishes a draft-to-sent transition from an unchanged message.
-    let existing_message =
-        email_db_client::messages::get_simple_messages::get_simple_message_by_provider_and_link(
-            &ctx.db,
-            &payload.provider_message_id,
-            &link.id,
-        )
-        .await
-        .map_err(|e| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e
-                    .context("Failed to fetch existing message before provider upsert".to_string()),
-            })
-        })?;
-    let existing_message_was_draft = existing_message.as_ref().map(|message| message.is_draft);
-    let message_already_exists = existing_message.is_some();
-
     let is_new_thread = !thread_provider_to_db_map.contains_key(&provider_thread_id);
 
     // if the message's thread doesn't exist in the database, we need to fetch and insert the whole thread.
@@ -220,7 +246,14 @@ pub async fn upsert_message(
     if let Some(thread_db_id) = thread_provider_to_db_map.get(&provider_thread_id) {
         // Retryable: a concurrent delete can drop the thread after the lookup
         // above, and the redelivery then takes the whole-thread branch below.
-        process_and_insert_message(&ctx.db, link.id, *thread_db_id, &mut message).await?;
+        process_and_insert_message(
+            &ctx.db,
+            link.id,
+            *thread_db_id,
+            &mut message,
+            resync.as_ref(),
+        )
+        .await?;
     } else {
         // Propagated verbatim: fetch_and_insert_thread already routed provider
         // errors through handle_operation_error (retry queue vs redelivery),
@@ -689,17 +722,25 @@ async fn process_and_insert_message(
     link_id: Uuid,
     thread_db_id: Uuid,
     message: &mut Message,
+    resync: Option<&ResyncSnapshot>,
 ) -> result::Result<(), ProcessingError> {
     process_message_pre_insert(message).await;
 
-    email_db_client::messages::insert::insert_message(db, thread_db_id, message, link_id, true)
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to insert message".to_string()),
-            })
+    email_db_client::messages::insert::insert_message(
+        db,
+        thread_db_id,
+        message,
+        link_id,
+        true,
+        resync,
+    )
+    .await
+    .map_err(|e| {
+        ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: e.context("Failed to insert message".to_string()),
         })
+    })
 }
 
 /// Notify downstream services about new message in a user's inbox

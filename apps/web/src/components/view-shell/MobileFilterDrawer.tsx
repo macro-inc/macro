@@ -64,14 +64,13 @@ function Root(props: MobileFilterDrawerProps) {
         as={Button}
         aria-label={props.triggerLabel ?? 'Open filters'}
         variant="ghost"
-        size="sm"
-        depth={3}
+        size="icon-md"
         class={cn(
-          'island bg-chrome pointer-events-auto relative z-10 size-10 shrink-0 rounded-full [&_svg]:size-6',
+          'island bg-chrome pointer-events-auto relative z-10 size-10 shrink-0 rounded-full',
           props.class
         )}
       >
-        <SlidersHorizontalIcon />
+        <SlidersHorizontalIcon class="size-6 shrink-0" />
         <Show when={props.activeCount > 0}>
           <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-4 translate-x-1/2 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
             {props.activeCount}

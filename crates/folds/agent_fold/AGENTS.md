@@ -66,9 +66,18 @@ keep deserialization compatible with existing flat rows. Exact `<noop/>` is buff
 turns without tool activity; lifecycle still reports the turn ending. User turns
 and tool-bearing turns preserve the literal text.
 
+Claude Code injects background-task reports (`<task-notification>`) as user
+turns. `claude_fold` copies the transcript's `origin` to
+`_meta.claudeCode.origin`; only that tag makes a user chunk a
+`TaskNotification` agent part in the open turn. Untagged text, even identical
+XML, stays a prompt.
+
 Server-added invocation context is marked by the protocol’s block metadata.
 Omit those blocks from user messages, including replay; preserve unmarked text
 even when it contains agent-context tags.
+
+Terminal failures remain `TurnState::Failed` until a new turn starts; the existing
+session projection carries that state to list rows without loading transcripts.
 
 ## Checks
 

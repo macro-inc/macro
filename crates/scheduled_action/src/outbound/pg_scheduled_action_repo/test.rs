@@ -18,20 +18,20 @@ use crate::domain::models::{
 };
 use crate::domain::ports::ScheduledActionRepo;
 
-const USER_A: &str = "macro|sched-a@macro.com";
-const USER_B: &str = "macro|sched-b@macro.com";
+pub(crate) const USER_A: &str = "macro|sched-a@macro.com";
+pub(crate) const USER_B: &str = "macro|sched-b@macro.com";
 const DAILY_9AM: &str = "0 0 9 * * *";
 
 fn user(id: &'static str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(id).expect("valid user id")
 }
 
-fn user_owner(id: &'static str) -> Owner {
+pub(crate) fn user_owner(id: &'static str) -> Owner {
     Owner::User(user(id))
 }
 
 #[derive(Clone)]
-struct NoBots;
+pub(crate) struct NoBots;
 
 impl BotFacts for NoBots {
     async fn sponsor(&self, _bot: bot_id::BotId) -> EntityRegistryResult<Option<Owner>> {
@@ -48,7 +48,7 @@ impl BotFacts for SponsoredBy {
     }
 }
 
-fn test_repo(pool: PgPool) -> PgScheduledActionRepo<NoBots> {
+pub(crate) fn test_repo(pool: PgPool) -> PgScheduledActionRepo<NoBots> {
     PgScheduledActionRepo::new(
         pool,
         OwnedEntityRegistrar::new(OwnerGrantPolicy::new(NoBots)),
@@ -74,7 +74,7 @@ async fn direct_grants(pool: &PgPool, id: Uuid) -> Vec<(String, String, String)>
     .collect()
 }
 
-async fn insert_user(pool: &PgPool, id: &str) {
+pub(crate) async fn insert_user(pool: &PgPool, id: &str) {
     let macro_user_id = macro_uuid::generate_uuid_v7();
     sqlx::query!(
         r#"INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $2)"#,
@@ -94,7 +94,7 @@ async fn insert_user(pool: &PgPool, id: &str) {
     .expect("user should insert");
 }
 
-fn sample_action(owner: Owner, name: &str) -> ScheduledAction {
+pub(crate) fn sample_action(owner: Owner, name: &str) -> ScheduledAction {
     let now = Utc::now();
     let schedule = Schedule::from_cron(DAILY_9AM.to_string()).expect("valid cron");
     let timezone = chrono_tz::UTC;
@@ -116,6 +116,7 @@ fn sample_action(owner: Owner, name: &str) -> ScheduledAction {
         next_run_at: Some(next_run_at),
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     }
 }
 

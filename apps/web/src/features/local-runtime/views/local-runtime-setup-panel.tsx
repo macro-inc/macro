@@ -168,7 +168,7 @@ export function LocalRuntimeSetupPanel(props: {
               <div class="flex items-center gap-2">
                 <Button
                   type="button"
-                  variant="cta"
+                  variant="primary"
                   size="sm"
                   onClick={() => openSession(state().agent)}
                 >
@@ -208,7 +208,7 @@ export function LocalRuntimeSetupPanel(props: {
             <p class="text-sm text-ink-muted">{t('localRuntime.noAgents')}</p>
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               size="sm"
               disabled={setup.scanning()}
               onClick={() => fireAndForget(setup.scan(), 'local-runtime-setup')}
@@ -245,7 +245,7 @@ export function LocalRuntimeSetupPanel(props: {
             <div>
               <Button
                 type="button"
-                variant="cta"
+                variant="primary"
                 size="sm"
                 disabled={!chosenAgent()}
                 onClick={start}
@@ -265,7 +265,7 @@ export function LocalRuntimeSetupPanel(props: {
               <div>
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   onClick={() =>
                     fireAndForget(setup.run(choices()), 'local-runtime-setup')

@@ -25,7 +25,7 @@ export function PermissionPart(props: {
     if (!chosen) return 'Answered';
     return match(chosen.kind)
       .with('allow_once', () => 'Allowed once')
-      .with('allow_always', () => 'Approval remembered')
+      .with('allow_always', () => 'Always allowed')
       .with('reject_once', () => 'Denied')
       .with('reject_always', () => 'Denial remembered')
       .exhaustive();
