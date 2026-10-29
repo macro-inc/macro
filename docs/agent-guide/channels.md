@@ -136,16 +136,20 @@ controls to continue. If **Stop** fails, a failure toast appears and the control
 becomes available again so you can retry.
 
 The reply is posted as ordinary messages while the turn runs. Each finished
-passage becomes a message. The steps taken between passages show inside the
-message as compact rows: a status icon (spinner, check, cross, or warning for
-interrupted), a label such as `Ran`, `Read`, `Edited`, or `Searching`, and a
-short detail like the command or file name for readers with session access.
+passage becomes a message. While a run of steps between passages is open, the
+message shows it as one shimmering line naming the step in progress, a label
+such as `Ran`, `Read`, `Edited`, or `Searching` with a short detail like the
+command or file name for readers with session access. The next step slides in
+as it starts, and steps running at the same time take turns every two seconds.
+A thread reply shows `Thinking…` only while it has no open run; the line
+replaces it. Once the run closes, it folds to a `Used N tools` summary (with
+`· N failed` when a step failed) that opens to compact rows: a status icon
+(spinner, check, cross, or warning for interrupted), the label, and the detail.
 Stored activity snapshots keep the status and label but omit commands and tool
-input details, in both shared threads and DMs. A long run shows its latest six
-steps behind an `N earlier steps` control. Rows tick live while the run is
-open, then freeze
-into the snapshot saved in the message. Readers without session access always
-see that snapshot. Only the turn's last message notifies. Previews and search
+input details, in both shared threads and DMs. The line follows the session
+live while the run is open; the summary shows the snapshot saved in the
+message. Readers without session access always see that snapshot. Only the
+turn's last message notifies. Previews and search
 quote the passages, not the steps. Typing refreshes every 3 seconds and clears
 on its own if the agent's replica dies. Follow-up messages queue in order, and
 the bar above the composer counts them (`1 queued`). Editing a sent message
