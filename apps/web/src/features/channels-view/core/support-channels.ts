@@ -42,7 +42,12 @@ export function channelEntityFromListItem(
  * when the paged source is mostly support conversations.
  */
 export function applySupportChannelVisibility(
-  scope: 'channels' | 'direct_messages' | 'recents' | 'search',
+  scope:
+    | 'team_channels'
+    | 'channels'
+    | 'direct_messages'
+    | 'recents'
+    | 'search',
   channels: readonly ChannelEntity[],
   extra: readonly ChannelEntity[],
   hide: boolean
