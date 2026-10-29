@@ -5,7 +5,6 @@
  */
 
 import { modelLabel } from '@core/component/AI/constant/model-label';
-import AgentIcon from '@icon/system/regular/sparkle.svg';
 import type {
   MessagePart,
   SubagentResult,
@@ -116,7 +115,6 @@ export function SubagentToolCall(props: {
 
   return (
     <ToolCard
-      icon={<AgentIcon class="size-4" />}
       title={props.detail.title}
       subtitle={subtitle()}
       status={props.common.status}

@@ -112,7 +112,7 @@ it('folds a sealed run to a summary that opens to its steps, without the session
   view.getByRole('button', { name: 'Used 2 tools · 1 failed' }).click();
   expect(steps(view)).toEqual([
     ['Rancargo', 'completed'],
-    ['Readlib.rs', 'failed'],
+    ['Readlib.rsFailed', 'failed'],
   ]);
 });
 

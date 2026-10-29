@@ -15,10 +15,6 @@ import type { MagicChipPresentation } from '@core/component/LexicalMarkdown/comp
 import { MarkdownImage } from '@core/component/LexicalMarkdown/component/decorator/MarkdownImage';
 import { MediaLoadingPlaceholder } from '@core/component/LexicalMarkdown/component/decorator/MediaLoadingPlaceholder';
 import { useUserId } from '@core/context/user';
-import FileText from '@icon/system/regular/file-text.svg';
-import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
-import PencilSimple from '@icon/system/regular/pencil-simple.svg';
-import Terminal from '@icon/system/regular/terminal.svg';
 import type {
   ElicitationSchema,
   FoldedMessage,
@@ -1226,20 +1222,17 @@ export default function AgentUiGallery() {
           <Item label="ToolCard">
             <ToolCard
               title="Shell"
-              icon={<Terminal />}
               subtitle="cargo test -p agent_fold"
               status={status()}
             />
             <ToolCard
               title="Read"
-              icon={<FileText />}
               subtitle="crates/agent_fold/src/domain/fold.rs"
               args={{ limit: '200' }}
               status="completed"
             />
             <ToolCard
               title="Edit"
-              icon={<PencilSimple />}
               subtitle={FIXTURE_DIFF.path}
               trailing={<DiffChanges additions={4} deletions={3} />}
               status="completed"
@@ -1252,19 +1245,16 @@ export default function AgentUiGallery() {
             <LiveToolGroup count={3} active={pulse()}>
               <ToolCard
                 title="Read"
-                icon={<FileText />}
                 subtitle="crates/agent_fold/src/domain/fold.rs"
                 status="completed"
               />
               <ToolCard
                 title="Edit"
-                icon={<PencilSimple />}
                 subtitle={FIXTURE_DIFF.path}
                 status="completed"
               />
               <ToolCard
                 title="Shell"
-                icon={<Terminal />}
                 subtitle="cargo test -p agent_fold"
                 status={pulse() ? 'running' : 'completed'}
               />
@@ -1272,12 +1262,11 @@ export default function AgentUiGallery() {
             <LiveToolGroup count={2} active={false} defaultOpen>
               <ToolCard
                 title="Search"
-                icon={<MagnifyingGlass />}
                 subtitle="fold"
                 status="completed"
                 trailing="3 results"
               />
-              <ToolCard title="Read" icon={<FileText />} status="completed" />
+              <ToolCard title="Read" status="completed" />
             </LiveToolGroup>
           </Item>
 

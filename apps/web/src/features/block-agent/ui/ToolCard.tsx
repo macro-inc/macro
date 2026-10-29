@@ -1,5 +1,8 @@
 /**
- * A bare tool row with an icon, a compact result, and lazy result disclosure.
+ * A bare tool row, a compact result, and lazy result disclosure, shaped like
+ * the session's other activity rows: the label, its detail beside it in a
+ * dimmer tone, and a caret after them on hover. No icon and no indent, so a
+ * run of calls reads as a quiet list in line with the prose around it.
  *
  * Ported from opencode's
  * `packages/session-ui/src/v2/components/basic-tool-v2.tsx`
@@ -7,22 +10,20 @@
  * and the `Tool` card idiom.
  */
 
-import CaretRight from '@icon/system/regular/caret-right.svg';
-import Wrench from '@icon/system/regular/wrench.svg';
 import { Collapsible } from '@kobalte/core/collapsible';
 import { Tooltip } from '@ui/components/Tooltip';
 import { createSignal, For, type JSX, Show } from 'solid-js';
+import { DisclosureCaret } from './DisclosureCaret';
 import { TextShimmer } from './TextShimmer';
 import { isToolActive, type ToolStatus } from './types';
 
 export interface ToolCardProps {
-  icon?: JSX.Element;
   title: JSX.Element | string;
   /** Mono, truncated detail next to the title (a path, a command, ...). */
   subtitle?: string;
   /** Compact `key=value` details after the subtitle. */
   args?: Record<string, string>;
-  /** Right-aligned slot before the chevron (status text, counts, ...). */
+  /** Status text or counts after the detail; a failed call says so by default. */
   trailing?: JSX.Element;
   status: ToolStatus;
   /** Fade the whole card, the chat block's failed-tool treatment. */
@@ -51,65 +52,54 @@ export function ToolCard(props: ToolCardProps) {
   // Conditional callers supply presence separately; Kobalte mounts the body.
   const hasChildren = () => props.hasContent ?? 'children' in props;
   const summary = () =>
-    props.trailing ??
-    (props.status === 'failed'
-      ? 'Failed'
-      : props.status === 'completed'
-        ? 'Succeeded'
-        : undefined);
+    props.trailing ?? (props.status === 'failed' ? 'Failed' : undefined);
 
   const row = (expandable: boolean) => (
     <>
-      <span
-        aria-hidden="true"
-        class="flex size-4 shrink-0 items-center justify-center text-ink-extra-muted [&>svg]:size-4"
-      >
-        {props.icon ?? <Wrench />}
+      <span class="min-w-0 max-w-full shrink-0 truncate">
+        {typeof props.title === 'string' ? (
+          <Tooltip
+            label={props.title}
+            as="span"
+            class="min-w-0 max-w-full truncate"
+          >
+            <TextShimmer text={props.title} active={active()} />
+          </Tooltip>
+        ) : (
+          props.title
+        )}
       </span>
-      <span class="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
-        <span class="min-w-0 truncate text-ink-muted">
-          {typeof props.title === 'string' ? (
-            <Tooltip
-              label={props.title}
-              as="span"
-              class="min-w-0 max-w-full truncate"
-            >
-              <TextShimmer text={props.title} active={active()} />
-            </Tooltip>
-          ) : (
-            props.title
-          )}
-        </span>
-        <Show when={props.subtitle}>
-          {(subtitle) => (
-            <>
-              <span aria-hidden="true" class="shrink-0 text-ink-placeholder">
-                ·
-              </span>
-              <Tooltip label={subtitle()} as="span" class="min-w-0 truncate">
-                <span class="truncate font-mono">{subtitle()}</span>
-              </Tooltip>
-            </>
-          )}
-        </Show>
-        <For each={Object.entries(props.args ?? {})}>
-          {([key, value]) => (
-            <span class="min-w-0 truncate font-mono text-ink-extra-muted">
-              {key}={value}
-            </span>
-          )}
-        </For>
-      </span>
-      <Show when={summary() || expandable}>
-        <span class="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-xs tabular-nums text-ink-extra-muted">
+      <Show when={props.subtitle}>
+        {(subtitle) => (
+          <Tooltip
+            label={subtitle()}
+            as="span"
+            class="min-w-0 truncate text-ink-disabled"
+          >
+            {subtitle()}
+          </Tooltip>
+        )}
+      </Show>
+      <For each={Object.entries(props.args ?? {})}>
+        {([key, value]) => (
+          <span class="min-w-0 truncate text-ink-disabled">
+            {key}={value}
+          </span>
+        )}
+      </For>
+      <Show when={summary()}>
+        <span
+          class="shrink-0 whitespace-nowrap tabular-nums"
+          classList={{
+            'text-failure': props.status === 'failed',
+            'text-ink-disabled': props.status !== 'failed',
+          }}
+        >
           {summary()}
-          <Show when={expandable}>
-            <CaretRight
-              aria-hidden="true"
-              class="size-3.5 shrink-0 text-ink-extra-muted group-data-expanded:rotate-90"
-            />
-          </Show>
         </span>
+      </Show>
+      <Show when={expandable}>
+        <DisclosureCaret open={open()} />
       </Show>
     </>
   );
@@ -124,20 +114,18 @@ export function ToolCard(props: ToolCardProps) {
       <Show
         when={hasChildren()}
         fallback={
-          <div class="flex min-h-8 w-full min-w-0 items-center gap-2 py-1 text-left text-sm leading-6">
+          <div class="flex min-h-8 w-full min-w-0 items-center gap-1.5 py-1 text-left text-sm leading-6">
             {row(false)}
           </div>
         }
       >
         <Collapsible open={open()} onOpenChange={setOpen}>
-          <Collapsible.Trigger class="group flex min-h-8 w-full min-w-0 items-center gap-2 py-1 text-left text-sm leading-6 outline-offset-2 hover:text-ink focus-visible:outline-2 focus-visible:outline-accent">
+          <Collapsible.Trigger class="group flex min-h-8 w-full min-w-0 items-center gap-1.5 py-1 text-left text-sm leading-6 outline-offset-2 not-touch:hover:text-ink-muted focus-visible:outline-2 focus-visible:outline-accent">
             {row(true)}
           </Collapsible.Trigger>
           <Collapsible.Content class="data-closed:hidden">
             <Show when={open()}>
-              <div class="min-w-0 pb-2 pl-6 text-xs leading-5">
-                {props.children}
-              </div>
+              <div class="min-w-0 pb-2 text-xs leading-5">{props.children}</div>
             </Show>
           </Collapsible.Content>
         </Collapsible>
