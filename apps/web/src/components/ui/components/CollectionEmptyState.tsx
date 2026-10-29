@@ -7,7 +7,7 @@ export type CollectionEmptyStateProps = Omit<ComponentProps<'div'>, 'children'> 
 };
 
 /**
- * Compact bordered empty collection message with an optional outside action.
+ * Compact unbordered empty collection message with an optional trailing action.
  * @do Keep loading, errors, collection data, and edit permissions with the caller.
  * @do Pass a shared Button as the action; omit it for read-only collections.
  * @dont Use this collection placeholder as a full-page empty state.
@@ -24,7 +24,7 @@ export function CollectionEmptyState(props: CollectionEmptyStateProps) {
       )}
       {...rest}
     >
-      <div class="flex min-h-9 min-w-0 flex-1 items-center rounded-lg border border-dashed border-border-secondary px-2 py-1 text-xs text-ink-extra-muted">
+      <div class="flex min-h-9 min-w-0 flex-1 items-center px-2 py-1 text-xs text-ink-extra-muted">
         {local.message}
       </div>
       {local.action}

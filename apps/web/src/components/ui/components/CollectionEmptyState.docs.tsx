@@ -55,7 +55,7 @@ export default defineDoc({
   exports: ['CollectionEmptyState'],
   import: "import { Button, CollectionEmptyState } from '@ui';",
   description:
-    'A compact dashed empty collection message with an optional outline action outside the border. The caller owns loading, permissions, and any expanded drag-and-drop state.',
+    'A compact unbordered empty collection message with an optional trailing outline action. The caller owns loading, permissions, and any expanded drag-and-drop state.',
   demos: [
     {
       id: 'editable',

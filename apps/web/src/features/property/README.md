@@ -12,11 +12,11 @@ Debug page: `/props-debug` (LOCAL_ONLY).
 ## Side-panel collections
 
 `side-panel/properties/EntityCollectionProperty.tsx` renders non-user, multi-entity
-properties. Empty collections use a compact message in a dashed border with an
-outline Add action outside it, aligned with the header action column. During
-app-item drags, incompatible collections keep their Add actions visible and
-retain their height. Compatible collections still expand into dropzones with
-the same label-to-content gap; their hidden Add actions reserve layout space.
+properties. Empty collections use a compact unbordered message with a trailing
+outline Add action aligned with the header action column.
+During app-item drags, incompatible collections keep their Add actions visible and
+retain their height. Compatible collections still expand into dashed dropzones
+with the same label-to-content gap; their hidden Add actions reserve layout space.
 Incompatible or unavailable collections show no rejection feedback. The same
 target covers empty and populated bodies, and geometry updates during expansion.
 Drops append a reference using the same entity-type conversion as the picker,
@@ -30,8 +30,8 @@ remains available for keyboard and touch.
 and save callbacks belong to the surrounding collection, not the shared UI component.
 
 The dedicated Tags section uses the same compact empty-state presentation with
-an outline Add action outside the border. The existing tag picker handles the
-action, and read-only sections omit it.
+a trailing outline Add action and no resting border. The existing tag picker
+handles the action, and read-only sections omit it.
 
 ## Side-panel header actions
 

@@ -154,9 +154,9 @@ confirmation drawers use the same action hierarchy.
 
 ## Property collections
 
-Multi-entity property collections use a compact empty message inside a light
-dashed border with an outline Add action outside it, aligned with the header
-action column. The dedicated Tags section uses the same empty-state layout.
+Multi-entity property collections use a compact unbordered empty message with a
+trailing outline Add action aligned with the header action column. The dedicated
+Tags section uses the same empty-state layout.
 While dragging an app item, compatible collections expand into dashed dropzones;
 hovering a valid zone strengthens its accent treatment. Empty-state and dropzone
 content keep the same spacing below the field label. Incompatible or unavailable
