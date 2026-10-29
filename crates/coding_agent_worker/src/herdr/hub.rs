@@ -359,8 +359,21 @@ impl HubState {
     }
 }
 
-/// The first line of a prompt, short enough for a tab label.
+/// The first visible line of a prompt, without Macro's context or mention payloads.
 pub(crate) fn title_from(text: &str) -> Option<String> {
+    let mut text = text.trim_start();
+    loop {
+        let closing = if text.starts_with("<macrod-runtime>") {
+            "</macrod-runtime>"
+        } else if text.starts_with("<m-agent-context>") {
+            "</m-agent-context>"
+        } else if text.starts_with("<m-user-mention>") {
+            "</m-user-mention>"
+        } else {
+            break;
+        };
+        text = text.split_once(closing)?.1.trim_start();
+    }
     let line = text.lines().map(str::trim).find(|line| !line.is_empty())?;
     let mut title: String = line.chars().take(TITLE_LIMIT).collect();
     if line.chars().count() > TITLE_LIMIT {

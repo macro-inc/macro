@@ -49,6 +49,7 @@ fn session(root: &Path) -> Session {
         model: Mutex::new(DEFAULT_MODEL.to_owned()),
         effort: Mutex::new(None),
         native_id: Mutex::new(None),
+        window: Mutex::new(None),
         prompt_pending: AtomicBool::new(false),
         live: tokio::sync::Mutex::new(None),
         cancel: Mutex::new(None),

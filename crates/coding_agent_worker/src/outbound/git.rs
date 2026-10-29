@@ -112,15 +112,20 @@ impl RepositoryStore for GitRepositories {
     }
 }
 
-/// Find the repository's main checkout, which Herdr requires as the source of
-/// a worktree-open action even when reopening an already managed worktree.
-pub async fn primary_worktree(path: &Path) -> rootcause::Result<PathBuf> {
-    let listing = git(path, &["worktree", "list", "--porcelain", "-z"]).await?;
-    let source = listing
-        .split('\0')
-        .next()
-        .and_then(|entry| entry.strip_prefix("worktree "))
-        .filter(|path| !path.is_empty())
-        .ok_or_else(|| rootcause::report!("git did not report the repository's main worktree"))?;
-    Ok(PathBuf::from(source))
+/// Create an isolated checkout from the fetched main branch without opening a terminal.
+pub async fn create_worktree(source: &Path, path: &Path, branch: &str) -> rootcause::Result<()> {
+    git(
+        source,
+        &[
+            "worktree",
+            "add",
+            "-b",
+            branch,
+            "--",
+            &path.to_string_lossy(),
+            "origin/main",
+        ],
+    )
+    .await?;
+    Ok(())
 }

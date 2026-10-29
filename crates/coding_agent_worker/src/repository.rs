@@ -78,7 +78,7 @@ pub trait RepositoryStore {
     fn refresh_main(&self, path: &Path) -> impl Future<Output = rootcause::Result<()>> + Send;
 }
 
-/// Resolve a clone and refresh the base before Herdr creates a new worktree.
+/// Resolve a clone and refresh the base before creating a new session worktree.
 pub async fn prepare(
     store: &impl RepositoryStore,
     repository: &Repository,

@@ -74,6 +74,12 @@ external chat replies depend on it. Direct session controls still mint IDs.
   Object on Windows (`src/outbound/acp_process/job.rs`).
 - macrod never pulls into the operator's working branch — new herdr worktrees
   start from a fresh fetch of `origin/main` (see README.md).
+- Create native session checkouts through Git and open each with Herdr's
+  `workspace create`; worktree commands group them under the main checkout's workspace.
+- Set native workspace names only at creation; preserve manual Herdr workspace
+  and tab labels through later prompts, Macro title changes, moves, and restarts. Exclude
+  runtime instructions, hidden context, and mention payloads from initial labels
+  (`src/herdr/hub.rs`); mention-only prompts use the provider's fallback label.
 - Switching native agents clears the previous agent's model/extra-args but
   keeps storage and focus preferences (README.md, "Setup").
 

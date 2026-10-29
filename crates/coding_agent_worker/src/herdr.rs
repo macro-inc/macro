@@ -11,8 +11,8 @@
 //! The harness still runs under macrod and every session still belongs to
 //! Macro: windows steer through the same control API the web app uses.
 //!
-//! With `macrod herdr-acp` as the harness, the window instead hosts the real
-//! Claude Code or Codex TUI, driven over ACP by that adapter (see
+//! With `macrod herdr-acp` as the harness, each session opens an independent
+//! workspace for the real Claude Code or Codex TUI, driven over ACP (see
 //! [`acp_agent`]).
 
 pub(crate) mod acp_agent;
@@ -88,7 +88,7 @@ pub(crate) fn instance_directory(id: impl std::fmt::Display) -> rootcause::Resul
 pub(crate) struct HerdrSession {
     /// The `herdr` binary attached to that session.
     pub bin: PathBuf,
-    /// The workspace macrod's pane belongs to; new windows open there.
+    /// The workspace macrod's pane belongs to; non-native viewer tabs open there.
     pub workspace_id: Option<String>,
 }
 
@@ -123,7 +123,6 @@ pub(crate) fn configure_launch(
     let mut flags = vec![
         "--state-dir".to_owned(),
         state_dir.to_string_lossy().into_owned(),
-        "--managed-worktrees".to_owned(),
     ];
     if let Some(model) = &settings.model {
         flags.push(format!("--model={model}"));
