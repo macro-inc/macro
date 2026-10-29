@@ -58,6 +58,7 @@ function PopoverSplitModal(props: {
   const [panelRef, setPanelRef] = createSignal<HTMLElement | null>(null);
   const [displayName, setDisplayName] = createSignal(props.popover.content.id);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
+  const [drawerHeader, setDrawerHeader] = createSignal<HTMLElement>();
   const [titleFileMenuRef, setTitleFileMenuRef] =
     createSignal<HTMLDivElement>();
   const [titleFileMenuTrigger, setTitleFileMenuTrigger] =
@@ -121,6 +122,7 @@ function PopoverSplitModal(props: {
     splitHotkeyScope: scopeId,
     isPanelActive: () => true,
     panelRef,
+    drawerHeader,
     panelSize: { width: null, height: null },
     contentOffsetTop,
     setContentOffsetTop,
@@ -192,6 +194,9 @@ function PopoverSplitModal(props: {
             maxHeight={92}
           >
             <MobileDrawer.Handle />
+            {/* Before the scroll body so it exists when the content mounts;
+                hidden unless the content portals its pinned actions here. */}
+            <div ref={setDrawerHeader} class="shrink-0 empty:hidden" />
             <MobileDrawer.ScrollBody>
               {/* As in Dialog's drawer: at its natural height the body's
                   overflow-clip cannot clip the drawer's scroll body. */}

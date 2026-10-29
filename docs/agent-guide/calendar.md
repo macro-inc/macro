@@ -231,14 +231,17 @@ new session from the same meeting link must start a separate chat thread.
 
 Calendar event creation and editing open in a bottom sheet on touch devices,
 with scrollable content above the keyboard. `Create event` or `Save` sits at
-the top right of a header that pins to the top of the sheet when the form
-outgrows it (as it does with the custom repeat builder or the keyboard open),
-taking a solid background only while pinned. The event pills sit on a single
-line that scrolls horizontally to the sheet's edges. The sheet has no Cancel:
-drag, the backdrop, or Escape dismiss it. `This event`/`All events` sits at the
-bottom when editing a recurring event. Desktop retains the centered dialog with
-wrapping pills and its Cancel footer; both layouts compose `EventFormParts`
-(`MobileEventForm` and `EventForm`).
+the top right of the sheet's pinned chrome, below the handle, so it stays in
+reach while the form scrolls. The title and description come first, then
+`Event` and `Out of office` as selectable labels. A section of rows holds
+All-day (switch on the right), Starts and Ends (date and time), and Repeat; a
+second has one row each for Calendar, Guests, Call, Location, and Reminders
+(Declines and Message for out-of-office events). Guest permissions follow, one
+per row. The sheet has no Cancel: drag, the backdrop, or Escape dismiss it.
+`This event`/`All events` sits at the bottom when editing a recurring event.
+Desktop retains the centered dialog with inline dates, wrapping pills, and its
+Cancel footer; both layouts compose `EventFormParts` (`MobileEventForm` and
+`EventForm`), and the range rows compose `DateTimeRange` parts.
 Dismissing a changed event still asks before discarding the draft.
 
 On phones, event details use inset round action buttons and a transparent RSVP

@@ -51,6 +51,10 @@ read their code, and follow that pattern rather than inventing a new one.
 - Phone drawers have a handle and no X; drag, backdrop, or Escape dismiss,
   and focus returns to the opener. No submenus at phone width: drill in
   place with a back row.
+- Actions that must stay in reach while a sheet scrolls sit in its pinned
+  chrome between the handle and `MobileDrawer.ScrollBody`, never in a sticky
+  band inside the scroll. A touch popover split exposes that slot as
+  `drawerHeader` on its panel context; see `MobileEventForm`.
 - A backdrop tap only dismisses: `MobileDrawer` swallows the rest of that tap,
   so it never presses what the scrim covered, even when the sheet unmounts as
   it closes (a `<Show>` around it, or `openDialog`). It swallows only a tap

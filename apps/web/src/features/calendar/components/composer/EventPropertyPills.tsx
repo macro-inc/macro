@@ -17,7 +17,7 @@ import { PropertyCaret } from '@property/extractors/PropertyCaret';
 import { PropertyPill } from '@property/extractors/PropertyPill';
 import type { EntityProperty } from '@property/types';
 import type { EventType } from '@service-storage/generated/schemas/eventType';
-import { cn, Layer, Select, Tooltip } from '@ui';
+import { cn, Layer, Select, Tabs, Tooltip } from '@ui';
 import { type Accessor, createMemo, createSignal, For, Show } from 'solid-js';
 import {
   formatReminderOffset,
@@ -697,11 +697,12 @@ export interface EventComposerKindPillProps {
   readOnly?: boolean;
 }
 
-/** Compact selector for the kind of event being created. */
-export function EventComposerKindPill(props: EventComposerKindPillProps) {
-  // A read-only pill displays whatever type the event has, including
-  // status types the composer cannot create.
-  const options = createMemo<EventComposerKindOption[]>(() =>
+/**
+ * The kinds the composer offers; a read-only event shows whatever type it
+ * has, including status types the composer cannot create.
+ */
+function createEventKindOptions(props: EventComposerKindPillProps) {
+  return createMemo<EventComposerKindOption[]>(() =>
     props.readOnly
       ? [
           {
@@ -711,6 +712,28 @@ export function EventComposerKindPill(props: EventComposerKindPillProps) {
         ]
       : EVENT_KIND_OPTIONS
   );
+}
+
+/** The kinds of event as selectable labels, for a touch sheet. */
+export function EventComposerKindTabs(props: EventComposerKindPillProps) {
+  const options = createEventKindOptions(props);
+  return (
+    <Tabs
+      aria-label="Event kind"
+      options={options()}
+      value={eventKindOf(props.eventType)}
+      onChange={(kind) => {
+        if (!props.readOnly) props.onChange(kind);
+      }}
+      disabled={props.disabled}
+      touch="pills"
+    />
+  );
+}
+
+/** Compact selector for the kind of event being created. */
+export function EventComposerKindPill(props: EventComposerKindPillProps) {
+  const options = createEventKindOptions(props);
   const selectedOption = () =>
     options().find((option) => option.value === eventKindOf(props.eventType)) ??
     options()[0];

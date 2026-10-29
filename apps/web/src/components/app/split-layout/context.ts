@@ -97,6 +97,11 @@ export type SplitPanelContextType = {
   navigationCollapsed?: Signal<boolean>;
   bottomPanel: Accessor<SplitBottomPanelRegistration | undefined>;
   registerBottomPanel: (panel: SplitBottomPanelRegistration) => () => void;
+  /**
+   * The touch sheet's pinned chrome between its handle and scrolling content,
+   * for actions that stay in reach; absent outside a touch popover.
+   */
+  drawerHeader?: Accessor<HTMLElement | undefined>;
   layoutRefs: {
     headerLeft?: HTMLDivElement;
     headerRight?: HTMLDivElement;

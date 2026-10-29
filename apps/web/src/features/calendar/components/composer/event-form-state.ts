@@ -1,8 +1,10 @@
+import type { DateTimeRangeProps } from '@app/components/date-time-range/date-time-range-fields';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import type { CalendarUpdateScope } from '@service-email/client';
 import type { JSX } from 'solid-js';
 import { createEffect, createSignal, createUniqueId } from 'solid-js';
 import type { CalendarEventFormController } from './create-calendar-event-form-controller';
+import type { EventGuestPolicyRowProps } from './EventGuestPolicyRow';
 import type {
   EventEditorDisabledFields,
   EventEditorSubmitValues,
@@ -52,6 +54,7 @@ export interface EventFormProps {
 export function createEventForm(props: EventFormProps) {
   const formId = createUniqueId();
   const ids = {
+    form: `event-composer-${formId}`,
     dateRangeError: `event-composer-date-range-error-${formId}`,
     recurrenceReason: `event-composer-recurrence-reason-${formId}`,
     pastEventWarning: `event-composer-past-event-warning-${formId}`,
@@ -84,6 +87,33 @@ export function createEventForm(props: EventFormProps) {
     props.disabledFields?.[field] === true;
   const fieldIsDisabled = (field: keyof EventEditorDisabledFields) =>
     formIsDisabled() || fieldIsReadOnly(field);
+  /** The event's start and end, bound for either range layout. */
+  const range: DateTimeRangeProps = {
+    subject: 'event',
+    get start() {
+      return state().start;
+    },
+    get end() {
+      return state().end;
+    },
+    get allDay() {
+      return state().allDay;
+    },
+    onStartChange: controller.setStart,
+    onEndChange: controller.setEnd,
+    get startDisabled() {
+      return fieldIsDisabled('start');
+    },
+    get endDisabled() {
+      return fieldIsDisabled('end');
+    },
+    get invalid() {
+      return controller.dateRangeError() !== undefined;
+    },
+    get describedBy() {
+      return dateRangeDescribedBy();
+    },
+  };
   const detailsLocked = () => props.detailsReadOnlyReason !== undefined;
   // A single occurrence has no repeat rule of its own; like the guest
   // permissions, the rule belongs to the whole series. A lock already says
@@ -114,6 +144,29 @@ export function createEventForm(props: EventFormProps) {
     );
   };
 
+  const showsDeclineMessage = () =>
+    !!state().outOfOffice &&
+    state().outOfOffice?.autoDeclineMode !== 'decline_none';
+  // Outlook has no guest permissions, and an out-of-office event no guests.
+  const showsGuestPolicy = () =>
+    props.guestPolicyEditable === true &&
+    capabilities()?.guestPolicy !== false &&
+    !isOutOfOffice();
+  const guestPolicy: EventGuestPolicyRowProps = {
+    get value() {
+      return controller.guestPolicy();
+    },
+    onChange: controller.setGuestPolicy,
+    get disabled() {
+      return formIsDisabled() || editScope() === 'this_event';
+    },
+    get disabledReason() {
+      return editScope() === 'this_event'
+        ? 'Guest permissions apply to all events. Choose All events to change them.'
+        : undefined;
+    },
+  };
+
   createEffect(() => {
     const option = controller.selectedCalendarOption();
     if (option) props.onCalendarChange?.(option.id, option.color);
@@ -140,7 +193,7 @@ export function createEventForm(props: EventFormProps) {
     editScope,
     changeEditScope,
     pastEventWarning,
-    dateRangeDescribedBy,
+    range,
     fieldIsReadOnly,
     fieldIsDisabled,
     detailsLocked,
@@ -150,6 +203,9 @@ export function createEventForm(props: EventFormProps) {
     conferenceLocked,
     isOutOfOffice,
     outOfOfficeNotice,
+    showsDeclineMessage,
+    showsGuestPolicy,
+    guestPolicy,
     submit,
   };
 }

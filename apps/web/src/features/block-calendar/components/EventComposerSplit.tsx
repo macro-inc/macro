@@ -4,6 +4,7 @@ import {
   defaultEditorInitialValues,
   type EventEditorInitialValues,
 } from '@app/features/calendar/components/composer/event-form-model';
+import type { EventFormProps } from '@app/features/calendar/components/composer/event-form-state';
 import { MobileEventForm } from '@app/features/calendar/components/composer/MobileEventForm';
 import { createGuestInviteController } from '@app/features/calendar/hooks/create-guest-invite-controller';
 import {
@@ -19,9 +20,7 @@ import { EventForwardInvitationAction } from '@app/features/calendar-view/compon
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type Accessor, createMemo, onMount, Show } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 
 /**
  * Forward invitation beside a guest list the viewer cannot add to, as the
@@ -40,6 +39,18 @@ function EditorForwardInvitation(props: {
   return (
     <Show when={invites.canForward()}>
       <EventForwardInvitationAction event={props.event} invites={invites} />
+    </Show>
+  );
+}
+
+/** The touch sheet's layout wherever the panel offers the sheet's pinned chrome. */
+function PanelEventForm(props: EventFormProps) {
+  const panel = useSplitPanelOrThrow();
+  return (
+    <Show when={panel.drawerHeader?.()} fallback={<EventForm {...props} />}>
+      {(headerMount) => (
+        <MobileEventForm {...props} headerMount={headerMount()} />
+      )}
     </Show>
   );
 }
@@ -118,14 +129,10 @@ function EventComposerContent(
   onMount(() =>
     panel.handle.setDisplayName(isEdit() ? 'Edit event' : 'New event')
   );
-  // Touch devices show a popover split in a bottom sheet, with its own layout.
-  const form = () =>
-    isTouchDevice() && panel.handle.isPopover() ? MobileEventForm : EventForm;
 
   return (
     <div ref={attachHotkeys} class="flex h-full min-h-0 flex-col p-4 text-ink">
-      <Dynamic
-        component={form()}
+      <PanelEventForm
         controller={controller}
         macroCallsEnabled={macroCallsEnabled()}
         isEdit={isEdit()}

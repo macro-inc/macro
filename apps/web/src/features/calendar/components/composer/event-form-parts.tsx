@@ -1,4 +1,7 @@
-import { DateTimeRangeFields } from '@app/components/date-time-range/date-time-range-fields';
+import {
+  DateTimeRange,
+  DateTimeRangeFields,
+} from '@app/components/date-time-range/date-time-range-fields';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import type { CalendarUpdateScope } from '@service-email/client';
@@ -15,7 +18,10 @@ import {
   calendarDescriptionToEditorHtml,
   exportCalendarDescription,
 } from '../../utils/calendar-description';
-import { EventGuestPolicyRow } from './EventGuestPolicyRow';
+import {
+  EventGuestPolicyRow,
+  EventGuestPolicyRows,
+} from './EventGuestPolicyRow';
 import {
   EventComposerCalendarPill,
   EventComposerConferencePill,
@@ -23,6 +29,7 @@ import {
   EventComposerDeclinePill,
   EventComposerGuestsPill,
   EventComposerKindPill,
+  EventComposerKindTabs,
   EventComposerLocationPill,
   EventComposerRecurrencePill,
   EventComposerRemindersPill,
@@ -69,6 +76,7 @@ function Root(props: {
   return (
     <EventFormPartsContext.Provider value={props.form}>
       <form
+        id={props.form.ids.form}
         class={cn(
           'flex min-h-0 flex-1 flex-col gap-4 text-sm text-ink-muted [&_:disabled]:cursor-not-allowed',
           props.class
@@ -84,10 +92,9 @@ function Root(props: {
   );
 }
 
-/** The start and end, with the range's error or past-event warning. */
+/** The start and end inline, with the range's error or past-event warning. */
 function When() {
   const form = useEventForm();
-  const state = form.state;
   return (
     <div class="flex min-w-0 flex-col gap-1">
       <LockedField
@@ -95,20 +102,29 @@ function When() {
         class="block min-w-0"
       >
         <DateTimeRangeFields
-          subject="event"
-          start={state().start}
-          end={state().end}
-          allDay={state().allDay}
-          onStartChange={form.controller.setStart}
-          onEndChange={form.controller.setEnd}
+          {...form.range}
           onAllDayChange={form.controller.setAllDay}
-          startDisabled={form.fieldIsDisabled('start')}
-          endDisabled={form.fieldIsDisabled('end')}
           allDayDisabled={form.fieldIsDisabled('allDay')}
-          invalid={form.controller.dateRangeError() !== undefined}
-          describedBy={form.dateRangeDescribedBy()}
         />
       </LockedField>
+      <RangeMessages />
+    </div>
+  );
+}
+
+/** The event's start and end for a layout that places `DateTimeRange` parts itself. */
+function Range(props: { children: JSX.Element }) {
+  const form = useEventForm();
+  return (
+    <DateTimeRange.Root {...form.range}>{props.children}</DateTimeRange.Root>
+  );
+}
+
+/** The range's error, or else a warning that the event is in the past. */
+function RangeMessages() {
+  const form = useEventForm();
+  return (
+    <>
       <Show when={form.controller.dateRangeError()}>
         {(error) => (
           <p
@@ -131,7 +147,7 @@ function When() {
           </p>
         )}
       </Show>
-    </div>
+    </>
   );
 }
 
@@ -207,129 +223,204 @@ function Description() {
   );
 }
 
-/** The kind, calendar, repeat, guests, call, location, and reminder pills; `class` places the row. */
-function Properties(props: { class?: string }) {
+function KindPill() {
   const form = useEventForm();
-  const state = form.state;
+  return (
+    // Read-only on every edit, it opens its one value as a list; locked, it
+    // is as unavailable as the other details.
+    <LockedField reason={form.props.detailsReadOnlyReason}>
+      <EventComposerKindPill
+        eventType={form.state().eventType}
+        onChange={form.controller.setEventKind}
+        disabled={form.formIsDisabled() || form.detailsLocked()}
+        readOnly={form.isEdit()}
+      />
+    </LockedField>
+  );
+}
+
+/** The kinds of event as selectable labels, in place of `KindPill`. */
+function KindTabs() {
+  const form = useEventForm();
+  return (
+    <EventComposerKindTabs
+      eventType={form.state().eventType}
+      onChange={form.controller.setEventKind}
+      disabled={form.formIsDisabled() || form.detailsLocked()}
+      readOnly={form.isEdit()}
+    />
+  );
+}
+
+function CalendarPill() {
+  const form = useEventForm();
+  return (
+    <LockedField reason={form.props.detailsReadOnlyReason}>
+      <EventComposerCalendarPill
+        options={form.controller.calendarOptions()}
+        value={form.controller.selectedCalendarOption()}
+        onChange={(calendarId) =>
+          form.controller.setField('calendarId', calendarId)
+        }
+        disabled={form.formIsDisabled() || form.detailsLocked()}
+        readOnly={form.fieldIsReadOnly('calendar')}
+      />
+    </LockedField>
+  );
+}
+
+function RecurrencePill() {
+  const form = useEventForm();
+  return (
+    <LockedField reason={form.props.detailsReadOnlyReason}>
+      <EventComposerRecurrencePill
+        options={form.controller.recurrenceOptions()}
+        value={form.controller.selectedRecurrenceOption()}
+        onChange={form.controller.changeRecurrenceChoice}
+        disabled={form.fieldIsDisabled('recurrence')}
+        // A single occurrence has no recurrence rule of its own, so the
+        // recurrence cannot be edited while the scope is one event.
+        readOnly={form.editScope() === 'this_event'}
+        readOnlyReason={form.recurrenceScopeReason()}
+        describedBy={form.recurrenceDescribedBy()}
+      />
+    </LockedField>
+  );
+}
+
+/** The guests, then the host's action beside them, such as forwarding. */
+function GuestsPill() {
+  const form = useEventForm();
   const controller = form.controller;
   return (
-    <div class={cn('flex min-w-0 flex-wrap items-center gap-2', props.class)}>
-      {/* Read-only on every edit, they open their one value as a list;
-          locked, they are as unavailable as the other details. */}
-      <LockedField reason={form.props.detailsReadOnlyReason}>
-        <EventComposerKindPill
-          eventType={state().eventType}
-          onChange={controller.setEventKind}
-          disabled={form.formIsDisabled() || form.detailsLocked()}
-          readOnly={form.isEdit()}
-        />
-      </LockedField>
-      <LockedField reason={form.props.detailsReadOnlyReason}>
-        <EventComposerCalendarPill
-          options={controller.calendarOptions()}
-          value={controller.selectedCalendarOption()}
-          onChange={(calendarId) =>
-            controller.setField('calendarId', calendarId)
-          }
-          disabled={form.formIsDisabled() || form.detailsLocked()}
-          readOnly={form.fieldIsReadOnly('calendar')}
-        />
-      </LockedField>
-      <LockedField reason={form.props.detailsReadOnlyReason}>
-        <EventComposerRecurrencePill
-          options={controller.recurrenceOptions()}
-          value={controller.selectedRecurrenceOption()}
-          onChange={controller.changeRecurrenceChoice}
-          disabled={form.fieldIsDisabled('recurrence')}
-          // A single occurrence has no recurrence rule of its own, so the
-          // recurrence cannot be edited while the scope is one event.
-          readOnly={form.editScope() === 'this_event'}
-          readOnlyReason={form.recurrenceScopeReason()}
-          describedBy={form.recurrenceDescribedBy()}
-        />
-      </LockedField>
+    <>
+      <EventComposerGuestsPill
+        options={controller.guestOptions}
+        selected={controller.selectedGuests()}
+        onChange={controller.setSelectedGuests}
+        disabled={form.formIsDisabled()}
+        readOnly={form.fieldIsReadOnly('guests')}
+        readOnlyReason={form.props.guestsReadOnlyReason}
+        guestListHidden={form.props.guestListHidden}
+        currentGuests={
+          form.props.addOnlyGuests ? controller.initialGuests() : undefined
+        }
+      />
+      {form.props.guestsAction}
+    </>
+  );
+}
+
+function ConferencePill() {
+  const form = useEventForm();
+  return (
+    <LockedField reason={form.props.detailsReadOnlyReason}>
+      <EventComposerConferencePill
+        value={form.state().conference}
+        provider={form.capabilities()?.conferenceProvider}
+        macroCallsEnabled={form.props.macroCallsEnabled}
+        canKeepExisting={
+          form.controller.initialConferenceChoice() === 'existing'
+        }
+        onChange={(conference) =>
+          form.controller.setField('conference', conference)
+        }
+        disabled={form.fieldIsDisabled('conference') || form.conferenceLocked()}
+      />
+    </LockedField>
+  );
+}
+
+function LocationPill() {
+  const form = useEventForm();
+  return (
+    <LockedField reason={form.props.detailsReadOnlyReason}>
+      <EventComposerLocationPill
+        value={form.state().location}
+        onChange={(location) => form.controller.setField('location', location)}
+        disabled={form.fieldIsDisabled('location')}
+      />
+    </LockedField>
+  );
+}
+
+/** How an out-of-office event declines meetings, where the calendar can. */
+function DeclinePill() {
+  const form = useEventForm();
+  return (
+    <Show
+      when={form.capabilities()?.autoDecline !== false}
+      fallback={
+        <span class="text-xs text-ink-muted">
+          Outlook blocks this time. Configure automatic declines in Outlook.
+        </span>
+      }
+    >
+      <EventComposerDeclinePill
+        value={form.state().outOfOffice}
+        onChange={form.controller.setOutOfOffice}
+        disabled={form.fieldIsDisabled('outOfOffice')}
+      />
+    </Show>
+  );
+}
+
+/** The reply to declined meetings; shown while `showsDeclineMessage`. */
+function DeclineMessagePill() {
+  const form = useEventForm();
+  const state = form.state;
+  return (
+    <EventComposerDeclineMessagePill
+      value={state().outOfOffice?.declineMessage ?? ''}
+      onChange={(declineMessage) =>
+        form.controller.setOutOfOffice({
+          autoDeclineMode:
+            state().outOfOffice?.autoDeclineMode ?? 'decline_none',
+          declineMessage,
+        })
+      }
+      disabled={form.fieldIsDisabled('outOfOffice')}
+    />
+  );
+}
+
+function RemindersPill() {
+  const form = useEventForm();
+  const controller = form.controller;
+  return (
+    <EventComposerRemindersPill
+      minutes={controller.reminderMinutes()}
+      usedSlots={
+        controller.reminderMinutes().length +
+        controller.preservedReminderCount()
+      }
+      canAdd={controller.canAddReminder()}
+      onChange={controller.setReminderMinutes}
+      disabled={form.fieldIsDisabled('reminders')}
+    />
+  );
+}
+
+/** Every event pill on one wrapping line. */
+function Properties() {
+  const form = useEventForm();
+  return (
+    <div class="flex min-w-0 flex-wrap items-center gap-2">
+      <KindPill />
+      <CalendarPill />
+      <RecurrencePill />
       <Show when={!form.isOutOfOffice()}>
-        <EventComposerGuestsPill
-          options={controller.guestOptions}
-          selected={controller.selectedGuests()}
-          onChange={controller.setSelectedGuests}
-          disabled={form.formIsDisabled()}
-          readOnly={form.fieldIsReadOnly('guests')}
-          readOnlyReason={form.props.guestsReadOnlyReason}
-          guestListHidden={form.props.guestListHidden}
-          currentGuests={
-            form.props.addOnlyGuests ? controller.initialGuests() : undefined
-          }
-        />
-        {form.props.guestsAction}
-        <LockedField reason={form.props.detailsReadOnlyReason}>
-          <EventComposerConferencePill
-            value={state().conference}
-            provider={form.capabilities()?.conferenceProvider}
-            macroCallsEnabled={form.props.macroCallsEnabled}
-            canKeepExisting={
-              controller.initialConferenceChoice() === 'existing'
-            }
-            onChange={(conference) =>
-              controller.setField('conference', conference)
-            }
-            disabled={
-              form.fieldIsDisabled('conference') || form.conferenceLocked()
-            }
-          />
-        </LockedField>
-        <LockedField reason={form.props.detailsReadOnlyReason}>
-          <EventComposerLocationPill
-            value={state().location}
-            onChange={(location) => controller.setField('location', location)}
-            disabled={form.fieldIsDisabled('location')}
-          />
-        </LockedField>
+        <GuestsPill />
+        <ConferencePill />
+        <LocationPill />
       </Show>
       <Show when={form.isOutOfOffice()}>
-        <Show
-          when={form.capabilities()?.autoDecline !== false}
-          fallback={
-            <span class="text-xs text-ink-muted">
-              Outlook blocks this time. Configure automatic declines in Outlook.
-            </span>
-          }
-        >
-          <EventComposerDeclinePill
-            value={state().outOfOffice}
-            onChange={controller.setOutOfOffice}
-            disabled={form.fieldIsDisabled('outOfOffice')}
-          />
-        </Show>
-        <Show
-          when={
-            state().outOfOffice &&
-            state().outOfOffice?.autoDeclineMode !== 'decline_none'
-          }
-        >
-          <EventComposerDeclineMessagePill
-            value={state().outOfOffice?.declineMessage ?? ''}
-            onChange={(declineMessage) =>
-              controller.setOutOfOffice({
-                autoDeclineMode:
-                  state().outOfOffice?.autoDeclineMode ?? 'decline_none',
-                declineMessage,
-              })
-            }
-            disabled={form.fieldIsDisabled('outOfOffice')}
-          />
+        <DeclinePill />
+        <Show when={form.showsDeclineMessage()}>
+          <DeclineMessagePill />
         </Show>
       </Show>
-      <EventComposerRemindersPill
-        minutes={controller.reminderMinutes()}
-        usedSlots={
-          controller.reminderMinutes().length +
-          controller.preservedReminderCount()
-        }
-        canAdd={controller.canAddReminder()}
-        onChange={controller.setReminderMinutes}
-        disabled={form.fieldIsDisabled('reminders')}
-      />
+      <RemindersPill />
     </div>
   );
 }
@@ -350,25 +441,19 @@ function RecurrenceScopeReason() {
 function GuestPolicy() {
   const form = useEventForm();
   return (
-    // Outlook has no guest permissions, and an out-of-office event no guests.
-    <Show
-      when={
-        form.props.guestPolicyEditable &&
-        form.capabilities()?.guestPolicy !== false &&
-        !form.isOutOfOffice()
-      }
-    >
+    <Show when={form.showsGuestPolicy()}>
       {/* The policy belongs to the whole series, like its recurrence. */}
-      <EventGuestPolicyRow
-        value={form.controller.guestPolicy()}
-        onChange={form.controller.setGuestPolicy}
-        disabled={form.formIsDisabled() || form.editScope() === 'this_event'}
-        disabledReason={
-          form.editScope() === 'this_event'
-            ? 'Guest permissions apply to all events. Choose All events to change them.'
-            : undefined
-        }
-      />
+      <EventGuestPolicyRow {...form.guestPolicy} />
+    </Show>
+  );
+}
+
+/** Guest permissions one per row, in place of `GuestPolicy`. */
+function GuestPolicyRows() {
+  const form = useEventForm();
+  return (
+    <Show when={form.showsGuestPolicy()}>
+      <EventGuestPolicyRows {...form.guestPolicy} />
     </Show>
   );
 }
@@ -512,6 +597,8 @@ function Submit() {
   return (
     <Button
       type="submit"
+      // Names the form so the action submits it from pinned sheet chrome too.
+      form={form.ids.form}
       variant="primary"
       disabled={!form.controller.canSave() || form.formIsDisabled()}
       aria-label={label()}
@@ -530,11 +617,24 @@ function Submit() {
 export const EventFormParts = {
   Root,
   When,
+  Range,
+  RangeMessages,
   Title,
   Description,
   Properties,
+  KindPill,
+  KindTabs,
+  CalendarPill,
+  RecurrencePill,
+  GuestsPill,
+  ConferencePill,
+  LocationPill,
+  DeclinePill,
+  DeclineMessagePill,
+  RemindersPill,
   RecurrenceScopeReason,
   GuestPolicy,
+  GuestPolicyRows,
   Notices,
   CustomRecurrence,
   SaveError,

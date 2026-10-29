@@ -1,61 +1,111 @@
-import { onElementConnect } from '@core/util/onElementConnect';
-import { cn } from '@ui';
-import { createSignal, onCleanup } from 'solid-js';
+import { DateTimeRange } from '@app/components/date-time-range/date-time-range-fields';
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { ToggleSwitch } from '@ui';
+import { type JSX, Show } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { EventFormParts } from './event-form-parts';
 import { createEventForm, type EventFormProps } from './event-form-state';
 
-/** The create/edit event form in the touch bottom sheet. */
-export function MobileEventForm(props: EventFormProps) {
-  const form = createEventForm(props);
+/** A labelled row of a sheet section, its control on the right. */
+function SheetRow(props: { label: string; children: JSX.Element }) {
+  return (
+    <div class="flex min-h-11 items-center justify-between gap-3 px-3">
+      <span class="shrink-0 text-sm text-ink">{props.label}</span>
+      <div class="flex min-w-0 items-center justify-end gap-1">
+        {props.children}
+      </div>
+    </div>
+  );
+}
 
-  // The keyboard leaves too little room for the whole form, so the header
-  // pins to the top of the sheet's scroll to keep the save action in reach.
-  // It only takes a background while pinned over content; at rest it would
-  // show as a band against the glass sheet.
-  const [headerPinned, setHeaderPinned] = createSignal(false);
-  const observeHeader = (header: HTMLElement) => {
-    onElementConnect(header, () => {
-      const observer = new IntersectionObserver(
-        ([entry]) => setHeaderPinned(!!entry && entry.intersectionRatio < 1),
-        {
-          root: header.closest('[data-drawer-scroll-body]'),
-          // Pinned at -1px, the header's top pixel leaves the scroll viewport.
-          threshold: 1,
-        }
-      );
-      observer.observe(header);
-      onCleanup(() => observer.disconnect());
-    });
-  };
+/**
+ * The create/edit event form in the touch bottom sheet: what and when first,
+ * then the event's details, one per row.
+ */
+export function MobileEventForm(
+  props: EventFormProps & {
+    /** The sheet's pinned chrome, which keeps the save action in reach. */
+    headerMount: HTMLElement;
+  }
+) {
+  const form = createEventForm(props);
 
   return (
     <EventFormParts.Root form={form} class={props.class}>
-      <div
-        ref={observeHeader}
-        class={cn(
-          // -mt-4 and pt-4 offset the host's padding so the header rests
-          // where it would have been.
-          'sticky -top-px z-1 -mx-4 -mt-4 -mb-3 flex shrink-0 items-center justify-end px-4 pt-4 pb-3',
-          headerPinned() && 'bg-menu'
-        )}
-      >
-        <EventFormParts.Submit />
-      </div>
-      <div class="flex min-w-0 flex-col gap-6">
-        <div class="flex min-w-0 flex-col gap-1">
-          <EventFormParts.When />
-          <EventFormParts.Title />
-          <EventFormParts.Description />
+      <Portal mount={props.headerMount}>
+        <div class="flex justify-end px-4 pb-1">
+          <EventFormParts.Submit />
         </div>
-        <div class="flex min-w-0 flex-col gap-2">
-          <div class="-mx-4 overflow-x-auto overscroll-x-contain scrollbar-hidden">
-            <EventFormParts.Properties class="w-max flex-nowrap px-4" />
+      </Portal>
+      <div class="flex min-w-0 flex-col gap-6">
+        <div class="flex min-w-0 flex-col gap-3">
+          <div class="flex min-w-0 flex-col gap-1">
+            <EventFormParts.Title />
+            <EventFormParts.Description />
           </div>
+          <EventFormParts.KindTabs />
+        </div>
+
+        <div class="flex min-w-0 flex-col gap-1">
+          <MobileDrawer.Section class="mx-0">
+            <ToggleSwitch
+              class="min-h-11 w-full flex-row-reverse justify-between px-3"
+              size="md"
+              label="All-day"
+              labelClass="text-sm text-ink"
+              checked={form.state().allDay}
+              disabled={form.fieldIsDisabled('allDay')}
+              onChange={form.controller.setAllDay}
+            />
+            <EventFormParts.Range>
+              <SheetRow label="Starts">
+                <DateTimeRange.Start />
+              </SheetRow>
+              <SheetRow label="Ends">
+                <DateTimeRange.End />
+              </SheetRow>
+            </EventFormParts.Range>
+            <SheetRow label="Repeat">
+              <EventFormParts.RecurrencePill />
+            </SheetRow>
+          </MobileDrawer.Section>
+          <EventFormParts.RangeMessages />
           <EventFormParts.RecurrenceScopeReason />
         </div>
-        <EventFormParts.GuestPolicy />
-        <EventFormParts.Notices />
         <EventFormParts.CustomRecurrence />
+
+        <MobileDrawer.Section class="mx-0">
+          <SheetRow label="Calendar">
+            <EventFormParts.CalendarPill />
+          </SheetRow>
+          <Show when={!form.isOutOfOffice()}>
+            <SheetRow label="Guests">
+              <EventFormParts.GuestsPill />
+            </SheetRow>
+            <SheetRow label="Call">
+              <EventFormParts.ConferencePill />
+            </SheetRow>
+            <SheetRow label="Location">
+              <EventFormParts.LocationPill />
+            </SheetRow>
+          </Show>
+          <Show when={form.isOutOfOffice()}>
+            <SheetRow label="Declines">
+              <EventFormParts.DeclinePill />
+            </SheetRow>
+            <Show when={form.showsDeclineMessage()}>
+              <SheetRow label="Message">
+                <EventFormParts.DeclineMessagePill />
+              </SheetRow>
+            </Show>
+          </Show>
+          <SheetRow label="Reminders">
+            <EventFormParts.RemindersPill />
+          </SheetRow>
+        </MobileDrawer.Section>
+
+        <EventFormParts.GuestPolicyRows />
+        <EventFormParts.Notices />
       </div>
       <EventFormParts.SaveError />
       <EventFormParts.EditScope />
