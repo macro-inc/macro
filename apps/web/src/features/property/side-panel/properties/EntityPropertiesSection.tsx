@@ -629,6 +629,8 @@ function PropertyRowActions(props: {
     ctx.pinnedPropertyIds?.().includes(props.property.propertyId) ?? false;
   const pinLabel = () => (isPinned() ? 'Unpin from title' : 'Pin below title');
   const hasActions = () => canRemove() || canPin();
+  const actionVisibility =
+    'pointer-events-none opacity-0 group-hover/property-row:pointer-events-auto group-hover/property-row:opacity-100 group-focus-within/property-row:pointer-events-auto group-focus-within/property-row:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100 touch:pointer-events-auto touch:opacity-100';
 
   const stopRowInteraction = (event: MouseEvent) => {
     event.preventDefault();
@@ -676,12 +678,7 @@ function PropertyRowActions(props: {
   return (
     <Show when={hasActions()}>
       <div
-        class={cn(
-          'flex shrink-0 items-center gap-0.5 transition-opacity',
-          'pointer-events-none opacity-0',
-          'group-hover/property-row:pointer-events-auto group-hover/property-row:opacity-100 group-focus-within/property-row:pointer-events-auto group-focus-within/property-row:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100',
-          'touch:pointer-events-auto touch:opacity-100'
-        )}
+        class="flex shrink-0 items-center gap-0.5"
         onMouseDown={stopRowInteraction}
       >
         <Show when={canRemove()}>
@@ -693,7 +690,10 @@ function PropertyRowActions(props: {
             title="Remove from entity"
             aria-label="Remove from entity"
             disabled={isSaving()}
-            class="text-ink-muted hover:bg-hover hover:text-failure-ink"
+            class={cn(
+              'text-ink-muted transition-opacity hover:bg-hover hover:text-failure-ink',
+              actionVisibility
+            )}
             onClick={removeFromEntity}
           >
             <TrashIcon class="size-4" />
@@ -710,8 +710,9 @@ function PropertyRowActions(props: {
             aria-pressed={isPinned()}
             disabled={isSaving()}
             class={cn(
-              'hover:bg-hover',
-              isPinned() ? 'text-accent' : 'text-ink-muted hover:text-ink'
+              'transition-opacity hover:bg-hover',
+              isPinned() ? 'text-accent' : 'text-ink-muted hover:text-ink',
+              !isPinned() && actionVisibility
             )}
             onClick={togglePin}
           >
