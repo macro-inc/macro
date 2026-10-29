@@ -239,6 +239,15 @@ on desktop and mobile. Tool results render through
 `lib/core/component/AI/component/tool/Canvas.tsx`; edits arrive through live sync.
 The shared plain-text Lexical codec is `packages/lexical-core/canvas-text.ts`.
 
+## Message notification reads
+
+Gate automatic message notification reads on the actual message element
+intersecting the visible scroll area, excluding floating chrome and background
+tabs. Share visibility observers per thread list, including standalone threads;
+never treat virtualized overscan or a visible thread parent as seeing its replies.
+The backend-free desktop/phone/tablet regression is
+`bunx playwright test --config src/features/notifications/browser-test/playwright.config.ts`.
+
 ## Development Patterns
 
 Route database row rename and delete through `renameDatabase` and
