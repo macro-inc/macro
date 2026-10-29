@@ -1,17 +1,9 @@
-import { t } from '@app/lib/i18n';
 import { SidePanel } from '@components/app/side-panel/SidePanel';
 import { useIsAuthenticated } from '@core/auth';
-import type { BlockAlias, BlockName } from '@core/block';
-import { PopupPreview } from '@core/component/DocumentPreview';
-import { HoverCard } from '@core/component/HoverCard';
-import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
-import { itemToBlockName } from '@core/constant/allBlocks';
-import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import Plus from '@icon/system/regular/plus.svg';
 import PushPinIcon from '@icon/system/regular/push-pin.svg';
 import PushPinSlashIcon from '@icon/system/regular/push-pin-slash.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
-import DeleteIcon from '@icon/system/regular/x.svg';
 import { Property as PropertyNS, useProperty } from '@property';
 import { AddPropertyButton } from '@property/component/AddPropertyButton';
 import { Modals } from '@property/component/modal';
@@ -23,7 +15,7 @@ import {
 } from '@property/context/PropertiesContext';
 import { resolvePinnedPropertyIds } from '@property/core/pinned-property-ids';
 import { useAllProperties } from '@property/editor/hooks/useAllProperties';
-import { useEntityProperties, usePropertyEntityDisplay } from '@property/hooks';
+import { useEntityProperties } from '@property/hooks';
 import { isTaggableEntityType, TagsRow } from '@property/tags';
 import type {
   Property,
@@ -31,11 +23,10 @@ import type {
   PropertyDefinitionDomain,
 } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
-import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useTagsQuery } from '@queries/properties/tags';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { Badge, Button, CollectionEmptyState, Layer } from '@ui';
+import { Badge, Button, Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
   createEffect,
@@ -49,6 +40,10 @@ import {
   Switch,
 } from 'solid-js';
 import { match } from 'ts-pattern';
+import {
+  EntityCollectionProperty,
+  NonUserEntityChip,
+} from './EntityCollectionProperty';
 
 export interface EntityPropertiesSectionProps {
   entityId: string;
@@ -398,15 +393,22 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
                   <EntityCollectionProperty
                     entityId={props.entityId}
                     loading={isLoading()}
+                    onRefresh={refetch}
                     property={property}
-                    canRemoveFromEntity={
-                      !defaultPinnedDefinitionIds().has(
-                        property.propertyDefinitionId
-                      )
-                    }
-                    onRemovePendingProperty={removePendingProperty}
-                    onPropertyPinned={
-                      props.onPropertyPinned ? pinProperty : undefined
+                    actions={
+                      <PropertyRowActions
+                        canRemoveFromEntity={
+                          !defaultPinnedDefinitionIds().has(
+                            property.propertyDefinitionId
+                          )
+                        }
+                        pinFirst
+                        property={property}
+                        onRemovePendingProperty={removePendingProperty}
+                        onPropertyPinned={
+                          props.onPropertyPinned ? pinProperty : undefined
+                        }
+                      />
                     }
                   />
                 )}
@@ -936,280 +938,6 @@ function NonUserEntityValue(props: {
       </div>
     </div>
   );
-}
-
-function EntityCollectionProperty(props: {
-  canRemoveFromEntity: boolean;
-  entityId: string;
-  loading?: boolean;
-  onRemovePendingProperty: (property: Property) => void;
-  onPropertyPinned?: (propertyId: string) => void;
-  property: Property;
-}) {
-  const ctx = usePropertiesContext();
-
-  return (
-    <PropertyNS.Root
-      property={props.property}
-      canEdit={ctx.canEdit}
-      onSave={ctx.saveHandler.saveProperty}
-      onRefresh={ctx.onRefresh}
-    >
-      <EntityCollectionPropertyBody
-        canRemoveFromEntity={props.canRemoveFromEntity}
-        loading={props.loading}
-        property={props.property}
-        onRemovePendingProperty={props.onRemovePendingProperty}
-        onPropertyPinned={props.onPropertyPinned}
-      />
-      <PropertyNS.PopoverEditor
-        entitySelfFilter={{
-          entityType: ctx.entityType,
-          blockId: props.entityId,
-        }}
-      />
-    </PropertyNS.Root>
-  );
-}
-
-function EntityCollectionPropertyBody(props: {
-  canRemoveFromEntity: boolean;
-  loading?: boolean;
-  onRemovePendingProperty: (property: Property) => void;
-  onPropertyPinned?: (propertyId: string) => void;
-  property: Property;
-}) {
-  const ctx = usePropertiesContext();
-  const propertyCtx = useProperty();
-  const entities = () => getEntityValues(props.property);
-  const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
-  const handleAdd: JSX.EventHandler<HTMLButtonElement, MouseEvent> = (event) => {
-    event.stopPropagation();
-    if (isReadOnly()) return;
-    propertyCtx.openEditor(event.currentTarget);
-  };
-
-  const handleRemoveEntity = async (entityId: string) => {
-    const remaining = entities().filter(
-      (entity) => entity.entity_id !== entityId
-    );
-    await ctx.saveHandler.saveProperty(props.property, {
-      valueType: 'ENTITY',
-      refs: remaining.length > 0 ? remaining : null,
-    });
-    ctx.onRefresh();
-  };
-
-  return (
-    <div class="group/property-row min-w-0 py-2">
-      <div class="flex items-center justify-between gap-2">
-        <span
-          class="min-w-0 truncate text-ink-muted"
-          title={props.property.displayName}
-        >
-          {props.property.displayName}
-        </span>
-        <div class="ml-auto flex shrink-0 items-center">
-          <Show when={!isReadOnly() && entities().length > 0}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              class="text-ink-extra-muted"
-              aria-label={`Add ${props.property.displayName}`}
-              onClick={handleAdd}
-            >
-              <Plus class="size-4" />
-            </Button>
-          </Show>
-          <PropertyRowActions
-            canRemoveFromEntity={props.canRemoveFromEntity}
-            pinFirst
-            property={props.property}
-            onRemovePendingProperty={props.onRemovePendingProperty}
-            onPropertyPinned={props.onPropertyPinned}
-          />
-        </div>
-      </div>
-      <div class="mt-2 flex flex-wrap gap-1.5">
-        <For
-          each={entities()}
-          fallback={
-            <Show when={!props.loading}>
-              <CollectionEmptyState
-                message={t('common.emptyCollection')}
-                action={
-                  <Show when={!isReadOnly()}>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="xs"
-                      class="text-ink-extra-muted"
-                      onClick={handleAdd}
-                    >
-                      <Plus class="size-4" />
-                      {t('common.add')}
-                    </Button>
-                  </Show>
-                }
-              />
-            </Show>
-          }
-        >
-          {(entityRef) => (
-            <NonUserEntityChip
-              property={props.property}
-              entityId={entityRef.entity_id}
-              entityType={entityRef.entity_type}
-              specificMessageId={entityRef.specific_message_id}
-              canEdit={!isReadOnly()}
-              onRemove={() => handleRemoveEntity(entityRef.entity_id)}
-              onEdit={(anchor) => {
-                if (isReadOnly()) return;
-                propertyCtx.openEditor(anchor);
-              }}
-            />
-          )}
-        </For>
-      </div>
-    </div>
-  );
-}
-
-function NonUserEntityChip(props: {
-  property: Property;
-  entityId: string;
-  entityType: EntityType;
-  specificMessageId?: string | null;
-  canEdit?: boolean;
-  onRemove?: () => void;
-  onEdit?: (anchor?: HTMLElement) => void;
-}) {
-  let containerRef: HTMLDivElement | undefined;
-  const { name, icon } = usePropertyEntityDisplay(
-    () => props.entityId,
-    () => props.entityType,
-    {
-      specificMessageId: () => props.specificMessageId,
-    }
-  );
-  const previewBlockType = () =>
-    getDocumentPreviewFallbackBlockType(props.entityType);
-  const isDocumentPreviewEntity = () =>
-    props.entityType === 'DOCUMENT' || props.entityType === 'TASK';
-
-  const openEditor = (event: MouseEvent) => {
-    if (!props.canEdit || !props.onEdit) return;
-    event.stopPropagation();
-    props.onEdit(containerRef);
-  };
-
-  return (
-    <Layer depth={2}>
-      <div
-        ref={containerRef}
-        class="inline-flex min-w-0 max-w-full border h-7 items-stretch border-edge-muted rounded-md bg-surface text-ink overflow-clip"
-      >
-        <Show
-          when={isDocumentPreviewEntity()}
-          fallback={
-            <button
-              type="button"
-              class="flex min-w-0 max-w-full items-center gap-1.5 px-2 text-left"
-              onClick={openEditor}
-              disabled={!props.canEdit}
-            >
-              <span class="shrink-0 flex items-center">{icon()}</span>
-              <span class="min-w-0 truncate">{name()}</span>
-            </button>
-          }
-        >
-          <DocumentEntityChipButton
-            entityId={props.entityId}
-            fallbackBlockType={previewBlockType()}
-            icon={icon()}
-            name={name()}
-          />
-        </Show>
-        <Show when={props.canEdit && props.onRemove}>
-          <div class="border-l border-edge-muted" />
-          <Button
-            variant="ghost"
-            type="button"
-            size="icon-sm"
-            class="flex w-6 p-1 h-full shrink-0 rounded-none text-ink-muted not-disabled:hover:text-failure-ink"
-            onClick={(event) => {
-              event.stopPropagation();
-              props.onRemove?.();
-            }}
-            aria-label={`Remove ${name()}`}
-          >
-            <DeleteIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-          </Button>
-        </Show>
-      </div>
-    </Layer>
-  );
-}
-
-function DocumentEntityChipButton(props: {
-  entityId: string;
-  fallbackBlockType: BlockName | BlockAlias | undefined;
-  icon: JSX.Element;
-  name: string;
-}) {
-  const [item] = useItemPreview(() => ({
-    id: props.entityId,
-    type: 'document',
-  }));
-  const blockType = () => {
-    const preview = item();
-    if (isAccessiblePreviewItem(preview)) {
-      return itemToBlockName(preview);
-    }
-    return props.fallbackBlockType;
-  };
-  const navHandlers = useSplitNavigationHandler<HTMLButtonElement>((event) => {
-    const targetBlockType = blockType();
-    if (!targetBlockType) return;
-    event.stopPropagation();
-    openDocument(targetBlockType, props.entityId, {}, event.shiftKey);
-  });
-
-  return (
-    <button
-      type="button"
-      class="flex min-w-0 max-w-full items-center gap-1.5 px-2 text-left"
-      {...navHandlers}
-    >
-      <span class="shrink-0 flex items-center">{props.icon}</span>
-      <HoverCard
-        trigger={<span class="truncate">{props.name}</span>}
-        content={
-          <PopupPreview
-            mouseEnter={() => {}}
-            mouseLeave={() => {}}
-            documentInfo={{
-              id: props.entityId,
-              name: props.name,
-              type: blockType() ?? 'unknown',
-              params: {},
-              isOpenable: true,
-            }}
-          />
-        }
-        triggerClass="min-w-0 truncate"
-      />
-    </button>
-  );
-}
-
-function getDocumentPreviewFallbackBlockType(
-  entityType: EntityType
-): BlockName | BlockAlias | undefined {
-  if (entityType === 'TASK') return 'task';
-  if (entityType === 'DOCUMENT') return undefined;
-  return undefined;
 }
 
 function InputValue() {

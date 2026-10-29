@@ -152,6 +152,20 @@ action; it uses the theme accent. Use neutral for solid monochrome emphasis and
 secondary for softer neutral actions. Loading actions use `loading`. Mobile
 confirmation drawers use the same action hierarchy.
 
+## Property collections
+
+Multi-entity property collections in the information panel accept compatible app
+items dragged from lists. The empty frame and populated collection body are the
+same drop target; a compatible hover highlights the body, and the empty frame
+shows **Drop to add**. Dropping adds a reference without moving the original item.
+Existing references stay in place. Duplicate references, the owning entity,
+unsupported item types, and types outside the property's restriction are ignored.
+Read-only, metadata, loading, saving, and open-editor states reject drops.
+
+The **Add** action remains the keyboard/touch alternative. This target does not
+upload files dragged from the computer. A persisted drop changes property data;
+use only disposable items and properties when that mutation is authorized.
+
 ## List-item sharing
 
 Right-click a shareable list row and choose **Share**. The sharing dialog must
