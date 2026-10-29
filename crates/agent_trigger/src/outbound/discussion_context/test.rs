@@ -4,8 +4,9 @@ use entity_access::domain::models::{AccessLevel, Entity, EntityPermission};
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{
     api::MockMessageReader,
-    models::{BotSenderProfile, ImportedAuthor, MessageThread, ThreadState},
+    models::{BotSenderProfile, ImportedAuthor, MessageAttachment, MessageThread, ThreadState},
 };
+use trigger_context::ContextAttachment;
 
 /// The lexical service's lookups, each answering one fixed result.
 struct Lexical {
@@ -149,6 +150,14 @@ fn entry(message: &Message) -> ContextMessage {
         author: person(message.sender_id.as_user().unwrap().email_str()),
         content: message.content.clone(),
         posted_at: message.created_at,
+        attachments: message
+            .attachments
+            .iter()
+            .map(|attachment| ContextAttachment {
+                entity_type: attachment.entity_type.clone(),
+                entity_id: attachment.entity_id.clone(),
+            })
+            .collect(),
     }
 }
 
@@ -276,6 +285,7 @@ async fn a_document_comment_carries_its_whole_thread_through_the_prompt() {
                         },
                         content: "is this right?".to_owned(),
                         posted_at: at(0),
+                        attachments: Vec::new(),
                     },
                     ContextMessage {
                         id: Uuid::from_u128(2),
@@ -286,6 +296,7 @@ async fn a_document_comment_carries_its_whole_thread_through_the_prompt() {
                         },
                         content: "@agent explain this paragraph".to_owned(),
                         posted_at: at(5),
+                        attachments: Vec::new(),
                     },
                 ],
                 messages_omitted: false,
@@ -293,6 +304,48 @@ async fn a_document_comment_carries_its_whole_thread_through_the_prompt() {
             channel: vec![],
         }
     );
+}
+
+#[tokio::test]
+async fn a_thread_root_image_travels_on_its_context_message() {
+    let parent = document();
+    let mut root = posted(&parent, 1, None, "alice@example.com", "is this right?", 0);
+    root.attachments = vec![MessageAttachment {
+        id: Uuid::from_u128(9),
+        entity_type: "static/image".to_owned(),
+        entity_id: "9ec21122-4bd8-473f-bfb0-21d2e6e5f03b".to_owned(),
+        width: None,
+        height: None,
+        created_at: at(0),
+    }];
+    let prompt = comment(&parent);
+    let mut source = MockMessageReader::new();
+    let prompt_message = prompt.clone();
+    source
+        .expect_get()
+        .withf(|_, id| *id == Uuid::from_u128(2))
+        .returning(move |_, _| Ok(prompt_message.clone()));
+    source.expect_preceding().never();
+    let expected = parent.entity_id();
+    let thread_replies = vec![prompt.clone()];
+    source
+        .expect_get_thread()
+        .once()
+        .withf(move |access, root_id| {
+            access.entity().entity_id == expected && *root_id == Uuid::from_u128(1)
+        })
+        .return_once(move |_, _| Ok(discussion(root, thread_replies, None)));
+
+    let context = context_from(source, document_names(), Lexical::none(), &prompt).await;
+    let thread = context.thread.expect("a comment has a thread");
+    assert_eq!(
+        thread.messages[0].attachments,
+        [ContextAttachment {
+            entity_type: "static/image".to_owned(),
+            entity_id: "9ec21122-4bd8-473f-bfb0-21d2e6e5f03b".to_owned(),
+        }]
+    );
+    assert!(thread.messages[1].attachments.is_empty());
 }
 
 /// "please fix" in thread A, posted while another thread was busier. The
@@ -537,6 +590,7 @@ async fn deleted_blank_imported_and_bot_messages_read_as_their_authors_wrote_the
                     },
                     content: "from slack".to_owned(),
                     posted_at: at(2),
+                    attachments: Vec::new(),
                 }],
                 messages_omitted: false,
             },
@@ -551,6 +605,7 @@ async fn deleted_blank_imported_and_bot_messages_read_as_their_authors_wrote_the
                     },
                     content: "deployed v2".to_owned(),
                     posted_at: at(3),
+                    attachments: Vec::new(),
                 }],
                 messages_omitted: false,
             },
@@ -629,6 +684,7 @@ async fn a_quote_reply_carries_the_quoted_message_even_outside_the_window() {
                 },
                 content: "the spinner never stops".to_owned(),
                 posted_at: at(0),
+                attachments: Vec::new(),
             }),
         }
     );

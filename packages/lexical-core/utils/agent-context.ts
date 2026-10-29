@@ -35,6 +35,14 @@ export type ContextPerson = {
   email?: string;
 };
 
+/** A file attached to a context message. */
+export type ContextAttachment = {
+  /** What was attached, such as `static/image`, `static/video`, or `document`. */
+  entity_type: string;
+  /** Its id. For a static file, the file id used in `/file/{id}`. */
+  entity_id: string;
+};
+
 /** A message the agent may read. */
 export type ContextMessage = {
   id: string;
@@ -42,6 +50,8 @@ export type ContextMessage = {
   /** Internal markdown. */
   content: string;
   posted_at: string;
+  /** Absent when empty. */
+  attachments?: ContextAttachment[];
 };
 
 /** Messages of one discussion, oldest first. */
@@ -709,19 +719,80 @@ type DiscussionReading = {
 
 type MessageMarker = { attribute: string; messageId: string };
 
+/** Public origin MCP channel tools use for static-file attachment URLs. */
+const STATIC_FILE_PUBLIC_ORIGIN = 'https://static-file-service.macro.com';
+
+function isStaticFileId(entityId: string): boolean {
+  return (
+    entityId.length > 0 &&
+    [...entityId].every(
+      (character) =>
+        (character >= '0' && character <= '9') ||
+        (character >= 'a' && character <= 'z') ||
+        (character >= 'A' && character <= 'Z') ||
+        character === '-' ||
+        character === '_'
+    )
+  );
+}
+
+function attachmentUrl(
+  entityType: string,
+  entityId: string
+): string | undefined {
+  if (entityType !== 'static/image' && entityType !== 'static/video') {
+    return undefined;
+  }
+  if (!isStaticFileId(entityId)) return undefined;
+  return `${STATIC_FILE_PUBLIC_ORIGIN}/file/${entityId}`;
+}
+
+function attachmentNodes(
+  attachments: ContextAttachment[] | undefined
+): FxpNode[] {
+  return (attachments ?? []).map((attachment) =>
+    el(
+      'attachment',
+      [],
+      present({
+        type: attachment.entity_type,
+        id: attachment.entity_id,
+        url: attachmentUrl(attachment.entity_type, attachment.entity_id),
+      })
+    )
+  );
+}
+
 function contextMessageNode(
   message: ContextMessage,
   marker: MessageMarker
 ): FxpNode {
   return el(
     'message',
-    [text(readable(message.content))],
+    [text(readable(message.content)), ...attachmentNodes(message.attachments)],
     present({
       id: message.id,
       ...personAttributes(message.author, 'author'),
       at: message.posted_at,
       [marker.attribute]: message.id === marker.messageId ? 'true' : undefined,
     })
+  );
+}
+
+function discussionHasAttachments(discussion: DiscussionContext): boolean {
+  const quoted =
+    discussion.reply_target.kind === 'quote'
+      ? discussion.reply_target.message
+      : undefined;
+  const threads = [
+    ...(discussion.thread ? [discussion.thread] : []),
+    ...(discussion.channel ?? []),
+  ];
+  return (
+    (quoted?.attachments?.length ?? 0) > 0 ||
+    threads.some((thread) =>
+      thread.messages.some((message) => (message.attachments?.length ?? 0) > 0)
+    )
   );
 }
 
@@ -951,6 +1022,13 @@ function discussionNode(
       : []),
     personNode('sender', discussion.sender),
     contextReplyTargetNode(discussion.reply_target, marker, reading.subject),
+    ...(discussionHasAttachments(discussion)
+      ? [
+          note(
+            'Attachments are listed on each message and can be fetched by their url.'
+          ),
+        ]
+      : []),
     ...(discussion.thread
       ? [contextThreadNode(discussion.thread, marker)]
       : []),

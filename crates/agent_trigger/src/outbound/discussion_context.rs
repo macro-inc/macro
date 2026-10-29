@@ -24,8 +24,8 @@ use messages::domain::{
     service::MessageView,
 };
 use trigger_context::{
-    ChannelType, CommentAnchor, ContextMessage, ContextPerson, ContextThread, DiscussionContext,
-    DiscussionSurface, MarkedPassage, ReplyTarget,
+    ChannelType, CommentAnchor, ContextAttachment, ContextMessage, ContextPerson, ContextThread,
+    DiscussionContext, DiscussionSurface, MarkedPassage, ReplyTarget,
 };
 
 use crate::domain::{
@@ -665,6 +665,14 @@ impl Authors {
             author: self.author(message),
             content: message.content.trim().to_owned(),
             posted_at: message.created_at,
+            attachments: message
+                .attachments
+                .iter()
+                .map(|attachment| ContextAttachment {
+                    entity_type: attachment.entity_type.clone(),
+                    entity_id: attachment.entity_id.clone(),
+                })
+                .collect(),
         }
     }
 

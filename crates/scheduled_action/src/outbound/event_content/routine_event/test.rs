@@ -568,6 +568,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
                             author: ana.clone(),
                             content: "Login crashes on Safari".into(),
                             posted_at: at(1),
+                            attachments: Vec::new(),
                         },
                         ContextMessage {
                             id: answer_id,
@@ -578,12 +579,14 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
                             },
                             content: "Fixed in #812".into(),
                             posted_at: at(2),
+                            attachments: Vec::new(),
                         },
                         ContextMessage {
                             id: prompt_id,
                             author: ana,
                             content: "Still broken on Safari 17, can someone look?".into(),
                             posted_at: at(4),
+                            attachments: Vec::new(),
                         },
                     ],
                     messages_omitted: false,

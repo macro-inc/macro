@@ -91,11 +91,17 @@ const triggerPerson = z.object({
   email: z.string().optional(),
 });
 
+const triggerAttachment = z.object({
+  entity_type: z.string().min(1),
+  entity_id: z.string().min(1),
+});
+
 const triggerMessage = z.object({
   id: z.string().min(1),
   author: triggerPerson,
   content: z.string(),
   posted_at: z.string().min(1),
+  attachments: z.array(triggerAttachment).optional(),
 });
 
 const triggerThread = z.object({

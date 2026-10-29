@@ -86,6 +86,14 @@ wakes; interrupted quiet batches return to the next real prompt.
   unset). Use CI's process isolation for the full database-backed suite so each
   test has its own process and runtime.
 
+## Gotchas
+
+- Prompt attachments include static files on the mentioning message and on
+  the rest of its thread (mention first, then root and replies), capped at 8
+  and deduped by file id. Background channel messages are not included. The
+  `<m-agent-context>` XML lists every attachment per message; ACP
+  `resource_link`s are what vision models actually fetch.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/security.md`
