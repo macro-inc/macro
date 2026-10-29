@@ -90,7 +90,7 @@ Macro Chat is designed to be more focused than Slack. The first couple of replie
 We've also added ways for you to bring in conversations outside of your team into Macro. We wanted to make sure that all your external and internal communication can live in Macro.
 
 - Add people outside your team to Macro chats.
-- Connect your WhatsApp account to bring selected direct and group chats.
+- Connect your WhatsApp account to access selected direct and group chats.
 - Read, reply to, and share your WhatsApp conversations from Macro.
 
 [Messages docs &rarr;](https://docs.macro.com/product/channels)
@@ -248,26 +248,6 @@ Deeper reading: [key concepts](https://docs.macro.com/concepts/blocks) covers bl
 To run the frontend against hosted services, or to run the local stack, follow [Running locally](docs/development/running-locally.md).
 
 To contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
-
-<br />
-
-# Layout
-
-```
-macro/
-├── apps/
-│   ├── web/       SolidJS client — browser, Tauri desktop, mobile
-│   └── docs/      docs.macro.com
-├── services/      42 deployable services, workers, and Lambda handlers
-├── crates/        167 Rust libraries — domain logic, models, db clients
-├── packages/      shared TypeScript — collaboration, lexical-core, loro-mirror
-├── infra/         Pulumi definitions
-├── docker/        local Compose stack
-├── nix/           pinned dev shell and build inputs
-└── tooling/       repo scripts and code generators
-```
-
-Services follow a hexagonal layout: inbound adapters, a domain core with ports, outbound adapters. [`docs/development/style-guide.md`](docs/development/style-guide.md) has the conventions and [`CONTRIBUTING.md`](CONTRIBUTING.md) covers the PR process.
 
 <br />
 
