@@ -41,6 +41,8 @@ vi.mock('@service-connection/websocket', () => ({
 vi.mock('@queries/pipedream-connectors', () => ({
   connectPipedreamApp: mocks.connect,
   usePipedreamConnectedSlugs: () => ({ slugs: () => new Set<string>() }),
+  usePipedreamOverlaysQuery: () => ({ isPending: false, data: [] }),
+  overlaidAppSlug: () => undefined,
 }));
 vi.mock('./use-connections-model', () => ({
   useConnectionsModel: () => ({

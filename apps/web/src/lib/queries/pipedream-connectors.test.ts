@@ -57,7 +57,7 @@ vi.mock('@service-cognition/client', () => ({
   },
 }));
 
-import { connectPipedreamApp } from './pipedream-connectors';
+import { connectPipedreamApp, overlaidAppSlug } from './pipedream-connectors';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -269,5 +269,21 @@ describe('a backend without overlays', () => {
     event({ type: 'close' });
     expect(await pending).toBe('closed');
     expect(mocks.token).toHaveBeenCalledOnce();
+  });
+});
+
+describe('overlaidAppSlug', () => {
+  const overlays = [
+    { app_slug: 'sentry', server_url: 'https://mcp.sentry.dev/mcp' },
+  ];
+  it('matches a connected server to its catalog app despite a trailing slash', () => {
+    expect(overlaidAppSlug(overlays, 'https://mcp.sentry.dev/mcp/')).toBe(
+      'sentry'
+    );
+  });
+  it('leaves custom servers unmatched', () => {
+    expect(
+      overlaidAppSlug(overlays, 'https://example.com/mcp')
+    ).toBeUndefined();
   });
 });

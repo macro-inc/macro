@@ -8,7 +8,7 @@ import {
   useUpdatePipedreamConnectionMutation,
 } from '@queries/pipedream-connectors';
 import { Button, Dialog, Panel } from '@ui';
-import { createEffect, createSignal, type JSX, on } from 'solid-js';
+import { createEffect, createSignal, type JSX, on, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ConnectAction } from '../integration-ui';
 import {
@@ -30,6 +30,16 @@ import {
 import type { Leftover } from './model';
 import { useNativeMcpActions } from './native-actions';
 
+/** Overlaid catalog apps read as agent tools; other native servers are custom. */
+export function leftoverCategories(
+  leftover: Leftover,
+  overlaidAppSlug: string | undefined
+): string[] {
+  return leftover.kind === 'native-mcp' && !overlaidAppSlug
+    ? ['Custom MCP']
+    : ['Agent tools'];
+}
+
 function leftoverDisabled(leftover: Leftover): boolean {
   return match(leftover)
     .with({ kind: 'native-mcp' }, (row) => row.authenticated && !row.enabled)
@@ -37,7 +47,11 @@ function leftoverDisabled(leftover: Leftover): boolean {
     .exhaustive();
 }
 
-export function LeftoverRow(props: { leftover: Leftover }) {
+export function LeftoverRow(props: {
+  leftover: Leftover;
+  /** The catalog app a native server stands in for, when it is overlaid. */
+  overlaidAppSlug?: string;
+}) {
   const [disconnect, setDisconnect] = createSignal<DisconnectConfirm | null>(
     null
   );
@@ -296,14 +310,22 @@ export function LeftoverRow(props: { leftover: Leftover }) {
     match(props.leftover)
       .with({ kind: 'native-mcp' }, (item) => (
         <IntegrationListRow
-          icon={<PlugIcon />}
+          icon={
+            <Show when={props.overlaidAppSlug} fallback={<PlugIcon />}>
+              {(appSlug) => (
+                <PipedreamConnectorIcon appSlug={appSlug()} class="size-5" />
+              )}
+            </Show>
+          }
           name={item.title}
           description={
             connectionFailed()
               ? `Last attempt failed · ${item.subtitle}`
-              : item.subtitle
+              : props.overlaidAppSlug
+                ? 'Agents can use this app when you ask them to. Nothing is copied into Macro.'
+                : item.subtitle
           }
-          categories={['Custom MCP']}
+          categories={leftoverCategories(item, props.overlaidAppSlug)}
           status={status()}
           statusLabel={item.authenticated ? undefined : 'Not connected'}
           muted={status() === 'disconnected'}

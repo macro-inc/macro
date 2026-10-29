@@ -7,9 +7,12 @@ import {
 } from '@core/pipedream/pendingConnect';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PlusIcon from '@icon/system/regular/plus.svg';
+import { queryReadyGate } from '@queries/gate';
 import {
   connectPipedreamApp,
+  overlaidAppSlug,
   usePipedreamConnectedSlugs,
+  usePipedreamOverlaysQuery,
 } from '@queries/pipedream-connectors';
 import { Button } from '@ui';
 import {
@@ -38,7 +41,7 @@ import {
   IntegrationsListHeader,
   matchesIntegration,
 } from './integrations-list';
-import { LeftoverRow } from './leftover-row';
+import { LeftoverRow, leftoverCategories } from './leftover-row';
 import {
   type ConnectionsModel,
   capabilitiesFor,
@@ -169,14 +172,16 @@ function ConnectionsContent(props: IntegrationsViewProps) {
   );
 }
 
-function leftoverMatches(leftover: Leftover, query: string): boolean {
+function leftoverMatches(
+  leftover: Leftover,
+  overlaidAppSlug: string | undefined,
+  query: string
+): boolean {
   return matchesIntegration(
     {
       name: leftover.title,
       description: leftover.kind === 'native-mcp' ? leftover.subtitle : '',
-      categories: [
-        leftover.kind === 'native-mcp' ? 'Custom MCP' : 'Agent tools',
-      ],
+      categories: leftoverCategories(leftover, overlaidAppSlug),
     },
     query
   );
@@ -226,8 +231,18 @@ function IntegrationsOverview(
   const inUse = () => matching().filter((item) => item.status !== 'available');
   const available = () =>
     matching().filter((item) => item.status === 'available');
+  // Overlaid catalog apps connect as native MCP servers; show them as the app.
+  const overlays = usePipedreamOverlaysQuery();
+  const overlaidSlugFor = (leftover: Leftover) =>
+    leftover.kind === 'native-mcp' && queryReadyGate(overlays)
+      ? overlaidAppSlug(overlays.data, leftover.url)
+      : undefined;
   const leftovers = () =>
-    props.model().leftovers.filter((row) => leftoverMatches(row, query()));
+    props
+      .model()
+      .leftovers.filter((row) =>
+        leftoverMatches(row, overlaidSlugFor(row), query())
+      );
 
   // Includes overlaid apps, which are connected as native MCP servers.
   const connected = usePipedreamConnectedSlugs();
@@ -299,7 +314,12 @@ function IntegrationsOverview(
             {(item) => <IntegrationItemRow item={item} />}
           </For>
           <For each={leftovers()}>
-            {(leftover) => <LeftoverRow leftover={leftover} />}
+            {(leftover) => (
+              <LeftoverRow
+                leftover={leftover}
+                overlaidAppSlug={overlaidSlugFor(leftover)}
+              />
+            )}
           </For>
           <For each={available()}>
             {(item) => <IntegrationItemRow item={item} />}
