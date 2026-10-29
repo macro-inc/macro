@@ -187,6 +187,70 @@ afterEach(() => {
 });
 
 describe('opt-in view restoration', () => {
+  it.each([false, true])(
+    'opens the chat list in the requested split when its remembered channel is open elsewhere (explicit handle: %s)',
+    async (explicitHandle) => {
+      const { router, manager } = setup('/home/~/channels/channel-one');
+      const [leftPane, rightPane] = router.panes();
+      const left = manager.getSplit(manager.splits()[0]!.id)!;
+      const right = manager.getSplit(manager.splits()[1]!.id)!;
+      const rightEntry = router.entry(rightPane!);
+      manager.activateSplit(explicitHandle ? right.id : left.id);
+
+      manager.openWithSplit(
+        { type: 'component', id: 'channels' },
+        {
+          resume: true,
+          allowDuplicate: true,
+          handle: explicitHandle ? left : undefined,
+        }
+      );
+      await router.settled();
+
+      expect(router.entry(leftPane!)?.location.route.matches.at(-1)?.id).toBe(
+        'view-channels'
+      );
+      expect(router.entry(rightPane!)).toBe(rightEntry);
+      expect(manager.activeSplit()?.id).toBe(left.id);
+      expect(router.panes()).toHaveLength(2);
+      await router.navigatePane(leftPane!, -1);
+      expect(router.entry(leftPane!)?.location.route.matches.at(-1)?.id).toBe(
+        'view-home'
+      );
+    }
+  );
+
+  it('opens the list when a remembered channel is held by another pane preview', async () => {
+    const { router, manager } = setup();
+    const leftPane = router.panes()[0]!;
+    await router.navigatePane(leftPane, '/home');
+    await router.open('/drive', { newPane: true });
+    const rightPane = router.panes()[1]!;
+    const left = manager.getSplit(manager.splits()[0]!.id)!;
+    const activate = vi.fn();
+    const owner = Symbol('preview');
+    const unregister = router.claims.register(() => [
+      {
+        owner,
+        pane: rightPane,
+        claim: 'block:channel:channel-one',
+        activate,
+      },
+    ]);
+
+    manager.openWithSplit(
+      { type: 'component', id: 'channels' },
+      { resume: true, allowDuplicate: true, handle: left }
+    );
+    await router.settled();
+
+    expect(router.entry(leftPane)?.location.route.matches.at(-1)?.id).toBe(
+      'view-channels'
+    );
+    expect(activate).not.toHaveBeenCalled();
+    unregister();
+  });
+
   it('restores nested location, search, and UI state through existing layout navigation', async () => {
     const { router, manager } = setup();
     const pane = router.panes()[0]!;

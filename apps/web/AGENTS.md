@@ -28,6 +28,11 @@ Split dragging and composer reflow have a backend-free browser regression:
 `bunx playwright test --config src/lib/core/component/Resize/browser-test/playwright.config.ts`.
 It exercises the real resize solver, scroll container, and Lexical layout primitive.
 
+Desktop app switches open the requested list in the target split when the
+retained detail is claimed by another pane or preview. Keep this check in view
+restoration and preserve entity deduplication and native dock stack restoration;
+`split-layout/tests/view-restoration.test.tsx` covers these navigation paths.
+
 Database document-reference cells have a backend-free desktop/touch regression:
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts references.browser.e2e.ts`.
 It uses the real records view with a local source and picker to exercise opening,
