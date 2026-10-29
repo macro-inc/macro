@@ -1,0 +1,157 @@
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
+import type { CalendarUpdateScope } from '@service-email/client';
+import type { JSX } from 'solid-js';
+import { createEffect, createSignal, createUniqueId } from 'solid-js';
+import type { CalendarEventFormController } from './create-calendar-event-form-controller';
+import type {
+  EventEditorDisabledFields,
+  EventEditorSubmitValues,
+} from './event-form-model';
+import { outOfOfficeNoticeFor } from './out-of-office';
+
+export interface EventFormProps {
+  controller: CalendarEventFormController;
+  /** Whether this host can create and attach Macro call links. */
+  macroCallsEnabled: boolean;
+  isEdit?: boolean;
+  disabledFields?: EventEditorDisabledFields;
+  /** The viewer may add guests but not remove the event's current ones. */
+  addOnlyGuests?: boolean;
+  /** Why a read-only guest list cannot change. */
+  guestsReadOnlyReason?: string;
+  /** An action beside the guests, such as forwarding the invitation. */
+  guestsAction?: JSX.Element;
+  /** The organizer hides the guest list, so the seeded guests are not all of them. */
+  guestListHidden?: boolean;
+  /** Whether the viewer may set what guests may do, as the organizer. */
+  guestPolicyEditable?: boolean;
+  /**
+   * Why the event's title, time, description, location, recurrence and
+   * conferencing cannot change.
+   */
+  detailsReadOnlyReason?: string;
+  showRecurringEditNotice?: boolean;
+  /** Disable interaction without presenting the form as an in-flight save. */
+  disabled?: boolean;
+  pending: boolean;
+  saveError?: string;
+  class?: string;
+  onCalendarChange?: (calendarId: string, color: string) => void;
+  onDirtyChange?: (dirty: boolean) => void;
+  onCancel: () => void;
+  onSubmit: (
+    values: EventEditorSubmitValues,
+    scope?: CalendarUpdateScope
+  ) => void;
+}
+
+/**
+ * Field locks, edit scope, and submission for one event form, shared by the
+ * desktop and mobile layouts through the `EventFormParts`.
+ */
+export function createEventForm(props: EventFormProps) {
+  const formId = createUniqueId();
+  const ids = {
+    dateRangeError: `event-composer-date-range-error-${formId}`,
+    recurrenceReason: `event-composer-recurrence-reason-${formId}`,
+    pastEventWarning: `event-composer-past-event-warning-${formId}`,
+  };
+
+  const controller = props.controller;
+  const state = controller.state;
+  const isEdit = () => props.isEdit ?? false;
+  const formIsDisabled = () => props.pending || props.disabled === true;
+
+  // Recurring edits default to the whole series, matching the long-standing
+  // behavior; "this event" writes a single-occurrence exception.
+  const [editScope, setEditScope] = createSignal<CalendarUpdateScope>('all');
+  // Guest permissions belong to the whole series, so an occurrence edit
+  // returns them to what is stored rather than keep an edit it cannot save.
+  const changeEditScope = (scope: CalendarUpdateScope) => {
+    setEditScope(scope);
+    if (scope === 'this_event') controller.resetGuestPolicy();
+  };
+
+  // An invalid range already speaks for itself; only one line shows at a time.
+  const pastEventWarning = () =>
+    controller.dateRangeError() ? undefined : controller.pastEventWarning();
+  const dateRangeDescribedBy = () => {
+    if (controller.dateRangeError()) return ids.dateRangeError;
+    return pastEventWarning() ? ids.pastEventWarning : undefined;
+  };
+
+  const fieldIsReadOnly = (field: keyof EventEditorDisabledFields) =>
+    props.disabledFields?.[field] === true;
+  const fieldIsDisabled = (field: keyof EventEditorDisabledFields) =>
+    formIsDisabled() || fieldIsReadOnly(field);
+  const detailsLocked = () => props.detailsReadOnlyReason !== undefined;
+  // A single occurrence has no repeat rule of its own; like the guest
+  // permissions, the rule belongs to the whole series. A lock already says
+  // why the rule cannot change.
+  const recurrenceScopeReason = () =>
+    editScope() === 'this_event' && !detailsLocked()
+      ? 'The repeat rule applies to all events. Choose All events to change it.'
+      : undefined;
+  const recurrenceDescribedBy = () =>
+    recurrenceScopeReason() ? ids.recurrenceReason : undefined;
+
+  const capabilities = () => controller.selectedCalendarOption()?.capabilities;
+  const conferenceLocked = () =>
+    isEdit() &&
+    capabilities()?.removeConference === false &&
+    ['microsoft_teams', 'existing'].includes(
+      controller.initialConferenceChoice()
+    );
+  const isOutOfOffice = () => controller.isOutOfOffice();
+  // The decline settings of an edited event are unknown until picked, and the
+  // disclosure must not claim behavior nobody chose.
+  const outOfOfficeNotice = () => {
+    const outOfOffice = state().outOfOffice;
+    if (!isOutOfOffice() || !outOfOffice) return undefined;
+    return outOfOfficeNoticeFor(
+      outOfOffice.autoDeclineMode,
+      outOfOffice.declineMessage
+    );
+  };
+
+  createEffect(() => {
+    const option = controller.selectedCalendarOption();
+    if (option) props.onCalendarChange?.(option.id, option.color);
+  });
+  createEffect(() => props.onDirtyChange?.(controller.isDirty()));
+
+  const submit = () => {
+    const values = controller.submitValues();
+    if (!values || formIsDisabled()) return;
+    props.onSubmit(
+      values,
+      props.showRecurringEditNotice ? editScope() : undefined
+    );
+  };
+
+  return {
+    props,
+    ids,
+    controller,
+    state,
+    resolveAppLink: useMacroMentionLinkResolver(),
+    isEdit,
+    formIsDisabled,
+    editScope,
+    changeEditScope,
+    pastEventWarning,
+    dateRangeDescribedBy,
+    fieldIsReadOnly,
+    fieldIsDisabled,
+    detailsLocked,
+    recurrenceScopeReason,
+    recurrenceDescribedBy,
+    capabilities,
+    conferenceLocked,
+    isOutOfOffice,
+    outOfOfficeNotice,
+    submit,
+  };
+}
+
+export type EventFormState = ReturnType<typeof createEventForm>;
