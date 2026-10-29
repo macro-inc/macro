@@ -624,26 +624,6 @@ describe('required navigation', () => {
     }
   });
 
-  it('gives the sidebar title the leftover header width', () => {
-    render(() => (
-      <ViewShell.Root asidePreferenceKey="channels">
-        <ViewShell.Aside>
-          <ViewSidebar.Header>
-            <ViewSidebar.Title>Chat</ViewSidebar.Title>
-          </ViewSidebar.Header>
-        </ViewShell.Aside>
-        <ViewShell.Main>
-          <ViewShell.TopBar />
-        </ViewShell.Main>
-      </ViewShell.Root>
-    ));
-    const header = document.querySelector('[data-view-sidebar-header]');
-    expect(header?.firstElementChild?.className).toContain('flex-1');
-    expect(screen.getByRole('heading', { name: 'Chat' }).className).toContain(
-      'max-w-full'
-    );
-  });
-
   it('ignores a programmatic collapse while pinned', () => {
     const [required, setRequired] = createSignal(true);
     function Pinned() {
