@@ -35,7 +35,7 @@ We built Macro because we wanted a single operating system for our startup. Ther
 
 Macro is a complete redesign of work software from the ground up as a single system.
 
-Designed by us in NYC and Toronto, dogfooded by our team of ~15 for two years. Built in SolidJS and Rust for speed and reliability. We're focused on building something that any small company or team at a larger company can use as their "operating system".
+Designed by us in NYC and Toronto, dogfooded by our team of ~15 for two years. Built in SolidJS and Rust for speed and reliability. We're focused on building something that teams can use as their "operating system".
 
 <br />
 
@@ -131,7 +131,7 @@ Each surface is purpose-built for its job rather than composed from a generic bl
 
 <br />
 
-# **Multiple email inboxes** w/ good AI tools, integrated CRM
+# **Multiple email inboxes** w/ good AI tools
 
 Macro Mail is inspired by Superhuman's keyboard-first interface with a few key additions:
 
@@ -150,7 +150,7 @@ Macro Mail lives in the same interface as channels, docs, tasks, and code. From 
 
 <br />
 
-# **Team chat** for focused technical discussions
+# **Team chat** for focused discussions
 
 Macro Chat is designed to be more focused than Slack. The first couple of replies show inline and the rest collapse into a thread, so a busy channel stays readable. Copy a link to a message/thread to reference it elsewhere in Macro. Everything is stored in a bidirectional graph, so tasks @link to messages that created them, customer support emails tie into support channels, CRM records get updated when they're discussed in messages, etc. The core idea is that (i) messaging should be the centerpiece around which tasks, mail, docs, and content management are built, all in a lightweight way, and agents should be first-class citizens like human users and (ii) messaging needs to be more focused and readable for technical conversations, and not turn into battles where context is lost and progress is indistinguishable from noise.
 
@@ -161,6 +161,8 @@ Macro Chat is designed to be more focused than Slack. The first couple of replie
 <br />
 
 # **Task management** built around chat
+
+Issue tracking never really worked, at least for us. We really tried and we blamed ourselves, but as we talked to other companies, it turns out that nobody was using their issue tracker "correctly". And if that's the case, the problem is the design of the tool, not the companies that use it.
 
 The core problem with traditional issue trackers or project management tools is that they get out of date. The reason they get out of date is that (i) they're a separate system from where the conversation really happens in team chat (e.g. Slack, Macro, Discord, etc.) and (ii) they don't add much benefit beyond tracking the work. They're a chore with near-term costs and only the promise of long-term benefit. They're too rigid compared to a 2D canvas, too opinionated, and don't match how your project actually functions.
 
