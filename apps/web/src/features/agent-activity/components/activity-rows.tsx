@@ -20,13 +20,13 @@ export type ActivityRowView = {
  */
 export function ActivityRows(props: { rows: readonly ActivityRowView[] }) {
   return (
-    <ul class="my-1 flex min-w-0 flex-col gap-0.5 text-xs" aria-label="Steps">
+    <ul class="my-1 flex min-w-0 flex-col gap-0.5 text-sm" aria-label="Steps">
       {/* Rows can arrive as new objects with every paint. Keyed by step, a
           row updates in place and its spinner and shimmer run on. */}
       <Key each={props.rows} by="id">
         {(row) => (
           <li
-            class="flex min-h-5 min-w-0 items-center gap-2"
+            class="flex min-h-6 min-w-0 items-center gap-2"
             data-status={row().status}
           >
             <StatusIcon status={row().status} />
@@ -56,28 +56,28 @@ function StatusIcon(props: { status: ActivityRowView['status'] }) {
       <Match when={props.status === 'running'}>
         <SpinnerIcon
           aria-hidden={false}
-          class="size-3.5 shrink-0 animate-spin text-ink-muted"
+          class="size-4 shrink-0 animate-spin text-ink-muted"
           aria-label="Running"
         />
       </Match>
       <Match when={props.status === 'completed'}>
         <CheckIcon
           aria-hidden={false}
-          class="size-3.5 shrink-0 text-success"
+          class="size-4 shrink-0 text-success"
           aria-label="Done"
         />
       </Match>
       <Match when={props.status === 'failed'}>
         <XIcon
           aria-hidden={false}
-          class="size-3.5 shrink-0 text-failure"
+          class="size-4 shrink-0 text-failure"
           aria-label="Failed"
         />
       </Match>
       <Match when={props.status === 'interrupted'}>
         <WarningIcon
           aria-hidden={false}
-          class="size-3.5 shrink-0 text-ink-muted"
+          class="size-4 shrink-0 text-ink-muted"
           aria-label="Interrupted: it may or may not have finished"
         />
       </Match>

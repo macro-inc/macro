@@ -1,4 +1,4 @@
-import { TextShimmer } from '@app/features/block-agent/ui';
+import { TextShimmer, WorkingDots } from '@app/features/block-agent/ui';
 import { Key } from '@solid-primitives/keyed';
 import {
   createMemo,
@@ -43,17 +43,10 @@ export function ActivityLine(props: { rows: readonly ActivityRowView[] }) {
   };
   return (
     <div
-      class="my-1 flex min-h-5 min-w-0 items-center gap-2 overflow-hidden text-xs"
+      class="my-1 flex min-h-6 min-w-0 items-center gap-2 overflow-hidden text-sm text-ink-extra-muted"
       role="status"
     >
-      <span
-        aria-hidden="true"
-        class="agent-working-wave flex size-3.5 shrink-0 items-center justify-center gap-[2px] text-ink-extra-muted"
-      >
-        <span class="size-[3px] rounded-full bg-current" />
-        <span class="size-[3px] rounded-full bg-current" />
-        <span class="size-[3px] rounded-full bg-current" />
-      </span>
+      <WorkingDots />
       {/* Keyed by step: the next step slides in, while a step repainted as
           new objects keeps its node and its shimmer runs on. */}
       <Key each={shown()} by="id">

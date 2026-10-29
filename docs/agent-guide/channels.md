@@ -137,13 +137,15 @@ becomes available again so you can retry.
 
 The reply is posted as ordinary messages while the turn runs. Each finished
 passage becomes a message. While a run of steps between passages is open, the
-message shows it as one shimmering line naming the step in progress, a label
+message shows it as one shimmering line, led by the working dots, naming the
+step in progress, a label
 such as `Ran`, `Read`, `Edited`, or `Searching` with a short detail like the
 command or file name for readers with session access. The next step slides in
 as it starts, and steps running at the same time take turns every two seconds.
 A thread reply shows `Thinking…` only while it has no open run; the line
 replaces it. Once the run closes, it folds to a `Used N tools` summary (with
-`· N failed` when a step failed) that opens to compact rows: a status icon
+`· N failed` when a step failed), with a caret after it on hover, that opens
+to compact rows: a status icon
 (spinner, check, cross, or warning for interrupted), the label, and the detail.
 Stored activity snapshots keep the status and label but omit commands and tool
 input details, in both shared threads and DMs. The line follows the session

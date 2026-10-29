@@ -1321,28 +1321,33 @@ html[data-platform='ios'][data-touch-device='true'] :is(
   }
 }
 
+/* One pass, then a rest: the highlight crosses in the first 60% of the
+   period and the label stays dim for the remainder. */
 @keyframes magic-chip-shimmer {
   0% {
     background-position: 100% 0;
   }
+  60%,
   100% {
     background-position: 0% 0;
   }
 }
 
+/* A highlight wider than the label, with a sharp leading edge and a long
+   tail, so the whole label lifts quickly from dim and fades back slowly. */
 .magic-chip-shimmer {
   background: linear-gradient(
     90deg,
-    var(--color-ink-extra-muted) 40%,
-    var(--color-ink) 50%,
-    var(--color-ink-extra-muted) 60%
+    color-mix(in oklch, var(--color-ink-disabled) 60%, transparent) 25%,
+    var(--color-ink-muted) 58%,
+    color-mix(in oklch, var(--color-ink-disabled) 60%, transparent) 70%
   );
-  background-size: 250% 100%;
+  background-size: 400% 100%;
   /* The highlight starts and ends just outside the text, without tiling. */
   background-repeat: no-repeat;
   background-clip: text;
   color: transparent;
-  animation: magic-chip-shimmer 1.8s linear infinite;
+  animation: magic-chip-shimmer 1.2s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1353,38 +1358,27 @@ html[data-platform='ios'][data-touch-device='true'] :is(
   }
 }
 
-/* The three dots leading an open agent turn that has nothing to expand yet.
-   A staggered ripple on the shimmer's period, so the row reads as one motion,
-   not two. */
-@keyframes agent-working-wave {
+/* One edge dot of `WorkingDots`: lit for half a lap, so four of the eight
+   are lit at once and the run chases around the grid. */
+@keyframes agent-working-dot {
   0%,
-  60%,
-  100% {
-    opacity: 0.35;
-    transform: translateY(0);
-  }
-  30% {
+  49% {
     opacity: 1;
-    transform: translateY(-2px);
+  }
+  50%,
+  100% {
+    opacity: 0.2;
   }
 }
 
-.agent-working-wave > * {
-  animation: agent-working-wave 1.8s ease-in-out infinite;
-}
-
-.agent-working-wave > :nth-child(2) {
-  animation-delay: 0.2s;
-}
-
-.agent-working-wave > :nth-child(3) {
-  animation-delay: 0.4s;
+.agent-working-dot {
+  animation: agent-working-dot 0.8s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .agent-working-wave > * {
+  .agent-working-dot {
     animation: none;
-    opacity: 0.55;
+    opacity: 0.6;
   }
 }
 
