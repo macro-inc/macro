@@ -67,7 +67,8 @@ function DateField(props: DateFieldProps) {
           variant: 'secondary',
           size: 'xs',
           class: cn(
-            'max-w-40 justify-start',
+            // A touch more room after the date than the icon has before it.
+            'max-w-40 justify-start pr-2.5',
             props.invalid && 'border-failure text-failure'
           ),
         })}

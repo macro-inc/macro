@@ -320,10 +320,11 @@ function GuestsSheetEditor(props: {
     >
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />
-        {/* Opens as tall as the event sheet beneath it. */}
-        <MobileDrawer.Content targetHeight={92}>
-          <MobileDrawer.Handle />
-          <div class="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 pb-2">
+        {/* Opens as tall as the event sheet beneath it. It does not drag:
+            Cancel and Done own closing, and a drag here would also reach the
+            event sheet, so both slid away together. */}
+        <MobileDrawer.Content targetHeight={92} data-corvu-no-drag>
+          <div class="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 pt-4 pb-2">
             <Button variant="ghost" class="justify-self-start" onClick={cancel}>
               Cancel
             </Button>

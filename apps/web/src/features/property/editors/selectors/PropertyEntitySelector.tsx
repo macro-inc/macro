@@ -456,6 +456,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   useSearchInputFocus(() => searchInputRef);
 
   const fills = () => props.config.fillHeight === true;
+  const keepSearchFocus = (event: Event) => event.preventDefault();
 
   return (
     <div class={cn(fills() && 'flex min-h-0 flex-1 flex-col')}>
@@ -483,7 +484,14 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       </div>
 
       <Show when={totalCount() > 0}>
-        <div class={cn('p-1.5', fills() && 'flex min-h-0 flex-1 flex-col')}>
+        {/* Picking a row keeps focus in the search field: a tap that moved
+            it would drop the phone keyboard until the refocus below. iOS
+            devices still send mousedown after a cancelled pointerdown. */}
+        <div
+          class={cn('p-1.5', fills() && 'flex min-h-0 flex-1 flex-col')}
+          onPointerDown={keepSearchFocus}
+          onMouseDown={keepSearchFocus}
+        >
           <For each={visiblePinnedOptions()}>
             {(option, i) => {
               const isSelected = () => props.selectedOptions().has(option.id);
