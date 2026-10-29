@@ -1,0 +1,219 @@
+import { rowPillClasses } from '@app/features/entity/components/row-pill';
+import { TAG_COLORS } from '@app/features/property/tags/tagColors';
+import { cn, TagDot } from '@ui';
+import { type Component, For, type JSX, Show } from 'solid-js';
+import { match } from 'ts-pattern';
+import { type ConnectionState, StatusDot } from '../integration-ui';
+
+/** Whether an integration is in use; connected rows sort to the top. */
+export type IntegrationStatus = ConnectionState | 'available';
+
+/** One row of the Integrations list. */
+export type IntegrationItem = {
+  id: string;
+  name: string;
+  icon: JSX.Element;
+  /** What it does in Macro, or which accounts are connected. */
+  description: string;
+  categories: string[];
+  status: IntegrationStatus;
+  /** Overrides the status word, e.g. "Reconnect required". */
+  statusLabel?: string;
+  /** Rendered in the row's trailing cell; reads its own reactive state. */
+  Actions: Component;
+};
+
+const CATEGORY_COLORS: Record<string, string> = {
+  Email: TAG_COLORS[0],
+  Calendar: TAG_COLORS[7],
+  Chat: TAG_COLORS[9],
+  Tasks: TAG_COLORS[8],
+  Docs: TAG_COLORS[6],
+  Code: TAG_COLORS[11],
+  Meetings: TAG_COLORS[5],
+  'AI apps': TAG_COLORS[3],
+  'Agent tools': TAG_COLORS[2],
+  'Custom MCP': TAG_COLORS[11],
+};
+
+/** Known categories keep their color; catalog categories get a stable one. */
+function categoryColor(category: string): string {
+  const known = CATEGORY_COLORS[category];
+  if (known) return known;
+  let hash = 0;
+  for (const char of category) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return TAG_COLORS[hash % TAG_COLORS.length];
+}
+
+function statusWord(
+  status: IntegrationStatus,
+  label: string | undefined
+): string | undefined {
+  if (label) return label;
+  return match(status)
+    .with('connected', () => 'Connected')
+    .with('attention', () => 'Needs attention')
+    .with('disconnected', () => 'Off')
+    .with('available', () => undefined)
+    .exhaustive();
+}
+
+/** Matches the name, description and categories, ignoring case. */
+export function matchesIntegration(
+  item: Pick<IntegrationItem, 'name' | 'description' | 'categories'>,
+  query: string
+): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  return [item.name, item.description, ...item.categories]
+    .join(' ')
+    .toLowerCase()
+    .includes(needle);
+}
+
+export function CategoryTags(props: { categories: string[] }) {
+  return (
+    <div class="flex min-w-0 items-center gap-1 overflow-hidden">
+      <For each={props.categories}>
+        {(category) => (
+          <span title={category} class={rowPillClasses('max-w-full shrink')}>
+            <TagDot fill={categoryColor(category)} size="sm" />
+            <span class="min-w-0 truncate">{category}</span>
+          </span>
+        )}
+      </For>
+    </div>
+  );
+}
+
+/**
+ * The list's columns. Category and status drop out on narrow containers, where
+ * the status dot moves beside the name.
+ */
+function Columns(props: {
+  class?: string;
+  children: JSX.Element;
+  role: 'row';
+}) {
+  return (
+    <div
+      role={props.role}
+      class={cn(
+        'grid items-center gap-3 grid-cols-[minmax(0,1fr)_auto]',
+        '@[640px]/integrations:grid-cols-[minmax(0,1fr)_13rem_7rem_12.5rem]',
+        props.class
+      )}
+    >
+      {props.children}
+    </div>
+  );
+}
+
+export function IntegrationsListHeader() {
+  return (
+    <Columns
+      role="row"
+      class="h-8 px-3 text-xs font-medium text-ink-extra-muted"
+    >
+      <span role="columnheader">Name</span>
+      <span role="columnheader" class="hidden @[640px]/integrations:block">
+        Category
+      </span>
+      <span role="columnheader" class="hidden @[640px]/integrations:block">
+        Status
+      </span>
+      <span role="columnheader" class="sr-only">
+        Actions
+      </span>
+    </Columns>
+  );
+}
+
+export function IntegrationListRow(props: {
+  icon: JSX.Element;
+  name: string;
+  description: string;
+  categories: string[];
+  status: IntegrationStatus;
+  statusLabel?: string;
+  /** Soften the row when the integration is paused. */
+  muted?: boolean;
+  children?: JSX.Element;
+}) {
+  const word = () => statusWord(props.status, props.statusLabel);
+  const dotState = () =>
+    props.status === 'available' ? undefined : props.status;
+  return (
+    <Columns
+      role="row"
+      class="min-h-10 rounded-xl px-3 py-1.5 text-sm touch:min-h-[44px] not-touch:hover:bg-list-hover focus-within:bg-list-hover"
+    >
+      <div role="cell" class="flex min-w-0 items-center gap-3">
+        <span
+          aria-hidden="true"
+          class={cn(
+            'flex size-5 shrink-0 items-center justify-center [&_img]:size-5 [&_svg]:size-5',
+            props.muted && 'opacity-50'
+          )}
+        >
+          {props.icon}
+        </span>
+        <div class="flex min-w-0 flex-1 items-baseline gap-2">
+          <span
+            class={cn(
+              'shrink-0 font-medium',
+              props.muted ? 'text-ink-muted' : 'text-ink'
+            )}
+          >
+            {props.name}
+          </span>
+          <Show when={dotState()}>
+            {(state) => (
+              <span class="self-center @[640px]/integrations:hidden">
+                <StatusDot state={state()} label={word()} />
+              </span>
+            )}
+          </Show>
+          <span
+            class="ph-no-capture min-w-0 truncate text-ink-muted"
+            title={props.description}
+          >
+            {props.description}
+          </span>
+        </div>
+      </div>
+      <div role="cell" class="hidden min-w-0 @[640px]/integrations:block">
+        <CategoryTags categories={props.categories} />
+      </div>
+      <div
+        role="cell"
+        class="hidden items-center gap-1.5 text-xs text-ink-muted @[640px]/integrations:flex"
+      >
+        <Show when={dotState()}>
+          {(state) => <StatusDot state={state()} />}
+        </Show>
+        <span>{word() ?? '—'}</span>
+      </div>
+      <div role="cell" class="flex shrink-0 items-center justify-end gap-1">
+        {props.children}
+      </div>
+    </Columns>
+  );
+}
+
+/** Renders an item from the integration sources. */
+export function IntegrationItemRow(props: { item: IntegrationItem }) {
+  return (
+    <IntegrationListRow
+      icon={props.item.icon}
+      name={props.item.name}
+      description={props.item.description}
+      categories={props.item.categories}
+      status={props.item.status}
+      statusLabel={props.item.statusLabel}
+      muted={props.item.status === 'disconnected'}
+    >
+      <props.item.Actions />
+    </IntegrationListRow>
+  );
+}

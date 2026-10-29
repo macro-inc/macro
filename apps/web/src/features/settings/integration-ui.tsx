@@ -46,7 +46,7 @@ export function ConnectAction(props: {
   const inert = () => Boolean(props.disabled || props.loading);
   const className = () =>
     cn(
-      'inline-flex items-center gap-1.5 h-7 touch:min-h-11 px-2 rounded-md text-sm font-medium',
+      'inline-flex items-center gap-1.5 h-7 touch:min-h-11 px-2 rounded-md text-sm font-medium whitespace-nowrap',
       'cursor-default transition-colors',
       'outline-none focus-visible:bg-ink/6',
       inert() && 'opacity-50 pointer-events-none',

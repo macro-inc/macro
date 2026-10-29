@@ -51,6 +51,38 @@ import {
 import { clearSignatureState } from './SignatureSection';
 
 /**
+ * Starts connecting an inbox. Without a provider, the flow asks which one;
+ * Outlook checks that new connections are open first. Repeated clicks while a
+ * connection is starting are ignored.
+ */
+export function useConnectInbox(): (provider?: EmailProvider) => void {
+  const startAddInbox = useAddInboxFlow();
+  // Not a disabled state: disabling the opener drops focus to <body>, which
+  // is where closing the provider chooser would then return it.
+  let addingInbox = false;
+  const connectEmail = (provider?: EmailProvider) =>
+    Telemetry.span('email.link.connect', async (span) => {
+      span.setAttr('email.link.provider', provider ?? 'choose');
+      try {
+        if (provider === 'OUTLOOK' && !(await outlookAvailable())) {
+          span.setAttr('email.link.outcome', 'outlook_unavailable');
+          toast.failure('New Outlook connections are temporarily unavailable.');
+          return;
+        }
+        await startAddInbox({ provider });
+        span.setAttr('email.link.outcome', 'started');
+      } finally {
+        addingInbox = false;
+      }
+    });
+  return (provider) => {
+    if (addingInbox) return;
+    addingInbox = true;
+    fireAndForget(connectEmail(provider), 'add-inbox');
+  };
+}
+
+/**
  * Connected inboxes, one row each, followed by rows to connect another Google
  * Workspace or Outlook account.
  */
@@ -80,9 +112,6 @@ export function EmailCard(props: { class?: string } = {}) {
   const [resyncingIds, setResyncingIds] = createSignal<ReadonlySet<string>>(
     new Set()
   );
-  // Not a disabled state: disabling the opener drops focus to <body>, which
-  // is where closing the provider chooser would then return it.
-  let addingInbox = false;
 
   // The primary inbox is the user's own is_primary link; it sorts to the top
   // and is labelled. Everything else (other own inboxes + delegated/shared) follows.
@@ -96,27 +125,7 @@ export function EmailCard(props: { class?: string } = {}) {
     return { primary, others };
   });
 
-  // Without a provider, the flow asks which one.
-  const connectEmail = (provider?: EmailProvider) =>
-    Telemetry.span('email.link.connect', async (span) => {
-      span.setAttr('email.link.provider', provider ?? 'choose');
-      try {
-        if (provider === 'OUTLOOK' && !(await outlookAvailable())) {
-          span.setAttr('email.link.outcome', 'outlook_unavailable');
-          toast.failure('New Outlook connections are temporarily unavailable.');
-          return;
-        }
-        await startAddInbox({ provider });
-        span.setAttr('email.link.outcome', 'started');
-      } finally {
-        addingInbox = false;
-      }
-    });
-  const onConnectEmail = (provider?: EmailProvider) => {
-    if (addingInbox) return;
-    addingInbox = true;
-    fireAndForget(connectEmail(provider), 'add-inbox');
-  };
+  const onConnectEmail = useConnectInbox();
   const hasInbox = () =>
     Boolean(inboxes().primary) || inboxes().others.length > 0;
   // Further inboxes are behind multi-inbox; the first is always offered.

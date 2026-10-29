@@ -199,8 +199,9 @@ the user's newest account for that app from the last fifteen minutes.
   for browser coverage. Keep signature commit callbacks on the mutation hook
   so account-list remounts cannot leave an already-cleared draft behind.
 - Keep personal accounts, team imports and agent tool connections together in
-  Settings → Integrations, one full-width row each, described by what they do in
-  Macro; preserve `agent-connections` and `team-connections` as aliases for existing links.
+  Settings → Integrations: one searchable list row per integration, styled like
+  the Drive/Tasks lists, connected first, described by what each does in Macro;
+  preserve `agent-connections` and `team-connections` as aliases for existing links.
 - Keep bot setup focused on the token-and-SDK workflow; Agent and Ownership
   controls live under collapsed Advanced settings. See the
   [Bots walkthrough](../../docs/agent-guide/settings.md#bots).

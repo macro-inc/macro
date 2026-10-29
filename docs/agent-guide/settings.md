@@ -565,54 +565,46 @@ available in all channels should refresh there without reloading the channel.
 
 ![Integrations overview with example connections](assets/settings-integrations.png)
 
-With `pipedream-mcp` enabled, Settings → Integrations is one column of
-full-width rows, each on its own raised surface with a title and a short line on
-what it does in Macro (never the app directory's own description). Groups, in
-order:
+With `pipedream-mcp` enabled, Settings → Integrations is one searchable list
+styled like the Drive and Tasks lists: single-line rows with Name (icon, name,
+and a muted line on what it does in Macro or which accounts are connected),
+Category (tag pills like email tags; several per row, e.g. Email, Calendar),
+Status, and the row's actions. There is one row per integration; integrations in
+use (connected, off, or needing attention) sort to the top, then the rest, then
+the app catalog. Below a 640px list width Category and Status hide and a status
+dot sits beside the name.
 
-- **Email**: one row per connected inbox with its provider icon, chips, sync
-  state and actions, then **Connect another Google Workspace account** and
-  **Connect an Outlook account**. Further inboxes still need multi-inbox; with
-  no inbox both rows always show. Outlook checks provider availability first.
-  A gear beside the heading opens Email settings. Finished syncs show no label.
-- **Accounts**: GitHub (Configure app opens the GitHub App install), Granola,
-  and, for team admins with Slack archive import enabled, **Slack export**.
-- **AI apps**: “Claude Code, Codex, and ChatGPT” opens Macro MCP setup;
-  “Coding agents on your computer” (Claude Code, Codex, OpenCode, OpenClaw,
-  Hermes) opens Runtimes within Integrations. Its Back button returns to
-  Integrations; opening Runtimes from Agents keeps the return to Agents. The
-  local row follows the Runtimes availability gate.
-- **Agent tools**: Installed, Featured, and All apps. Installed apps say agents
-  can use them and nothing is copied into Macro.
+- **Gmail** and **Outlook**: one row each; connected accounts appear as the
+  description. **Connect** (or **Add account** with multi-inbox) starts that
+  provider's flow; Outlook checks availability first. **Manage** opens Email
+  settings, where each inbox is managed.
+- **GitHub**: one row for the account link (pull request reviews and status)
+  and agent tools. Its menu has **Configure GitHub App**, **Agent tools** (the
+  GitHub provider page) and **Disconnect**.
+- **Slack**, **Linear**, **Notion**: agent tools, with **Connect**/**Manage**
+  opening the provider page and **Import** beside it. Slack's Import opens the
+  Slack export importer for team admins with archive import enabled, otherwise
+  the connector import dialog.
+- **Granola**, **Claude Code, Codex, and ChatGPT** (Macro MCP setup), and
+  **Coding agents on your computer** (Claude Code, Codex, OpenCode, OpenClaw,
+  Hermes; opens Runtimes within Integrations and follows the Runtimes
+  availability gate; Back returns to Integrations).
+- Installed catalog apps and custom MCP servers, with their More menus.
+- The catalog: every Pipedream app not yet connected, tagged with its directory
+  categories. Apps Macro can import from show **Import** beside **Connect**.
 
-Gmail, Google Calendar and Google Sheets are hidden from the catalog because
-Macro syncs email and calendars natively. Apps Macro can import from (the
-connector-import catalog: Notion, Google Drive, Dropbox, Linear, Jira, Asana,
-Trello, Airtable, Slack and others) show **Import** beside **Connect**: Import
-opens the connector import dialog for that app, which connects it and hands
-the import to an agent; Connect only gives agents the app's tools. Featured
-rows (GitHub, Linear, Notion, Slack) open their provider page from Connect or
-Manage. All apps has an Add Custom action beside its heading; Search apps and
-Category share a row and stack below a 560px catalog width.
-All apps groups each app under its first nonempty Pipedream category; apps without
-category metadata appear under More apps. Categories lead with Productivity,
-Communication, Developer Tools, AI, File Storage, and CRM; remaining categories
-follow the configured work-app order, then alphabetically, with More apps last.
-Search sits beside the category picker directly above the Pipedream catalog;
-Featured remains visible while searching. Scrolling toward the end loads the next
-page automatically and preserves category groups. A failed next page keeps loaded
-apps visible and offers Retry. Use the category picker below
-All apps to show one group; changing the search returns to all categories. Group
-counts reflect the currently loaded results.
+The search filters every row by name, description and category and also searches
+the catalog. **Add custom** sits beside it. Gmail, Google Calendar and Google
+Sheets are hidden from the catalog because Macro syncs email and calendars
+natively. Scrolling toward the end loads the next catalog page; a failed page
+keeps loaded apps and offers Retry.
 Overlaid catalog apps (the `mcp_overlays` table, served at
 `GET /pipedream/mcp/overlays`) look the same in the catalog but never open
 Pipedream: their Connect action opens the vendor's own MCP OAuth consent in a new
-tab (system browser on native) and the card turns connected once that server is
-authorized, after which the app appears with the custom MCP servers under
-Installed. Verify with an overlaid app such as Sentry or Asana; completing a
+tab (system browser on native) and the row turns connected once that server is
+authorized, after which the app appears with the custom MCP servers at the top. Verify with an overlaid app such as Sentry or Asana; completing a
 Pipedream connection for one answers 409.
-The Agents workspace opens this same Integrations page. Installed groups GitHub, Linear, Notion, and Slack tool grants by provider,
-lists other catalog connections alongside them, and lists custom servers in the same installed list. The available integrations include featured providers, a searchable catalog,
+The Agents workspace opens this same Integrations page. The list includes featured providers, a searchable catalog,
 and `Add Custom`. Pipedream Slack OAuth is available in production and
 development from the featured Slack provider. Connecting Slack here grants tool
 access; channel import is a separate action where the user chooses channels.

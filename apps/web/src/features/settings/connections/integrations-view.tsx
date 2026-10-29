@@ -1,27 +1,52 @@
+import { SearchBar } from '@app/components/view-shell';
 import { toast } from '@core/component/Toast/Toast';
+import { createPipedreamCatalogSearch } from '@core/pipedream/catalog';
 import {
   clearPendingConnectApp,
   pendingConnectApp,
 } from '@core/pipedream/pendingConnect';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ClaudeIcon from '@icon/claude-color.svg';
-import DesktopIcon from '@icon/system/regular/desktop.svg';
-import { connectPipedreamApp } from '@queries/pipedream-connectors';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import {
+  connectPipedreamApp,
+  usePipedreamConnectedSlugs,
+} from '@queries/pipedream-connectors';
 import { Button } from '@ui';
 import {
+  type Accessor,
   createEffect,
+  createMemo,
   createSignal,
+  For,
   on,
-  type ParentProps,
   Show,
   Suspense,
 } from 'solid-js';
-import { ConnectAction, IntegrationGroup } from '../integration-ui';
-import { IntegrationRow, SettingsPage, SettingsSurface } from '../primitives';
-import { ConnectedView } from './ConnectedView';
-import { DiscoverView } from './DiscoverView';
-import { capabilitiesFor, type ProviderId } from './model';
+import { SettingsPage } from '../primitives';
+import { AddCustomMcpDialog } from './add-custom-mcp-dialog';
+import { CatalogRows } from './catalog-rows';
+import {
+  aiAppItems,
+  type IntegrationItemHosts,
+  useAgentProviderItem,
+  useEmailItems,
+  useGithubItem,
+  useGranolaItem,
+} from './integration-items';
+import {
+  IntegrationItemRow,
+  IntegrationsListHeader,
+  matchesIntegration,
+} from './integrations-list';
+import { LeftoverRow } from './leftover-row';
+import {
+  type ConnectionsModel,
+  capabilitiesFor,
+  type Leftover,
+  type ProviderId,
+} from './model';
 import { PipedreamAiProvider } from './PipedreamAiProvider';
+import { PIPEDREAM_BROWSE_HIDDEN_SLUGS } from './provider-meta';
 import { SlackChannelImportFlow } from './slack-channel-import/SlackChannelImportFlow';
 import { useConnectionsModel } from './use-connections-model';
 import {
@@ -30,53 +55,9 @@ import {
   useConnectionsView,
 } from './view-state';
 
-function AiAppsGroup(props: {
-  onOpenMacroMcp: () => void;
-  onOpenLocalAgents?: () => void;
-}) {
-  return (
-    <IntegrationGroup title="AI apps">
-      <SettingsSurface>
-        <IntegrationRow
-          icon={<ClaudeIcon />}
-          title="Claude Code, Codex, and ChatGPT"
-          description="Use your Macro workspace from Claude Code, Codex, ChatGPT, Claude.ai, and IDEs through the Macro MCP server."
-        >
-          <ConnectAction
-            label="Set up"
-            variant="neutral"
-            ariaLabel="Set up Macro in AI apps"
-            onClick={props.onOpenMacroMcp}
-          />
-        </IntegrationRow>
-      </SettingsSurface>
-      <Show when={props.onOpenLocalAgents}>
-        {(open) => (
-          <SettingsSurface>
-            <IntegrationRow
-              icon={<DesktopIcon />}
-              title="Coding agents on your computer"
-              description="Pair your computer so Macro agents run on Claude Code, Codex, OpenCode, OpenClaw, or Hermes there, with each session streamed into Macro."
-            >
-              <ConnectAction
-                label="Set up"
-                variant="neutral"
-                ariaLabel="Set up local agents"
-                onClick={open()}
-              />
-            </IntegrationRow>
-          </SettingsSurface>
-        )}
-      </Show>
-    </IntegrationGroup>
-  );
-}
-
-type IntegrationsViewProps = ParentProps<{
-  onOpenMacroMcp: () => void;
-  onOpenLocalAgents?: () => void;
+type IntegrationsViewProps = IntegrationItemHosts & {
   initialProvider?: ProviderId;
-}>;
+};
 
 export function IntegrationsView(props: IntegrationsViewProps) {
   const view = createConnectionsViewState({ provider: props.initialProvider });
@@ -127,87 +108,43 @@ function ConnectionsContent(props: IntegrationsViewProps) {
       when={importSlackChannels()}
       fallback={
         <Show
-          when={!error()}
+          when={ready() && view.provider()}
+          keyed
           fallback={
-            <SettingsPage
-              title="Integrations"
-              onBack={view.provider() ? view.closeProvider : undefined}
-              backLabel="Integrations"
-            >
-              {props.children}
-              <AiAppsGroup
-                onOpenMacroMcp={props.onOpenMacroMcp}
-                onOpenLocalAgents={props.onOpenLocalAgents}
-              />
-              <div class="flex items-center gap-3 text-sm text-ink-muted">
-                Couldn't load Connections.
-                <Button variant="outline" size="sm" depth={3} onClick={retry}>
-                  Retry
-                </Button>
-              </div>
+            <SettingsPage title="Integrations" bodyClass="mt-6 gap-4">
+              <Show when={error() || partialError()}>
+                <div
+                  role="status"
+                  class="flex items-center gap-3 text-sm text-ink-muted"
+                >
+                  {error()
+                    ? "Couldn't load agent tools."
+                    : "Some connections couldn't be loaded."}
+                  <Button variant="outline" size="sm" depth={3} onClick={retry}>
+                    Retry
+                  </Button>
+                </div>
+              </Show>
+              <Show
+                when={ready() || error()}
+                fallback={
+                  <p class="text-sm text-ink-muted">Loading integrations…</p>
+                }
+              >
+                <Suspense>
+                  <IntegrationsOverview
+                    {...props}
+                    model={model}
+                    agentToolsAvailable={!error()}
+                  />
+                </Suspense>
+              </Show>
             </SettingsPage>
           }
         >
-          <Show
-            when={ready() && view.provider()}
-            keyed
-            fallback={
-              <SettingsPage title="Integrations" bodyClass="mt-6 gap-8">
-                {props.children}
-                <AiAppsGroup
-                  onOpenMacroMcp={props.onOpenMacroMcp}
-                  onOpenLocalAgents={props.onOpenLocalAgents}
-                />
-                <Show when={partialError()}>
-                  <div
-                    role="status"
-                    class="flex items-center gap-3 text-sm text-ink-muted"
-                  >
-                    Some connections couldn't be loaded.
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      depth={3}
-                      onClick={retry}
-                    >
-                      Retry
-                    </Button>
-                  </div>
-                </Show>
-                <Show
-                  when={ready()}
-                  fallback={
-                    <p class="text-sm text-ink-muted">Loading Connections…</p>
-                  }
-                >
-                  <IntegrationGroup
-                    title="Agent tools"
-                    description="Apps your agents can use when you ask them to. Connecting an app doesn't copy its data into Macro; use Import for that."
-                  >
-                    <section
-                      aria-label="Installed integrations"
-                      class="min-w-0 w-full"
-                    >
-                      <h3 class="mb-2 text-sm font-medium text-ink-muted">
-                        Installed
-                      </h3>
-                      <ConnectedView model={model()} />
-                    </section>
-                    <section
-                      aria-label="Available integrations"
-                      class="mt-5 min-w-0 w-full"
-                    >
-                      <DiscoverView model={model()} />
-                    </section>
-                  </IntegrationGroup>
-                </Show>
-              </SettingsPage>
-            }
-          >
-            {(provider) => (
-              <PipedreamAiProvider model={model()} provider={provider} />
-            )}
-          </Show>
+          {(provider) => (
+            <PipedreamAiProvider model={model()} provider={provider} />
+          )}
         </Show>
       }
     >
@@ -225,5 +162,156 @@ function ConnectionsContent(props: IntegrationsViewProps) {
         </Suspense>
       </Show>
     </Show>
+  );
+}
+
+function leftoverMatches(leftover: Leftover, query: string): boolean {
+  return matchesIntegration(
+    {
+      name: leftover.title,
+      description: leftover.kind === 'native-mcp' ? leftover.subtitle : '',
+      categories: [
+        leftover.kind === 'native-mcp' ? 'Custom MCP' : 'Agent tools',
+      ],
+    },
+    query
+  );
+}
+
+/**
+ * Every integration in one list: those in use first, then the rest, then the
+ * app catalog. One search filters all of them.
+ */
+function IntegrationsOverview(
+  props: IntegrationsViewProps & {
+    model: Accessor<ConnectionsModel>;
+    /** False when connector records failed to load. */
+    agentToolsAvailable: boolean;
+  }
+) {
+  const [query, setQuery] = createSignal('');
+  const [addingCustom, setAddingCustom] = createSignal(false);
+  const view = useConnectionsView();
+  const catalog = createPipedreamCatalogSearch(
+    () => PIPEDREAM_BROWSE_HIDDEN_SLUGS
+  );
+  const search = (value: string) => {
+    setQuery(value);
+    catalog.onSearchInput(value);
+  };
+
+  const agentTools = [
+    useAgentProviderItem(props.model, 'slack'),
+    useAgentProviderItem(props.model, 'linear'),
+    useAgentProviderItem(props.model, 'notion'),
+  ];
+  const items = [
+    ...useEmailItems(props),
+    useGithubItem(props.model),
+    ...agentTools,
+    useGranolaItem(),
+    ...aiAppItems(props),
+  ];
+  // Agent tool rows need connector records; without them their state is unknown.
+  const matching = () =>
+    items.filter(
+      (item) =>
+        (props.agentToolsAvailable || !agentTools.includes(item)) &&
+        matchesIntegration(item, query())
+    );
+  const inUse = () => matching().filter((item) => item.status !== 'available');
+  const available = () =>
+    matching().filter((item) => item.status === 'available');
+  const leftovers = () =>
+    props.model().leftovers.filter((row) => leftoverMatches(row, query()));
+
+  // Includes overlaid apps, which are connected as native MCP servers.
+  const connected = usePipedreamConnectedSlugs();
+  const alreadyHave = createMemo(() => {
+    const slugs = new Set<string>(connected.slugs());
+    for (const row of props.model().capabilities) {
+      if (row.status !== 'not-connected') slugs.add(row.provider);
+    }
+    for (const leftover of props.model().leftovers) {
+      if (leftover.kind === 'pipedream') slugs.add(leftover.appSlug);
+    }
+    return slugs;
+  });
+  const catalogEntries = createMemo(() =>
+    props.agentToolsAvailable
+      ? catalog.entries().filter(
+          (entry) =>
+            !alreadyHave().has(entry.app_slug) &&
+            matchesIntegration(
+              {
+                name: entry.display_name,
+                description: `${entry.description ?? ''} ${entry.app_slug}`,
+                categories: entry.categories ?? [],
+              },
+              query()
+            )
+        )
+      : []
+  );
+  const nothingMatches = () =>
+    matching().length === 0 &&
+    leftovers().length === 0 &&
+    catalogEntries().length === 0 &&
+    !catalog.query.isFetching;
+
+  return (
+    <>
+      <div class="flex items-center gap-2">
+        <SearchBar
+          size="sm"
+          label="Search integrations"
+          placeholder="Search integrations"
+          value={query()}
+          onValueChange={search}
+          onEscape={() => search('')}
+          class="min-w-0 flex-1"
+        />
+        <Show when={props.agentToolsAvailable}>
+          <Button
+            variant="outline"
+            size="md"
+            onClick={() => setAddingCustom(true)}
+          >
+            <PlusIcon class="size-4" /> Add custom
+          </Button>
+        </Show>
+      </div>
+      <div
+        role="table"
+        aria-label="Integrations"
+        class="@container/integrations -mx-3 flex min-w-0 flex-col"
+      >
+        <IntegrationsListHeader />
+        <div role="rowgroup" class="flex flex-col">
+          <For each={inUse()}>
+            {(item) => <IntegrationItemRow item={item} />}
+          </For>
+          <For each={leftovers()}>
+            {(leftover) => <LeftoverRow leftover={leftover} />}
+          </For>
+          <For each={available()}>
+            {(item) => <IntegrationItemRow item={item} />}
+          </For>
+          <Show when={props.agentToolsAvailable}>
+            <CatalogRows catalog={catalog} entries={catalogEntries} />
+          </Show>
+        </div>
+        <Show when={nothingMatches()}>
+          <p class="px-3 py-6 text-sm text-ink-muted">
+            No integrations match “{query().trim()}”.
+          </p>
+        </Show>
+      </div>
+      <AddCustomMcpDialog
+        open={addingCustom()}
+        onOpenChange={setAddingCustom}
+        onAdded={view.showOverview}
+      />
+    </>
   );
 }

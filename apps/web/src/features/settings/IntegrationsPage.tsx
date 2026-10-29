@@ -40,15 +40,14 @@ export function IntegrationsPage() {
         when={showLocalAgents() && isTabAvailable('Harness')}
         fallback={
           <IntegrationsView
+            onOpenEmailSettings={() => openSettings('Email')}
             onOpenMacroMcp={() => openSettings('Agent')}
             onOpenLocalAgents={
               isTabAvailable('Harness')
                 ? () => setShowLocalAgents(true)
                 : undefined
             }
-          >
-            <AccountConnections />
-          </IntegrationsView>
+          />
         }
       >
         <Harness

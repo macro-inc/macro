@@ -2,19 +2,19 @@ import { toast } from '@core/component/Toast/Toast';
 import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
 import { createPipedreamCatalogConnect } from '@core/pipedream/catalog';
 import { fireAndForget } from '@core/util/fireAndForget';
+import PlugIcon from '@icon/system/regular/plug.svg';
 import {
   useDeletePipedreamConnectionMutation,
   useUpdatePipedreamConnectionMutation,
 } from '@queries/pipedream-connectors';
 import { Button, Dialog, Panel } from '@ui';
-import { createEffect, createSignal, type JSX, on, Show } from 'solid-js';
+import { createEffect, createSignal, type JSX, on } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ConnectAction } from '../integration-ui';
 import {
   readMcpAuthAttempted,
   writeMcpAuthAttempted,
 } from '../mcp-auth-attempt';
-import { IntegrationRow } from '../primitives';
 import {
   type ConnectionMenuItem,
   ConnectionRowActions,
@@ -23,6 +23,10 @@ import {
   type DisconnectConfirm,
   DisconnectConfirmDialog,
 } from './disconnect-confirm';
+import {
+  IntegrationListRow,
+  type IntegrationStatus,
+} from './integrations-list';
 import type { Leftover } from './model';
 import { useNativeMcpActions } from './native-actions';
 
@@ -281,42 +285,47 @@ export function LeftoverRow(props: { leftover: Leftover }) {
       ))
       .exhaustive();
 
-  const row = (): JSX.Element => {
+  const status = (): IntegrationStatus => {
     const leftover = props.leftover;
-    const muted = leftoverDisabled(leftover);
-    return match(leftover)
+    if (leftover.kind === 'native-mcp' && !leftover.authenticated)
+      return 'attention';
+    return leftoverDisabled(leftover) ? 'disconnected' : 'connected';
+  };
+
+  const row = (): JSX.Element =>
+    match(props.leftover)
       .with({ kind: 'native-mcp' }, (item) => (
-        <IntegrationRow
-          class="gap-3 px-4 py-3"
-          title={item.title}
+        <IntegrationListRow
+          icon={<PlugIcon />}
+          name={item.title}
           description={
-            <>
-              <span class="block truncate">{item.subtitle}</span>
-              <Show when={connectionFailed()}>
-                <span class="block text-failure">Last attempt failed</span>
-              </Show>
-            </>
+            connectionFailed()
+              ? `Last attempt failed · ${item.subtitle}`
+              : item.subtitle
           }
-          muted={muted}
+          categories={['Custom MCP']}
+          status={status()}
+          statusLabel={item.authenticated ? undefined : 'Not connected'}
+          muted={status() === 'disconnected'}
         >
           {actions()}
-        </IntegrationRow>
+        </IntegrationListRow>
       ))
       .with({ kind: 'pipedream' }, (item) => (
-        <IntegrationRow
-          class="gap-3 px-4 py-3"
+        <IntegrationListRow
           icon={
-            <PipedreamConnectorIcon appSlug={item.appSlug} class="size-8" />
+            <PipedreamConnectorIcon appSlug={item.appSlug} class="size-5" />
           }
-          title={item.title}
+          name={item.title}
           description="Agents can use this app when you ask them to. Nothing is copied into Macro."
-          muted={muted}
+          categories={['Agent tools']}
+          status={status()}
+          muted={status() === 'disconnected'}
         >
           {actions()}
-        </IntegrationRow>
+        </IntegrationListRow>
       ))
       .exhaustive();
-  };
 
   return (
     <>
