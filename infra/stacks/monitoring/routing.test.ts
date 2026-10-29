@@ -53,9 +53,24 @@ const handles = (message: string): string[] =>
     /@(?:webhook|slack|pagerduty|opsgenie|teams)-[\w-]+|[\w.+-]+@[\w-]+\.[\w.]+/g
   ) ?? [];
 
-test('every monitor and synthetic test notifies only GoAlert', () => {
+// Dev and staging monitors stay in Datadog but notify no one.
+const nonProd = (r: pulumi.runtime.MockResourceArgs) =>
+  /\[(DEV|STAGING)\]/.test(r.inputs.name);
+
+test('dev and staging monitors notify no one', () => {
+  const quiet = monitors().filter(nonProd);
+  expect(quiet.length).toBeGreaterThan(5);
+  for (const resource of quiet) {
+    expect({
+      name: resource.name,
+      handles: handles(resource.inputs.message),
+    }).toEqual({ name: resource.name, handles: [] });
+  }
+});
+
+test('every prod monitor and synthetic test notifies only GoAlert', () => {
   const routed = [...monitors(), ...synthetics()].filter(
-    (r) => r.name !== 'goalert-health'
+    (r) => r.name !== 'goalert-health' && !nonProd(r)
   );
   expect(routed.length).toBeGreaterThan(80);
   for (const resource of routed) {

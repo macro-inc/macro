@@ -29,6 +29,7 @@ async fn cached_keys<S: PredicateIndexStorage>(
             cursor: None,
             through: None,
         },
+        &[],
     )
     .await
     .unwrap()

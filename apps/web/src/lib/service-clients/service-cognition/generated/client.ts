@@ -14,6 +14,8 @@ import type {
   ChatMessageError,
   CompleteOnboardingRequest,
   CreateChatRequest,
+  DatabaseQueryAnswer,
+  DatabaseQueryRequest,
   DecisionErrorBody,
   DecisionRequest,
   DecisionResponse,
@@ -1189,6 +1191,87 @@ export const getCitationHandler = async (
     status: res.status,
     headers: res.headers,
   } as getCitationHandlerResponse;
+};
+
+export type generateDatabaseQueryResponse200 = {
+  data: DatabaseQueryAnswer;
+  status: 200;
+};
+
+export type generateDatabaseQueryResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type generateDatabaseQueryResponse402 = {
+  data: StructuredCompletionError;
+  status: 402;
+};
+
+export type generateDatabaseQueryResponse403 = {
+  data: StructuredCompletionError;
+  status: 403;
+};
+
+export type generateDatabaseQueryResponse500 = {
+  data: StructuredCompletionError;
+  status: 500;
+};
+
+export type generateDatabaseQueryResponse503 = {
+  data: StructuredCompletionError;
+  status: 503;
+};
+
+export type generateDatabaseQueryResponse504 = {
+  data: StructuredCompletionError;
+  status: 504;
+};
+
+export type generateDatabaseQueryResponseSuccess =
+  generateDatabaseQueryResponse200 & {
+    headers: Headers;
+  };
+export type generateDatabaseQueryResponseError = (
+  | generateDatabaseQueryResponse401
+  | generateDatabaseQueryResponse402
+  | generateDatabaseQueryResponse403
+  | generateDatabaseQueryResponse500
+  | generateDatabaseQueryResponse503
+  | generateDatabaseQueryResponse504
+) & {
+  headers: Headers;
+};
+
+export type generateDatabaseQueryResponse =
+  | generateDatabaseQueryResponseSuccess
+  | generateDatabaseQueryResponseError;
+
+export const getGenerateDatabaseQueryUrl = () => {
+  return `/database-query`;
+};
+
+export const generateDatabaseQuery = async (
+  databaseQueryRequest: DatabaseQueryRequest,
+  options?: RequestInit
+): Promise<generateDatabaseQueryResponse> => {
+  const res = await fetch(getGenerateDatabaseQueryUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(databaseQueryRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: generateDatabaseQueryResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as generateDatabaseQueryResponse;
 };
 
 export type decisionsResponse200 = {

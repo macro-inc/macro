@@ -16,7 +16,9 @@ reference is gone and it's safe to delete.
 ## Scope
 
 - Owns: reference counting for file content SHAs and the `bucket:sha-delete`
-  tracking used to find SHAs ready for cleanup.
+  tracking used to find SHAs ready for cleanup. Counters are a cache, not the
+  source of truth: `"BomPart"` rows are, and `sha_cleanup_worker` recounts
+  them before deleting anything.
 - Not here: actually deleting the underlying blob storage — this crate only
   tracks the reference count.
 
@@ -28,9 +30,16 @@ reference is gone and it's safe to delete.
 
 ## Checks
 
-- `cargo test -p macro_sha_count_client` (`SQLX_OFFLINE` unset).
+- `cargo test -p macro_sha_count_client` (needs Redis at `REDIS_URI`, default
+  `redis://127.0.0.1:6379`).
 
 ## Gotchas
+
+- Every `sha:` counter expires `SHA_REFERENCE_TTL` (30 days) after the last
+  increment. Set the expiry in the same MULTI/EXEC as any write that can
+  create a counter, or the key lives forever in the shared cache, where
+  volatile-lru cannot evict it (the 2026-10-28 OOM). A missing counter only
+  makes the next upload re-send that part.
 
 - `release_shas` collapses a list with duplicate SHAs into per-SHA counts
   before decrementing (`reference_counts`) — releasing the same SHA twice in

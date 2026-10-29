@@ -1046,6 +1046,87 @@
         }
       }
     },
+    "/database-query": {
+      "post": {
+        "tags": ["database_query"],
+        "operationId": "generate_database_query",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatabaseQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseQueryAnswer"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "402": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/decisions": {
       "post": {
         "tags": ["decisions"],
@@ -3368,6 +3449,100 @@
           }
         ],
         "description": "What a successful tool call committed to the user's databases."
+      },
+      "DatabaseQueryAnswer": {
+        "type": "object",
+        "description": "A proposal, never stored results or permission to read the named database.",
+        "required": [
+          "answerable",
+          "sql",
+          "explanation",
+          "title",
+          "displayMode"
+        ],
+        "properties": {
+          "answerable": {
+            "type": "boolean"
+          },
+          "chart": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DatabaseQueryChart"
+              }
+            ]
+          },
+          "databaseId": {
+            "type": ["string", "null"]
+          },
+          "displayMode": {
+            "$ref": "#/components/schemas/DatabaseQueryDisplayMode"
+          },
+          "explanation": {
+            "type": "string"
+          },
+          "sql": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DatabaseQueryChart": {
+        "type": "object",
+        "description": "Chart fields name the proposal's result columns exactly.",
+        "required": ["x", "y", "title", "stack"],
+        "properties": {
+          "color": {
+            "type": ["string", "null"]
+          },
+          "stack": {
+            "type": "boolean"
+          },
+          "title": {
+            "type": "string"
+          },
+          "x": {
+            "type": "string"
+          },
+          "y": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "DatabaseQueryDisplayMode": {
+        "type": "string",
+        "description": "Supported live-answer presentations.",
+        "enum": ["scalar", "table", "bar", "line", "area", "scatter", "pie"]
+      },
+      "DatabaseQueryRequest": {
+        "type": "object",
+        "description": "The question and untrusted schema hints; authorization remains in the read services.",
+        "required": ["model", "prompt", "sql", "schema"],
+        "properties": {
+          "error": {
+            "type": ["string", "null"],
+            "description": "The SQL engine's error from one failed proposal, used for a bounded repair."
+          },
+          "model": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "schema": {},
+          "sql": {
+            "type": "string"
+          }
+        }
       },
       "DecisionErrorBody": {
         "type": "object",

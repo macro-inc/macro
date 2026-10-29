@@ -192,9 +192,6 @@ vi.mock('./channels-view-context', () => ({
           }
         : undefined,
     setAsideWidth: vi.fn(),
-    hideSupportChannels: () => false,
-    canHideSupportChannels: () => false,
-    setHideSupportChannels: vi.fn(),
   }),
 }));
 vi.mock('./queries', () => ({

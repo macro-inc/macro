@@ -642,15 +642,15 @@ body.tauri-ios {
   --divider: oklch(1 0 0 / 4%);
 
   /* Button materials. */
-  --button-primary-bg: var(--color-accent);
-  --button-primary-ink: white;
-  --button-primary-state-mix: black;
-  --button-primary-hover: color-mix(in srgb, var(--button-primary-bg) 82%, var(--button-primary-state-mix));
-  --button-primary-pressed: color-mix(in srgb, var(--button-primary-bg) 72%, var(--button-primary-state-mix));
-  --button-neutral-bg: white;
-  --button-neutral-ink: black;
-  --button-neutral-hover: color-mix(in srgb, var(--button-neutral-bg) 82%, var(--button-neutral-ink));
-  --button-neutral-pressed: color-mix(in srgb, var(--button-neutral-bg) 72%, var(--button-neutral-ink));
+  --button-primary-bg: white;
+  --button-primary-ink: black;
+  --button-primary-hover: color-mix(in srgb, var(--button-primary-bg) 82%, var(--button-primary-ink));
+  --button-primary-pressed: color-mix(in srgb, var(--button-primary-bg) 72%, var(--button-primary-ink));
+  --button-accent-bg: var(--color-accent);
+  --button-accent-ink: white;
+  --button-accent-state-mix: black;
+  --button-accent-hover: color-mix(in srgb, var(--button-accent-bg) 82%, var(--button-accent-state-mix));
+  --button-accent-pressed: color-mix(in srgb, var(--button-accent-bg) 72%, var(--button-accent-state-mix));
   --button-focus: var(--color-edge-focus, var(--color-accent));
   --button-elevated-outline: var(--glass-desktop-outline);
   --button-elevated-top-edge: var(--glass-desktop-top-edge);
@@ -719,8 +719,8 @@ body.tauri-ios {
   --divider: oklch(0 0 0 / 4%);
 
   /* Button materials. */
-  --button-neutral-bg: black;
-  --button-neutral-ink: white;
+  --button-primary-bg: black;
+  --button-primary-ink: white;
   /* Keep hover and pressed shading neutral over the lightly tinted face. */
   --button-secondary-bg: var(--button-secondary-face);
   --button-secondary-hover: color-mix(in srgb, var(--button-secondary-face), black 4%);
@@ -782,10 +782,10 @@ body.tauri-ios {
   --color-button-primary-hover: var(--button-primary-hover);
   --color-button-primary-pressed: var(--button-primary-pressed);
   --color-button-primary-ink: var(--button-primary-ink);
-  --color-button-neutral-bg: var(--button-neutral-bg);
-  --color-button-neutral-ink: var(--button-neutral-ink);
-  --color-button-neutral-hover: var(--button-neutral-hover);
-  --color-button-neutral-pressed: var(--button-neutral-pressed);
+  --color-button-accent-bg: var(--button-accent-bg);
+  --color-button-accent-ink: var(--button-accent-ink);
+  --color-button-accent-hover: var(--button-accent-hover);
+  --color-button-accent-pressed: var(--button-accent-pressed);
   --color-button-secondary-bg: var(--button-secondary-bg);
   --color-button-secondary-hover: var(--button-secondary-hover);
   --color-button-secondary-pressed: var(--button-secondary-pressed);

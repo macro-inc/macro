@@ -80,12 +80,15 @@ export function ViewSwitcher(props: ViewSwitcherProps) {
     </Dropdown.Item>
   );
 
+  // Size to the view name so short labels stay whole. Cap with `max-w-full`
+  // only when the title row has a real width; a percentage `calc` treats an
+  // indefinite parent as 0 and collapses "Chat" to "C…".
   return (
     <Dropdown placement="bottom-start">
       <Dropdown.Trigger
         variant="ghost"
         size="sm"
-        class="-ml-2 min-w-0 max-w-[calc(100%+0.5rem)] shrink"
+        class="-ml-2 w-max min-w-0 max-w-full"
         data-view-switcher=""
       >
         <span class="truncate text-sm font-semibold tracking-[-0.03em] text-ink">

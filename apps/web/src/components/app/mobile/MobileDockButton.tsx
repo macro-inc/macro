@@ -14,6 +14,12 @@ type MobileDockButtonProps = Omit<ComponentProps<'button'>, 'children'> & {
   icon: MobileDockIcon;
   /** Accessible name for the icon-only button. */
   ariaLabel: string;
+  /**
+   * Pass this only on buttons that can be selected: selection reads as full
+   * ink against muted siblings, so an explicitly unselected button dims.
+   * Buttons that are always actions (Search) leave it unset and stay at full
+   * ink.
+   */
   active?: boolean;
   unread?: boolean;
   iconClass?: string;
@@ -41,7 +47,7 @@ export function MobileDockButton(props: MobileDockButtonProps) {
       data-unread={local.unread ? '' : undefined}
       class={cn(
         'relative flex size-(--mobile-chrome-button-size) shrink-0 items-center justify-center rounded-full',
-        local.active && 'text-accent',
+        local.active === false && 'text-ink-extra-muted',
         local.class
       )}
       {...rest}

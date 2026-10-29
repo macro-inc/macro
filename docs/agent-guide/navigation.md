@@ -376,7 +376,7 @@ A desktop view's name opens the view switcher: clicking it shows the rail's apps
 in rail order, then the More apps, with a check on the current one. Choosing one
 replaces the view in that split, not the active split; Shift opens it in a new
 split. The navigation panel's title shows the name with a caret, sharing one
-hover background. Main headers show the name alone, with the same hover:
+hover background. Short names stay whole; long names ellipsize. Main headers show the name alone, with the same hover:
 `ViewSidebar.Title caret={false}` for plain titles, and the first breadcrumb
 (Drive, Email, Tasks, Reviews) while it is the current page; deeper, that crumb
 returns to the list. Titles that name content rather than the view (Calendar's
@@ -501,6 +501,15 @@ leave the saved snapshot unchanged. Direct links and explicit Shift/open-in-spli
 actions keep their requested destination. Closing a detail before switching apps
 remembers the list, not the closed detail. Views unmount normally; this is not a
 keep-alive cache for editors or other transient UI.
+On desktop, if the remembered detail is already open in another split or
+its inline preview, switching apps opens the requested app's list in the target
+split instead of moving focus to the existing detail. For example, with Home on
+the left and a Chat conversation on the right, select the left split and press
+Chat: the left split shows the chat list and the right conversation stays open.
+This applies in either direction across apps: with a task open on the left and
+Home on the right, choosing Tasks from the right view switcher opens the task
+list there and preserves the left task, its state, and its history.
+See the [redacted desktop example](media/navigation/chat-list-left-split.png).
 Verify Chat → open channel → Calendar → Chat restores the same channel, then
 repeat with a filtered list and a nested Drive item. Check mobile dock switching,
 split Back/Forward, refused leave guards, explicit links, and account changes.
@@ -867,6 +876,11 @@ in its own island at the right edge and opens the persistent Search… input and
 entity category pills (see [Search](search.md)). Once every view fits, the
 navigation island stops growing.
 
+The current view's button is full ink while the rest of the island dims; views
+with a filled glyph also swap to it. More carries that selected state while the
+open view is one of the destinations it hides, so the island always shows where
+you are. Search, on its own island, stays an action at full ink.
+
 Notifications, Email, and Channels use the same reactive unread-presence checks
 as the desktop sidebar, via `useNavigationUnread`. Their accent dots clear when
 the represented items are read or completed, not merely when opening a view.
@@ -1213,10 +1227,13 @@ refresh conservatively. For an empty search, scroll toward the end (or use
 Down); mentions offer **View all** for a category and then load more local pages.
 The @ menu ranks loaded projects and cached document/task matches together
 before choosing preview rows, with the same ranking on desktop and phone.
-Exact and prefix name matches get boosts, task projects get a type boost, and
-viewed recency and shorter names contribute. Empty-query browsing remains
-recency-led; existing People preview slots and phone pinning remain. Tuning lives
-in `MENTION_RANKING_CONFIG` in the mention menu's `utils/mention-ranking.ts`.
+Names equal to the query rank first and names starting with it next; within
+those groups task projects get a type boost, and viewed recency and shorter
+names contribute. Empty-query browsing remains
+recency-led; existing People preview slots and phone pinning remain. Name-match
+tuning is shared with Cmd+K in `NAME_MATCH_RANKING` (`@core/util/freshSort`);
+recency weights and type boosts live in `MENTION_RANKING_CONFIG` in the mention
+menu's `utils/mention-ranking.ts`.
 Broader cache/server matches remain reachable even when the local fuzzy matcher
 would omit them. To verify, type `@task` with a project named `Task planning`
 and many recent tasks containing “task”: the project should appear in the first
@@ -1301,8 +1318,14 @@ An empty query prefers when an item was last viewed, falling back to its update
 time; equal timestamps have a stable entity-type and ID order. Typed searches give
 channels (including DMs) the same 3x boost as the main search view, with the menu's
 additional 1.8x DM boost; relevance and viewed recency still order those results.
-This shared ranking also applies to mobile name search. Verify an older matching
-channel stays above recent CRM contacts and agent sessions in All, and remains
+Relevance uses the same name-match ranking as the @ menu: names equal to the
+query come first, then names starting with it, then other matches, and matches
+that are spread out or start late in the name score lower. The channel and DM
+boosts and recency order rows within each group. Verify that typing a project's
+full name puts it above recently viewed documents, tasks, and channels that
+only contain or start with those words. This shared ranking also applies to mobile name search.
+Verify an older matching channel stays above recent CRM contacts and agent
+sessions in All, and remains
 findable in Channels while its cache entry is absent. Refreshing the cache or
 reopening the menu with unchanged data must not reorder results or duplicate a
 channel when its cache entry arrives. Hydration must also refresh ownership,

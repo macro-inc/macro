@@ -106,6 +106,10 @@ read their code, and follow that pattern rather than inventing a new one.
   `FloatRegionOrInline` with `px-(--mobile-chrome-gutter)` and
   `pointer-events-auto`. Style it with `island` / `glass`, size it with the
   px `--mobile-chrome-*` tokens (not rem), and pass Button a `depth`.
+- Mark selection with `ink`, never `accent`: a selected pill is `bg-ink
+  text-surface`, a selected dock button or drawer row stays at full ink while
+  its siblings dim (`text-ink-extra-muted`, `aria-current="page"`). Keep the
+  accent for attention — unread dots and filter counts.
 - Phones show one pane: open in place or as a front pane, never a new
   split. Desktop-only layouts fall back (board to list) and update the URL.
 - Suspense wraps content, never the router or chrome, with `ContentLoading`

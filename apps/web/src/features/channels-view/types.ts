@@ -29,12 +29,6 @@ export type ChannelsViewState = {
   threadsChannelId: string | undefined;
   sortBy: Record<ChannelsSortGroup, ChannelListSort>;
   asideWidth: number;
-  /**
-   * Staff-only: hide seeded `Macro Support x …` conversations in Chat lists.
-   * Search still finds them. Default on so those conversations do not bury
-   * the rest of the sidebar.
-   */
-  hideSupportChannels: boolean;
 };
 
 export type ChannelsViewStateOptions = Partial<

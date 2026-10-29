@@ -1,5 +1,25 @@
-import { createFreshSearch } from '@core/util/freshSort';
+import { createFreshSearch, NAME_MATCH_RANKING } from '@core/util/freshSort';
+import { match } from 'ts-pattern';
 import type { CommandMenuItem } from './useCommandItems';
+
+/** The label a row shows; its search text can add emails, aliases, or command keywords. */
+function displayName(item: CommandMenuItem): string {
+  return match(item)
+    .with({ kind: 'entity' }, { kind: 'user' }, (row) => row.data.name)
+    .with({ kind: 'initiative' }, (row) => row.name)
+    .with({ kind: 'command' }, ({ data }) =>
+      typeof data.description === 'function'
+        ? data.description()
+        : data.description
+    )
+    .with(
+      { kind: 'search' },
+      { kind: 'ask-ai' },
+      { kind: 'new-project' },
+      (row) => row.searchText
+    )
+    .exhaustive();
+}
 
 function compareRecency(left: CommandMenuItem, right: CommandMenuItem) {
   return (
@@ -43,6 +63,7 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
 ): T[] {
   const search = createFreshSearch<T>({
     config: {
+      ...NAME_MATCH_RANKING,
       useViewedAt: true,
       channelBoost: 3,
       dmBoost: 1.8,
@@ -51,6 +72,7 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
       minFuzzyThreshold: 0.1,
     },
     getName: (item) => item.searchText,
+    getDisplayName: displayName,
     isChannelItem: (item) => item.bucket === 'channel' || item.bucket === 'dm',
     isDmItem: (item) => item.bucket === 'dm',
     getTimestamp: (item) => item.timestamps,
@@ -59,6 +81,7 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
   const ranked = search(items, query)
     .sort(
       (left, right) =>
+        right.nameMatchRank - left.nameMatchRank ||
         right.combinedScore - left.combinedScore ||
         compareRecency(left.item, right.item)
     )

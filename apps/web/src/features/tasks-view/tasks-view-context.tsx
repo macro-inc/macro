@@ -249,12 +249,14 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       return persistedState.layout;
     },
     get groupBy() {
+      if (persistedState.groupBy === 'project' && !projectsEnabled()) {
+        return 'status';
+      }
       if (state.layout !== 'board') {
         return persistedState.groupBy;
       }
 
-      const grouping = toTaskBoardGrouping(persistedState.groupBy);
-      return grouping === 'project' && !projectsEnabled() ? 'status' : grouping;
+      return toTaskBoardGrouping(persistedState.groupBy);
     },
     get tab(): TasksTab {
       return persistedState.tab === 'projects' && !projectsEnabled()
