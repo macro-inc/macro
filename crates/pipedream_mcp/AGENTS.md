@@ -15,8 +15,7 @@ AI loop calls their tools through Pipedream's remote MCP server.
   Connect API proxy (`ConnectedAppProxy`) that calls an app's own REST API
   with the account's credentials; catalog entries preserve Pipedream category
   labels for clients to group without a local taxonomy. `HIDDEN_APP_SLUGS`
-  lists apps the catalog (browse, agent discovery, agent pinning) never
-  offers; existing connections to them still load.
+  are never offered.
 - `src/outbound/pg_connection_repo.rs`: the `pipedream_mcp_connections` table,
   and the `mcp_overlays` table (`ConnectorOverlays`): catalog apps that connect
   through their own MCP server on the native stack instead of Pipedream.

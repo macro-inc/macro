@@ -505,11 +505,8 @@ fn is_app_slug(slug: &str) -> bool {
             .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' || ch == '_')
 }
 
-/// Apps Pipedream lists as connectable that the catalog never offers.
-///
-/// `linkedin` only posts, comments and looks up profiles by ID; it cannot
-/// search people or read a feed, which is what users connect it expecting.
-/// Existing connections keep working and can still be disconnected.
+/// Apps the catalog never offers. `linkedin` can only post and look up
+/// profiles by ID, not search people or read a feed as users expect.
 const HIDDEN_APP_SLUGS: &[&str] = &["linkedin"];
 
 /// The app the catalog would offer under `requested_slug`, if that is the app.
