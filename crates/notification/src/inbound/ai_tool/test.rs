@@ -38,9 +38,9 @@ fn test_list_notifications_deserialization() {
     assert_eq!(
         tool.include_types,
         Some(vec![
-            NotificationCategory::Email,
-            NotificationCategory::Message,
-            NotificationCategory::Github
+            ToolNotificationCategory::Email,
+            ToolNotificationCategory::Message,
+            ToolNotificationCategory::Github
         ])
     );
     assert_eq!(

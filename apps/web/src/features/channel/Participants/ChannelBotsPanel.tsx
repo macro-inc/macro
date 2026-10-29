@@ -2,9 +2,10 @@ import { channelWebhookUrl } from '@channel/Bots/webhook';
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import PlusIcon from '@phosphor/plus.svg';
-import RobotIcon from '@phosphor/robot.svg';
-import UserPlusIcon from '@phosphor/user-plus.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import RobotIcon from '@icon/system/regular/robot.svg';
+import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import {
   useChannelBotsQuery,
   useRemoveBotFromChannelMutation,
@@ -109,7 +110,9 @@ export function ChannelBotsPanel(props: {
                 editable={props.editable}
                 removing={removeBotMutation.isPending}
                 onOpen={() => props.onOpenBot(bot.id)}
-                onCopyWebhook={() => void copyWebhook()}
+                onCopyWebhook={() =>
+                  fireAndForget(copyWebhook(), 'channel-bots')
+                }
                 onRemove={() => removeBot(bot.id, bot.name)}
               />
             )}
@@ -138,7 +141,7 @@ export function ChannelBotsPanel(props: {
               <Show when={props.editable}>
                 <div class="flex flex-wrap items-center gap-2">
                   <Button variant="ghost" size="sm" onClick={props.onCreateBot}>
-                    <PlusIcon />
+                    <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
                     New bot
                   </Button>
                 </div>
@@ -167,20 +170,22 @@ export function ChannelBotsPanel(props: {
           </div>
           <Show when={props.editable}>
             <Button
-              variant="outline"
+              aria-label="New bot"
+              tooltip="New bot"
+              variant="secondary"
               size="icon-md"
-              label="New bot"
               onClick={props.onCreateBot}
             >
-              <PlusIcon />
+              <PlusIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
             <Button
-              variant="outline"
+              aria-label="Invite bot"
+              tooltip="Invite bot"
+              variant="secondary"
               size="icon-md"
-              label="Invite bot"
               onClick={() => setInviteOpen(true)}
             >
-              <UserPlusIcon />
+              <UserPlusIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </Show>
         </div>

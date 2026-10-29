@@ -7,3 +7,18 @@ soup-domain GraphQL wrapper types. The composed schema (root query, viewer,
 SDL export) lives in `complete_graph` — see `../complete_graph/AGENTS.md` for
 the schema conventions (presence-of-`id` normalized-cache rules and the
 viewer pattern), which apply to every type defined here.
+
+## Gotchas
+
+- `PROJECT` grouping forwards the Project property (initiative membership) to Soup; legacy folder IDs are not grouping keys.
+
+- `SoupItemLoader` (single-entity lookups, `soupUpdates` hydration) resolves
+  email threads through entity-access view receipts, the rule the REST thread
+  route applies, not through the viewer's inbox scope; Soup's email leg only
+  serves lists. A thread shared through a team's CRM, a project, or a share
+  therefore opens through `emailThread` even though it lives in a teammate's
+  inbox.
+- `NOTIFIED_AT` maps to Soup's notified request, not a simple sort: `soup`
+  accepts it descending only and `groupSoup` rejects it. Its continuation
+  cursors carry a different sort tag, so `inputs.rs` decodes both cursor shapes.
+- External chats are intentionally excluded from Soup hydration; use the `/external-chats` API.

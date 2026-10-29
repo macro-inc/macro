@@ -35,14 +35,15 @@ import {
 } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
-
 import {
   chatRuleset,
   handleFileFolderDrop,
   uploadFile,
 } from '@core/util/upload';
-import InfoIcon from '@phosphor/info.svg';
+import InfoIcon from '@icon/system/regular/info.svg';
+import { Telemetry } from '@macro-inc/observability';
 import { useCreateChannelMutation } from '@queries/channel/channels';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { ComposerSurface } from '@ui';
@@ -214,6 +215,17 @@ export function ChannelCompose() {
     callbacks: { onSend: handleSend },
   });
 
+  const send = async () => {
+    try {
+      await inputState.commands.send();
+    } catch (sendError) {
+      // `handleSend` shows its own failures in the compose error and rethrows.
+      if (error()) return;
+      setError('Failed to send message');
+      Telemetry.error(sendError, { surface: 'channel-compose' });
+    }
+  };
+
   const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
 
   const markdownEditor = createConfiguredChannelMarkdownEditor({
@@ -226,13 +238,16 @@ export function ChannelCompose() {
     onChange: (markdown) => inputState.setValue(markdown),
     onEnter: () => {
       if (isTouchDevice()) return false;
-      void inputState.commands.send();
+      fireAndForget(send(), 'channel-compose');
       return true;
     },
-    sendMessage: () => void inputState.commands.send(),
+    sendMessage: () => fireAndForget(send(), 'channel-compose'),
     onPasteFilesAndDirs: (files, directories) => {
-      void handleFileFolderDrop(files, directories, (entries) =>
-        inputState.commands.attachFiles(entries.map((e) => e.file))
+      fireAndForget(
+        handleFileFolderDrop(files, directories, (entries) =>
+          inputState.commands.attachFiles(entries.map((e) => e.file))
+        ),
+        'channel-compose'
       );
     },
   });

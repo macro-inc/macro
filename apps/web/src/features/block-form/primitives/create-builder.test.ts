@@ -456,7 +456,7 @@ describe('createBuilder', () => {
       builder.removeQuestion('q-team');
       expect(builder.selectedId()).toBe('q-name');
       expect(builder.layout()?.sections[1].gateRules?.conditions).toEqual([]);
-      expect(notices).toEqual(['✓ Removed 1 screener rule that checked it.']);
+      expect(notices).toEqual(['✓ Removed 1 gate rule that checked it.']);
       expect(calls).toEqual([]);
       expect(builder.hiddenColumns().map((column) => column.name)).toEqual([
         'Team',
@@ -820,28 +820,28 @@ describe('the booking step', () => {
     });
   });
 
-  it('puts new sections and screeners before the booking step and keeps it last when reordering', async () => {
+  it('puts new sections and gates before the booking step and keeps it last when reordering', async () => {
     const { writes } = fakeWrites();
     await createRoot(async (dispose) => {
       const { builder, notices } = setup({ writes });
       const { sectionId } = builder.addBooking(INTRO_CALL) ?? {};
       builder.focusSection('details');
       const travel = builder.addSection('questions');
-      const screener = builder.addSection('gate');
+      const gate = builder.addSection('gate');
       expect(builder.layout()?.sections.map((section) => section.id)).toEqual([
         'about',
         'gate',
         'details',
         travel,
-        screener,
+        gate,
         sectionId,
       ]);
       expect(builder.sectionMoveRefusal('details', 5)).toBe(
-        'The booking step comes last, after every question and screener. Move “Book a time” to the end.'
+        'The booking step comes last, after every question and gate. Move “Book a time” to the end.'
       );
       expect(builder.moveSection(sectionId ?? '', 0)).toBe(false);
       expect(notices).toEqual([
-        '✗ The booking step comes last, after every question and screener. Move “Book a time” to the end.',
+        '✗ The booking step comes last, after every question and gate. Move “Book a time” to the end.',
       ]);
       dispose();
     });

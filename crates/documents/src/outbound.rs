@@ -30,3 +30,6 @@ pub mod sync_service_probe;
 
 #[cfg(feature = "purge")]
 pub mod document_purge;
+
+#[cfg(feature = "axum")]
+pub mod markdown_text;

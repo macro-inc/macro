@@ -1,7 +1,10 @@
-import CopyIcon from '@phosphor/copy.svg';
-import DotsIcon from '@phosphor/dots-three.svg';
-import TrashIcon from '@phosphor/trash-simple.svg';
-import { Dropdown } from '@ui';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import DotsIcon from '@icon/system/regular/dots-three.svg';
+import ShareIcon from '@icon/system/regular/share-network.svg';
+import TrashIcon from '@icon/system/regular/trash-simple.svg';
+import { Button, ButtonGroup, Dropdown } from '@ui';
 import { type Accessor, createSignal, Match, Show, Switch } from 'solid-js';
 import { RoutineEditor } from '../components/routine-editor';
 import { RoutineRunButton } from '../components/routine-run-button';
@@ -25,6 +28,8 @@ export function RoutineDetailView(props: {
   onBack(): void;
   onDelete(): void;
   onCopyPrompt(prompt: string): Promise<void>;
+  onShareTemplate?(): void;
+  onOpenTemplate?(templateId: string): void;
   onOpenRun(resource: HistoryResource, newSplit: boolean): void;
 }) {
   const {
@@ -42,7 +47,11 @@ export function RoutineDetailView(props: {
     runDisabled,
     activationDisabled,
     runNow,
-  } = createRoutineDetail(props.source, props);
+  } = createRoutineDetail(props.source, {
+    userId: props.userId,
+    connectedApps: props.slots.createConnectedApps(),
+    onRename: (name) => props.onRename(name),
+  });
   const [tab, setTab] = createSignal(props.initialTab ?? 'settings');
   const back = () => props.onBack();
   const copyPrompt = async () => {
@@ -73,46 +82,74 @@ export function RoutineDetailView(props: {
           }
           onChange={setState}
           disabled={!isOwned() || isRunning() || !state()}
-          tab={tab()}
+          tab={isOwned() ? tab() : 'settings'}
+          showHistory={isOwned()}
           onTab={setTab}
           onBack={back}
           enabled={isActive()}
           runActions={
-            <RoutineRunButton
-              enabled={isActive()}
-              runDisabled={runDisabled()}
-              activationDisabled={activationDisabled()}
-              copyDisabled={!state()?.prompt}
-              onRun={runNow}
-              onEnabled={(enabled) => props.source.setEnabled(enabled)}
-              onCopyPrompt={() => void copyPrompt()}
-            />
+            isOwned() && (
+              <RoutineRunButton
+                enabled={isActive()}
+                runDisabled={runDisabled()}
+                activationDisabled={activationDisabled()}
+                copyDisabled={!state()?.prompt}
+                onRun={runNow}
+                onEnabled={(enabled) => props.source.setEnabled(enabled)}
+                onCopyPrompt={() => fireAndForget(copyPrompt(), 'routines')}
+              />
+            )
           }
           actions={
-            <Dropdown placement="bottom-start">
-              <Dropdown.Trigger
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Routine actions"
-              >
-                <DotsIcon class="size-5" />
-              </Dropdown.Trigger>
-              <Dropdown.Content portalScope="local">
-                <Dropdown.Item
-                  disabled={!state() || props.source.duplicationPending()}
-                  onSelect={() => props.source.duplicate()}
+            isOwned() && (
+              <Dropdown placement="bottom-start">
+                <Dropdown.Trigger
+                  as={ButtonGroup.Button}
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Routine actions"
                 >
-                  <CopyIcon class="size-4" />
-                  Duplicate
-                </Dropdown.Item>
-                <Show when={isOwned()}>
-                  <Dropdown.Item onSelect={props.onDelete}>
-                    <TrashIcon class="size-4" />
-                    Delete
-                  </Dropdown.Item>
-                </Show>
-              </Dropdown.Content>
-            </Dropdown>
+                  <DotsIcon class="size-5" />
+                </Dropdown.Trigger>
+                <Dropdown.Content portalScope="local">
+                  <Dropdown.Group>
+                    <Dropdown.Item
+                      disabled={!state() || props.source.duplicationPending()}
+                      onSelect={() => props.source.duplicate()}
+                    >
+                      <CopyIcon class="size-4" />
+                      Duplicate
+                    </Dropdown.Item>
+                    <Show when={props.onShareTemplate}>
+                      <Dropdown.Item onSelect={props.onShareTemplate}>
+                        <ShareIcon class="size-4" />
+                        Share as template
+                      </Dropdown.Item>
+                    </Show>
+                    <Show when={isOwned()}>
+                      <Dropdown.Item onSelect={props.onDelete}>
+                        <TrashIcon class="size-4" />
+                        Delete
+                      </Dropdown.Item>
+                    </Show>
+                  </Dropdown.Group>
+                </Dropdown.Content>
+              </Dropdown>
+            )
+          }
+          properties={
+            <Show when={props.onOpenTemplate && routine().templateId}>
+              {(templateId) => (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => props.onOpenTemplate?.(templateId())}
+                >
+                  Created from template
+                  <ArrowUpRightIcon class="size-3.5" />
+                </Button>
+              )}
+            </Show>
           }
           nextRun={nextRun()}
           instructions={
@@ -120,6 +157,7 @@ export function RoutineDetailView(props: {
               <Show when={{ version: editorVersion() }} keyed>
                 <props.slots.PromptEditor
                   initialValue={state()?.prompt ?? ''}
+                  disabled={!isOwned() || isRunning()}
                   onChange={(prompt) =>
                     setState((draft) =>
                       draft.prompt === prompt ? draft : { ...draft, prompt }
@@ -136,6 +174,18 @@ export function RoutineDetailView(props: {
                   target={draft().target}
                   onChange={(target) =>
                     setState((current) => ({ ...current, target }))
+                  }
+                />
+              )}
+            </Show>
+          }
+          apps={
+            <Show when={state()}>
+              {(draft) => (
+                <props.slots.Apps
+                  apps={draft().apps}
+                  onChange={(apps) =>
+                    setState((current) => ({ ...current, apps }))
                   }
                 />
               )}
@@ -202,7 +252,9 @@ export function RoutineDetailView(props: {
                   Could not load run history.{' '}
                   <button
                     class="underline"
-                    onClick={() => void props.source.refreshHistory()}
+                    onClick={() =>
+                      fireAndForget(props.source.refreshHistory(), 'routines')
+                    }
                   >
                     Retry
                   </button>

@@ -31,6 +31,8 @@ export interface BaseListEntityProps<E extends EntityData = EntityData>
   ref?: Ref<HTMLDivElement>;
   checked?: boolean;
   highlighted?: boolean;
+  /** The row open beside the list, marked while the cursor moves elsewhere. */
+  current?: boolean;
   hovered?: boolean;
   /** Caller-owned quick actions, revealed on pointer hover or keyboard focus. */
   actions?: JSX.Element;
@@ -84,6 +86,8 @@ export interface LayoutProps {
   /** Supporting text after the title in the standard content slot. */
   titleTrailing?: JSX.Element;
   meta?: JSX.Element;
+  /** Stored reference values alongside the existing property pills. */
+  referenceProperties?: JSX.Element;
   checked?: boolean;
   authorDisplayName?: string;
   hideCheckbox?: boolean;
@@ -105,7 +109,17 @@ export interface LayoutProps {
   showProject?: boolean;
 }
 
-export type NarrowLayoutVariant = 'standard' | 'condensed' | 'single-line';
+/**
+ * How rows render once the list is too narrow for columns. `inbox` gives
+ * email rows the compact stacked layout (sender, subject, snippet) on desktop,
+ * for lists that sit beside a reading pane; touch devices keep their own email
+ * rows, with the sender's picture.
+ */
+export type NarrowLayoutVariant =
+  | 'standard'
+  | 'condensed'
+  | 'single-line'
+  | 'inbox';
 
 interface ListLayoutContextValue {
   isWide: Accessor<boolean>;
@@ -117,6 +131,8 @@ const ListLayoutContext = createContext<ListLayoutContextValue>();
 export function ListLayoutProvider(props: {
   ref: Accessor<HTMLElement | undefined>;
   narrowLayout?: NarrowLayoutVariant;
+  /** Responsive rows have a nonzero width and their layout can be restored. */
+  onMeasured?: () => void;
   children: JSX.Element;
 }) {
   const [isWide, setIsWide] = createSignal(true);
@@ -125,7 +141,9 @@ export function ListLayoutProvider(props: {
     const el = props.ref();
     if (!el) return;
     const observer = new ResizeObserver((entries) => {
-      setIsWide((entries[0]?.contentRect.width ?? 0) >= WIDE_BREAKPOINT);
+      const width = entries[0]?.contentRect.width ?? 0;
+      setIsWide(width >= WIDE_BREAKPOINT);
+      if (width > 0) props.onMeasured?.();
     });
     observer.observe(el);
     onCleanup(() => observer.disconnect());

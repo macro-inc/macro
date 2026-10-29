@@ -21,6 +21,7 @@ import {
   parseAndroidSigning,
   propertyValue,
   provisionAndroidSigning,
+  raiseAndroidNativeBuildFloor,
   verifyAndroidApk,
 } from './android-release';
 
@@ -44,6 +45,17 @@ const releaseConfig = {
 };
 
 describe('Android release versions', () => {
+  it('names pull-request releases by version code', () => {
+    const code = releaseConfig.bundle.android.versionCode;
+    expect(androidReleaseMetadata(`vc${code}`, releaseConfig).filename).toBe(
+      `macro-vc${code}-android-arm64.aab`
+    );
+    expect(() => androidReleaseMetadata(`vc${code + 1}`, releaseConfig)).toThrow(
+      /does not match/
+    );
+    expect(() => androidReleaseMetadata('vc0', releaseConfig)).toThrow();
+  });
+
   it.each(['v2026.10.7', 'v2026.10.6.2', 'v2027.1.1.0'])(
     'uses the native config independently of tag %s',
     (tag) => {
@@ -102,6 +114,20 @@ describe('Android release versions', () => {
         },
       });
       expect(androidReleaseMetadata('v2026.10.7', updated).versionCode).toBe(9);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('raises only the Android native build floor', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'android-floor-test-'));
+    try {
+      const path = join(root, 'min-native-build.json');
+      await writeFile(path, JSON.stringify({ android: 1, ios: 191 }));
+      await raiseAndroidNativeBuildFloor(8, path);
+      expect(await readFile(path, 'utf8')).toBe(
+        '{\n  "android": 8,\n  "ios": 191\n}\n'
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }

@@ -1,4 +1,5 @@
 import { PermissionCard } from '@app/features/agent-interactions/components/PermissionCard';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { PendingPermission } from '@service-agent-fold/generated/types';
 import { useOptionalAgentSession } from '../context/AgentSessionContext';
 import { toolCallDetail, toolLabel } from './parts/shared';
@@ -36,10 +37,13 @@ export function PermissionRequest(props: { request: PendingPermission }) {
       canAnswer={session?.interactions.canAnswer() === true}
       disabled={session?.interactions.answering(identity())}
       onSelect={(optionId) =>
-        void session?.interactions.respond({
-          ...identity(),
-          answer: { kind: 'selected', optionId },
-        })
+        fireAndForget(
+          session?.interactions.respond({
+            ...identity(),
+            answer: { kind: 'selected', optionId },
+          }),
+          'agent-interactions'
+        )
       }
     />
   );

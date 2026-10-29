@@ -105,7 +105,13 @@ export function DocumentOrganizationDemo() {
   const playback = createProductWalkthrough({
     root: () => root,
     steps: 5,
-    reset: () => {},
+    reset: () => {
+      setCollection('Website');
+      setSelected(undefined);
+      setQuery('');
+      setPointAt(undefined);
+    },
+    loop: { hold: 5500 },
     reduced: () => {
       setAutomatic(false);
     },
@@ -122,7 +128,7 @@ export function DocumentOrganizationDemo() {
         setSelected(undefined);
         setPointAt(undefined);
       }
-      if (step === 5) setAutomatic(false);
+      if (step === 5) setPointAt(undefined);
     },
   });
   const pause = () => {
@@ -361,7 +367,6 @@ export function DocumentOrganizationDemo() {
       <Show when={pointer()}>
         {(p) => (
           <DemoCursor
-            label="Julia"
             class="doc-organize-pointer"
             style={{ transform: `translate(${p().x}px, ${p().y}px)` }}
           />

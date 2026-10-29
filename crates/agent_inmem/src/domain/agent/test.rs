@@ -93,7 +93,14 @@ async fn with_model_access<Engine: TurnEngine, Out>(
     model_access: Arc<dyn InMemModelAccess>,
     scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId, Arc<AgentState>) -> Out,
 ) -> (Vec<SessionNotification>, Vec<SessionConfigOption>, Out) {
-    let (notifications, recorded) = record(engine, admission, model_access, scenario).await;
+    let (notifications, recorded) = record(
+        engine,
+        admission,
+        model_access,
+        Arc::new(agent_api_keys::domain::NoAgentKeys),
+        scenario,
+    )
+    .await;
     let (config_options, out) = recorded.out;
     (notifications, config_options, out)
 }
@@ -108,6 +115,7 @@ async fn with_summaries<Engine: TurnEngine, Out>(
         engine,
         Arc::new(DisabledAiAdmissionService),
         Arc::new(crate::testing::TestModelAccess::paid()),
+        Arc::new(agent_api_keys::domain::NoAgentKeys),
         scenario,
     )
     .await;
@@ -121,6 +129,7 @@ async fn record<Engine: TurnEngine, Out>(
     engine: Arc<Engine>,
     admission: Arc<dyn AiAdmissionService>,
     model_access: Arc<dyn InMemModelAccess>,
+    agent_keys: Arc<dyn agent_api_keys::domain::AgentKeys>,
     scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId, Arc<AgentState>) -> Out,
 ) -> (
     Vec<SessionNotification>,
@@ -133,12 +142,14 @@ async fn record<Engine: TurnEngine, Out>(
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
         ),
         engine,
         admission,
+        agent_keys,
         model_access,
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
@@ -481,6 +492,132 @@ async fn cancel_during_billing_does_not_start_engine_or_write_history() {
     assert!(engine.requests().is_empty());
 }
 
+/// An agent with its own key for `provider`, or none.
+struct OneAgentKey(Option<agent_api_keys::domain::ModelProvider>);
+
+#[async_trait::async_trait]
+impl agent_api_keys::domain::AgentKeys for OneAgentKey {
+    async fn usable_provider(
+        &self,
+        _bot_id: macro_uuid::Uuid,
+        _user: &MacroUserIdStr<'_>,
+    ) -> agent_api_keys::domain::Result<Option<agent_api_keys::domain::ModelProvider>> {
+        Ok(self.0)
+    }
+
+    async fn usable_key(
+        &self,
+        bot_id: macro_uuid::Uuid,
+        _user: &MacroUserIdStr<'_>,
+    ) -> agent_api_keys::domain::Result<Option<agent_api_keys::domain::UsableAgentKey>> {
+        Ok(self
+            .0
+            .map(|provider| agent_api_keys::domain::UsableAgentKey {
+                bot_id,
+                key: agent_api_keys::domain::ProviderApiKey::parse(provider, "sk-ant-api03-abc")
+                    .expect("valid key"),
+            }))
+    }
+}
+
+fn be_agent(state: &AgentState, bot: bot_id::BotId) {
+    state
+        .store
+        .get_mut(&state.session_id)
+        .expect("session")
+        .identity = Some(crate::domain::engine::AgentIdentity {
+        bot,
+        name: "Grunk".to_owned(),
+        handle: "grunk".to_owned(),
+    });
+}
+
+#[tokio::test]
+async fn an_agent_with_its_own_key_runs_turns_on_it_without_spending_the_allowance() {
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+        "reply".into(),
+    )]));
+    let admission = Arc::new(TestAdmission::new(Err(AiAdmissionError::Denied(
+        DenyReason::AllowanceExhausted,
+    ))));
+    let bot = bot_id::BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    record(
+        engine.clone(),
+        admission.clone(),
+        Arc::new(crate::testing::TestModelAccess::paid()),
+        Arc::new(OneAgentKey(Some(
+            agent_api_keys::domain::ModelProvider::Anthropic,
+        ))),
+        async |connection, session, state| {
+            be_agent(&state, bot);
+            connection
+                .send_request(text_prompt(&session, "hello"))
+                .block_task()
+                .await
+                .expect("the turn runs on the agent's key");
+        },
+    )
+    .await;
+
+    assert_eq!(engine.requests()[0].agent_key, Some(bot.as_uuid()));
+    assert!(
+        admission.calls.lock().unwrap().is_empty(),
+        "the owner's allowance is never asked"
+    );
+}
+
+#[tokio::test]
+async fn an_agent_with_a_key_offers_only_its_providers_models() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let bot = bot_id::BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    let (_, recorded) = record(
+        engine,
+        Arc::new(DisabledAiAdmissionService),
+        // A free plan alone would offer only the free model.
+        Arc::new(crate::testing::TestModelAccess::new(
+            crate::domain::model_access::ModelAccess::Free,
+        )),
+        Arc::new(OneAgentKey(Some(
+            agent_api_keys::domain::ModelProvider::Anthropic,
+        ))),
+        async |connection, session, state| {
+            // Attach seeds the agent and its model before `session/new`; this
+            // harness opens the session first, so put them back.
+            be_agent(&state, bot);
+            use_model(&state, "anthropic/claude-sonnet-5-5");
+            let resumed = connection
+                .send_request(ResumeSessionRequest::new(session.clone(), "/"))
+                .block_task()
+                .await
+                .expect("resumed");
+            let other = connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    MODEL_CONFIG_ID,
+                    SessionConfigValueId::new("other-model"),
+                ))
+                .block_task()
+                .await;
+            (resumed.config_options.unwrap_or_default(), other.is_err())
+        },
+    )
+    .await;
+    let (options, other_refused) = recorded.out.1;
+
+    let selection = agent_fold::domain::model_selection::model_selection(&options)
+        .expect("resume should advertise a model select");
+    assert_eq!(selection.current, "anthropic/claude-sonnet-5-5");
+    assert_eq!(
+        selection
+            .options
+            .iter()
+            .map(|model| model.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["anthropic/claude-sonnet-5-5"]
+    );
+    assert!(other_refused, "another provider's model cannot be picked");
+}
+
 #[tokio::test]
 async fn new_session_advertises_the_engine_supported_models() {
     let (_notifications, config_options, ()) =
@@ -697,6 +834,155 @@ async fn tool_calls_are_stamped_with_their_names_and_subagent_flag() {
             serde_json::json!({"macro": {"toolName": "ReadContent"}}),
             serde_json::json!({"macro": {"toolName": "Subagent", "subagent": true}}),
             serde_json::json!({"macro": {"toolName": "mcp__slack__search"}}),
+        ]
+    );
+}
+
+/// The tool frames of a turn, one line each: what a reader of the log sees
+/// happen to its calls.
+fn tool_frames(notifications: &[SessionNotification]) -> Vec<String> {
+    let status = |status: Option<ToolCallStatus>| {
+        status.map_or_else(
+            || "-".to_owned(),
+            |status| {
+                serde_json::to_value(status)
+                    .expect("a status serializes")
+                    .to_string()
+            },
+        )
+    };
+    let input = |input: Option<&serde_json::Value>| {
+        input.map_or_else(|| "-".to_owned(), serde_json::Value::to_string)
+    };
+    notifications
+        .iter()
+        .filter_map(|notification| match &notification.update {
+            SessionUpdate::ToolCall(call) => Some(format!(
+                "open {} {} {} {}",
+                call.tool_call_id.0,
+                call.title,
+                status(Some(call.status)),
+                input(call.raw_input.as_ref())
+            )),
+            SessionUpdate::ToolCallUpdate(update) => Some(format!(
+                "update {} {} {}",
+                update.tool_call_id.0,
+                status(update.fields.status),
+                input(update.fields.raw_input.as_ref())
+            )),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A call the model is still writing opens `pending` at once, is peeked at
+/// as its arguments stream - at most once per window, so a burst of
+/// fragments is one peek - and starts under the same id once finished.
+#[tokio::test]
+async fn a_streamed_tool_call_opens_pending_and_is_peeked_at_while_written() {
+    let engine = Arc::new(ScriptedEngine::new(vec![
+        StreamPart::ToolCallStarted(agent::ToolCallStart {
+            id: "call-1".into(),
+            name: "NameSearch".into(),
+            mcp: None,
+        }),
+        StreamPart::ToolCallArgs {
+            id: "call-1".into(),
+            delta: "{\"query\":\"road".into(),
+        },
+        StreamPart::ToolCallArgs {
+            id: "call-1".into(),
+            delta: "map\"}".into(),
+        },
+        StreamPart::ToolCall(agent::ToolCall {
+            id: "call-1".into(),
+            name: "NameSearch".into(),
+            json: serde_json::json!({"query": "roadmap"}),
+            mcp: None,
+        }),
+        StreamPart::ToolResponse(agent::ToolResponse::Json {
+            id: "call-1".into(),
+            json: serde_json::json!({"hits": 1}),
+            name: "NameSearch".into(),
+        }),
+    ]));
+
+    let (notifications, _, _) = with_agent(Arc::clone(&engine), async |connection, session| {
+        connection
+            .send_request(text_prompt(&session, "find the roadmap"))
+            .block_task()
+            .await
+            .expect("the prompt should complete")
+    })
+    .await;
+
+    assert_eq!(
+        tool_frames(&notifications),
+        vec![
+            r#"open call-1 NameSearch "pending" -"#,
+            r#"update call-1 - {"query":"road"}"#,
+            r#"update call-1 "in_progress" {"query":"roadmap"}"#,
+            r#"update call-1 "completed" -"#,
+        ]
+    );
+    let open = notifications
+        .iter()
+        .find_map(|notification| match &notification.update {
+            SessionUpdate::ToolCall(call) => Some(call),
+            _ => None,
+        })
+        .expect("the call opened");
+    assert_eq!(
+        open.meta.clone().map(serde_json::Value::Object),
+        Some(serde_json::json!({"macro": {"toolName": "NameSearch"}})),
+        "the fold reads the tool's name from the opening frame"
+    );
+}
+
+/// A turn that ends while the model is still writing a call closes the
+/// call's row as failed, and the call - which never ran - stays out of the
+/// history the next turn is built from.
+#[tokio::test]
+async fn a_call_the_turn_ends_while_writing_closes_and_stays_out_of_history() {
+    let engine = Arc::new(ScriptedEngine::new(vec![
+        StreamPart::Content("On it.".into()),
+        StreamPart::ToolCallStarted(agent::ToolCallStart {
+            id: "call-1".into(),
+            name: "CreateDocument".into(),
+            mcp: None,
+        }),
+        StreamPart::ToolCallArgs {
+            id: "call-1".into(),
+            delta: "{\"title\":\"Pl".into(),
+        },
+    ]));
+
+    let (notifications, _, _) = with_agent(Arc::clone(&engine), async |connection, session| {
+        for prompt in ["write it up", "again"] {
+            connection
+                .send_request(text_prompt(&session, prompt))
+                .block_task()
+                .await
+                .expect("the prompt should complete");
+        }
+    })
+    .await;
+
+    let frames = tool_frames(&notifications);
+    assert_eq!(
+        frames[..3],
+        [
+            r#"open call-1 CreateDocument "pending" -"#.to_owned(),
+            r#"update call-1 - {"title":"Pl"}"#.to_owned(),
+            r#"update call-1 "failed" -"#.to_owned(),
+        ]
+    );
+    assert_eq!(
+        engine.requests()[1].messages,
+        vec![
+            "write it up".to_owned(),
+            "On it.".to_owned(),
+            "again".to_owned()
         ]
     );
 }
@@ -1529,12 +1815,14 @@ async fn serve_with_mcp(
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
         ),
         engine,
         admission: Arc::new(DisabledAiAdmissionService),
+        agent_keys: Arc::new(agent_api_keys::domain::NoAgentKeys),
         model_access: Arc::new(crate::testing::TestModelAccess::paid()),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
@@ -1585,12 +1873,14 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
         ),
         engine: Arc::new(ScriptedEngine::new(Vec::new())),
         admission: Arc::new(DisabledAiAdmissionService),
+        agent_keys: Arc::new(agent_api_keys::domain::NoAgentKeys),
         model_access: Arc::new(crate::testing::TestModelAccess::paid()),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
@@ -1674,12 +1964,14 @@ async fn first_prompt_waits_for_background_mcp_connect() {
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
         ),
         engine: Arc::clone(&engine) as Arc<dyn TurnEngine>,
         admission: Arc::new(DisabledAiAdmissionService),
+        agent_keys: Arc::new(agent_api_keys::domain::NoAgentKeys),
         model_access: Arc::new(crate::testing::TestModelAccess::paid()),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
@@ -1778,12 +2070,14 @@ where
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
         ),
         engine,
         admission: Arc::new(DisabledAiAdmissionService),
+        agent_keys: Arc::new(agent_api_keys::domain::NoAgentKeys),
         model_access: Arc::new(crate::testing::TestModelAccess::paid()),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
@@ -2676,4 +2970,23 @@ async fn changing_speed_applies_to_next_turn_and_rejects_unsupported_models() {
     let requests = engine.0.requests();
     assert_eq!(requests[0].speed, agent::ModelSpeed::Ultrafast);
     assert_eq!(requests[1].speed, agent::ModelSpeed::Standard);
+}
+
+#[test]
+fn a_turn_that_ends_on_a_tool_call_has_not_replied() {
+    let mut output = TurnOutput::default();
+    output.observe(&StreamPart::Content("Let me look.".to_owned()));
+    output.observe(&StreamPart::ToolCall(agent::ToolCall {
+        id: "call-1".to_owned(),
+        name: "ExecuteCode".to_owned(),
+        json: serde_json::json!({}),
+        mcp: None,
+    }));
+    output.observe(&StreamPart::Content("\n\n".to_owned()));
+    assert_eq!(output.text_chars, 14);
+    assert_eq!(output.tool_calls, 1);
+    assert!(!output.replied);
+
+    output.observe(&StreamPart::Content("Found it.".to_owned()));
+    assert!(output.replied);
 }

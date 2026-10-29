@@ -1,6 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { hapticImpact } from '@core/mobile/haptics';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInputCommands } from '../create-input-commands';
 import type { InputSnapshot } from '../types';
+
+vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
+beforeEach(() => vi.clearAllMocks());
 
 describe('createInputCommands', () => {
   it('does not send an empty message', async () => {
@@ -27,6 +31,7 @@ describe('createInputCommands', () => {
 
     await expect(commands.send()).resolves.toBe(false);
     expect(onSend).not.toHaveBeenCalled();
+    expect(hapticImpact).not.toHaveBeenCalled();
   });
 
   it('allows attachment-only messages', async () => {
@@ -63,8 +68,46 @@ describe('createInputCommands', () => {
 
     await expect(commands.send()).resolves.toBe(true);
     expect(onSend).toHaveBeenCalledWith(snapshot);
+    expect(hapticImpact).toHaveBeenCalledExactlyOnceWith('light');
     expect(reset).toHaveBeenCalledOnce();
     expect(clearComposer).toHaveBeenCalledOnce();
+  });
+
+  it('clears the draft before the message is delivered and restores it when send fails', async () => {
+    let value = 'Hello agent';
+    let duringSend = 'unset';
+    const snapshot = (): InputSnapshot => ({
+      value,
+      mentions: [],
+      attachments: [],
+    });
+    const commands = createInputCommands({
+      view: () => ({
+        mode: 'channel',
+        hasPendingAttachments: false,
+      }),
+      snapshot,
+      setIsSending: vi.fn(),
+      setShowFormatRibbon: vi.fn(),
+      reset: () => {
+        value = '';
+      },
+      restoreSnapshot: (next) => {
+        value = next.value;
+      },
+      clearComposer: vi.fn(),
+      removeTrackedAttachment: vi.fn(),
+      callbacks: {
+        onSend: async () => {
+          duringSend = value;
+          throw new Error('offline');
+        },
+      },
+    });
+
+    await expect(commands.send()).rejects.toThrow('offline');
+    expect(duringSend).toBe('');
+    expect(value).toBe('Hello agent');
   });
 
   it('resets before invoking onClose', () => {

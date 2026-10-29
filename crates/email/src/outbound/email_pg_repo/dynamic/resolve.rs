@@ -4,24 +4,12 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-/// Caches lookups that are repeated thousands of times inside the address
-/// filter — `email_contacts.id`s for each Complete email referenced by the
-/// AST, plus the `email_labels.id`s for the TRASH label. Resolving once up
-/// front lets the candidate WHERE use direct id equality instead of joining
-/// `email_contacts` / `email_labels` per message row.
-///
-/// Both fields are Vec-valued to support team-scoped queries, where the same
-/// email address may resolve to multiple `email_contacts` rows (one per team
-/// member's `link_id`) and the TRASH label exists once per link. For the
-/// normal per-link path the Vecs typically contain one element.
+/// Cache mailbox-scoped contact identities for address predicates and team scope.
 pub(super) struct ResolvedFilters {
     /// Lowercased email address → all contact ids that match across the
     /// resolved scope (one link, or all team links). Empty Vec means the
     /// address has no matching contact anywhere in scope.
     contact_ids: HashMap<String, Vec<Uuid>>,
-    /// All TRASH label ids in scope. One id per link with a TRASH label.
-    /// Empty when no scope-relevant link has a TRASH label (rare).
-    trash_label_ids: Vec<Uuid>,
     /// Every primary `email_links.id` owned by a member of the query's team.
     /// `Some` only for team-scoped queries. Doubles as the candidate-stage
     /// `t.link_id = ANY(…)` set and (for non-shared, non-project queries)
@@ -46,10 +34,6 @@ impl ResolvedFilters {
         }
     }
 
-    pub(super) fn trash_label_ids(&self) -> &[Uuid] {
-        &self.trash_label_ids
-    }
-
     /// The team's primary link ids, when this resolution was team-scoped.
     pub(super) fn team_link_ids(&self) -> Option<&[Uuid]> {
         self.team_link_ids.as_deref()
@@ -68,7 +52,6 @@ impl ResolvedFilters {
     pub(super) fn empty() -> Self {
         Self {
             contact_ids: HashMap::new(),
-            trash_label_ids: Vec::new(),
             team_link_ids: None,
         }
     }
@@ -85,12 +68,6 @@ impl ResolvedFilters {
             .entry(lowered_email.into())
             .or_default()
             .push(id);
-        self
-    }
-
-    #[cfg(test)]
-    pub(super) fn with_trash(mut self, id: Uuid) -> Self {
-        self.trash_label_ids.push(id);
         self
     }
 }
@@ -176,21 +153,7 @@ pub(super) fn can_short_circuit(ast: &Expr<EmailLiteral>, resolved: &ResolvedFil
     matches!(fold_unresolved(ast, resolved), Some(false))
 }
 
-/// Resolves all Complete emails in the AST to `contact_id`s and looks up
-/// the TRASH label id(s) for the scope.
-///
-/// When `team_id` is `None`, the scope is the single `link_id` (normal
-/// per-mailbox query) and each address resolves to at most one contact_id;
-/// the TRASH lookup returns at most one label id.
-///
-/// When `team_id` is `Some`, the scope expands to every primary `link_id`
-/// owned by any user on the team — a link is primary when its
-/// `email_address` is the owner's own macro_id email, so connected
-/// secondary mailboxes stay out of scope. The same email address may now
-/// resolve to multiple
-/// contact_ids (one per team member who has corresponded with that address),
-/// and the TRASH lookup returns one label id per team link. The SQL builder
-/// uses `= ANY($ids)` predicates so messages in *any* team mailbox match.
+/// Resolve complete addresses within the requested links or the team's primary inboxes.
 #[tracing::instrument(skip(pool, ast), err)]
 pub(super) async fn resolve_filters(
     pool: &PgPool,
@@ -220,17 +183,6 @@ pub(super) async fn resolve_filters(
     };
     let scope_link_ids: &[Uuid] = team_link_ids.as_deref().unwrap_or(link_ids);
 
-    let trash_label_ids: Vec<Uuid> = sqlx::query_scalar!(
-        r#"
-            SELECT id
-            FROM email_labels
-            WHERE link_id = ANY($1) AND name = 'TRASH'
-            "#,
-        scope_link_ids,
-    )
-    .fetch_all(pool)
-    .await?;
-
     let emails = collect_complete_emails(ast);
     let mut contact_ids: HashMap<String, Vec<Uuid>> = HashMap::new();
     if !emails.is_empty() {
@@ -253,7 +205,6 @@ pub(super) async fn resolve_filters(
 
     Ok(ResolvedFilters {
         contact_ids,
-        trash_label_ids,
         team_link_ids,
     })
 }

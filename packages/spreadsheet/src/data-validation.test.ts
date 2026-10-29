@@ -6,7 +6,7 @@ import {
   replaceValidations,
   validationReference,
 } from './data-validation';
-import type { DataValidation } from './sheet-rules';
+import { type DataValidation, validDataValidation } from './sheet-rules';
 
 const list = (range: string, formula = '"a,b"'): DataValidation => ({
   range,
@@ -37,6 +37,65 @@ describe('dropdown rules', () => {
     });
     expect(dropdownRule({ range: '$C$1' }).formulas).toEqual(['$C$1']);
     expect(() => dropdownRule({ range: 'B9:B2' })).toThrow('Invalid dropdown');
+  });
+
+  it('keeps choice colors, which must name typed choices once', () => {
+    expect(
+      dropdownRule({
+        items: ['Open', 'Done'],
+        colors: [
+          { item: ' done ', color: '#B7E1CD' },
+          { item: 'Open', color: '#f4cccc' },
+        ],
+      }).colors
+    ).toEqual([
+      { item: 'done', color: '#b7e1cd' },
+      { item: 'Open', color: '#f4cccc' },
+    ]);
+    // A range's values are only known when the dropdown opens.
+    expect(
+      dropdownRule({
+        range: 'A2:A9',
+        colors: [{ item: 'Anything', color: '#c9daf8' }],
+      }).colors
+    ).toEqual([{ item: 'Anything', color: '#c9daf8' }]);
+    expect(dropdownRule({ items: ['Open'], colors: [] })).not.toHaveProperty(
+      'colors'
+    );
+    const colored = (colors: { item: string; color: string }[]) => () =>
+      dropdownRule({ items: ['Open', 'Done'], colors });
+    expect(colored([{ item: 'Later', color: '#ffffff' }])).toThrow(
+      '“Later” is not one of the dropdown'
+    );
+    expect(colored([{ item: 'Open', color: 'red' }])).toThrow(
+      'Invalid color “red”'
+    );
+    expect(
+      colored([
+        { item: 'Open', color: '#ffffff' },
+        { item: 'OPEN', color: '#000000' },
+      ])
+    ).toThrow('more than one color');
+    expect(colored([{ item: ' ', color: '#ffffff' }])).toThrow(
+      'needs the choice'
+    );
+  });
+
+  it('accepts only well-formed colors in stored rules', () => {
+    const rule = { range: 'A1', type: 'list', formulas: ['"a"'] };
+    expect(
+      validDataValidation({
+        ...rule,
+        colors: [{ item: 'a', color: '#AABBCC' }],
+      })
+    ).toBe(true);
+    for (const colors of [
+      [{ item: 'a', color: 'blue' }],
+      [{ item: '', color: '#aabbcc' }],
+      [{ item: 'a', color: '#aabbcc', text: '#000000' }],
+      { a: '#aabbcc' },
+    ])
+      expect(validDataValidation({ ...rule, colors })).toBe(false);
   });
 
   it('reads sheet-qualified references', () => {

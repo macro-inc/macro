@@ -100,6 +100,7 @@ export function createBillingLab(initial: ScenarioId) {
       return plan ? { plan, effectiveAt: state().periodEnd } : undefined;
     },
     hasPaid: () => state().tier !== 'free',
+    trialEligible: () => state().tier === 'free',
     aiUsageBilling: () => state().status !== 'before-launch',
     teamRole: () =>
       state().role === 'solo'

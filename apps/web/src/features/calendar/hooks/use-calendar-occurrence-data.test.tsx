@@ -12,7 +12,11 @@ import {
 } from '@tanstack/solid-query';
 import { type Accessor, createSignal, For, Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_CALENDAR_SOURCE } from '../types';
+import {
+  DEFAULT_CALENDAR_SOURCE,
+  DEFAULT_GUEST_POLICY,
+  NO_VIEWER_CAPABILITIES,
+} from '../types';
 import {
   type CalendarOccurrenceData,
   useCalendarOccurrenceData,
@@ -75,6 +79,16 @@ function deferred<T>() {
 }
 
 const calendar: VisibleCalendar = {
+  provider: 'google',
+  capabilities: {
+    autoDecline: true,
+    conferenceProvider: 'google_meet',
+    customRecurrence: true,
+    emailReminders: true,
+    removeConference: true,
+    resetRsvp: true,
+    guestPolicy: true,
+  },
   id: 'primary',
   name: 'My calendar',
   color: '#dc2127',
@@ -105,6 +119,9 @@ function occurrenceData(): CalendarOccurrencesData {
           recurrenceLines: [],
           sequence: 0,
           isReadOnly: false,
+          guestPolicy: DEFAULT_GUEST_POLICY,
+          isSnapshot: false,
+          viewerCan: NO_VIEWER_CAPABILITIES,
           status: 'confirmed',
           transparency: 'opaque',
           visibility: 'default',

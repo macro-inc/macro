@@ -11,8 +11,8 @@ use crate::domain::{
     },
     ports::{
         ChannelAttachmentsPage, ChannelEventDispatcher, ChannelMessagesErr, ChannelMutationErr,
-        ChannelPictureFile, ChannelPictureFiles, ChannelReferenceSharePermissions, ChannelRepo,
-        ChannelService,
+        ChannelPictureAccess, ChannelPictureFile, ChannelPictureFiles,
+        ChannelReferenceSharePermissions, ChannelRepo, ChannelService, CommentParentAccess,
     },
 };
 use bot_id::{BotId, cowlike::CowLike};
@@ -22,6 +22,7 @@ use entity_access::domain::models::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, PaginateOn, Query};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -43,6 +44,8 @@ pub struct ChannelServiceImpl<
     reference_share_permissions: P,
     picture_files: F,
     agent_direct_messages: Option<Arc<dyn super::agent_dm::AgentDirectMessages>>,
+    /// Fail-closed when unset: comment references are withheld.
+    comment_parent_access: Option<Arc<dyn CommentParentAccess>>,
 }
 
 /// Fail-closed picture metadata source for contexts that do not wire uploads.
@@ -99,6 +102,7 @@ where
             reference_share_permissions: NoopChannelReferenceSharePermissions,
             picture_files: UnavailableChannelPictureFiles,
             agent_direct_messages: None,
+            comment_parent_access: None,
         }
     }
 }
@@ -112,6 +116,7 @@ impl<R, E, P> ChannelServiceImpl<R, E, P> {
             reference_share_permissions,
             picture_files: UnavailableChannelPictureFiles,
             agent_direct_messages: None,
+            comment_parent_access: None,
         }
     }
 }
@@ -126,6 +131,12 @@ impl<R, E, P, F> ChannelServiceImpl<R, E, P, F> {
         self
     }
 
+    /// Authorize comment references through the commented entity's permissions.
+    pub fn with_comment_parent_access(mut self, access: Arc<dyn CommentParentAccess>) -> Self {
+        self.comment_parent_access = Some(access);
+        self
+    }
+
     /// Wire the static-file metadata source used to authorize channel pictures.
     pub fn with_picture_files<F2: ChannelPictureFiles>(
         self,
@@ -137,6 +148,7 @@ impl<R, E, P, F> ChannelServiceImpl<R, E, P, F> {
             reference_share_permissions: self.reference_share_permissions,
             picture_files,
             agent_direct_messages: self.agent_direct_messages,
+            comment_parent_access: self.comment_parent_access,
         }
     }
 }
@@ -843,7 +855,7 @@ where
     #[tracing::instrument(err, skip(self, access))]
     async fn set_channel_picture(
         &self,
-        access: EntityAccessReceipt<entity_access::domain::models::AdminParticipantRole>,
+        access: ChannelPictureAccess,
         picture_id: Option<Uuid>,
     ) -> Result<(), ChannelMutationErr> {
         if access.entity().entity_type != EntityType::Channel {
@@ -951,6 +963,20 @@ where
         Ok(participants)
     }
 
+    #[tracing::instrument(err, skip_all, fields(user_count = user_ids.len()))]
+    async fn get_user_display_names(
+        &self,
+        user_ids: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<HashMap<MacroUserIdStr<'static>, String>, ChannelMessagesErr> {
+        let names = self
+            .repo
+            .get_user_display_names(&user_ids)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        Ok(names)
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn get_channel_metadata(
         &self,
@@ -1047,18 +1073,61 @@ where
         Ok(activity)
     }
 
-    #[tracing::instrument(err, skip(self, user_id))]
+    #[tracing::instrument(
+        err,
+        skip(self, user_id),
+        fields(comment_parents = tracing::field::Empty, references = tracing::field::Empty)
+    )]
     async fn get_attachment_references(
         &self,
         entity_type: String,
         entity_id: String,
         user_id: String,
     ) -> Result<Vec<AttachmentEntityReference>, ChannelMessagesErr> {
-        self.repo
+        let mut references = self
+            .repo
             .get_attachment_references(&entity_type, &entity_id, &user_id)
             .await
             .map_err(anyhow::Error::from)
-            .map_err(ChannelMessagesErr::Repo)
+            .map_err(ChannelMessagesErr::Repo)?;
+
+        // Channel rows are scoped to the viewer's channels in the repo; comment
+        // rows come back for every parent and are authorized here.
+        let parents: HashSet<(String, String)> = references
+            .iter()
+            .filter_map(|reference| match reference {
+                AttachmentEntityReference::Comment(comment) => Some((
+                    comment.parent_entity_type.clone(),
+                    comment.parent_entity_id.clone(),
+                )),
+                _ => None,
+            })
+            .collect();
+        let span = tracing::Span::current();
+        span.record("comment_parents", parents.len());
+
+        let mut viewable_parents = HashSet::new();
+        if let Some(access) = &self.comment_parent_access {
+            for (parent_type, parent_id) in parents {
+                if access
+                    .can_view_parent(&user_id, &parent_type, &parent_id)
+                    .await
+                    .map_err(ChannelMessagesErr::Repo)?
+                {
+                    viewable_parents.insert((parent_type, parent_id));
+                }
+            }
+        }
+        references.retain(|reference| match reference {
+            AttachmentEntityReference::Comment(comment) => viewable_parents.contains(&(
+                comment.parent_entity_type.clone(),
+                comment.parent_entity_id.clone(),
+            )),
+            _ => true,
+        });
+        span.record("references", references.len());
+
+        Ok(references)
     }
 
     async fn create_channel(

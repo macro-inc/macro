@@ -1,6 +1,6 @@
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import FunctionIcon from '@phosphor/function.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import FunctionIcon from '@icon/system/regular/function.svg';
 import { Dropdown } from '@ui/components/Dropdown';
 import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
 import {
@@ -21,6 +21,7 @@ const types: { label: string; to: DatabaseColumnKind }[] = [
   { label: 'Select', to: { type: 'select', multi: false } },
   { label: 'Multi-select', to: { type: 'select', multi: true } },
   { label: 'Date', to: { type: 'date' } },
+  { label: 'Time range', to: { type: 'date_range' } },
   { label: 'Checkbox', to: { type: 'boolean' } },
   { label: 'URL', to: { type: 'link' } },
   { label: 'People', to: { type: 'entity', target: 'USER', multi: false } },

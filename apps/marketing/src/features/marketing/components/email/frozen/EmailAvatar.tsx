@@ -6,7 +6,6 @@ import { homepagePeople } from '../../../core/homepage-demo-people';
 
 // Existing website-owned portraits illustrate fictional sample contacts.
 const sampleContactPhotos: Record<string, string> = {
-  Dana: homepagePeople.valentina.photo,
   Maya: homepagePeople.julia.photo,
   Alex: panat,
   Sam: mark,

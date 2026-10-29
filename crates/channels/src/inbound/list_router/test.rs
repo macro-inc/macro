@@ -111,13 +111,20 @@ impl ChannelListService for FakeChannelListService {
 struct FakeJwtValidator;
 
 impl JwtValidator for FakeJwtValidator {
-    fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
+    fn validate_credential(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
         match jwt {
-            VALID_BEARER_TOKEN => Ok(ValidatedIdentity {
-                user_id: BEARER_USER_ID.to_string(),
-                fusion_user_id: "fusion-user-id".to_string(),
-                organization_id: None,
-                permissions: None,
+            VALID_BEARER_TOKEN => Ok(macro_authorization::ValidatedCredential {
+                origin: macro_authorization::CredentialOrigin::Session,
+                identity: ValidatedIdentity {
+                    agent_id: None,
+                    user_id: BEARER_USER_ID.to_string(),
+                    fusion_user_id: "fusion-user-id".to_string(),
+                    organization_id: None,
+                    permissions: None,
+                },
             }),
             EXPIRED_BEARER_TOKEN => Err(Report::new(MacroAuthorizationError::CredentialsExpired)),
             _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),

@@ -1,7 +1,11 @@
 import {
+  copyFragment,
   createGraphicsEditor,
   drawableIds,
+  screenToWorld,
+  selectAllCommand,
   setShapeLabelCommand,
+  worldBounds,
 } from '@macro-inc/graphics';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createCanvasClipboard } from './clipboard';
@@ -14,13 +18,20 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function setup() {
+function setup(canvasId = 'canvas-a') {
   const editor = createGraphicsEditor(createCanvasNextScene());
   const host = document.createElement('div');
   const input = document.createElement('input');
   host.append(input);
   const notify = vi.fn();
-  const clipboard = createCanvasClipboard(editor, notify);
+  const center = () => screenToWorld(editor.getCamera(), { x: 400, y: 300 });
+  const clipboard = createCanvasClipboard(
+    editor,
+    notify,
+    undefined,
+    undefined,
+    { canvasId, center }
+  );
   cleanup.push(clipboard.attach(host), editor.dispose);
   const data = new Map<string, string>();
   const event = (type: string, target: HTMLElement = host) => {
@@ -34,8 +45,138 @@ function setup() {
     target.dispatchEvent(event);
     return event;
   };
-  return { editor, input, host, data, event, clipboard, notify };
+  return { editor, input, host, data, event, clipboard, notify, center };
 }
+
+function selectedBounds(editor: ReturnType<typeof createGraphicsEditor>) {
+  const fragment = copyFragment(
+    editor.document,
+    editor.getSession().selectedIds
+  )!;
+  return worldBounds(fragment.scene, fragment.scene.rootId);
+}
+
+it('centers cross-canvas selections in the current viewport, preserving their relative layout', () => {
+  const source = setup('source');
+  source.editor.execute(selectAllCommand, undefined);
+  const original = selectedBounds(source.editor);
+  source.event('copy');
+  const target = setup('target');
+  target.editor.zoomAt({ x: 0, y: 0 }, 2);
+  target.editor.panBy({ x: 1000, y: -500 });
+  target.editor.setSnapUnit(100);
+  target.data.set('text/plain', source.data.get('text/plain')!);
+  target.event('paste');
+  const bounds = selectedBounds(target.editor);
+  expect(bounds.width).toBe(original.width);
+  expect(bounds.height).toBe(original.height);
+  expect(bounds.x + bounds.width / 2).toBe(target.center().x);
+  expect(bounds.y + bounds.height / 2).toBe(target.center().y);
+  target.event('paste');
+  expect(selectedBounds(target.editor)).toEqual(bounds);
+  target.editor.undo();
+  expect(drawableIds(target.editor.document)).toHaveLength(6);
+  target.editor.redo();
+  expect(drawableIds(target.editor.document)).toHaveLength(9);
+});
+
+it('recognizes copies from another instance of the same canvas', () => {
+  const source = setup();
+  source.editor.select('welcome-rectangle');
+  source.event('copy');
+  const target = setup();
+  target.data.set('text/plain', source.data.get('text/plain')!);
+  target.event('paste');
+  expect(selectedBounds(target.editor)).toMatchObject({ x: 124, y: 124 });
+});
+
+it('centers old fragments without source metadata as external spatial data', () => {
+  const { editor, event, data, center } = setup();
+  data.set(
+    'text/plain',
+    JSON.stringify(copyFragment(editor.document, ['welcome-small']))
+  );
+  event('paste');
+  const bounds = selectedBounds(editor);
+  expect(bounds.x + bounds.width / 2).toBe(center().x);
+  expect(bounds.y + bounds.height / 2).toBe(center().y);
+});
+
+it('Shift-pastes exactly in place without snapping or advancing the same-canvas offset', () => {
+  const { editor, event, host } = setup();
+  editor.select('welcome-small');
+  const original = selectedBounds(editor);
+  event('copy');
+  event('paste');
+  editor.setSnapUnit(100);
+  host.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'v', metaKey: true, shiftKey: true })
+  );
+  event('paste');
+  expect(selectedBounds(editor)).toEqual(original);
+  host.dispatchEvent(
+    new KeyboardEvent('keyup', { key: 'Shift', shiftKey: false })
+  );
+  editor.setSnapUnit(undefined);
+  event('paste');
+  expect(selectedBounds(editor)).toMatchObject({
+    x: original.x + 48,
+    y: original.y + 48,
+  });
+});
+
+it('centers grouped Excalidraw shapes and supports paste in place through the clipboard API', async () => {
+  const { editor, data, event, center, clipboard } = setup();
+  const text = JSON.stringify({
+    type: 'excalidraw/clipboard',
+    elements: [
+      {
+        id: 'a',
+        type: 'rectangle',
+        x: 101,
+        y: 203,
+        width: 100,
+        height: 80,
+        angle: Math.PI / 4,
+        groupIds: ['group'],
+      },
+      {
+        id: 'b',
+        type: 'ellipse',
+        x: 401,
+        y: 503,
+        width: 100,
+        height: 80,
+        groupIds: ['group'],
+      },
+    ],
+  });
+  data.set('text/plain', text);
+  event('paste');
+  const centered = selectedBounds(editor);
+  expect(centered.x + centered.width / 2).toBeCloseTo(center().x);
+  expect(centered.y + centered.height / 2).toBeCloseTo(center().y);
+  vi.stubGlobal('navigator', { clipboard: { readText: async () => text } });
+  editor.setSnapUnit(100);
+  await clipboard.paste(true);
+  const inPlace = selectedBounds(editor);
+  expect(inPlace.width).toBeCloseTo(centered.width);
+  expect(inPlace.height).toBeCloseTo(centered.height);
+  expect(inPlace.x).toBeCloseTo(151 - 90 / Math.sqrt(2));
+  expect(inPlace.y).toBeCloseTo(243 - 90 / Math.sqrt(2));
+});
+
+it('clears held modifiers when the canvas loses focus', () => {
+  const { editor, event, host } = setup();
+  editor.select('welcome-rectangle');
+  event('copy');
+  host.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Shift', shiftKey: true })
+  );
+  host.dispatchEvent(new FocusEvent('focusout'));
+  event('paste');
+  expect(selectedBounds(editor)).toMatchObject({ x: 124, y: 124 });
+});
 
 it('copies/cuts/pastes native events, offsets repeated pastes, and undoes the whole fragment', () => {
   const { editor, data, event } = setup();

@@ -52,11 +52,11 @@ cloudkit_diagnostics() {
   echo '::endgroup::'
 }
 
-run_stapler() {
-  local operation="$1" target="$2" status=0
-  xcrun stapler "$operation" -v "$target" || status=$?
+run_stapler_pair() {
+  local target="$1" status=0
+  bash "$RUNNER_TEMP/macro-cloudkit-tcp.sh" "$target" || status=$?
   if [ "$status" -ne 0 ]; then
-    echo "stapler $operation failed for $target with exit code $status" >&2
+    echo "stapler failed for $target with exit code $status" >&2
     cloudkit_diagnostics
   fi
   return "$status"
@@ -69,8 +69,7 @@ xcrun notarytool submit "$dmg" \
 cat "$credentials_dir/submission.json"
 jq -e '.status == "Accepted"' "$credentials_dir/submission.json" > /dev/null
 cloudkit_diagnostics
-run_stapler staple "$dmg"
-run_stapler validate "$dmg"
+run_stapler_pair "$dmg"
 spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
 
 # The updater ships the app rather than the DMG. Notarize and staple that exact
@@ -81,8 +80,7 @@ xcrun notarytool submit "$credentials_dir/updater-app.zip" \
   --wait --timeout 30m --output-format json > "$credentials_dir/app-submission.json"
 jq -e '.status == "Accepted"' "$credentials_dir/app-submission.json" > /dev/null
 cloudkit_diagnostics
-run_stapler staple updater-app/Macro.app
-run_stapler validate updater-app/Macro.app
+run_stapler_pair updater-app/Macro.app
 codesign --verify --deep --strict --verbose=2 updater-app/Macro.app
 spctl --assess --type execute --verbose=2 updater-app/Macro.app
 version=$(jq -er '.version' apps/web/tauri/desktop-release.json)

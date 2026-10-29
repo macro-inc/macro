@@ -3,8 +3,8 @@
 
 /// Transport-independent message models, policies, and services.
 pub mod domain;
-/// HTTP adapters for the shared message use cases.
-#[cfg(feature = "inbound")]
+/// HTTP and AI tool adapters for the shared message use cases.
+#[cfg(any(feature = "inbound", feature = "ai_tools"))]
 pub mod inbound;
 /// Database and external delivery adapters.
 #[cfg(any(feature = "outbound", feature = "broker"))]

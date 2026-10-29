@@ -1,4 +1,5 @@
 import type { Entity } from '@core/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
 import { useMarkThreadAsSeenMutation } from '@queries/email/thread';
 import { debounce } from '@solid-primitives/scheduled';
@@ -55,9 +56,12 @@ export function DebouncedNotificationReadMarker(props: {
     <DebouncedMarker
       debounceTime={props.debounceTime}
       debouncedFn={() => {
-        void markNotificationsForEntityAsReadInBackground(
-          props.notificationSource,
-          props.entity
+        fireAndForget(
+          markNotificationsForEntityAsReadInBackground(
+            props.notificationSource,
+            props.entity
+          ),
+          'notification-read'
         );
       }}
     />
@@ -93,12 +97,12 @@ export const makeDebouncedChannelNotificationReadMarker = (
   return makeDebouncedMarker({
     debounceTime: props.debounceTime,
     debouncedFn() {
-      void markNotificationsForEntityAsReadInBackground(
-        props.notificationSource,
-        {
+      fireAndForget(
+        markNotificationsForEntityAsReadInBackground(props.notificationSource, {
           type: 'channel',
           id: props.channelId,
-        }
+        }),
+        'notification-read'
       );
     },
   });
@@ -133,12 +137,15 @@ export function EmailDebouncedReadMarker(props: {
     <DebouncedMarker
       debounceTime={props.debounceTime}
       debouncedFn={() => {
-        void markNotificationsForEntityAsReadInBackground(
-          props.notificationSource,
-          {
-            type: 'email_thread',
-            id: props.threadId,
-          }
+        fireAndForget(
+          markNotificationsForEntityAsReadInBackground(
+            props.notificationSource,
+            {
+              type: 'email_thread',
+              id: props.threadId,
+            }
+          ),
+          'notification-read'
         );
         markSeenMutation.mutate({
           threadId: props.threadId,

@@ -1,0 +1,100 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                calendar.id,\n                link.id AS email_link_id,\n                link.email_address,\n                calendar.name,\n                calendar.color,\n                calendar.is_primary,\n                calendar.access_role,\n                calendar.provider_calendar_id,\n                calendar.default_reminders,\n                calendar.last_sync_error,\n                EXISTS(SELECT 1 FROM calendar_outlook_declines d\n                    WHERE d.mailbox_key=calendar_outlook_mailbox_key(link.id) AND d.provider_calendar_id=calendar.provider_calendar_id AND d.confirmed_at IS NULL AND d.submitted_at<now()-interval '5 minutes') AS \"unconfirmed_reply!\",\n                calendar.consecutive_sync_failures,account.provider,calendar.online_meeting_providers\n            FROM email_links link\n            JOIN calendar_accounts account ON account.email_link_id = link.id\n            JOIN calendars calendar ON calendar.account_id = account.id\n            WHERE NOT calendar.is_deleted\n              AND account.sync_status <> 'disabled'\n              AND (\n                    link.macro_id = $1\n                    OR EXISTS (\n                        SELECT 1\n                        FROM macro_user_links delegation\n                        WHERE delegation.link_id = link.id\n                          AND delegation.primary_macro_id = $1\n                    )\n              )\n            ORDER BY\n                (link.macro_id = $1) DESC,\n                link.is_primary DESC,\n                link.created_at ASC,\n                calendar.is_primary DESC,\n                (calendar.access_role IN ('owner', 'writer')) DESC,\n                calendar.name ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email_link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "email_address",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "color",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_primary",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "access_role",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "provider_calendar_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "default_reminders",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 9,
+        "name": "last_sync_error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "unconfirmed_reply!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 11,
+        "name": "consecutive_sync_failures",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 12,
+        "name": "provider",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "online_meeting_providers",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      true,
+      null,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "805bc83e7b58ed0b6bf8e79799c9564959a2bfbf0f1b38699379b7d263917d5d"
+}

@@ -1,3 +1,4 @@
+pub(crate) mod eml;
 pub(crate) mod get;
 pub(crate) mod labels;
 
@@ -22,4 +23,5 @@ pub fn router(_state: ApiContext) -> Router<ApiContext> {
         .route("/labels", patch(labels::handler))
         .route("/batch", post(get::batch_handler))
         .route("/{id}", get(get::handler))
+        .route("/{id}/eml", get(eml::handler))
 }

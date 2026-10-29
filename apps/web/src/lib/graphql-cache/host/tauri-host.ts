@@ -1,4 +1,5 @@
 import type { MutationInspection } from '../protocol';
+
 /**
  * Tauri CacheHost: talks to the native cache engine living in the Tauri
  * host process (graphql_cache_plugin) over invoke commands. The host
@@ -8,6 +9,7 @@ import type { MutationInspection } from '../protocol';
  * worker-host.ts.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import { invoke } from '@tauri-apps/api/core';
 import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type {
@@ -249,10 +251,6 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     }
   }
   const unlistenHydration = listenForHydration();
-  async function removeHydrationListener(): Promise<void> {
-    const unlisten = await unlistenHydration;
-    unlisten?.();
-  }
 
   async function initialize(): Promise<void> {
     const { default: schemaSdl } = await import(
@@ -278,15 +276,18 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     }
   }
   const ready = initialize();
-  void (async () => {
-    try {
-      await ready;
-    } catch (error) {
-      options.onInitializationError?.(
-        error instanceof Error ? error : new Error(String(error))
-      );
-    }
-  })();
+  fireAndForget(
+    (async () => {
+      try {
+        await ready;
+      } catch (error) {
+        options.onInitializationError?.(
+          error instanceof Error ? error : new Error(String(error))
+        );
+      }
+    })(),
+    'graphql-cache-host'
+  );
 
   const opId = (opKey: number) => `${clientId}:${opKey}`;
 
@@ -677,10 +678,18 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       hydrationSubscribers.clear();
       generationChangeSubscribers.clear();
       settlementSubscribers.clear();
-      void unlistenOps.then((fn) => fn?.());
-      void unlistenCacheChanges.then((fn) => fn?.());
-      void removeHydrationListener();
-      void unlistenSettlements.then((fn) => fn?.());
+      for (const unlisten of [
+        unlistenOps,
+        unlistenCacheChanges,
+        unlistenHydration,
+        unlistenSettlements,
+      ]) {
+        // UnlistenFn returns the unlisten IPC promise despite its void type.
+        fireAndForget(
+          unlisten.then((fn) => fn?.()),
+          'graphql-cache-host'
+        );
+      }
     },
   };
 }

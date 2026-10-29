@@ -14,6 +14,8 @@
 // `documentToken` (macro_sync_service_jwt), so a probe needs somewhere to mint
 // one.
 import * as datadog from '@pulumi/datadog';
+import { goalertWebhooks } from '../goalert';
+import { notify, RENOTIFY_MINUTES } from '../notify';
 
 // The worker's entry span is `http.server.request` with resource_name `POST`.
 // Custom spans like `edit.session` do NOT produce trace metrics — Datadog only
@@ -35,16 +37,18 @@ cancels; only the former counts as an error here.
 - Check provider outages first: the supervisor chain falls back Anthropic ->
   OpenAI, so a single provider failing shows up as latency, not errors.
 
-@slack-monitoring`,
+${notify({ pages: false })}`,
     tags: ['env:prod', 'service:ai-editing-worker', 'product:apm'],
     monitorThresholds: { critical: '50', warning: '20' },
+    renotifyInterval: RENOTIFY_MINUTES,
     // Ratio of two count metrics: no traffic means no data, which must not
     // alert. Quiet-hours coverage is the canary's job, not this monitor's.
     onMissingData: 'default',
     evaluationDelay: 60,
     includeTags: true,
     notifyAudit: false,
-  }
+  },
+  { dependsOn: goalertWebhooks }
 );
 
 // ReqwestEditingWorkerClient::edit reports "editing worker returned" for
@@ -74,13 +78,15 @@ reads the callers' logs rather than the worker's telemetry. The common cause
 historically is \`initial sync failed: timeout\` — the worker could not open the
 document over the sync service.
 
-@slack-monitoring`,
+${notify({ pages: false })}`,
     tags: ['env:prod', 'service:ai-editing-worker'],
     monitorThresholds: { critical: '25', warning: '12' },
+    renotifyInterval: RENOTIFY_MINUTES,
     onMissingData: 'default',
     includeTags: false,
     notifyAudit: false,
     enableLogsSample: true,
     groupbySimpleMonitor: false,
-  }
+  },
+  { dependsOn: goalertWebhooks }
 );

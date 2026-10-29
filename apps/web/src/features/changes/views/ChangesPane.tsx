@@ -12,12 +12,13 @@ import {
 } from '@app/components/diff-view';
 import { Resize } from '@core/component/Resize';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg';
+import CircleNotchIcon from '@icon/system/regular/circle-notch.svg';
+import FileIcon from '@icon/system/regular/file.svg';
+import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
+import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import * as Dialog from '@kobalte/core/dialog';
-import ArrowsClockwiseIcon from '@phosphor/arrows-clockwise.svg';
-import CircleNotchIcon from '@phosphor/circle-notch.svg';
-import FileIcon from '@phosphor/file.svg';
-import SidebarIcon from '@phosphor/sidebar-simple.svg';
-import WarningCircleIcon from '@phosphor/warning-circle.svg';
 import { Button, cn, Panel } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import { FileTree } from '@ui/components/FileTree';
@@ -67,7 +68,7 @@ function CaptureBanners() {
           <CaptureBanner
             tone="failure"
             text={message()}
-            onRefresh={() => void model.refresh()}
+            onRefresh={() => fireAndForget(model.refresh(), 'changes')}
             refreshing={model.refreshing()}
           />
         )}
@@ -80,7 +81,7 @@ function CaptureBanners() {
           <CaptureBanner
             tone="failure"
             text={`The last capture failed: ${current().message}`}
-            onRefresh={() => void model.refresh()}
+            onRefresh={() => fireAndForget(model.refresh(), 'changes')}
             refreshing={model.refreshing()}
           />
         )}
@@ -107,13 +108,14 @@ function ChangesTreeToggle(props: {
     </Dialog.Trigger>
   ) : (
     <Button
+      aria-label={label()}
+      tooltip={label()}
       variant="ghost"
       size="icon-sm"
-      label={label()}
       aria-expanded={open()}
       onClick={props.onToggle ?? layout.toggleTree}
     >
-      <SidebarIcon />
+      <SidebarIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
   );
 }
@@ -155,13 +157,19 @@ function ChangesControls(props: { narrow: boolean; drawerOpen: boolean }) {
       <span class="flex-1" />
       <DiffView.CollapseAll iconOnly />
       <Button
+        aria-label="Refresh pull request changes"
+        tooltip="Refresh pull request changes"
         variant="ghost"
         size="icon-sm"
-        label="Refresh pull request changes"
         disabled={refreshing()}
-        onClick={() => void model.refresh()}
+        onClick={() => fireAndForget(model.refresh(), 'changes')}
       >
-        <ArrowsClockwiseIcon class={cn(refreshing() && 'animate-spin')} />
+        <ArrowsClockwiseIcon
+          class={cn(
+            'size-3.5 shrink-0 touch:size-6',
+            refreshing() && 'animate-spin'
+          )}
+        />
       </Button>
     </div>
   );
@@ -376,7 +384,7 @@ function ChangesBodyContent(props: {
                         The diff could not be loaded
                       </p>
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         onClick={model.retryPatch}
                       >
@@ -451,7 +459,7 @@ function ChangesNotices() {
             icon={<WarningCircleIcon />}
             title="The changes could not be loaded"
             detail="The changes service did not answer. Try again in a moment."
-            onRefresh={() => void model.refresh()}
+            onRefresh={() => fireAndForget(model.refresh(), 'changes')}
             refreshing={model.refreshing()}
           />
         </Match>
@@ -460,7 +468,7 @@ function ChangesNotices() {
             <ChangesNotice
               title="Pull request changes unavailable"
               detail={current().message}
-              onRefresh={() => void model.refresh()}
+              onRefresh={() => fireAndForget(model.refresh(), 'changes')}
               refreshing={model.refreshing()}
             />
           )}
@@ -469,7 +477,7 @@ function ChangesNotices() {
           <ChangesNotice
             title="No pull request changes loaded"
             detail="Link a GitHub pull request, then refresh to review its changes."
-            onRefresh={() => void model.refresh()}
+            onRefresh={() => fireAndForget(model.refresh(), 'changes')}
             refreshing={model.refreshing()}
           />
         </Match>
@@ -479,7 +487,7 @@ function ChangesNotices() {
               icon={<WarningCircleIcon />}
               title="The changes could not be captured"
               detail={current().message}
-              onRefresh={() => void model.refresh()}
+              onRefresh={() => fireAndForget(model.refresh(), 'changes')}
               refreshing={model.refreshing()}
             />
           )}
@@ -499,7 +507,7 @@ function ChangesNotices() {
                 ? `Nothing differs between ${range()}.`
                 : 'The pull request has no changed files.'
             }
-            onRefresh={() => void model.refresh()}
+            onRefresh={() => fireAndForget(model.refresh(), 'changes')}
             refreshing={model.refreshing()}
           />
         </Match>

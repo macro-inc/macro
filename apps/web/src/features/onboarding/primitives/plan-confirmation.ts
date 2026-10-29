@@ -1,4 +1,5 @@
 import type { PaidPlanTier } from '@app/features/paywall/plans';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createSignal, onCleanup } from 'solid-js';
 import type { OnboardingContext } from '../context/onboarding-context';
 import type { CheckoutReturn } from '../core/checkout';
@@ -64,7 +65,7 @@ export function createPlanConfirmation(
   };
 
   if (returned) context.track('subscription_success', { type: tier });
-  if (returned || licensed()) void confirm();
+  if (returned || licensed()) fireAndForget(confirm(), 'onboarding');
 
   const state = (): PlanState => {
     if (confirming()) return { t: 'confirming' };

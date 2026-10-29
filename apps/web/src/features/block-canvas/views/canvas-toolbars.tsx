@@ -1,18 +1,19 @@
 import { TOKENS } from '@core/hotkey/tokens';
-import Undo from '@phosphor/arrow-u-up-left.svg';
-import Redo from '@phosphor/arrow-u-up-right.svg';
-import ArrowUpRight from '@phosphor/arrow-up-right.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import Check from '@phosphor/check.svg';
-import Circle from '@phosphor/circle.svg';
-import Cursor from '@phosphor/cursor.svg';
-import Eraser from '@phosphor/eraser.svg';
-import Hand from '@phosphor/hand.svg';
-import Minus from '@phosphor/minus.svg';
-import Pencil from '@phosphor/pencil-simple.svg';
-import Plus from '@phosphor/plus.svg';
-import Rectangle from '@phosphor/rectangle.svg';
-import Text from '@phosphor/text-t.svg';
+import Undo from '@icon/system/regular/arrow-u-up-left.svg';
+import Redo from '@icon/system/regular/arrow-u-up-right.svg';
+import ArrowUpRight from '@icon/system/regular/arrow-up-right.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Check from '@icon/system/regular/check.svg';
+import Circle from '@icon/system/regular/circle.svg';
+import Cursor from '@icon/system/regular/cursor.svg';
+import Eraser from '@icon/system/regular/eraser.svg';
+import Hand from '@icon/system/regular/hand.svg';
+import Minus from '@icon/system/regular/minus.svg';
+import Paperclip from '@icon/system/regular/paperclip.svg';
+import Pencil from '@icon/system/regular/pencil-simple.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Rectangle from '@icon/system/regular/rectangle.svg';
+import Text from '@icon/system/regular/text-t.svg';
 import { Button, Dropdown, Hotkey, Toolbar } from '@ui';
 import { type ComponentProps, For, type ParentProps, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -37,6 +38,8 @@ export function CanvasDrawingToolbar(props: {
   tool: CanvasTool;
   onTool: (tool: CanvasTool) => void;
   readOnly?: boolean;
+  onAttach?: (anchor: { x: number; y: number }) => void;
+  attachOpen?: boolean;
 }) {
   return (
     <div class="pointer-events-none absolute bottom-4 left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2">
@@ -57,17 +60,36 @@ export function CanvasDrawingToolbar(props: {
           >
             {(tool) => (
               <Toolbar.Button
-                label={`${tool.label} tool`}
-                shortcut={tool.key}
+                aria-label={`${tool.label} tool`}
+                tooltip={{ content: `${tool.label} tool`, shortcut: tool.key }}
                 aria-pressed={props.tool === tool.id}
-                variant={props.tool === tool.id ? 'cta' : 'ghost'}
+                variant={props.tool === tool.id ? 'primary' : 'ghost'}
                 onClick={() => props.onTool(tool.id)}
               >
-                <Dynamic component={tool.icon} />
+                <Dynamic component={tool.icon} class="size-4" />
               </Toolbar.Button>
             )}
           </For>
         </Toolbar.Group>
+        <Show when={!props.readOnly && props.onAttach}>
+          <Toolbar.Divider />
+          <Toolbar.Button
+            aria-label="Attach"
+            tooltip={{
+              content: 'Attach',
+              disabled: props.attachOpen,
+              shortcut: 'i',
+            }}
+            aria-expanded={props.attachOpen ?? false}
+            aria-haspopup="menu"
+            onClick={(event) => {
+              const rect = event.currentTarget.getBoundingClientRect();
+              props.onAttach?.({ x: rect.left + rect.width / 2, y: rect.top });
+            }}
+          >
+            <Paperclip class="size-4" />
+          </Toolbar.Button>
+        </Show>
       </Toolbar>
     </div>
   );
@@ -83,28 +105,30 @@ export function CanvasHistoryControls(props: {
     <Show when={hasHistory()}>
       <div class="flex items-center" role="group" aria-label="Canvas history">
         <Button
+          variant="ghost"
+          aria-label="Undo"
+          tooltip={{ content: 'Undo', hotkey: TOKENS.canvas.undo }}
           size="icon-xs"
-          label="Undo"
-          hotkey={TOKENS.canvas.undo}
           disabled={!props.state.session().canUndo}
           onClick={() => {
             props.state.editor.undo();
             props.onFocusCanvas();
           }}
         >
-          <Undo />
+          <Undo class="size-3 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
         <Button
+          variant="ghost"
+          aria-label="Redo"
+          tooltip={{ content: 'Redo', hotkey: TOKENS.canvas.redo }}
           size="icon-xs"
-          label="Redo"
-          hotkey={TOKENS.canvas.redo}
           disabled={!props.state.session().canRedo}
           onClick={() => {
             props.state.editor.redo();
             props.onFocusCanvas();
           }}
         >
-          <Redo />
+          <Redo class="size-3 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
     </Show>
@@ -132,15 +156,18 @@ type CanvasZoomProps = {
   scale: number;
   onZoom: (factor: number) => void;
   onFit: () => void;
+  hasSelection: boolean;
+  onFitSelection: () => void;
 };
 
 function CanvasZoomMenu(props: ParentProps<CanvasZoomProps>) {
   return (
     <Dropdown placement="bottom-end">
       <Dropdown.Trigger
+        aria-label="Zoom options"
+        tooltip="Zoom options"
         variant="ghost"
         size="sm"
-        label="Zoom options"
         class="gap-1.5 tabular-nums"
       >
         <output aria-label="Zoom level">
@@ -160,7 +187,18 @@ function CanvasZoomMenu(props: ParentProps<CanvasZoomProps>) {
           </Dropdown.Item>
           <Dropdown.Item onSelect={props.onFit}>
             <span class="flex-1">Zoom to fit</span>
-            <Hotkey token={TOKENS.canvas.zoomFit} theme="subtle" />
+            <Show when={!props.hasSelection}>
+              <Hotkey token={TOKENS.canvas.zoomFit} theme="subtle" />
+            </Show>
+          </Dropdown.Item>
+          <Dropdown.Item
+            disabled={!props.hasSelection}
+            onSelect={props.onFitSelection}
+          >
+            <span class="flex-1">Zoom to fit selection</span>
+            <Show when={props.hasSelection}>
+              <Hotkey token={TOKENS.canvas.zoomFit} theme="subtle" />
+            </Show>
           </Dropdown.Item>
         </Dropdown.Group>
         <Dropdown.Group>
@@ -188,14 +226,19 @@ export function CanvasZoomToolbar(props: CanvasZoomProps) {
       <Toolbar size="icon-sm" aria-label="Canvas zoom">
         <Toolbar.Group>
           <Toolbar.Button
-            label="Zoom out"
+            aria-label="Zoom out"
+            tooltip="Zoom out"
             onClick={() => props.onZoom(1 / 1.2)}
           >
-            <Minus />
+            <Minus class="size-4" />
           </Toolbar.Button>
           <CanvasZoomMenu {...props} />
-          <Toolbar.Button label="Zoom in" onClick={() => props.onZoom(1.2)}>
-            <Plus />
+          <Toolbar.Button
+            aria-label="Zoom in"
+            tooltip="Zoom in"
+            onClick={() => props.onZoom(1.2)}
+          >
+            <Plus class="size-4" />
           </Toolbar.Button>
         </Toolbar.Group>
       </Toolbar>
@@ -209,6 +252,8 @@ export function CanvasViewControls(
     onGrid: (visible: boolean) => void;
     snapMode: CanvasSnapMode;
     onSnapMode: (mode: CanvasSnapMode) => void;
+    snapToObjects: boolean;
+    onSnapToObjects: (enabled: boolean) => void;
   }
 ) {
   return (
@@ -216,6 +261,8 @@ export function CanvasViewControls(
       scale={props.scale}
       onZoom={props.onZoom}
       onFit={props.onFit}
+      hasSelection={props.hasSelection}
+      onFitSelection={props.onFitSelection}
     >
       <Dropdown.Group>
         <CanvasViewCheckboxItem checked={props.grid} onChange={props.onGrid}>
@@ -223,10 +270,18 @@ export function CanvasViewControls(
         </CanvasViewCheckboxItem>
       </Dropdown.Group>
       <Dropdown.Group>
+        <CanvasViewCheckboxItem
+          checked={props.snapToObjects}
+          onChange={props.onSnapToObjects}
+        >
+          Snap to objects
+        </CanvasViewCheckboxItem>
+      </Dropdown.Group>
+      <Dropdown.Group>
         <For
           each={
             [
-              { mode: 'none', label: 'No snapping' },
+              { mode: 'none', label: 'No grid snapping' },
               { mode: 'pixel', label: 'Snap to px' },
               { mode: 'auto', label: 'Auto snapping' },
             ] as const

@@ -36,6 +36,7 @@ const result: FormMutation = {
       respondentColumnId: null,
       createdAt: '2026-10-06T12:00:00Z',
       updatedAt: '2026-10-06T12:00:00Z',
+      isHiddenInDrive: false,
     },
     columns: [
       {

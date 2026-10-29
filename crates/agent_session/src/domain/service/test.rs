@@ -1,7 +1,8 @@
 use super::*;
 use crate::PROTOCOL_VERSION;
 use crate::domain::model::{
-    DEFAULT_AGENT_SESSION_NAME, LeaseView, Message, ReplicaAddress, SessionBot,
+    DEFAULT_AGENT_SESSION_NAME, LeaseView, Message, ReplicaAddress, SessionBot, SessionSource,
+    SessionVisibility,
 };
 use crate::domain::ports::NoOpRealtime;
 use crate::domain::ports::{NoOpTurnObserver, NoopLifecyclePublisher};
@@ -24,6 +25,7 @@ use tokio::sync::Notify;
 use tracing::instrument::WithSubscriber as _;
 
 mod first_output;
+mod presentation;
 
 struct Fixture {
     service: AgentSessionServiceImpl<
@@ -558,6 +560,158 @@ async fn background_naming_persists_then_publishes_the_generated_name() {
     );
 }
 
+/// A fixed conversation: a vague prompt and a specific reply.
+#[derive(Clone)]
+struct FixedConversation;
+
+impl FoldedMessageRepo for FixedConversation {
+    async fn messages(
+        &self,
+        _session: AgentSessionId,
+    ) -> std::result::Result<Vec<FoldedMessage>, rootcause::Report> {
+        let message = |turn, author, text: &str| FoldedMessage {
+            id: agent_fold::domain::model::TurnId(turn),
+            author,
+            request_id: None,
+            parts: non_empty::NonEmpty::new(vec![MessagePart::Text { text: text.into() }])
+                .expect("one part"),
+            stop: None,
+            pending: false,
+            posted_at: None,
+        };
+        Ok(vec![
+            message(0, Author::User { user_id: None }, "investigate issue"),
+            message(
+                0,
+                Author::Agent,
+                "The OAuth callback drops its trailing slash.",
+            ),
+        ])
+    }
+
+    async fn next_turn_id(
+        &self,
+        _session: AgentSessionId,
+    ) -> std::result::Result<agent_fold::domain::model::TurnId, rootcause::Report> {
+        Ok(agent_fold::domain::model::TurnId(1))
+    }
+}
+
+/// Retitles every session it is asked about.
+#[derive(Clone)]
+struct RetitlingNameGenerator;
+
+impl AgentSessionNameGenerator for RetitlingNameGenerator {
+    async fn generate_name(
+        &self,
+        _session: &AgentSession,
+        _initial_prompt: &str,
+    ) -> std::result::Result<Option<String>, rootcause::Report> {
+        Ok(Some("Investigate Issue".to_owned()))
+    }
+
+    async fn retitle(
+        &self,
+        _session: &AgentSession,
+        current: &str,
+        conversation: &ConversationDigest,
+    ) -> std::result::Result<Option<String>, rootcause::Report> {
+        assert_eq!(current, "Investigate Issue");
+        assert!(conversation.has_reply());
+        Ok(Some("OAuth Callback Redirect".to_owned()))
+    }
+}
+
+#[tokio::test]
+async fn retitling_replaces_a_generated_name_and_publishes_it() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    assert!(
+        repo.set_name_if_default(session, "Investigate Issue")
+            .await
+            .unwrap()
+    );
+    let realtime = RenameRealtime::default();
+    let lifecycle = RecordingLifecyclePublisher::new();
+
+    spawn_agent_session_retitle(
+        &TaskTracker::new(),
+        repo.clone(),
+        FixedConversation,
+        realtime.clone(),
+        Arc::new(lifecycle.clone()),
+        RetitlingNameGenerator,
+        session,
+    );
+    lifecycle.wait_for_published(1).await;
+
+    assert_eq!(
+        repo.get(session).await.unwrap().name,
+        "OAuth Callback Redirect"
+    );
+    assert_eq!(
+        realtime.0.lock().expect("rename store is not poisoned")[0].name,
+        "OAuth Callback Redirect"
+    );
+    // A retitled name is still generated, so a later turn may refine it.
+    assert_eq!(
+        repo.generated_name(session).await.unwrap().as_deref(),
+        Some("OAuth Callback Redirect")
+    );
+}
+
+#[tokio::test]
+async fn retitling_never_replaces_a_name_a_person_chose() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    repo.set_name_if_default(session, "Investigate Issue")
+        .await
+        .unwrap();
+    repo.set_name(session, "Investigate Issue").await.unwrap();
+    let realtime = RenameRealtime::default();
+    let tasks = TaskTracker::new();
+
+    spawn_agent_session_retitle(
+        &tasks,
+        repo.clone(),
+        FixedConversation,
+        realtime.clone(),
+        Arc::new(RecordingLifecyclePublisher::new()),
+        RetitlingNameGenerator,
+        session,
+    );
+    tasks.close();
+    tasks.wait().await;
+
+    assert_eq!(repo.get(session).await.unwrap().name, "Investigate Issue");
+    assert!(
+        realtime
+            .0
+            .lock()
+            .expect("rename store is not poisoned")
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn retitling_skips_a_session_named_while_it_ran() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    repo.set_name_if_default(session, "Investigate Issue")
+        .await
+        .unwrap();
+    assert!(
+        !repo
+            .replace_generated_name(session, "Something Else", "OAuth Callback Redirect")
+            .await
+            .unwrap()
+    );
+    assert_eq!(repo.get(session).await.unwrap().name, "Investigate Issue");
+}
+
 #[tokio::test]
 async fn background_naming_does_not_overwrite_a_manual_name() {
     let repo = InMemoryAgentSessionRepo::new();
@@ -679,6 +833,15 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.set_model(id, model).await
     }
 
+    async fn set_origin(
+        &self,
+        id: AgentSessionId,
+        source: SessionSource,
+        visibility: SessionVisibility,
+    ) -> Result<()> {
+        self.repo.set_origin(id, source, visibility).await
+    }
+
     async fn set_name(&self, id: AgentSessionId, name: &str) -> Result<()> {
         self.repo.set_name(id, name).await
     }
@@ -693,6 +856,19 @@ impl AgentSessionRepo for BlockingPromptLogs {
 
     async fn set_name_if_default(&self, id: AgentSessionId, name: &str) -> Result<bool> {
         self.repo.set_name_if_default(id, name).await
+    }
+
+    async fn generated_name(&self, id: AgentSessionId) -> Result<Option<String>> {
+        self.repo.generated_name(id).await
+    }
+
+    async fn replace_generated_name(
+        &self,
+        id: AgentSessionId,
+        current: &str,
+        name: &str,
+    ) -> Result<bool> {
+        self.repo.replace_generated_name(id, current, name).await
     }
 
     async fn set_sandbox_size(&self, id: AgentSessionId, size: SandboxSize) -> Result<()> {
@@ -773,6 +949,16 @@ impl SessionOwnership for BlockingPromptLogs {
 }
 
 impl AgentSessionLogRepo for BlockingPromptLogs {
+    async fn list_action_history(
+        &self,
+        agent_session_id: AgentSessionId,
+        action: agent_runtime_protocol::domain::action::AgentActionId,
+    ) -> Result<Vec<StoredAgentSessionLog>> {
+        self.repo
+            .list_action_history(agent_session_id, action)
+            .await
+    }
+
     async fn create_fenced_with_boundary(
         &self,
         log: AgentSessionLog,
@@ -1852,8 +2038,11 @@ async fn shared_transport_copies_durable_initialization_before_load() {
         Arc::new(crate::domain::ports::NoOpToolCatalog),
     );
     let ready = actor.next_input().await;
-    assert!(matches!(ready, Input::SharedReady { .. }));
-    actor.dispatch(ready).await;
+    assert!(matches!(
+        ready,
+        ActorInput::Protocol(Input::SharedReady { .. })
+    ));
+    actor.dispatch_input(ready).await;
     let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(load))) =
         received.recv().await.unwrap()
     else {
@@ -1970,8 +2159,11 @@ async fn assert_restore_persistence_failure_does_not_send_prompt(failure: Restor
         .await
         .unwrap();
     let queued = actor.next_input().await;
-    assert!(matches!(queued, Input::Command { .. }));
-    assert_eq!(actor.dispatch(queued).await, Stepped::Continue);
+    assert!(matches!(
+        queued,
+        ActorInput::Protocol(Input::Command { .. })
+    ));
+    assert_eq!(actor.dispatch_input(queued).await, Stepped::Continue);
     assert!(received.try_recv().is_err());
 
     let init_id = RequestId::Str("shared-transport-initialization".into());
@@ -2002,8 +2194,11 @@ async fn assert_restore_persistence_failure_does_not_send_prompt(failure: Restor
         })
         .unwrap();
     let ready = actor.next_input().await;
-    assert!(matches!(ready, Input::SharedReady { .. }));
-    let step = actor.dispatch(ready).await;
+    assert!(matches!(
+        ready,
+        ActorInput::Protocol(Input::SharedReady { .. })
+    ));
+    let step = actor.dispatch_input(ready).await;
     let mut failed_response_id = None;
     if matches!(failure, RestoreLogFailure::LoadResponse) {
         assert_eq!(step, Stepped::Continue);

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
   createRenderEffect,
@@ -122,7 +123,7 @@ function createDraft(options: {
         return;
       }
       if (draft === held && !refused()) return;
-      void commit(draft);
+      fireAndForget(commit(draft), 'form-builder');
     },
   };
 }
@@ -162,7 +163,9 @@ export function DraftInput(
 
 /**
  * The textarea form of `DraftInput`, for prose: the draft is committed as
- * typed (an empty one too) and Enter starts a new line.
+ * typed (an empty one too) and Enter starts a new line. `singleLine` keeps
+ * `DraftInput`'s rules (trimmed, never empty, Enter commits) for a name that
+ * wraps instead of scrolling sideways.
  */
 export function DraftTextarea(
   props: Omit<
@@ -171,13 +174,14 @@ export function DraftTextarea(
   > & {
     value: string;
     onCommit: Commit;
+    singleLine?: boolean;
   }
 ) {
-  const [local, rest] = splitProps(props, ['value', 'onCommit']);
+  const [local, rest] = splitProps(props, ['value', 'onCommit', 'singleLine']);
   const draft = createDraft({
     value: () => local.value,
-    trim: false,
-    allowEmpty: true,
+    trim: !!local.singleLine,
+    allowEmpty: !local.singleLine,
     onCommit: (value) => local.onCommit(value),
   });
   return (
@@ -185,7 +189,7 @@ export function DraftTextarea(
       {...rest}
       ref={draft.ref}
       aria-invalid={draft.refused()}
-      onKeyDown={(event) => draft.onKeyDown(event, false)}
+      onKeyDown={(event) => draft.onKeyDown(event, !!local.singleLine)}
       onBlur={draft.onBlur}
     />
   );

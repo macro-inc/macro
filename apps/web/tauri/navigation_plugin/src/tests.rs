@@ -306,6 +306,72 @@ fn blocked_popup_neither_opens_nor_emits_navigation() {
     assert_eq!(received.load(Ordering::Relaxed), 0);
 }
 
+const PIPEDREAM_CONNECT: &str = "https://pipedream.com/_static/connect.html";
+
+fn embedding_plugin() -> MacroNavigationPlugin {
+    test_plugin()
+        .with_embedded_documents(&[PIPEDREAM_CONNECT])
+        .unwrap()
+}
+
+/// WebKit routes iframe loads through the navigation handler. Cancelling the
+/// Pipedream Connect frame left an empty full-screen iframe over the app and
+/// opened the page in the browser, so Connect froze the desktop app.
+#[test]
+fn embedded_document_loads_in_place_with_any_query() {
+    let plugin = embedding_plugin();
+    for input in [
+        PIPEDREAM_CONNECT,
+        "https://pipedream.com/_static/connect.html?token=ctok_1&app=github",
+    ] {
+        assert!(
+            matches!(
+                plugin.get_destination(&Url::parse(input).unwrap()),
+                NavigationOutput::Embedded
+            ),
+            "{input}"
+        );
+    }
+}
+
+#[test]
+fn embedded_document_match_is_exact() {
+    let plugin = embedding_plugin();
+    for input in [
+        "https://pipedream.com/",
+        "https://pipedream.com/_static/other.html",
+        "http://pipedream.com/_static/connect.html",
+        "https://pipedream.com:8443/_static/connect.html",
+        "https://evil.pipedream.com/_static/connect.html",
+        "https://pipedream.com.example.com/_static/connect.html",
+    ] {
+        assert!(
+            matches!(
+                plugin.get_destination(&Url::parse(input).unwrap()),
+                NavigationOutput::External(_)
+            ),
+            "{input}"
+        );
+    }
+}
+
+#[test]
+fn embedded_document_opened_as_a_window_is_external() {
+    let plugin = embedding_plugin();
+    assert!(matches!(
+        plugin.new_window_destination(&Url::parse(PIPEDREAM_CONNECT).unwrap()),
+        NavigationOutput::External(_)
+    ));
+}
+
+#[test]
+fn documents_are_not_embedded_unless_configured() {
+    assert!(matches!(
+        test_plugin().get_destination(&Url::parse(PIPEDREAM_CONNECT).unwrap()),
+        NavigationOutput::External(_)
+    ));
+}
+
 #[test]
 fn from_url_extracts_correct_path_from_universal_link() {
     let url = Url::parse("https://macro.com/app/component/doc123").unwrap();

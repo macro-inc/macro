@@ -1,7 +1,8 @@
 // Cursor now mints `grok_` keys; the `crsr_` keys minted before that still work.
 const CURSOR_KEY_PREFIXES = ['grok_', 'crsr_'];
 
-export const CURSOR_KEY_PLACEHOLDER = `${CURSOR_KEY_PREFIXES[0]}…`;
+/** The prefix of the keys Cursor mints today. */
+export const CURSOR_KEY_PREFIX = CURSOR_KEY_PREFIXES[0];
 
 export const CURSOR_KEY_FORMAT_ERROR = `Cursor API keys start with ${CURSOR_KEY_PREFIXES.join(' or ')}`;
 

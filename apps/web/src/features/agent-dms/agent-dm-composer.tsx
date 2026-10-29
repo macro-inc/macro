@@ -1,5 +1,6 @@
 import { AgentConversationControls } from '@app/features/agent-conversations/agent-conversation-controls';
 import { useAgentConversations } from '@app/features/agent-conversations/queries/conversations';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { queryReadyGate } from '@queries/gate';
 import { createMemo, type ParentProps, Show } from 'solid-js';
 import { ConversationNotice } from './components/conversation-notice';
@@ -57,7 +58,9 @@ export function AgentDmComposer(
           <div class="macro-message-width">
             <AgentConversationControls
               conversation={data()}
-              onChanged={() => void conversations.refetch()}
+              onChanged={() =>
+                fireAndForget(conversations.refetch(), 'agent-dms')
+              }
             />
           </div>
         )}
@@ -68,7 +71,9 @@ export function AgentDmComposer(
           <div class="macro-message-width">
             <ConversationNotice
               state={notice()}
-              onRetry={() => void conversations.refetch()}
+              onRetry={() =>
+                fireAndForget(conversations.refetch(), 'agent-dms')
+              }
             />
           </div>
         }

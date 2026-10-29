@@ -2,7 +2,7 @@
 
 This harness loads the complete bundled app and intercepts auth, team, and calendar HTTP traffic with synthetic identities. It blocks nonlocal requests and websocket traffic. It does not verify the Rust service or Google permissions. Own-calendar reads use the existing REST fallback.
 
-It uses a live clock and checks that loading placeholders disappear before capture. It checks that no surface reads teammate calendars or shows team calendar controls, and exercises the Team sharing select and the account-grouped "Calendars that count as busy" list, failing if any change flashes a loading state.
+It uses a live clock and checks that loading placeholders disappear before capture. It checks that no surface reads teammate calendars or shows team calendar controls, that the `Team out of office` checkbox hides and restores a teammate's out-of-office chip while the sidebar keeps listing it, and exercises the Team sharing select and the account-grouped "Calendars that count as busy" list, failing if any change flashes a loading state.
 
 Imported own point events must render compactly with a single time,
 without drag/resize. Editing the point's title must omit time from its request.

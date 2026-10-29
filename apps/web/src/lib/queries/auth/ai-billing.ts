@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import type { AiPlanTier, PaidPlan } from '@service-auth/ai-billing-types';
 import { authServiceClient } from '@service-auth/client';
@@ -15,6 +16,20 @@ type UseAiBillingSummaryQueryOptions = {
   enabled?: boolean | (() => boolean);
 };
 
+function aiBillingSummaryQueryOptions(enabled: boolean) {
+  return {
+    queryKey: authKeys.aiBillingSummary.queryKey,
+    queryFn: async () =>
+      await throwOnErr(
+        async () => await authServiceClient.getAiBillingSummary()
+      ),
+    staleTime: AI_BILLING_SUMMARY_STALE_TIME,
+    throwOnError: false,
+    retry: 1,
+    enabled,
+  };
+}
+
 /**
  * The signed-in user's AI usage position for the current billing period:
  * included allowance, usage, credits, and overage settings. The backend
@@ -23,34 +38,26 @@ type UseAiBillingSummaryQueryOptions = {
 export function useAiBillingSummaryQuery(
   options?: UseAiBillingSummaryQueryOptions
 ) {
-  return useQuery(() => {
-    const enabled =
+  return useQuery(() =>
+    aiBillingSummaryQueryOptions(
       typeof options?.enabled === 'function'
         ? options.enabled()
-        : (options?.enabled ?? true);
-    return {
-      queryKey: authKeys.aiBillingSummary.queryKey,
-      queryFn: async () =>
-        await throwOnErr(
-          async () => await authServiceClient.getAiBillingSummary()
-        ),
-      staleTime: AI_BILLING_SUMMARY_STALE_TIME,
-      throwOnError: false,
-      retry: 1,
-      enabled,
-    };
-  });
+        : (options?.enabled ?? true)
+    )
+  );
 }
+
+const aiBillingPlansQueryOptions = {
+  queryKey: authKeys.aiBillingPlans.queryKey,
+  queryFn: async () =>
+    await throwOnErr(async () => await authServiceClient.getAiBillingPlans()),
+  staleTime: AI_BILLING_PLANS_STALE_TIME,
+  throwOnError: false,
+};
 
 /** The plan catalog, credit packs, and overage cap bounds. */
 export function useAiBillingPlansQuery() {
-  return useQuery(() => ({
-    queryKey: authKeys.aiBillingPlans.queryKey,
-    queryFn: async () =>
-      await throwOnErr(async () => await authServiceClient.getAiBillingPlans()),
-    staleTime: AI_BILLING_PLANS_STALE_TIME,
-    throwOnError: false,
-  }));
+  return useQuery(() => aiBillingPlansQueryOptions);
 }
 
 /**
@@ -163,8 +170,8 @@ export function useChangePlanMutation() {
       await throwOnErr(async () => await authServiceClient.changePlan(args)),
     onSuccess: async () => {
       // Roles flip via webhook; the scheduled change is available immediately.
-      void invalidateUserInfo();
-      void invalidateAiBillingSummary();
+      fireAndForget(invalidateUserInfo(), 'ai-billing');
+      fireAndForget(invalidateAiBillingSummary(), 'ai-billing');
       await invalidateSubscriptionStatus();
     },
   }));

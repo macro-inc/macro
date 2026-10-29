@@ -24,6 +24,7 @@
 //! append - see [`AgentSessionRealtime`].
 
 mod first_output;
+mod presentation;
 #[cfg(test)]
 mod test;
 
@@ -36,7 +37,9 @@ use agent_client_protocol::schema::v1::{
     McpServer, RequestId, Response, SessionId, SetSessionConfigOptionResponse,
 };
 use agent_fold::domain::lifecycle::LifecycleFold;
-use agent_fold::domain::model::{Author, FoldedMessage, MessagePart, TurnState};
+use agent_fold::domain::model::{
+    Author, FoldedMessage, MessagePart, StopReason as TurnStopReason, TurnSignal, TurnState,
+};
 use agent_fold::domain::model_selection::model_selection;
 use agent_fold::domain::ports::FoldedMessageRepo;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, AgentSetModelAction};
@@ -61,20 +64,21 @@ use super::error::{AgentSessionError, Result};
 use super::lifecycle::session_identity;
 use super::model::{
     AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreview, AgentSessionRenamed,
-    AuthorKind, ClaimOutcome, CreateAgentSessionParams, LogAppended, MAX_AGENT_SESSION_NAME_CHARS,
-    MAX_PREVIEW_SESSION_IDS, Message, MessageId, ReplicaId, SandboxSize, SessionClaim, SessionLog,
-    SessionManagement, SessionPreviewCandidate, StoredAgentSessionLog, StoredQueuedAction,
-    ThreadSession, cursor_run_checkpoint,
+    AuthorKind, ClaimOutcome, CreateAgentSessionParams, FoldedSessionLog, LogAppended,
+    MAX_AGENT_SESSION_NAME_CHARS, MAX_PREVIEW_SESSION_IDS, Message, MessageId, ReplicaId,
+    SandboxSize, SessionClaim, SessionLog, SessionManagement, SessionPreviewCandidate,
+    StoredAgentSessionLog, StoredQueuedAction, ThreadSession, cursor_run_checkpoint,
 };
-use super::model::{SessionBot, TurnPrompter};
+use super::model::{SessionBot, SessionSource, SessionVisibility, TurnPrompter};
 use super::ports::{
     AgentConnector, AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionLogWriter,
     AgentSessionNameGenerator, AgentSessionQueueChanged, AgentSessionRealtime, AgentSessionRepo,
     Appended, NoInheritedSessionAccess, NoOpAgentSessionNameGenerator, NoOpToolCatalog,
     SessionOwnership, SessionToolCatalog, SessionTurnObserver, SessionViewAccess,
 };
-use super::session::actors::{SessionActor, SessionCommand, SessionMessage, Stepped};
-use super::session::{CloseReason, Input};
+use super::retitle::ConversationDigest;
+use super::session::actors::{ActorInput, SessionActor, SessionCommand, SessionMessage, Stepped};
+use super::session::{CloseReason, Input, StopReason as SessionStopReason};
 use crate::domain::events::{AgentSessionLifecycleEvent, SessionRenamedMetadata};
 
 /// Buffered not-yet-accepted commands per session actor.
@@ -150,6 +154,32 @@ impl Drop for AttachReservation {
 /// Durable and live use cases for agent sessions.
 #[cfg_attr(feature = "test-utils", mockall::automock)]
 pub trait AgentSessionService: Send + Sync + 'static {
+    /// Present a durable tool card as the owner without occupying a model turn.
+    fn present_tool(
+        &self,
+        id: AgentSessionId,
+        actor: MacroUserIdStr<'static>,
+        presentation: super::model::SessionToolPresentation,
+    ) -> impl Future<Output = Result<()>> + Send {
+        async move {
+            let _ = (actor, presentation);
+            Err(AgentSessionError::Disconnected(id))
+        }
+    }
+
+    /// Whether matching presentation frames are durably stored, not merely forwarded.
+    fn tool_presentation_persisted(
+        &self,
+        id: AgentSessionId,
+        actor: MacroUserIdStr<'static>,
+        presentation: super::model::SessionToolPresentation,
+    ) -> impl Future<Output = Result<bool>> + Send {
+        async move {
+            let _ = (actor, presentation);
+            Err(AgentSessionError::Disconnected(id))
+        }
+    }
+
     /// Persist a session before any transport is provisioned or attached.
     fn create_session(
         &self,
@@ -188,6 +218,12 @@ pub trait AgentSessionService: Send + Sync + 'static {
         id: AgentSessionId,
         prompter: &TurnPrompter,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Read the persisted identity of the current turn during recovery.
+    fn turn_prompter(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<TurnPrompter>>> + Send;
 
     /// What `viewer` may see of each of `ids`, for rendering chips.
     ///
@@ -318,11 +354,26 @@ pub trait AgentSessionService: Send + Sync + 'static {
     /// The effective ACP history of one session, oldest first, with the agent
     /// whose messages it derives.
     ///
-    /// Served unfolded because nothing here folds for a reader any more: the
-    /// web client runs the same fold compiled to WASM, so a streamed session
-    /// and a reloaded one are rendered by one implementation rather than two
-    /// that have to be kept agreeing. See [`SessionLog`].
+    /// Served unfolded for the web client, which runs the same fold compiled
+    /// to WASM so a streamed session and a reloaded one are rendered by one
+    /// implementation. See [`SessionLog`] and [`Self::folded_session_log`].
     fn session_log(&self, id: AgentSessionId) -> impl Future<Output = Result<SessionLog>> + Send;
+
+    /// Recover one action from a consistent durable snapshot, including history
+    /// replaced by session/load. No observer callback or live actor is required.
+    fn recorded_action(
+        &self,
+        id: AgentSessionId,
+        action: AgentActionId,
+    ) -> impl Future<Output = Result<Option<super::action_history::RecordedAction>>> + Send;
+
+    /// The same history as [`Self::session_log`], folded server-side into
+    /// renderable messages for readers that do not run the fold themselves,
+    /// such as SDK programs and agents reading other sessions.
+    fn folded_session_log(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<FoldedSessionLog>> + Send;
 
     /// Push a session's changed queue - the whole queue, every time - to its
     /// viewers.
@@ -542,7 +593,9 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
     ) -> Result<()>
     where
         R: AgentSessionRepo + AgentSessionLogRepo + SessionOwnership + Clone,
+        Folds: FoldedMessageRepo + Clone + Send + Sync + 'static,
         Rt: AgentSessionRealtime + Clone + Send + Sync + 'static,
+        Namer: AgentSessionNameGenerator + Clone,
         Connector: AgentConnector,
     {
         let _lifecycle = self.lifecycle.lock().await;
@@ -588,7 +641,15 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             logs,
             command_rx,
             attachment.handshake,
-            Arc::clone(&self.turn_observer),
+            Arc::new(RetitleAfterTurns {
+                observer: Arc::clone(&self.turn_observer),
+                repo: self.repo.clone(),
+                folds: self.folds.clone(),
+                realtime: self.realtime.clone(),
+                lifecycle_publisher: self.lifecycle_publisher.clone(),
+                name_generator: self.name_generator.clone(),
+                tasks: self.tasks.clone(),
+            }),
             Arc::clone(&self.tool_catalog),
         )
         .with_initial_model(initial_model);
@@ -747,6 +808,33 @@ where
     Rt: AgentSessionRealtime + Clone + Send + Sync + 'static,
     Namer: AgentSessionNameGenerator + Clone,
 {
+    async fn present_tool(
+        &self,
+        id: AgentSessionId,
+        actor: MacroUserIdStr<'static>,
+        presentation: super::model::SessionToolPresentation,
+    ) -> Result<()> {
+        self.present_to_actor(id, actor, presentation).await
+    }
+
+    async fn tool_presentation_persisted(
+        &self,
+        id: AgentSessionId,
+        actor: MacroUserIdStr<'static>,
+        presentation: super::model::SessionToolPresentation,
+    ) -> Result<bool> {
+        let session = self.repo.get(id).await?;
+        if !session.owner_id.is_user(&actor) {
+            return Err(AgentSessionError::Forbidden);
+        }
+        if session.is_archived {
+            return Err(AgentSessionError::Archived(id));
+        }
+        let entries = AgentSessionLogRepo::list_by_session(&self.repo, id).await?;
+        let (started, completed) = presentation::presentation_progress(entries, &presentation)?;
+        Ok(started && completed)
+    }
+
     async fn create_session(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
         params.purpose.for_creation(
             false,
@@ -817,6 +905,10 @@ where
 
     async fn set_turn_prompter(&self, id: AgentSessionId, prompter: &TurnPrompter) -> Result<()> {
         self.repo.set_turn_prompter(id, prompter).await
+    }
+
+    async fn turn_prompter(&self, id: AgentSessionId) -> Result<Option<TurnPrompter>> {
+        self.repo.turn_prompter(id).await
     }
 
     async fn preview_sessions(
@@ -1114,6 +1206,25 @@ where
         })
     }
 
+    #[tracing::instrument(err, skip(self))]
+    async fn recorded_action(
+        &self,
+        id: AgentSessionId,
+        action: AgentActionId,
+    ) -> Result<Option<super::action_history::RecordedAction>> {
+        let entries = self.repo.list_action_history(id, action).await?;
+        Ok(super::action_history::recorded_action(entries, action))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn folded_session_log(&self, id: AgentSessionId) -> Result<FoldedSessionLog> {
+        let session = self.repo.get(id).await?;
+        Ok(FoldedSessionLog {
+            bot: self.repo.session_bot(session.bot_id).await?,
+            messages: self.folds.messages(id).await?,
+        })
+    }
+
     async fn publish_queue_changed(&self, event: AgentSessionQueueChanged) -> Result<()> {
         Ok(self.realtime.publish_queue_changed(event).await?)
     }
@@ -1175,6 +1286,13 @@ where
     let AgentAction::Prompt(prompt) = action else {
         return None;
     };
+    if prompt
+        .notifications
+        .as_ref()
+        .is_some_and(|input| input.system_turn)
+    {
+        return None;
+    }
     // Whether anyone has *spoken* here yet, rather than whether the log has
     // opened a turn: controls take turns of their own, so a session whose
     // model was set before its first prompt would otherwise never be named.
@@ -1273,6 +1391,137 @@ fn spawn_initial_agent_session_rename<R, Rt, Namer>(
     );
 }
 
+/// A session actor's turn observer: tells the service's observer every fact,
+/// and after each turn that ended with a reply, asks the namer whether the
+/// session's generated name still fits.
+struct RetitleAfterTurns<R, Folds, Rt, Namer> {
+    observer: Arc<dyn SessionTurnObserver>,
+    repo: R,
+    folds: Folds,
+    realtime: Rt,
+    lifecycle_publisher: Arc<dyn AgentSessionLifecyclePublisher>,
+    name_generator: Namer,
+    tasks: TaskTracker,
+}
+
+impl<R, Folds, Rt, Namer> SessionTurnObserver for RetitleAfterTurns<R, Folds, Rt, Namer>
+where
+    R: AgentSessionRepo + AgentSessionLogRepo + Clone,
+    Folds: FoldedMessageRepo + Clone + Send + Sync + 'static,
+    Rt: AgentSessionRealtime + Clone + Send + Sync + 'static,
+    Namer: AgentSessionNameGenerator + Clone,
+{
+    fn signal(&self, id: AgentSessionId, signal: TurnSignal) {
+        // Only a reply the agent finished says anything new about the
+        // conversation; system-only notification turns and stopped or
+        // failed turns do not.
+        let replied = matches!(
+            signal,
+            TurnSignal::TurnEnded {
+                notification_noop: false,
+                stop: TurnStopReason::EndTurn,
+                ..
+            }
+        );
+        self.observer.signal(id, signal);
+        if replied {
+            spawn_agent_session_retitle(
+                &self.tasks,
+                self.repo.clone(),
+                self.folds.clone(),
+                self.realtime.clone(),
+                self.lifecycle_publisher.clone(),
+                self.name_generator.clone(),
+                id,
+            );
+        }
+    }
+
+    fn session_stopped(&self, id: AgentSessionId, reason: SessionStopReason) {
+        self.observer.session_stopped(id, reason);
+    }
+}
+
+fn spawn_agent_session_retitle<R, Folds, Rt, Namer>(
+    tasks: &TaskTracker,
+    repo: R,
+    folds: Folds,
+    realtime: Rt,
+    lifecycle_publisher: Arc<dyn AgentSessionLifecyclePublisher>,
+    name_generator: Namer,
+    id: AgentSessionId,
+) where
+    R: AgentSessionRepo + AgentSessionLogRepo + Clone,
+    Folds: FoldedMessageRepo + Send + Sync + 'static,
+    Rt: AgentSessionRealtime + Send + Sync + 'static,
+    Namer: AgentSessionNameGenerator,
+{
+    // Detached from the turn, like the initial rename, so it gets its own
+    // span; the outcome is recorded because a failure is swallowed here.
+    let span = tracing::info_span!(
+        "agent.session.retitle",
+        agent.session.id = %id,
+        agent.retitle.outcome = tracing::field::Empty,
+    );
+    tasks.spawn(
+        async move {
+            let span = tracing::Span::current();
+            let result: std::result::Result<&'static str, rootcause::Report> = async {
+                // A name a person chose, the default, or an archived session
+                // is never retitled, so most turns stop at this one read.
+                let Some(current) = repo
+                    .generated_name(id)
+                    .await
+                    .map_err(|error| rootcause::report!(error))?
+                else {
+                    return Ok("skipped_not_generated");
+                };
+                let conversation = ConversationDigest::from_messages(&folds.messages(id).await?);
+                if !conversation.has_reply() {
+                    return Ok("skipped_no_reply");
+                }
+                let session = repo
+                    .get(id)
+                    .await
+                    .map_err(|error| rootcause::report!(error))?;
+                let Some(name) = name_generator
+                    .retitle(&session, &current, &conversation)
+                    .await?
+                else {
+                    return Ok("kept");
+                };
+                let renamed = repo
+                    .replace_generated_name(id, &current, &name)
+                    .await
+                    .map_err(|error| rootcause::report!(error))?;
+                if !renamed {
+                    return Ok("skipped_name_changed");
+                }
+                realtime
+                    .publish_renamed(AgentSessionRenamed {
+                        agent_session_id: id,
+                        name,
+                    })
+                    .await?;
+                publish_renamed_lifecycle(&repo, &lifecycle_publisher, id).await;
+                Ok("renamed")
+            }
+            .await;
+
+            match result {
+                Ok(outcome) => {
+                    span.record("agent.retitle.outcome", outcome);
+                }
+                Err(error) => {
+                    span.record("agent.retitle.outcome", "failed");
+                    tracing::warn!(error = ?error, %id, "failed to retitle agent session");
+                }
+            }
+        }
+        .instrument(span),
+    );
+}
+
 /// Publish `agent_session.renamed` for a session whose name just changed.
 ///
 /// The rename itself is already durable, so a failure to describe it here is
@@ -1318,6 +1567,7 @@ fn frame_telemetry(content: &Message) -> (&'static str, Option<&str>) {
         Message::ToServer(ToServerMessage::Event { event }) => ("event", Some(event.as_str())),
         Message::ToServer(_) => ("acp_to_server", None),
         Message::ToRuntime(_) => ("acp_to_runtime", None),
+        Message::Notification(_) => ("notification", None),
     }
 }
 
@@ -1454,6 +1704,7 @@ fn flushes_through(content: &Message) -> bool {
     matches!(
         content,
         Message::ToRuntime(_)
+            | Message::Notification(_)
             | Message::ToServer(ToServerMessage::Event { .. })
             | Message::ToServer(ToServerMessage::Acp(AcpMessage(
                 RawJsonRpcMessage::Response(_)
@@ -1515,6 +1766,15 @@ where
     R: AgentSessionRepo + AgentSessionLogRepo + Clone,
     Rt: AgentSessionRealtime + Send + Sync + 'static,
 {
+    async fn present_tool(
+        &mut self,
+        id: AgentSessionId,
+        acp_id: SessionId,
+        presentation: super::model::SessionToolPresentation,
+    ) -> Result<()> {
+        self.persist_presentation(id, acp_id, presentation).await
+    }
+
     async fn append_with_boundary(
         &mut self,
         log: AgentSessionLog,
@@ -1528,6 +1788,7 @@ where
             let (direction, frame) = match &log.content {
                 Message::ToServer(message) => ("to_server", serde_json::to_string(message)),
                 Message::ToRuntime(message) => ("to_runtime", serde_json::to_string(message)),
+                Message::Notification(message) => ("notification", serde_json::to_string(message)),
             };
             tracing::trace!(
                 %session,
@@ -1840,6 +2101,15 @@ where
         self.repo.set_model(id, model).await
     }
 
+    async fn set_origin(
+        &self,
+        id: AgentSessionId,
+        source: SessionSource,
+        visibility: SessionVisibility,
+    ) -> Result<()> {
+        self.repo.set_origin(id, source, visibility).await
+    }
+
     async fn set_name(&self, id: AgentSessionId, name: &str) -> Result<()> {
         self.repo.set_name(id, name).await
     }
@@ -1854,6 +2124,19 @@ where
 
     async fn set_name_if_default(&self, id: AgentSessionId, name: &str) -> Result<bool> {
         self.repo.set_name_if_default(id, name).await
+    }
+
+    async fn generated_name(&self, id: AgentSessionId) -> Result<Option<String>> {
+        self.repo.generated_name(id).await
+    }
+
+    async fn replace_generated_name(
+        &self,
+        id: AgentSessionId,
+        current: &str,
+        name: &str,
+    ) -> Result<bool> {
+        self.repo.replace_generated_name(id, current, name).await
     }
 
     async fn set_sandbox_size(&self, id: AgentSessionId, size: SandboxSize) -> Result<()> {
@@ -2006,10 +2289,10 @@ async fn run_session<Connector, Logs, Ownership>(
     let stop_reason = loop {
         let input = tokio::select! {
             biased;
-            () = cancellation.cancelled() => Input::Closed(CloseReason::Abandoned),
+            () = cancellation.cancelled() => ActorInput::Protocol(Input::Closed(CloseReason::Abandoned)),
             input = actor.next_input() => input,
         };
-        let stepped = actor.dispatch(input).await;
+        let stepped = actor.dispatch_input(input).await;
         if let Stepped::Stopped(reason) = stepped {
             break reason;
         }

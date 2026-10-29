@@ -1,6 +1,10 @@
 import type {
   ApiDraftContactInfo,
   GetMessageResponses,
+  MessageOperationResponse,
+  ResolveMessageOperationRequest,
+  TransferDraftRequest,
+  TransferDraftResponse,
 } from '../../../generated/email/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
@@ -97,6 +101,58 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
     Link.byId(this.client, id),
   );
 
+  /** Read the draft's durable send, upload, or conflict status without retrying it. */
+  async operationStatus(): Promise<MessageOperationResponse> {
+    return unwrap(
+      await this.client.email.messageOperationStatus({ path: { id: this.id } }),
+    );
+  }
+
+  /** Resolve the displayed operation revision after the user chooses an action.
+   * Retrying an uncertain send requires explicit duplicate-risk acceptance. */
+  async resolveOperation(
+    request: ResolveMessageOperationRequest,
+  ): Promise<void> {
+    await this.mutate((c) =>
+      c.email.resolveMessageOperation({ path: { id: this.id }, body: request }),
+    );
+  }
+
+  /** Verify an uploaded attachment using the draft generation captured when its upload began. */
+  async completeDraftAttachment(
+    attachmentId: string,
+    draftGeneration = 0,
+  ): Promise<void> {
+    const link = await this.link();
+    await this.mutate((c) =>
+      c.email.completeDraftAttachment({
+        path: { id: this.id, attachment_id: attachmentId },
+        query: { draft_generation: draftGeneration },
+        headers: { 'X-Email-Link-Id': link.id },
+      }),
+    );
+  }
+
+  /** Move a draft to another inbox using a caller-persisted operation UUID.
+   * Continue editing the returned message_id; the original identity is retired.
+   * On an interrupted response, use email.recoverDraftTransfer(operation_id). */
+  async transferDraft(
+    request: TransferDraftRequest,
+  ): Promise<TransferDraftResponse> {
+    const draft = await this.detail.get();
+    return this.mutate((c) =>
+      c.email.transferDraft({
+        path: { id: this.id },
+        body: {
+          ...request,
+          draft_generation:
+            request.draft_generation ?? draft.draft_generation ?? 0,
+        },
+        headers: { 'X-Email-Link-Id': draft.link_id },
+      }),
+    );
+  }
+
   /** Add a label to this message. */
   async addLabel(label: Label): Promise<void> {
     await this.mutate((c) =>
@@ -128,6 +184,20 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
     return EmailThread.byId(
       this.client,
       (await this.detail.get()).thread_db_id,
+    );
+  }
+
+  /**
+   * The message's original source, exactly as Gmail or Outlook holds it, as
+   * `message/rfc822` bytes for an `.eml` file. Drafts and messages still on
+   * their way have no source yet and fail with a 404.
+   */
+  async downloadEml(): Promise<Blob> {
+    return unwrap(
+      await this.client.email.getMessageEml({
+        path: { id: this.id },
+        parseAs: 'blob',
+      }),
     );
   }
 }

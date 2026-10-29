@@ -1,6 +1,6 @@
 /** The keyboard shortcuts panel (Ctrl ⇧ ?). */
 
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { For } from 'solid-js';
 import { SHORTCUT_GROUPS } from '../core/shortcuts';
 
@@ -11,7 +11,7 @@ export function ShortcutsDialog(props: { mac: boolean; onClose: () => void }) {
       role="dialog"
       aria-label="Keyboard shortcuts"
       data-testid="fig-shortcuts"
-      class="absolute inset-x-4 bottom-16 z-20 mx-auto max-h-[70%] max-w-3xl overflow-y-auto rounded-xl border border-edge-muted bg-menu p-4 text-ink text-xs shadow-xl"
+      class="menu-surface absolute inset-x-4 bottom-16 z-20 mx-auto max-h-[70%] max-w-3xl overflow-y-auto p-4 text-xs"
       onPointerDown={(e) => e.stopPropagation()}
     >
       <div class="mb-3 flex items-center justify-between">

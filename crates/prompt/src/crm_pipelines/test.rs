@@ -19,6 +19,9 @@ fn every_agent_host_maps_deal_requests_to_the_pipeline_tools() {
             "RemoveFromPipeline",
             "EditPipeline",
             "CreatePipeline",
+            "ImportCompaniesCsv",
+            "ImportPipelineCsv",
+            "ExportPipelineCsv",
             "not a Macro database",
             "SetEntityProperty",
         ] {

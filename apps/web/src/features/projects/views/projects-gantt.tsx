@@ -3,9 +3,10 @@ import { Gantt } from '@app/components/gantt/gantt';
 import { deriveGanttRange } from '@app/components/gantt/gantt-date';
 import { STATUS_GROUP_HEADER_TINTS } from '@app/features/tasks-view/components/task-list/TaskGroupHeader';
 import { UserIcon } from '@core/component/UserIcon';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CircleDashedIcon from '@phosphor/circle-dashed.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { Button, cn, Layer } from '@ui';
@@ -76,6 +77,7 @@ export function ProjectsGantt(props: {
         <Match when={collection.state().kind === 'loading'}>
           <div class="grid flex-1 place-items-center text-ink-muted">
             <SpinnerIcon
+              aria-hidden={false}
               aria-label="Loading project timeline"
               class="size-5 animate-spin"
             />
@@ -87,7 +89,10 @@ export function ProjectsGantt(props: {
             class="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted"
           >
             Projects couldn’t be loaded.
-            <Button variant="outline" onClick={() => void collection.refresh()}>
+            <Button
+              variant="secondary"
+              onClick={() => fireAndForget(collection.refresh(), 'projects')}
+            >
               Try again
             </Button>
           </div>
@@ -298,7 +303,12 @@ export function ProjectsGantt(props: {
                                   size="sm"
                                   variant="ghost"
                                   disabled={more().isLoading}
-                                  onClick={() => void collection.loadMore()}
+                                  onClick={() =>
+                                    fireAndForget(
+                                      collection.loadMore(),
+                                      'projects'
+                                    )
+                                  }
                                 >
                                   <Show when={more().isLoading}>
                                     <SpinnerIcon class="size-3 animate-spin" />
@@ -314,7 +324,12 @@ export function ProjectsGantt(props: {
                                 size="sm"
                                 variant="ghost"
                                 disabled={more().isLoading}
-                                onClick={() => void collection.loadMore()}
+                                onClick={() =>
+                                  fireAndForget(
+                                    collection.loadMore(),
+                                    'projects'
+                                  )
+                                }
                               >
                                 <Show when={more().isLoading}>
                                   <SpinnerIcon class="size-3 animate-spin" />

@@ -8,7 +8,7 @@ afterEach(() => {
 });
 
 describe('calendar preferences', () => {
-  it('drops a saved team out-of-office hide now that it has no switch', async () => {
+  it('keeps a saved team out-of-office hide across reloads', async () => {
     localStorage.setItem(
       CALENDAR_PREFERENCES_KEY,
       JSON.stringify({ hiddenSourceIds: ['team-ooo', 'holidays'] })
@@ -22,6 +22,40 @@ describe('calendar preferences', () => {
       return ids;
     });
 
-    expect(hidden).toEqual(['holidays']);
+    expect(hidden).toEqual(['team-ooo', 'holidays']);
+  });
+
+  it('shows the next meeting badge for saved preferences without the setting', async () => {
+    localStorage.setItem(
+      CALENDAR_PREFERENCES_KEY,
+      JSON.stringify({ hiddenSourceIds: [] })
+    );
+    const { useCalendarPreferences } = await import('./preferences');
+
+    const show = createRoot((dispose) => {
+      const [preferences] = useCalendarPreferences();
+      const value = preferences.showNextMeetingBadge;
+      dispose();
+      return value;
+    });
+
+    expect(show).toBe(true);
+  });
+
+  it('keeps the next meeting badge off across reloads', async () => {
+    localStorage.setItem(
+      CALENDAR_PREFERENCES_KEY,
+      JSON.stringify({ showNextMeetingBadge: false })
+    );
+    const { useCalendarPreferences } = await import('./preferences');
+
+    const show = createRoot((dispose) => {
+      const [preferences] = useCalendarPreferences();
+      const value = preferences.showNextMeetingBadge;
+      dispose();
+      return value;
+    });
+
+    expect(show).toBe(false);
   });
 });

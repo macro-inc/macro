@@ -3,6 +3,8 @@ use mcp_client::domain::models::McpServerRecord;
 use pipedream_mcp::domain::models::{McpServer, PipedreamConnection};
 use std::sync::Mutex;
 
+mod combined_tools;
+
 const SLACK: ConnectorRef<'static> = ConnectorRef {
     pipedream_app_slugs: &["slack", "slack_v2"],
     native_server_url: "https://mcp.slack.com/mcp",

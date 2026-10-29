@@ -4,30 +4,28 @@ import {
   defineQueryFilters,
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
-import { compareDateDesc } from '@core/util/date';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type ChannelEntity,
   type EntityData,
   isChannelEntity,
   isChannelThreadEntity,
 } from '@entity';
-import { createChannelDetailQuery } from '@queries/channel/detail';
 import {
   type SoupAstItemsQueryArgs,
   type SoupAstParams,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
 import { type Accessor, createEffect, createMemo } from 'solid-js';
+import { sortChannels } from './core/channel-sort';
 import { channelThreadsQueryArgs } from './core/channel-threads-query';
 import type {
   ChannelListSort,
   ChannelsQueryScope,
   ChannelsSortGroup,
 } from './types';
-import { channelHasMessages, isDirectMessage } from './utils';
+import { channelHasMessages, isDirectMessage, isTeamChannel } from './utils';
 
 /** Threads per page the Threads rail reads to find their channels. */
 const THREAD_CHANNELS_PAGE_SIZE = 100;
@@ -68,13 +66,20 @@ export const CHANNELS_QUERY_DEFINITIONS = {
     }),
     matches: channelHasMessages,
   },
+  team_channels: {
+    params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'created_at' },
+    filters: defineQueryFilters({
+      include: { channelType: ['team'], channelIsParticipant: [true] },
+    }),
+    matches: isTeamChannel,
+  },
   channels: {
     params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'created_at' },
     filters: defineQueryFilters({
       include: { channelIsParticipant: [true] },
-      exclude: { channelType: ['direct_message'] },
+      exclude: { channelType: ['direct_message', 'team'] },
     }),
-    matches: (channel) => !isDirectMessage(channel),
+    matches: (channel) => !isDirectMessage(channel) && !isTeamChannel(channel),
   },
   direct_messages: {
     params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'updated_at' },
@@ -115,23 +120,6 @@ export function filterChannelsForScope(
   channels: readonly ChannelEntity[]
 ): ChannelEntity[] {
   return channels.filter(CHANNELS_QUERY_DEFINITIONS[scope].matches);
-}
-
-export function channelByIdQueryArgs(channelId: string): SoupAstItemsQueryArgs {
-  return {
-    params: {
-      ...CHANNELS_QUERY_PARAMS,
-      limit: 1,
-      sort_method: 'created_at',
-    },
-    body: compileToAst(
-      queryStateFrom(
-        defineQueryFilters({
-          include: { channelId: [channelId] },
-        })
-      )
-    ),
-  };
 }
 
 /**
@@ -178,7 +166,7 @@ export function useChannelsByIdsQuery(channelIds: Accessor<readonly string[]>) {
       !query.hasNextPage
     )
       return;
-    void query.fetchNextPage();
+    fireAndForget(query.fetchNextPage(), 'channels-view');
   });
   return query;
 }
@@ -238,22 +226,6 @@ export function resolveSelectedChannel(
   );
 }
 
-function sortChannels(
-  channels: readonly ChannelEntity[],
-  sort: ChannelListSort
-): ChannelEntity[] {
-  const sortDate = (channel: ChannelEntity) =>
-    sort === 'created_at'
-      ? channel.createdAt
-      : sort === 'viewed_at'
-        ? channel.viewedAt
-        : channel.updatedAt;
-
-  return channels
-    .slice()
-    .sort((left, right) => compareDateDesc(sortDate(left), sortDate(right)));
-}
-
 /**
  * The Threads rail: channels and DMs holding threads the user takes part in.
  * Channels have no thread filter, so the rail pages through the user's
@@ -287,7 +259,7 @@ function useThreadChannelsDataSource(
         THREAD_CHANNELS_PAGE_SIZE * THREAD_CHANNELS_AUTO_PAGES
     )
       return;
-    void threadsQuery.fetchNextPage();
+    fireAndForget(threadsQuery.fetchNextPage(), 'channels-view');
   });
   const channelIds = createMemo<string[]>((previous) => {
     if (!threadsQuery.isEnabled || threadsQuery.isLoading) return previous;
@@ -400,6 +372,11 @@ export function useChannelsSources(
   sortBy: (group: ChannelsSortGroup) => ChannelListSort
 ): ChannelsSources {
   return {
+    team_channels: useChannelsDataSource(
+      'team_channels',
+      () => enabled('team_channels'),
+      () => sortBy('team_channels')
+    ),
     channels: useChannelsDataSource(
       'channels',
       () => enabled('channels'),
@@ -424,44 +401,5 @@ export function useChannelsSources(
       () => enabled('threads'),
       () => sortBy('threads')
     ),
-  };
-}
-
-export function useChannelByIdQuery(
-  channelId: Accessor<string | undefined>,
-  enabled: Accessor<boolean>
-) {
-  // Every activation needs a fresh complete unread edge for marking read.
-  // GraphQL revalidates on activation; keep the REST fallback stale too.
-  const graphqlSoup = useFeatureFlag(enableGraphqlSoup);
-  const graphql = createChannelDetailQuery(
-    channelId,
-    () => enabled() && graphqlSoup().enabled
-  );
-  const rest = useSoupAstItemsQuery(
-    () => ({ ...channelByIdQueryArgs(channelId() ?? ''), transport: 'rest' }),
-    () => ({ enabled: enabled() && !graphqlSoup().enabled, staleTime: 0 })
-  );
-  const query = () => (graphqlSoup().enabled ? graphql : rest);
-  return {
-    get isEnabled() {
-      return query().isEnabled;
-    },
-    get isPending() {
-      return query().isPending;
-    },
-    get isLoading() {
-      return query().isLoading;
-    },
-    get isFetching() {
-      return query().isFetching;
-    },
-    get error() {
-      return query().error;
-    },
-    get data() {
-      return query().data;
-    },
-    refresh: () => query().refresh(),
   };
 }

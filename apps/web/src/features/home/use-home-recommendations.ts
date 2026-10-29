@@ -5,6 +5,7 @@ import { useChatInputContext } from '@core/component/AI/context';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { useSettingsState } from '@core/constant/SettingsState';
 import type { Entity } from '@core/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   compositeEntity,
   fetchNotificationsForEntities,
@@ -44,6 +45,7 @@ export function useHomeRecommendations() {
       failed:
         (emailLinks.isError && emailLinks.data === undefined) ||
         recommendations.hasError(),
+      retryable: recommendations.canRetry(),
       items: recommendations.items(),
       emailLinked:
         emailLinks.isSuccess && (emailLinks.data?.links.length ?? 0) > 0,
@@ -75,7 +77,14 @@ export function useHomeRecommendations() {
     }
 
     if (notification) {
-      const result = await openNotification(notification, splitManager, true);
+      const result = await openNotification(
+        notification,
+        splitManager,
+        true,
+        undefined,
+        undefined,
+        { source: 'home_recommendation' }
+      );
       if (result.isOk()) {
         await notificationSource.markAsRead(notification);
         return;
@@ -109,7 +118,10 @@ export function useHomeRecommendations() {
   };
 
   const retry = () => {
-    void Promise.allSettled([emailLinks.refetch(), recommendations.retry()]);
+    fireAndForget(
+      Promise.allSettled([emailLinks.refetch(), recommendations.retry()]),
+      'home'
+    );
   };
 
   return {

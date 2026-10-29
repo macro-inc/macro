@@ -35,7 +35,7 @@ export async function loadFormulaTools(
   };
 }
 
-/** The columns a formula can use: numbers, dates and other derived columns. */
+/** The columns a formula can use: numbers, dates and other derived columns, never date ranges. */
 export function formulaInputs(
   columns: readonly DatabaseViewColumn[],
   own?: string
@@ -84,6 +84,7 @@ function engineKind(column: DatabaseViewColumn): ColumnKind {
     .with('NUMBER', () => ({ kind: 'number' }))
     .with('BOOLEAN', () => ({ kind: 'boolean' }))
     .with('DATE', () => ({ kind: 'date' }))
+    .with('DATE_RANGE', () => ({ kind: 'dateRange' }))
     .with('LINK', () => ({ kind: 'link' }))
     .with(P.union('SELECT_STRING', 'SELECT_NUMBER', 'TAG'), () => ({
       kind: 'select',
@@ -95,7 +96,7 @@ function engineKind(column: DatabaseViewColumn): ColumnKind {
       multi: column.isMultiSelect,
       target: column.specificEntityType ?? 'USER',
     }))
-    .exhaustive();
+    .exhaustive(() => ({ kind: 'text' }));
 }
 
 /** Columns the name being typed at the caret could mean, and where it starts. */

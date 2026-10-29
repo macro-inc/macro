@@ -1,7 +1,7 @@
 //! Ports (trait contracts) for the initiative domain.
 
 use super::reads::{
-    InitiativePage, InitiativePageRequest, InitiativePageRow, InitiativeTasksPage,
+    InitiativePage, InitiativePageRequest, InitiativePageRow, InitiativeRead, InitiativeTasksPage,
     InitiativeTasksRequest,
 };
 use entity_access::domain::models::{
@@ -115,6 +115,18 @@ pub trait InitiativeService: Send + Sync + 'static {
     fn summary(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<InitiativePageRow, InitiativeError>> + Send;
+
+    /// Load an authorized initiative, checking each associated task's access once.
+    fn read(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<InitiativeRead, InitiativeError>> + Send;
+
+    /// Canonical properties and progress of an earlier read, without re-checking task access.
+    fn summarize(
+        &self,
+        read: &InitiativeRead,
     ) -> impl Future<Output = Result<InitiativePageRow, InitiativeError>> + Send;
 
     /// Filter, order and page the caller's discoverable initiatives.

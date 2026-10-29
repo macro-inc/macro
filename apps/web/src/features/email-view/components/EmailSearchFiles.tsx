@@ -74,7 +74,10 @@ export function EmailSearchFileRow(props: {
       onClick={props.onOpen}
     >
       <span class="size-4 shrink-0">
-        <EmailAttachmentIcon mimeType={file().mimeType} />
+        <EmailAttachmentIcon
+          fileName={file().filename}
+          mimeType={file().mimeType}
+        />
       </span>
       {/* Narrow lists stack the origin under the name so the name stays readable. */}
       <span

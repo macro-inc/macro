@@ -1,6 +1,6 @@
 export type GridCellControl = {
   focus: () => void;
-  edit: (seed?: string) => void;
+  edit: (seed?: string, options?: { selectAll?: boolean }) => void;
 };
 
 export type GridCellEditorOptions = {

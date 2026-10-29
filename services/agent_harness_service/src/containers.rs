@@ -14,7 +14,7 @@ use agent_harness::domain::ports::ContainerManager;
 use agent_harness::domain::sandbox::SandboxResizeEffect;
 use agent_harness::outbound::containers::{HarnessContainer, HarnessContainers};
 use agent_harness::outbound::sidecar::SidecarSender;
-use agent_inmem::domain::engine::AgentIdentity;
+use agent_inmem::domain::engine::{AgentIdentity, ReplyDelivery};
 use agent_inmem::outbound::manager::{InMemAgentManager, SessionFacts};
 use agent_runtime_protocol::domain::connection::ServerChannel;
 use agent_runtime_protocol::domain::ports::{Transport, TransportError, TransportSender};
@@ -133,6 +133,13 @@ where
             return Ok(Route::InMem(Box::new(SessionFacts {
                 id: session,
                 owner: row.owner_id,
+                // A thread's reply is one message, rewritten only as each
+                // passage finishes; an opening line lands with what follows it.
+                delivery: if row.thread_id.is_some() {
+                    ReplyDelivery::Whole
+                } else {
+                    ReplyDelivery::Streamed
+                },
                 model: row.model,
                 identity: Some(AgentIdentity {
                     bot: row.bot_id,

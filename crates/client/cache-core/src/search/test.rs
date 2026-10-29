@@ -119,6 +119,46 @@ fn soup_entity_recency_prefers_viewed_at_over_newer_activity() {
 }
 
 #[test]
+fn initiative_projection_indexes_display_name_and_reads_metadata_recency() {
+    let mut record = string_record(&[
+        ("__typename", "GraphqlSoupInitiative"),
+        ("displayName", "  Launch   Plan "),
+    ]);
+    let metadata = |fields: &[(&str, &str)]| {
+        CacheValue::Object(
+            fields
+                .iter()
+                .map(|(key, value)| ((*key).into(), CacheValue::String((*value).into())))
+                .collect(),
+        )
+    };
+    record.fields.insert(
+        "metadata".into(),
+        metadata(&[
+            ("viewedAt", "2025-01-01T00:00:00Z"),
+            ("updatedAt", "2025-01-03T00:00:00Z"),
+        ]),
+    );
+    let key = EntityKey::entity("GraphqlSoupInitiative", &["initiative"]);
+    let document = project_search_documents(&key, &record).pop().unwrap();
+    assert_eq!(document.bucket, "initiative");
+    assert_eq!(document.search_text, "launch plan");
+    assert_eq!(
+        document.timestamp_ms,
+        parse_rfc3339_millis("2025-01-01T00:00:00Z").unwrap()
+    );
+
+    record.fields.insert(
+        "metadata".into(),
+        metadata(&[("updatedAt", "2025-01-03T00:00:00Z")]),
+    );
+    assert_eq!(
+        project_search_documents(&key, &record)[0].timestamp_ms,
+        parse_rfc3339_millis("2025-01-03T00:00:00Z").unwrap()
+    );
+}
+
+#[test]
 fn crm_contact_projection_indexes_name_email_and_removes_hidden_records() {
     let mut record = string_record(&[
         ("__typename", "GraphqlSoupCrmContact"),
@@ -142,5 +182,65 @@ fn crm_contact_projection_indexes_name_email_and_removes_hidden_records() {
     record
         .fields
         .insert("hidden".into(), CacheValue::Bool(true));
+    assert!(project_search_documents(&key, &record).is_empty());
+}
+
+#[test]
+fn email_projection_matches_subject_and_all_senders_but_never_bodies() {
+    let key = EntityKey::entity("GraphqlSoupEmailThread", &["thread"]);
+    let mut record = string_record(&[
+        ("__typename", "GraphqlSoupEmailThread"),
+        ("name", "Weekly update"),
+        ("senderName", "Alex"),
+        ("senderEmail", "alex@example.com"),
+        ("snippet", "quartz"),
+        ("bodyText", "zebra"),
+    ]);
+    record.fields.insert(
+        "senders".into(),
+        CacheValue::List(vec![
+            CacheValue::Object(
+                string_record(&[("name", "Teo Earlier"), ("email", "teo@sender.test")]).fields,
+            ),
+            CacheValue::Object(
+                string_record(&[("name", "Alex"), ("email", "alex@example.com")]).fields,
+            ),
+        ]),
+    );
+    let documents = project_search_documents(&key, &record);
+    assert_eq!(documents.len(), 1);
+    assert!(documents[0].search_text.contains("teo earlier"));
+    assert!(documents[0].search_text.contains("teo@sender.test"));
+    assert!(!documents[0].search_text.contains("quartz"));
+    assert!(!documents[0].search_text.contains("zebra"));
+    for query in ["t", "te", "teo", "teo@sender.test", "weekly"] {
+        let page = rank_documents(
+            &SearchRequest {
+                profile: SearchProfile::QuickAccessV1,
+                buckets: vec!["email".into()],
+                query: query.into(),
+                cursor: None,
+                limit: 50,
+                now_ms: 0,
+            },
+            &documents,
+        );
+        assert_eq!(page.documents.len(), 1, "{query}");
+    }
+    record.fields.insert("name".into(), CacheValue::Null);
+    assert!(
+        project_search_documents(&key, &record)[0]
+            .search_text
+            .contains("teo")
+    );
+    record
+        .fields
+        .insert("hidden".into(), CacheValue::Bool(true));
+    assert!(project_search_documents(&key, &record).is_empty());
+    record.fields.remove("hidden");
+    record.fields.insert(
+        "deletedAt".into(),
+        CacheValue::String("2026-01-01T00:00:00Z".into()),
+    );
     assert!(project_search_documents(&key, &record).is_empty());
 }

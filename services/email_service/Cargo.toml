@@ -76,7 +76,7 @@ sfs_map = []
 sfs_delete = []
 
 [dependencies]
-calendar_events = { path = "../../crates/calendar_events", features = ["google", "postgres", "schema"] }
+calendar_events = { path = "../../crates/calendar_events", features = ["google", "inbound", "postgres", "schema"] }
 ammonia = { workspace = true }
 anyhow = { workspace = true }
 authentication_service_client = { path = "../../crates/authentication_service_client" }
@@ -97,10 +97,10 @@ document_storage_service_client = { path = "../../crates/document_storage_servic
 doppleganger = { workspace = true }
 doppler-config = { workspace = true }
 ego-tree = { workspace = true }
-email = { path = "../../crates/email", features = ["axum", "calendar_invitations", "gmail_token", "inbound", "outbound"] }
+email = { path = "../../crates/email", features = ["axum", "calendar_invitations", "gmail_token", "inbound", "outbound", "mailbox"] }
 entity_access = { path = "../../crates/entity_access", default-features = false, features = ["outbound"] }
 entity_access_management = { path = "../../crates/entity_access_management" }
-email_api_client = { path = "../../crates/email_api_client", features = ["ports", "outbound-gmail"] }
+email_api_client = { path = "../../crates/email_api_client", features = ["ports", "outbound-gmail", "outbound-outlook", "microsoft-gate"] }
 email_db_client = { path = "../../crates/email_db_client" }
 email_utils = { path = "../../crates/email_utils" }
 filter_ast = { path = "../../crates/filter_ast" }
@@ -131,7 +131,9 @@ notification = { path = "../../crates/notification" }
 macro_user_id = { path = "../../crates/macro_user_id" }
 macro_uuid = { path = "../../crates/macro_uuid" }
 mime_guess = "2.0.5"
+channels = { path = "../../crates/channels", features = ["outbound"] }
 contacts = { path = "../../crates/contacts" }
+generic_email_domains = { path = "../../crates/generic_email_domains" }
 model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
 model_file_type = { path = "../../crates/model_file_type" }
@@ -142,8 +144,10 @@ models_pagination = { path = "../../crates/models_pagination", features = ["axum
 models_permissions = { path = "../../crates/models_permissions" }
 once_cell = { workspace = true }
 models_properties = { path = "../../crates/models_properties" }
+rand = { workspace = true }
 redis = { workspace = true, features = [
   "cluster-async",
+  "connection-manager",
   "tokio-rustls-comp",
 ] }
 regex = { workspace = true }

@@ -9,14 +9,14 @@ import partnerAnnouncementPoster from '../../assets/partners/partnership-program
 import { HomeSectionRule } from '../components/sections/HomeSectionRule';
 import { type FaqItem, SectionFaq } from '../components/sections/SectionFaq';
 import { SectionMoreFeatures } from '../components/sections/SectionMoreFeatures';
-import { buildCalLinkWithAttribution } from '../utils/utilAnalytic';
 import { demoHref } from '../utils/utilCta';
 import { setPageSeo } from '../utils/utilSeo';
 import '../../routes/posts/posts-shell.css';
 import './partners-hero.css';
 
 const SUPPORT_EMAIL = 'support@macro.com';
-const KICKOFF_URL = 'https://cal.com/team/macro/partnerships-program';
+const KICKOFF_URL =
+  'https://macro.com/app/book/6de4003c-15e4-549f-b5a9-0e930bbf56e4/partnerships-program';
 
 const partnerFaq: FaqItem[] = [
   {
@@ -115,7 +115,7 @@ function PartnerCtaBar() {
     <div class="partners-actions">
       <a
         class="partners-action partners-action-primary"
-        href={buildCalLinkWithAttribution(KICKOFF_URL)}
+        href={KICKOFF_URL}
         target="_blank"
         rel="noreferrer"
       >

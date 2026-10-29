@@ -27,7 +27,7 @@ export class DatabaseColumn {
     /** The table this column belongs to. */
     readonly table: DatabaseTable,
     /** Identifier of the column placement. */
-    readonly id: string
+    readonly id: string,
   ) {}
 
   /** A handle to a column by id, within a table. Details load on first access. */
@@ -44,7 +44,7 @@ export class DatabaseColumn {
     const found = columns.find((column) => column.column.id === this.id);
     if (!found) {
       throw new MacroNotFoundError(
-        `column ${this.id} is not on table ${this.table.id}`
+        `column ${this.id} is not on table ${this.table.id}`,
       );
     }
     return found;
@@ -75,7 +75,7 @@ export class DatabaseColumn {
 
   /** Change this column's type. See {@link Database.changeColumnType}. */
   changeType(
-    options: ChangeColumnTypeOptions
+    options: ChangeColumnTypeOptions,
   ): Promise<OpResultOf<'column', 'type_changed'>> {
     return this.table.database.changeColumnType(this, options);
   }
@@ -86,7 +86,7 @@ export class DatabaseColumn {
    * {@link Database.convertColumnIntoNewColumn}.
    */
   convertIntoNewColumn(
-    options: ConvertIntoNewColumnOptions
+    options: ConvertIntoNewColumnOptions,
   ): Promise<DatabaseColumn> {
     return this.table.database.convertColumnIntoNewColumn(this, options);
   }

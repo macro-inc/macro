@@ -6,9 +6,10 @@
  */
 
 import type { DeckOutline } from '@core/pptx-engine/types';
-import FilePdf from '@phosphor/file-pdf.svg';
-import Printer from '@phosphor/printer.svg';
-import X from '@phosphor/x.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import FilePdf from '@icon/system/regular/file-pdf.svg';
+import Printer from '@icon/system/regular/printer.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { Dialog } from '@ui/components/Dialog';
 import { createSignal, For, Show } from 'solid-js';
@@ -297,12 +298,13 @@ export function PrintDialog(props: {
             Print
           </h2>
           <Button
+            aria-label="Close"
+            tooltip="Close"
             size="icon-sm"
             variant="ghost"
-            label="Close"
             onClick={props.onClose}
           >
-            <X />
+            <X class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </div>
         <fieldset class="flex flex-col gap-1.5">
@@ -414,19 +416,19 @@ export function PrintDialog(props: {
             variant="ghost"
             data-testid="pptx-print-pdf"
             disabled={pages().length === 0 || !!progress()}
-            onClick={() => void savePdf()}
+            onClick={() => fireAndForget(savePdf(), 'pptx-print')}
           >
-            <FilePdf />
+            <FilePdf class="size-3 touch:size-6 shrink-0 pointer-events-none" />
             Save as PDF
           </Button>
           <Button
             size="sm"
-            variant="cta"
+            variant="primary"
             data-testid="pptx-print-go"
             disabled={pages().length === 0 || !!progress()}
-            onClick={() => void print()}
+            onClick={() => fireAndForget(print(), 'pptx-print')}
           >
-            <Printer />
+            <Printer class="size-3 touch:size-6 shrink-0 pointer-events-none" />
             Print
           </Button>
         </div>

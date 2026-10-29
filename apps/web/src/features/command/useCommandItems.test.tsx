@@ -1,17 +1,36 @@
+import type {
+  Bucket,
+  QuickAccessItem,
+  QuickAccessListOptions,
+} from '@core/context/quickAccess/types';
 import type { CommandWithInfo } from '@core/hotkey/getCommands';
 import { TOKENS } from '@core/hotkey/tokens';
-import { cleanup, render, waitFor } from '@solidjs/testing-library';
-import { type Client, createClient, type Exchange } from '@urql/core';
+import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import { filter, fromPromise, mergeMap, pipe } from 'wonka';
 
-const fixtures = vi.hoisted(() => ({
-  commands: [] as CommandWithInfo[],
-  page: vi.fn(),
-  client: undefined as Client | undefined,
-  projectFlag: (): boolean | undefined => undefined,
-}));
+const fixtures = vi.hoisted(() => {
+  const project: QuickAccessItem = {
+    id: 'launch',
+    kind: 'entity',
+    bucket: 'initiative',
+    searchText: 'Launch',
+    sortTimestamp: 1,
+    timestamps: {},
+    data: {
+      id: 'launch',
+      type: 'initiative',
+      name: 'Launch',
+      ownerId: 'owner',
+    },
+  };
+  return {
+    commands: [] as CommandWithInfo[],
+    projectFlag: (): boolean | undefined => undefined,
+    requests: [] as Bucket[][],
+    project,
+  };
+});
 
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) => () => ({
@@ -24,9 +43,21 @@ vi.mock('@core/context/user', () => ({
 vi.mock('@core/context/quickAccess', () => ({
   exclude: () => [],
   useQuickAccess: () => ({
-    useList: () => ({ items: () => [], hasMore: () => false }),
+    useList: (options: Bucket | QuickAccessListOptions) => {
+      if (typeof options === 'string') return { items: () => [] };
+      fixtures.requests.push([...options.buckets]);
+      return {
+        items: () =>
+          options.buckets.includes('initiative') ? [fixtures.project] : [],
+        isLoading: () => false,
+        hasMore: () => false,
+        isLoadingMore: () => false,
+        error: () => undefined,
+        loadMore: async () => {},
+      };
+    },
     usesRecordSelection: () => false,
-    usesSearchProjection: () => false,
+    usesSearchProjection: () => true,
   }),
 }));
 vi.mock('@core/hotkey/getCommands', () => ({
@@ -37,123 +68,67 @@ vi.mock('@core/hotkey/state', () => ({
   activeScope: () => 'root',
   hotkeyScopeTree: new Map(),
 }));
-vi.mock('@service-storage/graphql-soup', () => ({
-  getGraphqlSoupClient: () => fixtures.client,
-  mapGraphqlProperties: () => [],
-}));
-vi.mock('@queries/activity/push-registry', () => ({
-  registerActivityRevalidator: () => () => {},
-}));
-vi.mock('@queries/client', async () => {
-  const { QueryClient } = await import('@tanstack/solid-query');
-  return {
-    queryClient: new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    }),
-  };
-});
 
-import { queryClient } from '@queries/client';
 import type { CategoryFilter } from './types';
 import { useCommandItems } from './useCommandItems';
 
 afterEach(() => {
   cleanup();
-  queryClient.clear();
-  fixtures.page.mockReset();
+  fixtures.requests = [];
 });
 
-it('gates Projects results and creation commands without hiding Folder', async () => {
-  const [flag, setFlag] = createSignal<boolean | undefined>(undefined);
+const createCommands: CommandWithInfo[] = [
+  {
+    hotkeyToken: TOKENS.create.initiative,
+    description: 'Create project',
+    scopeId: 'root',
+    scopeLevel: 0,
+    hotkeyIsShadowed: false,
+    runWithInputFocused: false,
+  },
+  {
+    hotkeyToken: TOKENS.create.project,
+    description: 'Create folder',
+    scopeId: 'root',
+    scopeLevel: 0,
+    hotkeyIsShadowed: false,
+    runWithInputFocused: false,
+  },
+];
+
+it('lists Projects from Quick Access and gates project creation without hiding Folder', () => {
+  const [flag, setFlag] = createSignal<boolean | undefined>(true);
   const [category, setCategory] = createSignal<CategoryFilter>('projects');
   fixtures.projectFlag = flag;
-  fixtures.commands = [
-    {
-      hotkeyToken: TOKENS.create.initiative,
-      description: 'Create project',
-      scopeId: 'root',
-      scopeLevel: 0,
-      hotkeyIsShadowed: false,
-      runWithInputFocused: false,
-    },
-    {
-      hotkeyToken: TOKENS.create.project,
-      description: 'Create folder',
-      scopeId: 'root',
-      scopeLevel: 0,
-      hotkeyIsShadowed: false,
-      runWithInputFocused: false,
-    },
-  ];
-  fixtures.page.mockImplementation(async (operation) => ({
-    operation,
-    stale: false,
-    hasNext: false,
-    data: {
-      user: {
-        id: 'viewer',
-        soup: {
-          nextCursor: null,
-          items: [
-            {
-              __typename: 'GraphqlSoupInitiative',
-              id: 'launch',
-              displayName: 'Launch',
-              metadata: { updatedAt: '2026-09-22T12:00:00Z' },
-              viewerPermission: {
-                __typename: 'GraphqlAccessLevelPermission',
-                accessLevel: 'OWNER',
-              },
-              properties: [],
-            },
-          ],
-        },
-      },
-    },
-  }));
-  const exchange: Exchange = () => (operations) =>
-    pipe(
-      operations,
-      filter((operation) => operation.kind === 'query'),
-      mergeMap((operation) => fromPromise(fixtures.page(operation)))
-    );
-  fixtures.client = createClient({
-    url: 'http://test.invalid/graphql',
-    exchanges: [exchange],
-  });
+  fixtures.commands = createCommands;
   let source!: ReturnType<typeof useCommandItems>;
   render(() => {
     source = useCommandItems(() => '', category, {
       searchActive: () => true,
     });
-    return (
-      <div>
-        {source
-          .items()
-          .map((item) => item.id)
-          .join(',')}
-      </div>
-    );
+    return null;
   });
-  expect(source.items()).toEqual([]);
-  expect(fixtures.page).not.toHaveBeenCalled();
-  setFlag(true);
-  await waitFor(() =>
-    expect(source.items().map((item) => item.id)).toEqual([
-      'launch',
-      'new-project',
-    ])
-  );
+  const ids = () => source.items().map((item) => item.id);
+
+  expect(fixtures.requests.at(-1)).toEqual(['initiative']);
+  expect(ids()).toEqual(['launch', 'new-project']);
   setCategory('commands');
-  expect(source.items().map((item) => item.id)).toEqual([
-    'command-Create-project',
-    'command-Create-folder',
-  ]);
+  expect(ids()).toEqual(['command-Create-project', 'command-Create-folder']);
   setFlag(false);
-  expect(source.items().map((item) => item.id)).toEqual([
-    'command-Create-folder',
-  ]);
+  expect(ids()).toEqual(['command-Create-folder']);
   setCategory('projects');
-  expect(source.items()).toEqual([]);
-  expect(fixtures.page).toHaveBeenCalledTimes(1);
+  expect(ids()).not.toContain('new-project');
+});
+
+it('adds projects to All only for typed queries', () => {
+  fixtures.projectFlag = () => true;
+  const [query, setQuery] = createSignal('');
+  render(() => {
+    useCommandItems(query, () => 'all', { searchActive: () => true }).items();
+    return null;
+  });
+
+  expect(fixtures.requests.at(-1)).not.toContain('initiative');
+  setQuery('launch');
+  expect(fixtures.requests.at(-1)).toContain('initiative');
 });

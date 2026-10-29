@@ -1,4 +1,5 @@
-.homepage-crm .mdf-frame { height: auto; padding: 48px 32px; }
+.homepage-crm .mdf-frame { height: auto; padding: 48px 32px; background: none; }
+.homepage-crm .mdf-frame::before { display: none; }
 .homepage-crm .mds-card { max-width: none; height: auto; overflow: hidden; }
 .homepage-crm-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--color-edge-muted); font-size: 14px; }
 .homepage-crm-viewport { height: 330px; overflow: hidden; position: relative; }
@@ -7,15 +8,23 @@
 .homepage-crm-columns > div { flex: none; width: 272px; }
 .homepage-crm-card { height: 62px; flex-shrink: 0; }
 .homepage-crm-company-mark { display: flex; width: 16px; height: 16px; align-items: center; justify-content: center; border-radius: 4px; background: var(--color-surface-4); font-size: 10px; color: var(--color-ink-muted); }
-.homepage-crm-drag { position: absolute; top: 0; left: 0; width: 256px; z-index: 2; pointer-events: none; filter: drop-shadow(0 16px 18px rgb(0 0 0 / 0.4)); }
-.homepage-crm-cursor { z-index: 3; }
-.homepage-crm-footer { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 20px; border-top: 1px solid var(--color-edge-muted); color: var(--color-ink-muted); font-size: 12px; min-height: 62px; }
-.homepage-crm-footer button { transition: color 160ms; }
-.homepage-crm-footer button:hover { color: var(--color-ink); }
-.homepage-crm-footer button:focus-visible { outline: 1px solid var(--color-ink); outline-offset: 4px; border-radius: 2px; }
+.homepage-crm-drag { position: absolute; top: 0; left: 0; width: 256px; z-index: 2; pointer-events: none; border-radius: 8px; box-shadow: 0 12px 24px rgb(0 0 0 / 0.22); transform-origin: top left; will-change: transform; }
+.homepage-crm-cursor { z-index: 3; transform-origin: top left; will-change: transform; }
 @media (max-width: 699px) {
   .homepage-crm .mdf-frame { padding: 24px 12px; }
   .homepage-crm-header { padding: 16px 12px; }
   .homepage-crm-viewport { height: 280px; }
-  .homepage-crm-footer { padding: 12px; font-size: 11px; align-items: flex-start; }
 }
+
+/* This fixed-coordinate illustration must not inherit rem-sized app geometry
+   or interactive hover transitions. Mobile scales the entire artboard once. */
+.homepage-crm-columns { box-sizing: border-box; pointer-events: none; }
+.homepage-crm-columns > div { box-sizing: border-box; }
+.homepage-crm-columns > div > div:first-child { box-sizing: border-box; height: 36px; flex: none; padding: 10px 12px; font-size: 12px; line-height: 16px; }
+.homepage-crm-columns > div > div:last-child { padding: 0 8px 8px; gap: 8px; }
+.homepage-crm-card-surface { box-sizing: border-box; height: 62px; padding: 10px; gap: 6px; font-size: 14px; line-height: 20px; pointer-events: none; transition: none; }
+.homepage-crm-card-surface > div:first-child { height: 20px; }
+.homepage-crm-card-surface > div:first-child > div:first-child { width: 16px; height: 16px; }
+.homepage-crm-card-surface > div:first-child > img { width: 20px; height: 20px; }
+.homepage-crm-card-surface > div:last-child { font-size: 12px; line-height: 16px; }
+.homepage-crm-cursor { transition: none; }

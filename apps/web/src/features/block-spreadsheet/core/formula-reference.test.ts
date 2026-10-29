@@ -8,14 +8,22 @@ import {
 import { SPREADSHEET_MAX_ROWS } from './spreadsheet-document';
 
 describe('formula reference slots', () => {
-  it.each(['=', '=SUM(', '=A1+', '=IF(A1>0, ', '=SUM(B1:B4,'])(
-    'inserts an operand at the end of %s',
-    (text) => {
-      expect(
-        formulaReferenceSlot(text, { start: text.length, end: text.length })
-      ).toEqual({ start: text.length, end: text.length });
-    }
-  );
+  it.each([
+    '=',
+    '=SUM(',
+    '=A1+',
+    '=IF(A1>0, ',
+    '=SUM(B1:B4,',
+    '=IF(D2 <',
+    '=IF(D2<=',
+    '=IF(D2 >= ',
+    '=IF(D2<>',
+    '=D2=',
+  ])('inserts an operand at the end of %s', (text) => {
+    expect(
+      formulaReferenceSlot(text, { start: text.length, end: text.length })
+    ).toEqual({ start: text.length, end: text.length });
+  });
 
   it('replaces an existing mixed reference/range, preserving surrounding formula text', () => {
     expect(

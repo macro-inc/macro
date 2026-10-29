@@ -140,6 +140,19 @@ fn topic_events() -> Vec<(CallTopicEvent, Value)> {
                 },
             }),
         ),
+        (
+            CallTopicEvent::RecordImported(CallRecordImportedMetadata {
+                call_id: uuid(CALL_ID),
+                owner: user_id("macro|owner@example.com"),
+            }),
+            json!({
+                "event_type": "call.record_imported",
+                "metadata": {
+                    "call_id": CALL_ID,
+                    "owner": "macro|owner@example.com",
+                },
+            }),
+        ),
     ]
 }
 
@@ -155,6 +168,7 @@ fn macro_events() -> Vec<CallMacroEvent> {
                 CallMacroEvent::record_summarized(metadata)
             }
             CallTopicEvent::RecordingReady(metadata) => CallMacroEvent::recording_ready(metadata),
+            CallTopicEvent::RecordImported(metadata) => CallMacroEvent::record_imported(metadata),
         })
         .collect()
 }

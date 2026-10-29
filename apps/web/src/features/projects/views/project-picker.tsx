@@ -1,9 +1,10 @@
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { debouncedDependent } from '@core/util/debounce';
-import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
-import StackIcon from '@phosphor/stack.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
+import StackIcon from '@icon/system/regular/stack.svg';
 import {
   DropdownSearchInput,
   DropdownSelectableRow,
@@ -63,7 +64,11 @@ export function ProjectPicker(props: {
     itemCount: () => items().length,
     onSelect: (index) => {
       const item = items()[index];
-      if (item) void assign(item.type === 'project' ? item.id : undefined);
+      if (item)
+        fireAndForget(
+          assign(item.type === 'project' ? item.id : undefined),
+          'projects'
+        );
     },
     onClose: props.onClose,
   });
@@ -101,7 +106,7 @@ export function ProjectPicker(props: {
     if (!source.hasMore() || source.loadingMore()) return;
     // One row of slack so the next page lands before the list bottoms out.
     if (element.scrollTop + element.clientHeight >= element.scrollHeight - 32)
-      void source.loadMore();
+      fireAndForget(source.loadMore(), 'projects');
   };
 
   onMount(() => document.addEventListener('keydown', dropdown.handleKeyDown));
@@ -150,8 +155,9 @@ export function ProjectPicker(props: {
                     <DropdownSelectableRow
                       isSelected={index() === dropdown.selectedIndex()}
                       onClick={() =>
-                        void assign(
-                          item.type === 'project' ? item.id : undefined
+                        fireAndForget(
+                          assign(item.type === 'project' ? item.id : undefined),
+                          'projects'
                         )
                       }
                       onMouseEnter={() => {

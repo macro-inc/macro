@@ -17,6 +17,7 @@ use crate::domain::{
     ports::{PullRequestSessions, SoupRealtimeService},
     service::SoupRealtimeServiceImpl,
 };
+use call::domain::events::{CallMacroEvent, CallTopicEvent};
 use channels::domain::{
     broker_events::{ChannelMacroEvent, ChannelTopicEvent},
     models::ReferencedShareItemType,
@@ -69,6 +70,7 @@ macro_event_broker::declare_topics!(
         MessageMacroEvent,
         PropertyMacroEvent,
         InitiativeMacroEvent,
+        CallMacroEvent,
 );
 
 fn entity(entity_type: EntityType, entity_id: impl ToString) -> Entity<'static> {
@@ -353,6 +355,8 @@ fn soup_entity_type_from_channel_reference(entity_type: &str) -> Option<EntityTy
         ReferencedShareItemType::CalendarEvent => None,
         // Forms are not soup entities; a posted form renders as its card.
         ReferencedShareItemType::Form => None,
+        // External chats are not soup entities; External lists them.
+        ReferencedShareItemType::ExternalChat => None,
     }
 }
 
@@ -392,6 +396,22 @@ fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatc
         ChannelTopicEvent::Deleted(metadata) => {
             vec![delete(EntityType::Channel, metadata.channel_id)]
         }
+    }
+}
+
+/// Imported records reach Soup as soon as they are stored. Native call
+/// lifecycle events don't patch Soup yet.
+fn patches_from_call_event(event: &CallTopicEvent) -> Vec<SoupRealtimePatch> {
+    match event {
+        CallTopicEvent::RecordImported(metadata) => {
+            vec![update(EntityType::Call, metadata.call_id)]
+        }
+        CallTopicEvent::Started(_)
+        | CallTopicEvent::RecordArchived(_)
+        | CallTopicEvent::RecordUpdated(_)
+        | CallTopicEvent::RecordDeleted(_)
+        | CallTopicEvent::RecordSummarized(_)
+        | CallTopicEvent::RecordingReady(_) => Vec::new(),
     }
 }
 
@@ -585,6 +605,7 @@ fn patches_from_event(event: &DeclaredMacroEvent) -> Vec<SoupRealtimePatch> {
         DeclaredMacroEvent::PropertyMacroEvent(event) => {
             patches_from_property_event(&event.event().event)
         }
+        DeclaredMacroEvent::CallMacroEvent(event) => patches_from_call_event(&event.event().event),
     }
 }
 

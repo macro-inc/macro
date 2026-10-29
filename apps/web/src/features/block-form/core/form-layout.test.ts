@@ -318,7 +318,7 @@ describe('broken gate rules', () => {
     expect(brokenGateColumns(offsite(), GATE)).toEqual([]);
   });
 
-  it('keeps edits open around a screener whose question went in the grid', () => {
+  it('keeps edits open around a gate whose question went in the grid', () => {
     const layout: FormLayout = {
       sections: offsite().sections.map((section) =>
         section.id === ABOUT
@@ -649,7 +649,7 @@ describe('booking step', () => {
     )._unsafeUnwrap();
   }
 
-  it('adds a booking step after every question and screener, whatever index it was given', () => {
+  it('adds a booking step after every question and gate, whatever index it was given', () => {
     const layout = addSection(
       offsite(),
       {
@@ -682,7 +682,7 @@ describe('booking step', () => {
     ]);
   });
 
-  it('inserts new sections and screeners before the booking step', () => {
+  it('inserts new sections and gates before the booking step', () => {
     const layout = addSection(
       withBooking(),
       {
@@ -725,7 +725,7 @@ describe('booking step', () => {
     ).toEqual({ kind: 'booking-must-be-last', sectionId: BOOKING });
   });
 
-  it('refuses moving the booking step ahead of a screener, or a section after it', () => {
+  it('refuses moving the booking step ahead of a gate, or a section after it', () => {
     expect(moveSection(withBooking(), BOOKING, 1)._unsafeUnwrapErr()).toEqual({
       kind: 'booking-must-be-last',
       sectionId: BOOKING,

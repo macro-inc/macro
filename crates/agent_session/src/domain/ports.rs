@@ -129,6 +129,10 @@ pub struct RequestedExternalSession {
     pub model: Option<String>,
     /// Remote repository selected for this external coding session.
     pub repo_url: Option<String>,
+    /// Who is starting the session.
+    pub source: SessionSource,
+    /// Whether a routine run is listed; a person's session always is.
+    pub visibility: SessionVisibility,
 }
 
 /// Validate the base branch supported by external repository provisioning.
@@ -324,6 +328,10 @@ pub struct OpenManagedSession {
     /// Model to run on instead of the persona's own. The session's model from
     /// creation, so its runtime starts on it and nothing is sent to change it.
     pub model: Option<String>,
+    /// Who is starting the session.
+    pub source: SessionSource,
+    /// Whether a routine run is listed; a person's session always is.
+    pub visibility: SessionVisibility,
 }
 
 /// Opens sessions, however they are served. Implemented by the harness, which
@@ -362,6 +370,16 @@ pub trait SessionOpener: Send + Sync + 'static {
         thread_id: Uuid,
         bot_id: BotId,
     ) -> impl Future<Output = Result<Option<AgentSessionId>>> + Send;
+}
+
+/// The turn currently allowed to initiate work, from shared durable state.
+/// Stopping, ended, archived, and deleted sessions have no active turn.
+pub trait ActiveSessionTurn: Send + Sync + 'static {
+    /// Resolve the starting, running, or blocked turn independently of replica ownership.
+    fn active_turn(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<agent_runtime_protocol::domain::action::AgentActionId>>> + Send;
 }
 
 /// `Send + Sync + 'static` with `Send` futures because callers drive sessions
@@ -477,7 +495,8 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     /// stop rendering because its agent was removed.
     fn session_bot(&self, id: BotId) -> impl Future<Output = Result<SessionBot>> + Send;
 
-    /// Persist the agent-assigned ACP session id without replacing other session fields.
+    /// Persist the agent-assigned ACP session id without replacing other
+    /// session fields or reordering the session list.
     fn set_acp_session_id(
         &self,
         id: AgentSessionId,
@@ -502,7 +521,17 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     fn set_model(&self, id: AgentSessionId, model: &str)
     -> impl Future<Output = Result<()>> + Send;
 
-    /// Persist the user-facing session name. Idempotent.
+    /// Record who started the session and where it is shown, for a session
+    /// whose runtime created the row without knowing either. Idempotent.
+    fn set_origin(
+        &self,
+        id: AgentSessionId,
+        source: SessionSource,
+        visibility: SessionVisibility,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Persist a name a person chose. Idempotent. The name stops being
+    /// generated, so retitling never replaces it.
     fn set_name(&self, id: AgentSessionId, name: &str) -> impl Future<Output = Result<()>> + Send;
 
     /// Archive or unarchive a session. Idempotent.
@@ -525,6 +554,24 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     fn set_name_if_default(
         &self,
         id: AgentSessionId,
+        name: &str,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// The session's name while it is a generated one that retitling may
+    /// replace: `None` once a person named the session, while it still has
+    /// the default, or when it is archived.
+    fn generated_name(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<String>>> + Send;
+
+    /// Replace a generated name only while the session is still called
+    /// `current`, that name is still generated, and the session is not
+    /// archived. Whether the name changed.
+    fn replace_generated_name(
+        &self,
+        id: AgentSessionId,
+        current: &str,
         name: &str,
     ) -> impl Future<Output = Result<bool>> + Send;
 
@@ -632,9 +679,11 @@ pub const REPLICA_STALE_AFTER: std::time::Duration = std::time::Duration::from_s
 /// Claiming is a single conditional update (compare-and-swap): it succeeds
 /// when the session is unmanaged, already ours, or held by a replica whose
 /// heartbeat has gone stale, and every success increments the session's
-/// fence. There are deliberately no explicit locks anywhere in the contract -
-/// see [`ManagerFence`](super::model::ManagerFence) for why a fence, not a
-/// lock, is what neutralizes a stale holder.
+/// fence. Lease changes must not bump list recency: a reclaim, release, or
+/// stale takeover is not the conversation being used. There are deliberately
+/// no explicit locks anywhere in the contract - see
+/// [`ManagerFence`](super::model::ManagerFence) for why a fence, not a lock,
+/// is what neutralizes a stale holder.
 pub trait SessionOwnership: Send + Sync + 'static {
     /// Claim live management of a session for `replica`, registering the
     /// replica's heartbeat as a side effect so a claim can never dangle on a
@@ -758,6 +807,16 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
         agent_session_id: AgentSessionId,
     ) -> impl Future<Output = Result<Vec<StoredAgentSessionLog>>> + Send;
 
+    /// A single snapshot of durable history when the action was prompted,
+    /// or an empty snapshot when absent. Includes frames
+    /// before a successful load. Internal action recovery needs their original
+    /// request IDs, which replayed display history does not preserve.
+    fn list_action_history(
+        &self,
+        agent_session_id: AgentSessionId,
+        action: agent_runtime_protocol::domain::action::AgentActionId,
+    ) -> impl Future<Output = Result<Vec<StoredAgentSessionLog>>> + Send;
+
     /// Every user the log has attributed a frame to: whoever prompted,
     /// answered, or otherwise drove the session. Distinct, unordered; the
     /// owner appears only if they acted. Spans the whole log, resumes
@@ -837,6 +896,19 @@ pub struct Appended {
 /// and [`flush_deadline`](Self::flush_deadline) tells the owning actor when
 /// the buffer must next be forced out with [`flush`](Self::flush).
 pub trait AgentSessionLogWriter: Send + 'static {
+    /// Persist the missing frames of a stable presentation and flush before acknowledging.
+    fn present_tool(
+        &mut self,
+        id: AgentSessionId,
+        acp_id: agent_client_protocol::schema::v1::SessionId,
+        presentation: super::model::SessionToolPresentation,
+    ) -> impl Future<Output = Result<()>> + Send {
+        async move {
+            let _ = (acp_id, presentation);
+            Err(AgentSessionError::Disconnected(id))
+        }
+    }
+
     /// Persist and fold one frame into this connection's live projection.
     fn append(&mut self, log: AgentSessionLog) -> impl Future<Output = Result<Appended>> + Send {
         self.append_with_boundary(log, None)
@@ -1069,7 +1141,8 @@ impl SessionTurnObserver for LateBoundTurnObserver {
     }
 }
 
-/// Generates a concise display name from a session's first prompt.
+/// Generates a concise display name from a session's first prompt, and
+/// replaces it once the conversation has outgrown it.
 pub trait AgentSessionNameGenerator: Send + Sync + 'static {
     /// Generate a name, or `None` when naming is disabled for this service.
     fn generate_name(
@@ -1077,6 +1150,19 @@ pub trait AgentSessionNameGenerator: Send + Sync + 'static {
         session: &AgentSession,
         initial_prompt: &str,
     ) -> impl Future<Output = Result<Option<String>, rootcause::Report>> + Send;
+
+    /// A name that describes the conversation better than `current`, or
+    /// `None` to keep it. Asked after every finished turn of a session whose
+    /// name was generated, so a name should change only when it has clearly
+    /// stopped fitting. Keeps every name by default.
+    fn retitle(
+        &self,
+        _session: &AgentSession,
+        _current: &str,
+        _conversation: &super::retitle::ConversationDigest,
+    ) -> impl Future<Output = Result<Option<String>, rootcause::Report>> + Send {
+        async { Ok(None) }
+    }
 }
 
 /// Disables automatic agent-session naming.
@@ -1173,6 +1259,19 @@ pub struct QueuedControl {
 /// control routes can be mounted against it without knowing what a harness is.
 #[cfg_attr(feature = "test-utils", mockall::automock)]
 pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
+    /// Persist a nonblocking tool presentation through the owning session actor.
+    fn present_tool(
+        &self,
+        id: AgentSessionId,
+        actor: MacroUserIdStr<'static>,
+        presentation: super::model::SessionToolPresentation,
+    ) -> impl Future<Output = Result<()>> + Send {
+        async move {
+            let _ = (actor, presentation);
+            Err(AgentSessionError::Disconnected(id))
+        }
+    }
+
     /// Release and delete every session owned by a user before account deletion.
     /// Internal account lifecycle only; shared sessions owned by others are untouched.
     fn delete_user_sessions(

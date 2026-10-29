@@ -32,6 +32,7 @@ return_passwordless_code = []
 
 [dependencies]
 crm = { path = "../../crates/crm", default-features = false, features = ["lookup"] }
+agent_api_keys = { path = "../../crates/agent_api_keys" }
 ai_billing = { path = "../../crates/ai_billing" }
 ai_usage = { path = "../../crates/ai_usage" }
 initiative = { path = "../../crates/initiative", default-features = false, features = ["postgres"] }
@@ -47,7 +48,7 @@ async-trait = { workspace = true }
 async-stripe = { workspace = true, default-features = false, features = [
   "billing",
   "checkout",
-  "runtime-tokio-hyper-rustls-webpki",
+  "runtime-tokio-hyper",
 ] }
 async-stripe-webhook = { version = "1.0.0-alpha.4", default-features = false }
 aws-sdk-kms = { workspace = true }
@@ -70,7 +71,7 @@ contacts = { path = "../../crates/contacts", default-features = false, features 
 cookie = { workspace = true }
 decode_jwt = { path = "../../crates/decode_jwt" }
 document_storage_service_client = { path = "../../crates/document_storage_service_client" }
-email = { path = "../../crates/email", features = ["http_client"] }
+email = { path = "../../crates/email", features = ["http_client", "outbound"] }
 doppleganger = { workspace = true }
 email_db_client = { path = "../../crates/email_db_client" }
 email_validator = { path = "../../crates/email_validator" }
@@ -135,6 +136,7 @@ maud = { version = "0.27.0" }
 miniserde = "0.1.45"
 microsoft_oauth_grant_db_utils = { path = "../../crates/microsoft_oauth_grant_db_utils" }
 mobile_welcome_email_db_client = { path = "../../crates/mobile_welcome_email_db_client" }
+models_email = { path = "../../crates/models_email" }
 mockall = { workspace = true }
 model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
@@ -177,6 +179,7 @@ tower-http = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
 urlencoding = { workspace = true }
+user_language = { path = "../../crates/user_language", features = ["inbound", "postgres"] }
 user_quota = { path = "../../crates/user_quota" }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
@@ -188,6 +191,9 @@ database_env_vars = { path = "../../crates/database_env_vars" }
 
 [dev-dependencies]
 cool_asserts = "2"
+macro_db_migrator = { path = "../../crates/macro_db_migrator" }
+serde_urlencoded = { workspace = true }
+wiremock = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["async-stripe"]

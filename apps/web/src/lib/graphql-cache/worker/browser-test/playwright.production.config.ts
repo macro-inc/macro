@@ -9,6 +9,7 @@ export default defineConfig({
   testMatch: [
     'calendar-points.browser.e2e.ts',
     'coordinator.browser.e2e.ts',
+    'parking.browser.e2e.ts',
     'cache-startup.browser.e2e.ts',
     'cache-artifact-compatibility.browser.e2e.ts',
     'cache-wasm-packaging.browser.e2e.ts',

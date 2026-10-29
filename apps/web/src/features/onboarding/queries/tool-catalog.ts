@@ -1,4 +1,5 @@
 import { createPipedreamCatalogSearch } from '@core/pipedream/catalog';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { NATIVE_GITHUB_TOOL, ONBOARDING_FEATURED_TOOLS } from '../core/tools';
 
 /** Stable featured metadata plus one paginated, searchable live directory. */
@@ -31,7 +32,7 @@ export function createOnboardingToolCatalog() {
     fetching: () => catalog.query.isFetching,
     failed: () => catalog.query.isError,
     hasMore: () => catalog.query.hasNextPage,
-    loadMore: () => void catalog.query.fetchNextPage(),
-    retry: () => void catalog.query.refetch(),
+    loadMore: () => fireAndForget(catalog.query.fetchNextPage(), 'onboarding'),
+    retry: () => fireAndForget(catalog.query.refetch(), 'onboarding'),
   };
 }

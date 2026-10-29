@@ -18,14 +18,23 @@ pub async fn delete_message(
     link: &link::Link,
     payload: &DeleteMessagePayload,
 ) -> result::Result<(), ProcessingError> {
-    let message = match email_db_client::messages::get_simple_messages::get_simple_message_by_provider_and_link(
-        &ctx.db,
+    let mut tx = ctx.db.begin().await.map_err(|e| {
+        ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: anyhow::Error::from(e).context("Failed to begin transaction"),
+        })
+    })?;
+    // Keep the provider identity and draft lifetime stable through deletion.
+    // A completion or Undo that wins the message lock is observed by this lookup;
+    // one that loses waits until deletion has been applied or safely deferred.
+    let message = match email_db_client::messages::get_simple_messages::get_simple_message_by_provider_and_link_for_update(
+        &mut tx,
         &payload.provider_message_id,
         &link.id,
     )
     .await
     .map_err(|e| {
-        ProcessingError::NonRetryable(DetailedError {
+        ProcessingError::Retryable(DetailedError {
             reason: FailureReason::DatabaseQueryFailed,
             source: e.context("Failed to get simple message".to_string()),
         })
@@ -47,7 +56,7 @@ pub async fn delete_message(
         Vec::new()
     } else if message.is_sent {
         let recipients =
-            email_db_client::contacts::get::fetch_db_recipients(&ctx.db, message.db_id)
+            email_db_client::contacts::get::fetch_db_recipients(&mut *tx, message.db_id)
                 .await
                 .map_err(|e| {
                     ProcessingError::Retryable(DetailedError {
@@ -67,7 +76,7 @@ pub async fn delete_message(
         // Received: the sender is the external party that may have a
         // CRM source row tied to this link.
         let sender =
-            email_db_client::contacts::get::get_sender_by_message_id(&ctx.db, message.db_id)
+            email_db_client::contacts::get::get_sender_by_message_id(&mut *tx, message.db_id)
                 .await
                 .map_err(|e| {
                     ProcessingError::Retryable(DetailedError {
@@ -78,24 +87,13 @@ pub async fn delete_message(
         sender.into_iter().filter_map(|c| c.email_address).collect()
     };
 
-    // Record CRM cleanup candidates BEFORE the delete commits, so a
-    // transient insert failure here doesn't strand the teardown after the
-    // message row is already gone (SQS retry would then short-circuit at
-    // the `None` arm above and never re-record). If the insert succeeds
-    // but the delete below fails, the nightly cleanup job's
-    // `link_has_any_message_with` pre-check sees the message still in
-    // place and skips — so the ordering is safe in both directions.
+    // Commit CRM cleanup candidates with the deletion so neither can survive
+    // a rollback alone. Deferred deletions retain the message; cleanup's
+    // `link_has_any_message_with` pre-check keeps its contacts until removal.
     if !crm_emails.is_empty() {
         let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
-        insert_crm_cleanup_candidates(ctx, link.id, &self_email, crm_emails).await?;
+        insert_crm_cleanup_candidates(&mut *tx, link.id, &self_email, crm_emails).await?;
     }
-
-    let mut tx = ctx.db.begin().await.map_err(|e| {
-        ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: anyhow::Error::from(e).context("Failed to begin transaction"),
-        })
-    })?;
 
     let result = async {
         let result = email_db_client::messages::delete::delete_message_with_tx(&mut tx, &message)
@@ -111,6 +109,11 @@ pub async fn delete_message(
     .await;
 
     let deletion = complete_transaction_with_processing_error(tx, result).await?;
+    if deletion == MessageDeletion::Deferred {
+        tracing::info!(event = "email_send.deletion_deferred", message_id = %message.db_id,
+            link_id = %link.id, "retained message for accepted delivery");
+        return Ok(());
+    }
     if deletion == MessageDeletion::AlreadyDeleted {
         tracing::debug!(
             message_id = %message.db_id,

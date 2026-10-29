@@ -10,5 +10,5 @@ export type NotifEventOneOfTwonineTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfTwonineTag = {
-  task_assigned: 'task_assigned',
+  inbox_reauth_required: 'inbox_reauth_required',
 } as const;

@@ -1,7 +1,9 @@
 import './block.css';
 
 import type { PortalScope } from '@core/component/ScopedPortal';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useTauri } from '@macro/tauri';
+import { Telemetry } from '@macro-inc/observability';
 import type { GetDocumentResponseDataViewLocation } from '@service-storage/generated/schemas/getDocumentResponseDataViewLocation';
 import { debounce, leading } from '@solid-primitives/scheduled';
 import { type BeforeLeaveEventArgs, useBeforeLeave } from '@solidjs/router';
@@ -168,7 +170,7 @@ function PdfDocumentBehavior(props: PdfDocumentProps) {
       !pdfViewer.root.isReady()
     )
       return;
-    void goToInitialLocation(pdf.locationParams());
+    fireAndForget(goToInitialLocation(pdf.locationParams()), 'pdf-location');
   });
 
   createEffect(() => {
@@ -183,7 +185,7 @@ function PdfDocumentBehavior(props: PdfDocumentProps) {
     targetedNavigationStarted = true;
     setPendingLocationParams(undefined);
     pdfViewer.root.instance()?.clearAllOverlays();
-    void goToLocationFromParams(params);
+    fireAndForget(goToLocationFromParams(params), 'pdf-location');
   });
 
   const [preprocessResource] = createResource(() => {
@@ -205,11 +207,22 @@ function PdfDocumentBehavior(props: PdfDocumentProps) {
     pdfViewer.replaceOverlays(coparse.overlays);
   });
 
+  const saveThenLeave = async (event: BeforeLeaveEventArgs) => {
+    try {
+      await savePdf();
+    } catch (error) {
+      Telemetry.error(error, { surface: 'pdf-save' });
+    } finally {
+      // A failed save must not trap the user on the page.
+      event.retry(true);
+    }
+  };
+
   const debouncedSave = leading(
     debounce,
     (event: BeforeLeaveEventArgs) => {
       event.preventDefault();
-      void savePdf().then(() => event.retry(true));
+      fireAndForget(saveThenLeave(event), 'pdf-save');
     },
     500
   );

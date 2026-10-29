@@ -572,7 +572,7 @@ export function createDatabaseRowsSource(props: {
     // New options live in the schema; read it again in the background
     // so they show as options without suspending the grid.
     if (createOptions)
-      void queryClient.invalidateQueries({
+      queryClient.invalidateQueries({
         queryKey: detailKey,
         exact: true,
       });

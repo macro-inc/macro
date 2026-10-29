@@ -1,0 +1,43 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+syntax = "proto2";
+package WAWebProtobufsGroupHistory;
+option go_package = "go.mau.fi/whatsmeow/proto/waGroupHistory";
+
+import "waE2E/WAWebProtobufsE2E.proto";
+import "waCommon/WACommon.proto";
+import "waWeb/WAWebProtobufsWeb.proto";
+
+message GroupHistory {
+	repeated WAWebProtobufsWeb.WebMessageInfo messages = 1;
+	repeated UnCountedAssociatedMessageList uncountedAssociatedMessageLists = 2;
+	repeated WAWebProtobufsWeb.WebMessageInfo commentMessages = 3;
+	repeated WAWebProtobufsWeb.WebMessageInfo outOfWindowPinnedMessages = 4;
+	optional WAWebProtobufsWeb.WebMessageInfo themeMessage = 5;
+}
+
+message UnCountedAssociatedMessageList {
+	repeated WAWebProtobufsWeb.WebMessageInfo messages = 1;
+	optional WACommon.MessageKey parentMessage = 2;
+	optional WAWebProtobufsE2E.MessageAssociation.AssociationType associationType = 3;
+}
+
+message WebMessageInfoWithMessageBytes {
+	optional WACommon.MessageKey key = 1;
+	optional bytes messageBytes = 2;
+}
+
+message UnCountedAssociatedMessageListWithMessageBytes {
+	repeated WebMessageInfoWithMessageBytes messages = 1;
+	optional WACommon.MessageKey parentMessage = 2;
+}
+
+message GroupHistoryWithMessageBytes {
+	repeated WebMessageInfoWithMessageBytes messages = 1;
+	repeated UnCountedAssociatedMessageListWithMessageBytes uncountedAssociatedMessageLists = 2;
+	repeated WebMessageInfoWithMessageBytes commentMessages = 3;
+	repeated WebMessageInfoWithMessageBytes outOfWindowPinnedMessages = 4;
+	optional WebMessageInfoWithMessageBytes themeMessage = 5;
+}

@@ -52,7 +52,7 @@
 		"lint:ci": "cd apps/web && bunx --bun @biomejs/biome ci --changed --no-errors-on-unmatched --error-on-warnings",
 		"check": "cd apps/web && tsc --noEmit --skipLibCheck --project tsconfig.json",
 		"lint": "cd apps/web && bunx --bun @biomejs/biome lint --skip=suspicious/noImportCycles",
-		"lint:oxlint": "cd apps/web && bunx --yes oxlint@1.73.0",
+		"lint:oxlint": "cd apps/web && npm exec --yes --package=oxlint@1.73.0 --package=oxlint-tsgolint@7.0.2004 -- oxlint --type-aware",
 		"format": "cd apps/web && bunx --bun @biomejs/biome format --write"
 	},
 	"trustedDependencies": [
@@ -69,6 +69,7 @@
 			"apps/web",
 			"apps/marketing",
 			"packages/observability",
+			"packages/code-mode-sdk",
 			"packages/email-renderer",
 			"packages/collaboration",
 			"packages/machine",
@@ -80,7 +81,8 @@
 			"services/bots/stripe-payment-bot",
 			"services/lexical-service",
 			"packages/spreadsheet",
-			"vendor/ironcalc/pkg"
+			"vendor/ironcalc/pkg",
+			"packages/sdk-docs"
 		],
 		"catalog": {
 			"loro-crdt": "1.16.3"

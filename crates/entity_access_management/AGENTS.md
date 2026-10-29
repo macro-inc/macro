@@ -17,6 +17,8 @@ events — adding/removing an entity from a project, and moving a project.
 ## Scope
 
 - Owns: propagating project-membership changes into `entity_access` rows.
+- Acquire the shared transaction guard before reading project sources or
+  descendants, so propagation cannot recreate a concurrently revoked grant.
 - Not here: checking access levels → `crates/entity_access`; the raw insert/
   delete helpers it calls → `crates/entity_access_db_utils`.
 

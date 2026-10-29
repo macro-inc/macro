@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM agent_preview_replica r WHERE expires_at < now() - interval '7 days' AND NOT EXISTS (SELECT 1 FROM agent_preview_lease l WHERE l.replica_id = r.id)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "ceaa13888777814ffe2a79e6364a374092315fbc86d53360c44d2d49df860586"
+}

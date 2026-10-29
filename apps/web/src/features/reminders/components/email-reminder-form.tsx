@@ -7,7 +7,7 @@ import {
   createCommandListController,
   Dialog,
   type ManagedDialogProps,
-  SegmentedControl,
+  Tabs,
 } from '@ui';
 import { createUniqueId, Show } from 'solid-js';
 import type {
@@ -126,8 +126,9 @@ export function EmailReminderForm(
           </Show>
         </CommandMenuShell.Body>
         {/* p-2 insets the h-8 pill so its 16px radius stays concentric
-            with the dialog's 24px corner. */}
-        <CommandMenuShell.Footer class="grid grid-cols-[1fr_auto_1fr] gap-2 p-2">
+            with the dialog's 24px corner. Touch has no keyboard hint, and a
+            phone is too narrow for fixed thirds, so the row wraps instead. */}
+        <CommandMenuShell.Footer class="grid grid-cols-[1fr_auto_1fr] gap-2 p-2 touch:flex touch:flex-wrap touch:items-center touch:justify-between">
           <div class="flex items-center gap-1 justify-self-start">
             <Button
               variant="ghost"
@@ -152,11 +153,21 @@ export function EmailReminderForm(
             </Show>
           </div>
           <span role="status" class="min-w-0 truncate text-center">
-            {props.pending ? 'Saving…' : '↑ ↓ to choose · Enter to snooze'}
+            <Show
+              when={props.pending}
+              fallback={
+                <span class="touch:hidden">
+                  ↑ ↓ to choose · Enter to snooze
+                </span>
+              }
+            >
+              Saving…
+            </Show>
           </span>
-          <SegmentedControl<EmailReminderCondition>
+          <Tabs<EmailReminderCondition>
+            touch="segmented"
             aria-label="Reminder condition"
-            class="justify-self-end"
+            class="justify-self-end whitespace-nowrap touch:ml-auto"
             value={props.condition}
             onChange={props.onConditionChange}
             options={[

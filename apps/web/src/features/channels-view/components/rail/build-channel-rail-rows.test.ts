@@ -172,6 +172,7 @@ describe('buildChannelSectionRows', () => {
 describe('buildChannelRailRows', () => {
   const expanded = {
     favorites: true,
+    team_channels: true,
     channels: true,
     direct_messages: true,
   };
@@ -182,7 +183,8 @@ describe('buildChannelRailRows', () => {
       expanded,
       {
         favorites: [],
-        channels: [acme, zeta],
+        team_channels: [acme, zeta],
+        channels: [],
         direct_messages: [],
         recents: [],
         threads: [],
@@ -196,9 +198,78 @@ describe('buildChannelRailRows', () => {
     );
 
     expect(rows.map((row) => row.id)).toEqual([
-      'section:channels',
+      'section:team_channels',
       'channel:acme',
       'channel:zeta',
+      'section:channels',
+      'section:direct_messages',
+    ]);
+  });
+
+  it('orders Team channels, Channels, then DMs, with labels only under Team channels', () => {
+    const privateChannel = channel('private', 'private', 'private');
+    const dm = channel('dm', 'Bob', 'direct_message');
+    const rows = buildChannelRailRows(
+      'browse',
+      expanded,
+      {
+        favorites: [],
+        team_channels: [deals],
+        channels: [privateChannel],
+        direct_messages: [dm],
+        recents: [],
+        threads: [],
+      },
+      buildChannelSectionRows({
+        labels: [label('l1', 'Enterprise', ['acme'])],
+        channels: [deals],
+        channelsById: byId,
+        isLabelOpen: () => true,
+      })
+    );
+
+    expect(rows.map((row) => row.id)).toEqual([
+      'section:team_channels',
+      'label:l1',
+      'channel:acme:label:l1',
+      'channel:deals',
+      'section:channels',
+      'channel:private',
+      'section:direct_messages',
+      'channel:dm',
+    ]);
+    expect(rows[5]).toMatchObject({
+      group: 'channels',
+      scope: 'channels',
+      localIndex: 0,
+    });
+  });
+
+  it('collapses each section on its own', () => {
+    const privateChannel = channel('private', 'private', 'private');
+    const rows = buildChannelRailRows(
+      'browse',
+      { ...expanded, team_channels: false },
+      {
+        favorites: [],
+        team_channels: [deals],
+        channels: [privateChannel],
+        direct_messages: [],
+        recents: [],
+        threads: [],
+      },
+      buildChannelSectionRows({
+        labels: [],
+        channels: [deals],
+        channelsById: byId,
+        isLabelOpen: () => true,
+      })
+    );
+
+    expect(rows.map((row) => row.id)).toEqual([
+      'section:team_channels',
+      'section:channels',
+      'channel:private',
       'section:direct_messages',
     ]);
   });
@@ -215,7 +286,8 @@ describe('buildChannelRailRows', () => {
       expanded,
       {
         favorites: [],
-        channels: [deals],
+        team_channels: [deals],
+        channels: [],
         direct_messages: [],
         recents: [],
         threads: [],
@@ -230,7 +302,7 @@ describe('buildChannelRailRows', () => {
         id: 'channel:acme:label:l1',
         localIndex: 1,
         labelId: 'l1',
-        scope: 'channels',
+        scope: 'team_channels',
       }),
       expect.objectContaining({
         kind: 'conversation',
@@ -247,7 +319,8 @@ describe('buildChannelRailRows', () => {
       expanded,
       {
         favorites: [],
-        channels: [acme],
+        team_channels: [acme],
+        channels: [],
         direct_messages: [],
         recents: [zeta, acme],
         threads: [],
@@ -264,7 +337,8 @@ describe('buildChannelRailRows', () => {
       expanded,
       {
         favorites: [],
-        channels: [acme],
+        team_channels: [acme],
+        channels: [],
         direct_messages: [],
         recents: [],
         threads: [dm, acme],
@@ -310,10 +384,16 @@ it('renders a channel in every matching smart tag with unique navigation IDs, ex
   ).toEqual(['deals']);
   const rows = buildChannelRailRows(
     'browse',
-    { favorites: true, channels: true, direct_messages: true },
+    {
+      favorites: true,
+      team_channels: true,
+      channels: true,
+      direct_messages: true,
+    },
     {
       favorites: [],
-      channels: [acme, zeta, deals],
+      team_channels: [acme, zeta, deals],
+      channels: [],
       direct_messages: [],
       recents: [],
       threads: [],

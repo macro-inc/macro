@@ -91,6 +91,7 @@ fn preconditions() -> Step<Run> {
     Step::new("Require the PR to be ready to merge")
         .run(concat!(
             include_str!("scripts/ios_native_tree.sh"),
+            include_str!("scripts/pr_merge_commit.sh"),
             include_str!("scripts/ios_release_preconditions.sh")
         ))
         .shell("bash")
@@ -123,6 +124,7 @@ fn head_guard() -> Step<Run> {
     Step::new("Require the PR's native code to be unchanged since the build")
         .run(concat!(
             include_str!("scripts/ios_native_tree.sh"),
+            include_str!("scripts/pr_merge_commit.sh"),
             include_str!("scripts/ios_release_head_guard.sh")
         ))
         .shell("bash")

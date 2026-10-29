@@ -1,17 +1,17 @@
 import { SearchBar, ViewSidebar } from '@app/components/view-shell';
+import { t } from '@app/lib/i18n';
 import type { SettingsTab } from '@core/constant/SettingsState';
 import type { SettingsTabGroup } from '@core/constant/settingsTabsConfig';
-import SignOutIcon from '@phosphor/sign-out.svg';
 import { pressHandlers } from '@ui';
-import { For, Show } from 'solid-js';
+import { children, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { SettingsSearchResult } from '../core/settings-search';
 import { SettingsSearchResults } from './settings-search-results';
 
 /**
  * Settings' inner navigation, laid out like every other view's sidebar: a
- * title bar, a search field, the grouped section pills, and Log out pinned to
- * the bottom.
+ * title bar, a search field, the grouped section pills, and an optional
+ * footer action pinned to the bottom.
  */
 export function SettingsSidebar(props: {
   groups: SettingsTabGroup[];
@@ -22,26 +22,30 @@ export function SettingsSidebar(props: {
   onSearchQueryChange: (query: string) => void;
   isItemActive: (tab: SettingsTab) => boolean;
   onSelect: (tab: SettingsTab) => void;
-  onLogout: () => void;
+  footer?: JSX.Element;
 }) {
+  const footer = children(() => props.footer);
   let root: HTMLDivElement | undefined;
   return (
-    <ViewSidebar.Root ref={root} aria-label="Settings navigation">
+    <ViewSidebar.Root
+      ref={root}
+      aria-label={t('settingsNav.settingsNavigation')}
+    >
       <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton class="shrink-0" />
-          <ViewSidebar.Title>Settings</ViewSidebar.Title>
+          <ViewSidebar.Title>{t('settingsNav.settings')}</ViewSidebar.Title>
         </div>
       </ViewSidebar.Header>
 
       <ViewSidebar.Primary>
         <SearchBar
-          label="Search settings"
-          placeholder="Search settings"
+          label={t('settingsNav.searchSettings')}
+          placeholder={t('settingsNav.searchSettings')}
           autocomplete="off"
           value={props.searchQuery}
           onValueChange={props.onSearchQueryChange}
-          class="border-0 bg-ink/5 shadow-none"
+          size="sm"
           onEscape={() => props.onSearchQueryChange('')}
           onKeyDown={(event) => {
             if (event.key === 'ArrowDown') {
@@ -71,7 +75,7 @@ export function SettingsSidebar(props: {
             when={props.groups.length > 0}
             fallback={
               <div class="py-4 text-center text-sm text-ink-muted">
-                No settings found
+                {t('settingsNav.noSettingsFound')}
               </div>
             }
           >
@@ -104,14 +108,11 @@ export function SettingsSidebar(props: {
         </Show>
       </ViewSidebar.Content>
 
-      <ViewSidebar.Footer class="py-(--sidebar-gutter)">
-        <ViewSidebar.Item {...pressHandlers(() => props.onLogout())}>
-          <ViewSidebar.Icon>
-            <SignOutIcon class="size-4" />
-          </ViewSidebar.Icon>
-          <span class="truncate">Log out</span>
-        </ViewSidebar.Item>
-      </ViewSidebar.Footer>
+      <Show when={footer()}>
+        <ViewSidebar.Footer class="py-(--sidebar-gutter)">
+          {footer()}
+        </ViewSidebar.Footer>
+      </Show>
     </ViewSidebar.Root>
   );
 }
