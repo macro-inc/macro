@@ -296,7 +296,10 @@ impl FocusStore for FocusPgRepository {
             r#"
             SELECT f.thread_id
             FROM email_thread_focus f
-            JOIN email_threads t ON t.id = f.thread_id
+            -- Joining on the inbox too lets the planner walk each inbox's recent
+            -- signal threads (idx_email_threads_signal_view) instead of every
+            -- Focus row the inbox ever had.
+            JOIN email_threads t ON t.id = f.thread_id AND t.link_id = f.link_id
             WHERE f.link_id IN (
                     -- The owner's inboxes, as Soup lists them: their own and linked ones.
                     SELECT el.id FROM email_links el WHERE el.macro_id = $1
