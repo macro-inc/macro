@@ -50,13 +50,14 @@ test('pastes Macro links and Markdown into a code block verbatim', async ({
   await expect(code).toHaveText(channelUrl);
   // Parsing this as Markdown stripped the heading, list, and bold syntax.
   await paste(`\n${markdown}`);
-  await expect(code).toHaveText(`${channelUrl}\n${markdown}`, {
-    useInnerText: true,
-  });
+  await expect.poll(() => code.innerText()).toBe(`${channelUrl}\n${markdown}`);
 
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
-  await expect(page.getByLabel('Sent message')).toHaveText(
-    `\`\`\`plaintext\n${channelUrl}\n${markdown}\n\`\`\``
-  );
+  // The trailing paragraph after the code block sends as blank lines.
+  await expect
+    .poll(async () =>
+      (await page.getByLabel('Sent message').textContent())?.trimEnd()
+    )
+    .toBe(`\`\`\`plaintext\n${channelUrl}\n${markdown}\n\`\`\``);
   expect(errors).toEqual([]);
 });
