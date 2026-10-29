@@ -20,16 +20,13 @@ import {
   taskSubmissionDraftStorage,
   taskSubmissionKey,
 } from '@block-md/util/taskComposerSubmissions';
-import { useSplitLayout } from '@components/app/split-layout/layout';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { COMPOSER_STORAGE_CLEARED } from '@core/auth/clear-composer-storage';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
+import type { MentionLinkResolver } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
 import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
-import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildSimpleEntityUrl } from '@core/util/url';
@@ -44,21 +41,51 @@ import { useUserTeamsQuery } from '@queries/team/teams';
 import { debounce } from '@solid-primitives/scheduled';
 import { useQueryClient } from '@tanstack/solid-query';
 import type { LexicalEditor } from 'lexical';
-import { createEffect, createSignal, onCleanup, onMount } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  onCleanup,
+  onMount,
+} from 'solid-js';
 import { reconcile, unwrap } from 'solid-js/store';
 import { tabbable } from 'tabbable';
 import type { ComposeTaskProps, ComposeTaskSuccess } from '../core/types';
 
 type ComposerTagLayoutMode = 'bottom' | 'title';
 
+/** A task to open, with the snapshot that renders it before it syncs. */
+type OpenableTask = { id: string; optimisticSnapshot?: Uint8Array };
+
+/** App capabilities the composer uses; `compose-task.tsx` supplies them. */
+export type TaskComposerHost = {
+  userId: Accessor<string | undefined>;
+  resolveAppLink: MentionLinkResolver | undefined;
+  /** Whether the composer floats over the layout rather than filling a split. */
+  isPopover: Accessor<boolean>;
+  setDisplayName(name: string): void;
+  close(): void;
+  /** Opens another composer on a recovered submission. */
+  openComposer(
+    params: Pick<ComposeTaskProps, 'composerContext' | 'recoveredDraftId'>
+  ): void;
+  openTask(
+    task: OpenableTask,
+    options: { newSplit: boolean; referredFrom: 'launcher' | null }
+  ): void;
+  /** Holds a new split for a task that is still being created. */
+  openPendingTask(): { show(task: OpenableTask): void; cancel(): void };
+};
+
 /**
  * Draft, property, and submission state for one task composer, shared by the
  * desktop and mobile views through the `TaskComposer` parts.
  */
-export function createTaskComposer(props: ComposeTaskProps) {
-  const splitPanel = useSplitPanelOrThrow();
-  const { popoverSplit, openWithSplit } = useSplitLayout();
-  const currentUserId = useUserId();
+export function createTaskComposer(
+  props: ComposeTaskProps,
+  host: TaskComposerHost
+) {
+  const currentUserId = host.userId;
   const queryClient = useQueryClient();
   const draftOwner = currentUserId() ?? '';
   const submissions = createTaskSubmissionList(
@@ -320,32 +347,21 @@ export function createTaskComposer(props: ComposeTaskProps) {
       toast.failure('Failed to copy link to clipboard');
     }
 
-    const snapshotParams = optimisticSnapshot
-      ? { params: { optimisticSnapshot }, preserveParams: true as const }
-      : {};
-
+    const task = { id: documentId, optimisticSnapshot };
     toast.success('Task created', {
       subtext: linkCopied ? 'Link copied' : undefined,
       actions: [
         {
           label: 'Open',
           icon: ArrowSquareOutIcon,
-          onClick: () => {
-            openWithSplit(
-              { type: 'task', id: documentId, ...snapshotParams },
-              { referredFrom: null }
-            );
-          },
+          onClick: () =>
+            host.openTask(task, { newSplit: false, referredFrom: null }),
         },
         {
           label: 'Open (New Split)',
           icon: SplitIcon,
-          onClick: () => {
-            openWithSplit(
-              { type: 'task', id: documentId, ...snapshotParams },
-              { referredFrom: null, preferNewSplit: true }
-            );
-          },
+          onClick: () =>
+            host.openTask(task, { newSplit: true, referredFrom: null }),
         },
       ],
     });
@@ -353,13 +369,9 @@ export function createTaskComposer(props: ComposeTaskProps) {
 
   const recoverDraft = (id: string) => {
     if (currentUserId() !== draftOwner) return;
-    popoverSplit({
-      type: 'component',
-      id: 'task-compose',
-      params: {
-        composerContext: props.composerContext,
-        recoveredDraftId: id,
-      },
+    host.openComposer({
+      composerContext: props.composerContext,
+      recoveredDraftId: id,
     });
   };
 
@@ -390,7 +402,7 @@ export function createTaskComposer(props: ComposeTaskProps) {
     const definitions = createDefinitions();
     const snapshot = draftSnapshot();
     const shareWithTeam = sharesWithTeam();
-    let split: ReturnType<typeof openWithSplit>['split'];
+    let pendingSplit: ReturnType<typeof host.openPendingTask> | undefined;
     let started = false;
     let createdTask: Awaited<ReturnType<typeof createTaskWithProperties>> =
       null;
@@ -432,13 +444,10 @@ export function createTaskComposer(props: ComposeTaskProps) {
                   if (editor) initializeEditorEmpty(editor);
                   requestAnimationFrame(() => titleEditorRoot?.focus());
                 } else {
-                  splitPanel.handle.close();
+                  host.close();
                   props.onClose?.();
                   if (inSplit) {
-                    split = openWithSplit(
-                      { type: 'component', id: 'loading' },
-                      { referredFrom: 'launcher', preferNewSplit: true }
-                    ).split;
+                    pendingSplit = host.openPendingTask();
                   } else {
                     props.onCreateStart?.({
                       title: taskTitle,
@@ -466,7 +475,7 @@ export function createTaskComposer(props: ComposeTaskProps) {
         return;
       }
       if (!inSplit && !keepOpen) props.onCreateFailure?.();
-      split?.goBack();
+      pendingSplit?.cancel();
       if (currentUserId() === draftOwner) {
         toast.failure('Task creation was not confirmed', {
           subtext:
@@ -481,23 +490,11 @@ export function createTaskComposer(props: ComposeTaskProps) {
     if (currentUserId() !== draftOwner) return;
     const { documentId, initialSnapshot } = createdTask;
     if (inSplit) {
-      const snapshotParams = initialSnapshot
-        ? {
-            params: { optimisticSnapshot: initialSnapshot },
-            preserveParams: true as const,
-          }
-        : {};
-      if (split) {
-        split.replace({
-          next: { type: 'task', id: documentId, ...snapshotParams },
-          mergeHistory: true,
-          referredFrom: 'launcher',
-        });
+      const task = { id: documentId, optimisticSnapshot: initialSnapshot };
+      if (pendingSplit) {
+        pendingSplit.show(task);
       } else {
-        openWithSplit(
-          { type: 'task', id: documentId, ...snapshotParams },
-          { referredFrom: 'launcher', preferNewSplit: true }
-        );
+        host.openTask(task, { newSplit: true, referredFrom: 'launcher' });
       }
     } else if (props.onSuccess) {
       props.onSuccess({ documentId, title: taskTitle, content: taskContent });
@@ -514,19 +511,16 @@ export function createTaskComposer(props: ComposeTaskProps) {
   const continueInSplit = () => submit(true);
 
   const close = () => {
-    splitPanel.handle.close();
+    host.close();
     props.onClose?.();
   };
 
   const openSimilarTask = (taskId: string) => {
     // Closing snapshots the draft (incl. these results); open the existing task
     // in a new split so the composer's work isn't lost.
-    splitPanel.handle.close();
+    host.close();
     props.onClose?.();
-    openWithSplit(
-      { type: 'task', id: taskId },
-      { referredFrom: null, preferNewSplit: true }
-    );
+    host.openTask({ id: taskId }, { newSplit: true, referredFrom: null });
   };
 
   const clearDraft = () => {
@@ -576,7 +570,7 @@ export function createTaskComposer(props: ComposeTaskProps) {
   };
 
   onMount(() => {
-    splitPanel.handle.setDisplayName('New task');
+    host.setDisplayName('New task');
     const container = containerRef();
     if (container) {
       attachHotkeys(container);
@@ -599,7 +593,7 @@ export function createTaskComposer(props: ComposeTaskProps) {
   });
 
   const editorConfig = buildConfig('markdown')
-    .withAppLinkResolver(useMacroMentionLinkResolver())
+    .withAppLinkResolver(host.resolveAppLink)
     .withMentions()
     .withTags({
       applyTargetLabel: 'Task',
@@ -629,8 +623,7 @@ export function createTaskComposer(props: ComposeTaskProps) {
     });
 
   setBodyEditor(editorConfig.buildHandle().lexical);
-  const isPopover = () => splitPanel.handle.isPopover();
-  const portalScope = (): PortalScope => (isPopover() ? 'local' : 'block');
+  const portalScope = (): PortalScope => (host.isPopover() ? 'local' : 'block');
 
   return {
     props,
@@ -649,7 +642,7 @@ export function createTaskComposer(props: ComposeTaskProps) {
     },
     editorConfig,
     portalScope,
-    isPopover,
+    isPopover: host.isPopover,
     isCreating,
     errorMessage,
     setErrorMessage,

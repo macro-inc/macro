@@ -1,14 +1,13 @@
 import { onElementConnect } from '@core/util/onElementConnect';
 import { cn, EntityComposer } from '@ui';
 import { createSignal, onCleanup } from 'solid-js';
-import type { ComposeTaskProps } from '../core/types';
-import { createTaskComposer } from '../primitives/task-composer';
+import type { TaskComposerController } from '../primitives/task-composer';
 import { TaskComposer } from './task-composer-parts';
 
 /** The task composer in the touch bottom sheet. */
-export function MobileTaskComposer(props: ComposeTaskProps) {
-  const composer = createTaskComposer(props);
-
+export function MobileTaskComposer(props: {
+  composer: TaskComposerController;
+}) {
   // The keyboard leaves too little room for the whole composer, so the header
   // pins to the top of the sheet's scroll to keep Create Task in reach. It
   // only takes a background while pinned over content; at rest it would show
@@ -30,7 +29,7 @@ export function MobileTaskComposer(props: ComposeTaskProps) {
   };
 
   return (
-    <TaskComposer.Root composer={composer}>
+    <TaskComposer.Root composer={props.composer}>
       <EntityComposer.Header
         ref={observeHeader}
         class={cn(

@@ -1,13 +1,13 @@
 import { EntityComposer } from '@ui';
-import type { ComposeTaskProps } from '../core/types';
-import { createTaskComposer } from '../primitives/task-composer';
+import type { TaskComposerController } from '../primitives/task-composer';
 import { TaskComposer } from './task-composer-parts';
 
 /** The task composer in a split or the desktop dialog. */
-export function DesktopTaskComposer(props: ComposeTaskProps) {
-  const composer = createTaskComposer(props);
+export function DesktopTaskComposer(props: {
+  composer: TaskComposerController;
+}) {
   return (
-    <TaskComposer.Root composer={composer}>
+    <TaskComposer.Root composer={props.composer}>
       <EntityComposer.Header>
         <div class="flex-1 flex items-center">
           <TaskComposer.ContinueInSplit />
