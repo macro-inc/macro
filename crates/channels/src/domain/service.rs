@@ -353,6 +353,7 @@ where
                 team_id: None,
                 auto_join_team: false,
                 participants: req.recipients,
+                is_support: false,
             },
         )
         .await
