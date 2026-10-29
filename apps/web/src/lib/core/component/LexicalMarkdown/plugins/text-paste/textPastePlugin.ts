@@ -271,6 +271,16 @@ function registerTextPastePlugin(
           const pastedText: string =
             event.clipboardData?.getData('text/plain') || '';
 
+          // Code blocks hold plain text, so paste it verbatim: the code
+          // highlighter drops mentions and chips inserted there, and parsing
+          // the text as Markdown strips its syntax. Files still attach.
+          if ($isSelectionInCode()) {
+            if (!pastedText || event.clipboardData?.files.length) return false;
+            event.preventDefault();
+            $getSelection()?.insertRawText(pastedText);
+            return true;
+          }
+
           // Check for theme JSON before checking for Macro URL
           const themeV3 =
             parseThemeV3Json(pastedText) ??
@@ -294,11 +304,7 @@ function registerTextPastePlugin(
           const githubPr = parsePastedGithubPrUrl(pastedText);
           if (githubPr && editor.hasNode(PullRequestMentionNode)) {
             const selection = $getSelection();
-            if (
-              !$isRangeSelection(selection) ||
-              !selection.isCollapsed() ||
-              $isSelectionInCode()
-            ) {
+            if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
               return false;
             }
 
@@ -313,11 +319,7 @@ function registerTextPastePlugin(
             editor.hasNode(BookingLinkMentionNode)
           ) {
             const selection = $getSelection();
-            if (
-              !$isRangeSelection(selection) ||
-              !selection.isCollapsed() ||
-              $isSelectionInCode()
-            ) {
+            if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
               return false;
             }
 

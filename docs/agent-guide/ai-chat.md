@@ -1595,9 +1595,10 @@ choose **Reply to this** above the selection. The composer inserts a single-line
 **Replying to** preview with the same quote-reply styling as channel replies.
 Click the preview to open the full **Referenced text** viewer. While editable,
 hover the preview for its menu: **Copy**, **Convert to text**, or **Delete**.
-A plain-text paste over 1500 characters collapses into a **pasted** chip that
-opens the same viewer, titled **Pasted text**. Text in either viewer can be
-drag-selected and copied, from the composer and from sent messages.
+A plain-text paste over 1500 characters outside a code block collapses into a
+**pasted** chip that opens the same viewer, titled **Pasted text**. Text in
+either viewer can be drag-selected and copied, from the composer and from sent
+messages.
 Selecting text in the composer or outside the transcript must not show the reply
 button; clearing the transcript selection dismisses it.
 
