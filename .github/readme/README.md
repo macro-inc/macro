@@ -1,5 +1,16 @@
 # README assets
 
+## Header
+
+`header.png` is the approved 2700×1050 banner: Julia’s supplied white Macro
+logo and wordmark above a fresh capture of the internal Sheets Improvements
+project board. The logo is placed at its native 867-pixel width; the board is
+downscaled from a 3010×916 crop to 2220 pixels wide. Neither raster is upscaled.
+The capture uses existing task content and statuses, with window chrome and
+the pointer excluded by cropping. No UI content was repainted or reconstructed.
+The editable composition and source assets remain in the local
+`Macro README header/2026-10-29-corrected-brand/` design package.
+
 ## Product screenshots
 
 The root README uses nine product screenshots. The October 29 final gallery
@@ -45,7 +56,7 @@ conversations. Use a populated pipeline board with fictional sample companies
 for CRM and keep the root README's alt text consistent with each displayed
 view. Review every saved image before staging it.
 Previous Chat, Tasks, Docs, and Agents JPEGs remain available but are no longer
-referenced by the root README. The banner is unchanged. A booking-link companion image remains optional.
+referenced by the root README. A booking-link companion image remains optional.
 
 The marketing homepage's separate screenshot copies under
 `apps/marketing/src/app/assets/desktop-feature-screens` are independent.

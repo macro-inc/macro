@@ -1,6 +1,6 @@
 <div align="center">
   <a target="_blank" href="https://macro.com">
-    <img width="2195" height="721" alt="Frame 11" src="https://github.com/user-attachments/assets/50405352-785e-4984-b24f-544e89731acb" />
+    <img width="2700" height="1050" alt="Macro — Sheets Improvements project board with work grouped by status" src=".github/readme/header.png" />
   </a>
 
   <br />
