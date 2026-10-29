@@ -571,10 +571,11 @@ available in all channels should refresh there without reloading the channel.
 ![Integrations overview with example connections](assets/settings-integrations.png)
 
 With `pipedream-mcp` enabled, Settings → Integrations is one searchable list
-styled like the Drive and Tasks lists: single-line rows with Name (icon, name,
-and a muted line on what it does in Macro or which accounts are connected),
-Category (tag pills like email tags; several per row, e.g. Email, Calendar),
-Status, and the row's actions. There is one row per integration; integrations in
+styled like the Drive and Tasks lists, spanning nearly the full settings page
+width. Rows are separated by faint dividers and have Name (icon and name, with a
+smaller, fainter second line on what it does in Macro or which accounts are
+connected), Category (tag pills like email tags; several per row, e.g. Email,
+Calendar), Status, and the row's actions. There is one row per integration; integrations in
 use (connected, off, or needing attention) sort to the top, then the rest, then
 the app catalog. Below a 640px list width Category and Status hide and a status
 dot sits beside the name.

@@ -260,8 +260,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Email draft reads compare server generations before choosing cached delivery state over a restored working copy; only a definitive first-submission rejection permits local send recovery without server cancellation.
 - Compose settings pages with `features/settings/primitives.tsx` so section headings,
   raised composer cards (`SettingsSurface`), row spacing, and control shapes stay
-  consistent; never hand-build a flat `bg-ink/*` card. Keep Integrations on the
-  shared page width and side padding.
+  consistent; never hand-build a flat `bg-ink/*` card. Integrations is the one
+  settings page that spans nearly the full width, for its list columns.
 - Preserve email signature HTML through import, preview, and source editing;
   mount Quill only for explicit Rich text editing and confirm custom-layout
   conversion. Keep the settings and composer preview on the same sanitized HTML

@@ -111,7 +111,11 @@ function ConnectionsContent(props: IntegrationsViewProps) {
           when={ready() && view.provider()}
           keyed
           fallback={
-            <SettingsPage title="Integrations" bodyClass="mt-6 gap-4">
+            <SettingsPage
+              title="Integrations"
+              bodyClass="mt-6 gap-4"
+              contentClass="max-w-none px-8"
+            >
               <Show when={error() || partialError()}>
                 <div
                   role="status"
@@ -287,7 +291,10 @@ function IntegrationsOverview(
         class="@container/integrations -mx-3 flex min-w-0 flex-col"
       >
         <IntegrationsListHeader />
-        <div role="rowgroup" class="flex flex-col">
+        <div
+          role="rowgroup"
+          class="flex flex-col [&>[role=row]+[role=row]]:border-t [&>[role=row]+[role=row]]:border-ink/5"
+        >
           <For each={inUse()}>
             {(item) => <IntegrationItemRow item={item} />}
           </For>

@@ -100,7 +100,7 @@ function Columns(props: {
       role={props.role}
       class={cn(
         'grid items-center gap-3 grid-cols-[minmax(0,1fr)_auto]',
-        '@[640px]/integrations:grid-cols-[minmax(0,1fr)_13rem_7rem_12.5rem]',
+        '@[640px]/integrations:grid-cols-[minmax(0,1fr)_15rem_7rem_12.5rem]',
         props.class
       )}
     >
@@ -113,7 +113,7 @@ export function IntegrationsListHeader() {
   return (
     <Columns
       role="row"
-      class="h-8 px-3 text-xs font-medium text-ink-extra-muted"
+      class="h-8 border-b border-ink/5 px-3 text-xs font-medium text-ink-extra-muted"
     >
       <span role="columnheader">Name</span>
       <span role="columnheader" class="hidden @[640px]/integrations:block">
@@ -146,7 +146,7 @@ export function IntegrationListRow(props: {
   return (
     <Columns
       role="row"
-      class="min-h-10 rounded-xl px-3 py-1.5 text-sm touch:min-h-[44px] not-touch:hover:bg-list-hover focus-within:bg-list-hover"
+      class="min-h-14 rounded-lg px-3 py-2 text-sm not-touch:hover:bg-list-hover focus-within:bg-list-hover"
     >
       <div role="cell" class="flex min-w-0 items-center gap-3">
         <span
@@ -158,24 +158,26 @@ export function IntegrationListRow(props: {
         >
           {props.icon}
         </span>
-        <div class="flex min-w-0 flex-1 items-baseline gap-2">
+        <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+          <div class="flex min-w-0 items-center gap-2">
+            <span
+              class={cn(
+                'min-w-0 truncate font-medium',
+                props.muted ? 'text-ink-muted' : 'text-ink'
+              )}
+            >
+              {props.name}
+            </span>
+            <Show when={dotState()}>
+              {(state) => (
+                <span class="flex @[640px]/integrations:hidden">
+                  <StatusDot state={state()} label={word()} />
+                </span>
+              )}
+            </Show>
+          </div>
           <span
-            class={cn(
-              'shrink-0 font-medium',
-              props.muted ? 'text-ink-muted' : 'text-ink'
-            )}
-          >
-            {props.name}
-          </span>
-          <Show when={dotState()}>
-            {(state) => (
-              <span class="self-center @[640px]/integrations:hidden">
-                <StatusDot state={state()} label={word()} />
-              </span>
-            )}
-          </Show>
-          <span
-            class="ph-no-capture min-w-0 truncate text-ink-muted"
+            class="ph-no-capture min-w-0 truncate text-xs text-ink-extra-muted"
             title={props.description}
           >
             {props.description}
