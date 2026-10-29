@@ -100,7 +100,10 @@ function EntityCollectionPropertyBody(props: {
   const isDraggingOver = () => dropTarget?.isOver() ?? false;
   const isDragging = () => dropTarget?.isDragging() ?? false;
   const canDrop = () => dropTarget?.canDrop() ?? false;
-  const isRejected = () => dropTarget?.isRejected() ?? false;
+  const showRejection = () =>
+    (dropTarget?.isRejected() ?? false) &&
+    (dropTarget?.isPointerOver() ?? false);
+  const dropZoneHeight = () => entities().length > 0 ? 'h-18' : 'h-16';
   const rejectionMessage = () => (
     <span class="flex items-center gap-1.5 text-xs text-ink-extra-muted">
       <ProhibitIcon class="size-3.5 shrink-0" />
@@ -123,7 +126,7 @@ function EntityCollectionPropertyBody(props: {
     saveReferences(entities().filter((entity) => entity.entity_id !== entityId));
 
   return (
-    <div class="group/property-row min-w-0 py-2">
+    <div class="group/property-row min-w-0">
       <div class="flex items-center justify-between gap-2">
         <span
           class="min-w-0 truncate text-ink-muted"
@@ -153,7 +156,7 @@ function EntityCollectionPropertyBody(props: {
         role="group"
         aria-label={props.property.displayName}
         aria-busy={isSaving()}
-        class={cn('mt-1 min-w-0 rounded-lg', isRejected() && 'cursor-not-allowed')}
+        class={cn('mt-1 min-w-0 rounded-lg', showRejection() && 'cursor-not-allowed')}
       >
         <div class="flex flex-wrap gap-1.5">
           <For
@@ -162,7 +165,7 @@ function EntityCollectionPropertyBody(props: {
               <Show when={!props.loading && !canDrop()}>
                 <CollectionEmptyState
                   message={
-                    isRejected() ? rejectionMessage() : t('common.emptyCollection')
+                    showRejection() ? rejectionMessage() : t('common.emptyCollection')
                   }
                   action={
                     <Show when={!isReadOnly() && !isDragging()}>
@@ -204,19 +207,20 @@ function EntityCollectionPropertyBody(props: {
             )}
           </For>
         </div>
-        <Show when={isRejected() && entities().length > 0}>
+        <Show when={showRejection() && entities().length > 0}>
           <div class="mt-1">{rejectionMessage()}</div>
         </Show>
         <div
           aria-hidden={!canDrop()}
           class={cn(
             'overflow-hidden transition-all duration-150 ease-out motion-reduce:transition-none',
-            canDrop() ? 'h-18 opacity-100' : 'h-0 opacity-0'
+            canDrop() ? `${dropZoneHeight()} opacity-100` : 'h-0 opacity-0'
           )}
         >
           <div
             class={cn(
-              'mt-2 flex h-16 items-center justify-center gap-2 rounded-lg border border-dashed text-xs text-accent',
+              'flex h-16 items-center justify-center gap-2 rounded-lg border border-dashed text-xs text-accent',
+              entities().length > 0 && 'mt-2',
               isDraggingOver()
                 ? 'border-accent bg-accent/10'
                 : 'border-accent/40 bg-accent/5'
