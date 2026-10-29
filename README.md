@@ -131,6 +131,12 @@ We wanted everything in a single markdown editor without switching tools.
 
 <br />
 
+# Databases
+
+[Placeholder]
+
+<br />
+
 # CRM that keeps itself up to date
 
 The problem with standalone CRM is the same as with task trackers: it's not up to date. The CRM only partially reflects reality, so if you want to know what the latest status on a deal is you still have to message the AE/SDR and ask for context. CRMs are also too rigid and closed-source, while DIY CRMs in Airtable/Notion don't provide email aggregation by Company/Contact/Deal that is the core feature of CRM.
