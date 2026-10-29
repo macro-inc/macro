@@ -807,6 +807,10 @@ databases, and forms support toggling; database and form favorites appear in Dri
 sidebar. Individual channel messages and pull requests are not favoritable. A
 favorited agent session disappears from the list once the session is deleted.
 
+Channel favorites show the same channel picture as regular channel rows, with
+the channel icon as a fallback when no picture is available. Direct-message
+favorites keep the other participant's avatar.
+
 With the GraphQL local cache enabled, cached favorites remain visible when offline
 or when a background refresh fails. Toggle and reorder success while offline means
 the change was accepted into the durable queue, not yet confirmed by the server.
