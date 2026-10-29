@@ -84,7 +84,9 @@ standalone Cursor entry points.
 
 ## Checks
 
-- `cargo test -p agent_harness` (`SQLX_OFFLINE` unset).
+- `cargo nextest run -p agent_harness --lib --test-threads=2` (`SQLX_OFFLINE`
+  unset). Use CI's process isolation for the full database-backed suite so each
+  test has its own process and runtime.
 
 ## Related
 
