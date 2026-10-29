@@ -8,7 +8,6 @@ import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import { CollectionEmptyState } from '@property/component/CollectionEmptyState';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Badge, buttonClasses, Layer } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
@@ -176,24 +175,22 @@ export function TagsRow(props: {
           </>
         }
       >
-        <CollectionEmptyState
-          message={t('common.emptyTags')}
-          action={
-            <Show when={props.canEdit}>
-              <TagPicker
-                docTags={docTags}
-                triggerClass={buttonClasses({
-                  variant: 'outline',
-                  size: 'xs',
-                })}
-                triggerLabel={t('common.addTags')}
-              >
-                <PlusIcon class="size-4" />
-                {t('common.add')}
-              </TagPicker>
-            </Show>
-          }
-        />
+        <div class="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <span class="text-xs text-ink-muted">{t('common.emptyTags')}</span>
+          <Show when={props.canEdit}>
+            <TagPicker
+              docTags={docTags}
+              triggerClass={buttonClasses({
+                variant: 'ghost',
+                size: 'xs',
+              })}
+              triggerLabel={t('common.addTags')}
+            >
+              <PlusIcon class="size-3.5" />
+              {t('common.addTags')}
+            </TagPicker>
+          </Show>
+        </div>
       </Show>
       <TagEditorDialog
         open={editorMode() !== null}

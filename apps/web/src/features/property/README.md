@@ -13,16 +13,19 @@ Debug page: `/props-debug` (LOCAL_ONLY).
 
 Property rows use a 4px vertical gap, including inline Tags and the boundary
 between regular fields and collection fields.
+Keep 16px between the property list and the bottom Add property action.
 
 `side-panel/properties/EntityCollectionProperty.tsx` renders non-user, multi-entity
-properties. Empty collections show plain, full-width copy without a resting
-border or padded box. The ghost Add action stays beside the property name for
-both empty and populated collections. During app-item drags, compatible
-collections expand into full-width dashed dropzones with the same
-label-to-content gap.
+properties. Empty collections show only the property header, with no placeholder
+or reserved content area. A labeled ghost Add button aligns with the shared
+value-selector column for both empty and populated collections. During compatible
+app-item drags, the property name uses accent ink and a small downward arrow
+while the row stays compact. Hovering anywhere on that property reveals its
+full-width dashed dropzone over 300ms; reduced motion disables the transition.
+Other properties do not expand. This first pass uses direct hover, not pointer proximity.
 Incompatible collections keep their Add actions visible and retain their height.
-Incompatible or unavailable collections show no rejection feedback. The same
-target covers empty and populated bodies, and geometry updates during expansion.
+Incompatible or unavailable collections show no rejection feedback. One target
+covers the name, values, and expanded dropzone, with bounds refreshed as it resizes.
 Drops append a reference using the same entity-type conversion as the picker,
 ignore duplicate references and the owning entity's type-and-ID pair, and retain
 existing values. Picker saves, drops, chip removal, and row removal share a pending
@@ -36,12 +39,12 @@ The accessible loading-status region stays mounted outside the collapsing drop
 feedback. Native file uploads are not supported here; the Add action remains
 available for keyboard and touch.
 
-`component/CollectionEmptyState.tsx` is local to this feature and shared by
-property collections and Tags. Drop handling and save callbacks stay in callers.
+Collection drop handling and save callbacks stay in the property callers.
 
-The dedicated Tags section uses the same plain, full-width empty-state message
-and outline Add action below it. The existing tag picker handles the action,
-and read-only sections omit it.
+The dedicated Tags section uses a plain muted “No tags added yet” message
+and a small ghost Add tags action, without a card, title, or description.
+The existing tag picker handles the action; read-only sections omit it.
+Inline Tags property rows retain their compact treatment.
 
 ## Side-panel header actions
 

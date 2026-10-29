@@ -11,7 +11,6 @@ import Plus from '@icon/system/regular/plus.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import DeleteIcon from '@icon/system/regular/x.svg';
 import { Property as PropertyNS, useProperty } from '@property';
-import { CollectionEmptyState } from '@property/component/CollectionEmptyState';
 import {
   type PropertySaveHandler,
   usePropertiesContext,
@@ -116,8 +115,7 @@ function EntityCollectionPropertyBody(props: {
   });
   const isDraggingOver = () => dropTarget?.isOver() ?? false;
   const canDrop = () => dropTarget?.canDrop() ?? false;
-  const dropZoneHeight = () => (entities().length > 0 ? 'h-18' : 'h-16');
-  const showDropZone = () => canDrop() || props.adding;
+  const showDropZone = () => isDraggingOver() || props.adding;
   const handleAdd: JSX.EventHandler<HTMLButtonElement, MouseEvent> = (event) => {
     event.stopPropagation();
     if (isReadOnly() || props.loading || isSaving()) return;
@@ -134,44 +132,50 @@ function EntityCollectionPropertyBody(props: {
     saveReferences(entities().filter((entity) => entity.entity_id !== entityId));
 
   return (
-    <div class="group/property-row grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2">
+    <div
+      ref={(element) => dropTarget?.ref(element)}
+      role="group"
+      aria-label={props.property.displayName}
+      class="group/property-row grid min-h-7 min-w-0 grid-cols-[var(--sidepanel-label-width,auto)_minmax(0,1fr)] items-center gap-x-3"
+    >
       <span
-        class="min-w-0 truncate text-ink-muted"
+        class={cn(
+          'flex min-w-0 items-center gap-1.5 transition-colors duration-150 motion-reduce:transition-none',
+          canDrop() ? 'text-accent' : 'text-ink-muted'
+        )}
         title={props.property.displayName}
       >
-        {props.property.displayName}
+        <span class="min-w-0 truncate">{props.property.displayName}</span>
+        <Show when={canDrop()}>
+          <ArrowDownIcon
+            class="size-3.5 shrink-0"
+            aria-hidden="true"
+            data-icon-motion="none"
+          />
+        </Show>
       </span>
-      <div class="ml-auto flex shrink-0 items-center">
+      <div class="flex min-w-0 items-center">
         <Show when={!isReadOnly()}>
           <Button
             type="button"
             variant="ghost"
-            size="icon-xs"
-            class="text-ink-extra-muted"
+            size="xs"
             aria-label={`Add ${props.property.displayName}`}
             disabled={props.loading || isSaving()}
             onClick={handleAdd}
           >
             <Plus class="size-4" />
+            {t('common.add')}
           </Button>
         </Show>
-        {props.actions}
+        <div class="ml-auto flex shrink-0 items-center">{props.actions}</div>
       </div>
-      <div
-        ref={(element) => dropTarget?.ref(element)}
-        role="group"
-        aria-label={props.property.displayName}
-        class="col-span-2 mt-1 min-w-0"
-      >
-        <div class="flex flex-wrap gap-1.5" aria-busy={isSaving()}>
-          <For
-            each={entities()}
-            fallback={
-              <Show when={!props.loading && !showDropZone()}>
-                <CollectionEmptyState message={t('common.emptyCollection')} />
-              </Show>
-            }
-          >
+      <div class="col-span-2 min-w-0">
+        <div
+          class={cn('flex flex-wrap gap-1.5', entities().length > 0 && 'mt-1')}
+          aria-busy={isSaving()}
+        >
+          <For each={entities()}>
             {(entityRef) => (
               <NonUserEntityChip
                 property={props.property}
@@ -199,32 +203,41 @@ function EntityCollectionPropertyBody(props: {
         <div
           aria-hidden={!showDropZone()}
           class={cn(
-            'overflow-hidden transition-all duration-150 ease-out motion-reduce:transition-none',
-            showDropZone() ? `${dropZoneHeight()} opacity-100` : 'h-0 opacity-0'
+            'grid transition-all duration-300 ease-out motion-reduce:transition-none',
+            showDropZone()
+              ? 'grid-rows-[1fr] opacity-100'
+              : 'grid-rows-[0fr] opacity-0'
           )}
         >
-          <div
-            class={cn(
-              'flex h-16 items-center justify-center gap-2 rounded-lg border text-xs',
-              entities().length > 0 && 'mt-2',
-              props.adding && 'border-edge-muted bg-surface text-ink-muted',
-              !props.adding && 'border-dashed text-accent',
-              !props.adding && isDraggingOver() && 'border-accent bg-accent/10',
-              !props.adding && !isDraggingOver() && 'border-accent/40 bg-accent/5'
-            )}
-          >
-            <Show
-              when={props.adding}
-              fallback={<ArrowDownIcon class="size-4 shrink-0" aria-hidden="true" />}
+          <div class="min-h-0 overflow-hidden">
+            <div
+              class={cn(
+                'flex h-12 items-center justify-center gap-2 rounded-lg border text-xs',
+                entities().length > 0 ? 'mt-2' : 'mt-1',
+                props.adding
+                  ? 'border-edge-muted bg-surface text-ink-muted'
+                  : 'border-dashed border-accent bg-accent/10 text-accent'
+              )}
             >
-              <SpinnerIcon
-                class="size-4 shrink-0 animate-spin motion-reduce:animate-none"
-                aria-hidden="true"
-              />
-            </Show>
-            <span aria-hidden={props.adding}>
-              {props.adding ? t('common.addingItem') : t('common.dropToAdd')}
-            </span>
+              <Show
+                when={props.adding}
+                fallback={
+                  <ArrowDownIcon
+                    class="size-4 shrink-0"
+                    aria-hidden="true"
+                    data-icon-motion="none"
+                  />
+                }
+              >
+                <SpinnerIcon
+                  class="size-4 shrink-0 animate-spin motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
+              </Show>
+              <span aria-hidden={props.adding}>
+                {props.adding ? t('common.addingItem') : t('common.dropToAdd')}
+              </span>
+            </div>
           </div>
         </div>
       </div>

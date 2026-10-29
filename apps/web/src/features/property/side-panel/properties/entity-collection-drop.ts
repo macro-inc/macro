@@ -36,7 +36,7 @@ export function getCollectionDropReference(
   return { entity_id: data.id, entity_type: entityType };
 }
 
-/** One target covers the compact collection and its expanded drag feedback. */
+/** One target covers the property label, values, and expanded drag feedback. */
 export function createEntityCollectionDropTarget(options: {
   property: Accessor<Property>;
   selfId: Accessor<string>;

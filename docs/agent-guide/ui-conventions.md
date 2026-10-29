@@ -156,14 +156,17 @@ confirmation drawers use the same action hierarchy.
 
 Use a 4px vertical gap between all property rows, including inline Tags and
 transitions between regular fields and collection fields.
+Separate the bottom Add property action from the list by 16px.
 
-Multi-entity property collections show plain, full-width empty copy without a
-resting border or padded box. Their ghost Add action stays beside the property
-name, including when empty. The dedicated Tags section retains its outlined
-empty-state Add action. While dragging an app item, compatible collections
-expand into full-width dashed dropzones;
-hovering a valid zone strengthens its accent treatment. Empty-state and dropzone
-content keep the same spacing below the field label. Incompatible or unavailable
+Empty multi-entity collections show only their property header, without a
+placeholder or reserved content area. Align the labeled ghost Add button with
+the shared value-selector column for both empty and populated collections.
+While dragging a compatible app item, tint the property
+name and show a small downward arrow without expanding the row. Reveal the
+full-width dashed dropzone only while hovering that property, including its
+name and existing values. Use a gentle 300ms reveal with reduced-motion support;
+this first pass does not use pointer proximity. Empty-state and dropzone content
+keep the same spacing below the field label. Incompatible or unavailable
 collections retain their height, keep eligible Add actions visible, and show no
 rejection feedback. Existing values stay visible. Dropping adds a reference
 without moving the original item.
@@ -178,6 +181,11 @@ spinner until save and refresh finish. A persistently mounted status region
 announces additions, including picker saves. Existing values remain visible;
 further edits and drops stay locked during that operation. Add and value edits
 also remain disabled while the initial collection loads.
+
+The dedicated Tags section uses a plain muted “No tags added yet” message
+with a small ghost Add tags action, without a card, title, or description.
+Keep that action permission-gated and connected to the existing tag picker.
+Inline Tags property rows remain compact.
 
 The **Add** action remains the keyboard/touch alternative. This target does not
 upload files dragged from the computer. A persisted drop changes property data;

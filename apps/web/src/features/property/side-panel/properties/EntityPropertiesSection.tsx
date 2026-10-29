@@ -388,7 +388,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
           </Show>
 
           <Show when={props.canEdit && props.showAddProperty !== false}>
-            <div class="flex items-center">
+            <div class="mt-3 flex items-center">
               <AddPropertyButton size="xs" class="m-px gap-1.5" />
             </div>
           </Show>
@@ -702,13 +702,13 @@ function PropertyRowActions(props: {
   const renderRemoveAction = () => (
     <Show when={canRemove()}>
       <Button
-        variant="ghost"
+        variant="danger-ghost"
         size="icon-xs"
         data-property-row-action
         tooltip="Remove from entity"
         aria-label="Remove from entity"
         disabled={isSaving()}
-        class={cn('text-ink-extra-muted transition', actionVisibility)}
+        class={cn('transition', actionVisibility)}
         onClick={removeFromEntity}
       >
         <TrashIcon class="size-4" />
