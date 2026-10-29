@@ -439,6 +439,7 @@ registerComponent('routine-compose', (params) => (
         ? (params.onCreated as (id: string) => void)
         : undefined
     }
+    initialDraft={params.initialDraft}
   />
 ));
 registerComponent('document-compose', (params) => {

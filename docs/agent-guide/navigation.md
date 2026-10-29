@@ -1009,6 +1009,8 @@ columns. The search field sits below the top bar, as in Projects; search by name
 creator, or model/agent, or press **Cmd/Ctrl+F** to focus it. **Create Routine** sits
 to the right of search. Click a row to open its settings in the same pane. Toggle
 the **Enabled** checkbox property directly in the list to pause or resume it.
+Below the list, **Suggested for you** shows AI-picked routines from every
+sidebar, filterable by area; see [suggested routines](setup-cards.md#suggested-routines).
 When the list is narrower than 760px (a phone, or the Settings sheet) it drops the
 column headers and **Created by**, and each row fits one line: name, status, the
 model or agent icon, and the **Enabled** checkbox, with no sideways scroll. Search

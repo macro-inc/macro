@@ -36,7 +36,8 @@ skip admission and record `ai_usage.agent_api_key_id`, which keeps them out
 of `count_usage`. Only the loop's own model calls run on the key; tools,
 opening lines, and summaries in those turns still use Macro's keys and count.
 
-**Exempt:** Memory, AiProjection, CallSummary, Dictation, ChatRename.
+**Exempt:** Memory, AiProjection, CallSummary, Dictation, ChatRename,
+AgentModeChoice, RoutineSuggestions.
 **Billable:** Chat, Automation, DynamicCompletionsApi, ChannelBot, AiEditing,
 Import, AgentSession, AgentRepositoryChoice, ImageGeneration. In particular, AI
 editing is not exempt.

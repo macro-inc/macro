@@ -647,6 +647,7 @@ dependencies = [
  "rmcp",
  "roles_and_permissions",
  "rootcause",
+ "routine_suggestions",
  "scheduled_action",
  "schemars 1.2.1",
  "search_service_client",
@@ -7496,6 +7497,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "email",
+ "macro_tower_layers",
  "model",
  "models_email",
  "reqwest 0.13.4",
@@ -16839,6 +16841,35 @@ dependencies = [
  "rootcause",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "routine_suggestions"
+version = "0.1.0"
+dependencies = [
+ "agent",
+ "ai_usage",
+ "axum",
+ "chrono",
+ "email_service_client",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "models_email",
+ "rootcause",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]

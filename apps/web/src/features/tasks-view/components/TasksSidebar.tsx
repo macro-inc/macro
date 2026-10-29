@@ -10,6 +10,7 @@ import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { openProject } from '@app/features/projects/open-project';
 import { ProjectsSidebarSection } from '@app/features/projects/projects';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { useNavigate, useParams } from '@app/lib/split-router';
 import { projectDetailRoute } from '@app/routes/routes';
 import {
@@ -203,6 +204,7 @@ export function TasksSidebar() {
       />
 
       <ViewSidebar.Content>
+        <SidebarRoutineSuggestions surface="tasks" />
         <TasksNavigation />
         <TaskSavedViewsList />
 

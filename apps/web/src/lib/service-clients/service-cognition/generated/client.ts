@@ -46,6 +46,7 @@ import type {
   PipedreamUpdateRequest,
   ProjectionStateResponse,
   RejectToolCallRequest,
+  RoutineSuggestionSet,
   RunImportOutcome,
   RunImportRequest,
   SendChatMessageResponse,
@@ -2892,6 +2893,110 @@ export const getBatchPreview = async (
     status: res.status,
     headers: res.headers,
   } as getBatchPreviewResponse;
+};
+
+/**
+ * @summary The signed-in user's routine suggestions. Starts generating them when
+there are none yet or they are a few days old; poll while `status` is
+`generating`.
+ */
+export type getRoutineSuggestionsResponse200 = {
+  data: RoutineSuggestionSet;
+  status: 200;
+};
+
+export type getRoutineSuggestionsResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type getRoutineSuggestionsResponseSuccess =
+  getRoutineSuggestionsResponse200 & {
+    headers: Headers;
+  };
+export type getRoutineSuggestionsResponseError =
+  getRoutineSuggestionsResponse500 & {
+    headers: Headers;
+  };
+
+export type getRoutineSuggestionsResponse =
+  | getRoutineSuggestionsResponseSuccess
+  | getRoutineSuggestionsResponseError;
+
+export const getGetRoutineSuggestionsUrl = () => {
+  return `/routine-suggestions`;
+};
+
+export const getRoutineSuggestions = async (
+  options?: RequestInit
+): Promise<getRoutineSuggestionsResponse> => {
+  const res = await fetch(getGetRoutineSuggestionsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getRoutineSuggestionsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getRoutineSuggestionsResponse;
+};
+
+/**
+ * @summary Starts generating fresh suggestions for the signed-in user, unless a
+generation is already running. Earlier suggestions stay in the answer
+until the new ones land.
+ */
+export type refreshRoutineSuggestionsResponse200 = {
+  data: RoutineSuggestionSet;
+  status: 200;
+};
+
+export type refreshRoutineSuggestionsResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type refreshRoutineSuggestionsResponseSuccess =
+  refreshRoutineSuggestionsResponse200 & {
+    headers: Headers;
+  };
+export type refreshRoutineSuggestionsResponseError =
+  refreshRoutineSuggestionsResponse500 & {
+    headers: Headers;
+  };
+
+export type refreshRoutineSuggestionsResponse =
+  | refreshRoutineSuggestionsResponseSuccess
+  | refreshRoutineSuggestionsResponseError;
+
+export const getRefreshRoutineSuggestionsUrl = () => {
+  return `/routine-suggestions/refresh`;
+};
+
+export const refreshRoutineSuggestions = async (
+  options?: RequestInit
+): Promise<refreshRoutineSuggestionsResponse> => {
+  const res = await fetch(getRefreshRoutineSuggestionsUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: refreshRoutineSuggestionsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as refreshRoutineSuggestionsResponse;
 };
 
 /**

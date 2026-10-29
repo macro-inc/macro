@@ -4,6 +4,7 @@ import {
   ViewSidebar,
 } from '@app/components/view-shell';
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -226,6 +227,7 @@ export function EmailSidebar() {
       </Show>
 
       <ViewSidebar.Content>
+        <SidebarRoutineSuggestions surface="email" />
         <EmailInboxList />
 
         <Show when={isTouchDevice()}>

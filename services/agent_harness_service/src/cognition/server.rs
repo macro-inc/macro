@@ -1081,6 +1081,22 @@ pub async fn build(
         cancellation.clone(),
         event_broker_tracker.clone(),
     );
+    let routine_suggestions_service = Arc::new(
+        routine_suggestions::domain::service::RoutineSuggestionService::new(
+            routine_suggestions::outbound::pg_repo::PgRoutineSuggestionRepo::new(db.clone()),
+            routine_suggestions::outbound::email_inbox::EmailServiceInboxReader::new(
+                email_service_client.clone(),
+            ),
+            // Every plan gets the free-tier model: suggestions must be quick,
+            // and they are generated before the user picks a plan.
+            routine_suggestions::outbound::agent_generator::AgentSuggestionGenerator::new(
+                chat::domain::models::FREE_MODEL,
+                tool_service_context.recorder.clone(),
+            ),
+            event_broker_tracker.clone(),
+            cancellation.clone(),
+        ),
+    );
     let router = api::build_router(ApiContext {
         db: db.clone(),
         email_service_client_external,
@@ -1123,6 +1139,7 @@ pub async fn build(
         mcp_selector,
         import_service,
         onboarding_service,
+        routine_suggestions_service,
         macro_event_broker: macro_event_broker.clone(),
     });
     let mut workers = vec![tokio_util::task::AbortOnDropHandle::new(

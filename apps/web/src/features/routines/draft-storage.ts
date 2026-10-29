@@ -40,6 +40,12 @@ const draftSchema = z
   ])
   .transform((draft): ScheduleDraft => draft);
 
+/** A draft handed over at runtime (split params), if it is well formed. */
+export function parseRoutineDraft(value: unknown): ScheduleDraft | undefined {
+  const parsed = draftSchema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+}
+
 const storedDraftSchema = z.object({
   draft: draftSchema,
   timestamp: z.number().nonnegative(),

@@ -26,3 +26,4 @@ pub mod inbox_lifecycle;
 /// Forwarded-attachment persistence facts.
 pub mod forwarded_attachments;
 pub mod mailbox_settings;
+pub mod recent_inbox;

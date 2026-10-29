@@ -11,6 +11,15 @@ import {
 export function stubOnboardingBrowser() {
   vi.stubGlobal('matchMedia', () => ({ matches: true }));
   HTMLElement.prototype.scrollTo = vi.fn();
+  // The routines step's expandable rows measure themselves.
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
 }
 
 /** Render `ui` under a fake onboarding backend seeded with `world`. */

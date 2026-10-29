@@ -223,6 +223,8 @@
   "cognition.recoverPipedreamMcpConnection": "Recover Pipedream Mcp Connection",
   "cognition.createPipedreamMcpToken": "Create Pipedream Mcp Token",
   "cognition.getBatchPreview": "Get Batch Preview",
+  "cognition.getRoutineSuggestions": "Get Routine Suggestions",
+  "cognition.refreshRoutineSuggestions": "Refresh Routine Suggestions",
   "cognition.sendChatMessage": "Send Chat Message",
   "cognition.stopChatStream": "Stop Chat Stream",
   "cognition.structuredCompletion": "Generate structured content",

@@ -3,6 +3,9 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, expect, it, vi } from 'vitest';
 import { CrmSidebar } from './crm-sidebar';
 
+vi.mock('@app/features/routine-suggestions/routine-suggestions', () => ({
+  SidebarRoutineSuggestions: () => null,
+}));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: false, loading: false }),
 }));

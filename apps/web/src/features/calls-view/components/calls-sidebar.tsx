@@ -6,6 +6,7 @@ import { NewCallButton } from '@app/features/next-soup/soup-view/NewCallButton';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { useApplyPreset } from '@app/features/next-soup/soup-view/soup-view-tabs';
 import { VIEW_TAB_LISTS } from '@app/features/next-soup/soup-view/tab-lists';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { usePreference } from '@app/preferences/use-preference';
 import { fireAndForget } from '@core/util/fireAndForget';
 import BuildingsIcon from '@icon/system/regular/buildings.svg';
@@ -176,6 +177,7 @@ export function CallsSidebar(props: { onNavigate: () => void }) {
       </ViewSidebar.Primary>
 
       <ViewSidebar.Content>
+        <SidebarRoutineSuggestions surface="calls" />
         <ViewSidebar.Nav aria-label="Call views">
           <For each={VIEW_TAB_LISTS.calls}>
             {(tab) => (

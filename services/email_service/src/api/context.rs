@@ -149,6 +149,8 @@ pub(crate) struct ApiContext {
     // The raw client is retained only for Gmail webhook JWKS/JWT authentication.
     pub gmail_client: Arc<gmail_client::GmailClient>,
     pub email_api: GmailApi,
+    /// Reads the top of a user's inboxes straight from the provider.
+    pub recent_inbox: Arc<crate::outbound::recent_inbox::RecentInboxReader>,
     pub redis_client: Arc<RedisClient>,
     pub sqs_client: Arc<sqs_client::SQS>,
     pub s3_client: Arc<s3_client::S3>,

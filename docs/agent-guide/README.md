@@ -29,7 +29,7 @@ verified live against a local stack (`just run_local`).
 | [external.md](external.md) | External tab: linking WhatsApp by QR, adding and sharing external chats, mocking `/whatsapp` and `/external-chats` |
 | [settings.md](settings.md) | Settings sections, including Slack import and team membership |
 | [onboarding.md](onboarding.md) | Onboarding resume links, bypass, and setup plan |
-| [setup-cards.md](setup-cards.md) | Sidebar import and setup cards, the connector import dialog, and permanent dismissal |
+| [setup-cards.md](setup-cards.md) | Sidebar import and setup cards, suggested routines, the connector import dialog, and permanent dismissal |
 | [canvas.md](canvas.md) | Canvas colors and link paste |
 | [soup-live-updates.md](soup-live-updates.md) | Live updates in flat Soup lists |
 | [ui-conventions.md](ui-conventions.md) | Shared UI behavior: list loading, top bars, dialog actions, user cards, information panels |

@@ -34,6 +34,12 @@ export const fakeWorld = (page: Page) =>
 export const fakeEvents = (page: Page) =>
   page.evaluate(() => window.onboardingFixture.events());
 
+/** Leave the last step with the routines the AI switched on. */
+export async function finishRoutines(page: Page) {
+  await expect(heading(page, 'Put your busywork on autopilot.')).toBeVisible();
+  await page.getByRole('button', { name: /^Turn on \d+ routines?$/ }).click();
+}
+
 export async function expectLanded(page: Page, text: string) {
   await expect(page.getByTestId('landed')).toHaveText(text);
 }

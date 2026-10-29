@@ -127,6 +127,15 @@ pub type DcsOnboardingService = onboarding::domain::service::OnboardingServiceIm
     mcp_client::outbound::pg_server_repo::PgServerRepo,
 >;
 
+/// Routine suggestions: sets in Postgres, inboxes read through the email
+/// service, and a structured completion on the free-tier model.
+pub type DcsRoutineSuggestionService =
+    routine_suggestions::domain::service::RoutineSuggestionService<
+        routine_suggestions::outbound::pg_repo::PgRoutineSuggestionRepo,
+        routine_suggestions::outbound::email_inbox::EmailServiceInboxReader,
+        routine_suggestions::outbound::agent_generator::AgentSuggestionGenerator,
+    >;
+
 /// Concrete Pipedream MCP router state for DCS: the Postgres connection
 /// store plus the Pipedream client (None when not configured — endpoints
 /// answer 501).
@@ -184,6 +193,7 @@ pub struct ApiContext {
     pub mcp_selector: Arc<ai_tools::ToolMcpSelector>,
     pub import_service: Arc<DcsImportService>,
     pub onboarding_service: Arc<DcsOnboardingService>,
+    pub routine_suggestions_service: Arc<DcsRoutineSuggestionService>,
     /// Kafka-backed macro event broker for publishing domain events.
     pub macro_event_broker: DcsEventBroker,
 }

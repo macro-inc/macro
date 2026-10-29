@@ -114,6 +114,16 @@ export type AppEvents = {
     emails_connected: number;
     connectors_connected: string[];
   };
+  /** Leaving the routines step: how many AI defaults the user kept. */
+  onboarding_v4_routines: {
+    suggested: number;
+    /** Switched on by the AI before the user touched anything. */
+    recommended: number;
+    /** Turned on when the user finished the step. */
+    enabled: number;
+    /** Recommended ones still on when the user finished the step. */
+    recommended_kept: number;
+  };
   /** A @macro.com account used the staff Bypass button; `step` is where. */
   onboarding_v4_bypassed: { step: string };
 
@@ -380,10 +390,19 @@ export type AppEvents = {
   // scheduled and event-triggered runs are not counted yet.
   routine_created: {
     routineId?: string;
-    source: 'new' | 'duplicate';
+    /** `suggestion`: enabled from an AI-suggested routine. */
+    source: 'new' | 'duplicate' | 'suggestion';
     triggerType: string;
     targetKind?: 'agent' | 'model';
   };
+  /** A sidebar's Suggested routines card was opened. */
+  routine_suggestions_opened: {
+    surface: string;
+    /** Suggestions ready for that surface when it opened. */
+    suggestions: number;
+  };
+  /** A sidebar's Suggested routines card was dismissed for good. */
+  routine_suggestions_dismissed: { surface: string };
   /** A manual Run now the server accepted, not the run's outcome. */
   routine_run: {
     routineId: string;

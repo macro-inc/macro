@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import type { Accessor } from 'solid-js';
+import type { Accessor, JSX } from 'solid-js';
 import { RoutinesList } from '../components/routines-list';
 import type { RoutineListSource } from '../context/routine-sources';
 import type { RoutineTarget } from '../core/routine-target';
@@ -12,6 +12,7 @@ export function RoutinesListView(props: {
   targetModel(target: RoutineTarget): string | undefined;
   showTitle?: boolean;
   registerSearchFocus?: (focus: () => void) => void;
+  footer?: JSX.Element;
   onCreate(): void;
   onOpen(id: string): void;
 }) {
@@ -25,6 +26,7 @@ export function RoutinesListView(props: {
     <RoutinesList
       showTitle={props.showTitle}
       registerSearchFocus={props.registerSearchFocus}
+      footer={props.footer}
       rows={rows()}
       loading={props.source.loading()}
       error={props.source.error()}

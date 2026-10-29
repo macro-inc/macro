@@ -1,4 +1,7 @@
 import type { PaidPlanTier } from '@app/features/paywall/plans';
+import type { RoutineSuggestionsSource } from '@app/features/routine-suggestions/queries/routine-suggestions';
+import type { ScheduleDraft } from '@app/features/routines/core/draft';
+import type { RoutineTarget } from '@app/features/routines/core/routine-target';
 import type { AppEvents } from '@app/lib/analytics/app-events';
 import type { AiPlanCatalog } from '@service-auth/ai-billing-types';
 import type { GtmInviteOffer } from '@service-auth/generated/schemas/gtmInviteOffer';
@@ -138,6 +141,16 @@ export type OnboardingContext = {
    * `skipped` records that the user left without going through the steps.
    */
   completeOnboarding(options: { skipped: boolean }): Promise<CompletionResult>;
+  /** Starts suggesting routines from the inbox and tools connected so far. */
+  warmRoutineSuggestions(): void;
+  /** The last step's AI-picked routines, and how to turn them on. */
+  createRoutineSuggestionsStep(): {
+    source: RoutineSuggestionsSource;
+    /** What new routines run with. */
+    target: Accessor<RoutineTarget>;
+    /** Creates the routine, turned on; resolves with its id, rejects on failure. */
+    create(draft: ScheduleDraft): Promise<string>;
+  };
   /** Finishes a tutorial flag left behind by a completed onboarding record. */
   repairTutorial(): Promise<void>;
   applyAccent(color: string, viewerId: string): void;

@@ -844,6 +844,20 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         },
         import_service: import_service.clone(),
         onboarding_service,
+        routine_suggestions_service: Arc::new(
+            routine_suggestions::domain::service::RoutineSuggestionService::new(
+                routine_suggestions::outbound::pg_repo::PgRoutineSuggestionRepo::new(pool.clone()),
+                routine_suggestions::outbound::email_inbox::EmailServiceInboxReader::new(
+                    email_service_client.clone(),
+                ),
+                routine_suggestions::outbound::agent_generator::AgentSuggestionGenerator::new(
+                    chat::domain::models::FREE_MODEL,
+                    recorder.clone(),
+                ),
+                tokio_util::task::TaskTracker::new(),
+                tokio_util::sync::CancellationToken::new(),
+            ),
+        ),
         macro_event_broker,
     };
     Arc::new(api_context)

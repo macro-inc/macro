@@ -27,7 +27,7 @@ export type AddServerRequest = {
  * Everything we use AI for. The wire / DB form of each variant is its
  * `snake_case` name.
  */
-export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'agent_mode_choice' | 'dictation' | 'image_generation';
+export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'agent_mode_choice' | 'dictation' | 'image_generation' | 'routine_suggestions';
 
 /**
  * A structured part within an assistant message.
@@ -392,6 +392,11 @@ export type ChatStream = (StreamError & {
     stream_id: string;
     type: 'stream_end';
 };
+
+/**
+ * A 24-hour local time of day, `HH:MM`.
+ */
+export type ClockTime = string;
 
 /**
  * Body for completing onboarding.
@@ -1549,6 +1554,77 @@ export type RejectToolCallRequest = {
 export type Role = 'user' | 'assistant' | 'system';
 
 /**
+ * One routine the AI suggests for a user, ready to enable as-is.
+ */
+export type RoutineSuggestion = {
+    /**
+     * Sends, posts, shares, or changes what other people see.
+     */
+    affectsOthers: boolean;
+    /**
+     * The glyph to show.
+     */
+    icon: SuggestionIcon;
+    /**
+     * What the routine agent follows on every run.
+     */
+    instructions: string;
+    /**
+     * The model's estimate, 0-1, that the user keeps it once enabled for
+     * them unasked.
+     */
+    keepProbability: number;
+    /**
+     * Whether every run should show in the user's Home.
+     */
+    notify: boolean;
+    /**
+     * Why it fits this user.
+     */
+    reason: string;
+    /**
+     * One sentence on what it does.
+     */
+    summary: string;
+    /**
+     * The sidebar it belongs to.
+     */
+    surface: RoutineSurface;
+    /**
+     * Short imperative routine name.
+     */
+    title: string;
+    /**
+     * When it runs.
+     */
+    trigger: SuggestionTrigger;
+};
+
+/**
+ * A user's routine suggestions.
+ */
+export type RoutineSuggestionSet = {
+    /**
+     * When `suggestions` were generated; absent before the first one lands.
+     */
+    generatedAt?: string | null;
+    /**
+     * Where generation stands.
+     */
+    status: SuggestionSetStatus;
+    /**
+     * The latest generated suggestions, best first within each surface.
+     */
+    suggestions: Array<RoutineSuggestion>;
+};
+
+/**
+ * The view sidebars that show routine suggestions; each suggestion belongs to
+ * exactly one.
+ */
+export type RoutineSurface = 'email' | 'calendar' | 'tasks' | 'files' | 'crm' | 'chat' | 'calls' | 'reviews' | 'agents';
+
+/**
  * Outcome of accepting/declining staged rows via `POST /import/run`.
  */
 export type RunImportOutcome = {
@@ -1881,6 +1957,78 @@ export type StructuredToolActivity = {
 };
 
 /**
+ * Workspace-wide events a suggestion may start from. Events scoped to
+ * specific channels, documents, or tasks are left out: they need the user to
+ * pick those first.
+ */
+export type SuggestedEvent = 'email.message_received' | 'task.created' | 'document.created' | 'call.started' | 'call.ended';
+
+/**
+ * The glyph a suggestion shows.
+ */
+export type SuggestionIcon = 'mail' | 'tag' | 'bell' | 'calendar' | 'task' | 'document' | 'chart' | 'people' | 'phone' | 'code' | 'chat' | 'sparkle';
+
+/**
+ * How often a scheduled suggestion runs, in the user's time zone.
+ */
+export type SuggestionSchedule = {
+    frequency: 'hour';
+} | {
+    frequency: 'day';
+    /**
+     * Local time of day.
+     */
+    time: ClockTime;
+} | {
+    frequency: 'week';
+    /**
+     * Local time of day.
+     */
+    time: ClockTime;
+    /**
+     * The days to run; never empty, never repeated.
+     */
+    weekdays: Array<Weekday>;
+} | {
+    /**
+     * 1-28, so it exists in every month.
+     */
+    dayOfMonth: number;
+    frequency: 'month';
+    /**
+     * Local time of day.
+     */
+    time: ClockTime;
+};
+
+/**
+ * Where the user's suggestion set stands.
+ */
+export type SuggestionSetStatus = 'generating' | 'ready' | 'failed';
+
+/**
+ * When a suggested routine runs.
+ */
+export type SuggestionTrigger = {
+    /**
+     * A yes/no question the event must answer yes to before the routine
+     * runs, e.g. "Is this email an invoice or a receipt?".
+     */
+    condition?: string | null;
+    /**
+     * The event.
+     */
+    event: SuggestedEvent;
+    kind: 'event';
+} | {
+    kind: 'schedule';
+    /**
+     * The schedule.
+     */
+    schedule: SuggestionSchedule;
+};
+
+/**
  * The kind of entity a projection is materialized for.
  */
 export type TargetType = 'user' | 'team';
@@ -2149,6 +2297,11 @@ export type WebCitation = {
      */
     url: string;
 };
+
+/**
+ * A day of the week, as weekly schedules name them.
+ */
+export type Weekday = 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat';
 
 export type WithChatId = {
     chat_id: string;
@@ -3385,6 +3538,52 @@ export type GetBatchPreviewResponses = {
 };
 
 export type GetBatchPreviewResponse2 = GetBatchPreviewResponses[keyof GetBatchPreviewResponses];
+
+export type GetRoutineSuggestionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/routine-suggestions';
+};
+
+export type GetRoutineSuggestionsErrors = {
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type GetRoutineSuggestionsResponses = {
+    /**
+     * The user's suggestions
+     */
+    200: RoutineSuggestionSet;
+};
+
+export type GetRoutineSuggestionsResponse = GetRoutineSuggestionsResponses[keyof GetRoutineSuggestionsResponses];
+
+export type RefreshRoutineSuggestionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/routine-suggestions/refresh';
+};
+
+export type RefreshRoutineSuggestionsErrors = {
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type RefreshRoutineSuggestionsResponses = {
+    /**
+     * The user's suggestions, now generating
+     */
+    200: RoutineSuggestionSet;
+};
+
+export type RefreshRoutineSuggestionsResponse = RefreshRoutineSuggestionsResponses[keyof RefreshRoutineSuggestionsResponses];
 
 export type SendChatMessageData = {
     body: HttpSendChatMessageRequest;

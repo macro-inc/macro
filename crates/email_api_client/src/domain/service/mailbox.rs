@@ -134,6 +134,42 @@ impl<
         }
     }
 
+    /// The newest inbox messages, newest first, read straight from the
+    /// provider, so a mailbox can be looked at before it synchronizes.
+    pub async fn recent_inbox_messages(
+        &self,
+        mailbox: MailboxAccess,
+        limit: u16,
+        folders: &[MailFolder],
+    ) -> Result<Vec<MailboxMessage>, EmailApiError> {
+        let token = self
+            .token(
+                mailbox,
+                ApiOperationKind::ListMessages,
+                TokenFreshness::Cached,
+            )
+            .await?;
+        let repository = self.repository.for_mailbox(mailbox);
+        match repository
+            .recent_inbox_messages(&token, mailbox.link_id, limit, folders)
+            .await
+        {
+            Err(EmailApiError::AuthRequired) => {
+                let fresh = self
+                    .token(
+                        mailbox,
+                        ApiOperationKind::ListMessages,
+                        TokenFreshness::Fresh,
+                    )
+                    .await?;
+                repository
+                    .recent_inbox_messages(&fresh, mailbox.link_id, limit, folders)
+                    .await
+            }
+            result => result,
+        }
+    }
+
     /// Download an attachment with the same mailbox binding as its parent message.
     pub async fn attachment(
         &self,

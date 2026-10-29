@@ -167,6 +167,7 @@ reqwest = { workspace = true }
 rmcp = { workspace = true, features = ["transport-streamable-http-server"] }
 roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = ["outbound"] }
 rootcause = { workspace = true }
+routine_suggestions = { path = "../../crates/routine_suggestions" }
 scheduled_action = { path = "../../crates/scheduled_action" }
 schemars = { workspace = true }
 search_service_client = { path = "../../crates/search_service_client" }

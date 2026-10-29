@@ -12,6 +12,7 @@ import {
   type EntityActionViewContext,
   toEntityActionListState,
 } from '@app/features/next-soup/actions';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import {
   MaybeSoupEntityActionDrawerManager,
   SoupEntityContextMenu,
@@ -288,6 +289,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
         </Show>
 
         <ViewSidebar.Content class="gap-2 overflow-hidden pt-2">
+          <SidebarRoutineSuggestions surface="agents" />
           <Show when={!isTouchDevice()}>
             <ViewSidebar.Nav aria-label="Agent tools">
               <ViewSidebar.Item

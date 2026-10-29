@@ -196,6 +196,9 @@ export const cognitionExcluded = [
   // Sidebar setup and import cards remember dismissals per user (web app only).
   'dismissedPromptsHandler',
   'dismissPromptHandler',
+  // Suggested routines feed the sidebar cards and onboarding (web app only).
+  'getRoutineSuggestions',
+  'refreshRoutineSuggestions',
   'setPricingHandler',
   'startMcpAuth',
   'updateMcpServer',

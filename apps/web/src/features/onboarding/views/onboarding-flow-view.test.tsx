@@ -63,6 +63,12 @@ const heading = (name: string | RegExp) =>
   screen.findByRole('heading', { name, level: 1 });
 const click = (name: string | RegExp) =>
   fireEvent.click(screen.getByRole('button', { name }));
+const ROUTINES_HEADING = 'Put your busywork on autopilot.';
+/** Leaves the routines step with the AI's picks: three in the fixture. */
+const turnOnPickedRoutines = async () => {
+  await heading(ROUTINES_HEADING);
+  click('Turn on 3 routines');
+};
 
 describe('onboarding flow', () => {
   it('walks every step and finishes with Free', async () => {
@@ -90,6 +96,8 @@ describe('onboarding flow', () => {
     click('Connect Linear');
     await screen.findByRole('button', { name: 'Connected to Linear' });
     click('Continue');
+    // Suggestions start generating once inbox and tools are connected.
+    expect(fake.calls()).toContain('warmRoutineSuggestions');
 
     await heading('Built for teams.');
     expect(screen.getByDisplayValue('Acme')).toBeTruthy();
@@ -106,9 +114,35 @@ describe('onboarding flow', () => {
       screen.getAllByRole('button', { name: 'Continue with Free' }).at(-1)!
     );
 
+    // The AI's likely keepers start on; the user swaps one for another.
+    await heading(ROUTINES_HEADING);
+    expect(navigate).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('heading', { name: 'Email automations', level: 2 })
+    ).toBeTruthy();
+    const toggle = (name: string) =>
+      screen.getByRole('switch', { name: `Turn on ${name}` });
+    expect(toggle('Follow-ups after every call')).toHaveProperty(
+      'checked',
+      true
+    );
+    expect(toggle('Alert me about Acme')).toHaveProperty('checked', false);
+    fireEvent.click(toggle('Morning inbox digest'));
+    fireEvent.click(toggle('Keep the pipeline honest'));
+    click('Turn on 3 routines');
+
     await waitFor(() =>
       expect(navigate).toHaveBeenCalledWith('/channel/launch')
     );
+    expect(fake.world.routines.toSorted()).toEqual([
+      'Follow-ups after every call',
+      'Keep the pipeline honest',
+      'Tag invoices and receipts',
+    ]);
+    expect(fake.events()).toContainEqual({
+      event: 'onboarding_v4_routines',
+      data: { suggested: 6, recommended: 3, enabled: 3, recommended_kept: 2 },
+    });
     // Completing flips the viewer to complete; the flow must not leave twice.
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(navigate).toHaveBeenCalledOnce();
@@ -197,9 +231,14 @@ describe('onboarding flow', () => {
       world: { webhookPollsRemaining: 1 },
     });
     await heading('Your workspace is ready.');
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/home'), {
-      timeout: 3_000,
-    });
+    await screen.findByRole(
+      'heading',
+      { name: ROUTINES_HEADING, level: 1 },
+      { timeout: 3_000 }
+    );
+    expect(navigate).not.toHaveBeenCalled();
+    await turnOnPickedRoutines();
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/home'));
   });
 
   it('keeps a deep-linked step after the link is gone and the session is new', async () => {
@@ -255,9 +294,14 @@ describe('onboarding flow', () => {
       world: { webhookPollsRemaining: 1 },
     });
     await heading('Your workspace is ready.');
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/home'), {
-      timeout: 3_000,
-    });
+    await screen.findByRole(
+      'heading',
+      { name: ROUTINES_HEADING, level: 1 },
+      { timeout: 3_000 }
+    );
+    expect(navigate).not.toHaveBeenCalled();
+    await turnOnPickedRoutines();
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/home'));
   });
 
   it('starts hosted checkout from the trial offer', async () => {
@@ -339,13 +383,14 @@ describe('onboarding flow', () => {
     expect(
       screen.queryByRole('button', { name: 'Continue with Free' })
     ).toBeNull();
+    await turnOnPickedRoutines();
     await waitFor(() =>
       expect(navigate).toHaveBeenCalledExactlyOnceWith('/home')
     );
     expect(redirect).not.toHaveBeenCalled();
   });
 
-  it('finishes a licensed member directly on the team step while saving', async () => {
+  it('takes a licensed member from the team step to routines and finishes while saving', async () => {
     const { fake, navigate } = setup({
       resume: 'team',
       world: {
@@ -364,16 +409,14 @@ describe('onboarding flow', () => {
       .mockReturnValue(completion.promise);
     await heading('Built for teams.');
     click('Continue');
+    await turnOnPickedRoutines();
 
     const opening = await screen.findByRole('button', {
       name: 'Opening your workspace…',
     });
     expect(opening.hasAttribute('disabled')).toBe(true);
-    expect(
-      screen.getByRole('heading', { name: 'Built for teams.' })
-    ).toBeTruthy();
     expect(screen.queryByText('Your workspace is ready.')).toBeNull();
-    expect(readSavedStep(FAKE_VIEWER_ID)).toBe('team');
+    expect(readSavedStep(FAKE_VIEWER_ID)).toBe('routines');
     expect(save).toHaveBeenCalledOnce();
     expect(navigate).not.toHaveBeenCalled();
 
@@ -383,7 +426,7 @@ describe('onboarding flow', () => {
     );
   });
 
-  it('lets a licensed member retry a failed save from the team step', async () => {
+  it('retries a failed save without turning routines on twice', async () => {
     const { fake, navigate } = setup({
       resume: 'team',
       world: {
@@ -399,21 +442,64 @@ describe('onboarding flow', () => {
     });
     await heading('Built for teams.');
     click('Continue');
+    await turnOnPickedRoutines();
     await waitFor(() => expect(fake.notifications()).toHaveLength(1));
     expect(
-      screen.getByRole('heading', { name: 'Built for teams.' })
+      screen.getByRole('heading', { name: ROUTINES_HEADING })
     ).toBeTruthy();
     expect(
-      screen.getByRole('button', { name: 'Continue' }).hasAttribute('disabled')
+      screen
+        .getByRole('button', { name: 'Turn on 3 routines' })
+        .hasAttribute('disabled')
     ).toBe(false);
     expect(navigate).not.toHaveBeenCalled();
     fake.update((world) => {
       delete world.failures.completion;
     });
-    click('Continue');
+    click('Turn on 3 routines');
     await waitFor(() =>
       expect(navigate).toHaveBeenCalledExactlyOnceWith('/home')
     );
+    expect(fake.world.routines).toHaveLength(3);
+  });
+
+  it('keeps the step when a routine fails and retries only that one', async () => {
+    const { fake, navigate } = setup({
+      resume: 'routines',
+      world: { failures: { createRoutine: 'Server busy' } },
+    });
+    await turnOnPickedRoutines();
+    await screen.findByText(/Some routines couldn't be turned on/);
+    expect(navigate).not.toHaveBeenCalled();
+    expect(fake.world.routines).toEqual([]);
+    fake.update((world) => {
+      delete world.failures.createRoutine;
+    });
+    click('Turn on 3 routines');
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/home'));
+    expect(fake.world.routines).toHaveLength(3);
+  });
+
+  it('skips routines, or continues while they are still being picked', async () => {
+    const first = setup({ resume: 'routines' });
+    await heading(ROUTINES_HEADING);
+    click('Skip for now');
+    await waitFor(() => expect(first.navigate).toHaveBeenCalledWith('/home'));
+    expect(first.fake.world.routines).toEqual([]);
+    expect(first.fake.events()).toContainEqual({
+      event: 'onboarding_v4_routines',
+      data: { suggested: 6, recommended: 3, enabled: 0, recommended_kept: 0 },
+    });
+    cleanup();
+
+    const second = setup({
+      resume: 'routines',
+      world: { routineSuggestions: null },
+    });
+    await heading(ROUTINES_HEADING);
+    expect(screen.getByText(/Studying your workspace/)).toBeTruthy();
+    click('Continue to workspace');
+    await waitFor(() => expect(second.navigate).toHaveBeenCalledWith('/home'));
   });
 
   it('sends a signed-out visitor to sign in', async () => {

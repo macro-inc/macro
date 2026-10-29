@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE routine_suggestion_set\n            SET status = 'failed'\n            WHERE user_id = $1 AND generation_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2f982073cae861ed109c0a5600305ce1c85ca877057d859ad2b0e08765bd187d"
+}

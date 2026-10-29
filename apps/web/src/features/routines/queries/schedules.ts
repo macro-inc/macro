@@ -131,8 +131,8 @@ function _invalidateScheduleHistory(scheduleId: string) {
 
 export function useCreateScheduleMutation(
   callbacks?: MutationCallbacks<ScheduledAction, Error, CreateScheduledAction>,
-  /** Whether the user created the routine or duplicated one, for analytics. */
-  source: 'new' | 'duplicate' = 'new'
+  /** How the user created the routine, for analytics. */
+  source: 'new' | 'duplicate' | 'suggestion' = 'new'
 ) {
   return useMutation(() => ({
     mutationFn: async (request: CreateScheduledAction) =>

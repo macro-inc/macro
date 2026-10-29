@@ -72,6 +72,48 @@ card sits above **Settings**, outside the scrolling list.
 
 `src/features/sidebar-promotion/browser-test/` renders all three cards.
 
+## Suggested routines
+
+The Email, Calendar, Tasks, Drive, Customers, Chat, Calls, Reviews, and Agents
+sidebars open with a **Suggested routines** card
+(`src/features/routine-suggestions`): a shared repeat icon on a flat violet
+tile, the top suggestion's name, and **+N** for the rest. It has no feature flag;
+its close button (**Dismiss suggested routines**) hides it per sidebar for good. Clicking
+it opens **Routines for <Surface>**, a modal (a sheet on phones) with up to
+three AI-picked routines for that sidebar. The card and modal use flat surfaces
+and the shared Macro icon family. Each row shows what the routine
+does, when it runs (an event such as "When a new email arrives", optionally
+narrowed by a yes/no condition, or a schedule), and why it fits this user.
+
+- **Enable** creates the routine at once with the plan's default model.
+  Pressing it again, or a routine already named the same, shows **Enabled**,
+  which opens the routine. A failed create says so on the row and can be retried.
+- Clicking the row expands it to edit the name and instructions and whether
+  runs show in Home before enabling. **More options** opens the routine
+  composer prefilled with the suggestion, for triggers and the model.
+- **Refresh suggestions** regenerates them; **All routines** opens the Routines
+  page, whose **Suggested for you** section lists every sidebar's suggestions
+  below your routines, filterable by area.
+
+The following screenshots use the browser fixture's sample suggestions, not
+mailbox data.
+
+![Suggested routines in light mode](media/routines/suggestions-light.jpg)
+
+![Suggested routines in dark mode](media/routines/suggestions-dark.jpg)
+
+Suggestions are one stored set per user (`GET /routine-suggestions` on
+cognition, from the `routine_suggestions` crate). The server reads the newest
+inbox messages straight from Gmail and Outlook, so a new mailbox need not have
+synchronized, and asks the free-tier model once for suggestions, estimating for
+each one the chance the user keeps it once turned on (onboarding's
+[routines step](onboarding.md#routines-step--apponboarding) switches on the
+likely keepers). Leaving onboarding's tools step starts the first generation
+(`POST /routine-suggestions/refresh`); a read regenerates a set older than
+three days, and the client polls while the set is generating.
+`src/features/routine-suggestions/browser-test/` exercises the
+card, modal, enable, edit, and phone sheet without a backend.
+
 ## Dismissing cards
 
 Every card (import, Slack, and setup) has a close button. Dismissing is
@@ -79,7 +121,8 @@ permanent and per account: `POST /onboarding/prompts/<id>/dismiss` stores it
 server-side, so the card stays gone on every device and browser. If
 `GET /onboarding/prompts` fails, the browser's own record of dismissals is
 used. Ids are `import:<files|tasks|crm|channels>`, `home-setup`,
-`calendar-accounts`, and `pull-request-repositories`. Account deletion removes
+`calendar-accounts`, `pull-request-repositories`, and
+`routine-suggestions:<surface>`. Account deletion removes
 them.
 
 ## Rendering on view switches

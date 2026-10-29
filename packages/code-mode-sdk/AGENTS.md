@@ -31,7 +31,8 @@ HTML worker belong to `packages/sdk-docs`.
 Run from this directory after installing the root workspace and the standalone
 `packages/sdk` dependencies. Generated Rust documentation JSON and Deno bundles
 must match the public SDK; edit source and regenerate them together.
-Use the repository's pinned Bun version (via `nix develop`); different Bun
-bundlers produce different checked-in output even from identical SDK source.
+Use the Nix shell's Bun (via `nix develop`), which CI uses, not the root
+`packageManager` version; different Bun bundlers produce different checked-in
+output even from identical SDK source.
 Run SDK-docs and code-mode generated-output checks sequentially; both render into
 `packages/sdk-docs/dist/docs`.

@@ -32,7 +32,7 @@ ledger decisions, plus a flexible admin query API.
 - Used by: `agent`, `agent_session`, `agent_harness`, `agent_trigger`,
   `ai_billing`, `ai_tools`, `ai_projections`, `anthropic`, `call`,
   `documents`, `import`, `image_generation`, `memory`, `channel_bots`,
-  `agent_inmem`, `dictation`, `task_dedup`, `jev`.
+  `agent_inmem`, `dictation`, `task_dedup`, `jev`, `routine_suggestions`.
 
 ## Recipes
 

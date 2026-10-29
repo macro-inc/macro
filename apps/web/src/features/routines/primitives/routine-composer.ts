@@ -17,9 +17,11 @@ export function createRoutineComposer(
   storage: RoutineDraftStorage,
   defaultModel: string,
   onCreated: (id: string) => void,
-  connectedApps: Accessor<ReadonlySet<string> | undefined>
+  connectedApps: Accessor<ReadonlySet<string> | undefined>,
+  /** Starts from this draft, e.g. a suggested routine, instead of a saved one. */
+  initialDraft?: ScheduleDraft
 ) {
-  const restored = storage.load();
+  const restored = initialDraft ?? storage.load();
   const [draft, setDraft] = createSignal<ScheduleDraft>(
     restored
       ? {

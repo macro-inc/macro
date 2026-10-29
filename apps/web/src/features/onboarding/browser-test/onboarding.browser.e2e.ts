@@ -5,6 +5,7 @@ import {
   expectLanded,
   fakeEvents,
   fakeWorld,
+  finishRoutines,
   heading,
   openFixture,
 } from './fixture-page';
@@ -60,8 +61,19 @@ test('a new user signs up, connects everything, and starts the trial', async ({
   await expect(page.getByRole('textbox')).toHaveCount(0);
   await page.getByRole('button', { name: 'Start 30 day trial' }).click();
 
-  // Stripe returns on the success leg; the flow waits for the webhook's license.
+  // Stripe returns on the success leg; the flow waits for the webhook's
+  // license, then offers routines with the AI's likely keepers switched on.
+  await expect(heading(page, 'Put your busywork on autopilot.')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { level: 2, name: 'Email automations' })
+  ).toBeVisible();
+  await expect(page.getByRole('switch', { checked: true })).toHaveCount(3);
+  await page
+    .getByRole('switch', { name: 'Turn on Alert me about Acme' })
+    .check({ force: true });
+  await page.getByRole('button', { name: 'Turn on 4 routines' }).click();
   await expectLanded(page, 'Entered Macro at /home');
+  expect((await fakeWorld(page)).routines).toHaveLength(4);
   const world = await fakeWorld(page);
   expect(world.viewer).toMatchObject({
     tutorialComplete: true,
@@ -87,6 +99,7 @@ test('a deep link survives the inbox OAuth round-trip', async ({ page }) => {
   await page.getByRole('button', { name: 'Skip for now' }).click();
   await page.getByRole('button', { name: 'Continue with Free' }).last().click();
 
+  await finishRoutines(page);
   await expectLanded(page, 'Entered Macro at /channel/launch');
 });
 
@@ -182,6 +195,7 @@ test('Free, Pro, and Max appear below the unchanged trial offer', async ({
   ).toBe(true);
   await page.getByRole('button', { name: 'Continue with Free' }).last().click();
 
+  await finishRoutines(page);
   await expectLanded(page, 'Entered Macro at /md/notes');
   expect(await fakeEvents(page)).toContainEqual({
     event: 'onboarding_v4_completed',
@@ -201,6 +215,7 @@ test('Max checkout returns with a licensed account and no trial', async ({
   });
   await page.reload();
   await page.getByRole('button', { name: 'Continue with Max' }).click();
+  await finishRoutines(page);
   await expectLanded(page, 'Entered Macro at /home');
   expect((await fakeWorld(page)).viewer).toMatchObject({
     tutorialComplete: true,
@@ -279,6 +294,7 @@ test('an invite’s free months replace the trial and keep its promotion', async
     page.getByRole('button', { name: 'Start 30 day trial' })
   ).toHaveCount(0);
   await page.getByRole('button', { name: 'Claim your free months' }).click();
+  await finishRoutines(page);
   await expectLanded(page, 'Entered Macro at /home');
   expect((await fakeWorld(page)).viewer?.licensed).toBe(true);
 });
@@ -405,6 +421,7 @@ for (const width of [1440, 390]) {
         'tools',
         'team',
         'plan',
+        'routines',
       ]) {
         await page.evaluate((step) => {
           localStorage.setItem(
@@ -756,6 +773,7 @@ for (const width of [1280, 390]) {
       page.getByText('30 days free, then', { exact: false })
     ).toHaveCount(0);
     await page.getByRole('button', { name: 'Get Pro', exact: true }).click();
+    await finishRoutines(page);
     await expectLanded(page, 'Entered Macro at /home');
   });
 }

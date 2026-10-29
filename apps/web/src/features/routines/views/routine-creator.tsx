@@ -9,7 +9,7 @@ import type {
   RoutineCreatorSource,
   RoutineDraftStorage,
 } from '../context/routine-sources';
-import { DEFAULT_RUN_VISIBILITY } from '../core/draft';
+import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from '../core/draft';
 import { createRoutineComposer } from '../primitives/routine-composer';
 
 export function RoutineCreatorView(props: {
@@ -17,6 +17,7 @@ export function RoutineCreatorView(props: {
   storage: RoutineDraftStorage;
   slots: RoutineEditorSlots;
   defaultModel: string;
+  initialDraft?: ScheduleDraft;
   onCreated(id: string): void;
   onClose(): void;
 }) {
@@ -26,7 +27,8 @@ export function RoutineCreatorView(props: {
       props.storage,
       props.defaultModel,
       props.onCreated,
-      props.slots.createConnectedApps()
+      props.slots.createConnectedApps(),
+      props.initialDraft
     );
   return (
     <EntityComposer.Root

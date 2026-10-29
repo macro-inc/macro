@@ -21,6 +21,9 @@ import { AgentsSidebar } from './AgentsSidebar';
 
 const openWithSplit = vi.fn();
 const unreadFilter = vi.hoisted(() => vi.fn(() => false));
+vi.mock('@app/features/routine-suggestions/routine-suggestions', () => ({
+  SidebarRoutineSuggestions: () => null,
+}));
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit }),
 }));

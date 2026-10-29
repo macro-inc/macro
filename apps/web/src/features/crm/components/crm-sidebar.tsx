@@ -1,4 +1,5 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { getIconConfig } from '@core/component/EntityIcon';
 import {
@@ -101,6 +102,7 @@ export function CrmSidebar(props: {
         </ViewSidebar.Primary>
       </header>
       <ViewSidebar.Content>
+        <SidebarRoutineSuggestions surface="crm" />
         <CollapsibleSection.Root
           open={recordsOpen()}
           onOpenChange={setRecordsOpen}

@@ -11,14 +11,13 @@ const server = vi.hoisted(() => ({
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
 vi.mock('@queries/prompt-dismissals', () => ({
   usePromptDismissalsQuery: () => ({
-    get isSuccess() {
-      return server.status === 'success';
-    },
-    get isError() {
-      return server.status === 'error';
+    get isPending() {
+      return server.status === 'pending';
     },
     get data() {
-      return { dismissed: server.dismissed };
+      return server.status === 'success'
+        ? { dismissed: server.dismissed }
+        : undefined;
     },
   }),
   dismissPromptEverywhere: server.dismiss,

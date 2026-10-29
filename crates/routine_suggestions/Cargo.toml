@@ -1,0 +1,34 @@
+[package]
+edition = "2024"
+name = "routine_suggestions"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+agent = { path = "../agent" }
+ai_usage = { path = "../ai_usage" }
+axum = { workspace = true }
+chrono = { workspace = true }
+email_service_client = { path = "../email_service_client" }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+  "axum",
+] }
+macro_user_id = { path = "../macro_user_id" }
+models_email = { path = "../models_email" }
+rootcause = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true, features = ["rt"] }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+macro_uuid = { path = "../macro_uuid" }

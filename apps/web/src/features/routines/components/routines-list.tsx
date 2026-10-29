@@ -7,7 +7,7 @@ import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
 import { Button } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { RoutineRow } from '../core/types';
 import { RoutineListRow, RoutineRowLayout } from './routine-row';
 
@@ -19,6 +19,8 @@ export function RoutinesList(props: {
   /** False where the host already titles the page, as Settings does. */
   showTitle?: boolean;
   registerSearchFocus?: (focus: () => void) => void;
+  /** Scrolls with the list, below it, e.g. suggested routines. */
+  footer?: JSX.Element;
   onCreate: () => void;
   onOpen: (id: string, history?: boolean) => void;
   onToggle: (row: RoutineRow) => void;
@@ -96,70 +98,70 @@ export function RoutinesList(props: {
       </Show>
       <div
         ref={list}
-        role="table"
-        aria-label="Routines"
-        aria-busy={props.loading}
         tabIndex={-1}
         class="@container/routines min-h-0 min-w-0 flex-1 overflow-auto outline-none"
       >
-        <div
-          role="rowgroup"
-          class="sticky top-0 z-1 min-w-[748px] bg-panel @max-[760px]/routines:hidden"
-        >
-          <RoutineRowLayout
-            role="row"
-            class="text-xs font-medium text-ink-extra-muted"
+        <div role="table" aria-label="Routines" aria-busy={props.loading}>
+          <div
+            role="rowgroup"
+            class="sticky top-0 z-1 min-w-[748px] bg-panel @max-[760px]/routines:hidden"
           >
-            <span role="columnheader">Routine</span>
-            <span role="columnheader">Created by</span>
-            <span role="columnheader">Status</span>
-            <span role="columnheader">Runs with</span>
-            <span role="columnheader" class="px-2">
-              Enabled
-            </span>
-          </RoutineRowLayout>
-        </div>
-        <div
-          role="rowgroup"
-          class="min-w-[748px] @max-[760px]/routines:min-w-0"
-        >
-          <For each={filtered()}>
-            {(row) => (
-              <RoutineListRow
-                row={row}
-                pending={props.pendingId === row.id}
-                onOpen={props.onOpen}
-                onToggle={props.onToggle}
-              />
-            )}
-          </For>
-        </div>
-        <Show when={!filtered().length}>
-          <div role="row">
-            <div
-              role="cell"
-              aria-colspan={5}
-              class="flex min-h-48 flex-col items-center justify-center gap-3 px-4 py-10 text-center text-sm text-ink-muted"
+            <RoutineRowLayout
+              role="row"
+              class="text-xs font-medium text-ink-extra-muted"
             >
-              <ClockIcon class="size-6 text-ink-extra-muted" />
-              <p>
-                {props.loading
-                  ? 'Loading routines…'
-                  : props.error
-                    ? 'Routines are unavailable'
-                    : search().trim()
-                      ? 'No matching routines'
-                      : 'No routines yet'}
-              </p>
-              <Show when={!props.loading && !props.error && !search().trim()}>
-                <p>
-                  Create a routine to run an agent on a schedule or a Macro
-                  event.
-                </p>
-              </Show>
-            </div>
+              <span role="columnheader">Routine</span>
+              <span role="columnheader">Created by</span>
+              <span role="columnheader">Status</span>
+              <span role="columnheader">Runs with</span>
+              <span role="columnheader" class="px-2">
+                Enabled
+              </span>
+            </RoutineRowLayout>
           </div>
-        </Show>
+          <div
+            role="rowgroup"
+            class="min-w-[748px] @max-[760px]/routines:min-w-0"
+          >
+            <For each={filtered()}>
+              {(row) => (
+                <RoutineListRow
+                  row={row}
+                  pending={props.pendingId === row.id}
+                  onOpen={props.onOpen}
+                  onToggle={props.onToggle}
+                />
+              )}
+            </For>
+          </div>
+          <Show when={!filtered().length}>
+            <div role="row">
+              <div
+                role="cell"
+                aria-colspan={5}
+                class="flex min-h-48 flex-col items-center justify-center gap-3 px-4 py-10 text-center text-sm text-ink-muted"
+              >
+                <ClockIcon class="size-6 text-ink-extra-muted" />
+                <p>
+                  {props.loading
+                    ? 'Loading routines…'
+                    : props.error
+                      ? 'Routines are unavailable'
+                      : search().trim()
+                        ? 'No matching routines'
+                        : 'No routines yet'}
+                </p>
+                <Show when={!props.loading && !props.error && !search().trim()}>
+                  <p>
+                    Create a routine to run an agent on a schedule or a Macro
+                    event.
+                  </p>
+                </Show>
+              </div>
+            </div>
+          </Show>
+        </div>
+        {props.footer}
       </div>
     </div>
   );

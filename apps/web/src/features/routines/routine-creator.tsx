@@ -6,6 +6,7 @@ import { defaultModelForPlan } from '@core/component/AI/constant';
 import {
   clearRoutineComposerDraft,
   loadRoutineComposerDraft,
+  parseRoutineDraft,
   saveRoutineComposerDraft,
 } from './draft-storage';
 import { createRoutineCreatorSource } from './queries/routine-sources';
@@ -17,7 +18,14 @@ import { RoutineCreatorView } from './views/routine-creator';
 
 /** Production composition for the shared task/project creation popover. */
 export function RoutineCreator(
-  props: { onCreated?: (id: string) => void } = {}
+  props: {
+    onCreated?: (id: string) => void;
+    /**
+     * Prefills the composer, e.g. with a suggested routine. Split params are
+     * untyped, so it is validated here and ignored when malformed.
+     */
+    initialDraft?: unknown;
+  } = {}
 ) {
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
@@ -27,6 +35,7 @@ export function RoutineCreator(
     <RoutineCreatorView
       source={source}
       defaultModel={defaultModelForPlan(hasPaidAccess())}
+      initialDraft={parseRoutineDraft(props.initialDraft)}
       storage={{
         load: loadRoutineComposerDraft,
         save: saveRoutineComposerDraft,

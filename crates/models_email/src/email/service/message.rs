@@ -443,3 +443,26 @@ impl HasContactInfo for MessageToSend {
         self.bcc.as_deref().unwrap_or(&[])
     }
 }
+
+/// One message from the top of a user's inbox, read straight from Gmail or
+/// Outlook rather than from Macro's synced copy.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecentInboxMessage {
+    /// The inbox address the message arrived in.
+    pub inbox: String,
+    pub from: Option<ContactInfo>,
+    /// Recipient addresses.
+    pub to: Vec<String>,
+    /// Copied addresses.
+    pub cc: Vec<String>,
+    pub subject: Option<String>,
+    /// The provider's short preview of the body.
+    pub snippet: Option<String>,
+    pub received_at: Option<DateTime<Utc>>,
+}
+
+/// The newest messages across a user's own inboxes, newest first.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct RecentInboxMessagesResponse {
+    pub messages: Vec<RecentInboxMessage>,
+}

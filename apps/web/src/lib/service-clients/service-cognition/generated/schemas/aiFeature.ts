@@ -28,4 +28,5 @@ export const AiFeature = {
   agent_mode_choice: 'agent_mode_choice',
   dictation: 'dictation',
   image_generation: 'image_generation',
+  routine_suggestions: 'routine_suggestions',
 } as const;

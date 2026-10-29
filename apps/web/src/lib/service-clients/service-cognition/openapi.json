@@ -2332,6 +2332,50 @@
         }
       }
     },
+    "/routine-suggestions": {
+      "get": {
+        "tags": ["routine-suggestions"],
+        "summary": "The signed-in user's routine suggestions. Starts generating them when\nthere are none yet or they are a few days old; poll while `status` is\n`generating`.",
+        "operationId": "get_routine_suggestions",
+        "responses": {
+          "200": {
+            "description": "The user's suggestions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineSuggestionSet"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/routine-suggestions/refresh": {
+      "post": {
+        "tags": ["routine-suggestions"],
+        "summary": "Starts generating fresh suggestions for the signed-in user, unless a\ngeneration is already running. Earlier suggestions stay in the answer\nuntil the new ones land.",
+        "operationId": "refresh_routine_suggestions",
+        "responses": {
+          "200": {
+            "description": "The user's suggestions, now generating",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineSuggestionSet"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/stream/chat/message": {
       "post": {
         "tags": ["chat_message"],
@@ -2577,7 +2621,8 @@
           "agent_repository_choice",
           "agent_mode_choice",
           "dictation",
-          "image_generation"
+          "image_generation",
+          "routine_suggestions"
         ]
       },
       "AssistantMessagePart": {
@@ -3242,6 +3287,11 @@
             }
           }
         ]
+      },
+      "ClockTime": {
+        "type": "string",
+        "description": "A 24-hour local time of day, `HH:MM`.",
+        "example": "08:30"
       },
       "CompleteOnboardingRequest": {
         "type": "object",
@@ -5228,6 +5278,103 @@
         "description": "The role of a message participant.",
         "enum": ["user", "assistant", "system"]
       },
+      "RoutineSuggestion": {
+        "type": "object",
+        "description": "One routine the AI suggests for a user, ready to enable as-is.",
+        "required": [
+          "surface",
+          "title",
+          "summary",
+          "reason",
+          "instructions",
+          "icon",
+          "keepProbability",
+          "affectsOthers",
+          "notify",
+          "trigger"
+        ],
+        "properties": {
+          "affectsOthers": {
+            "type": "boolean",
+            "description": "Sends, posts, shares, or changes what other people see."
+          },
+          "icon": {
+            "$ref": "#/components/schemas/SuggestionIcon",
+            "description": "The glyph to show."
+          },
+          "instructions": {
+            "type": "string",
+            "description": "What the routine agent follows on every run."
+          },
+          "keepProbability": {
+            "type": "number",
+            "format": "double",
+            "description": "The model's estimate, 0-1, that the user keeps it once enabled for\nthem unasked."
+          },
+          "notify": {
+            "type": "boolean",
+            "description": "Whether every run should show in the user's Home."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why it fits this user."
+          },
+          "summary": {
+            "type": "string",
+            "description": "One sentence on what it does."
+          },
+          "surface": {
+            "$ref": "#/components/schemas/RoutineSurface",
+            "description": "The sidebar it belongs to."
+          },
+          "title": {
+            "type": "string",
+            "description": "Short imperative routine name."
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/SuggestionTrigger",
+            "description": "When it runs."
+          }
+        }
+      },
+      "RoutineSuggestionSet": {
+        "type": "object",
+        "description": "A user's routine suggestions.",
+        "required": ["status", "suggestions"],
+        "properties": {
+          "generatedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When `suggestions` were generated; absent before the first one lands."
+          },
+          "status": {
+            "$ref": "#/components/schemas/SuggestionSetStatus",
+            "description": "Where generation stands."
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutineSuggestion"
+            },
+            "description": "The latest generated suggestions, best first within each surface."
+          }
+        }
+      },
+      "RoutineSurface": {
+        "type": "string",
+        "description": "The view sidebars that show routine suggestions; each suggestion belongs to\nexactly one.",
+        "enum": [
+          "email",
+          "calendar",
+          "tasks",
+          "files",
+          "crm",
+          "chat",
+          "calls",
+          "reviews",
+          "agents"
+        ]
+      },
       "RunImportOutcome": {
         "type": "object",
         "description": "Outcome of accepting/declining staged rows via `POST /import/run`.",
@@ -5742,6 +5889,153 @@
           }
         }
       },
+      "SuggestedEvent": {
+        "type": "string",
+        "description": "Workspace-wide events a suggestion may start from. Events scoped to\nspecific channels, documents, or tasks are left out: they need the user to\npick those first.",
+        "enum": [
+          "email.message_received",
+          "task.created",
+          "document.created",
+          "call.started",
+          "call.ended"
+        ]
+      },
+      "SuggestionIcon": {
+        "type": "string",
+        "description": "The glyph a suggestion shows.",
+        "enum": [
+          "mail",
+          "tag",
+          "bell",
+          "calendar",
+          "task",
+          "document",
+          "chart",
+          "people",
+          "phone",
+          "code",
+          "chat",
+          "sparkle"
+        ]
+      },
+      "SuggestionSchedule": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "At the top of every hour.",
+            "required": ["frequency"],
+            "properties": {
+              "frequency": {
+                "type": "string",
+                "enum": ["hour"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Every day at `time`.",
+            "required": ["time", "frequency"],
+            "properties": {
+              "frequency": {
+                "type": "string",
+                "enum": ["day"]
+              },
+              "time": {
+                "$ref": "#/components/schemas/ClockTime",
+                "description": "Local time of day."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "On `weekdays` at `time`.",
+            "required": ["time", "weekdays", "frequency"],
+            "properties": {
+              "frequency": {
+                "type": "string",
+                "enum": ["week"]
+              },
+              "time": {
+                "$ref": "#/components/schemas/ClockTime",
+                "description": "Local time of day."
+              },
+              "weekdays": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Weekday"
+                },
+                "description": "The days to run; never empty, never repeated."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "On `day_of_month` at `time`.",
+            "required": ["time", "dayOfMonth", "frequency"],
+            "properties": {
+              "dayOfMonth": {
+                "type": "integer",
+                "format": "int32",
+                "description": "1-28, so it exists in every month.",
+                "minimum": 0
+              },
+              "frequency": {
+                "type": "string",
+                "enum": ["month"]
+              },
+              "time": {
+                "$ref": "#/components/schemas/ClockTime",
+                "description": "Local time of day."
+              }
+            }
+          }
+        ],
+        "description": "How often a scheduled suggestion runs, in the user's time zone."
+      },
+      "SuggestionSetStatus": {
+        "type": "string",
+        "description": "Where the user's suggestion set stands.",
+        "enum": ["generating", "ready", "failed"]
+      },
+      "SuggestionTrigger": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "When a workspace event happens.",
+            "required": ["event", "kind"],
+            "properties": {
+              "condition": {
+                "type": ["string", "null"],
+                "description": "A yes/no question the event must answer yes to before the routine\nruns, e.g. \"Is this email an invoice or a receipt?\"."
+              },
+              "event": {
+                "$ref": "#/components/schemas/SuggestedEvent",
+                "description": "The event."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["event"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "On a schedule.",
+            "required": ["schedule", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["schedule"]
+              },
+              "schedule": {
+                "$ref": "#/components/schemas/SuggestionSchedule",
+                "description": "The schedule."
+              }
+            }
+          }
+        ],
+        "description": "When a suggested routine runs."
+      },
       "TargetType": {
         "type": "string",
         "description": "The kind of entity a projection is materialized for.",
@@ -6186,6 +6480,11 @@
             "description": "The URL of the citation."
           }
         }
+      },
+      "Weekday": {
+        "type": "string",
+        "description": "A day of the week, as weekly schedules name them.",
+        "enum": ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]
       },
       "WithChatId": {
         "type": "object",

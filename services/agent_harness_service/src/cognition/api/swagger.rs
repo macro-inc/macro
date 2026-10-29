@@ -105,6 +105,8 @@ use utoipa::OpenApi;
             onboarding_api::complete_handler,
             onboarding_api::dismissed_prompts_handler,
             onboarding_api::dismiss_prompt_handler,
+            routine_suggestions::inbound::axum_router::get_suggestions_handler,
+            routine_suggestions::inbound::axum_router::refresh_suggestions_handler,
             ai_usage_api::get_usage_handler,
             ai_usage_api::set_pricing_handler,
             ai_projections::inbound::axum_router::upsert_projection::handler::<crate::cognition::api::context::DcsAiProjectionService>,
@@ -235,6 +237,18 @@ use utoipa::OpenApi;
                 onboarding::domain::models::OnboardingStatus,
                 onboarding::domain::models::ConnectedServer,
                 CompleteOnboardingRequest,
+
+                // Routine suggestions
+                routine_suggestions::domain::model::RoutineSuggestionSet,
+                routine_suggestions::domain::model::RoutineSuggestion,
+                routine_suggestions::domain::model::SuggestionSetStatus,
+                routine_suggestions::domain::model::RoutineSurface,
+                routine_suggestions::domain::model::SuggestionIcon,
+                routine_suggestions::domain::model::SuggestionTrigger,
+                routine_suggestions::domain::model::SuggestionSchedule,
+                routine_suggestions::domain::model::SuggestedEvent,
+                routine_suggestions::domain::model::Weekday,
+                routine_suggestions::domain::model::ClockTime,
 
                 // AI cost
                 ai_usage_api::UsageRequest,

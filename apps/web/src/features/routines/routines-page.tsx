@@ -4,6 +4,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { Show, Suspense } from 'solid-js';
+import { RoutineSuggestionsSection } from '../routine-suggestions/routine-suggestions';
 import { getErrorMessage } from './core/routine-draft';
 import { createRoutineListSource } from './queries/routine-sources';
 import { createRoutineTargetDisplay } from './queries/routine-target-display';
@@ -58,6 +59,7 @@ function RoutinesContent() {
           targetLabel={display.targetLabel}
           targetModel={display.targetModel}
           registerSearchFocus={(focus) => (focusSearch = focus)}
+          footer={<RoutineSuggestionsSection />}
           onCreate={create}
           onOpen={(id) => open(id)}
         />

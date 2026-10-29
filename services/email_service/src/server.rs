@@ -334,7 +334,7 @@ pub async fn run() -> anyhow::Result<()> {
                 s3: s3_client.clone(),
                 bucket: config.attachment_bucket.to_string(),
                 gmail: email_api.clone(),
-                outlook: crate::outbound::email_api::ProviderMailboxGateway(outlook_api),
+                outlook: crate::outbound::email_api::ProviderMailboxGateway(outlook_api.clone()),
             },
             files: crate::outbound::attachment_access::MailAttachmentFiles {
                 db: db.clone(),
@@ -382,6 +382,11 @@ pub async fn run() -> anyhow::Result<()> {
             )
             .with_connections_enabled(config.outlook_connections_enabled),
         ),
+        recent_inbox: Arc::new(crate::outbound::recent_inbox::RecentInboxReader {
+            db: db.clone(),
+            gmail: email_api.clone(),
+            outlook: outlook_api,
+        }),
         invitation_snapshots: email::outbound::invitation_pg::InvitationPgRepository(db.clone()),
         // calendar_service's sync kill switch rejects RSVP writes itself.
         invitation_resolver: Arc::new(CalendarInvitationResolver::new(PgCalendarRepository::new(

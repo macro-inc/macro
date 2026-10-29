@@ -636,3 +636,54 @@ async fn cloud_reference_attachments_preserve_provider_open_without_download_byt
     assert!(attachment.data_url.is_none());
     assert_eq!(server.received_requests().await.unwrap().len(), 2);
 }
+
+#[tokio::test]
+async fn recent_inbox_messages_read_one_newest_first_page_without_attachments() {
+    let (server, api, token) = setup().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/inbox/messages"))
+        .and(query_param("$orderby", "receivedDateTime desc"))
+        .and(query_param("$top", "2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":[
+            {
+                "id":"m2", "conversationId":"c2", "parentFolderId":"inbox",
+                "subject":"Invoice 42", "bodyPreview":"Your invoice is attached",
+                "from":{"emailAddress":{"address":"billing@vendor.example","name":"Vendor"}},
+                "toRecipients":[{"emailAddress":{"address":"me@example.com"}}],
+                "isRead":false, "isDraft":false, "flag":{},
+                "receivedDateTime":"2026-10-27T09:00:00Z"
+            },
+            {
+                "id":"m1", "conversationId":"c1", "parentFolderId":"inbox",
+                "subject":"Lunch?", "isRead":true, "isDraft":false, "flag":{},
+                "receivedDateTime":"2026-10-26T09:00:00Z"
+            }
+        ]})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let inbox = MailFolder {
+        id: ProviderId::new("inbox").unwrap(),
+        parent_id: None,
+        name: "Inbox".into(),
+        role: FolderRole::Inbox,
+        has_children: false,
+    };
+    let messages = api
+        .recent_inbox_messages(&token, Uuid::now_v7(), 2, &[inbox])
+        .await
+        .unwrap();
+    let subjects: Vec<_> = messages
+        .iter()
+        .map(|message| message.content.message.subject.as_deref())
+        .collect();
+    assert_eq!(subjects, vec![Some("Invoice 42"), Some("Lunch?")]);
+    let newest = &messages[0].content.message;
+    assert_eq!(newest.snippet.as_deref(), Some("Your invoice is attached"));
+    assert_eq!(
+        newest.from.as_ref().map(|from| from.email.as_str()),
+        Some("billing@vendor.example")
+    );
+    assert!(messages[0].state.in_inbox);
+    assert!(newest.attachments.is_empty());
+}

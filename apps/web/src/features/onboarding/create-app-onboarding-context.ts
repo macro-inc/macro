@@ -1,5 +1,7 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useHasPaidAccess } from '@core/auth/license';
+import { defaultModelForPlan } from '@core/component/AI/constant';
 import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { deriveIsAuthenticated } from '@core/context/user';
@@ -34,6 +36,12 @@ import {
   useCreateTeamWithInvitesMutation,
   useUserTeamsQuery,
 } from '@queries/team/teams';
+import {
+  createRoutineSuggestions,
+  warmRoutineSuggestions,
+} from '../routine-suggestions/queries/routine-suggestions';
+import { draftToCreateBody } from '../routines/queries/routine-draft';
+import { useCreateScheduleMutation } from '../routines/queries/schedules';
 import { applyWorkspaceAccent } from './apply-workspace-accent';
 import type {
   OnboardingContext,
@@ -282,6 +290,26 @@ export function createAppOnboardingContext(): OnboardingContext {
       await completeOnboarding.mutateAsync({ skipped });
       await completeTutorial.mutateAsync();
       return { t: 'completed' };
+    },
+    warmRoutineSuggestions: () =>
+      fireAndForget(warmRoutineSuggestions(), 'onboarding'),
+    createRoutineSuggestionsStep: () => {
+      const create = useCreateScheduleMutation(undefined, 'suggestion');
+      const hasPaidAccess = useHasPaidAccess();
+      return {
+        source: createRoutineSuggestions({
+          ready: () => viewer().t === 'signed-in',
+        }),
+        target: () => ({
+          kind: 'model',
+          model: defaultModelForPlan(hasPaidAccess()),
+        }),
+        create: async (draft) => {
+          const created = await create.mutateAsync(draftToCreateBody(draft));
+          if (!created.id) throw new Error('Created routine has no ID');
+          return created.id;
+        },
+      };
     },
     repairTutorial: async () => {
       await completeTutorial.mutateAsync();

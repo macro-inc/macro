@@ -31,6 +31,7 @@ files:
   - apps/web/src/features/calendar-team/core/**
   - apps/web/src/features/tasks-view/core/task-board*
   - apps/web/src/features/routines/core/**
+  - apps/web/src/features/routine-suggestions/core/**
   - apps/web/src/features/scheduling/core/**
   - apps/web/src/features/usage/core/**
   - apps/web/src/features/crm/core/**

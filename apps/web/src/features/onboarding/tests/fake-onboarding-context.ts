@@ -1,4 +1,9 @@
 import type { PaidPlanTier } from '@app/features/paywall/plans';
+import {
+  toRoutineSuggestions,
+  type WireSuggestion,
+} from '@app/features/routine-suggestions/queries/suggestion-wire';
+import { FIXTURE_ROUTINE_SUGGESTIONS } from '@app/features/routine-suggestions/tests/fixture-suggestions';
 import type { AiPlanCatalog } from '@service-auth/ai-billing-types';
 import type { ServerResponse } from '@service-cognition/generated/schemas';
 import { createSignal } from 'solid-js';
@@ -51,6 +56,10 @@ export type FakeOnboardingWorld = {
   /** How many refreshes a checkout's webhook takes to land. */
   webhookDelayPolls: number;
   accent: string | undefined;
+  /** The AI's routine suggestions; null while they are still generating. */
+  routineSuggestions: WireSuggestion[] | null;
+  /** Names of the routines turned on, in order. */
+  routines: string[];
   /** Capabilities that fail, with the message they report. */
   failures: Partial<
     Record<
@@ -62,7 +71,8 @@ export type FakeOnboardingWorld = {
       | 'planCatalog'
       | 'trialEligibility'
       | 'checkout'
-      | 'completion',
+      | 'completion'
+      | 'createRoutine',
       string
     >
   >;
@@ -129,6 +139,8 @@ export function defaultFakeWorld(): FakeOnboardingWorld {
     webhookPollsRemaining: undefined,
     webhookDelayPolls: 1,
     accent: undefined,
+    routineSuggestions: FIXTURE_ROUTINE_SUGGESTIONS,
+    routines: [],
     failures: {},
   };
 }
@@ -355,6 +367,30 @@ export function createFakeOnboarding(
       });
       return { t: 'completed' };
     },
+    warmRoutineSuggestions: () => call('warmRoutineSuggestions'),
+    createRoutineSuggestionsStep: () => ({
+      source: {
+        suggestions: () =>
+          world.routineSuggestions
+            ? toRoutineSuggestions(
+                unwrap(world.routineSuggestions),
+                'America/New_York'
+              )
+            : undefined,
+        generating: () => world.routineSuggestions === null,
+        error: () => undefined,
+        refresh: async () => call('refreshRoutineSuggestions'),
+      },
+      target: () => ({ kind: 'model', model: 'fixture/model' }),
+      create: async (draft) => {
+        call(`createRoutine:${draft.name}`);
+        fail('createRoutine');
+        update((world) => {
+          world.routines.push(draft.name);
+        });
+        return `routine-${world.routines.length}`;
+      },
+    }),
     repairTutorial: async () => {
       call('repairTutorial');
       update((draft) => {

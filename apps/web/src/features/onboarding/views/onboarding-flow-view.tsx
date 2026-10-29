@@ -1,5 +1,12 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { createEffect, Match, onCleanup, Show, Switch } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  Match,
+  onCleanup,
+  Show,
+  Switch,
+} from 'solid-js';
 import { BypassButton } from '../components/bypass-button';
 import {
   animateStepChange,
@@ -22,6 +29,7 @@ import { createOnboardingFlow } from '../primitives/onboarding-flow';
 import { EmailStep } from './email-step';
 import { PlanComparisonView } from './plan-comparison-view';
 import { type InviteOfferSlot, PlanStep } from './plan-step';
+import { RoutinesStep } from './routines-step';
 import { StoryStageView } from './story-stage-view';
 import { TeamStep } from './team-step';
 import { ToolsStep } from './tools-step';
@@ -99,19 +107,35 @@ export function OnboardingFlowView(props: {
       queueMicrotask(() => focusStepHeading(content));
     });
   };
+  const licensed = () => {
+    const viewer = context.viewer();
+    return viewer.t === 'signed-in' && viewer.viewer.licensed;
+  };
+  // The plan is settled before the routines step, but onboarding completes
+  // after it; a reload there falls back to what the license says.
+  const [finishPlan, setFinishPlan] = createSignal<() => Promise<void>>();
+  const choosePlan = (finishWith: () => Promise<void>) => {
+    if (finish.finishing()) return;
+    setFinishPlan(() => finishWith);
+    flow.leave('completed');
+    goTo('routines');
+  };
+  const finishOnboarding = () => {
+    const finishWith =
+      finishPlan() ??
+      (licensed() ? () => finish.finishPremium() : () => finish.finishFree());
+    return finishWith();
+  };
   const advance = (outcome: StepOutcome = 'completed') => {
     if (finish.finishing()) return;
-    const next = flow.leave(outcome);
-    const viewer = context.viewer();
-    if (
-      step() === 'team' &&
-      viewer.t === 'signed-in' &&
-      viewer.viewer.licensed
-    ) {
-      fireAndForget(finish.finishPremium(), 'onboarding');
+    const current = step();
+    // Inbox and tools are connected now: start picking routines for the last step.
+    if (current === 'tools') context.warmRoutineSuggestions();
+    if (current === 'team' && licensed()) {
+      choosePlan(() => finish.finishPremium());
       return;
     }
-    goTo(next);
+    goTo(flow.leave(outcome));
   };
   const viewerEmail = () => {
     const viewer = context.viewer();
@@ -128,6 +152,8 @@ export function OnboardingFlowView(props: {
   };
   const back = () => {
     const current = step();
+    // The plan is settled (and maybe paid for) once routines show.
+    if (current === 'routines') return undefined;
     const previous = current && previousOnboardingStep(current);
     return previous && !finish.finishing() ? () => goTo(previous) : undefined;
   };
@@ -153,9 +179,7 @@ export function OnboardingFlowView(props: {
         showPlanOffer() ? (
           <PlanComparisonView
             disabled={finish.finishing()}
-            onContinueFree={() =>
-              fireAndForget(finish.finishFree(), 'onboarding')
-            }
+            onContinueFree={() => choosePlan(() => finish.finishFree())}
             onBackToPro={() => focusStepHeading(content, true)}
             onStartMax={() =>
               fireAndForget(
@@ -215,11 +239,17 @@ export function OnboardingFlowView(props: {
                   'onboarding'
                 )
               }
-              onContinueFree={() =>
-                fireAndForget(finish.finishFree(), 'onboarding')
-              }
+              onContinueFree={() => choosePlan(() => finish.finishFree())}
               renderInviteOffer={props.renderInviteOffer}
-              onPremiumPaid={finish.finishPremium}
+              onPremiumPaid={async (tier) =>
+                choosePlan(() => finish.finishPremium(tier))
+              }
+            />
+          </Match>
+          <Match when={step() === 'routines'}>
+            <RoutinesStep
+              finishing={finish.finishing()}
+              onFinish={() => fireAndForget(finishOnboarding(), 'onboarding')}
             />
           </Match>
         </Switch>

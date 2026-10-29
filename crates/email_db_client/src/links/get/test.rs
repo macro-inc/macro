@@ -1,7 +1,7 @@
 use crate::links::get::{
     fetch_inbox_details_for_macro_id, fetch_inboxes_for_macro_id, fetch_link_by_email,
     fetch_link_by_macro_id_and_email_address, fetch_owned_link_for_message,
-    fetch_owned_link_for_thread,
+    fetch_owned_link_for_thread, fetch_readable_owned_inboxes,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -750,4 +750,35 @@ async fn fetch_inbox_details_reports_calendar_data_from_the_account_row(
     );
 
     Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn readable_owned_inboxes_skip_delegated_and_reauth_links(pool: Pool<Postgres>) {
+    insert_user(&pool, CHILD, "sharedbox@corp.test").await;
+    insert_user(&pool, PRIMARY, "primary@corp.test").await;
+    let (shared, _, _) =
+        insert_inbox_with_thread_and_message(&pool, CHILD, "sharedbox@corp.test").await;
+    insert_delegation(&pool, PRIMARY, CHILD, shared).await;
+    let (own, _, _) =
+        insert_inbox_with_thread_and_message(&pool, PRIMARY, "primary@corp.test").await;
+    let (revoked, _, _) =
+        insert_inbox_with_thread_and_message(&pool, PRIMARY, "old@corp.test").await;
+    sqlx::query!(
+        "UPDATE email_links SET needs_reauth = true WHERE id = $1",
+        revoked
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let inboxes = fetch_readable_owned_inboxes(&pool, &macro_id(PRIMARY))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        inboxes.iter().map(|inbox| inbox.id).collect::<Vec<_>>(),
+        vec![own]
+    );
+    assert_eq!(inboxes[0].email_address, "primary@corp.test");
+    assert_eq!(inboxes[0].provider, UserProvider::Gmail);
 }

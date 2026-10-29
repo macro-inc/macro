@@ -1,5 +1,6 @@
 import { SearchBar, ViewSidebar } from '@app/components/view-shell';
 import { runCreateAction } from '@app/features/command/Launcher';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { SlackImportSidebar } from '@app/features/slack-import/slack-import-sidebar';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
@@ -432,6 +433,7 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
         <Show when={!isTouchDevice()}>
           <ConversationsCreateMenu presentation="sidebar" />
         </Show>
+        <SidebarRoutineSuggestions surface="chat" />
         <ViewSidebar.Toolbar class={!isTouchDevice() ? 'px-0' : undefined}>
           <Tabs
             aria-label="Chat sidebar views"

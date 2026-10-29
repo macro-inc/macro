@@ -51,6 +51,10 @@ beside a scrolling editor whose selection runs past its visible bottom
 (`clipToVisible`), have a backend-free browser regression:
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/directive/browser-test/playwright.config.ts`.
 
+Suggested routines (sidebar card, modal, one-click enable, edit before enabling,
+and the phone sheet) have a backend-free browser regression:
+`bunx playwright test --config src/features/routine-suggestions/browser-test/playwright.config.ts`.
+
 Composer `/` menus list Connections between Skills and Pull requests. Keep native
 and hosted providers aligned with `mcp_select::select_connections`, prefer native
 credentials per provider, and preserve editor focus on pointer and touch selection.

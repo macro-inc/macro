@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE routine_suggestion_set\n            SET status = 'ready', suggestions = $3, generated_at = $4\n            WHERE user_id = $1 AND generation_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Jsonb",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "261339e50c4dfc7c940f1104505f1463c5359688c9ea8fd56caa607c8946673b"
+}
