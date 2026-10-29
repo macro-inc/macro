@@ -50,6 +50,9 @@ Add and value edits stay disabled until the initial collection finishes loading.
 The accessible loading-status region stays mounted outside the collapsing drop
 feedback. Native file uploads are not supported here; the Add action remains
 available for keyboard and touch.
+Saved-item remove controls appear on the individual chip's hover or keyboard
+focus and remain visible on touch. Reserve their space so hover does not resize
+chips. Chip backgrounds use `bg-surface` at `Layer depth={2}`.
 
 Collection drop handling and save callbacks stay in the property callers.
 

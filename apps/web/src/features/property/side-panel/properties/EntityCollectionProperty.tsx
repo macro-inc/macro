@@ -370,7 +370,7 @@ export function NonUserEntityChip(props: {
     <Layer depth={2}>
       <div
         ref={containerRef}
-        class="inline-flex min-w-0 max-w-full border h-7 items-stretch border-edge-muted rounded-md bg-surface text-ink overflow-clip"
+        class="group/collection-item inline-flex min-w-0 max-w-full border h-7 items-stretch border-edge-muted rounded-md bg-surface text-ink overflow-clip"
         aria-busy={props.pending || undefined}
       >
         <Show
@@ -408,20 +408,21 @@ export function NonUserEntityChip(props: {
             />
           </Show>
           <Show when={props.canEdit && props.onRemove}>
-            <div class="border-l border-edge-muted" />
-            <Button
-              variant="ghost"
-              type="button"
-              size="icon-sm"
-              class="flex w-6 p-1 h-full shrink-0 rounded-none text-ink-muted not-disabled:hover:text-failure-ink"
-              onClick={(event) => {
-                event.stopPropagation();
-                props.onRemove?.();
-              }}
-              aria-label={`Remove ${name()}`}
-            >
-              <DeleteIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-            </Button>
+            <div class="flex shrink-0 border-l border-edge-muted pointer-events-none opacity-0 not-touch:group-hover/collection-item:pointer-events-auto not-touch:group-hover/collection-item:opacity-100 group-focus-within/collection-item:pointer-events-auto group-focus-within/collection-item:opacity-100 touch:pointer-events-auto touch:opacity-100">
+              <Button
+                variant="ghost"
+                type="button"
+                size="icon-sm"
+                class="flex w-6 p-1 h-full shrink-0 rounded-none text-ink-muted not-disabled:hover:text-failure-ink"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  props.onRemove?.();
+                }}
+                aria-label={`Remove ${name()}`}
+              >
+                <DeleteIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+              </Button>
+            </div>
           </Show>
         </Show>
       </div>
