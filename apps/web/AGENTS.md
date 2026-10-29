@@ -112,7 +112,9 @@ mentions) rank with `NAME_MATCH_RANKING` in `@core/util/freshSort`: names equal
 to the query first, then names starting with it, then other matches, with tight
 matches near the start scoring higher. Each menu's recency weights and type
 boosts (Cmd+K's channel and DM boosts) order rows within those groups and never
-lift a row past a better name match. Tune name relevance there for every menu.
+lift a row past a better name match. The one exception: Cmd+K then keeps Macro
+users and DMs ahead of CRM contacts across the people positions, whatever their
+match. Tune name relevance there for every menu.
 Name groups and match position use the row's label (`getDisplayName`), so search
 text can add emails, aliases, or command keywords before or after it. Mention
 menus rank loaded entity sources together with `MENTION_RANKING_CONFIG` in
