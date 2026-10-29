@@ -31,7 +31,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-it('refreshes isolated folder discovery and retained rows on provider changes without refetching All Mail', async () => {
+it('refreshes isolated folder queries on provider changes without refetching All Mail', async () => {
   const keys = ['spam', 'trash', 'all'].map(
     (emailView) =>
       soupKeys.astItems({ params: {}, body: { emailView }, transport: 'rest' })
