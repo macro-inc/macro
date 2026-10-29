@@ -108,6 +108,7 @@ harness_id = { path = "../../crates/harness_id" }
 harnesses = { path = "../../crates/harnesses", default-features = false, features = ["outbound", "ports"] }
 http = { workspace = true }
 http-body-util = { workspace = true }
+image_generation = { path = "../../crates/image_generation", features = ["axum"] }
 import = { path = "../../crates/import" }
 import_notion = { path = "../../crates/import_notion" }
 import_linear = { path = "../../crates/import_linear" }
