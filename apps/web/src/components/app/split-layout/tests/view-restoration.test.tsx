@@ -21,6 +21,8 @@ import {
   homeSplitRoute,
   notFoundRoute,
   searchRoute,
+  taskDetailRoute,
+  tasksSplitRoute,
 } from '@app/routes/routes';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { cleanup, render } from '@solidjs/testing-library';
@@ -136,6 +138,11 @@ function setup(
               component: AuthenticatedView,
               children: [driveTabRoute],
             },
+            {
+              ...tasksSplitRoute,
+              component: AuthenticatedView,
+              children: [taskDetailRoute],
+            },
             { ...searchRoute, component: AuthenticatedView },
             notFoundRoute,
           ],
@@ -187,6 +194,81 @@ afterEach(() => {
 });
 
 describe('opt-in view restoration', () => {
+  describe.each([
+    { view: 'channels', detail: '/channels/channel-one', targetIndex: 0 },
+    { view: 'channels', detail: '/channels/channel-one', targetIndex: 1 },
+    { view: 'tasks', detail: '/tasks/task-one', targetIndex: 0 },
+    { view: 'tasks', detail: '/tasks/task-one', targetIndex: 1 },
+  ])('$view list in pane $targetIndex', ({ view, detail, targetIndex }) => {
+    it.each([false, true])(
+      'keeps the existing detail independent (explicit handle: %s)',
+      async (explicitHandle) => {
+        const url = targetIndex === 0 ? `/home/~${detail}` : `${detail}/~/home`;
+        const { router, manager } = setup(url);
+        const detailIndex = 1 - targetIndex;
+        const targetPane = router.panes()[targetIndex]!;
+        const detailPane = router.panes()[detailIndex]!;
+        const target = manager.getSplit(manager.splits()[targetIndex]!.id)!;
+        const existing = manager.getSplit(manager.splits()[detailIndex]!.id)!;
+        const detailEntry = router.entry(detailPane);
+        manager.activateSplit(explicitHandle ? existing.id : target.id);
+
+        manager.openWithSplit(
+          { type: 'component', id: view },
+          {
+            resume: true,
+            allowDuplicate: true,
+            handle: explicitHandle ? target : undefined,
+          }
+        );
+        await router.settled();
+
+        expect(
+          router.entry(targetPane)?.location.route.matches.at(-1)?.id
+        ).toBe(`view-${view}`);
+        expect(router.entry(detailPane)).toBe(detailEntry);
+        expect(manager.activeSplit()?.id).toBe(target.id);
+        expect(router.panes()).toHaveLength(2);
+        await router.navigatePane(targetPane, -1);
+        expect(
+          router.entry(targetPane)?.location.route.matches.at(-1)?.id
+        ).toBe('view-home');
+        expect(router.entry(detailPane)).toBe(detailEntry);
+      }
+    );
+  });
+
+  it('opens the list when a remembered channel is held by another pane preview', async () => {
+    const { router, manager } = setup();
+    const leftPane = router.panes()[0]!;
+    await router.navigatePane(leftPane, '/home');
+    await router.open('/drive', { newPane: true });
+    const rightPane = router.panes()[1]!;
+    const left = manager.getSplit(manager.splits()[0]!.id)!;
+    const activate = vi.fn();
+    const owner = Symbol('preview');
+    const unregister = router.claims.register(() => [
+      {
+        owner,
+        pane: rightPane,
+        claim: 'block:channel:channel-one',
+        activate,
+      },
+    ]);
+
+    manager.openWithSplit(
+      { type: 'component', id: 'channels' },
+      { resume: true, allowDuplicate: true, handle: left }
+    );
+    await router.settled();
+
+    expect(router.entry(leftPane)?.location.route.matches.at(-1)?.id).toBe(
+      'view-channels'
+    );
+    expect(activate).not.toHaveBeenCalled();
+    unregister();
+  });
+
   it('restores nested location, search, and UI state through existing layout navigation', async () => {
     const { router, manager } = setup();
     const pane = router.panes()[0]!;

@@ -55,6 +55,7 @@ const channelsEntryStateSchemaWithDefaults = z.object({
   }),
   collapsedLabels: z.array(z.string()).default([]),
   threadsChannelId: z.string().optional(),
+  unreadOnly: z.boolean().default(false),
 });
 
 type ChannelsEntryState = z.infer<typeof channelsEntryStateSchemaWithDefaults>;
@@ -70,6 +71,7 @@ const DEFAULT_CHANNELS_ENTRY_STATE = {
   },
   collapsedLabels: [],
   threadsChannelId: undefined,
+  unreadOnly: false,
 } satisfies ChannelsEntryState;
 
 const channelsPreferencesSchema = z.object({
@@ -95,7 +97,6 @@ const channelsPreferencesSchema = z.object({
         .default(CHANNELS_DEFAULT_SORT_BY.threads),
     })
     .default(CHANNELS_DEFAULT_SORT_BY),
-  hideSupportChannels: z.boolean().default(true),
 });
 
 type ChannelsPreferences = z.infer<typeof channelsPreferencesSchema>;
@@ -104,7 +105,6 @@ const DEFAULT_CHANNELS_PREFERENCES = {
   version: 1,
   asideWidth: CHANNELS_DEFAULT_RAIL_WIDTH,
   sortBy: CHANNELS_DEFAULT_SORT_BY,
-  hideSupportChannels: true,
 } satisfies ChannelsPreferences;
 
 function selectEntryState(state: ChannelsViewState): ChannelsEntryState {
@@ -114,6 +114,7 @@ function selectEntryState(state: ChannelsViewState): ChannelsEntryState {
     expandedGroups: state.expandedGroups,
     collapsedLabels: state.collapsedLabels,
     threadsChannelId: state.threadsChannelId,
+    unreadOnly: state.unreadOnly,
   };
 }
 
@@ -130,6 +131,7 @@ function restoreChannelsEntryState(
     expandedGroups: restored.expandedGroups,
     collapsedLabels: restored.collapsedLabels,
     threadsChannelId: restored.threadsChannelId,
+    unreadOnly: restored.unreadOnly,
   };
 }
 
@@ -199,7 +201,6 @@ function createChannelsPreferencesStorage(options: {
       version: 1,
       asideWidth: clampChannelsRailWidth(state.asideWidth),
       sortBy: state.sortBy,
-      hideSupportChannels: state.hideSupportChannels,
     } satisfies ChannelsPreferences);
 
   return {
@@ -222,14 +223,12 @@ function createChannelsPreferencesStorage(options: {
           ...current,
           asideWidth: restored.asideWidth,
           sortBy: restored.sortBy,
-          hideSupportChannels: restored.hideSupportChannels,
         };
       } catch {
         return {
           ...current,
           asideWidth: DEFAULT_CHANNELS_PREFERENCES.asideWidth,
           sortBy: DEFAULT_CHANNELS_PREFERENCES.sortBy,
-          hideSupportChannels: DEFAULT_CHANNELS_PREFERENCES.hideSupportChannels,
         };
       }
     },

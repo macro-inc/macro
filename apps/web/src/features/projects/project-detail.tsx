@@ -4,6 +4,7 @@ import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
 } from '@app/features/next-soup/actions';
+import type { ComposeTaskProps } from '@app/features/task-composer/core/types';
 import { useNavigate } from '@app/lib/split-router';
 import {
   projectDetailRoute,
@@ -11,7 +12,6 @@ import {
   tasksSplitRoute,
 } from '@app/routes/routes';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import type { ComposeTaskProps } from '@block-md/component/ComposeTask';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   useSplitDisplayName,

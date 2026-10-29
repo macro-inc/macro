@@ -183,7 +183,7 @@ export function AgentCreateWizard(props: {
           fallback={
             <Button
               type="submit"
-              variant="neutral"
+              variant="primary"
               size="xl"
               class="min-w-44"
               disabled={!props.canContinue(step())}
@@ -206,7 +206,7 @@ export function AgentCreateWizard(props: {
             <div class="flex flex-col items-center gap-2">
               <Button
                 type="submit"
-                variant="neutral"
+                variant="primary"
                 size="xl"
                 class="min-w-44"
               >

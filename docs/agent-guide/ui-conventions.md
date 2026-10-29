@@ -42,8 +42,8 @@ shared Button touch targets; do not resize these controls through classes.
 On touch devices, low-emphasis header actions remain borderless with their
 existing hover and pressed states. Emphasized variants retain their treatment,
 including an active call's green ink. Button size does not change variant colors
-or framing. Primary, neutral, secondary, danger, and success Buttons automatically use raised desktop styling and glass on touch. Use `finish="flat"` to opt out, or `finish="raised"` to frame a ghost/link action. Outline Buttons always stay flat, including when a finish is supplied.
-Primary Buttons use the theme accent and its resolved contrast color. Use `neutral` for solid monochrome emphasis (black in light themes, white in dark themes), and secondary for softer neutral actions. Current Button usages trial secondary instead of outline; the outline API and canonical gallery examples remain available. The separate accent variant remains removed.
+or framing. Primary, accent, secondary, danger, and success Buttons automatically use raised desktop styling and glass on touch. Use `finish="flat"` to opt out, or `finish="raised"` to frame a ghost/link action. Outline Buttons always stay flat, including when a finish is supplied.
+Primary Buttons use solid monochrome emphasis (black in light themes, white in dark themes) for main actions such as create, save, submit, invite, and continue. Do not use accent merely because an action is primary. Accent Buttons use the theme accent and its resolved contrast color; accent emphasis is always explicit. Omitted variants use primary, and secondary remains the softer neutral action. Current Button usages trial secondary instead of outline; the outline API and canonical gallery examples remain available.
 Button API and composition details live in the
 [shared primitive contract](../../.agents/rules/web/ui-primitives.md#button-and-buttongroup).
 Inline calendar-invitation text actions remove the transparent border to keep alignment.
@@ -72,6 +72,11 @@ rounded selected pill. Use borders and selected fills without raised edges,
 gradients, or shadows. Buttons use variant-specific pressed fills. Wrapping
 preset choices can remain separate pills. Keep each surface's existing touch
 treatment and the agent composer's sliding track (`variant="track"`).
+
+Mobile chrome marks selection in ink, never the accent: the selected pill tab
+fills with ink, the current dock icon and drawer row stay at full ink while
+their siblings dim, and a checked filter option gets an ink check. The accent
+stays for attention — unread dots and filter counts.
 
 Reuse `Button`, `Input`, `InputGroup`, `Tabs`, `ComposerSurface`, `menu-surface`, and
 `elevated-surface` instead of introducing one-off surface styling. Every menu,
@@ -152,6 +157,58 @@ action; it uses the theme accent. Use neutral for solid monochrome emphasis and
 secondary for softer neutral actions. Loading actions use `loading`. Mobile
 confirmation drawers use the same action hierarchy.
 
+## Property collections
+
+Use a 4px vertical gap between all property rows, including inline Tags and
+transitions between regular fields and collection fields.
+Separate populated property lists from the bottom Add property action by 16px,
+using list bottom spacing rather than an action margin so empty lists leave no gap.
+Keep property names on one line. Let collection headers use available space up
+to their actions before truncating; value rows retain the shared label column.
+
+Empty multi-entity collections show only their property header, without a
+placeholder or reserved content area. Align their labeled ghost Add button with
+the shared value-selector column, allowing longer names to borrow available
+space. Populated collections use an icon-only ghost
+Add button at the right, immediately before the pin action. Keep Add actions
+extra-muted until hovered or keyboard-focused.
+While dragging a compatible app item, tint the property name and show a small
+tray-arrow drop icon without expanding the row. Hovering a populated property highlights
+its existing item list as the dashed dropzone, without a separate box or layout
+shift. Empty properties reveal a full-width dashed dropzone below the field label.
+Use 300ms transitions with reduced-motion support; this first pass does not use
+pointer proximity. Hide collection Add buttons during app-item drags while
+preserving their layout space. Incompatible or unavailable collections retain
+their height and show no rejection feedback. Dropping adds a reference without
+moving the original item.
+Existing references stay in place. Duplicate references, the owning entity's
+matching type-and-ID pair, unsupported item types, and types outside the property's
+restriction are ignored. Read-only, metadata, loading, saving, and open-editor
+states reject drops. Picker saves, drops, chip removal, and row removal share a
+busy state through save and refresh, preventing stale references from replacing
+newly selected values.
+New references appear immediately in the collection as pending chips with an
+inline spinner through saving and refresh. Use the dragged item's label while
+its preview metadata loads. Failed saves clear pending chips through the existing
+error flow. Pending chips cannot be opened or removed. A persistently
+mounted status region announces additions, including picker saves. Removed
+references disappear immediately and are restored from the last confirmed values
+if saving fails. A failed refresh does not undo a successful save: keep confirmed
+edits visible until the query reflects them, and base subsequent edits on those
+values. Other values remain visible; further edits and drops stay locked during
+that operation. Add and value edits also remain disabled while the initial
+collection loads.
+
+The empty dedicated Tags section uses a compact, tag-icon Add tags outline button,
+without a separate message, card, title, or description. Keep the button
+permission-gated and connected to the existing tag picker; read-only sections
+show “No tags added yet” instead.
+Inline Tags property rows remain compact.
+
+The **Add** action remains the keyboard/touch alternative. This target does not
+upload files dragged from the computer. A persisted drop changes property data;
+use only disposable items and properties when that mutation is authorized.
+
 ## List-item sharing
 
 Right-click a shareable list row and choose **Share**. The sharing dialog must
@@ -181,10 +238,20 @@ information panels. Markdown/tasks include Ask Macro and document/task dispatch;
 includes Ask Macro and Create task; PDF and calls include Ask Macro. Native
 projects put Delete in the `Project actions` menu after the project title.
 
-Standard metadata is quiet, non-collapsible text at the bottom of each panel,
-separated by a muted divider. Owner and available timestamps share one format;
-Markdown adds word/character counts. There is no standard Details or Stats
+Standard metadata appears at the top of each panel, before the interactive
+sections and separated by a muted divider. Each row places its label without an
+icon in a left column sized by `--sidepanel-label-width`, followed by a nearby
+left-aligned value. Metadata, property grids, and inline Tags share this column
+and 12px label-to-value gap; metadata rows retain their 8px vertical gaps.
+Word and character counts appear last. There is no standard Details or Stats
 disclosure. Agent runtime information remains in its dedicated Session section.
+Section headers and bodies use 12px horizontal insets, with 12px bottom padding
+on the body. Collapsible headers place the shared view-sidebar caret immediately
+after the section name, with matching hover and focus treatment rather than an
+underline. Editable Properties and Tags headers have a right-aligned, icon-only
+Add action, visible whenever the section is expanded, that opens the existing
+picker. Compose actions natively with the section and their owning state;
+do not mount them through a portal. Keep read-only sections free of Add actions.
 
 Block information panels float over the right side of the block without changing
 the content width or its centered position. A single rounded bubble fits its

@@ -31,6 +31,7 @@ import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { type Accessor, createMemo } from 'solid-js';
 import { TASK_SORT_DEFINITIONS } from '../constants';
+import { isProjectTab } from '../core/task-navigation';
 import type { TaskFacetContext } from '../filters/task-facets';
 import {
   type TaskViewContext,
@@ -41,7 +42,6 @@ import type {
   TaskReferenceScope,
   TasksViewState,
 } from '../types';
-import { createAutomaticTaskPagination } from './automatic-task-pagination';
 import { createScopedTaskSearch } from './scoped-task-search';
 import { buildTaskQuery } from './task-query';
 import { buildTaskSearchRequest } from './task-search';
@@ -67,8 +67,6 @@ export type UseTasksDataSourceOptions = {
   crm?: Accessor<TaskCrmScope>;
   enabled?: Accessor<boolean>;
   networkPaused?: Accessor<boolean>;
-  /** Project lists drain all cursors instead of requiring per-group Load More. */
-  loadAll?: boolean;
   board?: Accessor<boolean>;
 };
 
@@ -76,8 +74,6 @@ export type TasksDataSourceItem = SoupRow<TaskEntityWithProperties>;
 
 export type TasksDataSource = ListDataSource<TasksDataSourceItem> & {
   loadMoreGroup: (groupId: string) => Promise<void>;
-  paginationError?: Accessor<unknown>;
-  retryPagination?: () => void;
   /** Uncollapsed rows for alternative layouts; the query owner is shared. */
   boardRows?: Accessor<TasksDataSourceItem[]>;
   boardSearching?: Accessor<boolean>;
@@ -161,7 +157,7 @@ export function useTasksDataSource(
   );
   const facetOptionsReady = () =>
     (options.enabled?.() ?? true) &&
-    state.tab !== 'projects' &&
+    !isProjectTab(state.tab) &&
     (state.savedViewActive
       ? Boolean(options.userId())
       : tagFacetReady(state.facets, options.tagSetsReady()));
@@ -290,56 +286,6 @@ export function useTasksDataSource(
   const groupQueryFor = (groupKey: string) =>
     groupedQueries.map().get(groupKey);
 
-  const automatic = createAutomaticTaskPagination({
-    enabled: () =>
-      Boolean(options.loadAll) &&
-      facetOptionsReady() &&
-      !options.networkPaused?.(),
-    scope: () =>
-      JSON.stringify([
-        queryArgs(),
-        state.search,
-        options.userId(),
-        options.enabled?.(),
-      ]),
-    sources: () => {
-      if (search.isSearching()) {
-        return [
-          {
-            id: 'search',
-            hasMore: search.hasNextPage(),
-            pending: search.isFetching(),
-            load: async () => {
-              await search.fetchNextPage();
-            },
-            error: search.error,
-          },
-        ];
-      }
-      if (query.isPending || query.isPlaceholderData) return [];
-      return [
-        {
-          id: 'list',
-          hasMore: query.hasNextPage,
-          pending: query.isFetching,
-          load: async () => {
-            await query.fetchNextPage();
-          },
-          error: () => query.error,
-        },
-        ...[...groupedQueries.map().values()].map((group) => ({
-          id: `group:${group.key}`,
-          hasMore: group.hasNextPage(),
-          pending: group.isFetchingNextPage(),
-          load: async () => {
-            await group.fetchNextPage();
-          },
-          error: group.error,
-        })),
-      ];
-    },
-  });
-
   const continuations: TaskGroupContinuationReader = {
     entities: (groupKey) =>
       (groupQueryFor(groupKey)?.data()?.entities ?? []).flatMap((entity) =>
@@ -410,7 +356,7 @@ export function useTasksDataSource(
           count: group.totalCount,
         };
 
-        if (!options.loadAll && continuations.hasMore(group.key)) {
+        if (continuations.hasMore(group.key)) {
           taskGroup.loadMore = {
             scopeId: `tasks:${group.key}`,
             isLoading: continuations.isLoading(group.key),
@@ -458,7 +404,6 @@ export function useTasksDataSource(
   };
 
   const hasMore = () => {
-    if (options.loadAll) return false;
     if (usesServiceSearch()) return search.hasNextPage();
     return query.hasNextPage;
   };
@@ -527,7 +472,5 @@ export function useTasksDataSource(
     loadMoreGroup: continuations.loadMore,
     loadMore,
     refresh,
-    paginationError: automatic.error,
-    retryPagination: automatic.retry,
   } satisfies TasksDataSource;
 }

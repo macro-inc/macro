@@ -76,6 +76,17 @@ both listener attachment and pending-intent reads, including a tap delivered
 before the pending read stalls. Receiving a push without tapping it must not
 navigate.
 
+For an iOS warm resume, leave the app running past its startup timeout before
+backgrounding it. Tap an uncached notification without a direct channel target
+and fail its notification lookup: the app must reveal the existing page and
+show **Failed to open notification.** A later tap must still open normally.
+Also stall navigation or its native acknowledgment: after eight seconds the
+frontend releases the cover without discarding the pending destination. Duplicate
+delivery must not restart that deadline; a newer tap must get its own deadline.
+`notification.cover_timeout` is recorded on the notification-open trace. This
+frontend recovery requires responsive JavaScript and native IPC; verify actual
+iOS presentation separately from browser bridge simulations.
+
 On iOS, Macro requests provisional authorization at launch, so
 **Settings → Apps → Macro → Notifications** exists before any prompt, and a
 signed-in device registers for pushes that arrive quietly in Notification

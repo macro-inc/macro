@@ -66,7 +66,6 @@ import {
   filterChannelLabelMembers,
 } from '../../core/channel-label-eligibility';
 import { resolveChannelLabelMemberships } from '../../core/smart-tags';
-import { isSupportChannel } from '../../core/support-channels';
 import {
   type ChannelsSourceScope,
   type ChannelsSources,
@@ -106,6 +105,7 @@ export { buildChannelRailRows } from './build-channel-rail-rows';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useChannelCalls } from './hooks/useChannelCalls';
 import { useChannelRailActivity } from './hooks/useChannelRailActivity';
+import { useChannelRailUnreadFilter } from './hooks/useChannelRailUnreadFilter';
 
 const CHANNEL_RAIL_SECTIONS: ChannelsRailSection[] = [
   'favorites',
@@ -154,7 +154,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     threadsEnabled,
     threadsChannelId,
     setThreadsChannelId,
-    hideSupportChannels,
+    setUnreadOnly,
   } = useChannelsView();
 
   const panel = useSplitPanelOrThrow();
@@ -399,11 +399,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const labelledChannels = createMemo<ChannelEntity[]>(() => {
     if (!channelTagsEnabled()) return [];
     const labelled = new Set(labels().flatMap((label) => label.channelIds));
-    return referencedChannels()
-      .filter((channel) => labelled.has(channel.id))
-      .filter(
-        (channel) => !hideSupportChannels() || !isSupportChannel(channel)
-      );
+    return referencedChannels().filter((channel) => labelled.has(channel.id));
   });
 
   const allChannels = createMemo(() =>
@@ -415,17 +411,23 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const channelById = (channelId: string) =>
     channelsById().get(channelId) ??
     referencedChannels().find((channel) => channel.id === channelId);
-  const favorites = createMemo(() => {
-    const all = allFavorites();
-    if (!hideSupportChannels()) return all;
-    return all.filter((favorite) => {
-      if (favorite.entityType !== 'channel') return true;
-      const channel = channelById(favorite.entityId);
-      return channel === undefined || !isSupportChannel(channel);
-    });
-  });
 
   const channelActivity = useChannelRailActivity(allChannels, channelCalls);
+
+  const unreadOnly = () => state.unreadOnly;
+  const unreadFilter = useChannelRailUnreadFilter({
+    sources: props.sources,
+    favorites: allFavorites,
+    unreadOnly,
+    unreadChannelIds: channelActivity.unreadChannelIds,
+    isSelected: (channelId) =>
+      tab() === 'threads'
+        ? threadsChannelId() === channelId
+        : selectedChannel()?.id === channelId,
+  });
+  // The rail lists these; unread state and label lookups use the full lists.
+  const sources = unreadFilter.sources;
+  const favorites = unreadFilter.favorites;
 
   const isLabelOpen = (labelId: string) =>
     !state.collapsedLabels.includes(labelId);
@@ -439,6 +441,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
       ]),
       channelsById: channelsById(),
       isLabelOpen,
+      isChannelVisible: unreadOnly()
+        ? unreadFilter.isChannelVisible
+        : undefined,
     })
   );
 
@@ -467,11 +472,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
       state.expandedGroups,
       {
         favorites: favorites(),
-        team_channels: props.sources.team_channels.items(),
-        channels: props.sources.channels.items(),
-        direct_messages: props.sources.direct_messages.items(),
-        recents: props.sources.recents.items(),
-        threads: props.sources.threads.items(),
+        team_channels: sources.team_channels.items(),
+        channels: sources.channels.items(),
+        direct_messages: sources.direct_messages.items(),
+        recents: sources.recents.items(),
+        threads: sources.threads.items(),
       },
       channelSectionRows()
     );
@@ -598,7 +603,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
         ? channelSectionRows().map((row) =>
             row.kind === 'conversation' ? row.channel.id : undefined
           )
-        : props.sources[scope].items().map((channel) => channel.id);
+        : sources[scope].items().map((channel) => channel.id);
 
     const selectedIndex = rendered.indexOf(selectedChannel()?.id ?? '');
 
@@ -618,7 +623,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
 
   const scrollThreadsToSelectedOrStart = () => {
-    const items = props.sources.threads.items();
+    const items = sources.threads.items();
     const selectedIndex = items.findIndex(
       (channel) => channel.id === threadsChannelId()
     );
@@ -677,12 +682,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
     const sourcesReady = searchOpen
       ? !props.sources.search.isLoading()
       : tab() === 'recents'
-        ? !props.sources.recents.isLoading()
+        ? !sources.recents.isLoading()
         : tab() === 'threads'
-          ? !props.sources.threads.isLoading()
-          : BROWSE_QUERY_SCOPES.every(
-              (scope) => !props.sources[scope].isLoading()
-            );
+          ? !sources.threads.isLoading()
+          : BROWSE_QUERY_SCOPES.every((scope) => !sources[scope].isLoading());
     if (!sourcesReady) return;
 
     const frame = requestAnimationFrame(() => {
@@ -743,7 +746,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
           const row = current?.item;
           if (direction !== 1 || row?.kind !== 'conversation') return true;
 
-          const source = props.sources[row.scope];
+          const source = sources[row.scope];
           const renderedCount =
             row.scope === 'team_channels'
               ? channelSectionRows().length
@@ -1228,8 +1231,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
     list,
     tab,
     selectTab,
-    sources: props.sources,
+    sources,
     favorites,
+    unreadOnly,
+    setUnreadOnly,
     channelById,
     selectedChannel,
     threadsEnabled,

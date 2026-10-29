@@ -351,6 +351,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "base64 0.22.1",
+ "bot_id",
  "bytes",
  "chrono",
  "futures",
@@ -842,6 +843,7 @@ dependencies = [
  "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
+ "mention_utils",
  "messages",
  "mockall",
  "model-entity",
@@ -1242,6 +1244,7 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-macros",
+ "bot_id",
  "genai_telemetry",
  "macro_user_id",
  "opentelemetry",
@@ -2205,6 +2208,7 @@ dependencies = [
  "model",
  "model-entity",
  "model_notifications",
+ "models_email",
  "models_permissions",
  "native_app_service",
  "non_empty",
@@ -7315,6 +7319,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "email_focus_worker"
+version = "0.1.0"
+dependencies = [
+ "ai_usage",
+ "chrono",
+ "doppler-config",
+ "email",
+ "jev",
+ "kafka_util",
+ "macro_config",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_env_var",
+ "macro_event_broker",
+ "macro_user_id",
+ "memory",
+ "rdkafka",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "email_formatting"
 version = "0.1.0"
 dependencies = [
@@ -9095,6 +9128,7 @@ dependencies = [
  "futures",
  "graphql_common",
  "macro_user_id",
+ "rootcause",
  "serde_json",
  "tokio",
  "tracing",
@@ -12369,6 +12403,7 @@ name = "macro_sha_count_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "macro_env_var",
  "model",
  "redis",
  "tokio",
@@ -12554,9 +12589,11 @@ version = "0.1.0"
 name = "mcp_auth_proxy"
 version = "0.1.0"
 dependencies = [
+ "ai_toolset",
  "anyhow",
  "axum",
  "base64 0.22.1",
+ "bot_id",
  "fusionauth",
  "macro_auth",
  "macro_user_id",
@@ -13668,6 +13705,8 @@ dependencies = [
  "model_user",
  "models_pagination",
  "notification_state",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "rate_limit",
  "rdkafka",
  "redis",
@@ -13686,6 +13725,8 @@ dependencies = [
  "tokio-util",
  "tower 0.5.3",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "url",
  "utoipa",
  "uuid",
@@ -17292,6 +17333,7 @@ dependencies = [
  "entity_access_management",
  "entity_registry",
  "entity_registry_db_utils",
+ "feature_flags",
  "frecency",
  "futures",
  "jev",
@@ -18204,6 +18246,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
+ "macro_sha_count_client",
  "mockall",
  "redis",
  "sqlx",

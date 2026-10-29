@@ -296,9 +296,27 @@ iOS: tap it to reopen the drawer, drag it to another corner, or drag it past a s
 to tuck it away (an edge tab brings it back once someone else is in the call). Leaving the app continues the call in system PiP (you and the
 active speaker); tapping PiP shows Android's menu with Mute, **Leave** and expand,
 which reopens the drawer. **Open call controls** in the web call controls also
-reopens the drawer. Leaving the channel does not end the call. Incoming calls
-expose Answer/Decline in the **Calls** notification channel, including while
-locked/backgrounded; while Android 14+ blocks full-screen notifications, a toast
+reopens the drawer. Leaving the channel does not end the call. While ringing,
+a locked phone opens a full-screen incoming-call screen when permitted, with
+caller initials/name, channel context and large Answer/Decline controls. Back
+hides this screen and leaves the call available in its notification. Incoming calls
+also expose Answer/Decline in the **Calls** notification channel, including while
+locked/backgrounded. When full-screen access is unavailable, the notification
+remains usable; Answer opens the call screen directly for microphone permission
+and retry errors. Verify allowed/denied full-screen access, missing microphone
+permission, cancellation/expiry and stale notification actions after a replacement
+call arrives. While Android 14+ blocks full-screen notifications, a toast
 offers **Allow** (system setting) or **Hide**. PiP is a native, device-dependent
 flow. Browser-only tests cannot validate Telecom, FCM wakeup or background media;
 follow the hardware matrix in [Android development](../development/android.md#native-calling).
+
+Synthetic emulator captures: [incoming screen](media/calls/android-incoming-call.png),
+[notification fallback](media/calls/android-call-notification.png), and
+[microphone permission after Answer](media/calls/android-call-microphone-permission.png).
+
+Native Android call spans use service `android-calls` and the opaque `call.id`.
+The existing telemetry gate also controls cold calls. W3C context connects the
+push producer, notification/activity, permission and answer phases, and status
+HTTP requests; connection and cancellation outcomes end the incoming trace.
+For local collector verification and the exporter fixture, see
+[native call tracing](../development/android.md#native-call-tracing).

@@ -5,8 +5,11 @@
  * Document sync service JSON control plane
  * OpenAPI spec version: 0.1.0
  */
+import type { PeerWithUserIdActor } from './peerWithUserIdActor';
 
 export interface PeerWithUserId {
+  /** Signed agent actor (`bot|<uuid>`) the peer edited as; null for humans. */
+  actor?: PeerWithUserIdActor;
   peer_id: string;
   user_id: string;
 }

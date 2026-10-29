@@ -3,7 +3,7 @@
 use crate::domain::*;
 use async_trait::async_trait;
 use futures::StreamExt;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     path::{Path, PathBuf},
@@ -223,13 +223,34 @@ fn internal(_error: impl std::fmt::Display) -> ExecutionFailure {
     ExecutionFailure::new(FailureCode::Internal, "Deno runner infrastructure failed")
 }
 
+/// The first stdin line: run credentials plus bootstrap-only settings.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChildContext<'a> {
+    #[serde(flatten)]
+    environment: &'a RunEnvironment,
+    max_result_bytes: usize,
+}
+
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 enum ChildFrame {
-    Log { level: LogLevel, message: String },
-    Progress { value: Value },
-    Result { value: Value },
-    Error { message: String },
+    Log {
+        level: LogLevel,
+        message: String,
+    },
+    Progress {
+        value: Value,
+    },
+    Result {
+        value: Value,
+        /// Set when the bootstrap summarized an oversized result of this size.
+        #[serde(default)]
+        summarized_from_bytes: Option<usize>,
+    },
+    Error {
+        message: String,
+    },
 }
 
 async fn bridge(
@@ -240,7 +261,11 @@ async fn bridge(
     events: &mut EventSink,
     limits: &Limits,
 ) -> Result<Outcome, ExecutionFailure> {
-    let mut initial = serde_json::to_vec(environment).map_err(internal)?;
+    let mut initial = serde_json::to_vec(&ChildContext {
+        environment,
+        max_result_bytes: limits.max_result_bytes,
+    })
+    .map_err(internal)?;
     initial.push(b'\n');
     stdin.write_all(&initial).await.map_err(internal)?;
     // Credentials travel once through the private pipe, never argv or a file.
@@ -266,7 +291,7 @@ async fn bridge(
             _ = events.closed() => return Ok(Outcome::Cancelled),
             line = stdout.next(), if stdout_open => {
                 let Some(line) = line else { stdout_open = false; continue };
-                let raw = bounded_line(line, &mut remaining_total)?;
+                let raw = bounded_line(frame_line(line, limits.max_frame_bytes)?, &mut remaining_total)?;
                 let line = redact_token(raw.clone(), &environment.token);
                 if outcome.is_some() {
                     return Err(ExecutionFailure::new(FailureCode::Protocol, "output after terminal frame"));
@@ -277,18 +302,23 @@ async fn bridge(
                 } else {
                     &mut remaining
                 };
-                bounded_line(Ok(raw), budget)?;
+                bounded_line(raw, budget)?;
                 match frame {
                     ChildFrame::Log { level, message } => events.emit(EventKind::Log { level, message })?,
                     ChildFrame::Progress { value } => events.progress(value),
-                    ChildFrame::Result { value } => outcome = Some(Outcome::Succeeded { value }),
+                    ChildFrame::Result { value, summarized_from_bytes } => {
+                        if let Some(bytes) = summarized_from_bytes {
+                            tracing::Span::current().record("result_summarized_from_bytes", bytes);
+                        }
+                        outcome = Some(Outcome::Succeeded { value });
+                    }
                     ChildFrame::Error { message } => outcome = Some(ExecutionFailure::new(FailureCode::Runtime, message).into()),
                 }
             }
             line = stderr.next(), if stderr_open => {
                 let Some(line) = line else { stderr_open = false; continue };
-                let raw = bounded_line(line, &mut remaining_total)?;
-                let message = redact_token(bounded_line(Ok(raw), &mut remaining)?, &environment.token);
+                let raw = bounded_line(frame_line(line, limits.max_frame_bytes)?, &mut remaining_total)?;
+                let message = redact_token(bounded_line(raw, &mut remaining)?, &environment.token);
                 events.emit(EventKind::Log { level: LogLevel::Warn, message })?;
             }
         }
@@ -309,13 +339,22 @@ fn redact_token(line: String, token: &str) -> String {
     }
 }
 
-fn bounded_line(
+fn frame_line(
     line: Result<String, tokio_util::codec::LinesCodecError>,
-    remaining: &mut usize,
+    max_frame_bytes: usize,
 ) -> Result<String, ExecutionFailure> {
-    let line = line.map_err(|_| {
-        ExecutionFailure::new(FailureCode::Limit, "invalid or oversized process output")
-    })?;
+    line.map_err(|error| match error {
+        tokio_util::codec::LinesCodecError::MaxLineLengthExceeded => ExecutionFailure::new(
+            FailureCode::Limit,
+            format!("a single output line exceeded the {max_frame_bytes}-byte frame limit"),
+        ),
+        tokio_util::codec::LinesCodecError::Io(_) => {
+            ExecutionFailure::new(FailureCode::Protocol, "invalid process output")
+        }
+    })
+}
+
+fn bounded_line(line: String, remaining: &mut usize) -> Result<String, ExecutionFailure> {
     *remaining = remaining.checked_sub(line.len() + 1).ok_or_else(|| {
         ExecutionFailure::new(FailureCode::Limit, "process output limit exceeded")
     })?;

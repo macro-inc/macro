@@ -520,6 +520,15 @@ export const enableReminders = defineFlag({
   default: onInDev,
 });
 
+// The Focus tab in Mail: signal threads the email focus worker classified as
+// worth the owner's attention. Only allowlisted inboxes are classified, so the
+// tab is empty for everyone else.
+export const enableEmailFocus = defineFlag({
+  key: 'enable-email-focus',
+  env: 'ENABLE_EMAIL_FOCUS',
+  default: onInDev,
+});
+
 export const enableHistoryComponent = defineFlag({
   key: 'enable-history-component',
   env: 'ENABLE_HISTORY_COMPONENT',
@@ -840,6 +849,13 @@ export const enableRoutineConditions = defineFlag({
   key: 'enable-routine-conditions',
   env: 'ENABLE_ROUTINE_CONDITIONS',
   default: onInDev,
+});
+
+// Templates are not ready for general use. Follow PostHog even in development
+// so the UI and the server's per-user rollout agree.
+export const enableRoutineSharing = defineFlag({
+  key: 'enable-routine-sharing',
+  env: 'ENABLE_ROUTINE_SHARING',
 });
 
 // The Recent view: the touched-by-me feed (everything the viewer mutated,

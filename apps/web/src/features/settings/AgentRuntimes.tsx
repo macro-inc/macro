@@ -124,7 +124,7 @@ export function AgentRuntimes(props: { onNewRuntime: () => void }) {
             or a machine you pair with macrod.
           </p>
         </div>
-        <Button variant="neutral" size="sm" onClick={props.onNewRuntime}>
+        <Button variant="primary" size="sm" onClick={props.onNewRuntime}>
           <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
           New runtime
         </Button>

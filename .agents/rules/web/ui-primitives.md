@@ -76,11 +76,12 @@ Applies to `apps/web/src/components/ui`, including ports from shadcn-solid.
   native inputs, accessible labels, controlled/uncontrolled state, and keyboard behavior.
 - Keep unchecked checkbox and radio faces transparent. Checked and indeterminate
   controls use the accent fill. Checkbox marks and radio indicators share the
-  primary Button's `button-primary-ink` token.
+  accent Button's `button-accent-ink` token.
 - Set checkbox/radio size on the root: `sm` is 14px, `md` (default) is 16px,
   and `lg` is 20px. `ToggleSwitch` tracks use `xs` 28×14px, `sm` (default)
-  32×16px, and `md` 40×20px. Do not resize internal SVGs or override selection
-  colors from callers or enclosing pages; checked controls use the theme accent.
+  32×16px, and `md` 40×20px; `trackIcon` adds a glyph in the track's free
+  half. Do not resize internal SVGs or override selection colors from callers
+  or enclosing pages; checked controls use the theme accent.
 - Switch thumbs stay fixed white in both states and every theme, with a secondary border.
   Only the track changes to the theme accent when checked; do not apply accent-contrast to the thumb.
   Use the shared `ToggleSwitch` for code-preview controls instead of separately styled Kobalte parts.

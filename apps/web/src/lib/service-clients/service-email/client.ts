@@ -299,6 +299,13 @@ export const emailClient = {
       })
     ).map((result) => result);
   },
+  /** The message's original source as `.eml` bytes. */
+  async getMessageEml(args: { message_id: string }) {
+    return fetchWithToken<Uint8Array<ArrayBuffer>>(
+      `${emailHost}/email/messages/${args.message_id}/eml`,
+      { method: 'GET' }
+    );
+  },
   async getUserLabels() {
     return (
       await emailFetch<ListLabelsResponse>(`/email/labels`, {

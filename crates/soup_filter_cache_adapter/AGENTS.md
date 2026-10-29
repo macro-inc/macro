@@ -24,6 +24,8 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
   backfills, partial/cursor pages, identity switches, and pending optimistic
   rows. At most 500 local matches are checked per write; later full snapshots
   restore completeness.
+- `src/mail/retention.rs`: retain same-query server rows while local facts are
+  incomplete, reject proven nonmembers, and preserve the indexed cursor.
 
 ## Scope
 
@@ -51,6 +53,15 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
 - `cargo test -p soup-filter-cache-adapter` (`SQLX_OFFLINE` unset).
 
 ## Gotchas
+
+- Mail pages reconcile server membership through the generic predicate engine;
+  retain unknown projections with their supplied sort values, exclude confirmed
+  nonmembers, and keep continuation cursors on the original indexed window.
+  Reconcile only baseline rows outside that window; known live flags may reject
+  incomplete rows through predicate simplification, never establish new membership.
+  Exclude explicitly invalidated (`Dirty`) baseline rows in the queried scope
+  unless an optimistic shadow takes precedence; an older reader must not undo
+  authoritative first-page repair. Missing facts still retain server membership.
 
 - This crate must stay wasm-compatible — no `sqlx`, no native-only crates in
   default features; native-only test fixtures live under

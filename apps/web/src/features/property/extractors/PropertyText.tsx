@@ -76,21 +76,28 @@ export function PropertyText(props: Props) {
   return (
     <Show
       keyed
-      when={singleEntity()}
+      when={singleEntity()?.entity_id}
       fallback={<PropertyTextValue {...props} userId={userId()} />}
     >
-      {(entity) => <EntityPropertyText entity={entity} class={props.class} />}
+      {(entityId) => (
+        <EntityPropertyText
+          entityId={entityId}
+          entityType={singleEntity()?.entity_type}
+          class={props.class}
+        />
+      )}
     </Show>
   );
 }
 
 function EntityPropertyText(props: {
-  entity: EntityReference;
+  entityId: string;
+  entityType: EntityReference['entity_type'] | undefined;
   class?: string;
 }) {
   const { name, icon } = usePropertyEntityDisplay(
-    () => props.entity.entity_id,
-    () => props.entity.entity_type
+    () => props.entityId,
+    () => props.entityType
   );
   return (
     <span class={cn('inline-flex min-w-0 items-center gap-1.5', props.class)}>

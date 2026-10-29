@@ -62,6 +62,9 @@ tools — hexagonal, heavily feature-gated.
   provider write per inbox holding only the messages whose labels changed
   (`stage_thread_labels` / `commit_thread_label_write` in
   `domain/service/thread_labels.rs`); route new label actions through them.
+- `.eml` downloads go through `domain/message_source.rs`, which authorizes like
+  attachment reads and fetches the provider's original RFC 822 bytes (Gmail
+  `format=raw`, Graph `$value`); drafts and unsynced messages have no source.
 - Forwarded attachments register through `domain/draft_attachments.rs` and resolve
   bytes through `domain/attachment_access.rs`; scheduled delivery also rechecks
   source inbox access in `domain/forwarded_attachments.rs`, including legacy jobs.

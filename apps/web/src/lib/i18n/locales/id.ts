@@ -725,7 +725,6 @@ export default {
     groupAdmin: 'Admin',
     tabTeamGeneral: 'Umum',
     tabTeamMembers: 'Anggota',
-    tabTeamConnections: 'Koneksi',
     tabEmail: 'Email',
     tabCalendar: 'Kalender',
     tabAgents: 'Agen',

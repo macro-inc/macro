@@ -23,6 +23,7 @@ pub mod mcp_item_links;
 pub mod mentions;
 pub mod pull_requests;
 pub mod skills;
+pub mod tasks;
 pub mod tone;
 pub mod tool_usage;
 mod types;
@@ -96,6 +97,7 @@ pub static CODE_MODE_SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROM
     .compose(&crm_pipelines::PROMPT)
     .compose(&user_tools::BOOKING_PROMPT)
     .compose(&user_tools::CODE_MODE_SESSION_PROMPT)
+    .compose(&tasks::PROMPT)
     .compose(&skills::PROMPT)
     .compose(&document_content_links::PROMPT)
     .compose(&email::PROMPT);

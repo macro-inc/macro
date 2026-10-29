@@ -745,7 +745,6 @@ export default {
     groupAdmin: 'Administrator',
     tabTeamGeneral: 'Generelt',
     tabTeamMembers: 'Medlemmer',
-    tabTeamConnections: 'Tilkoblinger',
     tabEmail: 'E-post',
     tabCalendar: 'Kalender',
     tabAgents: 'Agenter',

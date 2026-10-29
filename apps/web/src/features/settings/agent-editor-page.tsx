@@ -835,7 +835,7 @@ export function AgentEditorPage(props: {
           <Button
             type="submit"
             form="agent-form"
-            variant="neutral"
+            variant="primary"
             size="lg"
             class="min-w-36"
             disabled={!canCreate()}

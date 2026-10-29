@@ -225,11 +225,17 @@ function AskAiDisplay(props: { item: AskAiItem }) {
 export function ItemDisplay(props: { item: CommandMenuItem }) {
   return (
     <Switch>
-      <Match when={props.item.kind === 'initiative' && props.item}>
-        {(item) => (
+      <Match
+        when={
+          isEntityItem(props.item) &&
+          props.item.data.type === 'initiative' &&
+          props.item.data
+        }
+      >
+        {(project) => (
           <div class="flex items-center gap-2 flex-1 min-w-0">
             <ProjectIcon class="size-4 mobile:scale-150 text-ink-muted shrink-0" />
-            <span class="truncate">{item().name}</span>
+            <span class="truncate">{project().name}</span>
             <span class="ml-auto text-xs text-ink-muted">
               {t('commandMenu.projectBadge')}
             </span>

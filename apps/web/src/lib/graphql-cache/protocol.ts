@@ -142,6 +142,8 @@ export type EntityFilterCacheResult =
       kind: 'mail-page';
       revision: CacheRevision;
       keys: string[];
+      /** Server members with incomplete local metadata; absent on older native hosts. */
+      retainedKeys?: string[];
       /** View-correct timestamps aligned with keys, independent of cached previews. */
       sortTimestamps: string[];
       nextCursor: string | null;

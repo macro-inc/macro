@@ -368,8 +368,14 @@ pub struct PropertyOptionReplacePlan {
 /// Outcome of a whole-set option replace.
 #[derive(Debug, Clone)]
 pub enum PropertyOptionReplaceOutcome {
-    /// Every change applied; carries the definition's options afterwards.
-    Replaced(Vec<PropertyOption>),
+    /// Every change applied.
+    Replaced {
+        /// The definition's options afterwards.
+        options: Vec<PropertyOption>,
+        /// One post-commit snapshot per entity value a deleted option was
+        /// stripped from.
+        mutations: Vec<EntityPropertyMutationSnapshot>,
+    },
     /// An option to delete or rewrite does not belong to the definition.
     OptionNotFound,
     /// Two options would share a value; nothing was applied.

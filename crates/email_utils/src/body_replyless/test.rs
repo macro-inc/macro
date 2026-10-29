@@ -202,3 +202,78 @@ fn test_email_extraction(full_email: &str, expected_reply: &str, test_name: &str
         test_name
     );
 }
+
+const NNBSP: &str = "\u{202f}";
+
+/// Superhuman-style reply: the attribution shares an element with the reply
+/// text, and Gmail-style times use a narrow no-break space before PM. Cutting
+/// at the shared element dropped the whole reply.
+#[test]
+fn attribution_sharing_an_element_with_the_reply_keeps_the_reply() {
+    let html = format!(
+        r#"<div>Sorry for the slow reply, that works. See you then!<br><br>On Thu, Oct 29, 2026 at 7:22{NNBSP}PM, Curtis &lt;<a href="mailto:c@example.com">c@example.com</a>&gt; wrote:<br></div><blockquote><div>Hey all, just checking in.</div></blockquote><div>--<br><b>Jacob</b></div>"#
+    );
+    let sanitized = crate::sanitize_email_html(&html);
+    let reply = compute_body_replyless(Some("Re: visit"), Some(&sanitized), None).expect("html");
+
+    assert!(reply.contains("See you then!"), "{reply}");
+    assert!(!reply.contains("wrote:"), "{reply}");
+    assert!(!reply.contains("checking in"), "{reply}");
+    assert!(!reply.contains("Jacob"), "{reply}");
+}
+
+/// The same text node can hold both the reply and the attribution.
+#[test]
+fn attribution_inside_the_reply_text_node_is_cut_mid_node() {
+    let html = "<div>See you then! On Mon, Oct 26, 2026 at 9:58 AM Curtis &lt;c@example.com&gt; wrote: older</div>";
+    let reply = compute_body_replyless(None, Some(html), None).expect("html");
+
+    assert_eq!(reply, "See you then!");
+}
+
+#[test]
+fn attribution_with_narrow_no_break_space_cuts_at_the_header() {
+    let html = format!(
+        r#"<p>Works for me.</p><p>On Wed, Oct 28, 2026 at 12:09{NNBSP}PM Curtis &lt;c@example.com&gt; wrote:</p><blockquote>Let's do 3pm?</blockquote>"#
+    );
+    let reply = compute_body_replyless(None, Some(&html), None).expect("html");
+
+    assert_eq!(reply, "<p>Works for me.</p>");
+}
+
+/// Apple Mail writes "On Oct 29, 2026, at 19:22, Name <addr> wrote:".
+#[test]
+fn apple_mail_attribution_without_a_blockquote_is_cut() {
+    let html = "<div>Sounds good.</div><div>On Oct 29, 2026, at 19:22, Curtis &lt;c@example.com&gt;\nwrote:</div><div>Older</div>";
+    let reply = compute_body_replyless(None, Some(html), None).expect("html");
+
+    assert_eq!(reply, "<div>Sounds good.</div>");
+}
+
+/// A splitter that wraps the reply would leave nothing; a later one is used.
+#[test]
+fn a_cut_that_empties_the_reply_falls_through() {
+    let html = r#"<div style="border:1px solid">Reply text<div>From: a<br>Sent: b<br>To: c<br>Subject: d</div><blockquote>Quoted</blockquote></div>"#;
+    let reply = compute_body_replyless(None, Some(html), None).expect("html");
+
+    assert!(reply.contains("Reply text"), "{reply}");
+    assert!(!reply.contains("Quoted"), "{reply}");
+}
+
+/// Kept text nodes are re-escaped rather than emitted as markup.
+#[test]
+fn kept_text_stays_escaped() {
+    let html = "Use &lt;b&gt; tags<blockquote>Quoted</blockquote>";
+    let reply = compute_body_replyless(None, Some(html), None).expect("html");
+
+    assert_eq!(reply, "Use &lt;b&gt; tags");
+}
+
+#[test]
+fn plaintext_cuts_at_a_wrapped_attribution() {
+    let text = "See you then!\n\nOn Thu, Oct 29, 2026 at 7:22 PM, Curtis <c@example.com>\nwrote:\n\n> Hey all";
+    assert_eq!(
+        compute_body_replyless(None, None, Some(text)).as_deref(),
+        Some("See you then!")
+    );
+}
