@@ -594,6 +594,7 @@ fn image_attachment(entity_id: &str) -> ContextAttachment {
     ContextAttachment {
         entity_type: "static/image".to_owned(),
         entity_id: entity_id.to_owned(),
+        url: None,
     }
 }
 
@@ -743,8 +744,10 @@ fn a_mention_image_is_listed_before_the_thread_root_and_deduped() {
     );
 }
 
+/// The session saw its thread's files on its first turn; a follow-up only
+/// sends its own, while the context still names every file by URL.
 #[test]
-fn a_follow_up_delivers_thread_root_files_with_the_prompt() {
+fn a_follow_up_sends_only_its_own_files_and_links_the_thread_in_context() {
     const ROOT_FILE: &str = "9ec21122-4bd8-473f-bfb0-21d2e6e5f03b";
     let event = AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(
         ChannelEventMetadata {
@@ -762,12 +765,17 @@ fn a_follow_up_delivers_thread_root_files_with_the_prompt() {
     let AgentAction::Prompt(prompt) = deliver.action else {
         panic!("a channel message becomes a prompt");
     };
+    assert_eq!(prompt.attachments, vec![]);
+    let Some(TriggerContext::Mentioned(discussion)) = deliver.context else {
+        panic!("the context travels with the prompt");
+    };
     assert_eq!(
-        prompt.attachments,
-        vec![
-            PromptAttachment::new(format!("https://static.example/file/{ROOT_FILE}"), "image",)
-                .mime_type("image/*")
-        ]
+        discussion.thread.unwrap().messages[0].attachments,
+        vec![ContextAttachment {
+            entity_type: "static/image".to_owned(),
+            entity_id: ROOT_FILE.to_owned(),
+            url: Some(format!("https://static.example/file/{ROOT_FILE}")),
+        }]
     );
 }
 

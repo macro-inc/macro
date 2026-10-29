@@ -70,6 +70,10 @@ pub struct ContextAttachment {
     pub entity_type: String,
     /// Its id. For a static file, the file id used in `/file/{id}`.
     pub entity_id: String,
+    /// Where the agent can fetch it. Only static files have one, filled in by
+    /// the harness from its static file service address.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
 }
 
 /// A message the agent may read.
@@ -141,6 +145,29 @@ impl DiscussionContext {
             .flat_map(|message| message.attachments.iter())
             .collect()
     }
+
+    /// Every attachment the agent will read about: the quoted message, the
+    /// prompt's thread, and background channel activity.
+    pub fn attachments_mut(&mut self) -> impl Iterator<Item = &mut ContextAttachment> {
+        let quoted = match &mut self.reply_target {
+            ReplyTarget::Quote {
+                message: Some(message),
+                ..
+            } => Some(message),
+            ReplyTarget::Quote { message: None, .. }
+            | ReplyTarget::Thread { .. }
+            | ReplyTarget::None => None,
+        };
+        quoted
+            .into_iter()
+            .chain(
+                self.thread
+                    .iter_mut()
+                    .chain(self.channel.iter_mut())
+                    .flat_map(|thread| thread.messages.iter_mut()),
+            )
+            .flat_map(|message| message.attachments.iter_mut())
+    }
 }
 
 impl TriggerContext {
@@ -150,6 +177,17 @@ impl TriggerContext {
         match self {
             Self::Mentioned(discussion) | Self::Conversation(discussion) => Some(discussion),
             Self::FollowUp(follow_up) => Some(&follow_up.discussion),
+            Self::TaskAssigned(_) | Self::Requested(_) | Self::Dispatched(_) | Self::Routine(_) => {
+                None
+            }
+        }
+    }
+
+    /// The discussion this trigger was posted in, mutably.
+    pub fn discussion_mut(&mut self) -> Option<&mut DiscussionContext> {
+        match self {
+            Self::Mentioned(discussion) | Self::Conversation(discussion) => Some(discussion),
+            Self::FollowUp(follow_up) => Some(&mut follow_up.discussion),
             Self::TaskAssigned(_) | Self::Requested(_) | Self::Dispatched(_) | Self::Routine(_) => {
                 None
             }

@@ -72,8 +72,10 @@ pub fn route_agent_trigger(
                 .as_user()
                 .cloned()
                 .ok_or(Skipped::NotFromUser)?;
+            let mut context = event.context;
+            links.link_context_attachments(context.as_mut());
             let attachments =
-                links.prompt_attachments_for(&event.message.attachments, event.context.as_ref());
+                links.prompt_attachments_for(&event.message.attachments, context.as_ref());
             Ok(RoutedTrigger::Command(
                 event.session_id,
                 HarnessCommand::ConversationMessage(OpenSession {
@@ -87,7 +89,7 @@ pub fn route_agent_trigger(
                         sender,
                         content: event.message.content,
                         attachments,
-                        context: event.context,
+                        context,
                     }),
                 }),
             ))
@@ -121,7 +123,7 @@ pub fn route_agent_trigger(
             let Some(OpeningMention {
                 bot_id,
                 message,
-                context,
+                mut context,
             }) = event.mention()
             else {
                 return Err(Skipped::Unrecognized);
@@ -134,6 +136,7 @@ pub fn route_agent_trigger(
                 .as_user()
                 .cloned()
                 .ok_or(Skipped::NotFromUser)?;
+            links.link_context_attachments(context.as_mut());
             let attachments = links.prompt_attachments_for(&message.attachments, context.as_ref());
             Ok(RoutedTrigger::Command(
                 AgentSessionId::new(),
@@ -161,7 +164,7 @@ pub fn route_agent_trigger(
                 session_id,
                 kind: _,
                 message,
-                context,
+                mut context,
             }) = event.session_message()
             else {
                 return Err(Skipped::Unrecognized);
@@ -176,9 +179,10 @@ pub fn route_agent_trigger(
             let kind = runtime
                 .as_ref()
                 .map_or(AgentKind::External, |runtime| runtime.kind);
+            links.link_context_attachments(context.as_mut());
             if kind.is_managed() {
-                let attachments =
-                    links.prompt_attachments_for(&message.attachments, context.as_ref());
+                // The session already saw its thread's files on its first turn.
+                let attachments = links.prompt_attachments_for(&message.attachments, None);
                 return Ok(RoutedTrigger::Command(
                     session_id,
                     HarnessCommand::Deliver(DeliverAction {

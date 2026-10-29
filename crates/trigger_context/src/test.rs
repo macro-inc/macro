@@ -275,6 +275,7 @@ fn image(entity_id: &str) -> ContextAttachment {
     ContextAttachment {
         entity_type: "static/image".to_owned(),
         entity_id: entity_id.to_owned(),
+        url: None,
     }
 }
 

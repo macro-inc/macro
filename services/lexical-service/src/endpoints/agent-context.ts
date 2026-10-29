@@ -94,6 +94,7 @@ const triggerPerson = z.object({
 const triggerAttachment = z.object({
   entity_type: z.string().min(1),
   entity_id: z.string().min(1),
+  url: z.string().optional(),
 });
 
 const triggerMessage = z.object({

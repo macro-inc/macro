@@ -156,6 +156,7 @@ fn entry(message: &Message) -> ContextMessage {
             .map(|attachment| ContextAttachment {
                 entity_type: attachment.entity_type.clone(),
                 entity_id: attachment.entity_id.clone(),
+                url: None,
             })
             .collect(),
     }
@@ -343,6 +344,7 @@ async fn a_thread_root_image_travels_on_its_context_message() {
         [ContextAttachment {
             entity_type: "static/image".to_owned(),
             entity_id: "9ec21122-4bd8-473f-bfb0-21d2e6e5f03b".to_owned(),
+            url: None,
         }]
     );
     assert!(thread.messages[1].attachments.is_empty());

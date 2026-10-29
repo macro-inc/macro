@@ -127,7 +127,11 @@ describe('composeAgentContextPrompt with a trigger', () => {
               content: 'We need agent templates',
               posted_at: '2026-10-08T14:00:00Z',
               attachments: [
-                { entity_type: 'static/image', entity_id: fileId },
+                {
+                  entity_type: 'static/image',
+                  entity_id: fileId,
+                  url: `https://static.example/file/${fileId}`,
+                },
                 { entity_type: 'document', entity_id: 'doc-1' },
               ],
             },
@@ -161,7 +165,7 @@ describe('composeAgentContextPrompt with a trigger', () => {
         '    <note>Attachments are listed on each message and can be fetched by their url.</note>',
         '    <thread root="m1">',
         `      <message id="m1" author="Teo" author_email="teo@example.com" author_id="macro|teo@example.com" at="2026-10-08T14:00:00Z">We need agent templates`,
-        `        <attachment type="static/image" id="${fileId}" url="https://static-file-service.macro.com/file/${fileId}"/>`,
+        `        <attachment type="static/image" id="${fileId}" url="https://static.example/file/${fileId}"/>`,
         '        <attachment type="document" id="doc-1"/>',
         '      </message>',
         '      <message id="m2" author="Julia" author_email="julia@example.com" author_id="macro|julia@example.com" at="2026-10-08T14:02:00Z" mentioned_you="true">see screenshot and create a task</message>',

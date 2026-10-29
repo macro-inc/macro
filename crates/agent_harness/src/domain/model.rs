@@ -62,7 +62,7 @@ impl StaticFileLinks {
     /// Channel rows record only that a file is an image or a video, not its
     /// exact type, so the media type is the matching wildcard range.
     #[must_use]
-    pub fn file_link(&self, entity_type: &str, entity_id: &str) -> Option<PromptAttachment> {
+    fn file_link(&self, entity_type: &str, entity_id: &str) -> Option<PromptAttachment> {
         let (kind, mime_type) = match entity_type {
             Self::STATIC_IMAGE => ("image", "image/*"),
             Self::STATIC_VIDEO => ("video", "video/*"),
@@ -70,28 +70,6 @@ impl StaticFileLinks {
         };
         let uri = format!("{}/file/{}", self.base_url, entity_id);
         Some(PromptAttachment::new(uri, kind).mime_type(mime_type))
-    }
-
-    /// The prompt attachment for a channel attachment, or `None` for one that
-    /// is not a static file.
-    #[must_use]
-    pub fn prompt_attachment(
-        &self,
-        attachment: &MessageEventAttachment,
-    ) -> Option<PromptAttachment> {
-        self.file_link(&attachment.entity_type, &attachment.entity_id)
-    }
-
-    /// The prompt attachments for a message's attached files, in order.
-    #[must_use]
-    pub fn prompt_attachments(
-        &self,
-        attachments: &[MessageEventAttachment],
-    ) -> Vec<PromptAttachment> {
-        attachments
-            .iter()
-            .filter_map(|attachment| self.prompt_attachment(attachment))
-            .collect()
     }
 
     /// Files to send with a prompt: the mentioning message first, then the
@@ -124,6 +102,19 @@ impl StaticFileLinks {
             }
         }
         out
+    }
+
+    /// Give every static file in the trigger's discussion the URL the agent
+    /// fetches it from, so the prompt XML can name it.
+    pub fn link_context_attachments(&self, context: Option<&mut TriggerContext>) {
+        let Some(discussion) = context.and_then(TriggerContext::discussion_mut) else {
+            return;
+        };
+        for attachment in discussion.attachments_mut() {
+            attachment.url = self
+                .file_link(&attachment.entity_type, &attachment.entity_id)
+                .map(|link| link.uri);
+        }
     }
 
     fn push_prompt_attachment(

@@ -671,6 +671,7 @@ impl Authors {
                 .map(|attachment| ContextAttachment {
                     entity_type: attachment.entity_type.clone(),
                     entity_id: attachment.entity_id.clone(),
+                    url: None,
                 })
                 .collect(),
         }
