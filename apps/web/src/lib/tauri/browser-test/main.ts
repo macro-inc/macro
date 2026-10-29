@@ -8,20 +8,20 @@ import { createRoot } from 'solid-js';
 import { useNotificationCoverTimeout } from '../notification-launch';
 import { createPushApi } from '../push-api';
 
-const cover = document.getElementById('cover');
-const navigate = document.getElementById('navigate');
-const navigation = document.getElementById('navigation');
-if (!cover || !navigate || !navigation) throw new Error('Missing fixture UI');
+const COVER = document.getElementById('cover');
+const NAVIGATE = document.getElementById('navigate');
+const NAVIGATION = document.getElementById('navigation');
+if (!COVER || !NAVIGATE || !NAVIGATION) throw new Error('Missing fixture UI');
 
-const commands: string[] = [];
+const COMMANDS: string[] = [];
 let nativePending: string | undefined;
-const frames: FrameRequestCallback[] = [];
+const FRAMES: FrameRequestCallback[] = [];
 const requestFrame = window.requestAnimationFrame;
 window.__MACRO_IOS_NOTIFICATION_LAUNCH__ = true;
 mockIPC((command, payload) => {
-  commands.push(command);
+  COMMANDS.push(command);
   if (command === 'plugin:notifications|release_notification_cover') {
-    cover.hidden = true;
+    COVER.hidden = true;
     return;
   }
   if (command === 'plugin:notifications|acknowledge_notification') {
@@ -31,34 +31,34 @@ mockIPC((command, payload) => {
       payload.deliveryId === nativePending
     ) {
       nativePending = undefined;
-      cover.hidden = true;
+      COVER.hidden = true;
     }
     return;
   }
   throw new Error(`Unexpected native command: ${command}`);
 });
 
-const push = createPushApi('ios');
+const PUSH = createPushApi('ios');
 const dispose = createRoot((dispose) => {
   useNotificationCoverTimeout();
   return dispose;
 });
 window.addEventListener('pagehide', dispose, { once: true });
-navigate.addEventListener('click', () => {
-  navigation.textContent = 'Another page';
+NAVIGATE.addEventListener('click', () => {
+  NAVIGATION.textContent = 'Another page';
 });
 
-const fixture = {
+const FIXTURE = {
   tap(deliveryId: string) {
     nativePending = deliveryId;
-    cover.hidden = false;
+    COVER.hidden = false;
     receiveNotificationTap(
       {
         type: 'BACKGROUND_TAP',
         payload: { notificationId: deliveryId },
         deliveryId,
       },
-      push.acknowledge
+      PUSH.acknowledge
     );
   },
   complete() {
@@ -66,26 +66,26 @@ const fixture = {
     if (intent) finishNotificationNavigation(intent);
   },
   blockFrames() {
-    window.requestAnimationFrame = (callback) => frames.push(callback);
+    window.requestAnimationFrame = (callback) => FRAMES.push(callback);
   },
   flushFrames() {
     window.requestAnimationFrame = requestFrame;
-    for (const frame of frames.splice(0)) frame(performance.now());
+    for (const frame of FRAMES.splice(0)) frame(performance.now());
   },
   snapshot() {
     return {
-      commands: [...commands],
+      commands: [...COMMANDS],
       nativePending,
       pending: pendingNotificationNavigation()?.deliveryId,
-      blockedFrames: frames.length,
-      covered: !cover.hidden,
+      blockedFrames: FRAMES.length,
+      covered: !COVER.hidden,
     };
   },
 };
 
 declare global {
   interface Window {
-    notificationCoverFixture: typeof fixture;
+    notificationCoverFixture: typeof FIXTURE;
   }
 }
-window.notificationCoverFixture = fixture;
+window.notificationCoverFixture = FIXTURE;
