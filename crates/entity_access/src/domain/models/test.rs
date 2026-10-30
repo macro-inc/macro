@@ -232,6 +232,212 @@ fn dangerously_assert_bot_creates_owner_level_test_receipt() {
 }
 
 #[test]
+fn an_anonymous_caller_with_a_public_grant_above_view_holds_view() {
+    for grant in [
+        AccessLevel::View,
+        AccessLevel::Comment,
+        AccessLevel::Edit,
+        AccessLevel::Owner,
+    ] {
+        let receipt = EntityAccessReceipt::<ViewAccessLevel>::try_new(
+            EntityAccessAuth::Unauthenticated,
+            document(),
+            EntityPermission::AccessLevel {
+                access_level: grant,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            receipt.entity_permission(),
+            &EntityPermission::AccessLevel {
+                access_level: AccessLevel::View
+            },
+            "grant: {grant:?}"
+        );
+    }
+}
+
+#[test]
+fn an_anonymous_receipt_with_no_requirement_holds_view() {
+    let receipt = EntityAccessReceipt::<AnyEntityPermission>::try_new(
+        EntityAccessAuth::Unauthenticated,
+        document(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(
+        receipt.entity_permission(),
+        &EntityPermission::AccessLevel {
+            access_level: AccessLevel::View
+        }
+    );
+}
+
+#[test]
+fn an_anonymous_caller_never_meets_comment_edit_or_owner() {
+    let owner = EntityPermission::AccessLevel {
+        access_level: AccessLevel::Owner,
+    };
+
+    assert!(matches!(
+        EntityAccessReceipt::<CommentAccessLevel>::try_new(
+            EntityAccessAuth::Unauthenticated,
+            document(),
+            owner,
+        ),
+        Err(AccessError::Unauthorized)
+    ));
+    assert!(matches!(
+        EntityAccessReceipt::<EditAccessLevel>::try_new(
+            EntityAccessAuth::Unauthenticated,
+            document(),
+            owner,
+        ),
+        Err(AccessError::Unauthorized)
+    ));
+    assert!(matches!(
+        EntityAccessReceipt::<OwnerAccessLevel>::try_new(
+            EntityAccessAuth::Unauthenticated,
+            document(),
+            owner,
+        ),
+        Err(AccessError::Unauthorized)
+    ));
+}
+
+#[test]
+fn re_tagging_an_anonymous_receipt_cannot_regain_its_grant() {
+    let view = EntityAccessReceipt::<ViewAccessLevel>::try_new(
+        EntityAccessAuth::Unauthenticated,
+        document(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit,
+        },
+    )
+    .unwrap();
+
+    assert!(matches!(
+        view.try_into_requirement::<EditAccessLevel>(),
+        Err(AccessError::Unauthorized)
+    ));
+}
+
+#[test]
+fn an_anonymous_channel_role_becomes_view_only() {
+    let owner = EntityPermission::ChannelRole {
+        role: ParticipantRole::Owner,
+    };
+
+    let receipt = EntityAccessReceipt::<ViewOnly>::try_new(
+        EntityAccessAuth::Unauthenticated,
+        document(),
+        owner,
+    )
+    .unwrap();
+
+    assert_eq!(
+        receipt.entity_permission(),
+        &EntityPermission::ChannelViewOnly
+    );
+    assert!(matches!(
+        EntityAccessReceipt::<MemberParticipantRole>::try_new(
+            EntityAccessAuth::Unauthenticated,
+            document(),
+            owner,
+        ),
+        Err(AccessError::Unauthorized)
+    ));
+}
+
+#[test]
+fn an_anonymous_caller_holds_no_team_role() {
+    assert!(matches!(
+        EntityAccessReceipt::<AnyEntityPermission>::try_new(
+            EntityAccessAuth::Unauthenticated,
+            document(),
+            EntityPermission::TeamRole {
+                role: TeamRole::Member,
+            },
+        ),
+        Err(AccessError::Unauthorized)
+    ));
+}
+
+#[test]
+fn signed_in_and_internal_callers_keep_their_grant() {
+    let edit = EntityAccessReceipt::<EditAccessLevel>::try_new_authenticated_user(
+        user_id(),
+        document(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit,
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        edit.entity_permission(),
+        &EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit
+        }
+    );
+
+    let internal = EntityAccessReceipt::<OwnerAccessLevel>::try_new(
+        EntityAccessAuth::Internal,
+        document(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner,
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        internal.entity_permission(),
+        &EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner
+        }
+    );
+}
+
+#[test]
+fn try_new_for_user_caps_only_the_caller_with_no_account() {
+    let edit_grant = EntityPermission::AccessLevel {
+        access_level: AccessLevel::Edit,
+    };
+
+    let signed_in = EntityAccessReceipt::<EditAccessLevel>::try_new_for_user(
+        Some(user_id()),
+        document(),
+        edit_grant,
+    )
+    .unwrap();
+    assert!(matches!(
+        signed_in.auth(),
+        EntityAccessAuth::Authenticated(user) if user == &user_id()
+    ));
+    assert_eq!(signed_in.entity_permission(), &edit_grant);
+
+    let signed_out =
+        EntityAccessReceipt::<ViewAccessLevel>::try_new_for_user(None, document(), edit_grant)
+            .unwrap();
+    assert!(matches!(
+        signed_out.auth(),
+        EntityAccessAuth::Unauthenticated
+    ));
+    assert_eq!(
+        signed_out.entity_permission(),
+        &EntityPermission::AccessLevel {
+            access_level: AccessLevel::View
+        }
+    );
+    assert!(matches!(
+        EntityAccessReceipt::<EditAccessLevel>::try_new_for_user(None, document(), edit_grant),
+        Err(AccessError::Unauthorized)
+    ));
+}
+
+#[test]
 fn channel_view_only_satisfies_only_view_only_requirement() {
     let permission = EntityPermission::ChannelViewOnly;
 

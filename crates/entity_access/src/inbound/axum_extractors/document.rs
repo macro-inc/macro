@@ -19,9 +19,7 @@ use tracing::Level;
 
 use super::{ExtractorError, RequiredPermission, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
-    models::{
-        AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
-    },
+    models::{AccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType},
     ports::EntityAccessService,
 };
 use model::document::DocumentBasic;
@@ -110,17 +108,10 @@ where
 
         if macro_user_id.is_none() && is_internal_access {
             return Ok(Self {
-                entity_access_receipt: EntityAccessReceipt {
-                    entity: Entity {
-                        entity_id: document_context.document_id.clone(),
-                        entity_type: EntityType::Document,
-                    },
-                    auth: EntityAccessAuth::Internal,
-                    entity_permission: EntityPermission::AccessLevel {
-                        access_level: AccessLevel::Owner,
-                    },
-                    _marker: PhantomData,
-                },
+                entity_access_receipt: EntityAccessReceipt::dangerously_assert_internal_user(
+                    &document_context.document_id,
+                    EntityType::Document,
+                ),
                 _marker: PhantomData,
             });
         }
@@ -130,17 +121,16 @@ where
             && document_context.owner.is_user(user_id)
         {
             return Ok(Self {
-                entity_access_receipt: EntityAccessReceipt {
-                    entity: Entity {
+                entity_access_receipt: EntityAccessReceipt::try_new_authenticated_user(
+                    user_id.clone(),
+                    Entity {
                         entity_id: document_context.document_id.clone(),
                         entity_type: EntityType::Document,
                     },
-                    auth: EntityAccessAuth::Authenticated(user_id.clone()),
-                    entity_permission: EntityPermission::AccessLevel {
+                    EntityPermission::AccessLevel {
                         access_level: AccessLevel::Owner,
                     },
-                    _marker: PhantomData,
-                },
+                )?,
                 _marker: PhantomData,
             });
         }
@@ -165,23 +155,15 @@ where
             None => return Err(ExtractorError::Unauthorized),
         };
 
-        let permission = EntityPermission::AccessLevel { access_level };
-        if !permission.satisfies::<T>() {
-            return Err(ExtractorError::Unauthorized);
-        };
-
         Ok(Self {
-            entity_access_receipt: EntityAccessReceipt {
-                entity: Entity {
+            entity_access_receipt: EntityAccessReceipt::try_new_for_user(
+                macro_user_id,
+                Entity {
                     entity_id: document_context.document_id.clone(),
                     entity_type: EntityType::Document,
                 },
-                auth: macro_user_id
-                    .map(EntityAccessAuth::Authenticated)
-                    .unwrap_or(EntityAccessAuth::Unauthenticated),
-                entity_permission: permission,
-                _marker: PhantomData,
-            },
+                EntityPermission::AccessLevel { access_level },
+            )?,
             _marker: PhantomData,
         })
     }

@@ -19,8 +19,7 @@ use axum::{
 use super::{ExtractorError, RequiredPermission, bot::map_bot_access_scope};
 use crate::domain::{
     models::{
-        AccessError, BotAccessScope, Entity, EntityAccessAuth, EntityAccessReceipt,
-        EntityPermission, EntityType,
+        AccessError, BotAccessScope, Entity, EntityAccessReceipt, EntityPermission, EntityType,
     },
     ports::EntityAccessService,
 };
@@ -72,22 +71,20 @@ where
         return Ok(TeamAccessOutcome::NotInTeam);
     };
 
-    let permission = EntityPermission::TeamRole {
-        role: team_info.role,
-    };
-    if !permission.satisfies::<T>() {
-        return Ok(TeamAccessOutcome::InsufficientRole);
-    }
-
-    Ok(TeamAccessOutcome::Qualifying(EntityAccessReceipt {
-        entity: Entity {
+    match EntityAccessReceipt::try_new_authenticated_user(
+        macro_user_id,
+        Entity {
             entity_id: team_info.team_id.to_string(),
             entity_type: EntityType::Team,
         },
-        auth: EntityAccessAuth::Authenticated(macro_user_id),
-        entity_permission: permission,
-        _marker: PhantomData,
-    }))
+        EntityPermission::TeamRole {
+            role: team_info.role,
+        },
+    ) {
+        Ok(receipt) => Ok(TeamAccessOutcome::Qualifying(receipt)),
+        Err(AccessError::Unauthorized) => Ok(TeamAccessOutcome::InsufficientRole),
+        Err(error) => Err(ExtractorError::from(error)),
+    }
 }
 
 /// The team receipt an authenticated user qualifies for, minted the way

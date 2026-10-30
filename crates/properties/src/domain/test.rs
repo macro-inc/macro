@@ -18,8 +18,8 @@ use crate::domain::{
 use anyhow::anyhow;
 use document_sub_type::DocumentSubType;
 use entity_access::domain::models::{
-    AccessLevel, BotId, BotReceiptScope, Entity, EntityAccessAuth, EntityAccessReceipt,
-    EntityPermission, EntityType as AccessEntityType, ViewAccessLevel,
+    BotId, BotReceiptScope, EntityAccessAuth, EntityAccessReceipt, EntityType as AccessEntityType,
+    ViewAccessLevel,
 };
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
@@ -1278,23 +1278,11 @@ async fn entity_property_event_attributes_team_bot_but_not_system_access() {
         "doc1",
         AccessEntityType::Document,
     );
-    let unauthenticated_access = EditReceipt::try_new(
-        EntityAccessAuth::Unauthenticated,
-        Entity {
-            entity_id: "doc1".to_string(),
-            entity_type: AccessEntityType::Document,
-        },
-        EntityPermission::AccessLevel {
-            access_level: AccessLevel::Owner,
-        },
-    )
-    .unwrap();
     let internal_access =
         EditReceipt::dangerously_assert_internal_user("doc1", AccessEntityType::Document);
 
     for (access, expected_actor) in [
         (bot_access, Some(bot_id.into_storage_id().to_string())),
-        (unauthenticated_access, None),
         (internal_access, None),
     ] {
         let property_definition_id = Uuid::from_u128(0xE704);
@@ -1861,7 +1849,7 @@ async fn test_link_parent_task_requires_edit_on_parent() {
 }
 
 #[tokio::test]
-async fn test_link_parent_task_rejects_bot_and_unauthenticated_callers() {
+async fn test_link_parent_task_rejects_team_bot_callers() {
     let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
     let bot_id = BotId::new_from_uuid(uuid::uuid!("00000000-0000-0000-0000-000000000123"));
     let bot_access = EditReceipt::dangerously_assert_bot(
@@ -1872,41 +1860,28 @@ async fn test_link_parent_task_rejects_bot_and_unauthenticated_callers() {
         &task_id.to_string(),
         AccessEntityType::Document,
     );
-    let unauthenticated_access = EditReceipt::try_new(
-        EntityAccessAuth::Unauthenticated,
-        Entity {
-            entity_id: task_id.to_string(),
-            entity_type: AccessEntityType::Document,
-        },
-        EntityPermission::AccessLevel {
-            access_level: AccessLevel::Owner,
-        },
-    )
-    .unwrap();
 
-    for access in [bot_access, unauthenticated_access] {
-        let mut repo = MockPropertiesRepo::new();
-        repo.expect_link_parent_task().times(0);
-        let service = PropertiesServiceImpl::new(
-            repo,
-            None::<MockPermissionService>,
-            None::<MockNotificationService>,
-        );
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_link_parent_task().times(0);
+    let service = PropertiesServiceImpl::new(
+        repo,
+        None::<MockPermissionService>,
+        None::<MockNotificationService>,
+    );
 
-        let err = service
-            .handle_task_relationship_property(
-                &access,
-                SystemPropertyKey::PARENT_TASK_UUID,
-                Some(parent_task_value(Uuid::from_u128(0xF00D))),
-            )
-            .await
-            .unwrap_err();
+    let err = service
+        .handle_task_relationship_property(
+            &bot_access,
+            SystemPropertyKey::PARENT_TASK_UUID,
+            Some(parent_task_value(Uuid::from_u128(0xF00D))),
+        )
+        .await
+        .unwrap_err();
 
-        assert!(matches!(
-            err,
-            crate::domain::error::PropertiesErr::PermissionDenied
-        ));
-    }
+    assert!(matches!(
+        err,
+        crate::domain::error::PropertiesErr::PermissionDenied
+    ));
 }
 
 #[tokio::test]

@@ -1608,7 +1608,8 @@ None / Public / Team and an access level. **Team access** shares directly with
 the owner's team when one exists. On mobile these controls are in the Share,
 People, and Link tabs, and the People tab is likewise named Owner when only the
 owner is listed. View and Comment allow reading; Edit also allows
-controlling the session. View-only sessions keep the composer, model selector,
+controlling the session. Signed-out visitors on a Public link get View whatever
+level the link grants. View-only sessions keep the composer, model selector,
 and queued-message controls disabled. **Copy Share Link** remains in the header. Cancel
 closes the composer without sending.
 

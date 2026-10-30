@@ -20,7 +20,7 @@ use tracing::Level;
 
 use super::{ExtractorError, RequiredPermission, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
-    models::{Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType},
+    models::{Entity, EntityAccessReceipt, EntityPermission, EntityType},
     ports::EntityAccessService,
 };
 
@@ -131,12 +131,8 @@ async fn person_receipt<T: RequiredPermission>(
         .map_err(ExtractorError::from)?
         .ok_or(ExtractorError::Unauthorized)?;
 
-    let auth = user
-        .map(EntityAccessAuth::Authenticated)
-        .unwrap_or(EntityAccessAuth::Unauthenticated);
-
-    EntityAccessReceipt::try_new(
-        auth,
+    EntityAccessReceipt::try_new_for_user(
+        user,
         Entity {
             entity_id: initiative_id,
             entity_type: EntityType::Initiative,
