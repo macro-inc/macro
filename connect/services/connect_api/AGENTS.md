@@ -16,6 +16,7 @@ grants in Connect's own Postgres database.
   vendor OAuth adapter, and KMS/local envelope encryption.
 - `src/outbound/mcp.rs`: shared vendor HTTP client and trace propagation for the gateway.
 - `migrations/`: Connect-only SQLx schema.
+- `Dockerfile`: multi-stage standalone container build from the repository root.
 - `../../crates/connect_registry/src/lib.rs`: embedded app model and validation.
 
 ## Scope
@@ -30,9 +31,8 @@ grants in Connect's own Postgres database.
 
 ## Recipes
 
-- Run locally: from the repo root, use a dedicated Connect Postgres database and `nix develop --command bash -lc 'export CARGO_TARGET_DIR="$CONNECT_CARGO_TARGET_DIR" DATABASE_URL="$CONNECT_DATABASE_URL"; cargo run -p connect_api'`, then request `http://localhost:8080/v1/catalog`.
-- Set `CONNECT_PUBLIC_URL` to the full Connect base URL (including `/connect`
-  behind the gateway). Only live `own_app` entries need `<ID>_CLIENT_ID` and
+- Run locally: from the repo root, use `docker compose -f connect/docker-compose.yml up --build`, then request `http://localhost:8080/v1/catalog`. Set `CONNECT_PORT` when 8080 is in use. See `../../docs/runbooks/bootstrap.md` for the customer creation command.
+- Set `CONNECT_PUBLIC_URL` to the Connect host root. Only live `own_app` entries need `<ID>_CLIENT_ID` and
   `<ID>_CLIENT_SECRET` at startup. Set `CONNECT_KMS_KEY_ID` for KMS grants, or
   `CONNECT_LOCAL_WRAPPING_KEY` to a base64-encoded 32-byte key for local
   development. Startup fails without these values.
@@ -53,11 +53,9 @@ grants in Connect's own Postgres database.
   credentials, `CONNECT_KMS_KEY_ID` or `CONNECT_LOCAL_WRAPPING_KEY` (one
   required), `PORT` (default 8080), and the optional `OTEL_*` and `RUST_LOG`
   settings. `APP_SECRETS_JSON` is the sole source when present.
-- On startup, `connect_api` applies its own SQLx migrations. The local compose
-  `connect_db_init` creates the dedicated `connect` database first; deployed
-  bootstrap is in `../../docs/runbooks/bootstrap.md`.
-- `src/doppler_config.rs` validates the database, KMS, public URL, and live
-  own-app keys in dev/prd Doppler once the project is bootstrapped.
+- On startup, `connect_api` applies its own SQLx migrations. Local Compose
+  creates the dedicated `connect` database; deployed bootstrap is in
+  `../../docs/runbooks/bootstrap.md`.
 
 ## Checks
 

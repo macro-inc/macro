@@ -171,7 +171,7 @@ pub(crate) fn fixture(
 }
 
 #[tokio::test]
-async fn gateway_prefix_is_preserved_in_oauth_urls() {
+async fn root_host_is_preserved_in_oauth_urls() {
     let vendor = vendor_server(ClientRegistration::Cimd, 3600, false, 0).await;
     let pool = sqlx::postgres::PgPoolOptions::new()
         .connect_lazy("postgres://localhost/connect_test")
@@ -180,12 +180,12 @@ async fn gateway_prefix_is_preserved_in_oauth_urls() {
         pool,
         &vendor,
         ClientRegistration::Cimd,
-        "https://connect.example/connect",
+        "https://connect.example",
     );
     let response = app
         .oneshot(
             Request::builder()
-                .uri("/connect/v1/oauth/client-metadata.json")
+                .uri("/v1/oauth/client-metadata.json")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -196,11 +196,11 @@ async fn gateway_prefix_is_preserved_in_oauth_urls() {
         serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes()).unwrap();
     assert_eq!(
         body["client_id"],
-        "https://connect.example/connect/v1/oauth/client-metadata.json"
+        "https://connect.example/v1/oauth/client-metadata.json"
     );
     assert_eq!(
         body["redirect_uris"][0],
-        "https://connect.example/connect/v1/oauth/callback"
+        "https://connect.example/v1/oauth/callback"
     );
 }
 

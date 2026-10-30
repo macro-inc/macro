@@ -65,19 +65,19 @@ fn only_live_own_apps_require_credentials() {
 }
 
 #[test]
-fn public_url_accepts_the_gateway_prefix() {
-    assert!(parse_public_url("https://dev-gateway.macro.com/connect").is_ok());
+fn public_url_requires_host_root() {
+    assert!(parse_public_url("https://connect-dev.macro.com").is_ok());
     assert!(parse_public_url("http://localhost:8080").is_ok());
-    assert!(parse_public_url("https://dev-gateway.macro.com/connect?bad=1").is_err());
-    assert!(parse_public_url("https://dev-gateway.macro.com/other").is_err());
+    assert!(parse_public_url("https://connect-dev.macro.com/connect").is_err());
+    assert!(parse_public_url("https://connect-dev.macro.com?bad=1").is_err());
 }
 
 #[tokio::test]
-async fn gateway_prefix_serves_health() {
+async fn root_serves_health() {
     let response = test_router(all_apps().unwrap())
         .oneshot(
             Request::builder()
-                .uri("/connect/health")
+                .uri("/health")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -87,11 +87,11 @@ async fn gateway_prefix_serves_health() {
 }
 
 #[tokio::test]
-async fn gateway_catalog_icon_url_keeps_prefix() {
-    let response = test_router_with_url(all_apps().unwrap(), "http://localhost:8080/connect")
+async fn catalog_icon_url_uses_root() {
+    let response = test_router_with_url(all_apps().unwrap(), "http://localhost:8080")
         .oneshot(
             Request::builder()
-                .uri("/connect/v1/catalog")
+                .uri("/v1/catalog")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -104,7 +104,7 @@ async fn gateway_catalog_icon_url_keeps_prefix() {
         .iter()
         .find(|entry| entry["id"] == "notion")
         .unwrap();
-    assert_eq!(notion["icon_url"], "/connect/v1/catalog/notion/icon.svg");
+    assert_eq!(notion["icon_url"], "/v1/catalog/notion/icon.svg");
 }
 
 #[tokio::test]

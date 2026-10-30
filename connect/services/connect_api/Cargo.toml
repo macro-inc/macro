@@ -4,10 +4,6 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
-[[bin]]
-name = "connect_api_doppler_config"
-path = "src/doppler_config.rs"
-
 [dependencies]
 aes-gcm = { workspace = true }
 async-trait = { workspace = true }
@@ -20,7 +16,6 @@ chrono = { workspace = true }
 clap = { workspace = true }
 connect_platform = { path = "../../crates/connect_platform" }
 connect_registry = { path = "../../crates/connect_registry" }
-doppler-config = { workspace = true }
 futures = { workspace = true }
 opentelemetry-http = { workspace = true }
 rand = { workspace = true }
