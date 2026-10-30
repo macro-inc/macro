@@ -43,7 +43,8 @@ current, ingests the traffic of added chats (`external_chat`) through `whatsapp_
   non-zero so ECS replaces it), release announcements, and discovery through
   `SessionService` (`discoverable_accounts`, `fleet_health`).
 - `outbound/signals.rs`: `LISTEN` for `whatsapp_{account_released,
-  pairing_requested, send_requested, groups_requested, account_changed}`.
+  pairing_requested, send_requested, roster_requested, lookup_requested,
+  account_changed}`.
   Payloads are `external_chat::signals::Signal` JSON; each
   one's `traceparent` parents a `whatsapp.signal.receive` span that travels
   with the signal (`ports::Traced`): the supervisor's work and the runner's
@@ -87,7 +88,17 @@ current, ingests the traffic of added chats (`external_chat`) through `whatsapp_
   sync bundles, live messages (any chat) and contact/archive/pin events into
   `ChatUpdate`s (`events.rs`: `history_chats`, `message_chat`,
   `chat_setting`; direct chats by phone number) that the runner stores with
-  `update_chats`. On-demand history answers are parsed with
+  `update_chats`. The device store's saved contacts (`events::contact_chats`:
+  address-book names only, not people merely seen in groups) are listed on
+  `Connected` and every `AppStateSyncComplete`, and a `Contact` event lists
+  its contact, so the owner can start a chat with them.
+- Phone-number lookups (`domain/account/lookups.rs`): on
+  `whatsapp_lookup_requested`, on connect and on every tick, the runner
+  answers pending lookups with one `IsOnWhatsApp` usync each
+  (`WhatsAppSession::look_up`; whatsmeow stores the number's LID pairing, so a
+  later message by LID lands in the same chat) and records the answer
+  (`events::lookup_answer` names it like any chat). Only explicit owner
+  lookups, rate-limited in DSS: WhatsApp bans bulk usync. On-demand history answers are parsed with
   `Client::parse_web_message`, ingested as history events through the inbound
   gate, then reported as a `HistoryPage`. The runner's `backfill` asks the
   phone for pages of added groups (`request_history`, plus `request_message`
@@ -126,7 +137,8 @@ current, ingests the traffic of added chats (`external_chat`) through `whatsapp_
 Spans: `whatsapp.account.{lease,release,rescan,connect}`,
 `whatsapp.inbound.ingest`, `whatsapp.media.import`, `whatsapp.send.dispatch`
 (parented on the trace of the request that recorded the send),
-`whatsapp.groups.{refresh,event}`, `whatsapp.signal.receive`,
+`whatsapp.groups.{refresh,event}`, `whatsapp.contacts.sync`, `whatsapp.lookup`
+(outcome `found`/`not_on_whatsapp`/`failed`), `whatsapp.signal.receive`,
 `whatsapp.account.signal`, `whatsapp.drain`,
 `whatsapp.history.{sync,page}`, `whatsapp.backfill.request`
 (`whatsapp.inbound.ingest` records the message `kind`; `whatsapp.history.page`

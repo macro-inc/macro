@@ -97,10 +97,26 @@ one shared with them by someone else (`shared`, with its owner).
 and direct chats: name, last activity, archived and pinned, and the newest
 known message (the anchor). WhatsApp's history sync right after pairing fills
 it (initial, recent and full bundles; push-name bundles rename direct chats);
-live messages in any chat bump activity and add new chats; contact, push-name,
-archive and pin updates change existing rows. It never holds message content.
+live messages in any chat bump activity and add new chats; push-name, archive
+and pin updates change existing rows. The phone's saved contacts (address-book
+names from app state) are listed as direct chats with no activity, so the owner
+can start a chat with someone never written to: all of them on connect and
+after each app-state sync, each contact change as it arrives; a row that didn't
+change signals nothing. It never holds message content.
 `GET /whatsapp/chats` merges it with the roster (the roster names groups and decides
-which groups can be added), newest first.
+which groups can be added), newest first, and gives a direct chat's phone
+number.
+
+Anyone else is reached by phone number: `POST /whatsapp/lookups {phoneNumber}`
+(E.164; the owner's own session only, at most 20 per account per hour, since
+WhatsApp bans accounts that check many numbers) records a `whatsapp_lookup`
+and signals `whatsapp_lookup_requested`; the session holding the account asks
+WhatsApp once (`IsOnWhatsApp`, which also stores the number's LID pairing) and
+records `found`, `not_on_whatsapp` or `failed`. A found number joins the chat
+list as a direct chat by phone number, so the ordinary add accepts it; the web
+polls `GET /whatsapp/lookups/{id}`, then adds and opens the chat. A lookup still
+pending after 60 seconds reads as `failed`. Lookups are deleted an hour later,
+and with the account's consent.
 
 Direct chats are added like groups (`external_chat.kind = 'direct'`,
 `remote_id` the other person's JID, by phone number when known) and named after the
@@ -118,6 +134,9 @@ messages: WhatsApp sends the full list once, at pairing.
 Adding a group sets `backfill_state = 'pending'` when a message of the chat is
 known to start from (the chat list's anchor, or a stored message the account
 saw), else `waiting_for_message`: nothing to import from until someone posts.
+A direct chat with no known message (a saved contact or looked-up number)
+starts `done`: there is nothing earlier to import, and its first message
+arrives live.
 The chat's first message (live, history sync or chat-list update) makes it
 `pending` and starts the import at once. The owner's account then
 imports the chat's earlier messages from the phone, on demand only: it asks for
