@@ -152,10 +152,7 @@ set in the accent color.
 Stored activity snapshots keep the status and label but omit commands and tool
 input details, in both shared threads and DMs. The line follows the session
 live while the run is open; the summary shows the snapshot saved in the
-message. Readers without session access always see that snapshot. The local
-playground at `/app/debug/agent-progress` shows each of these states as the
-channel message and the agent session render it, side by side, with theme,
-viewer, and phone-width toggles and a looping replay of one turn. Only the
+message. Readers without session access always see that snapshot. Only the
 turn's last message notifies. Previews and search
 quote the passages, not the steps. Typing refreshes every 3 seconds and clears
 on its own if the agent's replica dies. Follow-up messages queue in order, and
@@ -163,6 +160,10 @@ the bar above the composer counts them (`1 queued`). Editing a sent message
 does not invoke the agent again. A reply inside a thread is not part of the
 conversation: the agent answers it only when mentioned there, in the thread,
 as in any channel.
+
+The local playground at `/app/debug/agent-progress` shows each of these states
+as the channel message and the agent session render it, side by side, with
+theme, viewer, and phone-width toggles and a looping replay of one turn.
 
 Each failed, stopped, or interrupted source message has its own **Retry message**
 action in the current context. Retry is explicit because an interrupted attempt
