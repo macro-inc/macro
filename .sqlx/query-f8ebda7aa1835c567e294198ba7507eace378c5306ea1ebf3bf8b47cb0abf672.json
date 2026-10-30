@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT 1\n                + (SELECT count(*) FROM comms_channel_participants\n                   WHERE user_id = $1 AND left_at IS NULL)\n                + (SELECT count(*) FROM team_user WHERE user_id = $1) AS \"sources!\",\n            current_setting('TimeZone') IN ('UTC', 'Etc/UTC') AS \"utc!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sources!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "utc!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "f8ebda7aa1835c567e294198ba7507eace378c5306ea1ebf3bf8b47cb0abf672"
+}

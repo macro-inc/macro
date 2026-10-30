@@ -107,7 +107,10 @@ Otherwise, for example a filter on another user's documents, a property value,
 a creation date or a name, that arm reads its item table in the same query, as
 it would with the projection disabled. A user with many sources reads up to a
 page from each, so when sources × page size exceeds 5,000 rows the whole query
-reads the item tables, which read each visible item once.
+reads the item tables, which read each visible item once. Projected scans order
+the stored `timestamp(3)` values, which sort like the item tables' `timestamptz`
+casts only in UTC; sqlx opens every session in UTC, and a page whose session was
+moved to another time zone reads the item tables.
 
 Soup's query tests run every case on both paths and require identical pages,
 and assert the projection is exact after every fixture. `crates/source_items`

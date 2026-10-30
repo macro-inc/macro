@@ -28,6 +28,7 @@ use model_owner::Owner;
 use models_pagination::{Cursor, Identify, Query, SimpleSortMethod, SortOn};
 use models_soup::item::SoupItem;
 use sqlx::PgPool;
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use std::sync::Arc;
 use system_properties::{PriorityOption, StatusOption, SystemPropertyKey};
 use uuid::Uuid;
@@ -610,6 +611,91 @@ async fn source_items_pages_like_the_item_tables(pool: PgPool) -> anyhow::Result
     ] {
         assert!(!everything.contains(&hidden), "{hidden} should not show");
     }
+    Ok(())
+}
+
+/// Projected scans order the stored timestamps, which sort like the item tables' `timestamptz`
+/// casts only in UTC. In New York, 02:30 on 2018-03-11 does not exist and reads as 07:30Z, after
+/// 03:00 (07:00Z), so a session there must read the item tables. sqlx opens every session in
+/// UTC; only an explicit setting moves one.
+#[sqlx::test(
+    fixtures(path = "../../../../../../fixtures", scripts("source_items_feed")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn non_utc_sessions_read_the_item_tables(
+    pool_options: PgPoolOptions,
+    connect_options: PgConnectOptions,
+) -> anyhow::Result<()> {
+    let pool = pool_options
+        .after_connect(|connection, _| {
+            Box::pin(async move {
+                sqlx::query!("SELECT set_config('TimeZone', 'America/New_York', false)")
+                    .fetch_one(connection)
+                    .await?;
+                Ok(())
+            })
+        })
+        .connect_with(connect_options)
+        .await?;
+    let (gap, after) = (document(101), document(102));
+    sqlx::query!(
+        r#"INSERT INTO "Document" (id, name, owner, "fileType", "createdAt", "updatedAt")
+        VALUES ($1, 'In the gap', $3, 'md', '2018-03-11 02:30', '2018-03-11 02:30'),
+               ($2, 'After the gap', $3, 'md', '2018-03-11 03:00', '2018-03-11 03:00')"#,
+        gap.to_string(),
+        after.to_string(),
+        USER
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO "DocumentInstance" ("documentId", sha, "createdAt", "updatedAt")
+        SELECT id, 'sha-' || id, "createdAt", "updatedAt" FROM "Document" WHERE id IN ($1, $2)"#,
+        gap.to_string(),
+        after.to_string()
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'document', $3, 'user', 'owner'), ($2, 'document', $3, 'user', 'owner')"#,
+        gap,
+        after,
+        USER
+    )
+    .execute(&pool)
+    .await?;
+    assert_source_items_match_grants(&pool).await?;
+
+    let filter = EntityFilterAst {
+        document_filter: tree(Expr::val(DocumentLiteral::UpdatedAt(DateLiteral::LessThan(
+            Utc.with_ymd_and_hms(2019, 1, 1, 0, 0, 0).unwrap(),
+        )))),
+        chat_filter: tree(Expr::val(ChatLiteral::Importance(false))),
+        project_filter: tree(Expr::val(ProjectLiteral::ProjectId(Uuid::nil()))),
+        ..Default::default()
+    };
+    // A one-item page: each source's scan keeps only its newest row.
+    let newest = |item_source| {
+        expanded_dynamic_cursor_soup_hydrated(
+            &pool,
+            ExpandedDynamicCursorArgs {
+                user_id: MacroUserIdStr::parse_from_str(USER).unwrap(),
+                limit: 1,
+                cursor: Query::Sort(SimpleSortMethod::UpdatedAt, filter.clone()),
+                exclude_frecency: false,
+            },
+            item_source,
+        )
+    };
+    let ids = |page: Vec<SoupProjectionHydration>| {
+        page.into_iter()
+            .map(|hydration| hydration.item.id())
+            .collect::<Vec<_>>()
+    };
+    let expected = ids(newest(ItemSource::ItemTables).await?);
+    assert_eq!(expected, [gap], "07:30Z is newer than 07:00Z");
+    assert_eq!(ids(newest(ItemSource::SourceItems).await?), expected);
     Ok(())
 }
 

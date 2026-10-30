@@ -1463,24 +1463,46 @@ fn project_top_where_clause() -> String {
 /// item tables, which read each visible item once; past this the query reads the item tables.
 const SOURCE_SCAN_ROWS: i64 = 5_000;
 
-/// How many sources `user_source_ids` lists for the user.
-async fn source_count(
+/// What decides whether a page may read `source_items`.
+struct ScanBound {
+    /// How many sources `user_source_ids` lists for the user.
+    sources: i64,
+    /// Whether the session's time zone is UTC. Projected scans order and bound the stored
+    /// `timestamp` values, which order like the item-table path's `timestamptz` casts only
+    /// where no daylight-saving jump reorders them.
+    utc: bool,
+}
+
+impl ScanBound {
+    fn allows(&self, limit: i64) -> bool {
+        self.utc && self.sources * limit <= SOURCE_SCAN_ROWS
+    }
+}
+
+async fn scan_bound(
     connection: &mut sqlx::PgConnection,
     user_id: &str,
-) -> Result<i64, sqlx::Error> {
-    let span = tracing::info_span!("soup.source_items.sources", sources = tracing::field::Empty);
-    let sources = sqlx::query_scalar!(
+) -> Result<ScanBound, sqlx::Error> {
+    let span = tracing::info_span!(
+        "soup.source_items.bound",
+        sources = tracing::field::Empty,
+        utc = tracing::field::Empty
+    );
+    let bound = sqlx::query_as!(
+        ScanBound,
         r#"SELECT 1
                 + (SELECT count(*) FROM comms_channel_participants
                    WHERE user_id = $1 AND left_at IS NULL)
-                + (SELECT count(*) FROM team_user WHERE user_id = $1) AS "sources!""#,
+                + (SELECT count(*) FROM team_user WHERE user_id = $1) AS "sources!",
+            current_setting('TimeZone') IN ('UTC', 'Etc/UTC') AS "utc!""#,
         user_id
     )
     .fetch_one(connection)
     .instrument(span.clone())
     .await?;
-    span.record("sources", sources);
-    Ok(sources)
+    span.record("sources", bound.sources);
+    span.record("utc", bound.utc);
+    Ok(bound)
 }
 
 /// Where `build_query` finds documents, chats and projects.
@@ -2133,7 +2155,9 @@ async fn expanded_dynamic_cursor_soup_hydrated(
         .await?;
     let item_source = if item_source == ItemSource::SourceItems
         && Feed::serves(*cursor.sort_method())
-        && source_count(&mut connection, user_id.as_ref()).await? * query_limit > SOURCE_SCAN_ROWS
+        && !scan_bound(&mut connection, user_id.as_ref())
+            .await?
+            .allows(query_limit)
     {
         ItemSource::ItemTables
     } else {
