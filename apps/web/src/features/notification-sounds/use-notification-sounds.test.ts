@@ -118,3 +118,14 @@ it('leaves another tab playing when a background tab closes', () => {
   expect(localStorage.getItem(TAB_KEY)).toBe('another-tab');
   dispose();
 });
+
+it('reclaims sound when a focused page returns from the back/forward cache', () => {
+  const { dispose } = mountSounds();
+  vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+  window.dispatchEvent(
+    new PageTransitionEvent('pageshow', { persisted: true })
+  );
+  expect(localStorage.getItem(TAB_KEY)).not.toBeNull();
+  vi.mocked(document.hasFocus).mockRestore();
+  dispose();
+});

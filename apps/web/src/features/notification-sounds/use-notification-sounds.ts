@@ -51,6 +51,10 @@ export function useNotificationSounds(
   if (document.hasFocus()) claimNotificationSoundTab();
   makeEventListener(window, 'focus', claimNotificationSoundTab);
   makeEventListener(window, 'pagehide', releaseNotificationSoundTab);
+  // A page restored from the back/forward cache released its claim on hide.
+  makeEventListener(window, 'pageshow', (event) => {
+    if (event.persisted && document.hasFocus()) claimNotificationSoundTab();
+  });
   makeEventListener(
     window,
     'pointerdown',
