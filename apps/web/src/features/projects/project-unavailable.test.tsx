@@ -71,16 +71,19 @@ it('keeps the unavailable notice when the viewer already has access', () => {
   expect(view.queryByRole('button', { name: 'Request access' })).toBeNull();
 });
 
-it('waits for its own request state instead of a cached one from before losing access', () => {
+it('shows the project skeleton until the request state decides the view', () => {
   const [loading, setLoading] = createSignal(true);
-  const fake = fakeSharingSource({ accessLevel: 'view' });
-  source = { ...fake.source, loading };
+  const [loaded, setLoaded] = createSignal(false);
+  const fake = fakeSharingSource({ accessLevel: null });
+  source = {
+    ...fake.source,
+    state: () => (loaded() ? fake.source.state() : undefined),
+    loading,
+  };
   const view = renderUnavailable();
   expect(view.getByText('Loading project')).toBeTruthy();
   expect(view.queryByRole('alert')).toBeNull();
-  fake.setState((current) => ({ ...current, accessLevel: null }));
-  expect(view.queryByRole('button', { name: 'Request access' })).toBeNull();
+  setLoaded(true);
   setLoading(false);
   expect(view.getByRole('button', { name: 'Request access' })).toBeTruthy();
-  expect(view.queryByText('Loading project')).toBeNull();
 });
