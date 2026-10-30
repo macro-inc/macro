@@ -19,6 +19,7 @@ let snapshot: {
   isSuccess: boolean;
   isPending: boolean;
   isFetching: boolean;
+  isPaused: boolean;
   isFetchedAfterMount: boolean;
   isError: boolean;
   error: Error | null;
@@ -74,6 +75,7 @@ function mount(initial: Partial<RequestState> = {}) {
     isSuccess: true,
     isPending: false,
     isFetching: false,
+    isPaused: false,
     isFetchedAfterMount: true,
     isError: false,
     error: null,
@@ -205,6 +207,12 @@ it('keeps loading while a new mount refetches a cached state', () => {
   expect(source.loading()).toBe(false);
   Object.assign(snapshot, { isFetching: true });
   expect(source.loading()).toBe(false);
+});
+
+it('keeps loading while an offline mount waits to refetch a cached state', () => {
+  const { source } = mount({ accessLevel: 'view' });
+  Object.assign(snapshot, { isPaused: true, isFetchedAfterMount: false });
+  expect(source.loading()).toBe(true);
 });
 
 it('tells a deleted entity from a failed state read', () => {

@@ -178,6 +178,27 @@ it('decides the denied document screen from its own request state, not a cached 
   expect(onAccessGranted).toHaveBeenCalledOnce();
 });
 
+it('does not report a cached grant once the document turns out to be deleted', () => {
+  const [loading, setLoading] = createSignal(true);
+  const [notFound, setNotFound] = createSignal(false);
+  source = {
+    ...fakeSharingSource({ accessLevel: 'view' }).source,
+    loading,
+    notFound,
+  };
+  const onAccessGranted = vi.fn();
+  const view = render(() => (
+    <DocumentAccessDenied
+      documentId="01a140ad-06d5-7791-8b68-bc128654bbba"
+      onAccessGranted={onAccessGranted}
+    />
+  ));
+  setNotFound(true);
+  setLoading(false);
+  expect(view.getByText('Not found')).toBeTruthy();
+  expect(onAccessGranted).not.toHaveBeenCalled();
+});
+
 it('shows a deleted document as not found instead of offering a request', () => {
   const [notFound, setNotFound] = createSignal(false);
   source = { ...fakeSharingSource({ accessLevel: null }).source, notFound };

@@ -54,7 +54,9 @@ export function AccessDenied(props: {
   createEffect(
     on(
       () =>
-        props.source.loading() ? undefined : props.source.state()?.accessLevel,
+        props.source.loading() || props.source.notFound()
+          ? undefined
+          : props.source.state()?.accessLevel,
       (level) => {
         if (level) props.onAccessGranted();
       }

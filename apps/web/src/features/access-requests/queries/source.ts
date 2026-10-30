@@ -114,7 +114,8 @@ export function createSharingSource(
     grants: () => (grants.isPending ? [] : (grants.data ?? [])),
     // A cached state can predate an access change, so each mount waits for
     // its own refetch.
-    loading: () => state.isFetching && !state.isFetchedAfterMount,
+    loading: () =>
+      (state.isFetching || state.isPaused) && !state.isFetchedAfterMount,
     notFound: () =>
       state.isError && thrownResultErrorHasCode(state.error, 'NOT_FOUND'),
     busy: () => mutation.isPending,
