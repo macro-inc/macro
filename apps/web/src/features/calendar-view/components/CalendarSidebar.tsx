@@ -38,6 +38,7 @@ import {
   Switch,
 } from 'solid-js';
 import { CalendarCallSidebar } from '../calendar-call-sidebar';
+import { useCalendarFocus } from '../calendar-focus-target';
 import { CALENDAR_TOUR } from '../tour';
 import {
   CalendarCreateBookingLinkItem,
@@ -165,8 +166,31 @@ export function TeamOooUpcomingList() {
   const upcoming = useUpcomingTeamOoo();
   const windows = upcoming.windows;
   const calendarView = useCalendarView();
+  const calendarFocus = useCalendarFocus();
   const isActive = (window: TeamOooWindow) =>
     calendarView.selectedEvent()?.id === window.event.id;
+  const openWindow = (window: TeamOooWindow, row: HTMLElement) => {
+    const openOnRow = () => {
+      calendarPager.gotoDate(window.start);
+      calendarView.selectEvent(window.event, row, 'agenda');
+    };
+    // With the overlay on, the absence also renders on the grid: open it on
+    // its chip once the page shows it, as a navigation request does, so the
+    // card never opens on the row and then jumps to the chip.
+    if (calendarView.isSourceVisible(TEAM_OOO_SOURCE_ID)) {
+      calendarFocus.focusOccurrence(
+        {
+          eventId: window.eventId,
+          occurrenceKey: window.occurrenceKey,
+          date: window.start,
+        },
+        openOnRow
+      );
+    } else {
+      openOnRow();
+    }
+    if (shell.aside.isOverlay()) shell.aside.collapse();
+  };
 
   return (
     <div class="flex flex-col gap-0.5">
@@ -197,15 +221,7 @@ export function TeamOooUpcomingList() {
                   isActive(window()) ? 'bg-active' : 'hover:bg-hover'
                 )}
                 aria-current={isActive(window()) ? 'true' : undefined}
-                onClick={(event) => {
-                  calendarPager.gotoDate(window().start);
-                  calendarView.selectEvent(
-                    window().event,
-                    event.currentTarget,
-                    'agenda'
-                  );
-                  if (shell.aside.isOverlay()) shell.aside.collapse();
-                }}
+                onClick={(event) => openWindow(window(), event.currentTarget)}
               >
                 <UserIcon
                   id={window().ownerId}
