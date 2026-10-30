@@ -8,7 +8,8 @@ export type EntityDragOperation = 'move' | 'copy';
 export type EntityDragSelection = {
   /** What the drag carries: the whole selection for a selected row, else the row. */
   entities: Accessor<EntityData[]>;
-  /** Clears the list's selection if the dragged row is part of it. */
+  /** Whether the dragged row is part of the list's selection. */
+  isSelected: Accessor<boolean>;
   clear: () => void;
 };
 

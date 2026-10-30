@@ -111,7 +111,11 @@ describe('createEntityDraggable', () => {
 
   it('carries the selection its list provides', () => {
     const other: ChannelEntity = { ...entity, id: 'other', name: 'Another' };
-    const selection = { entities: () => [entity, other], clear: vi.fn() };
+    const selection = {
+      entities: () => [entity, other],
+      isSelected: () => true,
+      clear: vi.fn(),
+    };
     const { state } = setup(undefined, entity, selection);
 
     const data = state.draggables['row-split']!.data;

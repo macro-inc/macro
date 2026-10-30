@@ -60,6 +60,7 @@ export function createFolderDropTargets(
     folderId: string | undefined
   ): EntityData[] => {
     if (!folderId || !isEntityDragData(data)) return [];
+    if (data.operation() !== 'move') return [];
     const ownSplitId = options.ownSplitId?.();
     if (ownSplitId && data.splitId === ownSplitId) return [];
     const dragged = data.selection?.entities() ?? [data];
@@ -67,10 +68,15 @@ export function createFolderDropTargets(
     return entitiesToMove(dragged, folderId, folders());
   };
 
-  const move = async (entities: EntityData[], folderId: string) => {
+  const move = async (
+    entities: EntityData[],
+    folderId: string,
+    clearSelection?: () => void
+  ) => {
     const name = folders().get(folderId)?.name ?? folderId;
     try {
       await moveEntities(entities, { id: folderId, name });
+      clearSelection?.();
       toast.success(
         entities.length > 1
           ? t('entityActions.toastMovedCount', { count: entities.length })
@@ -86,8 +92,14 @@ export function createFolderDropTargets(
     if (!folderId) return;
     const entities = droppableEntities(draggable.data, folderId);
     if (entities.length === 0) return;
-    if (isEntityDragData(draggable.data)) draggable.data.selection?.clear();
-    fireAndForget(move(entities, folderId), 'folder-drop');
+    // Read now: the moved rows can leave the list before the server answers.
+    const selection = isEntityDragData(draggable.data)
+      ? draggable.data.selection
+      : undefined;
+    const clearSelection = selection?.isSelected()
+      ? selection.clear
+      : undefined;
+    fireAndForget(move(entities, folderId, clearSelection), 'folder-drop');
   });
 
   return (folderId) => {
@@ -103,7 +115,7 @@ export function createFolderDropTargets(
     return {
       ref: droppable.ref,
       count,
-      isOver: () => droppable.isActiveDroppable,
+      isOver: () => droppable.isActiveDroppable && count() > 0,
     };
   };
 }

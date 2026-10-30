@@ -76,12 +76,9 @@ export const SoupEntityContextMenu: FlowComponent<
 
   const dragSelection: EntityDragSelection = {
     entities: menuEntities,
-    clear: () => {
-      const isSelected = props
-        .selectedEntities()
-        .some(({ id }) => id === props.entity.id);
-      if (isSelected) props.list.selection.clear();
-    },
+    isSelected: () =>
+      props.selectedEntities().some(({ id }) => id === props.entity.id),
+    clear: () => props.list.selection.clear(),
   };
   const row = () => (
     <EntityDragSelectionContext.Provider value={dragSelection}>

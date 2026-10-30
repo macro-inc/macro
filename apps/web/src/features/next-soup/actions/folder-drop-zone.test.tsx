@@ -47,15 +47,21 @@ const doc = (id: string, ownerId = 'macro|me'): EntityData => ({
 
 function dragData(
   entity: EntityData,
-  options: { splitId?: string; selected?: EntityData[]; clear?: () => void }
+  options: {
+    splitId?: string;
+    selected?: EntityData[];
+    clear?: () => void;
+    operation?: 'move' | 'copy';
+  }
 ): EntityDragData {
   return {
     ...entity,
     dragType: 'entity',
-    operation: () => 'move',
+    operation: () => options.operation ?? 'move',
     splitId: options.splitId ?? 'list-split',
     selection: options.selected && {
       entities: () => options.selected ?? [],
+      isSelected: () => true,
       clear: options.clear ?? (() => {}),
     },
   };
@@ -259,14 +265,47 @@ describe('FolderDropZone', () => {
     expect(mocks.moveEntities).toHaveBeenCalledTimes(1);
   });
 
-  it('reports a failed move', async () => {
+  it('refuses a drag held as a copy', () => {
+    const { start, drop } = setup(dragData(doc('row'), { operation: 'copy' }));
+
+    start();
+    expect(screen.queryByText(/to this folder/)).toBeNull();
+    drop();
+
+    expect(mocks.moveEntities).not.toHaveBeenCalled();
+  });
+
+  it('clears the selection only once the move lands', async () => {
+    let finishMove = () => {};
+    mocks.moveEntities.mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishMove = resolve;
+      })
+    );
+    const clear = vi.fn();
+    const row = doc('row');
+    const { start, drop } = setup(dragData(row, { selected: [row], clear }));
+
+    start();
+    drop();
+    await vi.waitFor(() => expect(mocks.moveEntities).toHaveBeenCalled());
+    expect(clear).not.toHaveBeenCalled();
+
+    finishMove();
+    await vi.waitFor(() => expect(clear).toHaveBeenCalled());
+  });
+
+  it('reports a failed move and keeps the selection', async () => {
     mocks.moveEntities.mockRejectedValue(new Error('offline'));
-    const { start, drop } = setup(dragData(doc('row'), {}));
+    const clear = vi.fn();
+    const row = doc('row');
+    const { start, drop } = setup(dragData(row, { selected: [row], clear }));
 
     start();
     drop();
 
     await vi.waitFor(() => expect(mocks.toast.failure).toHaveBeenCalled());
     expect(mocks.toast.success).not.toHaveBeenCalled();
+    expect(clear).not.toHaveBeenCalled();
   });
 });
