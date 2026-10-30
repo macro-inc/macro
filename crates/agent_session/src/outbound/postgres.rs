@@ -1039,6 +1039,19 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         let Some(modified_at) = modified_at else {
             return Err(anyhow::anyhow!("agent session not found").into());
         };
+        if !is_archived {
+            sqlx::query!(
+                r#"
+                UPDATE agent_session_auto_archive
+                SET restored_at = NOW()
+                WHERE agent_session_id = $1 AND restored_at IS NULL
+                "#,
+                id.as_uuid(),
+            )
+            .execute(&mut *transaction)
+            .await
+            .context("failed to record agent session auto-archive restore")?;
+        }
         touch_entity_updated(&mut transaction, id, Some(modified_at)).await?;
         transaction
             .commit()

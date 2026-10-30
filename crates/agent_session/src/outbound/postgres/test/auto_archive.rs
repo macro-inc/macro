@@ -161,14 +161,14 @@ async fn a_restored_session_is_never_archived_again(pool: PgPool) {
             .unwrap()
             .is_archived
     );
-    assert_eq!(
-        repo.session_auto_archive(session.id)
-            .await
-            .unwrap()
-            .archived
-            .map(|record| record.reason),
-        Some(AutoArchiveReason::RuntimeClosed)
-    );
+    let record = repo
+        .session_auto_archive(session.id)
+        .await
+        .unwrap()
+        .archived
+        .unwrap();
+    assert_eq!(record.reason, AutoArchiveReason::RuntimeClosed);
+    assert!(record.restored_at.is_some());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

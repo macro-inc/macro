@@ -64,7 +64,8 @@ impl<B: BotFacts + 'static> AutoArchiveRepo for PgAgentSessionRepo<B> {
                 COALESCE(defaults.on_pull_request_merged, false) AS "default_on_pull_request_merged!",
                 COALESCE(defaults.on_runtime_closed, false) AS "default_on_runtime_closed!",
                 archive.reason AS "reason?",
-                archive.archived_at AS "archived_at?"
+                archive.archived_at AS "archived_at?",
+                archive.restored_at AS "restored_at?"
             FROM agent_session session
             LEFT JOIN agent_session_auto_archive_override override
                 ON override.agent_session_id = session.id
@@ -86,6 +87,7 @@ impl<B: BotFacts + 'static> AutoArchiveRepo for PgAgentSessionRepo<B> {
                     .parse::<AutoArchiveReason>()
                     .context("read auto-archive reason")?,
                 archived_at,
+                restored_at: row.restored_at,
             }),
             _ => None,
         };

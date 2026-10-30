@@ -66,6 +66,8 @@ pub struct AutoArchiveRecord {
     pub reason: AutoArchiveReason,
     /// When it archived.
     pub archived_at: DateTime<Utc>,
+    /// When a person restored it, after which the archive no longer stands.
+    pub restored_at: Option<DateTime<Utc>>,
 }
 
 /// A session's auto-archive settings and history.
@@ -75,7 +77,7 @@ pub struct SessionAutoArchive {
     pub overrides: AutoArchiveOverrides,
     /// The owner's defaults the session follows where it has no choice of its own.
     pub defaults: AutoArchivePreferences,
-    /// The archive a trigger made, if one did.
+    /// The archive a trigger made, if one did. A session archives itself at most once.
     pub archived: Option<AutoArchiveRecord>,
 }
 

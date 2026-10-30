@@ -16,9 +16,10 @@ CREATE TABLE agent_session_auto_archive_override (
 );
 
 -- The one time a session archived itself, and why. Kept when a person restores the session, so
--- no later trigger archives it again.
+-- no later trigger archives it again; restored_at marks that the archive no longer stands.
 CREATE TABLE agent_session_auto_archive (
     agent_session_id UUID PRIMARY KEY REFERENCES agent_session (id) ON DELETE CASCADE,
     reason           TEXT NOT NULL CHECK (reason IN ('pull_request_merged', 'runtime_closed')),
-    archived_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    archived_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    restored_at      TIMESTAMPTZ
 );

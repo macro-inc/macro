@@ -108,6 +108,8 @@ pub struct AutoArchivedBody {
     pub reason: AutoArchiveReason,
     /// When it archived.
     pub archived_at: DateTime<Utc>,
+    /// When a person restored it, after which the archive no longer stands.
+    pub restored_at: Option<DateTime<Utc>>,
 }
 
 /// A session's auto-archive settings and history.
@@ -130,6 +132,7 @@ impl From<SessionAutoArchive> for SessionAutoArchiveResponse {
             archived: settings.archived.map(|record| AutoArchivedBody {
                 reason: record.reason,
                 archived_at: record.archived_at,
+                restored_at: record.restored_at,
             }),
         }
     }
