@@ -7,12 +7,9 @@
   --task-col-initiative: 8rem;
 }
 
-.task-grid-icon-creator {
-  --task-col-created-by: 1rem;
-}
-
 @container u-list (min-width: 1221px) {
-  .task-grid-icon-creator {
+  .task-grid-row.task-grid-icon-creator {
+    --task-col-created-by: 1rem;
     --task-col-timestamp: 2.5rem;
   }
 }
