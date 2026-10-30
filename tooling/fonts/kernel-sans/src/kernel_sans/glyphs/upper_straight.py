@@ -104,21 +104,27 @@ def _vtrap(p, v, d1, d2):
     return crotch_trap(v, d1, d2, p.trap)
 
 
-# Depth of the stem-join traps, in p.trap. Exception to n's 1.3: at n's
-# shoulder most of geom.stem_trap's triangle already lies in the white
-# counter, but at these 22-40 degree crotches all of it lands in ink. At 1.3
-# each join lost about 3.4 times the ink n's trap removes (2400 vs 700 units^2
-# at 800) and read as holes punched through the joins at text sizes; 0.75
-# removes about what n's does at every weight.
-STEM_JOIN = 0.75
+# Stem-join traps (M N AE K): geom.stem_trap along the stem edge, as in n,
+# but sized for a 22-40 degree crotch. At n's shoulder most of stem_trap's
+# triangle already lies in the white; here all of it lands in ink. Placed at
+# the crotch with n's 1.3 * p.trap it bit 3.4 times n's ink out of each join
+# (2400 vs 700 units^2 at 800) and sat above the wedge behind an 8-unit neck,
+# so it read as a hole punched through the join at text sizes. Depth p.trap,
+# anchored 0.6 of the depth below the crotch, opens the bite out of the wedge
+# itself: at 800 the narrowest white is 13-15 units (5-8 at the crotch) and
+# the wedge is under 24 units wide for 32-44 units (44-55 with no trap).
+STEM_JOIN = 1.0  # depth, in p.trap
+STEM_JOIN_DROP = 0.6  # anchor below the crotch, in depths
 
 
 def _strap(p, x, y, side, up):
     """Ink trap where a diagonal leaves the straight stem edge x at the crotch
-    height y: geom.stem_trap along the stem edge, as at n's shoulder. `side`
-    is the side of the stem the white is on; `up` means the white opens
-    downward from the crotch (the trap runs up the stem edge)."""
-    return stem_trap(x, y, STEM_JOIN * p.trap, side=side, up=up)
+    height y: geom.stem_trap along the stem edge. `side` is the side of the
+    stem the white is on; `up` means the white opens downward from the crotch
+    (the trap runs up the stem edge)."""
+    d = STEM_JOIN * p.trap
+    y0 = y - STEM_JOIN_DROP * d if up else y + STEM_JOIN_DROP * d
+    return stem_trap(x, y0, d, side=side, up=up)
 
 
 def _down(edge):
