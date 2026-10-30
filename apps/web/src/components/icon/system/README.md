@@ -63,8 +63,9 @@ stem and dot for small-size legibility. Its foreground mixes 25% `currentColor`
 with 75% black in sRGB, giving a darker shade of the badge rather than a transparent
 cutout. The badge's dedicated `priority-urgent` token maps to the theme's orange
 rather than warning or accent.
-Completed task status uses the filled check-circle through the shared property
-and task-status renderers. Empty priority uses three muted, hollow ascending bars,
+Completed and Canceled task statuses use filled check-circle and x-circle glyphs
+through the shared property and task-status renderers. Their marks are transparent
+cutouts. Empty priority uses three muted, hollow ascending bars,
 scaled down by 15% within the unchanged icon box to balance their visual weight.
 Empty assignees use the muted user-circle-dashed glyph; populated project properties
 use the regular stack glyph, while empty projects retain its dashed counterpart.

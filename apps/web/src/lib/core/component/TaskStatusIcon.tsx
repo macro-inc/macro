@@ -1,5 +1,5 @@
 import StatusDone from '@icon/system/fill/check-circle-fill.svg';
-import StatusCanceled from '@icon/system/regular/task-cancelled.svg';
+import StatusCanceled from '@icon/system/fill/x-circle-fill.svg';
 import StatusCreated from '@icon/system/regular/task-created.svg';
 import StatusInProgress from '@icon/system/regular/task-in-progress.svg';
 import StatusInReview from '@icon/system/regular/task-in-review.svg';

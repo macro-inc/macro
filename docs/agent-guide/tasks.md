@@ -109,7 +109,7 @@ Priority sits directly beside the title. Their pickers replace
 the separate Status/Priority columns and duplicate trailing mobile pills; Assignees
 and Project stay on the right, with 20px phone icons. Empty assignees use a person in
 a dashed circular frame. Empty priority shows hollow ascending bars, Urgent shows a
-filled exclamation badge, and Completed uses a filled check-circle.
+filled exclamation badge, Completed uses a filled check-circle, and Canceled uses a filled x-circle.
 The property edit menus use 18px status and Urgent icons on desktop and mobile.
 Each status has its own `task-status-*` theme color, shared by task icons and
 group-header tints. In the theme editor's **Task statuses** section, change a status
