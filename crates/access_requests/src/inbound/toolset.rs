@@ -111,7 +111,6 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock>
 {
     type Output = RequestEntityAccessResponse;
 
-    #[tracing::instrument(name = "access_requests.tool.request", skip_all, fields(entity_id = %self.entity_id, entity_type = ?self.entity_type, requested_level = ?self.access), err)]
     async fn call(
         &self,
         context: ServiceContext<AccessRequestToolContext<R, A, C>>,
@@ -197,7 +196,6 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock>
 {
     type Output = ReadEntityAccessRequestResponse;
 
-    #[tracing::instrument(name = "access_requests.tool.read", skip_all, fields(entity_id = %self.entity_id, entity_type = ?self.entity_type), err)]
     async fn call(
         &self,
         context: ServiceContext<AccessRequestToolContext<R, A, C>>,

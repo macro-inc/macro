@@ -30,6 +30,7 @@ mod subagent;
 mod tool_context;
 pub mod user_tool_review;
 
+use access_requests::inbound::toolset::access_request_toolset;
 pub use anthropic::toolset::AnthropicToolContext;
 use anthropic::toolset::anthropic_toolset;
 use bots::inbound::toolset::bot_toolset;
@@ -78,9 +79,9 @@ pub use tool_context::{
     ChannelSideEffectClients, FormsToolConfig, MaybeToolEventBroker, NoOpCallRtcClient,
     NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
     NoOpSnsEndpointManager, NoOpTaskProperties, RequestContext, RoutineToolContext,
-    TaskPropertiesAdapter, ToolActivityToolContext, ToolBookingLinkService,
-    ToolBookingLinkToolContext, ToolBookingManagementToolContext, ToolBotService,
-    ToolBotToolContext, ToolCalendarMutationService, ToolCalendarReadService,
+    TaskPropertiesAdapter, ToolAccessRequestToolContext, ToolActivityToolContext,
+    ToolBookingLinkService, ToolBookingLinkToolContext, ToolBookingManagementToolContext,
+    ToolBotService, ToolBotToolContext, ToolCalendarMutationService, ToolCalendarReadService,
     ToolCalendarToolContext, ToolCallRecordQueryService, ToolCallService, ToolCallToolContext,
     ToolChannelEventDispatcher, ToolChannelMediaUploadToolContext, ToolChannelMessagesService,
     ToolChannelToolContext, ToolChatService, ToolChatToolContext, ToolCodingAgentToolContext,
@@ -100,18 +101,19 @@ pub use tool_context::{
     ToolServiceContext, ToolSkillService, ToolSkillToolContext, ToolSoupService,
     ToolSystemPropertiesService, ToolTableEventPublisher, ToolTeamCalendarService,
     ToolTeamCalendarToolContext, ToolTeamService, ToolTeamToolContext, ToolUserEmailService,
-    ToolViewOnlyDatabasesSqlToolContext, build_activity_tool_context,
-    build_booking_link_tool_context, build_booking_management_tool_context, build_bot_tool_context,
-    build_calendar_tool_context, build_channel_media_upload_tool_context,
-    build_channel_tool_context_with_dispatcher, build_channel_tool_context_with_side_effects,
-    build_channel_tool_context_without_side_effects, build_coding_agent_tool_context,
-    build_crm_tool_context, build_crm_transfer_tool_context, build_databases_sql_tool_context,
-    build_databases_tool_context, build_favorites_service, build_favorites_tool_context,
-    build_forms_tool_context, build_image_generation_tool_context, build_import_repo,
-    build_initiative_tool_context, build_item_notification_preference_tool_context,
-    build_message_service_with_side_effects, build_message_service_without_side_effects,
-    build_message_tool_context, build_pipeline_tool_context, build_project_tool_context,
-    build_properties_service, build_properties_service_with_broker, build_properties_tool_context,
+    ToolViewOnlyDatabasesSqlToolContext, build_access_request_tool_context,
+    build_activity_tool_context, build_booking_link_tool_context,
+    build_booking_management_tool_context, build_bot_tool_context, build_calendar_tool_context,
+    build_channel_media_upload_tool_context, build_channel_tool_context_with_dispatcher,
+    build_channel_tool_context_with_side_effects, build_channel_tool_context_without_side_effects,
+    build_coding_agent_tool_context, build_crm_tool_context, build_crm_transfer_tool_context,
+    build_databases_sql_tool_context, build_databases_tool_context, build_favorites_service,
+    build_favorites_tool_context, build_forms_tool_context, build_image_generation_tool_context,
+    build_import_repo, build_initiative_tool_context,
+    build_item_notification_preference_tool_context, build_message_service_with_side_effects,
+    build_message_service_without_side_effects, build_message_tool_context,
+    build_pipeline_tool_context, build_project_tool_context, build_properties_service,
+    build_properties_service_with_broker, build_properties_tool_context,
     build_read_agent_session_context, build_routine_tool_context, build_skill_tool_context,
     build_task_properties_adapter, build_team_calendar_tool_context, build_team_repository,
     build_team_tool_context,
@@ -173,6 +175,7 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
         .add_subtoolset::<ToolCognitionToolContext>(cognition_toolset())
         .add_subtoolset::<ToolProjectToolContext>(project_toolset())
         .add_subtoolset::<ToolFavoritesToolContext>(favorites_toolset())
+        .add_subtoolset::<ToolAccessRequestToolContext>(access_request_toolset())
         .add_subtoolset::<ToolMessageToolContext>(message_toolset())
         .add_subtoolset::<ToolInitiativeToolContext>(initiative_toolset())
         .add_subtoolset::<ToolPropertiesToolContext>(properties_toolset())

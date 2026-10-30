@@ -1121,6 +1121,7 @@ dependencies = [
 name = "ai_tools"
 version = "0.1.0"
 dependencies = [
+ "access_requests",
  "activity",
  "agent",
  "agent_code_mode",

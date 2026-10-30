@@ -8,6 +8,7 @@ version = "0.1.0"
 test-support = []
 
 [dependencies]
+access_requests = { path = "../access_requests" }
 import_linear = { path = "../import_linear" }
 import_jira = { path = "../import_jira" }
 clap = { workspace = true, features = ["derive"] }
