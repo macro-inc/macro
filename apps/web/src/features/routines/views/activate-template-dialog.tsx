@@ -85,6 +85,10 @@ export function ActivateTemplateDialog(props: {
   choices: ReadonlyMap<string, ReferenceChoice>;
   onChoose(key: string, choice: ReferenceChoice): void;
   undecided: number;
+  /** Still checking access to the steps' channels, folders and documents. */
+  checking: boolean;
+  /** Steps whose destination the activator can't open; they start empty. */
+  unreachable: number;
   pending: boolean;
   error?: string;
   onActivate(): void;
@@ -192,7 +196,11 @@ export function ActivateTemplateDialog(props: {
                 fallback={
                   props.undecided > 0
                     ? `Decide on ${props.undecided} ${props.undecided === 1 ? 'reference' : 'references'} to activate.`
-                    : 'Your routine runs as you, on its own schedule.'
+                    : props.checking
+                      ? 'Checking what you can open…'
+                      : props.unreachable > 0
+                        ? `${props.unreachable} ${props.unreachable === 1 ? 'step points' : 'steps point'} to something you can’t open. Choose your own in the editor; the routine starts off until then.`
+                        : 'Your routine runs as you, on its own schedule.'
                 }
               >
                 {(error) => <span class="text-failure">{error()}</span>}
@@ -207,7 +215,9 @@ export function ActivateTemplateDialog(props: {
               </Button>
               <Button
                 variant="primary"
-                disabled={props.undecided > 0 || props.pending}
+                disabled={
+                  props.undecided > 0 || props.checking || props.pending
+                }
                 onClick={() => props.onActivate()}
               >
                 {props.pending ? 'Activating…' : 'Activate'}

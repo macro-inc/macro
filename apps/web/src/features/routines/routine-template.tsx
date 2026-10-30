@@ -49,6 +49,7 @@ import {
 } from './core/template';
 import {
   createTemplateActivation,
+  templateDestinations,
   templatePrompt,
 } from './primitives/template-activation';
 import { parseRoutineTriggers } from './queries/routine-trigger-mapping';
@@ -130,9 +131,11 @@ function ActivateTemplate(
   }
 ) {
   const activator = useActivator();
-  const access = useReferenceAccess(() =>
-    itemReferences(props.template.variables)
-  );
+  // Steps' fixed channels, folders and documents are checked like mentions.
+  const access = useReferenceAccess(() => [
+    ...itemReferences(props.template.variables),
+    ...templateDestinations(props.template),
+  ]);
   const activation = createTemplateActivation({
     template: () => props.template,
     activator,
@@ -190,6 +193,8 @@ function ActivateTemplate(
       choices={activation.choices()}
       onChoose={activation.choose}
       undecided={activation.undecided().length}
+      checking={activation.checking()}
+      unreachable={activation.unreachable().length}
       pending={mutation.isPending}
       error={error()}
       onActivate={() => fireAndForget(activate(), 'routines')}

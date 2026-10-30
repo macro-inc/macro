@@ -16,13 +16,16 @@ import {
 } from '../core/routine-steps';
 import {
   type Activator,
-  fillTemplateArguments,
+  argumentDestinations,
+  fillStepArguments,
   fillTemplatePrompt,
   fillTemplateTrigger,
+  keepsAuthor,
   needsDecision,
   type ReferenceChoice,
   type ReferenceState,
   referenceState,
+  type StepDestination,
   variableKey,
 } from '../core/template';
 
@@ -45,14 +48,30 @@ export function templatePrompt(
   return typeof prompt === 'string' ? prompt : '';
 }
 
+/** The fixed channels, folders and documents a template's steps act on. */
+export function templateDestinations(
+  template: Pick<RoutineTemplate, 'task'>
+): StepDestination[] {
+  const steps = stepsFromTask(template.task) ?? [];
+  const seen = new Set<string>();
+  return flattenSteps(steps).flatMap((step) =>
+    step.kind === 'tool'
+      ? argumentDestinations(step.arguments).filter(
+          (destination) =>
+            !seen.has(destination.id) && Boolean(seen.add(destination.id))
+        )
+      : []
+  );
+}
+
 /**
  * The template's task filled in for the activator: every agent's instructions,
- * including agents in branches, and the author named in any step's arguments.
+ * including agents in branches, and each tool step's arguments.
  */
 function filledTask(
   task: RoutineTemplate['task'],
   fill: (instructions: string) => string,
-  fillArguments: <T>(value: T) => T
+  fillArguments: (args: Record<string, unknown>) => Record<string, unknown>
 ) {
   const steps = stepsFromTask(task);
   if (!steps) return { ...task, user_prompt: fill(templatePrompt({ task })) };
@@ -88,7 +107,10 @@ function filledTask(
 export function createTemplateActivation(args: {
   template: Accessor<RoutineTemplate>;
   activator: Accessor<Activator | undefined>;
-  /** Whether the activator can open each mentioned item, by item ID. */
+  /**
+   * Whether the activator can open each mentioned item and each step's fixed
+   * destination (`templateDestinations`), by item ID.
+   */
   access: Accessor<ReadonlyMap<string, boolean>>;
 }) {
   const [choices, setChoices] = createSignal<
@@ -126,11 +148,33 @@ export function createTemplateActivation(args: {
     return activator ? fill(activator)(instructions) : instructions;
   };
 
+  const destinations = createMemo(() => templateDestinations(args.template()));
+  /** Still learning whether the activator can open each step's destination. */
+  const checking = () =>
+    destinations().some((destination) => !args.access().has(destination.id));
+  /** Destinations the activator can't open: their steps start empty. */
+  const unreachable = () =>
+    destinations().filter(
+      (destination) => args.access().get(destination.id) === false
+    );
+
   /** The routine to create, once every reference that needs one has a decision. */
   const request = (): CreateScheduledAction | undefined => {
     const activator = args.activator();
-    if (!activator || undecided().length > 0) return undefined;
+    if (!activator || undecided().length > 0 || checking()) return undefined;
     const template = args.template();
+    const context = {
+      authorId: template.author,
+      activator,
+      keepAuthor: keepsAuthor(template.variables, template.author),
+      inaccessible: new Set(unreachable().map((destination) => destination.id)),
+    };
+    let cleared = false;
+    const task = filledTask(template.task, fill(activator), (stepArgs) => {
+      const filled = fillStepArguments(stepArgs, context);
+      cleared ||= filled.cleared;
+      return filled.args;
+    });
     return {
       name: template.name,
       trigger: fillTemplateTrigger({
@@ -139,10 +183,9 @@ export function createTemplateActivation(args: {
         activator,
       }),
       kind: 'Agent',
-      task: filledTask(template.task, fill(activator), (value) =>
-        fillTemplateArguments(value, template.author, activator)
-      ),
-      enabled: true,
+      task,
+      // A step left without its destination can't run; it starts off.
+      enabled: !cleared,
       run_visibility: DEFAULT_RUN_VISIBILITY,
     };
   };
@@ -156,5 +199,7 @@ export function createTemplateActivation(args: {
     },
     prompt,
     request,
+    checking,
+    unreachable,
   };
 }

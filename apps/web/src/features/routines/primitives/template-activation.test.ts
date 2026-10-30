@@ -151,6 +151,103 @@ describe('createTemplateActivation', () => {
     });
   });
 
+  it('keeps the author where they shared themselves, and leaves other text alone', () => {
+    createRoot((dispose) => {
+      const activation = createTemplateActivation({
+        template: () => ({
+          ...TEMPLATE,
+          task: {
+            steps: [
+              {
+                type: 'tool',
+                tool: 'SetEntityProperty',
+                arguments: {
+                  entity_id: '{{trigger.entity_id}}',
+                  entity_type: 'document',
+                  property_definition_id: 'assignees',
+                  entity_refs: [
+                    { entityType: 'user', entityId: 'macro|eric@macro.com' },
+                  ],
+                },
+              },
+              {
+                type: 'tool',
+                tool: 'SetSenderPolicy',
+                arguments: { sender_email: 'eric@macro.com', policy: 'noise' },
+              },
+            ],
+          },
+          variables: [
+            {
+              kind: 'user',
+              id: 'macro|eric@macro.com',
+              label: 'eric@macro.com',
+              fill: 'shared',
+            },
+          ],
+        }),
+        activator: () => ACTIVATOR,
+        access: () => new Map(),
+      });
+      const text = JSON.stringify(activation.request()?.task);
+      expect(text).toContain('"entityId":"macro|eric@macro.com"');
+      expect(text).toContain('"sender_email":"eric@macro.com"');
+      expect(text).not.toContain('jun@macro.com');
+      dispose();
+    });
+  });
+
+  it('empties steps aimed at what the activator can’t open, and starts off', () => {
+    createRoot((dispose) => {
+      const [access, setAccess] = createSignal<ReadonlyMap<string, boolean>>(
+        new Map()
+      );
+      const activation = createTemplateActivation({
+        template: () => ({
+          ...TEMPLATE,
+          task: {
+            steps: [
+              {
+                type: 'tool',
+                tool: 'SendChannelMessage',
+                arguments: { channel_id: 'private', content: 'Done' },
+              },
+              {
+                type: 'tool',
+                tool: 'CreateDocument',
+                arguments: { documentName: 'Notes', projectId: 'shared' },
+              },
+            ],
+          },
+          variables: [],
+        }),
+        activator: () => ACTIVATOR,
+        access,
+      });
+      // Until access is known, there's nothing to activate.
+      expect(activation.checking()).toBe(true);
+      expect(activation.request()).toBeUndefined();
+      setAccess(
+        new Map([
+          ['private', false],
+          ['shared', true],
+        ])
+      );
+      expect(activation.unreachable()).toEqual([
+        { id: 'private', blockName: 'channel' },
+      ]);
+      const body = activation.request();
+      expect(body?.enabled).toBe(false);
+      expect(body?.task).toMatchObject({
+        steps: [
+          { arguments: { channel_id: '' } },
+          { arguments: { projectId: 'shared' } },
+        ],
+      });
+      dispose();
+    });
+  });
+
   it('fills the author in as the activator in every agent, branches included', () => {
     createRoot((dispose) => {
       const author =

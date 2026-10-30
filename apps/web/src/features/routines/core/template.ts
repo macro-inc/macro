@@ -52,29 +52,101 @@ function isSameUser(mention: { id: string; email?: string }, userId: string) {
   );
 }
 
-/**
- * A step's arguments with the template's author replaced by whoever activates
- * it: an "assign to me" step must not keep giving the author the activator's
- * items. The author's ID or bare email, anywhere in the arguments, is theirs.
- */
-export function fillTemplateArguments<T>(
-  value: T,
-  authorId: string,
-  activator: Activator
-): T {
-  const fill = (current: unknown): unknown => {
-    if (typeof current === 'string')
-      return isSameUser({ id: current, email: current }, authorId)
-        ? activator.userId
-        : current;
-    if (Array.isArray(current)) return current.map(fill);
-    if (current && typeof current === 'object')
-      return Object.fromEntries(
-        Object.entries(current).map(([key, item]) => [key, fill(item)])
-      );
-    return current;
+/** An item a tool step acts on by its fixed ID, not the trigger's. */
+export type StepDestination = { id: string; blockName: string };
+
+const PLACEHOLDER = /^\{\{.*\}\}$/;
+
+function fixedId(value: unknown): string | undefined {
+  return typeof value === 'string' && value && !PLACEHOLDER.test(value)
+    ? value
+    : undefined;
+}
+
+/** The fixed channel, folder or document a tool step's arguments name. */
+export function argumentDestinations(
+  args: Record<string, unknown>
+): StepDestination[] {
+  const item = (id: unknown, type: unknown): StepDestination[] => {
+    const fixed = fixedId(id);
+    if (!fixed) return [];
+    return type === 'channel'
+      ? [{ id: fixed, blockName: 'channel' }]
+      : type === 'document'
+        ? [{ id: fixed, blockName: 'md' }]
+        : [];
   };
-  return fill(value) as T;
+  return [
+    ...item(args.channel_id, 'channel'),
+    ...(fixedId(args.projectId)
+      ? [{ id: args.projectId as string, blockName: 'project' }]
+      : []),
+    ...item(args.entity_id, args.entity_type),
+    ...item(args.entityId, args.entityType),
+    ...item(args.documentId, 'document'),
+  ];
+}
+
+/**
+ * A step's arguments as the activator's routine runs them. People the author
+ * assigned as themselves become the activator (unless the author shared
+ * themselves as "same for everyone"), and fixed destinations the activator
+ * can't open are cleared, so the step asks for one instead of failing.
+ */
+export function fillStepArguments(
+  args: Record<string, unknown>,
+  context: {
+    authorId: string;
+    activator: Activator;
+    keepAuthor: boolean;
+    inaccessible: ReadonlySet<string>;
+  }
+): { args: Record<string, unknown>; cleared: boolean } {
+  const filled: Record<string, unknown> = { ...args };
+  if (Array.isArray(args.entity_refs) && !context.keepAuthor) {
+    filled.entity_refs = args.entity_refs.map((ref: unknown) =>
+      ref &&
+      typeof ref === 'object' &&
+      'entityType' in ref &&
+      ref.entityType === 'user' &&
+      'entityId' in ref &&
+      typeof ref.entityId === 'string' &&
+      isSameUser({ id: ref.entityId }, context.authorId)
+        ? { ...ref, entityId: context.activator.userId }
+        : ref
+    );
+  }
+  let cleared = false;
+  const clear = (key: string) => {
+    const id = fixedId(args[key]);
+    if (id && context.inaccessible.has(id)) {
+      cleared = true;
+      if (key === 'projectId') delete filled[key];
+      else filled[key] = '';
+    }
+  };
+  for (const key of [
+    'channel_id',
+    'projectId',
+    'entity_id',
+    'entityId',
+    'documentId',
+  ])
+    clear(key);
+  return { args: filled, cleared };
+}
+
+/** Whether the author shared themselves as "same for everyone". */
+export function keepsAuthor(
+  variables: readonly TemplateVariable[],
+  authorId: string
+): boolean {
+  return variables.some(
+    (variable) =>
+      variable.kind === 'user' &&
+      variable.fill === 'shared' &&
+      isSameUser({ id: variable.id }, authorId)
+  );
 }
 
 /** The ID a variable is keyed by within one template. */
