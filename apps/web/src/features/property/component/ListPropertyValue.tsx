@@ -1,10 +1,10 @@
-import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import { Property } from '@property';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
 import type { Property as PropertyType } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
 import { Layer } from '@ui';
 import { type Accessor, Match, Show, Switch } from 'solid-js';
+import { PropertyEmptyIcon } from '../extractors/PropertyEmpty';
 
 /** Shared property cell for unified task and native project lists. */
 export function ListPropertyValue(props: {
@@ -80,7 +80,10 @@ function ListPropertyCell(props: {
               when={!isEmpty()}
               fallback={
                 <>
-                  <CircleDashedEmpty class="size-3 shrink-0 opacity-50 @max-[840px]/u-list:size-4" />
+                  <PropertyEmptyIcon
+                    propertyDefinitionId={props.property().propertyDefinitionId}
+                    class="size-3.5 text-ink-extra-muted @max-[840px]/u-list:size-4"
+                  />
                   <span class="min-w-0 flex-1 truncate opacity-50 @max-[840px]/u-list:hidden">
                     {props.property().displayName}
                   </span>

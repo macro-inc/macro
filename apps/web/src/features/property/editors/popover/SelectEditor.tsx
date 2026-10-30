@@ -7,6 +7,7 @@ import {
 import { usablePropertyOptions } from '@queries/properties/options-data';
 import { onMount, Show } from 'solid-js';
 import { useProperty } from '../../core/context';
+import { PropertyEmptyIcon } from '../../extractors/PropertyEmpty';
 import type { PropertyApiValues, SelectProperty } from '../../types';
 import { formatOptionValue, isSelectProperty } from '../../utils';
 import { PropertyOptionSelector } from '../selectors/PropertyOptionSelector';
@@ -107,6 +108,12 @@ function SelectEditorBody() {
             !property.isMultiSelect && !property.isRequired
               ? {
                   label: `No ${property.displayName.toLowerCase()}`,
+                  icon: (
+                    <PropertyEmptyIcon
+                      propertyDefinitionId={property.propertyDefinitionId}
+                      class="size-3.5 text-ink-extra-muted"
+                    />
+                  ),
                   onClear: editor.clearOptions,
                 }
               : undefined
