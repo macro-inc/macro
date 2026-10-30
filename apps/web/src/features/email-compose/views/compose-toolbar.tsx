@@ -87,11 +87,11 @@ export function EmailComposeToolbar(props: {
                   })
               }
               variant="ghost"
-              label="Insert image"
+              tooltip="Insert image"
               size="icon-md"
               disabled={ctx.disabled()}
             >
-              <ImageIcon />
+              <ImageIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </Show>
           <Button
