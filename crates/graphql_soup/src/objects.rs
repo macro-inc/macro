@@ -246,9 +246,11 @@ impl<E: SoupEntityEdges> GroupedSoup<E> {
 pub struct GraphqlSoupBin<E: SoupEntityEdges> {
     /// The grouping key.
     key: String,
-    /// The group's display name when the server resolved one, such as the
-    /// name of a project the viewer can read; otherwise the client labels
-    /// the key.
+    /// Display text the client cannot derive from the key alone: for a
+    /// project group, the name of the initiative the viewer can read. Null
+    /// for groupings whose key already identifies the label client side
+    /// (status and priority option ids, assignee ids, date buckets, entity
+    /// types) and for a project the viewer cannot read.
     label: Option<String>,
     /// Total number of items in this group across all pages.
     total_count: usize,
