@@ -292,7 +292,8 @@ export function CallOverlay(props: {
   const [sharingOpen, setSharingOpen] = createSignal(false);
   const [keyboardFocus, setKeyboardFocus] = createSignal(false);
   const controls = createControlsVisibility({
-    enabled: isMobile,
+    // Keep controls visible until idle hiding is reintroduced.
+    enabled: () => false,
     keepVisible: () =>
       chatOpen() ||
       settingsOpen() ||
@@ -317,6 +318,27 @@ export function CallOverlay(props: {
     callCtx.activeChannelId() !== null && props.showTeamSharing !== false;
   const teamShareLocked = () =>
     isConnecting() || !teamShare.canToggle() || teamShare.isPending();
+
+  const ChatToggle = () => (
+    <Show when={canChat()}>
+      <Button
+        ref={chatButton}
+        variant="secondary"
+        size={isMobile() ? 'icon-xl' : 'icon-lg'}
+        aria-label={chatOpen() ? 'Close chat' : 'Open chat'}
+        tooltip={{
+          content: chatOpen() ? 'Close chat' : 'Open chat',
+          placement: 'top',
+        }}
+        aria-pressed={chatOpen()}
+        aria-expanded={chatOpen()}
+        aria-controls={chatId}
+        onClick={toggleChat}
+      >
+        <ChatIcon class="size-4 mobile:size-6" />
+      </Button>
+    </Show>
+  );
 
   const participants = () =>
     Array.from(callCtx.remoteParticipants().values()).filter((p) => !p.isAgent);
@@ -525,17 +547,11 @@ export function CallOverlay(props: {
             inert={controlsHidden()}
             data-holds-prompts={isTouchDevice() ? undefined : ''}
           >
-            <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-2 mobile:grid-cols-[minmax(0,1fr)_auto] mobile:px-[max(16px,var(--mobile-chrome-gutter))] @3xl/call-stage:grid-cols-[minmax(0,1fr)_minmax(18rem,2fr)_minmax(0,1fr)]">
+            <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-2 mobile:grid-cols-1 mobile:px-[max(16px,var(--mobile-chrome-gutter))] @3xl/call-stage:grid-cols-[minmax(0,1fr)_minmax(18rem,2fr)_minmax(0,1fr)]">
               <div class="min-w-0 max-w-48 mobile:hidden">
                 {props.footerLeading}
               </div>
-              <div
-                class={cn(
-                  'flex min-w-0 justify-center',
-                  canShareWithTeam() &&
-                    'mobile:@max-[22rem]/call-stage:col-span-2'
-                )}
-              >
+              <div class="flex min-w-0 justify-center">
                 <CallControls
                   onLeave={props.onLeave}
                   onSettingsOpenChange={setSettingsOpen}
@@ -550,34 +566,16 @@ export function CallOverlay(props: {
                       onOpenChange={setSharingOpen}
                     />
                   </Show>
+                  <Show when={isMobile()}>
+                    <ChatToggle />
+                  </Show>
                 </CallControls>
               </div>
-              <div
-                class={cn(
-                  'flex justify-end',
-                  canShareWithTeam() &&
-                    'mobile:@max-[22rem]/call-stage:col-start-2'
-                )}
-              >
-                <Show when={canChat()}>
-                  <Button
-                    ref={chatButton}
-                    variant="secondary"
-                    size={isMobile() ? 'icon-xl' : 'icon-lg'}
-                    aria-label={chatOpen() ? 'Close chat' : 'Open chat'}
-                    tooltip={{
-                      content: chatOpen() ? 'Close chat' : 'Open chat',
-                      placement: 'top',
-                    }}
-                    aria-pressed={chatOpen()}
-                    aria-expanded={chatOpen()}
-                    aria-controls={chatId}
-                    onClick={toggleChat}
-                  >
-                    <ChatIcon class="size-4 mobile:size-6" />
-                  </Button>
-                </Show>
-              </div>
+              <Show when={!isMobile()}>
+                <div class="flex justify-end">
+                  <ChatToggle />
+                </div>
+              </Show>
             </div>
           </div>
         </div>

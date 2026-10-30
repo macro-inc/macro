@@ -7,7 +7,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import Image from '@icon/system/regular/image.svg';
 import Prohibit from '@icon/system/regular/prohibit.svg';
 import Upload from '@icon/system/regular/upload-simple.svg';
-import { Dropdown, InlineCheckbox, SingleSelectCheck } from '@ui';
+import { Dropdown, SingleSelectCheck, ToggleSwitch } from '@ui';
 import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
 import type { CallState } from '../CallContext';
 import { CallControlBar } from './CallControlBar';
@@ -148,12 +148,21 @@ export function CallMediaControls(props: {
             <Dropdown.Separator />
             <Dropdown.Group>
               <Dropdown.CheckboxItem
+                class="flex-row-reverse"
                 checked={call.isNoiseSuppressed()}
                 disabled={call.isConnecting()}
                 closeOnSelect={false}
                 onChange={() => fire(call.toggleNoiseSuppression)}
+                indicator={
+                  <span inert aria-hidden="true">
+                    <ToggleSwitch
+                      size="md"
+                      checked={call.isNoiseSuppressed()}
+                    />
+                  </span>
+                }
               >
-                Noise suppression
+                <span class="flex-1">Noise suppression</span>
               </Dropdown.CheckboxItem>
             </Dropdown.Group>
           </>
@@ -255,15 +264,15 @@ export function CallMediaControls(props: {
               </div>
             </Show>
             <MobileDrawer.Section>
-              <MobileDrawer.Item
-                role="checkbox"
-                aria-checked={call.isNoiseSuppressed()}
+              <ToggleSwitch
+                size="md"
+                label="Noise suppression"
+                labelClass="order-first flex-1"
+                class="min-h-11 w-full px-3 py-2.5 text-sm"
+                checked={call.isNoiseSuppressed()}
                 disabled={call.isConnecting()}
-                onClick={() => fire(call.toggleNoiseSuppression)}
-              >
-                <span class="flex-1">Noise suppression</span>
-                <InlineCheckbox checked={call.isNoiseSuppressed()} />
-              </MobileDrawer.Item>
+                onChange={() => fire(call.toggleNoiseSuppression)}
+              />
             </MobileDrawer.Section>
           </div>
         }

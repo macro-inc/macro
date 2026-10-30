@@ -61,7 +61,7 @@ function MediaSplitButton(props: {
               placement: 'top',
               disabled: open(),
             }}
-            class="w-6"
+            class="w-6 mobile:@max-[20rem]:min-w-6"
           >
             <CaretUp
               class="size-3 transition-transform duration-200 ease-out motion-reduce:transition-none"
@@ -98,8 +98,11 @@ export function CallControlBar(props: {
   let audioOpen = false;
   let videoOpen = false;
   return (
-    <div data-call-controls class="@container relative z-20 w-full max-w-xl">
-      <div class="mx-auto flex w-fit max-w-full flex-wrap items-center justify-center gap-1 rounded-full bg-menu-glass p-1.5 text-ink glass @max-3xs:gap-0 @max-3xs:px-0 @sm:gap-2">
+    <div
+      data-call-controls
+      class="@container relative z-20 w-full max-w-xl mobile:max-w-none"
+    >
+      <div class="mx-auto flex w-fit max-w-full flex-wrap items-center justify-center gap-1 rounded-full bg-menu-glass p-1.5 text-ink glass mobile:w-full mobile:flex-nowrap mobile:justify-between mobile:gap-0 mobile:@max-[20rem]:px-0 @max-3xs:gap-0 @max-3xs:px-0 @sm:gap-2">
         <MediaSplitButton
           label="Microphone"
           onOpenChange={(open) => {

@@ -217,7 +217,8 @@ call, a fully rounded toolbar contains the controls. The microphone and camera
 are split buttons (`ButtonGroup`): the left half
 toggles the device (pressed while on), and the caret opens a settings menu above
 the toolbar on click only; hovering opens nothing. **Audio settings** lists
-microphones, speakers (when the browser can choose one), and noise suppression.
+microphones, speakers (when the browser can choose one), and a noise suppression
+switch with its label on the left.
 **Video settings** lists cameras and the background effects as tiles: None,
 Light blur, Strong blur, a selected custom image, and Upload. Screen share and
 Leave call are separate buttons. Live channel calls also include **Call sharing**
@@ -239,16 +240,14 @@ the focused tile again (**Back to grid**) to restore the grid. If that participa
 leaves, the grid returns automatically. Focus does not replace the video tracks.
 A talking participant has an accent-colored border above their video or avatar.
 
-Open live chat with **Open chat** at the bottom-right, alongside the media controls.
-On desktop, Copy Meeting Url stays at the bottom-left. On phones it uses the same
-header island style as the channel header, while chat keeps its 48px tap target.
-Media controls and chat occupy a separate row below the video, never over it.
-On the smallest phones, channel-call controls keep their toolbar on one row and
-chat moves to a second row instead of compressing tap targets or wrapping the toolbar.
-The phone's bottom controls hide after four idle seconds and return when the call
-is tapped, reserving their row so the video does not resize. Header islands stay
-visible. Chat, settings menus or drawers, keyboard navigation, and text entry keep controls
-visible. Check 320px phones, safe-area insets, and rotation.
+Open live chat with **Open chat** alongside the media controls. On phones, chat
+joins the full-width, fully rounded control bar, with side gutters and a 48px tap
+target. On desktop, chat stays at the bottom-right and Copy Meeting Url stays at
+the bottom-left. On phones, Copy Meeting Url uses the same header island style
+as the channel header. Media controls and chat occupy a separate row below the
+video, never over it. Controls remain visible while idle; auto-hide is disabled
+for now. Header islands also stay visible. Check 320px phones, safe-area insets,
+and rotation.
 Desktop chat fills the call content height alongside both
 the video and its media controls, with a rounded, raised background and a gap from
 the participant tiles. Narrow desktop panes overlay chat instead; phones use the
