@@ -202,8 +202,15 @@ where
                 })
                 .is_ok()
             {
-                self.publish(id, InitiativeTopicEvent::Purged { initiative_id: id })
-                    .await;
+                // Nothing announced the initiative yet, so no one has it to remove.
+                self.publish(
+                    id,
+                    InitiativeTopicEvent::Purged {
+                        initiative_id: id,
+                        audience: Vec::new(),
+                    },
+                )
+                .await;
                 self.retire_description(id).await;
             }
             return Err(error);
@@ -501,9 +508,24 @@ where
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<(), InitiativeError> {
         let id = initiative_id_from_receipt(&receipt)?;
+        // The delete removes the access that realtime consumers resolve recipients from.
+        let audience = self
+            .resources
+            .audience(id)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(?error, %id, "unable to read initiative audience before delete");
+            })
+            .unwrap_or_default();
         self.repo.delete(id).await.map_err(Into::into)?;
-        self.publish(id, InitiativeTopicEvent::Purged { initiative_id: id })
-            .await;
+        self.publish(
+            id,
+            InitiativeTopicEvent::Purged {
+                initiative_id: id,
+                audience,
+            },
+        )
+        .await;
         // Cleanup follows an authorized deletion and is not a fresh user edit.
         // Unattributed property cleanup cannot recreate history after the purge event.
         let cleanup_receipt = EntityAccessReceipt::try_new(

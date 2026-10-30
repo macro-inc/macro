@@ -39,6 +39,9 @@ impl InitiativeResources for UnusedProperties {
     ) -> ResourceFuture<'_, ()> {
         panic!("unexpected initial properties")
     }
+    fn audience(&self, _: InitiativeId) -> ResourceFuture<'_, Vec<MacroUserIdStr<'static>>> {
+        panic!("unexpected audience read")
+    }
     fn purge(&self, _: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()> {
         panic!("unexpected property deletion")
     }

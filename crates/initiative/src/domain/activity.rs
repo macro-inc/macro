@@ -29,7 +29,7 @@ impl ActivitySource for InitiativeTopicEvent {
         match self {
             Self::Created(change) => lifecycle(event_id, change, CommonAction::Created),
             Self::Updated(change) => lifecycle(event_id, change, CommonAction::Edited),
-            Self::Purged { initiative_id } => {
+            Self::Purged { initiative_id, .. } => {
                 Ingest::Purge(vec![(EntityType::Initiative, initiative_id.to_string())])
             }
         }

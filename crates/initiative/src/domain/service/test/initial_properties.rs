@@ -46,6 +46,9 @@ impl InitiativeResources for RecordingResources {
             }
         })
     }
+    fn audience(&self, _id: InitiativeId) -> ResourceFuture<'_, Vec<MacroUserIdStr<'static>>> {
+        panic!("a create never reads an audience")
+    }
     fn purge(&self, _receipt: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()> {
         panic!("a create never purges through a receipt")
     }

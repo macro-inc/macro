@@ -80,6 +80,35 @@ impl InitiativeEventPublisher for Events {
 }
 
 #[tokio::test]
+async fn deletion_announces_the_audience_read_before_access_is_removed() {
+    let audience_read = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let read_before_delete = audience_read.clone();
+    let mut repo = MockInitiativeRepo::new();
+    repo.expect_delete().times(1).return_once(move |_| {
+        assert!(read_before_delete.load(std::sync::atomic::Ordering::SeqCst));
+        Box::pin(async { Ok(()) })
+    });
+    let events = Arc::new(Events::default());
+    InitiativeServiceImpl::new(
+        repo,
+        deleting_surfaces(),
+        Arc::new(reads::FakeResources::with_audience(
+            vec![user(OWNER), user(OTHER)],
+            audience_read,
+        )),
+    )
+    .with_event_publisher(events.clone())
+    .delete(owner_receipt())
+    .await
+    .unwrap();
+    let recorded = events.0.lock().unwrap();
+    let [InitiativeTopicEvent::Purged { audience, .. }] = recorded.as_slice() else {
+        panic!("one purge")
+    };
+    assert_eq!(audience, &vec![user(OWNER), user(OTHER)]);
+}
+
+#[tokio::test]
 async fn committed_deletion_purges_activity_even_when_description_cleanup_fails() {
     let mut repo = MockInitiativeRepo::new();
     repo.expect_delete()

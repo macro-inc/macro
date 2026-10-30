@@ -30,6 +30,9 @@ pub trait InitiativeResources: std::fmt::Debug + Send + Sync + 'static {
         id: InitiativeId,
         values: Vec<InitialPropertyValue>,
     ) -> ResourceFuture<'_, ()>;
+    /// Users with current access to the initiative. A delete reads them before it removes
+    /// that access, so they can still be told about it.
+    fn audience(&self, id: InitiativeId) -> ResourceFuture<'_, Vec<MacroUserIdStr<'static>>>;
     /// Clean up properties after the initiative is deleted using its already-verified capability:
     /// its own values, and the Project values that put tasks in it.
     fn purge(&self, receipt: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()>;

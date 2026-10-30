@@ -55,6 +55,11 @@ pub enum InitiativeTopicEvent {
     Purged {
         /// Deleted initiative.
         initiative_id: InitiativeId,
+        /// Users who had access before the delete removed it, so realtime
+        /// consumers can still reach them. Empty on events published before
+        /// it was recorded.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        audience: Vec<MacroUserIdStr<'static>>,
     },
 }
 

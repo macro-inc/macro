@@ -6,7 +6,10 @@ use crate::domain::{
 use entity_access::domain::models::{Entity, EntityAccessAuth};
 use std::{
     collections::{HashMap, HashSet},
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 #[derive(Debug, Default)]
@@ -20,6 +23,24 @@ pub(super) struct FakeResources {
     checked: Arc<Mutex<Vec<String>>>,
     /// Every entity id whose receipt reached `properties`, in call order.
     read_properties: Arc<Mutex<Vec<String>>>,
+    /// Users `audience` reports.
+    audience: Vec<MacroUserIdStr<'static>>,
+    /// Set once `audience` is read.
+    audience_read: Arc<AtomicBool>,
+}
+
+impl FakeResources {
+    /// Resources whose `audience` reports `audience` and sets `audience_read`.
+    pub(super) fn with_audience(
+        audience: Vec<MacroUserIdStr<'static>>,
+        audience_read: Arc<AtomicBool>,
+    ) -> Self {
+        Self {
+            audience,
+            audience_read,
+            ..Self::default()
+        }
+    }
 }
 
 impl InitiativeResources for FakeResources {
@@ -41,6 +62,10 @@ impl InitiativeResources for FakeResources {
         _values: Vec<crate::domain::models::InitialPropertyValue>,
     ) -> ResourceFuture<'_, ()> {
         Box::pin(async { Ok(()) })
+    }
+    fn audience(&self, _id: InitiativeId) -> ResourceFuture<'_, Vec<MacroUserIdStr<'static>>> {
+        self.audience_read.store(true, Ordering::SeqCst);
+        Box::pin(async { Ok(self.audience.clone()) })
     }
     fn purge(&self, _receipt: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()> {
         Box::pin(async { Ok(()) })

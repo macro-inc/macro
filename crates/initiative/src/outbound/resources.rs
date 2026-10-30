@@ -114,6 +114,14 @@ impl<P: PropertiesService, S: SystemPropertiesService, A: EntityAccessService> I
             Ok(())
         })
     }
+    fn audience(&self, id: InitiativeId) -> ResourceFuture<'_, Vec<MacroUserIdStr<'static>>> {
+        Box::pin(async move {
+            self.access
+                .get_users_by_entity(&id.to_string(), EntityType::Initiative)
+                .await
+                .map_err(|error| InitiativeError::Internal(rootcause::report!(error).into()))
+        })
+    }
     fn purge(&self, receipt: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()> {
         Box::pin(async move {
             let id: InitiativeId = receipt

@@ -166,8 +166,13 @@ fn patches_from_initiative_event(event: &InitiativeTopicEvent) -> Vec<SoupRealti
         InitiativeTopicEvent::Created(change) | InitiativeTopicEvent::Updated(change) => {
             vec![update(EntityType::Initiative, change.initiative_id)]
         }
-        InitiativeTopicEvent::Purged { initiative_id } => {
-            vec![delete(EntityType::Initiative, initiative_id)]
+        // The delete removed the access recipients resolve from, so the event
+        // carries the users who had it.
+        InitiativeTopicEvent::Purged {
+            initiative_id,
+            audience,
+        } => {
+            vec![delete(EntityType::Initiative, initiative_id).with_audience(audience.clone())]
         }
     }
 }
