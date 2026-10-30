@@ -1,66 +1,60 @@
+import { deepEqual } from '@core/util/compareUtils';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import { createSignal } from 'solid-js';
-import type { DraftRef, MarketingCapabilities } from '../context/contracts';
-import type {
-  AttentionReason,
-  Campaign,
-  DeliveryIssue,
-  Enrollment,
-  MarketingContact,
-  MarketingSnapshot,
-  QueuedStep,
-  Sender,
-  SenderStatus,
+import type { MarketingCapabilities } from '../context/contracts';
+import {
+  attentionFor,
+  collectIssues,
+  inspectionTargets,
+  needsAttention,
+  senderStatusOf,
+} from '../core/attention';
+import { MarketingError } from '../core/errors';
+import {
+  type Campaign,
+  type DeliveryIssue,
+  EMPTY_SNAPSHOT,
+  type Enrollment,
+  type MarketingContact,
+  type MarketingSnapshot,
+  type QueuedStep,
+  type Sender,
+  validateCampaign,
 } from '../core/model';
-import { validateCampaign } from '../core/model';
 import { createSequenceEngine } from './sequence-engine';
 
-type InspectTarget = DraftRef & { sendAt: string };
-
 export function createMarketingWorkspace(capabilities: MarketingCapabilities) {
+  // Nothing is writable until a load says so.
   const [snapshot, setSnapshot] = createSignal<MarketingSnapshot>({
-    campaigns: [],
-    enrollments: [],
+    ...EMPTY_SNAPSHOT,
     writable: false,
   });
-  const [loading, setLoading] = createSignal(true);
+  /** Set once the first load settles, whether or not it succeeded. */
+  const [settled, setSettled] = createSignal(false);
+  const [loaded, setLoaded] = createSignal(false);
   const [busy, setBusy] = createSignal(false);
-  const [error, setError] = createSignal('');
-  const [notice, setNotice] = createSignal('');
+  const [error, setError] = createSignal<unknown>();
   const [contacts, setContacts] = createSignal<MarketingContact[]>([]);
   const [senders, setSenders] = createSignal<Sender[]>();
   const [issues, setIssues] = createSignal<Record<string, DeliveryIssue>>({});
+  /** Scheduled sequence emails no record tracks, by inbox. */
+  const [untracked, setUntracked] = createSignal<Record<string, string[]>>({});
   let inspection = 0;
 
-  /** `undefined` until the user's inboxes have loaded. */
-  function senderStatus(senderId: string): SenderStatus | undefined {
-    const inboxes = senders();
-    if (!inboxes) return undefined;
-    const sender = inboxes.find((item) => item.id === senderId);
-    if (!sender) return 'disconnected';
-    return sender.ready ? 'ready' : 'reauth';
-  }
-  /** A queued step's scheduler problem, when the last inspection found one. */
-  function stepIssue(step: QueuedStep): DeliveryIssue | undefined {
-    return step.draftId ? issues()[step.draftId] : undefined;
-  }
-  /**
-   * The most pressing problem with an enrollment that its stored status does
-   * not show: a disconnected inbox, then the first step the scheduler flags.
-   */
-  function enrollmentAttention(entry: Enrollment): AttentionReason | undefined {
-    const live =
-      entry.status === 'preparing' ||
-      entry.status === 'scheduled' ||
-      entry.status === 'needs_attention';
-    if (live && senderStatus(entry.senderId) === 'disconnected')
-      return 'disconnected';
-    for (const step of entry.steps) {
-      const issue = stepIssue(step);
-      if (issue) return issue;
-    }
-    return undefined;
-  }
+  const senderStatus = (senderId: string) =>
+    senderStatusOf(senders(), senderId);
+  const stepIssue = (step: QueuedStep): DeliveryIssue | undefined =>
+    step.draftId ? issues()[step.draftId] : undefined;
+  const enrollmentAttention = (entry: Enrollment) =>
+    attentionFor(entry, senderStatus, issues());
+  /** Enrollments in a campaign that need the user. */
+  const campaignAttention = (campaignId: string) =>
+    snapshot().enrollments.filter(
+      (entry) =>
+        entry.campaignId === campaignId &&
+        needsAttention(entry, senderStatus, issues())
+    ).length;
 
   const engine = createSequenceEngine(
     capabilities.repository,
@@ -68,127 +62,138 @@ export function createMarketingWorkspace(capabilities: MarketingCapabilities) {
     { senderStatus }
   );
 
-  /** Read scheduler state for queued steps in the user's own inboxes. Non-fatal. */
+  /**
+   * Read the scheduler for every inbox the user still has, even one with no
+   * queued steps: emails whose records were lost show up there. Non-fatal.
+   */
   function inspectDelivery(data: MarketingSnapshot) {
-    const inspect = capabilities.delivery.inspect;
-    if (!inspect) return;
-    const bySender = new Map<string, InspectTarget[]>();
-    for (const entry of data.enrollments) {
-      const status = senderStatus(entry.senderId);
-      if (status !== 'ready' && status !== 'reauth') continue;
-      for (const step of entry.steps) {
-        if (step.status !== 'queued' || !step.draftId) continue;
-        const targets = bySender.get(entry.senderId) ?? [];
-        targets.push({
-          draftId: step.draftId,
-          generation: step.draftGeneration,
-          threadId: step.threadId,
-          sendAt: step.sendAt,
-        });
-        bySender.set(entry.senderId, targets);
-      }
-    }
+    const bySender = inspectionTargets(data.enrollments, senderStatus);
+    for (const sender of senders() ?? [])
+      if (!bySender.has(sender.id)) bySender.set(sender.id, []);
     const run = ++inspection;
     if (!bySender.size) {
       setIssues({});
+      setUntracked({});
       return;
     }
     fireAndForget(
-      collectIssues(inspect, bySender, run),
+      Telemetry.span('email_marketing.inspect', async (span) => {
+        span.setAttr('email_marketing.inboxes', bySender.size);
+        const result = await collectIssues(
+          capabilities.delivery.inspect,
+          bySender
+        );
+        span.setAttr(
+          'email_marketing.issues',
+          Object.keys(result.found).length
+        );
+        if (run !== inspection) return;
+        setIssues(result.found);
+        setUntracked(result.untracked);
+        if (result.failed) throw result.failed.reason;
+      }),
       'email-marketing.inspect'
     );
-  }
-  async function collectIssues(
-    inspect: NonNullable<MarketingCapabilities['delivery']['inspect']>,
-    bySender: Map<string, InspectTarget[]>,
-    run: number
-  ) {
-    const results = await Promise.allSettled(
-      [...bySender].map(([senderId, steps]) => inspect(senderId, steps))
-    );
-    if (run !== inspection) return;
-    const found: Record<string, DeliveryIssue> = {};
-    for (const result of results)
-      if (result.status === 'fulfilled') Object.assign(found, result.value);
-    setIssues(found);
-    const failed = results.find((result) => result.status === 'rejected');
-    if (failed?.status === 'rejected') throw failed.reason;
   }
 
   async function refresh() {
     const data = await capabilities.repository.load();
     setSnapshot(data);
+    setLoaded(true);
     inspectDelivery(data);
   }
+  /** Load everything; a retry keeps what is on screen while it runs. */
   async function initialize() {
-    setLoading(true);
-    setError('');
-    try {
-      const [data, people, inboxes] = await Promise.all([
-        capabilities.repository.load(),
-        capabilities.loadContacts(),
-        capabilities.loadSenders(),
-      ]);
-      setSnapshot(data);
-      setContacts(people);
-      setSenders(inboxes);
-      inspectDelivery(data);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setLoading(false);
+    setError(undefined);
+    // Contacts are optional: without them the workspace still manages sends.
+    const [data, people, inboxes] = await Promise.allSettled([
+      capabilities.repository.load(),
+      capabilities.loadContacts(),
+      capabilities.loadSenders(),
+    ]);
+    if (inboxes.status === 'fulfilled') setSenders(inboxes.value);
+    if (people.status === 'fulfilled') setContacts(people.value);
+    if (data.status === 'fulfilled') {
+      setSnapshot(data.value);
+      setLoaded(true);
+      inspectDelivery(data.value);
     }
+    const failed = [data, inboxes, people].find(
+      (result) => result.status === 'rejected'
+    );
+    if (failed?.status === 'rejected') setError(failed.reason);
+    setSettled(true);
   }
-  async function run(action: () => Promise<void>, success: string) {
+  /**
+   * Run one user action at a time in its own span, then reload so every view
+   * matches storage. Spans carry ids and counts, never addresses or content.
+   */
+  async function run(
+    name: string,
+    action: () => Promise<void>,
+    attributes: Record<string, string | number> = {}
+  ) {
     if (busy()) return false;
     setBusy(true);
-    setError('');
-    setNotice('');
+    setError(undefined);
     let succeeded = false;
     try {
-      await action();
+      await Telemetry.span(`email_marketing.${name}`, async (span) => {
+        for (const [key, value] of Object.entries(attributes))
+          span.setAttr(`email_marketing.${key}`, value);
+        try {
+          await action();
+        } catch (cause) {
+          span.error(cause);
+          if (cause instanceof MarketingError) {
+            span.setAttr('email_marketing.error', cause.code);
+            span.setAttr('email_marketing.failures', cause.failures.length);
+          }
+          throw cause;
+        }
+      });
       succeeded = true;
-      setNotice(success);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setError(cause);
     } finally {
       try {
         await refresh();
       } catch (cause) {
         succeeded = false;
-        setError(cause instanceof Error ? cause.message : String(cause));
+        setError(cause);
       }
       setBusy(false);
     }
     return succeeded;
   }
-  async function save(campaign: Campaign, activate: boolean) {
+  /**
+   * Save an edited campaign. `base` is the stored copy the edits started from;
+   * a campaign changed or deleted elsewhere since then is not overwritten.
+   */
+  async function save(
+    campaign: Campaign,
+    activate: boolean,
+    base: Campaign | undefined
+  ) {
     if (activate) {
       validateCampaign(campaign);
-      if (senderStatus(campaign.senderId) !== 'ready')
-        throw new Error('Reconnect this Gmail inbox before activating.');
+      const status = senderStatus(campaign.senderId);
+      if (status !== 'ready')
+        throw new MarketingError(
+          status === 'disconnected' ? 'inboxDisconnected' : 'inboxReauth'
+        );
     }
+    // The all-table version check makes this load and the write one step.
+    const stored = (await capabilities.repository.load()).campaigns.find(
+      (item) => item.id === campaign.id
+    );
+    if (base ? !deepEqual(stored, base) : stored)
+      throw new MarketingError('campaignChanged');
     await capabilities.repository.saveCampaign({
       ...campaign,
       status: activate ? 'active' : campaign.status,
       updatedAt: new Date().toISOString(),
     });
-  }
-  async function pause(campaign: Campaign) {
-    // Stop new enrollments first, then cancel every tracked draft. Read the
-    // enrollments fresh: another tab may have enrolled people since our snapshot.
-    await capabilities.repository.saveCampaign({
-      ...campaign,
-      status: 'paused',
-      updatedAt: new Date().toISOString(),
-    });
-    const failures = await engine.stopWhere(
-      (entry) =>
-        entry.campaignId === campaign.id &&
-        ['scheduled', 'preparing', 'needs_attention'].includes(entry.status),
-      'paused'
-    );
-    if (failures.length) throw new Error(failures.join('; '));
   }
   async function enroll(
     campaign: Campaign,
@@ -197,36 +202,33 @@ export function createMarketingWorkspace(capabilities: MarketingCapabilities) {
   ) {
     const { failures } = await engine.enrollMany(campaign, selected, startAt);
     if (failures.length)
-      throw new Error(
+      throw new MarketingError(
+        'contactsFailed',
+        { count: failures.length },
         failures
-          .map((failure) =>
-            failure.message.includes(failure.email)
-              ? failure.message
-              : `${failure.email}: ${failure.message}`
-          )
-          .join('; ')
       );
   }
   return {
     snapshot,
-    loading,
+    /** The first load is still running. */
+    loading: () => !settled(),
+    /** Records have loaded at least once. */
+    loaded,
     busy,
     error,
-    notice,
+    dismissError: () => setError(undefined),
     contacts,
     senders: () => senders() ?? [],
     senderStatus,
-    issues,
+    untracked,
     stepIssue,
     enrollmentAttention,
+    campaignAttention,
     initialize,
-    refresh,
     run,
     save,
-    pause,
     enroll,
     engine,
-    capabilities,
   };
 }
 export type MarketingWorkspace = ReturnType<typeof createMarketingWorkspace>;

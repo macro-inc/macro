@@ -1,24 +1,33 @@
+import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { ContactEnrollments } from './components/contact-enrollments';
-import { normalizeEmail } from './core/model';
-import { useMarketingEnrollments } from './queries/enrollments-query';
+import { isUnsubscribed, normalizeEmail } from './core/model';
+import {
+  useContactAttention,
+  useMarketingEnrollments,
+} from './queries/enrollments-query';
 
 export function MarketingContactCard(props: { email: string }) {
   const query = useMarketingEnrollments();
   const { openWithSplit } = useSplitLayout();
+  // Gate on pending only, so cached rows stay through a failed refetch (FE-48).
+  const snapshot = () => (query.isPending ? undefined : query.data);
+  const entries = () =>
+    snapshot()?.enrollments.filter(
+      (entry) =>
+        normalizeEmail(entry.contact.email) === normalizeEmail(props.email)
+    ) ?? [];
+  const attention = useContactAttention(entries);
+  const reasons = () => (attention.isPending ? undefined : attention.data);
   return (
     <ContactEnrollments
-      entries={
-        // Keep cached rows through a failed refetch (FE-48).
-        query.data?.enrollments.filter(
-          (entry) =>
-            normalizeEmail(entry.contact.email) === normalizeEmail(props.email)
-        ) ?? []
-      }
+      entries={entries()}
       loading={query.isPending}
+      unsubscribed={!!snapshot() && isUnsubscribed(snapshot()!, props.email)}
+      attention={(entry) => reasons()?.[entry.id]}
       error={
-        query.isError && !query.data
-          ? 'Could not load Email Marketing enrollments.'
+        query.isError && !snapshot()
+          ? t('emailMarketing.enrollmentsLoadFailed')
           : undefined
       }
       onOpen={() =>

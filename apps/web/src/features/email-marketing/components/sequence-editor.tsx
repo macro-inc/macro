@@ -1,28 +1,36 @@
+import { t } from '@app/lib/i18n';
 import ArrowUpIcon from '@icon/system/regular/arrow-up.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import FlowArrowIcon from '@icon/system/regular/tree-structure.svg';
-import { Button, ComposerSurface, Input, inputClasses } from '@ui';
+import { Button, Checkbox, ComposerSurface, Input } from '@ui';
 import { For, Show } from 'solid-js';
-import type { MarketingCapabilities } from '../context/contracts';
-import type { Campaign, Sender, SequenceStep } from '../core/model';
 import {
-  type CompositionState,
-  SequenceContentEditor,
-} from './sequence-content-editor';
+  type Campaign,
+  DEFAULT_OPT_OUT_LINE,
+  isReplyStep,
+  replySubject,
+  type Sender,
+  type SequenceStep,
+  threadSubject,
+} from '../core/model';
+import { OptionSelect } from './option-select';
+
+const PERSONALIZATION = ['{{firstName}}', '{{name}}', '{{email}}'];
+
+/** Whole days from 0 to 365; an emptied field reads as 0. */
+function clampDelay(value: number) {
+  return Number.isFinite(value)
+    ? Math.min(365, Math.max(0, Math.trunc(value)))
+    : 0;
+}
 
 export function SequenceEditor(props: {
   campaign: Campaign;
   senders: Sender[];
   disabled: boolean;
-  databaseId?: string;
-  composition?: MarketingCapabilities['composition'];
-  onCompositionState?: (
-    stepId: string,
-    field: 'subject' | 'body',
-    state: CompositionState
-  ) => void;
   onChange: (campaign: Campaign) => void;
-  onPreview: (step: SequenceStep) => void;
+  onPreview: (stepIndex: number) => void;
 }) {
   const change = (patch: Partial<Campaign>) =>
     props.onChange({ ...props.campaign, ...patch });
@@ -36,44 +44,43 @@ export function SequenceEditor(props: {
     <div class="mx-auto w-full max-w-3xl space-y-7 pb-12">
       <div class="grid gap-4 sm:grid-cols-2">
         <label class="space-y-2 text-xs font-medium">
-          Campaign name
+          {t('emailMarketing.campaignName')}
           <Input
-            aria-label="Campaign name"
+            aria-label={t('emailMarketing.campaignName')}
             value={props.campaign.name}
+            maxLength={120}
             disabled={props.disabled}
             onInput={(event) => change({ name: event.currentTarget.value })}
           />
         </label>
-        <label class="space-y-2 text-xs font-medium">
-          Send from
-          <select
-            aria-label="Send from"
-            class={inputClasses()}
-            value={props.campaign.senderId}
+        <div class="space-y-2 text-xs font-medium">
+          <span>{t('emailMarketing.sendFrom')}</span>
+          <OptionSelect
+            label={t('emailMarketing.sendFrom')}
+            value={props.campaign.senderId || undefined}
+            placeholder={t('emailMarketing.chooseInbox')}
             disabled={props.disabled}
-            onChange={(event) =>
-              change({ senderId: event.currentTarget.value })
-            }
-          >
-            <option value="">Choose a Gmail inbox</option>
-            <For each={props.senders}>
-              {(sender) => (
-                <option value={sender.id} disabled={!sender.ready}>
-                  {sender.email}
-                  {sender.ready ? '' : ' · reconnect required'}
-                </option>
-              )}
-            </For>
-          </select>
-        </label>
+            options={props.senders.map((sender) => ({
+              value: sender.id,
+              label: sender.ready
+                ? sender.email
+                : t('emailMarketing.inboxNeedsReconnect', {
+                    email: sender.email,
+                  }),
+              disabled: !sender.ready,
+            }))}
+            onChange={(senderId) => change({ senderId })}
+          />
+        </div>
       </div>
       <label class="block space-y-2 text-xs font-medium">
-        Description <span class="font-normal text-ink-muted">optional</span>
+        {t('emailMarketing.descriptionOptional')}
         <Input
-          aria-label="Campaign description"
+          aria-label={t('emailMarketing.description')}
           value={props.campaign.description}
+          maxLength={500}
           disabled={props.disabled}
-          placeholder="What does this sequence help people do?"
+          placeholder={t('emailMarketing.descriptionPlaceholder')}
           onInput={(event) =>
             change({ description: event.currentTarget.value })
           }
@@ -84,9 +91,11 @@ export function SequenceEditor(props: {
           <FlowArrowIcon class="size-4" aria-hidden="true" />
         </span>
         <div>
-          <p class="text-sm font-medium">Contact is enrolled</p>
+          <p class="text-sm font-medium">
+            {t('emailMarketing.sequenceStarts')}
+          </p>
           <p class="text-xs text-ink-muted">
-            Choose contacts and a start time when you enroll them.
+            {t('emailMarketing.sequenceStartsHint')}
           </p>
         </div>
       </div>
@@ -94,40 +103,50 @@ export function SequenceEditor(props: {
         {(id, index) => {
           const step = () =>
             props.campaign.steps.find((item) => item.id === id)!;
-          const shared = () =>
-            props.composition &&
-            props.databaseId &&
-            props.campaign.status !== 'active';
+          const position = () => index() + 1;
+          const reply = () => isReplyStep(props.campaign.steps, index());
           return (
             <div>
               <div class="ml-7 h-5 border-l border-dashed border-edge" />
-              <article class="relative" aria-label={`Email ${index() + 1}`}>
+              <article
+                class="relative"
+                aria-label={t('emailMarketing.emailNumber', {
+                  position: position(),
+                })}
+              >
                 <ComposerSurface
                   as="div"
                   class="relative overflow-clip touch:rounded-xl touch:border touch:border-edge-muted touch:bg-composer"
                 >
                   <div class="flex flex-wrap items-center justify-between gap-2 border-b border-edge-muted px-6 py-4">
                     <div class="flex items-center gap-3">
-                      <span class="flex size-7 items-center justify-center rounded-lg border border-edge text-sm text-ink-muted">
+                      <span class="flex size-7 items-center justify-center rounded-lg border border-edge text-ink-muted">
                         <EnvelopeIcon class="size-4" aria-hidden="true" />
                       </span>
-                      <h3 class="text-sm font-medium">Email {index() + 1}</h3>
+                      <h3 class="text-sm font-medium">
+                        {t('emailMarketing.emailNumber', {
+                          position: position(),
+                        })}
+                      </h3>
                     </div>
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-1">
                       <Button
                         type="button"
                         variant="ghost"
                         size="xs"
-                        onClick={() => props.onPreview(step())}
+                        onClick={() => props.onPreview(index())}
                       >
-                        Preview
+                        {t('emailMarketing.preview')}
                       </Button>
                       <Show when={!props.disabled}>
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon-xs"
-                          aria-label={`Move email ${index() + 1} up`}
+                          aria-label={t('emailMarketing.moveEmailUp', {
+                            position: position(),
+                          })}
+                          tooltip={t('emailMarketing.moveUp')}
                           disabled={index() === 0}
                           onClick={() => {
                             const steps = [...props.campaign.steps];
@@ -139,31 +158,36 @@ export function SequenceEditor(props: {
                             change({ steps });
                           }}
                         >
-                          <ArrowUpIcon aria-hidden="true" class="size-3.5" />
+                          <ArrowUpIcon aria-hidden="true" class="size-4" />
                         </Button>
                         <Button
                           type="button"
                           variant="danger-ghost"
                           size="xs"
-                          aria-label={`Remove email ${index() + 1}`}
+                          aria-label={t('emailMarketing.removeEmail', {
+                            position: position(),
+                          })}
+                          disabled={props.campaign.steps.length === 1}
                           onClick={() =>
                             change({
                               steps: props.campaign.steps.filter(
-                                (item) => item.id !== step().id
+                                (item) => item.id !== id
                               ),
                             })
                           }
                         >
-                          Remove
+                          {t('emailMarketing.remove')}
                         </Button>
                       </Show>
                     </div>
                   </div>
-                  <div class="space-y-4 px-6 pb-6 pt-4">
-                    <label class="flex items-center gap-2 text-xs text-ink-muted">
-                      Wait
+                  <div class="space-y-4 px-6 pt-4 pb-6">
+                    <label class="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+                      {t('emailMarketing.wait')}
                       <Input
-                        aria-label={`Email ${index() + 1} delay days`}
+                        aria-label={t('emailMarketing.delayDays', {
+                          position: position(),
+                        })}
                         type="number"
                         min="0"
                         max="365"
@@ -172,90 +196,90 @@ export function SequenceEditor(props: {
                         value={step().delayDays}
                         disabled={props.disabled}
                         onInput={(event) =>
-                          changeStep(step().id, {
-                            delayDays: Number(event.currentTarget.value),
+                          changeStep(id, {
+                            delayDays: clampDelay(
+                              event.currentTarget.valueAsNumber
+                            ),
                           })
                         }
                       />
-                      days{' '}
                       {index() === 0
-                        ? 'after enrollment starts'
-                        : 'after the previous email'}
+                        ? t('emailMarketing.daysAfterStart', {
+                            count: step().delayDays || 0,
+                          })
+                        : t('emailMarketing.daysAfterPrevious', {
+                            count: step().delayDays || 0,
+                          })}
                     </label>
+                    <Show when={index() > 0}>
+                      <Checkbox
+                        checked={step().asReply === true}
+                        disabled={props.disabled}
+                        onChange={(checked: boolean) =>
+                          changeStep(id, { asReply: checked })
+                        }
+                        class="text-xs text-ink-muted"
+                      >
+                        <Checkbox.Control />
+                        <Checkbox.Label>
+                          {t('emailMarketing.replyInThread')}
+                        </Checkbox.Label>
+                      </Checkbox>
+                    </Show>
                     <label class="block space-y-2 text-xs font-medium">
-                      Subject
+                      {t('emailMarketing.subject')}
                       <Show
-                        when={shared()}
-                        fallback=<input
-                          aria-label={`Email ${index() + 1} subject`}
-                          class="w-full border-0 bg-transparent text-sm text-composer-ink outline-none placeholder:text-ink-placeholder disabled:opacity-60"
-                          placeholder="A subject worth opening"
+                        when={!reply()}
+                        fallback={
+                          <p class="text-sm font-normal text-ink-muted">
+                            {replySubject(
+                              threadSubject(props.campaign.steps, index())
+                            )}
+                          </p>
+                        }
+                      >
+                        <input
+                          aria-label={t('emailMarketing.subjectOf', {
+                            position: position(),
+                          })}
+                          class="w-full rounded-md border-0 bg-transparent text-sm font-normal text-composer-ink outline-none placeholder:text-ink-placeholder focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent/40 disabled:opacity-60"
+                          placeholder={t('emailMarketing.subjectPlaceholder')}
+                          maxLength={300}
                           value={step().subject}
                           disabled={props.disabled}
                           onInput={(event) =>
-                            changeStep(step().id, {
-                              subject: event.currentTarget.value,
+                            changeStep(id, {
+                              subject: event.currentTarget.value.replace(
+                                /[\r\n]+/g,
+                                ' '
+                              ),
                             })
-                          }
-                        />
-                      >
-                        <SequenceContentEditor
-                          composition={props.composition!}
-                          options={{
-                            databaseId: props.databaseId!,
-                            campaignId: props.campaign.id,
-                            stepId: id,
-                            field: 'subject',
-                            initialText: step().subject,
-                          }}
-                          label={`Email ${index() + 1} subject`}
-                          disabled={props.disabled}
-                          onChange={(text) => changeStep(id, { subject: text })}
-                          onState={(state) =>
-                            props.onCompositionState?.(id, 'subject', state)
                           }
                         />
                       </Show>
                     </label>
                     <label class="block space-y-2 text-xs font-medium">
-                      Message
-                      <Show
-                        when={shared()}
-                        fallback=<textarea
-                          aria-label={`Email ${index() + 1} message`}
-                          class="w-full min-h-36 resize-y border-0 bg-transparent text-sm leading-6 text-composer-ink outline-none placeholder:text-ink-placeholder disabled:opacity-60"
-                          placeholder="Hi {{firstName}},"
-                          value={step().body}
-                          disabled={props.disabled}
-                          onInput={(event) =>
-                            changeStep(step().id, {
-                              body: event.currentTarget.value,
-                            })
-                          }
-                        />
-                      >
-                        <SequenceContentEditor
-                          composition={props.composition!}
-                          options={{
-                            databaseId: props.databaseId!,
-                            campaignId: props.campaign.id,
-                            stepId: id,
-                            field: 'body',
-                            initialText: step().body,
-                          }}
-                          label={`Email ${index() + 1} message`}
-                          disabled={props.disabled}
-                          onChange={(text) => changeStep(id, { body: text })}
-                          onState={(state) =>
-                            props.onCompositionState?.(id, 'body', state)
-                          }
-                        />
-                      </Show>
+                      {t('emailMarketing.message')}
+                      <textarea
+                        aria-label={t('emailMarketing.messageOf', {
+                          position: position(),
+                        })}
+                        class="min-h-36 w-full resize-y rounded-md border-0 bg-transparent text-sm leading-6 font-normal text-composer-ink outline-none placeholder:text-ink-placeholder focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent/40 disabled:opacity-60"
+                        placeholder={t('emailMarketing.messagePlaceholder', {
+                          tag: '{{firstName}}',
+                        })}
+                        maxLength={50_000}
+                        value={step().body}
+                        disabled={props.disabled}
+                        onInput={(event) =>
+                          changeStep(id, { body: event.currentTarget.value })
+                        }
+                      />
                     </label>
                     <p class="text-xs text-ink-muted">
-                      Plain-text delivery. Personalize with{' '}
-                      <code>{'{{firstName}}'}</code>, <code>{'{{name}}'}</code>,
-                      or <code>{'{{email}}'}</code>.
+                      {t('emailMarketing.personalizeHint', {
+                        tags: PERSONALIZATION.join(', '),
+                      })}
                     </p>
                   </div>
                 </ComposerSurface>
@@ -279,22 +303,39 @@ export function SequenceEditor(props: {
                   delayDays: props.campaign.steps.length ? 2 : 0,
                   subject: '',
                   body: '',
+                  asReply: props.campaign.steps.length > 0 || undefined,
                 },
               ],
             })
           }
         >
-          ＋ Add email
+          {t('emailMarketing.addEmail')}
         </Button>
       </Show>
-      <div class="flex items-center gap-3 rounded-lg bg-panel/50 px-4 py-3">
-        <span class="text-success">✓</span>
-        <div>
-          <p class="text-sm font-medium">Sequence ends</p>
-          <p class="text-xs text-ink-muted">
-            Replies and unsubscribe requests are handled manually in v1.
-          </p>
+      <div class="space-y-3 rounded-lg bg-panel/50 px-4 py-3">
+        <div class="flex items-center gap-3">
+          <CheckIcon class="size-4 text-success" aria-hidden="true" />
+          <div>
+            <p class="text-sm font-medium">
+              {t('emailMarketing.sequenceEnds')}
+            </p>
+            <p class="text-xs text-ink-muted">
+              {t('emailMarketing.sequenceEndsHint')}
+            </p>
+          </div>
         </div>
+        <label class="block space-y-2 text-xs font-medium">
+          {t('emailMarketing.optOutLine')}
+          <Input
+            aria-label={t('emailMarketing.optOutLine')}
+            value={props.campaign.optOutLine ?? DEFAULT_OPT_OUT_LINE}
+            maxLength={300}
+            disabled={props.disabled}
+            onInput={(event) =>
+              change({ optOutLine: event.currentTarget.value })
+            }
+          />
+        </label>
       </div>
     </div>
   );

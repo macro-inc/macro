@@ -1,16 +1,19 @@
-import X from '@icon/system/regular/x.svg';
-import { ActionDialogShell, Button, Dialog, Input } from '@ui';
+import { t } from '@app/lib/i18n';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { ActionDialogShell, Button, Checkbox, Dialog, Input } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
-import type { Campaign, MarketingContact } from '../core/model';
-import { normalizeEmail } from '../core/model';
+import {
+  type Campaign,
+  MAX_ENROLLMENT_BATCH,
+  type MarketingContact,
+  mergeContacts,
+  normalizeEmail,
+} from '../core/model';
+import { errorMessage } from './error-message';
 
-/** @deprecated Kept only for the browser-test fixture; use `@ui` Button. */
-export const primaryButton =
-  'inline-flex items-center justify-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-page hover:opacity-85 disabled:opacity-40';
-/** @deprecated Kept only for the browser-test fixture; use `@ui` Button. */
-export const secondaryButton =
-  'inline-flex items-center justify-center gap-2 rounded-lg border border-edge-muted bg-page px-3 py-2 text-sm font-medium hover:bg-panel disabled:opacity-40';
+const SURFACE = 'email-marketing.enroll';
 
+/** Half an hour from now, as a `datetime-local` value in local time. */
 function defaultStart() {
   const date = new Date(Date.now() + 30 * 60_000);
   date.setSeconds(0, 0);
@@ -23,9 +26,11 @@ export function EnrollmentDialog(props: {
   campaign: Campaign;
   contacts: MarketingContact[];
   enrolledEmails: string[];
+  isUnsubscribed: (email: string) => boolean;
   busy: boolean;
-  error: string;
+  error: unknown;
   onClose: () => void;
+  onCloseAutoFocus?: (event: Event) => void;
   onEnroll: (contacts: MarketingContact[], startAt: Date) => Promise<boolean>;
   onSearchCrm: (query: string) => Promise<MarketingContact[]>;
 }) {
@@ -35,16 +40,10 @@ export function EnrollmentDialog(props: {
   const [start, setStart] = createSignal(defaultStart());
   const [consent, setConsent] = createSignal(false);
   const [remote, setRemote] = createSignal<MarketingContact[]>([]);
-  const [searchError, setSearchError] = createSignal('');
+  const [searchError, setSearchError] = createSignal<unknown>();
   const [searching, setSearching] = createSignal(false);
-  const all = () => [
-    ...new Map(
-      [...props.contacts, ...remote()].map((contact) => [
-        normalizeEmail(contact.email),
-        contact,
-      ])
-    ).values(),
-  ];
+  // CRM results fill in what local contacts lack, never replace them.
+  const all = () => mergeContacts([...remote(), ...props.contacts]);
   const filtered = () =>
     all().filter((contact) =>
       `${contact.name} ${contact.email}`
@@ -53,19 +52,20 @@ export function EnrollmentDialog(props: {
     );
   const isSelected = (email: string) =>
     selected().includes(normalizeEmail(email));
-  const already = (email: string) =>
-    props.enrolledEmails.map(normalizeEmail).includes(normalizeEmail(email));
+  const blocked = (email: string) =>
+    props.enrolledEmails.includes(normalizeEmail(email)) ||
+    props.isUnsubscribed(email);
   const chosen = () =>
     all().filter(
-      (contact) => isSelected(contact.email) && !already(contact.email)
+      (contact) => isSelected(contact.email) && !blocked(contact.email)
     );
   const searchCrm = async () => {
     setSearching(true);
-    setSearchError('');
+    setSearchError(undefined);
     try {
       setRemote(await props.onSearchCrm(search()));
     } catch (cause) {
-      setSearchError(cause instanceof Error ? cause.message : String(cause));
+      setSearchError(cause);
     } finally {
       setSearching(false);
     }
@@ -73,6 +73,14 @@ export function EnrollmentDialog(props: {
   const enroll = async () => {
     if (await props.onEnroll(chosen(), new Date(start()))) props.onClose();
   };
+  const contactState = (contact: MarketingContact) =>
+    props.enrolledEmails.includes(normalizeEmail(contact.email))
+      ? t('emailMarketing.alreadyEnrolled')
+      : props.isUnsubscribed(contact.email)
+        ? t('emailMarketing.unsubscribed')
+        : contact.crmContactId
+          ? t('emailMarketing.crmContact')
+          : t('emailMarketing.contact');
   return (
     <Dialog
       open
@@ -84,114 +92,104 @@ export function EnrollmentDialog(props: {
       onEscapeKeyDown={(event) => {
         if (props.busy) event.preventDefault();
       }}
+      onCloseAutoFocus={props.onCloseAutoFocus}
     >
       <ActionDialogShell class="max-h-[88vh]">
-        <div class="flex shrink-0 items-start justify-between gap-3 border-b border-edge-divider px-5 py-4">
-          <div>
-            <ActionDialogShell.Title>Enroll contacts</ActionDialogShell.Title>
-            <ActionDialogShell.Description class="mt-1">
-              Add people to {props.campaign.name}.
-            </ActionDialogShell.Description>
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Close enrollment"
-            disabled={props.busy}
-            onClick={() => props.onClose()}
-          >
-            <X aria-hidden="true" class="size-4" />
-          </Button>
-        </div>
         <ActionDialogShell.Body class="space-y-4">
-          <div class="flex gap-2">
+          <ActionDialogShell.Header>
+            <ActionDialogShell.Title>
+              {t('emailMarketing.enrollContacts')}
+            </ActionDialogShell.Title>
+            <ActionDialogShell.Description class="truncate">
+              {t('emailMarketing.enrollInto', { name: props.campaign.name })}
+            </ActionDialogShell.Description>
+          </ActionDialogShell.Header>
+          {/* The search comes first, so it takes focus when the dialog opens. */}
+          <form
+            class="flex gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!searching() && !props.busy)
+                fireAndForget(searchCrm(), SURFACE);
+            }}
+          >
             <Input
-              aria-label="Search enrollment contacts"
-              placeholder="Search contacts by name or email"
+              aria-label={t('emailMarketing.searchContacts')}
+              placeholder={t('emailMarketing.searchContactsPlaceholder')}
               value={search()}
               onInput={(event) => {
                 setSearch(event.currentTarget.value);
-                setSearchError('');
+                setSearchError(undefined);
               }}
             />
             <Button
-              type="button"
+              type="submit"
               variant="secondary"
               disabled={searching() || props.busy}
-              onClick={searchCrm}
+              loading={searching()}
             >
-              {searching() ? 'Searching…' : 'Search CRM'}
+              {t('emailMarketing.searchCrm')}
             </Button>
-          </div>
+          </form>
           <Show when={searchError()}>
-            <p class="text-xs text-failure" role="alert">
-              {searchError()}
-            </p>
+            {(cause) => (
+              <p class="text-xs text-failure" role="alert">
+                {errorMessage(cause())}
+              </p>
+            )}
           </Show>
           <div class="max-h-72 min-h-28 overflow-y-auto rounded-lg border border-edge-muted">
             <Show
               when={filtered().length}
               fallback={
                 <p class="p-5 text-sm text-ink-muted">
-                  No matching contacts. Try searching CRM.
+                  {t('emailMarketing.noMatchingContacts')}
                 </p>
               }
             >
               <For each={filtered()}>
                 {(contact) => (
-                  <label
-                    class="flex items-center gap-3 border-b border-edge-muted px-4 py-3 last:border-0"
-                    classList={{ 'opacity-50': already(contact.email) }}
+                  <Checkbox
+                    class="flex w-full items-center gap-3 border-b border-edge-muted px-4 py-3 last:border-0"
+                    checked={isSelected(contact.email)}
+                    disabled={
+                      props.busy ||
+                      blocked(contact.email) ||
+                      (!isSelected(contact.email) &&
+                        selected().length >= MAX_ENROLLMENT_BATCH)
+                    }
+                    onChange={(checked: boolean) => {
+                      const email = normalizeEmail(contact.email);
+                      setSelected((before) =>
+                        checked
+                          ? [...new Set([...before, email])]
+                          : before.filter((item) => item !== email)
+                      );
+                    }}
                   >
-                    <input
-                      type="checkbox"
-                      aria-label={`Enroll ${contact.email}`}
-                      disabled={
-                        props.busy ||
-                        already(contact.email) ||
-                        (!isSelected(contact.email) && selected().length >= 50)
-                      }
-                      checked={isSelected(contact.email)}
-                      onChange={(event) => {
-                        const email = normalizeEmail(contact.email);
-                        const checked = event.currentTarget.checked;
-                        setSelected((before) =>
-                          checked
-                            ? [...new Set([...before, email])]
-                            : before.filter((item) => item !== email)
-                        );
-                      }}
-                    />
-                    <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-panel text-xs font-medium text-ink-muted">
-                      {(contact.name || contact.email)
-                        .slice(0, 2)
-                        .toUpperCase()}
-                    </span>
-                    <span class="min-w-0 flex-1">
-                      <span class="block truncate text-sm font-medium">
-                        {contact.name || contact.email}
+                    <Checkbox.Control />
+                    <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-3">
+                      <span class="min-w-0 flex-1">
+                        <span class="block truncate text-sm font-medium">
+                          {contact.name || contact.email}
+                        </span>
+                        <span class="block truncate text-xs text-ink-muted">
+                          {contact.email}
+                        </span>
                       </span>
-                      <span class="block truncate text-xs text-ink-muted">
-                        {contact.email}
+                      <span class="shrink-0 text-xs text-ink-muted">
+                        {contactState(contact)}
                       </span>
-                    </span>
-                    <span class="text-xs text-ink-muted">
-                      {already(contact.email)
-                        ? 'Already enrolled'
-                        : contact.crmContactId
-                          ? 'CRM contact'
-                          : 'Contact'}
-                    </span>
-                  </label>
+                    </Checkbox.Label>
+                  </Checkbox>
                 )}
               </For>
             </Show>
           </div>
           <label class="block space-y-1 text-xs font-medium">
-            Start sending <span class="text-ink-muted">your local time</span>
+            {t('emailMarketing.startSending')}
             <Input
-              aria-label="Sequence start time"
+              aria-label={t('emailMarketing.startTime')}
               type="datetime-local"
               value={start()}
               disabled={props.busy}
@@ -199,41 +197,50 @@ export function EnrollmentDialog(props: {
             />
           </label>
           <p class="text-xs text-ink-muted">
-            Starts at least 10 minutes from now. Each contact receives{' '}
-            {props.campaign.steps.length} emails following the sequence delays.
+            {t('emailMarketing.startHint', {
+              count: props.campaign.steps.length,
+            })}
           </p>
-          <label class="flex items-start gap-2 text-xs text-ink-muted">
-            <input
-              type="checkbox"
-              aria-label="Confirm permission to email"
-              checked={consent()}
-              disabled={props.busy}
-              onChange={(event) => setConsent(event.currentTarget.checked)}
-            />
-            <span>
-              I have permission to email these contacts and will handle replies
-              and unsubscribe requests.
-            </span>
-          </label>
+          <Checkbox
+            class="flex items-start gap-2 text-xs text-ink-muted"
+            checked={consent()}
+            disabled={props.busy}
+            onChange={(checked: boolean) => setConsent(checked)}
+          >
+            <Checkbox.Control />
+            <Checkbox.Label>{t('emailMarketing.consent')}</Checkbox.Label>
+          </Checkbox>
           <Show when={props.error}>
-            <p class="text-xs text-failure" role="alert">
-              {props.error}
-            </p>
+            {(cause) => (
+              <p class="whitespace-pre-line text-xs text-failure" role="alert">
+                {errorMessage(cause())}
+              </p>
+            )}
           </Show>
         </ActionDialogShell.Body>
-        <ActionDialogShell.Footer class="justify-between">
-          <span class="text-xs text-ink-muted">
-            {chosen().length} selected · up to 50 at a time
+        <ActionDialogShell.Footer class="items-center">
+          <span class="mr-auto text-xs text-ink-muted">
+            {t('emailMarketing.selectedCount', {
+              count: chosen().length,
+              max: MAX_ENROLLMENT_BATCH,
+            })}
           </span>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={props.busy}
+            onClick={() => props.onClose()}
+          >
+            {t('emailMarketing.cancel')}
+          </Button>
           <Button
             type="button"
             variant="primary"
             disabled={!chosen().length || !consent() || props.busy}
+            loading={props.busy}
             onClick={enroll}
           >
-            {props.busy
-              ? 'Scheduling…'
-              : `Enroll ${chosen().length || ''} contact${chosen().length === 1 ? '' : 's'}`}
+            {t('emailMarketing.enrollCount', { count: chosen().length })}
           </Button>
         </ActionDialogShell.Footer>
       </ActionDialogShell>

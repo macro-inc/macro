@@ -1,212 +1,400 @@
-import { expect, type Locator, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import { differenceInCalendarDays } from 'date-fns';
 
 const path = '/src/features/email-marketing/browser-test/marketing.html';
 
-/**
- * Replace a collaborative field's text the way a person does: select all, then
- * type. Main's collab editor can re-apply the shared snapshot just after it
- * turns editable and drop the first keystrokes, so retry until the edit sticks.
- */
-async function replaceEditorText(field: Locator, text: string) {
-  await expect(field).toBeEditable();
-  await expect(async () => {
-    await field.click();
-    await field.press('ControlOrMeta+a');
-    // Real key events: main's editor ignores synthetic insertText input.
-    await field.page().keyboard.type(text);
-    await expect(field).toHaveText(text.replace(/\n+/g, ''), {
-      timeout: 1_000,
-    });
-  }).toPass({ timeout: 15_000 });
-}
-test('v1 creates a campaign, previews, enrolls, cross-references CRM, pauses, resumes, and stops', async ({
-  page,
-}) => {
-  const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto(path, { waitUntil: 'domcontentloaded' });
-  await expect(
-    page.getByRole('heading', { name: 'Campaigns', exact: true })
-  ).toBeVisible();
-  await page.getByRole('button', { name: '＋ New campaign' }).click();
-  await page.getByLabel('New campaign name').fill('A warm welcome');
-  await page
-    .getByRole('button', { name: 'Create campaign', exact: true })
-    .click();
-  await replaceEditorText(
-    page.getByLabel('Email 1 subject'),
-    'Welcome to Macro, {{firstName}}'
-  );
-  await replaceEditorText(
-    page.getByLabel('Email 1 message'),
-    'Hi {{firstName}},\n\nWelcome to Macro. Your team’s work finally has a home.\n\nHit reply if you need a hand getting started.'
-  );
-  await page.getByRole('button', { name: '＋ Add email' }).click();
-  await replaceEditorText(
-    page.getByLabel('Email 3 subject'),
-    'Anything we can help with?'
-  );
-  await replaceEditorText(
-    page.getByLabel('Email 3 message'),
-    'Hi {{firstName}},\n\nHow is your first week going? Let me know if we can help.'
-  );
-  await page.getByLabel('Email 3 delay days').fill('3');
-  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Campaign saved');
-  await page
-    .getByRole('button', { name: 'Preview', exact: true })
-    .first()
-    .click();
-  await expect(page.getByRole('dialog')).toContainText(
-    'Welcome to Macro, Alex'
-  );
-  await page.getByLabel('Preview contact').selectOption('jamie@example.com');
-  await expect(page.getByRole('dialog')).toContainText(
-    'Welcome to Macro, Jamie'
-  );
-  await page.getByRole('button', { name: 'Close preview' }).click();
-  await page.getByRole('button', { name: 'Activate campaign' }).click();
-  await expect(page.getByRole('status')).toContainText('Campaign is active');
-  await expect(page.getByLabel('Email 1 subject')).toBeDisabled();
-  await page.getByRole('button', { name: '＋ Enroll contacts' }).click();
-  await page
-    .getByRole('checkbox', { name: 'Enroll alex@example.com', exact: true })
-    .check();
-  await page
-    .getByRole('checkbox', { name: 'Enroll jamie@example.com', exact: true })
-    .check();
-  await page.getByLabel('Confirm permission to email').check();
-  await page
-    .getByRole('button', { name: 'Enroll 2 contacts', exact: true })
-    .click();
-  await expect(page.getByRole('status')).toContainText('2 contacts enrolled');
-  await page
-    .getByRole('button', { name: 'Enrollments (2)', exact: true })
-    .click();
-  await expect(
-    page.getByText('Welcome to Macro, Alex', { exact: false })
-  ).toBeVisible();
-  const scheduled = await page.evaluate(() =>
+type Draft = {
+  id: string;
+  email: string;
+  subject: string;
+  body: string;
+  threadId: string;
+  replyingToId?: string;
+  sendAt?: string;
+};
+const outbox = (page: Page): Promise<Draft[]> =>
+  page.evaluate(() =>
     JSON.parse(localStorage.getItem('marketing-test-outbox') ?? '[]')
   );
-  expect(scheduled).toHaveLength(6);
-  const alex = scheduled.filter(
-    (draft: { email: string }) => draft.email === 'alex@example.com'
-  );
+const stored = (page: Page) =>
+  page.evaluate(() => JSON.parse(localStorage.getItem('marketing-test')!));
+const nav = (page: Page) =>
+  page.getByRole('navigation', { name: 'Email Marketing navigation' });
+/** Confirmations are toasts, which stack: check the newest. */
+const notice = (page: Page, text: string | RegExp) =>
+  expect(
+    page.getByRole('status').filter({ hasText: text }).last()
+  ).toBeVisible();
+
+async function choose(page: Page, label: string, option: string) {
+  await page.getByRole('button', { name: label }).click();
+  // The listbox portals outside an open dialog, which hides it from role queries.
+  await page.locator('[role="option"]').filter({ hasText: option }).click();
+}
+/**
+ * Pick one of a Tabs control's options as a person does, by its segment
+ * (icon-only tabs have no visible text; the native radio is tiny).
+ */
+async function pick(page: Page, group: string, option: string) {
+  const radio = page
+    .getByRole('radiogroup', { name: group })
+    .getByRole('radio', { name: new RegExp(`^${option}`) });
+  const label = await radio.getAttribute('aria-labelledby');
+  await page.locator(`[id="${label}"]`).click();
+  await expect(radio).toBeChecked();
+}
+async function openCampaign(page: Page, name: string) {
+  await page.getByRole('button', { name: new RegExp(name) }).click();
+}
+async function activateAndEnroll(page: Page, emails: string[]) {
+  await page.getByRole('button', { name: 'Activate', exact: true }).click();
+  await notice(page, 'Campaign is active');
+  await page.getByRole('button', { name: 'Enroll contacts' }).click();
+  const dialog = page.getByRole('dialog');
+  // Click the labels, as a person does; the styled control covers the input.
+  for (const email of emails)
+    await dialog.getByText(email, { exact: true }).click();
+  await dialog.getByText(/permission to email/).click();
+  await dialog
+    .getByRole('button', {
+      name: `Enroll ${emails.length} contact${emails.length === 1 ? '' : 's'}`,
+    })
+    .click();
+  await notice(page, /enrolled\. Emails scheduled/);
+}
+
+// Every scenario must finish without uncaught page errors.
+const pageErrors = new WeakMap<Page, string[]>();
+test.beforeEach(({ page }) => {
+  const errors: string[] = [];
+  pageErrors.set(page, errors);
+  page.on('pageerror', (error) => errors.push(error.message));
+});
+test.afterEach(({ page }) => {
+  expect(pageErrors.get(page)).toEqual([]);
+});
+
+test('creates, personalizes, threads, enrolls, cross-references CRM, pauses, resumes, and stops', async ({
+  page,
+}) => {
+  await page.goto(path, { waitUntil: 'domcontentloaded' });
+  await expect(
+    nav(page).getByRole('button', { name: /Campaigns/ })
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'New campaign' }).first().click();
+  const create = page.getByRole('dialog');
+  await create.getByLabel('Campaign name').fill('A warm welcome');
+  await create.getByRole('button', { name: 'Create campaign' }).click();
+  await notice(page, 'Campaign created');
+  // The welcome template: a first email and a reply in its thread.
+  await expect(page.getByText('Re: Welcome, {{firstName}}')).toBeVisible();
+  await page
+    .getByLabel('Email 1 subject')
+    .fill('Welcome to Macro, {{firstName}}');
+  await expect(
+    page.getByText('Re: Welcome to Macro, {{firstName}}')
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Add email' }).click();
+  await page.getByLabel('Email 3 delay in days').fill('3');
+  await page
+    .getByLabel('Email 3 message')
+    .fill('Hi {{firstName}},\n\nAnything we can help with?');
+  // Email 3 starts its own thread.
+  const reply = page
+    .getByRole('article', { name: 'Email 3' })
+    .getByRole('checkbox', { name: /reply in the same thread/ });
+  await expect(reply).toBeChecked();
+  await page
+    .getByRole('article', { name: 'Email 3' })
+    .getByText(/reply in the same thread/)
+    .click();
+  await expect(reply).not.toBeChecked();
+  await page.getByLabel('Email 3 subject').fill('One more idea');
+  await expect(page.getByText('Unsaved changes')).toBeVisible();
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  await notice(page, 'Campaign saved');
+
+  await page
+    .getByRole('article', { name: 'Email 2' })
+    .getByRole('button', { name: 'Preview' })
+    .click();
+  const preview = page.getByRole('dialog');
+  await expect(preview).toContainText('Re: Welcome to Macro, Alex');
+  await choose(page, 'Preview contact', 'Jamie Chen');
+  await expect(preview).toContainText('Re: Welcome to Macro, Jamie');
+  await expect(preview).toContainText('reply "unsubscribe"');
+  await preview.getByRole('button', { name: 'Close' }).click();
+
+  await activateAndEnroll(page, ['alex@example.com', 'jamie@example.com']);
+  await expect(page.getByLabel('Email 1 subject')).toBeDisabled();
+  const drafts = await outbox(page);
+  expect(drafts).toHaveLength(6);
+  const alex = drafts.filter((draft) => draft.email === 'alex@example.com');
+  expect(alex.map((draft) => draft.subject)).toEqual([
+    'Welcome to Macro, Alex',
+    'Re: Welcome to Macro, Alex',
+    'One more idea',
+  ]);
+  // The follow-up replies in the first email's thread; email 3 is a new thread.
+  expect(alex[1].replyingToId).toBe(alex[0].id);
+  expect(alex[1].threadId).toBe(alex[0].threadId);
+  expect(alex[2].replyingToId).toBeUndefined();
+  expect(alex[2].threadId).not.toBe(alex[0].threadId);
   // Delays are calendar days at the same local time, even across a DST change.
-  const sendAt = alex.map(
-    (draft: { sendAt: string }) => new Date(draft.sendAt)
-  );
+  const sendAt = alex.map((draft) => new Date(draft.sendAt!));
   expect(differenceInCalendarDays(sendAt[1], sendAt[0])).toBe(2);
   expect(differenceInCalendarDays(sendAt[2], sendAt[1])).toBe(3);
   for (const time of sendAt)
     expect(time.getHours() * 60 + time.getMinutes()).toBe(
       sendAt[0].getHours() * 60 + sendAt[0].getMinutes()
     );
-  await page.getByRole('button', { name: 'Alex Morgan', exact: true }).click();
+
+  await pick(page, 'Campaign views', 'Enrollments');
+  const alexCard = page.getByRole('article', { name: 'Alex Morgan' });
+  await expect(alexCard).toContainText('Re: Welcome to Macro, Alex');
+  await alexCard.getByRole('button', { name: 'Alex Morgan' }).click();
   await expect(page.getByRole('dialog')).toContainText('A warm welcome');
-  await page.getByRole('button', { name: 'Open CRM contact ↗' }).click();
-  await expect(
-    page.getByRole('heading', { name: 'Alex Morgan' })
-  ).toBeVisible();
+  await page.getByRole('button', { name: 'Open CRM contact' }).click();
   await expect(
     page.getByRole('region', { name: 'Email Marketing enrollments' })
   ).toContainText('A warm welcome');
   await page.getByRole('button', { name: 'Back to Email Marketing' }).click();
-  await page.getByRole('button', { name: /A warm welcome/ }).click();
-  await page.getByRole('button', { name: 'Enrollments (2)' }).click();
-  await page
-    .getByRole('button', { name: 'Pause', exact: true })
-    .first()
-    .click();
-  await expect(page.getByRole('status')).toContainText('Enrollment paused');
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          JSON.parse(localStorage.getItem('marketing-test-outbox') ?? '[]')
-            .length
-      )
-    )
-    .toBe(3);
-  await page.getByRole('button', { name: 'Resume', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText(
-    'Future emails rescheduled'
-  );
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          JSON.parse(localStorage.getItem('marketing-test-outbox') ?? '[]')
-            .length
-      )
-    )
-    .toBe(6);
-  await page.getByRole('button', { name: 'Stop', exact: true }).first().click();
-  await expect(page.getByRole('status')).toContainText('Enrollment stopped');
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          JSON.parse(localStorage.getItem('marketing-test-outbox') ?? '[]')
-            .length
-      )
-    )
-    .toBe(3);
-  await page
-    .getByRole('button', { name: 'Pause campaign', exact: true })
-    .click();
-  await expect(page.getByRole('status')).toContainText('Campaign paused');
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          JSON.parse(localStorage.getItem('marketing-test-outbox') ?? '[]')
-            .length
-      )
-    )
-    .toBe(0);
+
+  await openCampaign(page, 'A warm welcome');
+  await pick(page, 'Campaign views', 'Enrollments');
+  await alexCard.getByRole('button', { name: 'Pause', exact: true }).click();
+  await notice(page, 'Enrollment paused');
+  await expect.poll(async () => (await outbox(page)).length).toBe(3);
+  await alexCard.getByRole('button', { name: 'Resume' }).click();
+  await notice(page, 'Upcoming emails rescheduled');
+  await expect.poll(async () => (await outbox(page)).length).toBe(6);
+  await alexCard.getByRole('button', { name: 'Stop', exact: true }).click();
+  await notice(page, 'Enrollment stopped');
+  await expect.poll(async () => (await outbox(page)).length).toBe(3);
+  await page.getByRole('button', { name: 'Pause campaign' }).click();
+  await notice(page, 'Campaign paused');
+  await expect.poll(async () => (await outbox(page)).length).toBe(0);
+
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.getByRole('button', { name: /A warm welcome/ }).click();
-  await expect(page.getByLabel('Email 1 subject')).toHaveText(
+  await openCampaign(page, 'A warm welcome');
+  await expect(page.getByLabel('Email 1 subject')).toHaveValue(
     'Welcome to Macro, {{firstName}}'
   );
-  await page.getByRole('button', { name: 'Enrollments (2)' }).click();
-  await expect(page.getByText('Stopped', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Delivery', exact: true }).click();
-  await expect(page.getByText('Not connected', { exact: true })).toBeVisible();
-  expect(errors).toEqual([]);
+  await pick(page, 'Campaign views', 'Enrollments');
+  await expect(alexCard.getByText('Stopped', { exact: true })).toBeVisible();
+  await nav(page)
+    .getByRole('button', { name: /Delivery/ })
+    .click();
+  await expect(page.getByText('hello@macro.example')).toBeVisible();
 });
 
-test('active sequences reject duplicate enrollment and readonly controls, and fit a mobile viewport', async ({
+test('unsubscribing stops a contact in every campaign and blocks enrolling them again', async ({
   page,
 }) => {
   await page.goto(path, { waitUntil: 'domcontentloaded' });
-  await page.getByRole('button', { name: /Customer onboarding/ }).click();
-  await page.getByRole('button', { name: 'Activate campaign' }).click();
-  await page.getByRole('button', { name: '＋ Enroll contacts' }).click();
+  await openCampaign(page, 'Customer onboarding');
+  await activateAndEnroll(page, ['alex@example.com', 'sam@example.com']);
+  await page.getByRole('button', { name: 'All campaigns' }).click();
+  await openCampaign(page, 'A friendly check-in');
+  await activateAndEnroll(page, ['alex@example.com']);
+  expect(await outbox(page)).toHaveLength(5);
+
+  // From an enrollment: every campaign stops emailing Alex.
+  await pick(page, 'Campaign views', 'Enrollments');
   await page
-    .getByRole('checkbox', { name: 'Enroll alex@example.com', exact: true })
-    .check();
-  await page.getByLabel('Confirm permission to email').check();
-  await page
-    .getByRole('button', { name: 'Enroll 1 contact', exact: true })
+    .getByRole('article', { name: 'Alex Morgan' })
+    .getByRole('button', { name: 'Mark unsubscribed' })
     .click();
-  await page.getByRole('button', { name: '＋ Enroll contacts' }).click();
-  await expect(
-    page.getByRole('checkbox', { name: 'Enroll alex@example.com', exact: true })
-  ).toBeDisabled();
-  await page.getByRole('button', { name: 'Close enrollment' }).click();
-  await page.setViewportSize({ width: 430, height: 932 });
-  await expect(
-    page.getByRole('heading', { name: 'Email Marketing', exact: true })
-  ).toBeVisible();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Mark unsubscribed' })
+    .click();
+  await notice(page, 'alex@example.com is unsubscribed');
+  expect((await outbox(page)).map((draft) => draft.email)).toEqual([
+    'sam@example.com',
+    'sam@example.com',
+  ]);
+  const data = await stored(page);
   expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth
-    )
-  ).toBe(true);
+    data.enrollments
+      .filter(
+        (entry: { contact: { email: string } }) =>
+          entry.contact.email === 'alex@example.com'
+      )
+      .map((entry: { status: string }) => entry.status)
+  ).toEqual(['stopped', 'stopped']);
+
+  // From the contact: Sam is unsubscribed too.
+  await nav(page)
+    .getByRole('button', { name: /Contacts/ })
+    .click();
+  await page.getByRole('button', { name: /Sam Rivera/ }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Mark unsubscribed' })
+    .click();
+  await page
+    .getByRole('dialog')
+    .filter({ hasText: 'Unsubscribe sam@example.com?' })
+    .getByRole('button', { name: 'Mark unsubscribed' })
+    .click();
+  await expect(page.getByRole('dialog')).toContainText(
+    'Unsubscribed from every campaign.'
+  );
+  await page.keyboard.press('Escape');
+  await notice(page, 'sam@example.com is unsubscribed');
+  expect(await outbox(page)).toEqual([]);
+
+  // A campaign Sam was never in still can't enroll Sam.
+  await nav(page)
+    .getByRole('button', { name: /Campaigns/ })
+    .click();
+  await openCampaign(page, 'A friendly check-in');
+  await page.getByRole('button', { name: 'Enroll contacts' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(
+    dialog.getByRole('checkbox', { name: /sam@example\.com/ })
+  ).toBeDisabled();
+  await expect(
+    dialog.getByRole('checkbox', { name: /sam@example\.com/ })
+  ).toHaveAccessibleName(/Unsubscribed/);
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await nav(page)
+    .getByRole('button', { name: /Unsubscribed/ })
+    .click();
+  const list = page.getByRole('list', { name: 'Unsubscribed' });
+  await expect(list).toContainText('alex@example.com');
+  await expect(list).toContainText('sam@example.com');
+});
+
+test('deleting a campaign cancels its upcoming emails and removes its records', async ({
+  page,
+}) => {
+  await page.goto(path, { waitUntil: 'domcontentloaded' });
+  await openCampaign(page, 'Customer onboarding');
+  await activateAndEnroll(page, ['alex@example.com', 'jamie@example.com']);
+  expect(await outbox(page)).toHaveLength(4);
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Delete', exact: true })
+    .click();
+  await notice(page, 'Deleted Customer onboarding');
+  expect(await outbox(page)).toEqual([]);
+  const data = await stored(page);
+  expect(data.campaigns.map((item: { name: string }) => item.name)).toEqual([
+    'A friendly check-in',
+  ]);
+  expect(data.enrollments).toEqual([]);
+  await expect(
+    page.getByRole('button', { name: /Customer onboarding/ })
+  ).toHaveCount(0);
+});
+
+test('a failed send is flagged on the next visit in the list, the enrollment, and CRM', async ({
+  page,
+}) => {
+  await page.goto(path, { waitUntil: 'domcontentloaded' });
+  await openCampaign(page, 'Customer onboarding');
+  await activateAndEnroll(page, ['alex@example.com']);
+  const [first] = await outbox(page);
+  // Gmail rejected the first email while the workspace was closed.
+  await page.evaluate((id) => {
+    localStorage.setItem('marketing-test-failed', JSON.stringify([id]));
+  }, first.id);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(
+    page.getByRole('button', { name: /Customer onboarding/ })
+  ).toContainText('1 needs attention');
+  await expect(
+    nav(page).getByRole('button', { name: /Campaigns/ })
+  ).toContainText('1');
+  await openCampaign(page, 'Customer onboarding');
+  await pick(page, 'Campaign views', 'Enrollments');
+  const card = page.getByRole('article', { name: 'Alex Morgan' });
+  await expect(card.getByText('Send failed').first()).toBeVisible();
+  await expect(card).toContainText('Gmail rejected this email');
+  await card.getByRole('button', { name: 'Open email' }).first().click();
+  await expect(page.getByTestId('opened-thread')).toHaveText(first.threadId);
+  await page.getByRole('button', { name: 'Back to Email Marketing' }).click();
+  await openCampaign(page, 'Customer onboarding');
+  await pick(page, 'Campaign views', 'Enrollments');
+  await card.getByRole('button', { name: 'Alex Morgan' }).click();
+  await page.getByRole('button', { name: 'Open CRM contact' }).click();
+  await expect(
+    page.getByRole('region', { name: 'Email Marketing enrollments' })
+  ).toContainText('Send failed');
+});
+
+test('emails whose records were lost are flagged and can be canceled', async ({
+  page,
+}) => {
+  await page.goto(path, { waitUntil: 'domcontentloaded' });
+  await openCampaign(page, 'Customer onboarding');
+  await activateAndEnroll(page, ['alex@example.com']);
+  expect(await outbox(page)).toHaveLength(2);
+  // The records go (the database was trashed, or the table deleted), the
+  // scheduled emails stay.
+  await page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem('marketing-test')!);
+    data.enrollments = [];
+    localStorage.setItem('marketing-test', JSON.stringify(data));
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(
+    page.getByText(/2 scheduled sequence emails have no campaign record/)
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel them' }).click();
+  await notice(page, 'Untracked sequence emails were canceled');
+  expect(await outbox(page)).toEqual([]);
+  await expect(page.getByText(/have no campaign record/)).toHaveCount(0);
+});
+
+test('a stale tab cannot overwrite a campaign another tab changed', async ({
+  page,
+  context,
+}) => {
+  const other = await context.newPage();
+  await page.goto(path, { waitUntil: 'domcontentloaded' });
+  await other.goto(path, { waitUntil: 'domcontentloaded' });
+  for (const client of [page, other])
+    await openCampaign(client, 'Customer onboarding');
+  await other.getByLabel('Campaign name').fill('Renamed in another tab');
+  await other.getByRole('button', { name: 'Save draft' }).click();
+  await notice(other, 'Campaign saved');
+  await page.getByLabel('Campaign name').fill('My stale edit');
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  await expect(page.getByRole('alert')).toContainText('This campaign changed');
+  await expect(
+    page.getByText(/changed in another tab or device/)
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Discard my changes' }).click();
+  await expect(page.getByLabel('Campaign name')).toHaveValue(
+    'Renamed in another tab'
+  );
+  const data = await stored(page);
+  expect(
+    data.campaigns.find((item: { id: string }) => item.id === 'example-welcome')
+      .name
+  ).toBe('Renamed in another tab');
+});
+
+test('blocks duplicate enrollment and disables writes on a read-only database', async ({
+  page,
+}) => {
+  await page.goto(path, { waitUntil: 'domcontentloaded' });
+  await openCampaign(page, 'Customer onboarding');
+  await activateAndEnroll(page, ['alex@example.com']);
+  await page.getByRole('button', { name: 'Enroll contacts' }).click();
+  await expect(
+    page
+      .getByRole('dialog')
+      .getByRole('checkbox', { name: /alex@example\.com/ })
+  ).toBeDisabled();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Cancel' })
+    .click();
   await page.evaluate(() => {
     const data = JSON.parse(localStorage.getItem('marketing-test')!);
     data.writable = false;
@@ -214,125 +402,26 @@ test('active sequences reject duplicate enrollment and readonly controls, and fi
   });
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expect(
-    page.getByRole('button', { name: '＋ New campaign' })
+    page.getByRole('button', { name: 'New campaign' }).first()
   ).toBeDisabled();
 });
 
-test('two clients share subjects and messages, merge concurrent typing, retain focus, and restore unsaved content', async ({
-  page,
-  context,
-}) => {
-  const peer = await context.newPage();
-  const errors: string[] = [];
-  for (const client of [page, peer])
-    client.on('pageerror', (error) => errors.push(error.message));
-  await Promise.all([
-    page.goto(`${path}?theme=dark`, { waitUntil: 'domcontentloaded' }),
-    peer.goto(`${path}?theme=dark&peer=jamie`, {
-      waitUntil: 'domcontentloaded',
-    }),
-  ]);
-  for (const client of [page, peer]) {
-    await client.getByRole('button', { name: /Customer onboarding/ }).click();
+test.describe('on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+  test('navigates sections with tabs and fits the screen', async ({ page }) => {
+    await page.goto(`${path}?theme=dark`, { waitUntil: 'domcontentloaded' });
     await expect(
-      client.getByRole('button', { name: 'Activate campaign' })
-    ).toBeEnabled();
-  }
-  const subject = page.getByLabel('Email 1 subject');
-  const body = page.getByLabel('Email 1 message');
-  const peerBody = peer.getByLabel('Email 1 message');
-  // Edit once the shared copy is on screen in both clients, as a person would.
-  for (const client of [page, peer])
-    await expect(client.getByLabel('Email 1 subject')).toHaveText(
-      'Welcome to Macro, {{firstName}}'
-    );
-  await replaceEditorText(subject, 'A shared welcome, {{firstName}}');
-  await expect(peer.getByLabel('Email 1 subject')).toHaveText(
-    'A shared welcome, {{firstName}}'
-  );
-  await subject.press('End');
-  await subject.press('Enter');
-  await expect(subject).toHaveText('A shared welcome, {{firstName}}');
-  await replaceEditorText(body, 'Working together');
-  await expect(peerBody).toHaveText('Working together');
-  const original = await body.elementHandle();
-  // One-line body: move to its end with the platform's line-end key.
-  const lineEnd = process.platform === 'darwin' ? 'Meta+ArrowRight' : 'End';
-  await body.press(lineEnd);
-  await peerBody.press(lineEnd);
-  await Promise.all([
-    body.pressSequentially(' Alex'),
-    peerBody.pressSequentially(' Jamie'),
-  ]);
-  await expect
-    .poll(async () => (await body.innerText()) === (await peerBody.innerText()))
-    .toBe(true);
-  const typed = (await body.innerText()).slice('Working together'.length);
-  // Concurrent single-character inserts can interleave; every character must survive.
-  expect([...typed].sort().join('')).toBe([...' Alex Jamie'].sort().join(''));
-  expect(await original!.evaluate((node) => node.isConnected)).toBe(true);
-  await expect(body).toBeFocused();
-  const merged = await body.innerText();
-  await page.getByLabel('Move email 2 up').click();
-  await expect(page.getByLabel('Email 2 message')).toHaveText(merged);
-  expect(await original!.evaluate((node) => node.isConnected)).toBe(true);
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.getByRole('button', { name: /Customer onboarding/ }).click();
-  await expect(page.getByLabel('Email 1 subject')).toHaveText(
-    'A shared welcome, {{firstName}}'
-  );
-  await expect(page.getByLabel('Email 1 message')).toHaveText(merged);
-  await expect(
-    page.getByRole('button', { name: 'Activate campaign' })
-  ).toBeEnabled();
-  const chrome = await page
-    .getByRole('article', { name: 'Email 1', exact: true })
-    .locator(':scope > div')
-    .evaluate((node) => {
-      const style = getComputedStyle(node);
-      return {
-        classes: node.className,
-        shadow: style.boxShadow,
-        radius: style.borderRadius,
-        rim: getComputedStyle(node, '::after').boxShadow,
-      };
-    });
-  // The card reuses the email composer's surface; exact radii follow main's design system.
-  expect(chrome.classes).toContain('bg-composer');
-  expect(chrome.classes).toContain('glass-input');
-  expect(chrome.shadow).not.toBe('none');
-  expect(Number.parseFloat(chrome.radius)).toBeGreaterThan(0);
-  await page.getByRole('button', { name: 'Activate campaign' }).click();
-  await expect(page.getByLabel('Email 1 message')).toHaveValue(merged);
-  await replaceEditorText(peerBody, 'Later edits from another draft tab');
-  await expect(page.getByLabel('Email 1 message')).toHaveValue(merged);
-  const stored = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem('marketing-test')!).campaigns.find(
-      (campaign: { id: string }) => campaign.id === 'example-welcome'
-    )
-  );
-  expect(stored.steps[0].body).toBe(merged);
-  expect(errors).toEqual([]);
-});
-
-test('failed collaborative initialization blocks activation and can be retried', async ({
-  page,
-}) => {
-  await page.goto(`${path}?failContent=once`, {
-    waitUntil: 'domcontentloaded',
+      page.getByRole('radiogroup', { name: 'Email Marketing navigation' })
+    ).toBeVisible();
+    await openCampaign(page, 'Customer onboarding');
+    await expect(page.getByLabel('Email 1 subject')).toBeVisible();
+    await page.getByRole('button', { name: 'All campaigns' }).click();
+    await pick(page, 'Email Marketing navigation', 'Contacts');
+    await expect(page.getByText('jamie@example.com')).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth
+      )
+    ).toBe(true);
   });
-  await page.getByRole('button', { name: /Customer onboarding/ }).click();
-  await expect(
-    page.getByRole('button', { name: 'Activate campaign' })
-  ).toBeDisabled();
-  await expect(
-    page.getByRole('button', { name: 'Save draft', exact: true })
-  ).toBeDisabled();
-  await page.getByRole('button', { name: 'Retry shared content' }).click();
-  await expect(
-    page.getByRole('button', { name: 'Activate campaign' })
-  ).toBeEnabled();
-  await expect(page.getByLabel('Email 1 subject')).toHaveText(
-    'Welcome to Macro, {{firstName}}'
-  );
 });

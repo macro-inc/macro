@@ -1,1068 +1,713 @@
+import { ViewShell } from '@app/components/view-shell';
+import { ListHeaderSearch } from '@app/components/view-shell/ListHeader';
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { useViewControlHotkeys } from '@app/components/view-shell/use-view-control-hotkeys';
+import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
+import { t } from '@app/lib/i18n';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import { toast } from '@core/component/Toast/Toast';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { deepEqual } from '@core/util/compareUtils';
 import { fireAndForget } from '@core/util/fireAndForget';
-import EnvelopeIcon from '@icon/system/regular/envelope.svg';
-import GearIcon from '@icon/system/regular/gear-six.svg';
-import FlowArrowIcon from '@icon/system/regular/tree-structure.svg';
-import UsersIcon from '@icon/system/regular/users.svg';
-import X from '@icon/system/regular/x.svg';
-import { ActionDialogShell, Button, Dialog, Input, inputClasses } from '@ui';
-import { createSignal, For, onMount, Show } from 'solid-js';
-import { CampaignList } from '../components/campaign-list';
-import { ContactEnrollments } from '../components/contact-enrollments';
-import { EnrollmentDialog } from '../components/enrollment-dialog';
-import type { CompositionState } from '../components/sequence-content-editor';
-import { SequenceEditor } from '../components/sequence-editor';
 import {
-  AttentionBadge,
-  attentionDetail,
-  StatusBadge,
-} from '../components/status-badge';
+  Button,
+  ConfirmDialog,
+  DeleteDialog,
+  EmptyStatePanel,
+  Tabs,
+} from '@ui';
+import { createSignal, type JSX, Match, onMount, Show, Switch } from 'solid-js';
+import { CampaignList, type CampaignRow } from '../components/campaign-list';
+import {
+  ContactList,
+  type ContactRow,
+  UnsubscribedList,
+} from '../components/contact-list';
+import { DeliveryPanel } from '../components/delivery-panel';
+import { EnrollmentDialog } from '../components/enrollment-dialog';
+import { errorMessage } from '../components/error-message';
+import {
+  ContactDialog,
+  NewCampaignDialog,
+  PreviewDialog,
+  type Template,
+  templateSteps,
+} from '../components/marketing-dialogs';
+import {
+  MarketingSidebar,
+  SECTIONS,
+  type Section,
+  sectionLabel,
+} from '../components/marketing-sidebar';
+import { SectionHeader } from '../components/section-header';
 import type { MarketingCapabilities } from '../context/contracts';
 import {
   type Campaign,
+  type Enrollment,
+  isReplaceable,
+  isUnsubscribed,
   type MarketingContact,
   normalizeEmail,
-  personalize,
-  type SequenceStep,
 } from '../core/model';
 import { createMarketingWorkspace } from '../primitives/workspace';
+import { CampaignDetail, type DetailTab } from './campaign-detail';
 
 const SURFACE = 'email-marketing';
-
-function newCampaign(name: string, senderId: string, template: string) {
-  const step = (delayDays: number, subject: string, body: string) => ({
-    id: crypto.randomUUID(),
-    delayDays,
-    subject,
-    body,
-  });
-  const campaign: Campaign = {
-    id: crypto.randomUUID(),
-    name: name.trim(),
-    description: '',
-    senderId,
-    status: 'draft',
-    updatedAt: new Date().toISOString(),
-    steps:
-      template === 'welcome'
-        ? [
-            step(
-              0,
-              'Welcome, {{firstName}}',
-              'Hi {{firstName}},\n\nThanks for joining us. I’m glad you’re here.\n\nWhat are you hoping to get out of your experience? Just reply — I’d love to hear.'
-            ),
-            step(
-              2,
-              'A little help getting started',
-              'Hi {{firstName}},\n\nChecking in to see how things are going. If you have any questions, hit reply and I’ll help you get started.'
-            ),
-          ]
-        : [step(0, '', '')],
-  };
-  return campaign;
-}
+type StatusFilter = 'all' | Campaign['status'];
+/** Edits to an open campaign and the stored copy they started from. */
+type Edit = { base: Campaign; draft: Campaign };
 
 export function MarketingWorkspaceView(props: {
   capabilities: MarketingCapabilities;
 }) {
   const workspace = createMarketingWorkspace(props.capabilities);
-  const [section, setSection] = createSignal<
-    'campaigns' | 'contacts' | 'delivery'
-  >('campaigns');
-  const [draft, setDraft] = createSignal<Campaign>();
-  const [detailTab, setDetailTab] = createSignal<'sequence' | 'enrollments'>(
-    'sequence'
-  );
-  const [filter, setFilter] = createSignal('');
-  const [statusFilter, setStatusFilter] = createSignal('all');
-  const [newOpen, setNewOpen] = createSignal(false);
-  const [newName, setNewName] = createSignal('');
-  const [template, setTemplate] = createSignal('welcome');
-  const [enrollOpen, setEnrollOpen] = createSignal(false);
-  const [preview, setPreview] = createSignal<SequenceStep>();
-  const [previewEmail, setPreviewEmail] = createSignal('');
-  const [contactDetail, setContactDetail] = createSignal<MarketingContact>();
-  const [compositionStates, setCompositionStates] = createSignal<
-    Record<string, CompositionState>
-  >({});
-  const compositionKey = (
-    campaignId: string,
-    stepId: string,
-    field: 'subject' | 'body'
-  ) => `${campaignId}:${stepId}:${field}`;
-  const compositionReady = () =>
-    !props.capabilities.composition ||
-    draft()?.status === 'active' ||
-    (detailTab() === 'sequence' &&
-      draft()?.steps.every((step) =>
-        ['subject', 'body'].every(
-          (field) =>
-            compositionStates()[
-              compositionKey(draft()!.id, step.id, field as 'subject' | 'body')
-            ] === 'ready'
-        )
-      ));
-  onMount(() => {
-    fireAndForget(workspace.initialize(), SURFACE);
-  });
-  const campaigns = () =>
-    workspace
-      .snapshot()
+  const panel = useSplitPanel();
+  const [section, setSection] = createSignal<Section>('campaigns');
+  const [openId, setOpenId] = createSignal<string>();
+  const [edit, setEdit] = createSignal<Edit>();
+  const [tab, setTab] = createSignal<DetailTab>('sequence');
+  const [search, setSearch] = createSignal('');
+  const [statusFilter, setStatusFilter] = createSignal<StatusFilter>('all');
+  const [creating, setCreating] = createSignal(false);
+  const [enrolling, setEnrolling] = createSignal(false);
+  const [deleting, setDeleting] = createSignal(false);
+  const [preview, setPreview] = createSignal<number>();
+  const [contact, setContact] = createSignal<MarketingContact>();
+  const [unsubscribing, setUnsubscribing] = createSignal<MarketingContact>();
+  let focusSearch: (() => void) | undefined;
+  onMount(() => fireAndForget(workspace.initialize(), SURFACE));
+  if (panel)
+    useViewControlHotkeys({
+      scopeId: panel.splitHotkeyScope,
+      enabled: panel.isPanelActive,
+      search: {
+        description: t('emailMarketing.searchCampaigns'),
+        condition: () =>
+          !openId() && (section() === 'campaigns' || section() === 'contacts'),
+        run: () => focusSearch?.(),
+      },
+    });
+
+  // Dialogs here have no trigger to return focus to, so remember the opener.
+  let opener: HTMLElement | undefined;
+  const rememberOpener = () => {
+    opener =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : undefined;
+  };
+  const returnFocus = (event: Event) => {
+    if (!opener?.isConnected) return;
+    event.preventDefault();
+    opener.focus();
+  };
+  const opening =
+    <T,>(set: (value: T) => void) =>
+    (value: T) => {
+      rememberOpener();
+      set(value);
+    };
+
+  const snapshot = workspace.snapshot;
+  const stored = () =>
+    snapshot().campaigns.find((campaign) => campaign.id === openId());
+  /** The open campaign as shown: local edits over the stored copy. */
+  const shown = () => edit()?.draft ?? stored();
+  const changed = () => {
+    const current = edit();
+    return !!current && !deepEqual(current.draft, current.base);
+  };
+  const conflict = () => changed() && !deepEqual(stored(), edit()?.base);
+  const change = (draft: Campaign) =>
+    setEdit((current) => ({ base: current?.base ?? stored() ?? draft, draft }));
+  const close = () => {
+    setEdit(undefined);
+    setOpenId(undefined);
+  };
+
+  /** Run a workspace action and confirm it with a toast. */
+  async function act(
+    name: string,
+    action: () => Promise<void>,
+    success: () => string,
+    attributes?: Record<string, string | number>
+  ) {
+    const ok = await workspace.run(name, action, attributes);
+    if (ok) toast.success(success());
+    return ok;
+  }
+
+  const enrollmentsOf = (email: string) =>
+    snapshot().enrollments.filter(
+      (entry) => normalizeEmail(entry.contact.email) === normalizeEmail(email)
+    );
+  const campaignRows = (): CampaignRow[] =>
+    snapshot()
       .campaigns.filter(
         (campaign) =>
           `${campaign.name} ${campaign.description}`
             .toLowerCase()
-            .includes(filter().toLowerCase()) &&
+            .includes(search().toLowerCase()) &&
           (statusFilter() === 'all' || statusFilter() === campaign.status)
-      );
-  const entries = () =>
-    workspace
-      .snapshot()
-      .enrollments.filter((entry) => entry.campaignId === draft()?.id);
-  const futureQueued = () =>
-    workspace
-      .snapshot()
-      .enrollments.flatMap((entry) => entry.steps)
-      .filter(
-        (step) =>
-          step.status === 'queued' &&
-          new Date(step.sendAt).getTime() > Date.now()
-      ).length;
-  const activeCount = () =>
-    workspace
-      .snapshot()
-      .campaigns.filter((campaign) => campaign.status === 'active').length;
-  const canEdit = () =>
-    workspace.snapshot().writable &&
-    !workspace.busy() &&
-    draft()?.status !== 'active';
-  const changed = () =>
-    draft() &&
-    JSON.stringify(draft()) !==
-      JSON.stringify(
-        workspace
-          .snapshot()
-          .campaigns.find((campaign) => campaign.id === draft()?.id)
-      );
-  const openCampaign = (campaign: Campaign) => {
-    setCompositionStates({});
-    setDraft(structuredClone(campaign));
-    setDetailTab('sequence');
-  };
-  const save = async (activate: boolean) => {
-    const campaign = draft();
-    if (!campaign) return;
-    if (!compositionReady()) return;
-    if (
-      await workspace.run(
-        () => workspace.save(campaign, activate),
-        activate
-          ? 'Campaign is active. Enroll contacts to start the sequence.'
-          : 'Campaign saved.'
       )
-    )
-      setDraft(
-        workspace.snapshot().campaigns.find((item) => item.id === campaign.id)
-      );
-  };
-  const go = async (next: 'campaigns' | 'contacts' | 'delivery') => {
-    if (changed() && canEdit()) {
-      if (!compositionReady()) {
-        await workspace.run(async () => {
-          throw new Error(
-            'Open the sequence and wait for its shared drafts to load before saving.'
-          );
-        }, '');
-        return;
-      }
-      const campaign = draft()!;
-      if (
-        !(await workspace.run(
-          () => workspace.save(campaign, false),
-          'Campaign saved.'
-        ))
-      )
-        return;
-    }
-    setDraft(undefined);
-    setSection(next);
-    setFilter('');
-  };
-  const createCampaign = async (event: SubmitEvent) => {
-    event.preventDefault();
-    const campaign = newCampaign(
-      newName(),
-      workspace.senders().find((sender) => sender.ready)?.id ?? '',
-      template()
+      .map((campaign) => ({
+        campaign,
+        enrolled: snapshot().enrollments.filter(
+          (entry) => entry.campaignId === campaign.id
+        ).length,
+        attention: workspace.campaignAttention(campaign.id),
+      }));
+  const attentionTotal = () =>
+    snapshot().campaigns.reduce(
+      (total, campaign) => total + workspace.campaignAttention(campaign.id),
+      0
     );
-    if (
-      !(await workspace.run(
-        () => workspace.save(campaign, false),
-        'Campaign created.'
-      ))
-    )
-      return;
-    setNewOpen(false);
-    const saved = workspace
-      .snapshot()
-      .campaigns.find((item) => item.id === campaign.id);
-    if (saved) openCampaign(saved);
-  };
-  const previewContact = () =>
-    workspace.contacts().find((contact) => contact.email === previewEmail()) ??
-    workspace.contacts()[0] ?? {
-      email: 'alex@example.com',
-      name: 'Alex Morgan',
+  const contactRows = (): ContactRow[] =>
+    workspace
+      .contacts()
+      .filter((item) =>
+        `${item.name} ${item.email}`
+          .toLowerCase()
+          .includes(search().toLowerCase())
+      )
+      .map((item) => ({
+        contact: item,
+        sequences: enrollmentsOf(item.email).length,
+        unsubscribed: isUnsubscribed(snapshot(), item.email),
+      }));
+  /** Live enrollments whose campaign record is gone (deleted in the database). */
+  const orphans = () =>
+    snapshot().enrollments.filter(
+      (entry) =>
+        entry.status !== 'stopped' &&
+        !snapshot().campaigns.some((item) => item.id === entry.campaignId)
+    ).length;
+  const untrackedCount = () =>
+    Object.values(workspace.untracked()).reduce(
+      (total, ids) => total + ids.length,
+      0
+    );
+
+  /** Leave the open campaign, saving unsaved edits first. */
+  async function leaveCampaign() {
+    const current = edit();
+    if (current && changed() && current.draft.status !== 'active') {
+      const ok = await act(
+        'campaign.save',
+        () => workspace.save(current.draft, false, current.base),
+        () => t('emailMarketing.noticeSaved'),
+        { campaign_id: current.draft.id }
+      );
+      if (!ok) return false;
+    }
+    close();
+    return true;
+  }
+  async function go(next: Section) {
+    if (!(await leaveCampaign())) return;
+    setSection(next);
+    setSearch('');
+  }
+  function openCampaign(campaign: Campaign) {
+    setEdit(undefined);
+    setOpenId(campaign.id);
+    setTab('sequence');
+  }
+  function openCreate() {
+    workspace.dismissError();
+    rememberOpener();
+    setCreating(true);
+  }
+  async function create(name: string, template: Template) {
+    const campaign: Campaign = {
+      id: crypto.randomUUID(),
+      name,
+      description: '',
+      senderId: workspace.senders().find((sender) => sender.ready)?.id ?? '',
+      status: 'draft',
+      updatedAt: new Date().toISOString(),
+      steps: templateSteps(template),
+      optOutLine: t('emailMarketing.defaultOptOutLine'),
     };
-  return (
-    <main
-      class="flex h-full min-h-0 w-full flex-col bg-page text-ink"
-      aria-label="Email Marketing"
-    >
-      <header class="flex shrink-0 items-center justify-between gap-3 border-b border-edge-muted px-6 py-4">
-        <div class="flex items-center gap-3">
-          <span class="flex size-8 items-center justify-center rounded-lg bg-accent/10 text-accent">
-            <EnvelopeIcon class="size-5" aria-hidden="true" />
-          </span>
-          <h1 class="text-base font-semibold">Email Marketing</h1>
-          <span class="rounded-md border border-edge-muted px-1.5 py-0.5 text-[10px] text-ink-muted">
-            BETA
-          </span>
-        </div>
-        <Show when={workspace.snapshot().databaseId}>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            onClick={() =>
-              props.capabilities.openDatabase(workspace.snapshot().databaseId!)
-            }
+    const ok = await act(
+      'campaign.create',
+      () => workspace.save(campaign, false, undefined),
+      () => t('emailMarketing.noticeCreated'),
+      { campaign_id: campaign.id, steps: campaign.steps.length }
+    );
+    if (!ok) return;
+    setCreating(false);
+    setSection('campaigns');
+    openCampaign(campaign);
+  }
+  async function save(activate: boolean) {
+    const campaign = shown();
+    if (!campaign) return;
+    const base = edit()?.base ?? stored();
+    const ok = await act(
+      activate ? 'campaign.activate' : 'campaign.save',
+      () => workspace.save(campaign, activate, base),
+      () =>
+        activate
+          ? t('emailMarketing.noticeActivated')
+          : t('emailMarketing.noticeSaved'),
+      { campaign_id: campaign.id, steps: campaign.steps.length }
+    );
+    if (ok) setEdit(undefined);
+  }
+  async function pause() {
+    const campaign = stored();
+    if (!campaign) return;
+    await act(
+      'campaign.pause',
+      () => workspace.engine.pauseCampaign(campaign),
+      () => t('emailMarketing.noticePaused'),
+      { campaign_id: campaign.id }
+    );
+  }
+  async function remove() {
+    const campaign = stored();
+    if (!campaign) return;
+    const ok = await act(
+      'campaign.delete',
+      () => workspace.engine.deleteCampaign(campaign),
+      () => t('emailMarketing.noticeDeleted', { name: campaign.name }),
+      { campaign_id: campaign.id }
+    );
+    setDeleting(false);
+    if (ok) close();
+  }
+  function stop(entry: Enrollment, status: 'paused' | 'stopped') {
+    fireAndForget(
+      act(
+        `enrollment.${status === 'paused' ? 'pause' : 'stop'}`,
+        () => workspace.engine.stop(entry, status),
+        () =>
+          status === 'paused'
+            ? t('emailMarketing.noticeEnrollmentPaused')
+            : t('emailMarketing.noticeEnrollmentStopped'),
+        { campaign_id: entry.campaignId, enrollment_id: entry.id }
+      ),
+      SURFACE
+    );
+  }
+  function resume(entry: Enrollment) {
+    fireAndForget(
+      act(
+        'enrollment.resume',
+        async () => {
+          await workspace.engine.resume(entry);
+        },
+        () => t('emailMarketing.noticeResumed'),
+        { campaign_id: entry.campaignId, enrollment_id: entry.id }
+      ),
+      SURFACE
+    );
+  }
+  async function unsubscribe() {
+    const person = unsubscribing();
+    if (!person) return;
+    await act(
+      'unsubscribe',
+      () => workspace.engine.unsubscribe(person.email),
+      () => t('emailMarketing.noticeUnsubscribed', { email: person.email })
+    );
+    setUnsubscribing(undefined);
+  }
+  function stopOrphans() {
+    fireAndForget(
+      act(
+        'enrollment.stop_orphans',
+        () => workspace.engine.stopOrphans(),
+        () => t('emailMarketing.noticeOrphansStopped'),
+        { enrollments: orphans() }
+      ),
+      SURFACE
+    );
+  }
+  function cancelUntracked() {
+    const bySender = Object.entries(workspace.untracked());
+    fireAndForget(
+      act(
+        'untracked.cancel',
+        async () => {
+          for (const [senderId, draftIds] of bySender)
+            await workspace.engine.cancelUntracked(senderId, draftIds);
+        },
+        () => t('emailMarketing.noticeUntrackedCanceled'),
+        { emails: untrackedCount() }
+      ),
+      SURFACE
+    );
+  }
+
+  /** Problems that apply wherever the user is; below the header, never above it. */
+  const banners = (): JSX.Element => (
+    <div class="flex flex-col gap-2 px-4 empty:hidden">
+      <Show when={workspace.error()}>
+        {(cause) => (
+          <div
+            class="flex items-start justify-between gap-3 rounded-lg border border-failure/20 bg-failure/5 px-4 py-3 text-sm text-ink"
+            role="alert"
           >
-            Open database ↗
-          </Button>
-        </Show>
-      </header>
-      <div class="flex min-h-0 flex-1 flex-col sm:flex-row">
-        <nav
-          class="flex shrink-0 gap-1 border-b border-edge-muted bg-panel/30 p-3 sm:w-48 sm:flex-col sm:gap-1 sm:border-r sm:border-b-0 sm:p-4"
-          aria-label="Email Marketing navigation"
-        >
-          <p class="mb-3 hidden px-3 text-[10px] font-medium uppercase tracking-widest text-ink-subtle sm:block">
-            Your workspace
+            <span class="whitespace-pre-line">{errorMessage(cause())}</span>
+            <Button
+              type="button"
+              variant="link"
+              size="xs"
+              disabled={workspace.busy()}
+              onClick={() => fireAndForget(workspace.initialize(), SURFACE)}
+            >
+              {t('emailMarketing.refresh')}
+            </Button>
+          </div>
+        )}
+      </Show>
+      <Show when={snapshot().unreadable}>
+        {(count) => (
+          <p class="rounded-lg bg-warning/10 px-4 py-2 text-xs text-ink">
+            {t('emailMarketing.unreadableNotice', { count: count() })}
           </p>
-          <For each={['campaigns', 'contacts', 'delivery'] as const}>
-            {(item) => (
-              <button
-                type="button"
-                aria-label={
-                  item === 'campaigns'
-                    ? 'Campaigns'
-                    : item === 'contacts'
-                      ? 'Contacts'
-                      : 'Delivery'
-                }
-                aria-current={section() === item ? 'page' : undefined}
-                disabled={workspace.busy()}
-                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-ink-muted disabled:opacity-50"
-                classList={{ 'bg-page text-ink shadow-sm': section() === item }}
-                onClick={() => fireAndForget(go(item), SURFACE)}
-              >
-                <span class="w-4 text-base" aria-hidden="true">
-                  {item === 'campaigns' ? (
-                    <FlowArrowIcon class="size-4" />
-                  ) : item === 'contacts' ? (
-                    <UsersIcon class="size-4" />
-                  ) : (
-                    <GearIcon class="size-4" />
-                  )}
-                </span>
-                {item === 'campaigns'
-                  ? 'Campaigns'
-                  : item === 'contacts'
-                    ? 'Contacts'
-                    : 'Delivery'}
-                <Show when={item === 'campaigns'}>
-                  <span class="ml-auto text-xs text-ink-subtle">
-                    {workspace.snapshot().campaigns.length}
-                  </span>
-                </Show>
-              </button>
-            )}
-          </For>
-          <div class="mt-auto hidden rounded-lg border border-edge-muted p-3 sm:block">
-            <p class="text-xs font-medium">A little more personal.</p>
-            <p class="mt-1 text-xs leading-5 text-ink-muted">
-              The right email, at the right time. All from your own inbox.
-            </p>
+        )}
+      </Show>
+      <Show when={untrackedCount()}>
+        {(count) => (
+          <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-failure/5 px-4 py-2 text-xs text-ink">
+            {t('emailMarketing.untrackedNotice', { count: count() })}
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={workspace.busy()}
+              onClick={cancelUntracked}
+            >
+              {t('emailMarketing.cancelUntracked')}
+            </Button>
           </div>
-        </nav>
-        <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-          <Show when={workspace.error()}>
-            <div
-              class="mx-6 mt-4 flex items-center justify-between gap-3 rounded-lg border border-failure/20 bg-failure/5 px-4 py-3 text-sm text-failure"
-              role="alert"
+        )}
+      </Show>
+      <Show when={orphans()}>
+        {(count) => (
+          <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-failure/5 px-4 py-2 text-xs text-ink">
+            {t('emailMarketing.orphansNotice', { count: count() })}
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={workspace.busy() || !snapshot().writable}
+              onClick={stopOrphans}
             >
-              {workspace.error()}
-              <button
-                type="button"
-                class="shrink-0 underline"
-                disabled={workspace.busy()}
-                onClick={() => fireAndForget(workspace.initialize(), SURFACE)}
-              >
-                Refresh
-              </button>
-            </div>
-          </Show>
-          <Show when={workspace.notice()}>
-            <div
-              class="mx-6 mt-4 rounded-lg bg-success/10 px-4 py-3 text-xs text-success"
-              role="status"
-            >
-              {workspace.notice()}
-            </div>
-          </Show>
-          <Show
-            when={!workspace.loading()}
-            fallback={
-              <p class="p-8 text-sm text-ink-muted">Loading Email Marketing…</p>
-            }
-          >
-            <Show when={section() === 'campaigns'}>
-              <Show
-                when={draft()}
-                fallback={
-                  <CampaignList
-                    campaigns={campaigns()}
-                    snapshot={workspace.snapshot()}
-                    busy={workspace.busy()}
-                    activeCount={activeCount()}
-                    upcomingCount={futureQueued()}
-                    filter={filter()}
-                    statusFilter={statusFilter()}
-                    onFilter={setFilter}
-                    onStatusFilter={setStatusFilter}
-                    onCreate={() => {
-                      setNewName('');
-                      setNewOpen(true);
-                    }}
-                    onOpen={openCampaign}
-                  />
-                }
-              >
-                {(campaign) => (
-                  <>
-                    <div class="shrink-0 border-b border-edge-muted px-6 pt-5">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        class="mb-4"
-                        disabled={workspace.busy()}
-                        onClick={() => fireAndForget(go('campaigns'), SURFACE)}
-                      >
-                        ← All campaigns
-                      </Button>
-                      <div class="flex flex-wrap items-center justify-between gap-3">
-                        <div class="flex items-center gap-3">
-                          <h2 class="text-xl font-semibold">
-                            {campaign().name}
-                          </h2>
-                          <StatusBadge status={campaign().status} />
-                          <Show
-                            when={
-                              campaign().senderId &&
-                              workspace.senderStatus(campaign().senderId) !==
-                                'ready' &&
-                              workspace.senderStatus(campaign().senderId)
-                            }
-                          >
-                            {(status) => (
-                              <span class="text-xs text-failure" role="alert">
-                                {status() === 'reauth'
-                                  ? 'Reconnect this Gmail inbox in Settings before enrolling.'
-                                  : attentionDetail('disconnected')}
-                              </span>
-                            )}
-                          </Show>
-                          <Show when={changed()}>
-                            <span class="text-xs text-ink-muted">
-                              Unsaved changes
-                            </span>
-                          </Show>
-                        </div>
-                        <div class="flex flex-wrap gap-2">
-                          <Show
-                            when={campaign().status === 'active'}
-                            fallback={
-                              <>
-                                <Button
-                                  type="button"
-                                  variant="secondary"
-                                  disabled={!canEdit() || !compositionReady()}
-                                  onClick={() =>
-                                    fireAndForget(save(false), SURFACE)
-                                  }
-                                >
-                                  {workspace.busy() ? 'Saving…' : 'Save draft'}
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="primary"
-                                  disabled={!canEdit() || !compositionReady()}
-                                  onClick={() =>
-                                    fireAndForget(save(true), SURFACE)
-                                  }
-                                >
-                                  Activate campaign
-                                </Button>
-                              </>
-                            }
-                          >
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              disabled={
-                                workspace.busy() ||
-                                !workspace.snapshot().writable
-                              }
-                              onClick={async () => {
-                                if (
-                                  await workspace.run(
-                                    () => workspace.pause(campaign()),
-                                    'Campaign paused. Future emails have been canceled.'
-                                  )
-                                )
-                                  setDraft(
-                                    workspace
-                                      .snapshot()
-                                      .campaigns.find(
-                                        (item) => item.id === campaign().id
-                                      )
-                                  );
-                              }}
-                            >
-                              Pause campaign
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="primary"
-                              disabled={
-                                workspace.busy() ||
-                                !workspace.snapshot().writable
-                              }
-                              onClick={() => setEnrollOpen(true)}
-                            >
-                              ＋ Enroll contacts
-                            </Button>
-                          </Show>
-                        </div>
-                      </div>
-                      <Show
-                        when={
-                          props.capabilities.composition &&
-                          campaign().status !== 'active'
-                        }
-                      >
-                        <p class="mt-3 text-xs text-ink-muted">
-                          {compositionReady()
-                            ? 'Subject and message edits are shared live. Save to update the sending snapshot.'
-                            : detailTab() === 'sequence'
-                              ? 'Loading shared draft content…'
-                              : 'Open Sequence to load the shared draft before saving or activating.'}
-                        </p>
-                      </Show>
-                      <div class="mt-5 flex gap-6">
-                        <For each={['sequence', 'enrollments'] as const}>
-                          {(tab) => (
-                            <button
-                              type="button"
-                              class="border-b-2 border-transparent pb-3 text-sm text-ink-muted"
-                              classList={{
-                                'border-ink text-ink': detailTab() === tab,
-                              }}
-                              onClick={() => setDetailTab(tab)}
-                            >
-                              {tab === 'sequence'
-                                ? 'Sequence'
-                                : `Enrollments (${entries().length})`}
-                            </button>
-                          )}
-                        </For>
-                      </div>
-                    </div>
-                    <div class="flex-1 overflow-y-auto p-6 lg:p-8">
-                      <Show
-                        when={detailTab() === 'sequence'}
-                        fallback={
-                          <div class="space-y-4">
-                            <div>
-                              <h3 class="text-base font-medium">
-                                People in this sequence
-                              </h3>
-                              <p class="mt-1 text-xs text-ink-muted">
-                                Stopping or pausing cancels upcoming emails.
-                                Emails already sent cannot be recalled.
-                              </p>
-                            </div>
-                            <Show
-                              when={entries().length}
-                              fallback={
-                                <p class="rounded-xl border border-dashed border-edge p-10 text-center text-sm text-ink-muted">
-                                  No contacts enrolled yet.
-                                </p>
-                              }
-                            >
-                              <For each={entries()}>
-                                {(entry) => (
-                                  <article class="rounded-xl border border-edge-muted p-4">
-                                    <div class="flex flex-wrap items-center justify-between gap-3">
-                                      <div>
-                                        <button
-                                          type="button"
-                                          class="text-sm font-medium hover:underline"
-                                          onClick={() => {
-                                            setContactDetail(entry.contact);
-                                          }}
-                                        >
-                                          {entry.contact.name ||
-                                            entry.contact.email}
-                                        </button>
-                                        <p class="mt-1 text-xs text-ink-muted">
-                                          {entry.contact.email}
-                                        </p>
-                                      </div>
-                                      <div class="flex items-center gap-2">
-                                        <Show
-                                          when={workspace.enrollmentAttention(
-                                            entry
-                                          )}
-                                          fallback={
-                                            <StatusBadge
-                                              status={entry.status}
-                                            />
-                                          }
-                                        >
-                                          {(reason) => (
-                                            <AttentionBadge reason={reason()} />
-                                          )}
-                                        </Show>
-                                        <Show
-                                          when={entry.status === 'scheduled'}
-                                        >
-                                          <Button
-                                            type="button"
-                                            variant="secondary"
-                                            size="sm"
-                                            disabled={
-                                              workspace.busy() ||
-                                              !workspace.snapshot().writable
-                                            }
-                                            onClick={() =>
-                                              fireAndForget(
-                                                workspace.run(
-                                                  () =>
-                                                    workspace.engine.stop(
-                                                      entry,
-                                                      'paused'
-                                                    ),
-                                                  'Enrollment paused.'
-                                                ),
-                                                SURFACE
-                                              )
-                                            }
-                                          >
-                                            Pause
-                                          </Button>
-                                        </Show>
-                                        <Show
-                                          when={
-                                            entry.status === 'paused' &&
-                                            campaign().status === 'active'
-                                          }
-                                        >
-                                          <Button
-                                            type="button"
-                                            variant="secondary"
-                                            size="sm"
-                                            disabled={
-                                              workspace.busy() ||
-                                              !workspace.snapshot().writable
-                                            }
-                                            onClick={() =>
-                                              fireAndForget(
-                                                workspace.run(async () => {
-                                                  await workspace.engine.resume(
-                                                    entry
-                                                  );
-                                                }, 'Future emails rescheduled.'),
-                                                SURFACE
-                                              )
-                                            }
-                                          >
-                                            Resume
-                                          </Button>
-                                        </Show>
-                                        <Show when={entry.status !== 'stopped'}>
-                                          <Button
-                                            type="button"
-                                            variant="secondary"
-                                            size="sm"
-                                            disabled={
-                                              workspace.busy() ||
-                                              !workspace.snapshot().writable
-                                            }
-                                            onClick={() =>
-                                              fireAndForget(
-                                                workspace.run(
-                                                  () =>
-                                                    workspace.engine.stop(
-                                                      entry,
-                                                      'stopped'
-                                                    ),
-                                                  'Enrollment stopped. Upcoming emails canceled.'
-                                                ),
-                                                SURFACE
-                                              )
-                                            }
-                                          >
-                                            Stop
-                                          </Button>
-                                        </Show>
-                                      </div>
-                                    </div>
-                                    <div class="mt-4 space-y-2 border-t border-edge-muted pt-3">
-                                      <For each={entry.steps}>
-                                        {(step, index) => (
-                                          <div class="flex justify-between gap-3 text-xs">
-                                            <span class="text-ink-muted">
-                                              {index() + 1}. {step.subject}
-                                            </span>
-                                            <Show
-                                              when={workspace.stepIssue(step)}
-                                            >
-                                              {(issue) => (
-                                                <AttentionBadge
-                                                  reason={issue()}
-                                                />
-                                              )}
-                                            </Show>
-                                            <span class="text-ink-subtle">
-                                              {step.status ===
-                                              'delivery_started'
-                                                ? 'Sending or sent'
-                                                : step.status === 'canceled'
-                                                  ? 'Canceled'
-                                                  : `${new Date(step.sendAt).toLocaleString()} · ${step.status === 'queued' && new Date(step.sendAt).getTime() <= Date.now() ? 'Due' : step.status}`}
-                                            </span>
-                                          </div>
-                                        )}
-                                      </For>
-                                    </div>
-                                    <Show when={entry.error}>
-                                      <p
-                                        class="mt-3 text-xs text-failure"
-                                        role="alert"
-                                      >
-                                        {entry.error}
-                                      </p>
-                                    </Show>
-                                    <Show
-                                      when={workspace.enrollmentAttention(
-                                        entry
-                                      )}
-                                    >
-                                      {(reason) => (
-                                        <p
-                                          class="mt-3 text-xs text-failure"
-                                          role="status"
-                                        >
-                                          {attentionDetail(reason())}
-                                        </p>
-                                      )}
-                                    </Show>
-                                  </article>
-                                )}
-                              </For>
-                            </Show>
-                            <p class="text-xs text-ink-subtle">
-                              Scheduled and due statuses are not delivery
-                              receipts. Open your Gmail Sent folder to confirm
-                              delivery.
-                            </p>
-                          </div>
-                        }
-                      >
-                        <Show when={campaign().status === 'active'}>
-                          <p class="mx-auto mb-5 max-w-3xl rounded-lg bg-panel px-4 py-3 text-xs text-ink-muted">
-                            Pause this campaign to edit. Existing enrollments
-                            keep their original email content.
-                          </p>
-                        </Show>
-                        <SequenceEditor
-                          campaign={campaign()}
-                          senders={workspace.senders()}
-                          disabled={!canEdit()}
-                          databaseId={workspace.snapshot().databaseId}
-                          composition={props.capabilities.composition}
-                          onCompositionState={(stepId, field, state) =>
-                            setCompositionStates((states) => ({
-                              ...states,
-                              [compositionKey(campaign().id, stepId, field)]:
-                                state,
-                            }))
-                          }
-                          onChange={setDraft}
-                          onPreview={(step) => {
-                            setPreviewEmail(
-                              workspace.contacts()[0]?.email ?? ''
-                            );
-                            setPreview(step);
-                          }}
-                        />
-                      </Show>
-                    </div>
-                    <Show when={enrollOpen()}>
-                      <EnrollmentDialog
-                        campaign={campaign()}
-                        contacts={workspace.contacts()}
-                        enrolledEmails={entries().map((entry) =>
-                          normalizeEmail(entry.contact.email)
-                        )}
-                        busy={workspace.busy()}
-                        error={workspace.error()}
-                        onClose={() => setEnrollOpen(false)}
-                        onSearchCrm={props.capabilities.searchCrmContacts}
-                        onEnroll={(contacts, startAt) =>
-                          workspace.run(
-                            () =>
-                              workspace.enroll(campaign(), contacts, startAt),
-                            `${contacts.length} contact${contacts.length === 1 ? '' : 's'} enrolled. Emails scheduled.`
-                          )
-                        }
-                      />
-                    </Show>
-                  </>
-                )}
-              </Show>
-            </Show>
-            <Show when={section() === 'contacts'}>
-              <div class="flex-1 overflow-y-auto p-6 lg:p-9">
-                <h2 class="text-2xl font-semibold tracking-tight">Contacts</h2>
-                <p class="mt-2 text-sm text-ink-muted">
-                  Your audience, connected across Macro.
-                </p>
-                <Input
-                  aria-label="Search marketing contacts"
-                  class="my-6 max-w-sm"
-                  placeholder="Search contacts"
-                  value={filter()}
-                  onInput={(event) => setFilter(event.currentTarget.value)}
-                />
-                <div class="overflow-hidden rounded-xl border border-edge-muted">
-                  <For
-                    each={workspace
-                      .contacts()
-                      .filter((contact) =>
-                        `${contact.name} ${contact.email}`
-                          .toLowerCase()
-                          .includes(filter().toLowerCase())
-                      )}
-                  >
-                    {(contact) => (
-                      <button
-                        type="button"
-                        class="flex w-full items-center justify-between gap-3 border-b border-edge-muted px-5 py-4 text-left last:border-0 hover:bg-panel/30"
-                        onClick={() => setContactDetail(contact)}
-                      >
-                        <span class="min-w-0">
-                          <span class="block text-sm font-medium">
-                            {contact.name || contact.email}
-                          </span>
-                          <span class="mt-1 block truncate text-xs text-ink-muted">
-                            {contact.email}
-                          </span>
-                        </span>
-                        <span class="flex items-center gap-3">
-                          <Show when={contact.crmContactId}>
-                            <span class="rounded-md bg-panel px-2 py-1 text-xs text-ink-muted">
-                              CRM
-                            </span>
-                          </Show>
-                          <span class="text-xs text-ink-muted">
-                            {
-                              workspace
-                                .snapshot()
-                                .enrollments.filter(
-                                  (entry) =>
-                                    normalizeEmail(entry.contact.email) ===
-                                    normalizeEmail(contact.email)
-                                ).length
-                            }{' '}
-                            sequences
-                          </span>
-                        </span>
-                      </button>
-                    )}
-                  </For>
-                  <Show when={!workspace.contacts().length}>
-                    <p class="p-10 text-center text-sm text-ink-muted">
-                      Your Macro and Gmail contacts will appear here.
-                    </p>
-                  </Show>
-                </div>
-              </div>
-            </Show>
-            <Show when={section() === 'delivery'}>
-              <div class="mx-auto w-full max-w-3xl flex-1 overflow-y-auto p-6 lg:p-9">
-                <h2 class="text-2xl font-semibold tracking-tight">Delivery</h2>
-                <p class="mt-2 text-sm text-ink-muted">
-                  Choose how your sequences reach people.
-                </p>
-                <section class="mt-7 rounded-xl border border-edge-muted p-6">
-                  <div class="flex justify-between">
-                    <h3 class="text-base font-medium">Connected Gmail</h3>
-                    <span class="text-xs text-success">Available in v1</span>
-                  </div>
-                  <p class="mt-2 text-sm leading-6 text-ink-muted">
-                    Send personal sequences from an inbox you already use.
-                    Scheduled emails continue when you close Macro.
-                  </p>
-                  <div class="mt-4 space-y-3">
-                    <For each={workspace.senders()}>
-                      {(sender) => (
-                        <div class="flex items-center justify-between rounded-lg bg-panel/50 px-4 py-3">
-                          <span class="text-sm">{sender.email}</span>
-                          <span
-                            class="text-xs"
-                            classList={{
-                              'text-success': sender.ready,
-                              'text-warning': !sender.ready,
-                            }}
-                          >
-                            {sender.ready ? 'Connected' : 'Reconnect required'}
-                          </span>
-                        </div>
-                      )}
-                    </For>
-                    <Show when={!workspace.senders().length}>
-                      <p class="rounded-lg bg-panel p-4 text-sm text-ink-muted">
-                        Connect a Gmail inbox in Macro’s email settings to start
-                        sending.
-                      </p>
-                    </Show>
-                  </div>
-                  <p class="mt-4 text-xs leading-5 text-ink-muted">
-                    Gmail account sending limits and your existing Macro plan
-                    apply. This version does not add a separate sequence billing
-                    meter.
-                  </p>
-                </section>
-                <section class="mt-4 rounded-xl border border-edge-muted p-6">
-                  <div class="flex justify-between">
-                    <h3 class="text-base font-medium">SendGrid</h3>
-                    <span class="rounded-full bg-panel px-3 py-1 text-xs text-ink-muted">
-                      Not connected
-                    </span>
-                  </div>
-                  <p class="mt-2 text-sm leading-6 text-ink-muted">
-                    Bulk sending needs a verified sending domain, a server-side
-                    API connection, unsubscribe handling, and a provider billing
-                    plan. It is not available in this version.
-                  </p>
-                </section>
-                <section class="mt-4 rounded-xl border border-edge-muted p-6">
-                  <h3 class="text-sm font-medium">Sequence controls</h3>
-                  <p class="mt-2 text-xs leading-6 text-ink-muted">
-                    Pause or stop enrollments to cancel future emails. Replies,
-                    unsubscribe requests, and delivery failures are handled
-                    manually. Open your Sent folder for confirmed delivery. This
-                    version does not track opens or clicks.
-                  </p>
-                </section>
-              </div>
-            </Show>
-          </Show>
+              {t('emailMarketing.stopOrphans')}
+            </Button>
+          </div>
+        )}
+      </Show>
+    </div>
+  );
+  const touchNavigation = (): JSX.Element => (
+    <Show when={isTouchDevice()}>
+      <Tabs<Section>
+        aria-label={t('emailMarketing.navigation')}
+        iconOnly
+        value={section()}
+        disabled={workspace.busy()}
+        onChange={(next) => fireAndForget(go(next), SURFACE)}
+        options={SECTIONS.map((item) => ({
+          value: item.id,
+          label: sectionLabel(item.id),
+          icon: item.icon,
+        }))}
+      />
+    </Show>
+  );
+  const header = (title?: JSX.Element, actions?: JSX.Element) => (
+    <SectionHeader
+      touchNavigation={touchNavigation()}
+      title={
+        <div class="flex min-w-0 flex-wrap items-center gap-2">
+          <h2 class="truncate text-sm font-semibold">
+            {sectionLabel(section())}
+          </h2>
+          {title}
         </div>
-      </div>
-      <Dialog
-        open={newOpen()}
-        position="center"
-        class="w-[min(480px,calc(100vw-16px))]"
-        onOpenChange={(open) => {
-          if (!workspace.busy()) setNewOpen(open);
-        }}
-      >
-        <ActionDialogShell>
-          <form class="flex min-h-0 flex-col" onSubmit={createCampaign}>
-            <ActionDialogShell.Body>
-              <ActionDialogShell.Header>
-                <ActionDialogShell.Title>
-                  Create a campaign
-                </ActionDialogShell.Title>
-                <ActionDialogShell.Description>
-                  Start with a sequence that feels like you.
-                </ActionDialogShell.Description>
-              </ActionDialogShell.Header>
-              <label class="block space-y-2 text-xs font-medium">
-                Campaign name
-                <Input
-                  aria-label="New campaign name"
-                  value={newName()}
-                  required
-                  maxLength={120}
-                  onInput={(event) => setNewName(event.currentTarget.value)}
-                />
-              </label>
-              <label class="block space-y-2 text-xs font-medium">
-                Starting point
-                <select
-                  aria-label="Campaign template"
-                  class={inputClasses()}
-                  value={template()}
-                  onChange={(event) => setTemplate(event.currentTarget.value)}
-                >
-                  <option value="welcome">Welcome series · 2 emails</option>
-                  <option value="blank">Blank sequence</option>
-                </select>
-              </label>
-              <Show when={workspace.error()}>
-                <p class="text-xs text-failure" role="alert">
-                  {workspace.error()}
-                </p>
-              </Show>
-            </ActionDialogShell.Body>
-            <ActionDialogShell.Footer>
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={workspace.busy()}
-                onClick={() => setNewOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                disabled={!newName().trim() || workspace.busy()}
-              >
-                Create campaign
-              </Button>
-            </ActionDialogShell.Footer>
-          </form>
-        </ActionDialogShell>
-      </Dialog>
-      <Dialog
-        open={!!preview()}
-        position="center"
-        class="w-[min(650px,calc(100vw-16px))]"
-        onOpenChange={(open) => {
-          if (!open) setPreview(undefined);
-        }}
-      >
-        <ActionDialogShell class="max-h-[88vh]">
-          <div class="flex shrink-0 items-start justify-between gap-3 border-b border-edge-divider px-5 py-4">
-            <div>
-              <ActionDialogShell.Title>Email preview</ActionDialogShell.Title>
-              <ActionDialogShell.Description class="mt-1">
-                See the personalized email your contact receives.
-              </ActionDialogShell.Description>
-            </div>
-            <Dialog.CloseButton
-              as={Button}
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Close preview"
-            >
-              <X aria-hidden="true" class="size-4" />
-            </Dialog.CloseButton>
-          </div>
-          <ActionDialogShell.Body>
-            <select
-              aria-label="Preview contact"
-              class={inputClasses()}
-              value={previewEmail()}
-              onChange={(event) => setPreviewEmail(event.currentTarget.value)}
-            >
-              <Show when={!workspace.contacts().length}>
-                <option value="">Alex Morgan · sample contact</option>
-              </Show>
-              <For each={workspace.contacts()}>
-                {(contact) => (
-                  <option value={contact.email}>
-                    {contact.name || contact.email}
-                  </option>
-                )}
-              </For>
-            </select>
-            <div class="overflow-hidden rounded-xl border border-edge-muted">
-              <div class="space-y-2 border-b border-edge-muted p-5">
-                <p class="text-xs text-ink-muted">
-                  To: {previewContact().email}
-                </p>
-                <p class="text-sm font-semibold">
-                  {personalize(preview()?.subject ?? '', previewContact())}
-                </p>
-              </div>
-              <div class="whitespace-pre-wrap p-6 text-sm leading-7">
-                {personalize(preview()?.body ?? '', previewContact())}
-                <p class="mt-6 text-xs text-ink-muted">
-                  If you would prefer not to receive these emails, reply
-                  unsubscribe.
-                </p>
-              </div>
-            </div>
-          </ActionDialogShell.Body>
-        </ActionDialogShell>
-      </Dialog>
-      <Dialog
-        open={!!contactDetail()}
-        position="center"
-        class="w-[min(520px,calc(100vw-16px))]"
-        onOpenChange={(open) => {
-          if (!open) setContactDetail(undefined);
-        }}
-      >
-        <ActionDialogShell>
-          <div class="flex shrink-0 items-start justify-between gap-3 border-b border-edge-divider px-5 py-4">
-            <div class="min-w-0">
-              <ActionDialogShell.Title class="truncate">
-                {contactDetail()?.name || contactDetail()?.email}
-              </ActionDialogShell.Title>
-              <ActionDialogShell.Description class="mt-1 truncate">
-                {contactDetail()?.email}
-              </ActionDialogShell.Description>
-            </div>
-            <Dialog.CloseButton
-              as={Button}
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Close contact"
-            >
-              <X aria-hidden="true" class="size-4" />
-            </Dialog.CloseButton>
-          </div>
-          <ActionDialogShell.Body>
-            <ContactEnrollments
-              attention={workspace.enrollmentAttention}
-              entries={workspace
-                .snapshot()
-                .enrollments.filter(
-                  (entry) =>
-                    normalizeEmail(entry.contact.email) ===
-                    normalizeEmail(contactDetail()?.email ?? '')
-                )}
+      }
+      actions={actions}
+    />
+  );
+  const searchControl = (label: string) => (
+    <ListHeaderSearch
+      label={label}
+      value={search()}
+      onValueChange={setSearch}
+      registerFocus={(focus) => {
+        focusSearch = focus;
+      }}
+    />
+  );
+  const body = (children: JSX.Element) => (
+    <>
+      {banners()}
+      <div class="min-h-0 flex-1 overflow-y-auto">{children}</div>
+    </>
+  );
+
+  return (
+    <ViewShell.Root
+      asidePreferenceKey="email-marketing"
+      class="bg-page text-ink"
+    >
+      <Show when={!isTouchDevice()}>
+        <ViewShell.Aside>
+          <MarketingSidebar
+            section={section()}
+            counts={{
+              campaigns: snapshot().campaigns.length,
+              unsubscribed: snapshot().unsubscribed.length,
+            }}
+            attention={attentionTotal()}
+            canCreate={snapshot().writable}
+            disabled={workspace.busy()}
+            onSelect={(next) => fireAndForget(go(next), SURFACE)}
+            onCreate={openCreate}
+          />
+        </ViewShell.Aside>
+      </Show>
+      <ViewShell.Main aria-label={t('nav.emailMarketing')}>
+        <Switch>
+          <Match when={workspace.loading()}>
+            {header()}
+            <ListSkeleton.Root label={t('emailMarketing.loading')} class="px-4">
+              <ListSkeleton.Row>
+                <ListSkeleton.Bar class="h-4 w-1/2" />
+              </ListSkeleton.Row>
+              <ListSkeleton.Row>
+                <ListSkeleton.Bar class="h-4 w-2/3" />
+              </ListSkeleton.Row>
+              <ListSkeleton.Row>
+                <ListSkeleton.Bar class="h-4 w-2/5" />
+              </ListSkeleton.Row>
+            </ListSkeleton.Root>
+          </Match>
+          <Match when={!workspace.loaded()}>
+            {/* No records yet: an error must not look like an empty account. */}
+            {header()}
+            <EmptyStatePanel
+              centered
+              title={t('emailMarketing.loadFailed')}
+              description={errorMessage(workspace.error())}
+              primaryAction={{
+                label: t('emailMarketing.refresh'),
+                onClick: () => fireAndForget(workspace.initialize(), SURFACE),
+              }}
             />
-            <Show when={contactDetail()?.crmContactId}>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => props.capabilities.openContact(contactDetail()!)}
-              >
-                Open CRM contact ↗
-              </Button>
+          </Match>
+          <Match when={section() === 'campaigns' && shown()}>
+            {(campaign) => (
+              <CampaignDetail
+                workspace={workspace}
+                campaign={campaign()}
+                changed={changed()}
+                conflict={conflict()}
+                tab={tab()}
+                touchNavigation={touchNavigation()}
+                banners={banners()}
+                onTab={setTab}
+                onChange={change}
+                onDiscard={() => setEdit(undefined)}
+                onBack={() => fireAndForget(go('campaigns'), SURFACE)}
+                onSave={(activate) => fireAndForget(save(activate), SURFACE)}
+                onPause={() => fireAndForget(pause(), SURFACE)}
+                onEnroll={() => {
+                  rememberOpener();
+                  setEnrolling(true);
+                }}
+                onDelete={() => {
+                  rememberOpener();
+                  setDeleting(true);
+                }}
+                onPreview={opening(setPreview)}
+                onStop={stop}
+                onResume={resume}
+                onUnsubscribe={opening(setUnsubscribing)}
+                onOpenContact={opening(setContact)}
+                onOpenThread={props.capabilities.openThread}
+              />
+            )}
+          </Match>
+          <Match when={section() === 'campaigns'}>
+            {header(
+              <Tabs<StatusFilter>
+                aria-label={t('emailMarketing.filterStatus')}
+                value={statusFilter()}
+                onChange={setStatusFilter}
+                options={[
+                  { value: 'all', label: t('emailMarketing.filterAll') },
+                  {
+                    value: 'active',
+                    label: t('emailMarketing.statusActive'),
+                  },
+                  { value: 'draft', label: t('emailMarketing.statusDraft') },
+                  { value: 'paused', label: t('emailMarketing.statusPaused') },
+                ]}
+              />,
+              <>
+                <ViewCreateButton
+                  aria-label={t('emailMarketing.newCampaign')}
+                  disabled={!snapshot().writable || workspace.busy()}
+                  onClick={openCreate}
+                />
+                {searchControl(t('emailMarketing.searchCampaigns'))}
+              </>
+            )}
+            {body(
+              <CampaignList
+                rows={campaignRows()}
+                filtered={!!search() || statusFilter() !== 'all'}
+                canCreate={snapshot().writable && !workspace.busy()}
+                onCreate={openCreate}
+                onOpen={openCampaign}
+              />
+            )}
+          </Match>
+          <Match when={section() === 'contacts'}>
+            {header(
+              undefined,
+              searchControl(t('emailMarketing.searchContacts'))
+            )}
+            {body(
+              <ContactList
+                rows={contactRows()}
+                filtered={!!search()}
+                onOpen={opening(setContact)}
+              />
+            )}
+          </Match>
+          <Match when={section() === 'unsubscribed'}>
+            {header()}
+            {body(<UnsubscribedList entries={snapshot().unsubscribed} />)}
+          </Match>
+          <Match when={section() === 'delivery'}>
+            {header(
+              undefined,
+              <Show when={snapshot().databaseId}>
+                {(id) => (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => props.capabilities.openDatabase(id())}
+                  >
+                    {t('emailMarketing.openDatabase')}
+                  </Button>
+                )}
+              </Show>
+            )}
+            {body(<DeliveryPanel senders={workspace.senders()} />)}
+          </Match>
+        </Switch>
+      </ViewShell.Main>
+      {/* Mounted per opening, so every new campaign starts blank. */}
+      <Show when={creating()}>
+        <NewCampaignDialog
+          open
+          busy={workspace.busy()}
+          error={workspace.error()}
+          onOpenChange={setCreating}
+          onCloseAutoFocus={returnFocus}
+          onCreate={(name, template) =>
+            fireAndForget(create(name, template), SURFACE)
+          }
+        />
+      </Show>
+      <Show when={shown()}>
+        {(campaign) => (
+          <>
+            <PreviewDialog
+              campaign={campaign()}
+              stepIndex={preview()}
+              contacts={workspace.contacts()}
+              onClose={() => setPreview(undefined)}
+              onCloseAutoFocus={returnFocus}
+            />
+            <Show when={enrolling()}>
+              <EnrollmentDialog
+                campaign={campaign()}
+                contacts={workspace.contacts()}
+                // A failed enrollment with nothing sent can be retried in place.
+                enrolledEmails={snapshot()
+                  .enrollments.filter(
+                    (entry) =>
+                      entry.campaignId === campaign().id &&
+                      !isReplaceable(entry)
+                  )
+                  .map((entry) => normalizeEmail(entry.contact.email))}
+                isUnsubscribed={(email) => isUnsubscribed(snapshot(), email)}
+                busy={workspace.busy()}
+                error={workspace.error()}
+                onClose={() => setEnrolling(false)}
+                onCloseAutoFocus={returnFocus}
+                onSearchCrm={props.capabilities.searchCrmContacts}
+                onEnroll={(people, startAt) =>
+                  act(
+                    'enroll',
+                    () => workspace.enroll(campaign(), people, startAt),
+                    () =>
+                      t('emailMarketing.noticeEnrolled', {
+                        count: people.length,
+                      }),
+                    {
+                      campaign_id: campaign().id,
+                      contacts: people.length,
+                      steps: campaign().steps.length,
+                    }
+                  )
+                }
+              />
             </Show>
-          </ActionDialogShell.Body>
-        </ActionDialogShell>
-      </Dialog>
-    </main>
+            <DeleteDialog
+              open={deleting()}
+              onOpenChange={setDeleting}
+              onCloseAutoFocus={returnFocus}
+              pending={workspace.busy()}
+              title={t('emailMarketing.deleteTitle', {
+                name: campaign().name,
+              })}
+              body={t('emailMarketing.deleteBody')}
+              deleteLabel={t('emailMarketing.delete')}
+              cancelLabel={t('emailMarketing.cancel')}
+              onDelete={() => fireAndForget(remove(), SURFACE)}
+            />
+          </>
+        )}
+      </Show>
+      <ContactDialog
+        contact={contact()}
+        entries={enrollmentsOf(contact()?.email ?? '')}
+        unsubscribed={
+          !!contact() && isUnsubscribed(snapshot(), contact()!.email)
+        }
+        disabled={workspace.busy() || !snapshot().writable}
+        attention={workspace.enrollmentAttention}
+        onClose={() => setContact(undefined)}
+        onCloseAutoFocus={returnFocus}
+        onOpenCrm={props.capabilities.openContact}
+        onUnsubscribe={setUnsubscribing}
+      />
+      <ConfirmDialog
+        open={!!unsubscribing()}
+        onOpenChange={(open) => {
+          if (!open) setUnsubscribing(undefined);
+        }}
+        onCloseAutoFocus={returnFocus}
+        pending={workspace.busy()}
+        tone="danger"
+        title={t('emailMarketing.unsubscribeTitle', {
+          email: unsubscribing()?.email ?? '',
+        })}
+        body={t('emailMarketing.unsubscribeBody')}
+        confirmLabel={t('emailMarketing.markUnsubscribed')}
+        cancelLabel={t('emailMarketing.cancel')}
+        onConfirm={() => fireAndForget(unsubscribe(), SURFACE)}
+      />
+    </ViewShell.Root>
   );
 }

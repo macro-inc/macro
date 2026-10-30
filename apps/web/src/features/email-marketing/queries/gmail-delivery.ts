@@ -1,6 +1,7 @@
 import { throwOnErr } from '@core/util/result';
 import { emailClient } from '@service-email/client';
 import type { DraftRef, SequenceDelivery } from '../context/contracts';
+import { MarketingError } from '../core/errors';
 import type { DeliveryIssue } from '../core/model';
 
 type ResultErrors = { code: string; message: string }[];
@@ -8,6 +9,9 @@ type ResultErrors = { code: string; message: string }[];
 function describe(errors: ResultErrors) {
   return errors.map((error) => error.message).join('; ');
 }
+
+/** Marks scheduled sends as sequence steps, which Mail's lists leave out. */
+const SEQUENCE_SOURCE = 'sequence';
 
 /** Past-due steps still on the scheduler after this long are reported as stalled. */
 const STALLED_AFTER_MS = 15 * 60_000;
@@ -29,40 +33,51 @@ type DraftState =
       generation?: number;
     };
 
+/** The message's delivery state from one thread, if the thread holds it. */
+async function readFromThread(
+  threadId: string,
+  draftId: string
+): Promise<DraftState | undefined> {
+  const thread = await emailClient.getThread({
+    thread_id: threadId,
+    limit: 50,
+  });
+  if (thread.isErr()) return undefined;
+  const message = thread.value.thread.messages.find(
+    (item) => item.db_id === draftId
+  );
+  if (!message) return undefined;
+  return {
+    kind: 'found',
+    sent: message.is_sent,
+    delivering:
+      message.scheduled_send_status === 'sending' ||
+      message.scheduled_send_status === 'unconfirmed',
+    status: message.scheduled_send_status,
+    generation: message.draft_generation,
+  };
+}
+
 /**
- * Read a draft's delivery state. The thread read carries send status; the
- * message read is a fallback for rows saved before thread ids were stored.
+ * Read a draft's delivery state. The thread read carries send status. The
+ * message read decides whether it still exists: inbox sync can move a sent
+ * step into another thread, and rows saved before thread ids omit one.
  */
 async function readDraftState(draft: DraftRef): Promise<DraftState> {
   if (draft.threadId) {
-    const thread = await emailClient.getThread({
-      thread_id: draft.threadId,
-      limit: 50,
-    });
-    if (thread.isOk()) {
-      const message = thread.value.thread.messages.find(
-        (item) => item.db_id === draft.draftId
-      );
-      if (!message) return { kind: 'gone' };
-      return {
-        kind: 'found',
-        sent: message.is_sent,
-        delivering:
-          message.scheduled_send_status === 'sending' ||
-          message.scheduled_send_status === 'unconfirmed',
-        status: message.scheduled_send_status,
-        generation: message.draft_generation,
-      };
-    }
-    if (thread.error.every((error) => error.code === 'NOT_FOUND'))
-      return { kind: 'gone' };
+    const state = await readFromThread(draft.threadId, draft.draftId);
+    if (state) return state;
   }
   const message = await emailClient.getMessage({ message_id: draft.draftId });
-  if (message.isOk())
-    return { kind: 'found', generation: message.value.draft_generation };
-  if (message.error.every((error) => error.code === 'NOT_FOUND'))
-    return { kind: 'gone' };
-  return { kind: 'unknown' };
+  if (message.isErr())
+    return message.error.every((error) => error.code === 'NOT_FOUND')
+      ? { kind: 'gone' }
+      : { kind: 'unknown' };
+  const moved =
+    message.value.thread_db_id !== draft.threadId
+      ? await readFromThread(message.value.thread_db_id, draft.draftId)
+      : undefined;
+  return moved ?? { kind: 'found', generation: message.value.draft_generation };
 }
 
 async function cancelOnce(
@@ -109,27 +124,29 @@ async function resolveConflict(
     if (state.generation !== undefined && state.generation !== generation)
       return { retry: state.generation };
   }
-  throw new Error(`Could not cancel a scheduled email: ${reason}`);
+  throw new MarketingError('cancelFailed', { reason });
 }
 
 export function createGmailSequenceDelivery(): SequenceDelivery {
   return {
-    async createDraft(senderId, email, subject, body) {
+    async createDraft(senderId, content) {
       const result = await throwOnErr(() =>
         emailClient.createDraft(
           {
             draft: {
-              subject,
-              body_text: body,
-              to: [{ email }],
+              subject: content.subject,
+              body_text: content.body,
+              to: [{ email: content.email }],
               include_signature: false,
+              replying_to_id: content.replyingToId,
+              // Each step is its own draft; never continue the user's reply.
+              reuse_reply_draft: false,
             },
           },
           senderId
         )
       );
-      if (!result.draft.db_id)
-        throw new Error('Gmail did not return a draft ID.');
+      if (!result.draft.db_id) throw new MarketingError('draftIdMissing');
       return {
         id: result.draft.db_id,
         generation: result.draft.draft_generation ?? 0,
@@ -144,6 +161,7 @@ export function createGmailSequenceDelivery(): SequenceDelivery {
             draftGeneration: draft.generation,
             send_time: sendAt,
             include_signature: false,
+            source: SEQUENCE_SOURCE,
           },
           senderId
         )
@@ -155,21 +173,28 @@ export function createGmailSequenceDelivery(): SequenceDelivery {
       // The draft was edited in the composer; cancel it at its new generation.
       const second = await cancelOnce(senderId, draft, first.retry);
       if (typeof second === 'string') return second;
-      throw new Error(
-        'Could not cancel a scheduled email because it keeps changing. Check Drafts > Scheduled.'
-      );
+      throw new MarketingError('cancelKeepsChanging');
     },
     async inspect(senderId, steps) {
+      // Only this inbox's sequence sends, pending or failed, never sent ones.
       const scheduled = new Set<string>();
+      let complete = false;
       for (let page = 0; page < MAX_SCHEDULED_PAGES; page++) {
         const result = await throwOnErr(() =>
           emailClient.getScheduledMessages(
-            { offset: page * SCHEDULED_PAGE_SIZE, limit: SCHEDULED_PAGE_SIZE },
+            {
+              offset: page * SCHEDULED_PAGE_SIZE,
+              limit: SCHEDULED_PAGE_SIZE,
+              source: SEQUENCE_SOURCE,
+            },
             senderId
           )
         );
         for (const message of result.messages) scheduled.add(message.db_id);
-        if (result.messages.length < SCHEDULED_PAGE_SIZE) break;
+        if (result.messages.length < SCHEDULED_PAGE_SIZE) {
+          complete = true;
+          break;
+        }
       }
       const now = Date.now();
       const issues: Record<string, DeliveryIssue> = {};
@@ -179,18 +204,24 @@ export function createGmailSequenceDelivery(): SequenceDelivery {
         const queued = scheduled.has(step.draftId);
         if (queued && due < now - STALLED_AFTER_MS) stalled.push(step);
         // Removed from the scheduler before its time: deleted or sent elsewhere.
-        else if (!queued && due > now) issues[step.draftId] = 'missing';
+        // Past the page cap an unseen step may simply be on a later page.
+        else if (!queued && complete && due > now)
+          issues[step.draftId] = 'missing';
       }
       for (const [index, step] of stalled.entries()) {
         issues[step.draftId] = 'stalled';
-        if (index >= MAX_STATUS_READS || !step.threadId) continue;
+        if (index >= MAX_STATUS_READS) continue;
         const state = await readDraftState(step);
         if (state.kind !== 'found') continue;
         if (state.status === 'failed') issues[step.draftId] = 'failed';
         else if (state.status === 'unconfirmed')
           issues[step.draftId] = 'unconfirmed';
       }
-      return issues;
+      const live = new Set(steps.map((step) => step.draftId));
+      return {
+        issues,
+        untracked: [...scheduled].filter((draftId) => !live.has(draftId)),
+      };
     },
   };
 }
