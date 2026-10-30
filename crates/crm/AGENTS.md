@@ -31,7 +31,7 @@ tools/HTTP/GraphQL surfaces over them.
 
 - Cargo features gate what's pulled in: `lookup` and `search` are read-only,
   sqlx-only slices for other domains to depend on without pulling in
-  `reqwest`/`axum`; pick the narrowest feature for a new caller.
+  `unfurl`/`axum`; pick the narrowest feature for a new caller.
 - Depends on: `entity_access` (ports-and-adapters base), `databases` (ports),
   `filter_ast`, `item_filters`, `macro_authorization`, `properties`.
 - Used by: `email`, `memory`, `ai_tools`, `soup`/`models_soup`, `graphql_crm`,
@@ -63,11 +63,15 @@ tools/HTTP/GraphQL surfaces over them.
   domains and addresses constrain the viewer's mailbox, not team email access.
 
 - Company names/logos live in the global `crm_domain_directory`. Only the
-  email pubsub workers carry a real `CompanyMetadataResolver`; every other
+  email pubsub workers carry a real `CompanyMetadataResolver`, using public
+  homepage metadata through `unfurl`; every other
   binary uses `NoOpCompanyMetadataResolver`, which leaves a pending entry
   (NULL `enriched_at`) that `CrmServiceImpl::enrich_pending_domains` resolves
   later with bounded retries. Never store an empty entry for a domain no
   resolver answered for: resolved entries are permanent.
+- Apollo enrichment has been removed. Historical provider fields in the
+  directory remain readable; do not clear existing metadata or drop columns
+  as part of provider removal.
 - The Sales migration (`SALES_BACKFILL.md`) is forward-only and additive —
   its down migration refuses to erase completion or user edits; never revert
   it to undo a bad migration, only the application code that reads it.
