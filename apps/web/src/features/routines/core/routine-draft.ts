@@ -14,6 +14,7 @@ import {
   agentStep,
   firstAgent,
   type StepDraft,
+  updateStep,
   validateSteps,
 } from './routine-steps';
 import { routineTargetSchema } from './routine-target';
@@ -79,7 +80,19 @@ export function withDraftSteps(
     return draft.prompt === only.instructions && draft.target === only.target
       ? draft
       : { ...draft, prompt: only.instructions, target: only.target };
-  return { ...draft, steps };
+  const base = draft.steps === undefined ? draft.basePrompt?.trim() : undefined;
+  return {
+    ...draft,
+    // The program's agent step runs with everything the single agent did,
+    // as the scheduler reads an old task.
+    steps: base
+      ? updateStep(steps, SINGLE_AGENT_STEP_ID, (step) =>
+          step.kind === 'agent'
+            ? { ...step, instructions: `${base}\n\n${step.instructions}` }
+            : step
+        )
+      : steps,
+  };
 }
 
 /**

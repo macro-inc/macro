@@ -600,4 +600,31 @@ describe('routines with steps', () => {
       ],
     });
   });
+
+  it('keeps instructions stored ahead of the prompt when steps are added', () => {
+    const stored = {
+      ...events,
+      task: { ...(events.task as object), prompt: 'Be brief.' },
+    } as ScheduledAction;
+    const simple = draftFromSchedule(stored)!;
+    expect(simple.prompt).toBe('Summarize updates');
+    const steps = draftSteps(simple);
+    const renamed = withDraftSteps(simple, [
+      { ...steps[0]!, kind: 'agent', instructions: 'New' } as never,
+    ]);
+    expect(draftToUpdateBody(renamed, stored)?.task).toMatchObject({
+      prompt: 'Be brief.',
+      user_prompt: 'New',
+    });
+    const added = withDraftSteps(simple, [
+      ...steps,
+      { id: 'x', kind: 'tool', tool: 'ArchiveEmail', arguments: {} },
+    ]);
+    expect(draftToUpdateBody(added, stored)?.task).toMatchObject({
+      steps: [
+        { type: 'agent', instructions: 'Be brief.\n\nSummarize updates' },
+        { type: 'tool' },
+      ],
+    });
+  });
 });

@@ -24,6 +24,11 @@ export type ScheduleDraft = {
   runVisibility?: RunVisibility;
   name: string;
   prompt: string;
+  /**
+   * Instructions a single agent routine written through the API stores ahead
+   * of `prompt`. Kept as they are, and joined to `prompt` if steps are added.
+   */
+  basePrompt?: string;
   frequency: ScheduleFrequency;
   time: string;
   /** Day-of-week values using the cron crate's 1-7 numbering (1=Sun). */

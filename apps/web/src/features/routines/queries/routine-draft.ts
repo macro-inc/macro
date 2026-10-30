@@ -138,6 +138,7 @@ export function draftFromSchedule(
     id: schedule.id ?? undefined,
     name: schedule.name,
     prompt: task.user_prompt,
+    ...(task.prompt.trim() ? { basePrompt: task.prompt } : {}),
     frequency: parsed.frequency,
     time: parsed.time,
     daysOfWeek: parsed.daysOfWeek,
