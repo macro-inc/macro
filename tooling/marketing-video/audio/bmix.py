@@ -10,8 +10,8 @@ major pentatonic as the system fills; the premium kit is machined (module snaps,
 press, LEDs, a chime when the system comes on).
 
     python3 bmix.py cues.json out.wav      cues.json from `node render.mjs cues` (PAGE=blocks.html or blocks2.html)
-FF=/path/to/ffmpeg measures loudness. The result is 48 kHz stereo at about -16 LUFS with true peaks at -1.8 dBTP, which
-leaves room for the AAC encode (it adds a few tenths of a dB) to stay under -1 dBTP.
+FF=/path/to/ffmpeg measures loudness. The result is 48 kHz stereo at about -16 LUFS with true peaks at -2.5 dBTP, which
+leaves room for the AAC encode (it adds up to about 1.3 dB on the sharpest clicks) to stay under -1 dBTP.
 """
 import json
 import os
@@ -491,7 +491,7 @@ def convolve(x, h):
     return y
 
 
-def tp_limit(x, ceil_db=-1.8, rel=0.06, over=4):
+def tp_limit(x, ceil_db=-2.5, rel=0.06, over=4):
     """Look-ahead limiter on the true peak: the signal is band-limited-interpolated 4x to find the peaks between samples,
     the gain is already down when a peak arrives (1.5 ms look-ahead, smoothed), and recovers with a short release."""
     n = len(x)
