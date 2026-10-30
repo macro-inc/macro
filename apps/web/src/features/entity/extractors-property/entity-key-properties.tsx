@@ -3,7 +3,7 @@ import { ScopedPortal } from '@core/component/ScopedPortal';
 import UsersIcon from '@icon/system/regular/users.svg';
 import { Property } from '@property';
 import { Modals } from '@property/component/modal';
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
@@ -193,6 +193,18 @@ function KeyPropertiesRow(props: {
               const isMultiUserEntity = () =>
                 isUserEntity() && getEntityValues(shown()).length > 1;
 
+              const hasStatusOrUrgentIcon = () => {
+                const property = shown();
+                return (
+                  property.propertyDefinitionId ===
+                    SYSTEM_PROPERTY_IDS.STATUS ||
+                  (property.propertyDefinitionId ===
+                    SYSTEM_PROPERTY_IDS.PRIORITY &&
+                    property.valueType === 'SELECT_STRING' &&
+                    property.value?.[0] === PROPERTY_OPTION_IDS.PRIORITY.URGENT)
+                );
+              };
+
               return (
                 <>
                   <Property.Tooltip property={shown()}>
@@ -215,7 +227,12 @@ function KeyPropertiesRow(props: {
                           fallback={
                             <Property.Icon
                               property={shown()}
-                              class="shrink-0 @max-2xl/u-list:size-4 mobile:size-5"
+                              class={cn(
+                                'shrink-0',
+                                hasStatusOrUrgentIcon()
+                                  ? 'size-4.5'
+                                  : '@max-2xl/u-list:size-4 mobile:size-5'
+                              )}
                             />
                           }
                         >
@@ -224,7 +241,11 @@ function KeyPropertiesRow(props: {
                               propertyDefinitionId={
                                 shown().propertyDefinitionId
                               }
-                              class="size-3.5 @max-2xl/u-list:size-4 mobile:size-5"
+                              class={
+                                hasStatusOrUrgentIcon()
+                                  ? 'size-4.5'
+                                  : 'size-3.5 @max-2xl/u-list:size-4 mobile:size-5'
+                              }
                             />
                           </Match>
                           <Match when={isMultiUserEntity()}>
