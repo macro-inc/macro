@@ -1,3 +1,4 @@
+import { compareTimelinePositions } from '@core/util/message-timeline';
 import type { UnifiedNotification } from '@notifications/types';
 import type { UnreadDestinationElements } from './create-unread-destination-registry';
 
@@ -62,6 +63,13 @@ export function unreadThreads(
 export type ThreadPosition = { id: string; created_at: string };
 export type VisibleThreadRange = { first: string; last: string };
 
+export type ThreadRowOrder = {
+  /** Loaded rows in the order the list renders them, oldest first. */
+  rows: readonly ThreadPosition[];
+  /** Thread roots resolved outside the loaded window, keyed by id. */
+  unloaded: ReadonlyMap<string, ThreadPosition>;
+};
+
 export type UnreadNotificationChip = {
   thread: UnreadThread;
   count: number;
@@ -70,17 +78,40 @@ export type UnreadNotificationChip = {
 
 export type UnreadDestinationPosition = 'above' | 'below' | 'visible';
 
-function compareThreads(a: ThreadPosition, b: ThreadPosition) {
-  return (
-    Date.parse(a.created_at) - Date.parse(b.created_at) ||
-    a.id.localeCompare(b.id)
+/**
+ * Where a thread sits when none of it is rendered. Rows are placed by the order
+ * the list shows them, not by timestamp: concurrent realtime inserts append in
+ * delivery order, so a row can sit below the viewport while carrying an older
+ * `created_at` than the rows above it.
+ */
+function placeUnrenderedThread(
+  thread: UnreadThread,
+  order: ThreadRowOrder,
+  visible: VisibleThreadRange
+): UnreadDestinationPosition | undefined {
+  const first = order.rows.findIndex((row) => row.id === visible.first);
+  const last = order.rows.findIndex((row) => row.id === visible.last);
+  if (first < 0 || last < 0) return;
+  const row = order.rows.findIndex(
+    (candidate) => candidate.id === thread.threadId
   );
+  if (row >= 0) return row < first ? 'above' : row > last ? 'below' : 'visible';
+  // An unloaded root sits outside the window entirely, so one bound decides it.
+  const root = order.unloaded.get(thread.threadId);
+  const oldest = order.rows[0];
+  if (!root || !oldest) return;
+  return compareTimelinePositions(
+    { id: root.id, createdAt: root.created_at },
+    { id: oldest.id, createdAt: oldest.created_at }
+  ) < 0
+    ? 'above'
+    : 'below';
 }
 
 /** Count only offscreen threads; keep newest-first navigation among those left. */
 export function unreadNotificationChip(
   threads: readonly UnreadThreadGroup[],
-  positions: ReadonlyMap<string, ThreadPosition>,
+  order: ThreadRowOrder,
   visible: VisibleThreadRange | undefined,
   destinations: ReadonlyMap<string, UnreadDestinationPosition> = new Map()
 ): UnreadNotificationChip | undefined {
@@ -89,17 +120,10 @@ export function unreadNotificationChip(
   let targetDirection: 'above' | 'below' | undefined;
   let count = 0;
   for (const thread of threads) {
-    const root = positions.get(thread.threadId);
-    const first = positions.get(visible.first);
-    const last = positions.get(visible.last);
-    const fallback =
-      root && first && last
-        ? compareThreads(root, first) < 0
-          ? 'above'
-          : compareThreads(root, last) > 0
-            ? 'below'
-            : undefined
-        : undefined;
+    const root =
+      order.rows.find((row) => row.id === thread.threadId) ??
+      order.unloaded.get(thread.threadId);
+    const fallback = placeUnrenderedThread(thread, order, visible);
     for (const messageId of thread.messageIds) {
       const direction = destinations.get(messageId) ?? fallback;
       // A mounted thread with no destination yet is waiting for layout/data.
