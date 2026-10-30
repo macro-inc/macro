@@ -30,6 +30,7 @@ weight, compiles CFF `.otf`, TrueType `.ttf` and `.woff2`, then matches the
 - Add kerning: classes and pairs in `kerning.py` (values at Regular).
 - Proof: `python3 build.py --proof --only <module> --out /tmp/proofs` or
   `python3 build.py --zoom a,b --weights 400,800`.
+- Check variable compatibility: `python3 build.py --compat --only <module>`.
 
 ## Checks
 
@@ -41,9 +42,10 @@ weight, compiles CFF `.otf`, TrueType `.ttf` and `.woff2`, then matches the
 
 ## Gotchas
 
-- Keep a glyph's construction identical across weights. Shapes that touch or
-  overlap only at some weights change the contour structure and break the
-  variable build (`test_masters_are_interpolation_compatible`).
+- Keep a glyph's topology identical across weights. `compat.py` absorbs
+  contour order, start points and extra smooth nodes, but not a different
+  number of contours or corners. Shapes that touch, or meet exactly on a
+  centre line, at some weights only cause that; `--compat` names the glyph.
 - `geom.chamfer`, `trap` and `notch` return regions to subtract, not shapes
   to add.
 - pathops outlines are counter-clockwise (PostScript order); `fontbuild.py`

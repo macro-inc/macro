@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.join(HERE, "..", "src"))
 
 from kernel_sans import glyphs  # noqa: E402
 from kernel_sans import params as P  # noqa: E402
-from kernel_sans.variable import DEFAULT, MASTERS, IncompatibleGlyph, _contours, _match  # noqa: E402
+from kernel_sans.variable import MASTERS, compatible_outlines  # noqa: E402
 
 # Basic Latin, Latin-1 Supplement, the rest of Windows-1252, and extras.
 REQUIRED = (
@@ -83,17 +83,8 @@ class OutlineTest(unittest.TestCase):
                     self.assertGreater(abs(bold[name].shape.path.area), abs(light[name].shape.path.area))
 
     def test_masters_are_interpolation_compatible(self):
-        sets = {w: _Drawn.at(w) for w in MASTERS}
-        bad = {}
-        for name in sets[DEFAULT]:
-            base = _contours(sets[DEFAULT][name].shape)
-            for w in MASTERS:
-                if w == DEFAULT:
-                    continue
-                try:
-                    _match(base, _contours(sets[w][name].shape))
-                except IncompatibleGlyph as e:
-                    bad[f"{name}@{w}"] = str(e)
+        drawn = {w: _Drawn.at(w) for w in MASTERS}
+        _, bad = compatible_outlines(drawn, list(drawn[MASTERS[0]]))
         self.assertFalse(bad, "\n".join(f"{k}: {v}" for k, v in sorted(bad.items())))
 
 

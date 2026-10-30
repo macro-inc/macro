@@ -4,6 +4,7 @@
     python3 build.py                     # every weight -> fonts/{otf,ttf,woff2,variable}
     python3 build.py --proof --only lower_round [--weights 300,400,800] [--out DIR]
     python3 build.py --zoom a,b,c [--weights 400] [--cell 420] [--out DIR]
+    python3 build.py --compat [--only lower_round]   # variable-font compatibility
 
 `--proof` draws only the named glyph modules (plus `core`), tolerates broken
 modules, and writes glyph sheets and text proofs as PNGs to proofs/ (or --out).
@@ -50,6 +51,23 @@ def build_static(wght, out_dir, formats, strict=True):
             font.save(path)
         paths[fmt] = path
     return paths, drawn, errors
+
+
+def compat(only):
+    """Report glyphs whose 300/400/800 outlines can't be made point-compatible."""
+    from kernel_sans.variable import MASTERS, compatible_outlines
+
+    for mod, err in glyphs.load_modules(only=only, strict=False).items():
+        print(f"!! module {mod} failed to import:\n{err}", file=sys.stderr)
+    drawn = {w: glyphs.Drawer(P.params(w), strict=False).draw_all() for w in MASTERS}
+    names = [n for n in drawn[MASTERS[0]] if all(n in drawn[w] for w in MASTERS)]
+    if only:
+        names = [n for n in names if glyphs.REGISTRY[n].module in only]
+    _, bad = compatible_outlines(drawn, names)
+    for name, why in sorted(bad.items()):
+        print(f"{name}: {why}")
+    print(f"{len(names) - len(bad)}/{len(names)} glyphs interpolation-compatible")
+    return 1 if bad else 0
 
 
 def zoom(names, weights, out_dir, cell):
@@ -114,10 +132,13 @@ def main():
     ap.add_argument("--formats", default="otf,ttf,woff2")
     ap.add_argument("--no-variable", action="store_true")
     ap.add_argument("--zoom", default="", help="comma-separated glyph names to render large")
+    ap.add_argument("--compat", action="store_true", help="check variable-font compatibility (with --only)")
     ap.add_argument("--cell", type=int, default=420, help="cell height in px for --zoom")
     ap.add_argument("--specimen-embed", default="", help="also write a self-contained specimen to this path")
     args = ap.parse_args()
     only = [m for m in args.only.split(",") if m]
+    if args.compat:
+        sys.exit(compat(only))
     if args.zoom:
         weights = [int(w) for w in args.weights.split(",") if w] or [300, 400, 800]
         zoom(args.zoom.split(","), weights, args.out or os.path.join(HERE, "proofs"), args.cell)
