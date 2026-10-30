@@ -15,7 +15,7 @@ use model_entity::{Entity, EntityType};
 use model_owner::Owner;
 use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{agent_session::SoupAgentSession, item::SoupItem};
-use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
+use sqlx::{Arguments, FromRow, PgPool, Postgres, QueryBuilder, postgres::PgArguments};
 use uuid::Uuid;
 
 use crate::domain::models::{AdvancedSortParams, SimpleSortQuery, SimpleSortRequest};
@@ -185,9 +185,17 @@ pub(super) async fn viewable_by_ids(
     if ids.is_empty() {
         return Ok(Vec::new());
     }
-    sqlx::query_as::<_, AgentSessionRow>(&format!("{ROW_SQL} WHERE s.id = ANY($2)"))
-        .bind(viewer.as_ref().map(|user| user.as_ref().to_owned()))
-        .bind(ids)
+    // `ROW_SQL` reads the viewer as `$1`, so it is bound before the ids.
+    let mut arguments = PgArguments::default();
+    arguments
+        .add(viewer.as_ref().map(|user| user.as_ref().to_owned()))
+        .map_err(sqlx::Error::Encode)?;
+    let mut query = QueryBuilder::<Postgres>::with_arguments(ROW_SQL, arguments);
+    query.push(" WHERE s.id = ANY(");
+    query.push_bind(ids);
+    query.push(")");
+    query
+        .build_query_as::<AgentSessionRow>()
         .fetch_all(db)
         .await?
         .into_iter()

@@ -223,7 +223,7 @@ where
                         permission,
                     )
                     .ok()
-                    .map(|receipt| receipt.entity_permission().clone());
+                    .map(|receipt| *receipt.entity_permission());
                     result.insert(entity, held);
                 }
                 Err(

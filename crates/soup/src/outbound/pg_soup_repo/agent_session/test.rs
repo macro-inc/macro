@@ -611,11 +611,31 @@ async fn viewable_reads_hydrate_sessions_the_listing_never_reaches(
         "the listing's by-ID read keeps its access predicate"
     );
 
-    for viewer in [Some(stranger), None] {
+    sqlx::query!(
+        r#"
+        INSERT INTO "UserHistory" ("userId", "itemId", "itemType", "updatedAt")
+        VALUES ($1, $2, 'agent_session', '2026-01-04')
+        "#,
+        STRANGER,
+        fixture.private.to_string(),
+    )
+    .execute(&pool)
+    .await?;
+
+    for (viewer, viewed) in [(Some(stranger), true), (None, false)] {
+        let items = viewable_by_ids(&pool, viewer, &requested).await?;
         assert_eq!(
-            ids(&viewable_by_ids(&pool, viewer, &requested).await?),
+            ids(&items),
             vec![fixture.private],
             "a receipt already authorized the read"
+        );
+        let SoupItem::AgentSession(session) = &items[0] else {
+            unreachable!("ids matched an agent session");
+        };
+        assert_eq!(
+            session.viewed_at.is_some(),
+            viewed,
+            "only the viewer's own history joins"
         );
     }
     Ok(())
