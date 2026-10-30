@@ -80,3 +80,9 @@ export const SKIP_DOM_SELECTION_TAG = 'skip-dom-selection';
  * The update was triggered by editor.focus()
  */
 export const FOCUS_TAG = 'focus';
+
+/**
+ * The marker a chat agent's reply carries while its turn runs, read as text
+ * in notification excerpts, search, and plain-text previews.
+ */
+export const PENDING_REPLY_TEXT = 'Thinking…';

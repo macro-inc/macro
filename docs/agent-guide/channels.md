@@ -142,8 +142,9 @@ step in progress, a label
 such as `Ran`, `Read`, `Edited`, or `Searching` with a short detail like the
 command or file name for readers with session access. The next step slides in
 as it starts, and steps running at the same time take turns every two seconds.
-A thread reply shows `Thinking…` only while it has no open run; the line
-replaces it. Once the run closes, it folds to a `Used N tools` summary (with
+Whenever a thread reply's turn is running with no open run, before the first
+step or while the agent writes after one, the same line reads `Thinking`.
+Once the run closes, it folds to a `Used N tools` summary (with
 `· N failed` when a step failed), with a caret after it on hover, that opens
 to compact rows like the session's tool rows: the label, the detail in a
 dimmer tone, and **Failed** or **Interrupted** when a step did not finish.

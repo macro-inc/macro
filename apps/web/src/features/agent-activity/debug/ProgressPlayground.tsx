@@ -320,7 +320,7 @@ const SCENARIOS: Scenario[] = [
   {
     id: 'thinking',
     title: 'Before the first step',
-    note: 'A mention shows the Thinking spinner, a DM only its typing row, the session its working line.',
+    note: 'A mention and the session show the working line; a DM only its typing row.',
     parts: [],
     inFlight: true,
   },
