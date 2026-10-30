@@ -7,17 +7,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// An entity type with an existing Share surface.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    utoipa::ToSchema,
-    schemars::JsonSchema,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ShareEntityType {
     /// Files and document-backed tasks, snippets and skills.

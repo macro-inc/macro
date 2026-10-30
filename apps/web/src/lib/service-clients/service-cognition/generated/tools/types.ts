@@ -4471,13 +4471,13 @@ export type CommentAnchor =
       type: 'fig';
     };
 /**
- * An entity type with an existing Share surface.
+ * Shared items an agent can ask about. Legacy AI chats are left out: agents
+ * work with agent sessions instead.
  */
-export type ShareEntityType =
+export type RequestableEntityType =
   | 'document'
-  | 'chat'
-  | 'project'
   | 'initiative'
+  | 'project'
   | 'database'
   | 'call'
   | 'email_thread'
@@ -14202,7 +14202,7 @@ export interface DiscussionComment {
  * Read the user's current access to an item and the outcome of their latest access request on it: pending, granted, denied or cancelled. Use it to check a request made with RequestEntityAccess before retrying the action that needed the access.
  */
 export interface ReadEntityAccessRequest {
-  entityType: ShareEntityType;
+  entityType: RequestableEntityType;
   /**
    * Id of the item.
    */
@@ -14915,7 +14915,7 @@ export interface RenderCanvas {
  * Ask the owner of an item for more access in the user's name, as the Share menu's Request access does: the owner gets a normal access request from the user and decides. Use it only when the user asked you to request access or agreed after you offered, typically after a write failed because the user can only view the item; never request access on your own. It never grants access and does not retry the failed action. Tell the user the request is pending and who it went to, then check it with ReadEntityAccessRequest and retry the original action only once it is granted.
  */
 export interface RequestEntityAccess {
-  entityType: ShareEntityType;
+  entityType: RequestableEntityType;
   /**
    * Id of the item.
    */

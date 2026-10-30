@@ -170,6 +170,8 @@ fn app_item_actions_are_available_in_every_host() {
         "RenameItem",
         "UpdateSharing",
         "SetFavorite",
+        "RequestEntityAccess",
+        "ReadEntityAccessRequest",
         "MuteNotifications",
         "RunRoutine",
         "DeleteRoutine",
@@ -598,7 +600,11 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     let direct = tools_for_agent_code_mode();
     let sdk = code_mode_tools();
     assert!(direct.toolset.tools.len() < standard.toolset.tools.len());
-    for name in ["ReadContent"] {
+    for name in [
+        "ReadContent",
+        "RequestEntityAccess",
+        "ReadEntityAccessRequest",
+    ] {
         assert!(standard.toolset.tools.contains_key(name), "{name}");
         assert!(sdk.tools.contains_key(name), "{name}");
         assert!(!direct.toolset.tools.contains_key(name), "{name}");
@@ -743,6 +749,8 @@ fn conversation_tools_only_advertise_new_sessions() {
                 "UpdateSharing",
                 "ShareWithChannel",
                 "SetFavorite",
+                "RequestEntityAccess",
+                "ReadEntityAccessRequest",
                 "GetEntityProperties",
                 "SetEntityProperty",
                 "BulkSetEntityPropertyOptions",

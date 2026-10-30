@@ -3,7 +3,8 @@
 use access_requests::{
     domain::{models::*, ports::SystemClock, service::AccessRequestService},
     inbound::toolset::{
-        AccessRequestToolContext, ReadEntityAccessRequest, RequestEntityAccess, RequestedAccess,
+        AccessRequestToolContext, ReadEntityAccessRequest, RequestEntityAccess,
+        RequestableEntityType, RequestedAccess,
     },
     outbound::postgres::PgRequestRepository,
 };
@@ -47,13 +48,13 @@ async fn viewer_requests_edit_waits_for_the_owner_then_retries(pool: PgPool) {
         })
     };
     let read = || ReadEntityAccessRequest {
-        entity_type: ShareEntityType::Document,
+        entity_type: RequestableEntityType::Document,
         entity_id: DOCUMENT,
     };
     assert!(!reader_can_edit(&access).await, "the reader can only view");
 
     let requested = RequestEntityAccess {
-        entity_type: ShareEntityType::Document,
+        entity_type: RequestableEntityType::Document,
         entity_id: DOCUMENT,
         access: RequestedAccess::Edit,
     }
@@ -124,7 +125,7 @@ async fn the_agent_cannot_raise_access_without_review(pool: PgPool) {
     };
     let ask = async |who: &str, level| {
         RequestEntityAccess {
-            entity_type: ShareEntityType::Document,
+            entity_type: RequestableEntityType::Document,
             entity_id: DOCUMENT,
             access: level,
         }

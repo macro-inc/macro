@@ -26,3 +26,13 @@ fn ownership_is_not_requestable() {
     }));
     assert!(owner.is_err());
 }
+
+#[test]
+fn legacy_chats_are_not_advertised() {
+    let chat = serde_json::from_value::<RequestEntityAccess>(serde_json::json!({
+        "entityType": "chat",
+        "entityId": "00000000-0000-0000-0000-000000000010",
+        "access": "edit"
+    }));
+    assert!(chat.is_err());
+}

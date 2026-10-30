@@ -63,7 +63,44 @@ impl From<RequestedAccess> for AccessLevel {
     }
 }
 
-const ENTITY_TYPE: &str = "Kind of item: document (files, tasks, snippets and skills), initiative (a task project, shown as a Project in the app), project (a folder), chat, database, call, email_thread, agent_session or external_chat.";
+/// Shared items an agent can ask about. Legacy AI chats are left out: agents
+/// work with agent sessions instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RequestableEntityType {
+    /// Files and documents, including tasks, snippets and skills.
+    Document,
+    /// A task project, shown as a Project in the app.
+    Initiative,
+    /// A folder.
+    Project,
+    /// A database.
+    Database,
+    /// A call and its recording.
+    Call,
+    /// An email thread.
+    EmailThread,
+    /// An agent session.
+    AgentSession,
+    /// An external chat added to Macro.
+    ExternalChat,
+}
+impl From<RequestableEntityType> for ShareEntityType {
+    fn from(value: RequestableEntityType) -> Self {
+        match value {
+            RequestableEntityType::Document => Self::Document,
+            RequestableEntityType::Initiative => Self::Initiative,
+            RequestableEntityType::Project => Self::Project,
+            RequestableEntityType::Database => Self::Database,
+            RequestableEntityType::Call => Self::Call,
+            RequestableEntityType::EmailThread => Self::EmailThread,
+            RequestableEntityType::AgentSession => Self::AgentSession,
+            RequestableEntityType::ExternalChat => Self::ExternalChat,
+        }
+    }
+}
+
+const ENTITY_TYPE: &str = "Kind of item: document (files, tasks, snippets and skills), initiative (a task project, shown as a Project in the app), project (a folder), database, call, email_thread, agent_session or external_chat.";
 
 /// Ask the item's owner for more access in the user's name.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -75,7 +112,7 @@ const ENTITY_TYPE: &str = "Kind of item: document (files, tasks, snippets and sk
 pub struct RequestEntityAccess {
     /// Shared item kind.
     #[schemars(description = ENTITY_TYPE)]
-    pub entity_type: ShareEntityType,
+    pub entity_type: RequestableEntityType,
     /// Item identifier.
     #[schemars(description = "Id of the item.")]
     pub entity_id: Uuid,
@@ -121,7 +158,7 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock>
             .request(
                 request.user_id,
                 ShareEntity {
-                    entity_type: self.entity_type,
+                    entity_type: self.entity_type.into(),
                     entity_id: self.entity_id,
                 },
                 self.access.into(),
@@ -151,7 +188,7 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock>
 pub struct ReadEntityAccessRequest {
     /// Shared item kind.
     #[schemars(description = ENTITY_TYPE)]
-    pub entity_type: ShareEntityType,
+    pub entity_type: RequestableEntityType,
     /// Item identifier.
     #[schemars(description = "Id of the item.")]
     pub entity_id: Uuid,
@@ -206,7 +243,7 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock>
             .state(
                 request.user_id,
                 ShareEntity {
-                    entity_type: self.entity_type,
+                    entity_type: self.entity_type.into(),
                     entity_id: self.entity_id,
                 },
                 0,

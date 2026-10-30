@@ -13637,9 +13637,8 @@ export const ReadEntityAccessRequest = z.object({
   entityType: z.any().superRefine((x, ctx) => {
     const schemas = [
       z.literal('document'),
-      z.literal('chat'),
-      z.literal('project'),
       z.literal('initiative'),
+      z.literal('project'),
       z.literal('database'),
       z.literal('call'),
       z.literal('email_thread'),
@@ -15384,9 +15383,8 @@ export const RequestEntityAccess = z.object({
   entityType: z.any().superRefine((x, ctx) => {
     const schemas = [
       z.literal('document'),
-      z.literal('chat'),
-      z.literal('project'),
       z.literal('initiative'),
+      z.literal('project'),
       z.literal('database'),
       z.literal('call'),
       z.literal('email_thread'),
