@@ -71,6 +71,10 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   `expanded` path instead.
 - `candidate_gates.rs` encodes access-gate SQL shared across repo queries;
   changing it changes what every entity kind can return.
+- `get_viewable_items` (`*/viewable_by_ids*`) is the one by-id read with no
+  access predicate: its callers pass entity access receipts, which already
+  grant public and team links that listings leave out. Keep viewer columns
+  (view history) nullable there; the viewer may have no account.
 - Queries over a known id list (`*/by_ids.rs`, hydration) and the initiative
   listing (`initiative_access_clause`) check access per row with `EXISTS` on
   `entity_access`, matching sources with `= ANY(ARRAY(SELECT ...))` so they are

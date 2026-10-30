@@ -1,9 +1,11 @@
 //! DataLoader-backed hydration of lightweight realtime Soup patches and
-//! single-entity lookups. Email threads hydrate through entity access
-//! receipts, the rule the REST thread route applies, so a thread shared by a
-//! team's CRM or a project resolves for the viewer even though it lives in a
-//! teammate's inbox; every other entity hydrates through one filtered Soup
-//! request per user.
+//! single-entity lookups. Email threads, initiatives and agent sessions
+//! hydrate through entity access receipts, the rule their REST routes apply:
+//! a thread shared by a team's CRM or a project resolves for the viewer even
+//! though it lives in a teammate's inbox, and an initiative or session opened
+//! by a public or team link resolves although Soup's listings never enumerate
+//! it, for a caller with no account too. Every other entity hydrates through
+//! one filtered Soup request per user.
 
 #[cfg(test)]
 mod test;
@@ -20,13 +22,17 @@ use email::domain::{
     ports::EmailThreadPreviewService,
 };
 use entity_access::domain::{
-    models::{AccessError, EntityAccessReceipt, MemberTeamRole},
+    models::{
+        AccessError, Entity as AccessEntity, EntityAccessReceipt, MemberTeamRole, ViewAccessLevel,
+    },
     ports::EntityAccessService,
 };
 use filter_ast::Expr;
 use futures::{
+    StreamExt,
     future::BoxFuture,
-    future::{try_join, try_join_all},
+    future::{try_join_all, try_join3},
+    stream,
 };
 use item_filters::ast::{
     EmailFilterAst, EntityFilterAst,
@@ -61,8 +67,21 @@ use uuid::Uuid;
 /// Maximum number of entity keys folded into one user-scoped Soup request.
 const MAX_BATCH_SIZE: usize = 500;
 
-/// Key used to hydrate one Soup item for one viewer.
-pub type SoupItemLoaderKey = (MacroUserIdStr<'static>, Entity<'static>);
+/// Bound concurrent access checks for one batch of single-item reads.
+const MAX_CONCURRENT_ACCESS_CHECKS: usize = 16;
+
+/// Key used to hydrate one Soup item for one viewer; `None` is a caller with
+/// no account, who can only read entities that hydrate through receipts.
+pub type SoupItemLoaderKey = (Option<MacroUserIdStr<'static>>, Entity<'static>);
+
+/// Entity types whose single-item reads authorize through entity access
+/// rather than Soup's listing policy.
+fn hydrates_through_receipts(entity_type: EntityType) -> bool {
+    matches!(
+        entity_type,
+        EntityType::Initiative | EntityType::AgentSession
+    )
+}
 
 /// Cloneable error returned by the realtime Soup item loader.
 pub type SoupItemLoaderError = Report<Dynamic, Cloneable>;
@@ -186,24 +205,114 @@ impl<A: EntityAccessService> SoupTeamReader for EntityAccessTeamReader<A> {
     }
 }
 
-/// Batches lightweight entity patches per user: email threads through the
-/// access-checked thread reader, every other entity through one filtered Soup
-/// request.
+/// Mints the View receipts that single-item reads hydrate through.
+pub trait SoupViewAuthorizer: Send + Sync + 'static {
+    /// A View receipt for each requested entity `viewer` may view, signed in
+    /// or not. Refused and missing entities are absent.
+    fn view_receipts(
+        &self,
+        viewer: Option<MacroUserIdStr<'static>>,
+        entities: Vec<Entity<'static>>,
+    ) -> BoxFuture<'_, Result<Vec<EntityAccessReceipt<ViewAccessLevel>>, SoupItemLoaderError>>;
+}
+
+/// Mints view receipts through the entity access service, which grants a
+/// public or team link the same as any other share.
+pub struct EntityAccessViewAuthorizer<A>(pub A);
+
+impl<A: EntityAccessService> SoupViewAuthorizer for EntityAccessViewAuthorizer<A> {
+    fn view_receipts(
+        &self,
+        viewer: Option<MacroUserIdStr<'static>>,
+        entities: Vec<Entity<'static>>,
+    ) -> BoxFuture<'_, Result<Vec<EntityAccessReceipt<ViewAccessLevel>>, SoupItemLoaderError>> {
+        let mut checks = Vec::with_capacity(entities.len());
+        for entity in entities {
+            checks.push(view_receipt(&self.0, viewer.clone(), entity));
+        }
+        Box::pin(async move {
+            let receipts = stream::iter(checks)
+                .buffer_unordered(MAX_CONCURRENT_ACCESS_CHECKS)
+                .collect::<Vec<_>>()
+                .await;
+            Ok(receipts
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
+                .flatten()
+                .collect())
+        })
+    }
+}
+
+/// One entity's View receipt, or `None` when the viewer may not view it.
+async fn view_receipt<A: EntityAccessService>(
+    access: &A,
+    viewer: Option<MacroUserIdStr<'static>>,
+    entity: Entity<'static>,
+) -> Result<Option<EntityAccessReceipt<ViewAccessLevel>>, SoupItemLoaderError> {
+    let permission = match access
+        .get_entity_permission(
+            viewer.as_deref(),
+            &entity.entity_id,
+            entity.entity_type,
+            None,
+        )
+        .await
+    {
+        Ok(permission) => permission,
+        Err(
+            AccessError::Unauthorized
+            | AccessError::UnauthorizedWithMessage(_)
+            | AccessError::NotFound(_),
+        ) => return Ok(None),
+        Err(error) => {
+            return Err(rootcause::report!(
+                "{} {} access check failed: {error}",
+                entity.entity_type,
+                entity.entity_id
+            )
+            .into_cloneable());
+        }
+    };
+    // A permission below View, such as a team role held with no account, is
+    // a refusal like any other.
+    Ok(EntityAccessReceipt::try_new_for_user(
+        viewer,
+        AccessEntity {
+            entity_id: entity.entity_id.into_owned(),
+            entity_type: entity.entity_type,
+        },
+        permission,
+    )
+    .ok())
+}
+
+/// Batches lightweight entity patches per viewer: email threads through the
+/// access-checked thread reader, initiatives and agent sessions through view
+/// receipts, every other entity through one filtered Soup request.
 pub struct SoupItemLoader<S, R> {
     /// Existing Soup query service.
     soup_service: S,
     /// Reader used only when a batch requests email threads.
     thread_reader: R,
+    /// Mints the receipts initiatives and agent sessions hydrate through.
+    view_authorizer: Arc<dyn SoupViewAuthorizer>,
     /// Optional reader for current team access during PR and session hydration.
     team_reader: Option<Arc<dyn SoupTeamReader>>,
 }
 
 impl<S, R> SoupItemLoader<S, R> {
     /// Construct a Soup item loader from its existing domain services.
-    pub fn new(soup_service: S, thread_reader: R) -> Self {
+    pub fn new(
+        soup_service: S,
+        thread_reader: R,
+        view_authorizer: Arc<dyn SoupViewAuthorizer>,
+    ) -> Self {
         Self {
             soup_service,
             thread_reader,
+            view_authorizer,
             team_reader: None,
         }
     }
@@ -214,34 +323,48 @@ where
     S: SoupService,
     R: SoupEmailThreadReader,
 {
-    /// Hydrate one user's portion of a batch.
-    async fn load_user(
+    /// Hydrate one viewer's portion of a batch.
+    async fn load_viewer(
         &self,
-        user_id: MacroUserIdStr<'static>,
+        viewer: Option<MacroUserIdStr<'static>>,
         entities: Vec<Entity<'static>>,
     ) -> Result<HashMap<SoupItemLoaderKey, SoupProjectionHydration>, SoupItemLoaderError> {
         let requested = entities.iter().cloned().collect::<HashSet<_>>();
         let mut thread_ids = Vec::new();
+        let mut receipt_entities = Vec::new();
         let mut soup_entities = Vec::new();
         for entity in entities {
             if entity.entity_type == EntityType::EmailThread {
                 thread_ids.push(entity_uuid(&entity)?);
+            } else if hydrates_through_receipts(entity.entity_type) {
+                receipt_entities.push(entity);
             } else {
                 soup_entities.push(entity);
             }
         }
 
+        // Inboxes and Soup's listing policy belong to an account; a caller
+        // with no account reads only what hydrates through receipts.
         let threads = async {
-            if thread_ids.is_empty() {
-                return Ok(Vec::new());
+            match &viewer {
+                Some(user) if !thread_ids.is_empty() => {
+                    self.thread_reader
+                        .read_threads(user.clone(), thread_ids)
+                        .await
+                }
+                _ => Ok(Vec::new()),
             }
-            self.thread_reader
-                .read_threads(user_id.clone(), thread_ids)
-                .await
         };
-        let (threads, items) = try_join(
+        let listed = async {
+            match &viewer {
+                Some(user) => self.load_soup_items(user.clone(), soup_entities).await,
+                None => Ok(Vec::new()),
+            }
+        };
+        let (threads, receipted, listed) = try_join3(
             threads,
-            self.load_soup_items(user_id.clone(), soup_entities),
+            self.load_receipted_items(viewer.clone(), receipt_entities),
+            listed,
         )
         .await?;
 
@@ -251,7 +374,8 @@ where
                 item: SoupItem::EmailThread(thread),
                 document_server_facts: None,
             })
-            .chain(items);
+            .chain(receipted)
+            .chain(listed);
         let mut loaded = HashMap::with_capacity(requested.len());
         for hydration in hydrations {
             let entity = hydration.item.entity();
@@ -264,7 +388,7 @@ where
                 .into_cloneable());
             }
             if loaded
-                .insert((user_id.clone(), entity.clone()), hydration)
+                .insert((viewer.clone(), entity.clone()), hydration)
                 .is_some()
             {
                 return Err(rootcause::report!(
@@ -277,6 +401,36 @@ where
         }
 
         Ok(loaded)
+    }
+
+    /// Hydrate the initiatives and agent sessions of a batch that the viewer
+    /// holds view receipts for.
+    async fn load_receipted_items(
+        &self,
+        viewer: Option<MacroUserIdStr<'static>>,
+        entities: Vec<Entity<'static>>,
+    ) -> Result<Vec<SoupProjectionHydration>, SoupItemLoaderError> {
+        if entities.is_empty() {
+            return Ok(Vec::new());
+        }
+        let needs_team = entities
+            .iter()
+            .any(|entity| entity.entity_type == EntityType::AgentSession);
+        let receipts = self.view_authorizer.view_receipts(viewer.clone(), entities);
+        let team = async {
+            match (&self.team_reader, viewer, needs_team) {
+                (Some(reader), Some(user), true) => reader.team_receipt(user).await,
+                _ => Ok(None),
+            }
+        };
+        let (receipts, team) = futures::future::try_join(receipts, team).await?;
+        if receipts.is_empty() {
+            return Ok(Vec::new());
+        }
+        self.soup_service
+            .get_viewable_items(receipts, team)
+            .await
+            .map_err(|error| rootcause::report!(error).into_dynamic().into_cloneable())
     }
 
     /// Execute one filtered Soup request for the non-email entities of a batch.
@@ -292,10 +446,7 @@ where
         let needs_team = entities.iter().any(|entity| {
             matches!(
                 entity.entity_type,
-                EntityType::ForeignEntity
-                    | EntityType::AgentSession
-                    | EntityType::CrmCompany
-                    | EntityType::CrmContact
+                EntityType::ForeignEntity | EntityType::CrmCompany | EntityType::CrmContact
             )
         });
         let team = match (&self.team_reader, needs_team) {
@@ -338,14 +489,15 @@ where
         &self,
         keys: Vec<SoupItemLoaderKey>,
     ) -> Result<HashMap<SoupItemLoaderKey, SoupProjectionHydration>, SoupItemLoaderError> {
-        let mut entities_by_user = HashMap::<MacroUserIdStr<'static>, Vec<Entity<'static>>>::new();
-        for (user_id, entity) in keys {
-            entities_by_user.entry(user_id).or_default().push(entity);
+        let mut entities_by_viewer =
+            HashMap::<Option<MacroUserIdStr<'static>>, Vec<Entity<'static>>>::new();
+        for (viewer, entity) in keys {
+            entities_by_viewer.entry(viewer).or_default().push(entity);
         }
 
-        let batches = entities_by_user
+        let batches = entities_by_viewer
             .into_iter()
-            .map(|(user_id, entities)| self.load_user(user_id, entities));
+            .map(|(viewer, entities)| self.load_viewer(viewer, entities));
         let loaded = try_join_all(batches).await?;
         Ok(loaded.into_iter().flatten().collect())
     }
@@ -370,8 +522,8 @@ where
 /// Owned key used only across the type-erased GraphQL context boundary.
 #[derive(Clone, Hash, PartialEq, Eq)]
 struct OwnedSoupItemLoaderKey {
-    /// User whose Soup visibility applies.
-    user_id: MacroUserIdStr<'static>,
+    /// Viewer whose access applies; `None` has no account.
+    viewer: Option<MacroUserIdStr<'static>>,
     /// Entity to hydrate.
     entity: Entity<'static>,
 }
@@ -390,12 +542,12 @@ where
     ) -> Result<HashMap<OwnedSoupItemLoaderKey, Self::Value>, Self::Error> {
         let tuple_keys = keys
             .iter()
-            .map(|key| (key.user_id.clone(), key.entity.clone()))
+            .map(|key| (key.viewer.clone(), key.entity.clone()))
             .collect();
         let loaded = self.load_keys(tuple_keys).await?;
         Ok(loaded
             .into_iter()
-            .map(|((user_id, entity), item)| (OwnedSoupItemLoaderKey { user_id, entity }, item))
+            .map(|((viewer, entity), item)| (OwnedSoupItemLoaderKey { viewer, entity }, item))
             .collect())
     }
 }
@@ -450,8 +602,8 @@ impl SoupItemDataLoader {
         &self,
         key: SoupItemLoaderKey,
     ) -> Result<Option<SoupProjectionHydration>, SoupItemLoaderError> {
-        let (user_id, entity) = key;
-        (self.load_one)(OwnedSoupItemLoaderKey { user_id, entity }).await
+        let (viewer, entity) = key;
+        (self.load_one)(OwnedSoupItemLoaderKey { viewer, entity }).await
     }
 }
 
@@ -484,7 +636,8 @@ where
 {
     SoupItemDataLoader::new(SoupItemLoader::new(
         soup_service,
-        EntityAccessEmailThreadReader::new(email_service, access),
+        EntityAccessEmailThreadReader::new(email_service, access.clone()),
+        Arc::new(EntityAccessViewAuthorizer(access)),
     ))
 }
 
@@ -502,6 +655,7 @@ where
     let mut loader = SoupItemLoader::new(
         soup_service,
         EntityAccessEmailThreadReader::new(email_service, access.clone()),
+        Arc::new(EntityAccessViewAuthorizer(access.clone())),
     );
     loader.team_reader = Some(Arc::new(EntityAccessTeamReader(access)));
     SoupItemDataLoader::new(loader)

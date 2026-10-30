@@ -19,7 +19,7 @@ async fn favorite_loader_fails_soft_when_reader_is_unavailable() {
     let entity = EntityType::Document.with_entity_string("document-1".to_owned());
     let key = OwnedEntity::from(entity);
     let loader = EntityFavoriteLoader::new(
-        MacroUserIdStr::parse_from_str("macro|viewer@example.com").unwrap(),
+        Some(MacroUserIdStr::parse_from_str("macro|viewer@example.com").unwrap()),
         FailingFavoriteReader,
     );
 

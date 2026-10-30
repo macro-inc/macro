@@ -69,12 +69,12 @@ async fn subscription_responses_from(
     let list_loader = graphql_soup::soup_item_loader(
         replica.clone(),
         Arc::new(NoOpEmailService),
-        NoOpEntityAccessService,
+        CountingEntityAccessService::default(),
     );
     let hydration_loader = graphql_soup::PrimarySoupItemLoader(graphql_soup::soup_item_loader(
         primary,
         Arc::new(NoOpEmailService),
-        NoOpEntityAccessService,
+        CountingEntityAccessService::default(),
     ));
     let schema: RealtimeSchema = build_schema_with_services(
         replica,
@@ -437,43 +437,42 @@ async fn pr_and_linked_session_updates_serialize_current_metadata() {
     let session_id = Uuid::now_v7();
     let now = chrono::Utc::now();
     let soup = CountingSoupService::default();
-    soup.set_raw_response(vec![
-        SoupItem::ForeignEntity(SoupForeignEntity {
-            id: pr_id,
-            foreign_entity_id: "macro/app/pull/7".into(),
-            foreign_entity_source: "github_pull_request".into(),
-            metadata: async_graphql::value!({"title": "Updated PR", "state": "merged"})
-                .into_json()
-                .unwrap(),
-            stored_for_id: VALID_USER_ID.into(),
-            stored_for_auth_entity: "user".into(),
-            created_at: now,
-            updated_at: now,
-        }),
-        SoupItem::AgentSession(SoupAgentSession {
-            id: session_id,
-            name: "Linked session".into(),
-            is_archived: false,
-            owner_id: model_owner::Owner::from_principal_str(VALID_USER_ID).unwrap(),
-            bot_id: Uuid::now_v7(),
-            harness: "claude".into(),
-            repo_url: None,
-            repo_branch: None,
-            pull_request_url: Some("https://github.com/macro/app/pull/7".into()),
-            working_branch: None,
-            pull_request_state: Some(AgentPullRequestState::Merged),
-            pull_request_id: Some(pr_id),
-            turn_state: None,
-            thread_id: None,
-            status: "disconnected".into(),
-            created_at: now,
-            updated_at: now,
-            viewed_at: None,
-            extra: (),
-            source: models_soup::agent_session::AgentSessionSource::User,
-            visibility: models_soup::agent_session::AgentSessionVisibility::Listed,
-        }),
-    ]);
+    soup.set_raw_response(vec![SoupItem::ForeignEntity(SoupForeignEntity {
+        id: pr_id,
+        foreign_entity_id: "macro/app/pull/7".into(),
+        foreign_entity_source: "github_pull_request".into(),
+        metadata: async_graphql::value!({"title": "Updated PR", "state": "merged"})
+            .into_json()
+            .unwrap(),
+        stored_for_id: VALID_USER_ID.into(),
+        stored_for_auth_entity: "user".into(),
+        created_at: now,
+        updated_at: now,
+    })]);
+    // A session hydrates through its view receipt, not the listing.
+    soup.set_viewable_response(vec![SoupItem::AgentSession(SoupAgentSession {
+        id: session_id,
+        name: "Linked session".into(),
+        is_archived: false,
+        owner_id: model_owner::Owner::from_principal_str(VALID_USER_ID).unwrap(),
+        bot_id: Uuid::now_v7(),
+        harness: "claude".into(),
+        repo_url: None,
+        repo_branch: None,
+        pull_request_url: Some("https://github.com/macro/app/pull/7".into()),
+        working_branch: None,
+        pull_request_state: Some(AgentPullRequestState::Merged),
+        pull_request_id: Some(pr_id),
+        turn_state: None,
+        thread_id: None,
+        status: "disconnected".into(),
+        created_at: now,
+        updated_at: now,
+        viewed_at: None,
+        extra: (),
+        source: models_soup::agent_session::AgentSessionSource::User,
+        visibility: models_soup::agent_session::AgentSessionVisibility::Listed,
+    })]);
     let calls = soup.raw_calls.clone();
     let responses = subscription_responses(
         soup,
@@ -500,5 +499,9 @@ async fn pr_and_linked_session_updates_serialize_current_metadata() {
         .unwrap();
     assert_eq!(session["item"]["pullRequestState"], "MERGED");
     assert_eq!(session["item"]["pullRequestId"], pr_id.to_string());
-    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        2,
+        "one listing request for the PR, one receipt hydration for the session"
+    );
 }

@@ -4,7 +4,10 @@ use std::{
 };
 
 use chrono::{DateTime, Utc};
-use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
+use entity_access::domain::models::{
+    AccessLevel, Entity as AccessEntity, EntityAccessReceipt, EntityPermission, MemberTeamRole,
+    ViewAccessLevel,
+};
 use item_filters::ast::{
     call::CallLiteral,
     channel::{ChannelLiteral, ChannelThreadLiteral},
@@ -18,11 +21,13 @@ use item_filters::ast::{
 use model_owner::Owner;
 use models_pagination::{Paginated, PaginatedCursor};
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_soup::{document::SoupDocument, email_thread::SoupEmailThreadPreview};
+use models_soup::{
+    document::SoupDocument, email_thread::SoupEmailThreadPreview, initiative::SoupInitiative,
+};
 use soup::domain::{
     models::{
-        EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst, SoupErr, SoupPropertiesField,
-        SoupRequest, grouping::ItemGroupingInfo,
+        EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst, SoupErr, SoupProjectionHydration,
+        SoupPropertiesField, SoupRequest, grouping::ItemGroupingInfo,
     },
     ports::{SoupOutput, SoupService},
 };
@@ -143,6 +148,25 @@ impl SoupService for RecordingSoupService {
     ) -> Result<Vec<PropertyDefinitionWithOptions>, SoupErr> {
         unreachable!("loader does not load tag definitions")
     }
+
+    async fn get_viewable_items(
+        &self,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+        _team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<Vec<SoupProjectionHydration>, SoupErr> {
+        Ok(receipts
+            .iter()
+            .filter_map(|receipt| {
+                let id = Uuid::parse_str(&receipt.entity().entity_id).ok()?;
+                (receipt.entity().entity_type == EntityType::Initiative).then(|| {
+                    SoupProjectionHydration {
+                        item: initiative(id),
+                        document_server_facts: None,
+                    }
+                })
+            })
+            .collect())
+    }
 }
 
 /// Thread reader that records requests and returns configured previews by user.
@@ -166,6 +190,52 @@ impl SoupEmailThreadReader for RecordingThreadReader {
             .push((user_id.clone(), thread_ids));
         Ok(self.responses.get(&user_id).cloned().unwrap_or_default())
     }
+}
+
+/// View authorizer that grants View to configured viewers and records each request.
+#[derive(Clone, Default)]
+struct RecordingViews {
+    /// Viewers and entities whose receipts were requested.
+    calls: Arc<Mutex<Vec<(Option<MacroUserIdStr<'static>>, Vec<Entity<'static>>)>>>,
+    /// Entities each viewer, signed in or not, may view.
+    grants: Arc<HashMap<Option<MacroUserIdStr<'static>>, HashSet<Entity<'static>>>>,
+}
+
+impl SoupViewAuthorizer for RecordingViews {
+    fn view_receipts(
+        &self,
+        viewer: Option<MacroUserIdStr<'static>>,
+        entities: Vec<Entity<'static>>,
+    ) -> BoxFuture<'_, Result<Vec<EntityAccessReceipt<ViewAccessLevel>>, SoupItemLoaderError>> {
+        self.calls
+            .lock()
+            .expect("view calls lock")
+            .push((viewer.clone(), entities.clone()));
+        let granted = self.grants.get(&viewer);
+        let receipts = entities
+            .into_iter()
+            .filter(|entity| granted.is_some_and(|granted| granted.contains(entity)))
+            .map(|entity| {
+                EntityAccessReceipt::try_new_for_user(
+                    viewer.clone(),
+                    AccessEntity {
+                        entity_id: entity.entity_id.into_owned(),
+                        entity_type: entity.entity_type,
+                    },
+                    EntityPermission::AccessLevel {
+                        access_level: AccessLevel::View,
+                    },
+                )
+                .expect("view receipt")
+            })
+            .collect();
+        Box::pin(async move { Ok(receipts) })
+    }
+}
+
+/// A view authorizer that grants nothing.
+fn no_views() -> Arc<dyn SoupViewAuthorizer> {
+    Arc::new(RecordingViews::default())
 }
 
 /// Build a stable test user ID.
@@ -196,6 +266,19 @@ fn document_named(id: Uuid, name: impl Into<String>) -> SoupItem<()> {
         viewed_at: None,
         sub_type: None,
         deleted_at: None,
+        extra: (),
+    })
+}
+
+/// Build an initiative Soup item as receipt hydration returns it.
+fn initiative(id: Uuid) -> SoupItem<()> {
+    SoupItem::Initiative(SoupInitiative {
+        id,
+        name: "Launch".to_owned(),
+        owner_id: Owner::from_principal_str("macro|owner@example.com").expect("valid owner"),
+        created_at: DateTime::<Utc>::default(),
+        updated_at: DateTime::<Utc>::default(),
+        viewed_at: None,
         extra: (),
     })
 }
@@ -253,14 +336,14 @@ async fn batches_all_keys_for_one_user_into_one_soup_request() {
         vec![document(first_id), document(second_id)],
     );
     let calls = Arc::clone(&service.calls);
-    let loader = SoupItemLoader::new(service, RecordingThreadReader::default());
+    let loader = SoupItemLoader::new(service, RecordingThreadReader::default(), no_views());
     let keys = vec![
         (
-            user_id.clone(),
+            Some(user_id.clone()),
             EntityType::Document.with_entity_string(first_id.to_string()),
         ),
         (
-            user_id.clone(),
+            Some(user_id.clone()),
             EntityType::Document.with_entity_string(second_id.to_string()),
         ),
     ];
@@ -286,14 +369,14 @@ async fn separates_one_soup_request_per_unique_user() {
         .with_response(first_user.clone(), vec![document(first_id)])
         .with_response(second_user.clone(), vec![document(second_id)]);
     let calls = Arc::clone(&service.calls);
-    let loader = SoupItemLoader::new(service, RecordingThreadReader::default());
+    let loader = SoupItemLoader::new(service, RecordingThreadReader::default(), no_views());
     let keys = vec![
         (
-            first_user.clone(),
+            Some(first_user.clone()),
             EntityType::Document.with_entity_string(first_id.to_string()),
         ),
         (
-            second_user.clone(),
+            Some(second_user.clone()),
             EntityType::Document.with_entity_string(second_id.to_string()),
         ),
     ];
@@ -330,14 +413,14 @@ async fn email_threads_hydrate_through_the_access_checked_reader_not_the_viewer_
             vec![email_thread(first_id), email_thread(second_id)],
         )])),
     };
-    let loader = SoupItemLoader::new(service, thread_reader);
+    let loader = SoupItemLoader::new(service, thread_reader, no_views());
     let keys = vec![
         (
-            user_id.clone(),
+            Some(user_id.clone()),
             EntityType::EmailThread.with_entity_string(first_id.to_string()),
         ),
         (
-            user_id.clone(),
+            Some(user_id.clone()),
             EntityType::EmailThread.with_entity_string(second_id.to_string()),
         ),
     ];
@@ -377,14 +460,14 @@ async fn email_threads_and_other_entities_hydrate_side_by_side() {
             vec![email_thread(thread_id)],
         )])),
     };
-    let loader = SoupItemLoader::new(service, thread_reader);
+    let loader = SoupItemLoader::new(service, thread_reader, no_views());
     let keys = vec![
         (
-            user_id.clone(),
+            Some(user_id.clone()),
             EntityType::Document.with_entity_string(document_id.to_string()),
         ),
         (
-            user_id.clone(),
+            Some(user_id.clone()),
             EntityType::EmailThread.with_entity_string(thread_id.to_string()),
         ),
     ];
@@ -407,10 +490,11 @@ async fn a_thread_the_reader_withholds_is_absent() {
     let loader = SoupItemDataLoader::new(SoupItemLoader::new(
         RecordingSoupService::default(),
         RecordingThreadReader::default(),
+        no_views(),
     ));
 
     let item = loader
-        .load_one((user_id, entity))
+        .load_one((Some(user_id), entity))
         .await
         .expect("an inaccessible thread is not a loader failure");
 
@@ -429,10 +513,11 @@ async fn context_loader_does_not_cache_across_realtime_updates() {
     let loader = SoupItemDataLoader::new(SoupItemLoader::new(
         service,
         RecordingThreadReader::default(),
+        no_views(),
     ));
 
     let first = loader
-        .load_one((user_id.clone(), entity.clone()))
+        .load_one((Some(user_id.clone()), entity.clone()))
         .await
         .expect("first load succeeds")
         .expect("first item exists");
@@ -441,7 +526,7 @@ async fn context_loader_does_not_cache_across_realtime_updates() {
         .expect("responses lock")
         .insert(user_id.clone(), vec![document_named(document_id, "Second")]);
     let second = loader
-        .load_one((user_id, entity))
+        .load_one((Some(user_id), entity))
         .await
         .expect("second load succeeds")
         .expect("second item exists");
@@ -458,10 +543,11 @@ async fn context_loader_returns_none_for_a_missing_item() {
     let loader = SoupItemDataLoader::new(SoupItemLoader::new(
         RecordingSoupService::default(),
         RecordingThreadReader::default(),
+        no_views(),
     ));
 
     let item = loader
-        .load_one((user_id, entity))
+        .load_one((Some(user_id), entity))
         .await
         .expect("missing item is not a loader failure");
 
@@ -653,15 +739,16 @@ async fn pr_and_session_hydration_recheck_team_on_each_batch() {
         .unwrap(),
     ))));
     let soup = RecordingSoupService::default();
-    let mut loader = SoupItemLoader::new(soup.clone(), RecordingThreadReader::default());
+    let mut loader =
+        SoupItemLoader::new(soup.clone(), RecordingThreadReader::default(), no_views());
     loader.team_reader = Some(team.clone());
     let keys = vec![
         (
-            viewer.clone(),
+            Some(viewer.clone()),
             EntityType::ForeignEntity.with_entity_string(Uuid::now_v7().to_string()),
         ),
         (
-            viewer.clone(),
+            Some(viewer.clone()),
             EntityType::AgentSession.with_entity_string(Uuid::now_v7().to_string()),
         ),
     ];
@@ -694,11 +781,12 @@ async fn crm_record_hydration_carries_the_viewer_team() {
         .unwrap(),
     ))));
     let soup = RecordingSoupService::default();
-    let mut loader = SoupItemLoader::new(soup.clone(), RecordingThreadReader::default());
+    let mut loader =
+        SoupItemLoader::new(soup.clone(), RecordingThreadReader::default(), no_views());
     loader.team_reader = Some(team);
     for entity_type in [EntityType::CrmCompany, EntityType::CrmContact] {
         let keys = vec![(
-            viewer.clone(),
+            Some(viewer.clone()),
             entity_type.with_entity_string(Uuid::now_v7().to_string()),
         )];
         loader.load(&keys).await.unwrap();
@@ -708,4 +796,58 @@ async fn crm_record_hydration_carries_the_viewer_team() {
             "{entity_type} hydration needs the viewer's team"
         );
     }
+}
+
+#[tokio::test]
+async fn a_link_opens_an_initiative_for_a_caller_with_no_account() {
+    let initiative_id = Uuid::from_u128(30);
+    let entity = EntityType::Initiative.with_entity_string(initiative_id.to_string());
+    let views = RecordingViews {
+        grants: Arc::new(HashMap::from([(None, HashSet::from([entity.clone()]))])),
+        ..RecordingViews::default()
+    };
+    let service = RecordingSoupService::default();
+    let loader = SoupItemLoader::new(
+        service.clone(),
+        RecordingThreadReader::default(),
+        Arc::new(views.clone()),
+    );
+
+    let loaded = Loader::<SoupItemLoaderKey>::load(&loader, &[(None, entity.clone())])
+        .await
+        .expect("receipt hydration succeeds");
+
+    assert!(matches!(
+        &loaded[&(None, entity.clone())].item,
+        SoupItem::Initiative(initiative) if initiative.id == initiative_id
+    ));
+    assert_eq!(
+        *views.calls.lock().expect("view calls lock"),
+        vec![(None, vec![entity])]
+    );
+    assert!(
+        service.calls.lock().expect("calls lock").is_empty(),
+        "receipts, not the listing policy, authorize single-item reads"
+    );
+}
+
+#[tokio::test]
+async fn a_caller_with_no_account_reads_nothing_that_needs_an_inbox_or_a_listing() {
+    let document = EntityType::Document.with_entity_string(Uuid::from_u128(31).to_string());
+    let thread = EntityType::EmailThread.with_entity_string(Uuid::from_u128(32).to_string());
+    let refused = EntityType::Initiative.with_entity_string(Uuid::from_u128(33).to_string());
+    let service = RecordingSoupService::default();
+    let threads = RecordingThreadReader::default();
+    let loader = SoupItemLoader::new(service.clone(), threads.clone(), no_views());
+
+    let loaded = Loader::<SoupItemLoaderKey>::load(
+        &loader,
+        &[(None, document), (None, thread), (None, refused)],
+    )
+    .await
+    .expect("an unreadable item is not a loader failure");
+
+    assert!(loaded.is_empty());
+    assert!(service.calls.lock().expect("calls lock").is_empty());
+    assert!(threads.calls.lock().expect("thread calls lock").is_empty());
 }

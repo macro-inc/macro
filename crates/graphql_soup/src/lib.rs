@@ -25,9 +25,10 @@ pub use folders::{
 pub use graphql_common::{GraphqlRequestParts, GraphqlSoupEntityType};
 pub use inputs::{GraphqlSimpleSortMethod, GroupedSoupInput, SoupInput};
 pub use loaders::{
-    AgentSessionEntityLoader, EntityAccessEmailThreadReader, PrimarySoupItemLoader,
-    SoupEmailThreadReader, SoupItemDataLoader, SoupItemLoader, SoupItemLoaderError,
-    SoupItemLoaderKey, soup_item_loader, soup_item_loader_with_team_access,
+    AgentSessionEntityLoader, EntityAccessEmailThreadReader, EntityAccessViewAuthorizer,
+    PrimarySoupItemLoader, SoupEmailThreadReader, SoupItemDataLoader, SoupItemLoader,
+    SoupItemLoaderError, SoupItemLoaderKey, SoupViewAuthorizer, soup_item_loader,
+    soup_item_loader_with_team_access,
 };
 pub use mutation_thread::{
     EmailMutationThreadLoader, EmailMutationThreadReader, email_mutation_thread_loader,

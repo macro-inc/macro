@@ -28,7 +28,9 @@ use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
     NoOpChannelActivityMutationService,
 };
-use graphql_common::{GraphqlSoupEntityType, parse_id, require_authorized_user};
+use graphql_common::{
+    GraphqlSoupEntityType, optional_authenticated_user, parse_id, require_authorized_user,
+};
 use graphql_email::{
     GraphqlEmailMutation, GraphqlEmailQuery, NoOpSoupEmailContentEdgeReader, SoupEmailEdgeReader,
 };
@@ -604,6 +606,51 @@ where
             user_id,
         })
     }
+
+    /// One initiative the caller may view, signed in or not. Access is the
+    /// initiative's own: a public or team link opens it like any other share.
+    async fn initiative(
+        &self,
+        ctx: &Context<'_>,
+        initiative_id: ID,
+    ) -> async_graphql::Result<GraphqlSoupInitiative<SoupEdges<NR, PR, ER, FR, AR, AcR>>> {
+        resolve_initiative(ctx, initiative_id).await
+    }
+
+    /// A page of the tasks in an initiative the caller may view, signed in or
+    /// not, holding only the tasks they may view themselves.
+    async fn initiative_tasks(
+        &self,
+        ctx: &Context<'_>,
+        initiative_id: ID,
+        input: Option<InitiativeTasksInput>,
+    ) -> async_graphql::Result<GraphqlInitiativeTasksPage> {
+        resolve_initiative_tasks(
+            ctx,
+            optional_authenticated_user(ctx),
+            initiative_id,
+            input.unwrap_or_default(),
+        )
+        .await
+    }
+
+    /// One agent session the caller may view, signed in or not, with its
+    /// protocol log reachable through `log`. A public link opens it like any
+    /// other share.
+    async fn agent_session(
+        &self,
+        ctx: &Context<'_>,
+        session_id: ID,
+    ) -> async_graphql::Result<Option<GraphqlSoupAgentSession<SoupEdges<NR, PR, ER, FR, AR, AcR>>>>
+    {
+        let session_id = parse_id(session_id, "sessionId")?;
+        resolve_soup_agent_session::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
+            ctx,
+            optional_authenticated_user(ctx),
+            session_id,
+        )
+        .await
+    }
 }
 
 /// Root entry point for realtime Soup subscriptions.
@@ -654,7 +701,9 @@ where
         // Access is what `agentSession` checks: a session the viewer cannot
         // read is one they cannot follow either.
         let accessible = resolve_soup_agent_session::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
-            ctx, user_id, session_id,
+            ctx,
+            Some(user_id),
+            session_id,
         )
         .await?
         .is_some();
@@ -704,6 +753,7 @@ where
     }
 
     /// One initiative accessible to the authenticated viewer.
+    #[graphql(deprecation = "Use the root initiative field. Remove after 2026-12-15.")]
     async fn initiative(
         &self,
         ctx: &Context<'_>,
@@ -713,6 +763,7 @@ where
     }
 
     /// A permission-filtered page of task identifiers within an initiative.
+    #[graphql(deprecation = "Use the root initiativeTasks field. Remove after 2026-12-15.")]
     async fn initiative_tasks(
         &self,
         ctx: &Context<'_>,
@@ -721,7 +772,7 @@ where
     ) -> async_graphql::Result<GraphqlInitiativeTasksPage> {
         resolve_initiative_tasks(
             ctx,
-            self.user_id.clone(),
+            Some(self.user_id.clone()),
             initiative_id,
             input.unwrap_or_default(),
         )
@@ -904,6 +955,7 @@ where
 
     /// Fetch one accessible agent session by id, with its protocol log
     /// reachable through `log`.
+    #[graphql(deprecation = "Use the root agentSession field. Remove after 2026-12-15.")]
     async fn agent_session(
         &self,
         ctx: &Context<'_>,
@@ -913,7 +965,7 @@ where
         let session_id = parse_id(session_id, "sessionId")?;
         resolve_soup_agent_session::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
             ctx,
-            self.user_id.clone(),
+            Some(self.user_id.clone()),
             session_id,
         )
         .await

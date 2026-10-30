@@ -126,14 +126,59 @@ fn insert_graphql_context_data(
 ) {
     data.insert(state.clone());
 
+    // Single-item reads at the query root (`initiative`, `initiativeTasks`,
+    // `agentSession`) and the entity edges they reach answer anyone with
+    // View, so a caller with no account gets these too; each loader treats
+    // `None` as a viewer with no account.
+    data.insert(state.graphql_initiative_context.clone());
+    data.insert(state.graphql_initiative_entity_loader.clone());
+    data.insert(state.graphql_agent_session_entity_loader.clone());
+    data.insert(graphql_initiative::initiative_loader(
+        state.graphql_initiative_context.clone(),
+        macro_user_id.clone(),
+    ));
+    data.insert(complete_graph::agent_session_bot_loader(PgBotsRepo::new(
+        state.readonly_db.0.clone(),
+    )));
+    // Read right after the session is created and after its subscription
+    // starts, so the log must hold every committed row: the primary.
+    data.insert(complete_graph::agent_session_log_loader(
+        PgAgentSessionRepo::new(
+            state.db.clone(),
+            OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(state.db.clone()))),
+        ),
+    ));
+    data.insert(complete_graph::entity_properties_loader(
+        macro_user_id.clone(),
+        complete_graph::PropertiesEntityPropertyReader::new(
+            state.properties_service.clone(),
+            state.entity_access_service.clone(),
+        ),
+    ));
+    data.insert(complete_graph::entity_favorite_loader(
+        macro_user_id.clone(),
+        state.favorites_service.clone(),
+    ));
+    data.insert(complete_graph::entity_permission_loader(
+        macro_user_id.clone(),
+        organization_id,
+        state.entity_access_service.clone(),
+    ));
+    data.insert(complete_graph::entity_notifications_loader(
+        macro_user_id.clone(),
+        state.graphql_notification_reader.clone(),
+    ));
+    // The feed resolver reads the reader directly; the edge goes through
+    // the request's DataLoader.
+    data.insert(state.activity_reader.clone());
+    data.insert(complete_graph::entity_activity_loader(
+        state.activity_reader.clone(),
+    ));
+
     let Some(macro_user_id) = macro_user_id else {
         return;
     };
 
-    let property_reader = complete_graph::PropertiesEntityPropertyReader::new(
-        state.properties_service.clone(),
-        state.entity_access_service.clone(),
-    );
     let property_writer = complete_graph::PropertiesEntityPropertyWriter::new(
         state.properties_service.clone(),
         state.entity_access_service.clone(),
@@ -159,18 +204,11 @@ fn insert_graphql_context_data(
         state.projects_state.service.clone(),
     )));
     data.insert(state.channel_service.clone());
-    data.insert(state.graphql_initiative_context.clone());
     data.insert(state.graphql_scheduled_action_context.clone());
     data.insert(state.graphql_calendar_context.clone());
     data.insert(state.graphql_calendar_mutation_context.clone());
     data.insert(state.graphql_work_feed_context.clone());
-    data.insert(state.graphql_initiative_entity_loader.clone());
-    data.insert(state.graphql_agent_session_entity_loader.clone());
     data.insert(state.graphql_primary_soup_item_loader.clone());
-    data.insert(graphql_initiative::initiative_loader(
-        state.graphql_initiative_context.clone(),
-        macro_user_id.clone(),
-    ));
     data.insert(graphql_crm::pipeline_entries_loader(
         state.graphql_crm_context.clone(),
         macro_user_id.clone(),
@@ -185,21 +223,6 @@ fn insert_graphql_context_data(
     data.insert(email_mutation_thread_loader(
         state.soup_router_state.email_service(),
     ));
-    data.insert(complete_graph::agent_session_bot_loader(PgBotsRepo::new(
-        state.readonly_db.0.clone(),
-    )));
-    // Read right after the session is created and after its subscription
-    // starts, so the log must hold every committed row: the primary.
-    data.insert(complete_graph::agent_session_log_loader(
-        PgAgentSessionRepo::new(
-            state.db.clone(),
-            OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(state.db.clone()))),
-        ),
-    ));
-    data.insert(complete_graph::entity_properties_loader(
-        macro_user_id.clone(),
-        property_reader,
-    ));
     data.insert(complete_graph::email_content_loader(
         macro_user_id.clone(),
         email_content_reader.clone(),
@@ -209,27 +232,8 @@ fn insert_graphql_context_data(
         email_content_reader.clone(),
     ));
     data.insert(complete_graph::email_thread_mail_projection_loader(
-        macro_user_id.clone(),
+        macro_user_id,
         email_content_reader,
     ));
-    data.insert(complete_graph::entity_favorite_loader(
-        macro_user_id.clone(),
-        state.favorites_service.clone(),
-    ));
-    data.insert(complete_graph::entity_permission_loader(
-        macro_user_id.clone(),
-        organization_id,
-        state.entity_access_service.clone(),
-    ));
     data.insert(property_writer);
-    data.insert(complete_graph::entity_notifications_loader(
-        macro_user_id,
-        state.graphql_notification_reader.clone(),
-    ));
-    // The feed resolver reads the reader directly; the edge goes through
-    // the request's DataLoader.
-    data.insert(state.activity_reader.clone());
-    data.insert(complete_graph::entity_activity_loader(
-        state.activity_reader.clone(),
-    ));
 }

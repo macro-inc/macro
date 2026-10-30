@@ -78,7 +78,7 @@ impl EntityPropertyReader for TestReader {
 
     async fn get_properties(
         &self,
-        _user_id: &MacroUserIdStr<'static>,
+        _viewer: Option<&MacroUserIdStr<'static>>,
         _keys: &[model_entity::Entity<'static>],
     ) -> Result<
         HashMap<model_entity::Entity<'static>, Vec<EntityPropertyWithDefinition>>,
@@ -120,7 +120,7 @@ impl Query {
 fn schema(calls: Arc<AtomicUsize>) -> Schema<Query, EmptyMutation, EmptySubscription> {
     Schema::build(Query, EmptyMutation, EmptySubscription)
         .data(entity_properties_loader(
-            MacroUserIdStr::parse_from_str("macro|viewer@macro.com").expect("valid user"),
+            Some(MacroUserIdStr::parse_from_str("macro|viewer@macro.com").expect("valid user")),
             TestReader(calls),
         ))
         .finish()

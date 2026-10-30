@@ -3,19 +3,22 @@
 use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Utc};
-use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
+use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole, ViewAccessLevel};
+use futures::future::BoxFuture;
 use graphql_soup::{
     SoupEmailThreadReader, SoupItemDataLoader, SoupItemLoader, SoupItemLoaderError,
+    SoupViewAuthorizer,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::Entity;
 use model_owner::Owner;
 use models_pagination::{Paginated, PaginatedCursor, SimpleSortMethod};
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::{initiative::SoupInitiative, item::SoupItem};
 use soup::domain::{
     models::{
-        EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst, SoupErr, SoupPropertiesField,
-        SoupRequest, grouping::ItemGroupingInfo,
+        EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst, SoupErr, SoupProjectionHydration,
+        SoupPropertiesField, SoupRequest, grouping::ItemGroupingInfo,
     },
     ports::{SoupOutput, SoupService},
 };
@@ -61,11 +64,63 @@ impl RecordingSoupService {
     }
 
     pub(super) fn loader(&self) -> SoupItemDataLoader {
-        SoupItemDataLoader::new(SoupItemLoader::new(self.clone(), NoThreads))
+        SoupItemDataLoader::new(SoupItemLoader::new(
+            self.clone(),
+            NoThreads,
+            Arc::new(FixtureViewer),
+        ))
+    }
+}
+
+impl RecordingSoupService {
+    fn initiative(&self) -> Option<SoupItem<()>> {
+        let snapshot = match &self.source {
+            Source::Replica => Some(detail()),
+            Source::Empty => None,
+            Source::Primary(api) => Some(api.current_detail()),
+        };
+        snapshot.map(|detail| {
+            SoupItem::Initiative(SoupInitiative {
+                id: detail.id.as_uuid(),
+                name: detail.name,
+                owner_id: Owner::from_principal_str(detail.owner_id.as_ref()).unwrap(),
+                created_at: detail.created_at,
+                updated_at: detail.updated_at,
+                viewed_at: Some(
+                    DateTime::parse_from_rfc3339(VIEWED_AT)
+                        .unwrap()
+                        .with_timezone(&Utc),
+                ),
+                extra: (),
+            })
+        })
     }
 }
 
 impl SoupService for RecordingSoupService {
+    async fn get_viewable_items(
+        &self,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<Vec<SoupProjectionHydration>, SoupErr> {
+        assert!(team_receipt.is_none());
+        Ok(receipts
+            .iter()
+            .filter_map(|receipt| {
+                self.calls.lock().unwrap().push(
+                    receipt
+                        .acting_user_id()
+                        .map_or_else(|| "anonymous".to_owned(), ToString::to_string),
+                );
+                self.initiative()
+            })
+            .map(|item| SoupProjectionHydration {
+                item,
+                document_server_facts: None,
+            })
+            .collect())
+    }
+
     async fn get_user_soup<T>(
         &self,
         req: SoupRequest<T>,
@@ -77,28 +132,9 @@ impl SoupService for RecordingSoupService {
     {
         assert!(team_receipt.is_none());
         self.calls.lock().unwrap().push(req.user.to_string());
-        let snapshot = match &self.source {
-            Source::Replica => Some(detail()),
-            Source::Empty => None,
-            Source::Primary(api) => Some(api.current_detail()),
-        };
-        let items = snapshot
+        let items = self
+            .initiative()
             .filter(|_| req.user == user())
-            .map(|detail| {
-                SoupItem::Initiative(SoupInitiative {
-                    id: detail.id.as_uuid(),
-                    name: detail.name,
-                    owner_id: Owner::from_principal_str(detail.owner_id.as_ref()).unwrap(),
-                    created_at: detail.created_at,
-                    updated_at: detail.updated_at,
-                    viewed_at: Some(
-                        DateTime::parse_from_rfc3339(VIEWED_AT)
-                            .unwrap()
-                            .with_timezone(&Utc),
-                    ),
-                    extra: (),
-                })
-            })
             .into_iter()
             .collect();
         let page: PaginatedCursor<SoupItem<()>, String, SimpleSortMethod, T> =
@@ -163,6 +199,32 @@ impl SoupService for RecordingSoupService {
 }
 
 struct NoThreads;
+
+/// Grants View to the fixture viewer only.
+struct FixtureViewer;
+
+impl SoupViewAuthorizer for FixtureViewer {
+    fn view_receipts(
+        &self,
+        viewer: Option<MacroUserIdStr<'static>>,
+        entities: Vec<Entity<'static>>,
+    ) -> BoxFuture<'_, Result<Vec<EntityAccessReceipt<ViewAccessLevel>>, SoupItemLoaderError>> {
+        let receipts = match viewer {
+            Some(viewer) if viewer == user() => entities
+                .iter()
+                .map(|entity| {
+                    EntityAccessReceipt::dangerously_assert_authenticated_user(
+                        viewer.clone(),
+                        &entity.entity_id,
+                        entity.entity_type,
+                    )
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
+        Box::pin(async move { Ok(receipts) })
+    }
+}
 
 impl SoupEmailThreadReader for NoThreads {
     async fn read_threads(
