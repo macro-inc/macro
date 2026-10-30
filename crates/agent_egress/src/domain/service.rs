@@ -153,7 +153,7 @@ where
 impl<Sessions, Credentials, Tokens, Forward, Approvals>
     EgressServiceImpl<Sessions, Credentials, Tokens, Forward, Approvals>
 where
-    Sessions: SessionAuthority,
+    Sessions: SessionAuthority + 'static,
     Credentials: McpCredentials,
     Tokens: GithubTokens,
     Forward: Forwarder + 'static,
