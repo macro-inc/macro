@@ -153,7 +153,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
           class="ph-no-capture font-medium truncate items-center gap-2 flex min-w-0"
         >
           <TaskPropertyControl entity={props.entity} property="status" />
-          <div class="-mr-2 flex shrink-0 items-center">
+          <div class="-mr-1 flex shrink-0 items-center touch:-mr-2">
             <TaskPropertyControl entity={props.entity} property="priority" />
           </div>
           <span class="truncate min-w-0">
