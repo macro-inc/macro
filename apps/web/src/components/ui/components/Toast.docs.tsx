@@ -162,7 +162,6 @@ function ActionsDemo() {
         content: () => 'Reconnect your account to resume syncing.',
         icon: LinkIcon,
         actions: [
-          { label: 'Hide', onClick: () => preview.dismiss(id) },
           {
             label: 'Reconnect',
             onClick: () => {
@@ -333,7 +332,7 @@ export default defineDoc({
   name: 'Toast',
   category: 'Feedback',
   description:
-    'Standalone status icons, title-aligned content and actions, and compact mobile notices. These local previews use the app renderer without triggering real operations or publishing into the app notification regions.',
+    'Standalone status icons, title-aligned content, primary actions with secondary Dismiss buttons, and compact mobile notices. These local previews use the app renderer without triggering real operations or publishing into the app notification regions.',
   import: "import { toast } from '@core/component/Toast/Toast';",
   demos: [
     { id: 'notifications', title: 'Statuses and close controls', render: StatusesDemo, fill: true },
@@ -352,12 +351,13 @@ export default defineDoc({
       'Use a short title and put supporting details in subtext.',
       'Reserve persistent prompts for notices that need a response.',
       'Keep action labels short and retain meaningful content on mobile.',
+      'Use primary actions with a secondary Dismiss button instead of a close icon.',
       'Use the existing toast service so queueing, timing, and dismissal stay consistent.',
     ],
     dont: [
       'Use a toast for information that must remain in the page.',
       'Add custom surfaces, shadows, or animations in consumers.',
-      'Hide the close button when a persistent notice has no other dismissal action.',
+      'Hide the dismissal control on a persistent notice unless its content provides another way to dismiss.',
     ],
   },
 });

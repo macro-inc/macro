@@ -109,7 +109,7 @@ it('keeps keyboard-focused actions alive until focus leaves the list', () => {
   ).toBe(true);
 });
 
-it('preserves actions and only reports explicit close as a user dismissal', () => {
+it('preserves actions and only reports explicit dismissal as a user dismissal', () => {
   render(() => <ToastRegion />);
   const action = vi.fn();
   const onUserDismiss = vi.fn();
@@ -124,7 +124,8 @@ it('preserves actions and only reports explicit close as a user dismissal', () =
   fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
   expect(action).toHaveBeenCalledOnce();
   expect(onUserDismiss).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
   expect(onUserDismiss).toHaveBeenCalledOnce();
   expect(
     screen

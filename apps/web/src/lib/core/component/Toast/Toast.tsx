@@ -54,7 +54,7 @@ interface ToastOptions {
   duration?: number;
   /** When true, don't render this toast on mobile. */
   hideOnMobile?: boolean;
-  /** Hide only the visible close control; Escape, swipe, and expiry stay unchanged. */
+  /** Hide the visible dismissal control; Escape, swipe, and expiry stay unchanged. */
   showCloseButton?: boolean;
 }
 
@@ -203,25 +203,41 @@ function alert(
   return createToast(message, ToastType.ALERT, options);
 }
 
-function ActionButtons(props: { actions: ToastAction[] }) {
+function ActionButtons(props: {
+  actions: ToastAction[];
+  showDismiss: boolean;
+  onDismiss?: () => void;
+}) {
   return (
-    <For each={props.actions}>
-      {(action) => (
-        <Button
+    <>
+      <Show when={props.showDismiss}>
+        <Toast.CloseButton
+          as={Button}
           size="sm"
-          onClick={action.onClick}
           variant="secondary"
-          class="max-w-full"
+          onClick={() => props.onDismiss?.()}
         >
-          <Show when={action.icon}>
-            {(icon) => <Dynamic component={icon()} class="size-3.5 shrink-0" />}
-          </Show>
-          <span class="min-w-0 whitespace-normal break-words">
-            {action.label}
-          </span>
-        </Button>
-      )}
-    </For>
+          {t('common.dismiss')}
+        </Toast.CloseButton>
+      </Show>
+      <For each={props.actions}>
+        {(action) => (
+          <Button
+            size="sm"
+            onClick={action.onClick}
+            variant="primary"
+            class="max-w-full"
+          >
+            <Show when={action.icon}>
+              {(icon) => <Dynamic component={icon()} class="size-3.5 shrink-0" />}
+            </Show>
+            <span class="min-w-0 whitespace-normal break-words">
+              {action.label}
+            </span>
+          </Button>
+        )}
+      </For>
+    </>
   );
 }
 
@@ -245,8 +261,10 @@ export function ToastContent(props: {
   const icon = () => props.custom?.icon ?? styles()?.icon;
   const actions = () => props.custom?.actions ?? props.actions ?? [];
   const hasBody = () => Boolean(props.custom?.content || props.subtext);
-  const singleRow = () => !props.embed && !hasBody() && actions().length <= 1;
-  const showCloseButton = () => props.showCloseButton !== false;
+  const hasActions = () => actions().length > 0;
+  const singleRow = () => !props.embed && !hasBody() && !hasActions();
+  const showDismiss = () => props.showCloseButton !== false;
+  const showCloseButton = () => showDismiss() && !hasActions();
   const loading = () => !props.custom && props.toastType === ToastType.LOADING;
   const [height, setHeight] = createSignal<number>();
   let surface!: HTMLDivElement;
@@ -319,11 +337,6 @@ export function ToastContent(props: {
                     <Toast.Title class="min-w-0 flex-1 text-base font-medium leading-normal text-ink wrap-anywhere">
                       {props.custom?.title ?? props.message}
                     </Toast.Title>
-                    <Show when={singleRow() && actions().length > 0}>
-                      <div class="flex max-w-full shrink-0 flex-wrap items-center gap-2">
-                        <ActionButtons actions={actions()} />
-                      </div>
-                    </Show>
                   </div>
                   <Show when={hasBody()}>
                     <Toast.Description class="mt-0.5 text-sm leading-normal text-ink-muted wrap-anywhere">
@@ -332,9 +345,13 @@ export function ToastContent(props: {
                         : props.subtext}
                     </Toast.Description>
                   </Show>
-                  <Show when={!singleRow() && actions().length > 0}>
+                  <Show when={hasActions()}>
                     <div class="mt-3 flex flex-wrap items-center gap-2">
-                      <ActionButtons actions={actions()} />
+                      <ActionButtons
+                        actions={actions()}
+                        showDismiss={showDismiss()}
+                        onDismiss={props.onUserDismiss}
+                      />
                     </div>
                   </Show>
                 </div>
@@ -344,9 +361,13 @@ export function ToastContent(props: {
             {(Embed) => (
               <div class="min-w-0">
                 <Dynamic component={Embed()} />
-                <Show when={actions().length > 0}>
+                <Show when={hasActions()}>
                   <div class="mt-3 flex flex-wrap items-center gap-2">
-                    <ActionButtons actions={actions()} />
+                    <ActionButtons
+                      actions={actions()}
+                      showDismiss={showDismiss()}
+                      onDismiss={props.onUserDismiss}
+                    />
                   </div>
                 </Show>
               </div>
