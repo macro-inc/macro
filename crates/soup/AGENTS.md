@@ -74,10 +74,10 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   the caller's mailbox. Keep browser requests bounded; never expand every CRM
   record into client-side filters or raise ingress limits to fit them.
 
-- Agent-session lookups by id (`agent_session::by_ids`, behind GraphQL
-  `agentSession` and its log) also accept a grant on the document or call
-  whose live thread the session runs in, matching `entity_access`. Lists use
-  session grants only.
+- Agent sessions named by id (an `Id` literal in `cursor_soup`, which GraphQL
+  `agentSession` and its log use, and `by_ids`) also accept a grant on the
+  document or call whose live thread the session runs in, matching
+  `entity_access`. Broad lists use session grants only.
 - `expanded/` vs `unexpanded/` queries exist because hydrating full entities
   is expensive — don't widen `unexpanded` to return hydrated data; add a new
   `expanded` path instead.

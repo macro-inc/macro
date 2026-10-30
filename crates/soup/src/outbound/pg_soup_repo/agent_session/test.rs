@@ -655,6 +655,17 @@ async fn by_ids_inherits_the_parent_thread_access(pool: PgPool) -> anyhow::Resul
         .await?;
         assert_eq!(ids(&viewer_items), vec![fixture.private], "{kind} viewer");
 
+        // GraphQL `agentSession` loads through a cursor query naming the id.
+        let named = cursor_soup(
+            &pool,
+            request(
+                STRANGER,
+                Some(Expr::val(AgentSessionLiteral::Id(fixture.private))),
+            ),
+        )
+        .await?;
+        assert_eq!(ids(&named), vec![fixture.private], "{kind} viewer by id");
+
         let listed = cursor_soup(
             &pool,
             request(STRANGER, Some(Expr::val(AgentSessionLiteral::Include))),

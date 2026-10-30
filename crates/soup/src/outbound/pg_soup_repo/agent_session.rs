@@ -120,16 +120,26 @@ pub(super) async fn cursor_soup(
     // `$1` is the requesting user for every clause in this query: the source
     // id CTE, the history join, and any `Owner` literal that binds it again.
     query.push_bind(req.user_id.as_ref().to_string());
+    let named_ids = explicitly_named_ids(filter);
     query.push(ACCESS_SQL);
+    // A session the query names is also readable through its thread's parent,
+    // like the session's own REST read; GraphQL `agentSession` loads this way.
+    // Broad lists stay limited to session grants so every document thread's
+    // sessions do not flood Home and Recent.
+    query.push("(");
     query.push(SESSION_GRANT_SQL);
-    query.push(" AND (");
+    query.push(" OR (s.id = ANY(");
+    query.push_bind(named_ids.clone());
+    query.push(") AND ");
+    query.push(PARENT_THREAD_GRANT_SQL);
+    query.push(")) AND (");
     push_filter(&mut query, filter);
     query.push(")");
     // Hidden inline mentions and DM contexts are absent from broad lists. A
     // query that names the session still returns it, so favorites and direct
     // id lookups keep working.
     query.push(" AND (s.visibility <> 'hidden' OR s.id = ANY(");
-    query.push_bind(explicitly_named_ids(filter));
+    query.push_bind(named_ids);
     query.push("))");
     if let (Some(timestamp), Some(id)) = (parts.timestamp, parts.id) {
         query.push(format!(" AND ({sort}, s.id) < ("));
@@ -150,6 +160,7 @@ pub(super) async fn cursor_soup(
         .collect()
 }
 
+#[tracing::instrument(err, skip_all, fields(entity_count = req.entities.len()))]
 pub(super) async fn by_ids(
     db: &PgPool,
     req: AdvancedSortParams<'_>,
@@ -167,9 +178,7 @@ pub(super) async fn by_ids(
     let mut query = QueryBuilder::<Postgres>::new(SELECT_SQL);
     query.push_bind(req.user_id.as_ref().to_string());
     query.push(ACCESS_SQL);
-    // A session opened by id is also readable through its thread's parent,
-    // like the session's own REST read. Lists stay limited to session grants
-    // so every document thread's sessions do not flood Home and Recent.
+    // Every session here is named, so its thread's parent grants apply too.
     query.push("(");
     query.push(SESSION_GRANT_SQL);
     query.push(" OR ");
