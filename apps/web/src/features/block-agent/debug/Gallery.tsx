@@ -649,6 +649,53 @@ const FIXTURE_MESSAGE: FoldedMessage = {
         error: null,
       },
     },
+    {
+      kind: 'tool_use',
+      id: 'demo-request-access',
+      name: { kind: 'mcp', server: 'macro', tool: 'RequestEntityAccess' },
+      status: 'completed',
+      detail: {
+        kind: 'macro',
+        input: {
+          entityType: 'initiative',
+          entityId: '0195d2dd-5de9-71f2-9d59-5d9734f1adb8',
+          access: 'edit',
+        },
+        output: {
+          status: 'pending',
+          requestedLevel: 'edit',
+          sentTo: ['macro|owner@example.com'],
+          requestedAt: '2026-10-30T12:00:00Z',
+        },
+        error: null,
+      },
+    },
+    {
+      kind: 'tool_use',
+      id: 'demo-read-access-request',
+      name: { kind: 'mcp', server: 'macro', tool: 'ReadEntityAccessRequest' },
+      status: 'completed',
+      detail: {
+        kind: 'macro',
+        input: {
+          entityType: 'initiative',
+          entityId: '0195d2dd-5de9-71f2-9d59-5d9734f1adb8',
+        },
+        output: {
+          currentAccess: 'edit',
+          supportedLevels: ['view', 'comment', 'edit'],
+          owner: 'macro|owner@example.com',
+          request: {
+            status: 'granted',
+            requestedLevel: 'edit',
+            grantedLevel: 'edit',
+            updatedAt: '2026-10-30T12:05:00Z',
+            retryAfter: null,
+          },
+        },
+        error: null,
+      },
+    },
     // A Macro MCP call whose payload does not fit the registered renderer:
     // keep its summary visible without exposing the raw exchange.
     {
