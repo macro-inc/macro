@@ -12,5 +12,6 @@ Package names remain stable; only their workspace paths live under `folds/`.
 Run each package's tests from the repository root.
 
 Native folds implement `agent_fold::domain::transcript::Fold`. Their fixtures are
-synthetic transcripts with pinned output snapshots. Runtime adapters consume the
+synthetic transcripts with pinned output snapshots, plus sanitized excerpts of
+real transcripts for regressions. Runtime adapters consume the
 same events; there is no separate parsing implementation in macrod.

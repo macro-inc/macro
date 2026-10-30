@@ -4,16 +4,25 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[features]
+axum = ["dep:axum", "dep:entity_registry", "dep:macro_authorization", "dep:utoipa"]
+
 [dependencies]
+ai_billing = { path = "../ai_billing" }
 ai_toolset = { path = "../ai_toolset" }
 ai_usage = { path = "../ai_usage" }
 anyhow.workspace = true
 async-trait.workspace = true
 attachment = { path = "../attachment" }
+axum = { workspace = true, optional = true }
 base64.workspace = true
 bot_id = { path = "../bot_id" }
+entity_registry = { path = "../entity_registry/entity_registry", features = ["axum"], optional = true }
 image.workspace = true
 lexical_client = { path = "../lexical_client" }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+  "axum",
+], optional = true }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 model_owner = { path = "../model_owner" }
@@ -26,10 +35,14 @@ serde_json.workspace = true
 static_file_service_client = { path = "../static_file_service_client" }
 thiserror.workspace = true
 tracing.workspace = true
+utoipa = { workspace = true, optional = true }
 uuid.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+http-body-util.workspace = true
 macro_user_id = { path = "../macro_user_id" }
+model_user = { path = "../model_user" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true, features = ["util"] }
 wiremock.workspace = true

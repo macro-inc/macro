@@ -82,7 +82,9 @@ icon and app-name branding are Android-only.
    `iOS Native Check` passes. (The workflow doesn't enable auto-merge
    itself: that would need a user token, because a merge set up by the
    Actions token doesn't trigger the push-to-`main` workflows such as the
-   dev redeploy.) To retry after a failure, remove and re-add the label.
+   dev redeploy.) A failure comment names the step that failed and, for
+   the checking steps, quotes the end of its output. To retry after a
+   failure, remove and re-add the label.
    The label only works on a PR that is mergeable: GitHub does not run
    `pull_request` workflows on a PR that conflicts with `main`, so the
    release never starts there. The **`Release Label Check`** workflow
@@ -118,8 +120,8 @@ icon and app-name branding are Android-only.
      `minNativeBuilds.ios` = the new build number. Installed apps on older
      native builds stop applying OTA bundles and show the "update from the
      App Store" prompt instead (`NativeUpdateRequired` in
-     `src/lib/tauri/TauriProvider.tsx`). The Android floor is independent;
-     see `docs/development/android.md`.
+     `src/lib/tauri/TauriProvider.tsx`). The Android floor is independent:
+     `just android-bump` raises it; see `docs/development/android.md`.
 
    Because the App Store release starts with the deploy rather than before
    it, older installs can see the update prompt shortly before the App
@@ -204,8 +206,12 @@ code" is defined above. The checks:
   submitting): the head's native tree must equal that of the PR's merge
   result. A head that lacks native code `main` gained since it branched
   would go through App Review but could never pass the gate; the release
-  refuses instead, and the fix is to merge `main`, bump, and re-add the
-  label.
+  refuses instead, lists the native files `main` changed, and the fix is to
+  merge `main`, bump, and re-add the label. When GitHub has no merge result
+  (the PR conflicts with `main`, or GitHub hasn't computed it yet) the check
+  compares `main`'s native tree with the PR's branch point instead: if
+  `main`'s native code hasn't moved, merging can only carry the PR's own,
+  whatever files the conflicts are in, and the release goes ahead.
 - **Approval check** (the gate): the approved build's stamp must equal the native
   tree of the PR's **current merge result** (fetched through the API, so a
   re-run of the job evaluates today's `main`, not the one the run started

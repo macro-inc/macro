@@ -40,11 +40,11 @@ export type ChannelRailRow =
       favorite: Favorite;
     }
   | {
-      /** A team channel label heading inside the Channels section. */
+      /** A team channel label heading inside the Team channels section. */
       kind: 'label';
       id: `label:${string}`;
-      group: 'channels';
-      /** Index in the Channels section's rendered rows (labels and channels). */
+      group: 'team_channels';
+      /** Index in the Team channels section's rendered rows (labels and channels). */
       localIndex: number;
       label: ChannelLabel;
     }
@@ -54,7 +54,7 @@ export type ChannelRailRow =
       group?: ChannelsGroup;
       scope: ChannelsSourceScope;
       /**
-       * Index in the scope's rendered list. For `channels` that list mixes
+       * Index in the scope's rendered list. For `team_channels` that list mixes
        * label headings and channels, so it is not an index into the source.
        */
       localIndex: number;
@@ -64,7 +64,7 @@ export type ChannelRailRow =
     };
 
 /**
- * One rendered row of the Channels section: a label heading or a channel,
+ * One rendered row of the Team channels section: a label heading or a channel,
  * nested (`labelId` set) or in the plain list below the labels.
  */
 export type ChannelSectionRow =

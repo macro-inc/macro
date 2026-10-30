@@ -17,10 +17,13 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use crate::domain::{
-    models::{AuthorizeRequest, CallbackRequest, ClientRegistrationRequest, TokenRequest},
+    models::{
+        AuthorizeRequest, CallbackRequest, ClientRegistrationRequest, RevocationRequest,
+        TokenRequest,
+    },
     service::{
         CompleteCallbackError, InflightAuthStore, McpAuthProxyService, McpAuthProxyServiceImpl,
-        RegisterClientError, StartAuthorizationError, TokenExchangeError,
+        RegisterClientError, RevokeTokenError, StartAuthorizationError, TokenExchangeError,
     },
 };
 
@@ -86,7 +89,15 @@ async fn authorize<I: InflightAuthStore + 'static>(
     Query(params): Query<AuthorizeRequest>,
 ) -> Response {
     match auth_proxy.start_authorization(params).await {
-        Ok(url) => Redirect::temporary(&url).into_response(),
+        // The browser carries the MCP client page's Referer across this
+        // redirect, and FusionAuth rejects any Referer outside its first-party
+        // origin list with "Invalid origin uri". The redirect URI policy has
+        // already vetted the client, so the client's origin is withheld.
+        Ok(url) => (
+            [(header::REFERRER_POLICY, "no-referrer")],
+            Redirect::temporary(&url),
+        )
+            .into_response(),
         Err(StartAuthorizationError::UnsupportedResponseType) => (
             axum::http::StatusCode::BAD_REQUEST,
             "unsupported response_type",
@@ -240,6 +251,11 @@ async fn token<I: InflightAuthStore + 'static>(
             "refresh token is not bound to a client",
         )
             .into_response(),
+        Err(TokenExchangeError::RevokedGrant) => (
+            axum::http::StatusCode::BAD_REQUEST,
+            "refresh token has been revoked",
+        )
+            .into_response(),
         Err(TokenExchangeError::InflightStore(error)) => {
             tracing::error!(error=?error, "failed to access inflight auth state");
             (
@@ -267,8 +283,61 @@ async fn token<I: InflightAuthStore + 'static>(
     }
 }
 
+/// RFC 7009 revocation endpoint. Errors use the RFC 6749 section 5.2 JSON
+/// shape that RFC 7009 section 2.2.1 refers to.
+async fn revoke<I: InflightAuthStore + 'static>(
+    State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
+    axum::Form(params): axum::Form<RevocationRequest>,
+) -> Response {
+    let (status, error, description) = match auth_proxy.revoke_token(params).await {
+        Ok(()) => return axum::http::StatusCode::OK.into_response(),
+        Err(RevokeTokenError::ClientIdRequired) => (
+            axum::http::StatusCode::UNAUTHORIZED,
+            "invalid_client",
+            "client_id required",
+        ),
+        Err(RevokeTokenError::TokenRequired) => (
+            axum::http::StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "token required",
+        ),
+        Err(RevokeTokenError::UnsupportedTokenType) => (
+            axum::http::StatusCode::BAD_REQUEST,
+            "unsupported_token_type",
+            "access tokens cannot be revoked; revoke the refresh token instead",
+        ),
+        Err(RevokeTokenError::ClientMismatch) => (
+            axum::http::StatusCode::BAD_REQUEST,
+            "invalid_grant",
+            "token was not issued to this client",
+        ),
+        Err(RevokeTokenError::RefreshTokenBindingStore(error)) => {
+            tracing::error!(error=?error, "failed to access refresh token bindings");
+            (
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                "server_error",
+                "failed to access refresh token bindings",
+            )
+        }
+        Err(RevokeTokenError::UpstreamRevocationFailed(error)) => {
+            tracing::error!(error=?error, "upstream refresh token revocation failed");
+            (
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                "server_error",
+                "upstream refresh token revocation failed",
+            )
+        }
+    };
+    (
+        status,
+        Json(serde_json::json!({ "error": error, "error_description": description })),
+    )
+        .into_response()
+}
+
 /// Builds the unauthenticated OAuth broker routes: discovery metadata,
-/// dynamic client registration, authorize, upstream callback, and token.
+/// dynamic client registration, authorize, upstream callback, token, and
+/// revocation.
 pub fn oauth_router<I>(auth_proxy: McpAuthProxyServiceImpl<I>) -> Router
 where
     I: InflightAuthStore + 'static,
@@ -298,6 +367,7 @@ fn oauth_routes<I: InflightAuthStore + 'static>(auth_proxy: McpAuthProxyServiceI
         .route("/register", routing::post(register))
         .route("/oauth/callback", routing::get(oauth_callback))
         .route("/token", routing::post(token))
+        .route("/revoke", routing::post(revoke))
         .with_state(auth_proxy)
 }
 
@@ -318,7 +388,14 @@ where
     S::Response: axum::response::IntoResponse,
     S::Future: Send + 'static,
 {
-    mcp_router_with_oauth(oauth_router(auth_proxy), jwt_args, mcp_service)
+    {
+        let clients = auth_proxy.access_token_clients();
+        mcp_router_with_oauth(
+            oauth_router(auth_proxy),
+            super::middleware::BearerAuth { jwt_args, clients },
+            mcp_service,
+        )
+    }
 }
 
 /// MCP routes for a shared HTTP listener whose process owns health checks.
@@ -337,10 +414,21 @@ where
     S::Response: axum::response::IntoResponse,
     S::Future: Send + 'static,
 {
-    mcp_router_with_oauth(oauth_routes(auth_proxy), jwt_args, mcp_service)
+    {
+        let clients = auth_proxy.access_token_clients();
+        mcp_router_with_oauth(
+            oauth_routes(auth_proxy),
+            super::middleware::BearerAuth { jwt_args, clients },
+            mcp_service,
+        )
+    }
 }
 
-fn mcp_router_with_oauth<S>(oauth: Router, jwt_args: JwtValidationArgs, mcp_service: S) -> Router
+fn mcp_router_with_oauth<S>(
+    oauth: Router,
+    auth: super::middleware::BearerAuth,
+    mcp_service: S,
+) -> Router
 where
     S: tower::Service<axum::http::Request<axum::body::Body>, Error = std::convert::Infallible>
         + Clone
@@ -354,7 +442,7 @@ where
         Router::new()
             .nest_service("/mcp", mcp_service)
             .layer(axum_mw::from_fn_with_state(
-                jwt_args,
+                auth,
                 super::middleware::validate_bearer,
             ));
 

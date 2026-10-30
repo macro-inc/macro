@@ -6,27 +6,19 @@ import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import { useDatabasesQuery } from '@queries/storage/databases';
 import { databasesKeys } from '@queries/storage/keys';
 import { storageServiceClient } from '@service-storage/client';
-import { useQuery, useQueryClient } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { DatabaseViewSelection } from '../../database/core/view-selection';
 
-/** Mounted inside authenticated app chrome. Provisioning never suspends the app. */
-export function useStarterDatabase() {
-  const userId = useUserId();
-  const flag = useFeatureFlag(enableDatabases);
-  const databases = useDatabasesQuery();
-  const client = useQueryClient();
-  return useQuery(() => ({
-    queryKey: databasesKeys.starter(userId() ?? '').queryKey,
-    enabled:
-      !!userId() &&
-      !flag().loading &&
-      flag().enabled &&
-      databases.isSuccess &&
-      databases.data?.length === 0,
+function starterDatabaseQueryOptions(
+  ownerId: string | undefined,
+  enabled: boolean
+) {
+  return queryOptions({
+    queryKey: databasesKeys.starter(ownerId ?? '').queryKey,
+    enabled: !!ownerId && enabled,
     staleTime: Infinity,
     gcTime: Infinity,
-    queryFn: async () => {
-      const ownerId = userId();
+    queryFn: async ({ client }) => {
       const result = await throwOnErr(() =>
         storageServiceClient.databases.ensureStarter()
       );
@@ -58,5 +50,21 @@ export function useStarterDatabase() {
         });
       return result;
     },
-  }));
+  });
+}
+
+/** Mounted inside authenticated app chrome. Provisioning never suspends the app. */
+export function useStarterDatabase() {
+  const userId = useUserId();
+  const flag = useFeatureFlag(enableDatabases);
+  const databases = useDatabasesQuery();
+  return useQuery(() =>
+    starterDatabaseQueryOptions(
+      userId(),
+      !flag().loading &&
+        flag().enabled &&
+        databases.isSuccess &&
+        databases.data?.length === 0
+    )
+  );
 }

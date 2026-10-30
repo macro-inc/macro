@@ -6,11 +6,12 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import FunnelIcon from '@icon/system/regular/funnel-simple.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
+import TagIcon from '@icon/system/regular/tag-simple.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { Badge, badgeTriggerClasses, Layer } from '@ui';
-import { createSignal, For, Match, Show, Switch } from 'solid-js';
+import { Badge, buttonClasses, Layer } from '@ui';
+import { createSignal, For, Show } from 'solid-js';
 import { TagDot } from './TagDot';
 import {
   type EditableTag,
@@ -138,53 +139,61 @@ export function TagsRow(props: {
 
   return (
     <div class="flex flex-wrap items-center gap-1.5">
-      <For each={docTags.appliedTags()}>
-        {(tag) => (
-          <TagChip
-            tag={tag}
-            docTags={docTags}
-            canEdit={props.canEdit}
-            onEdit={openEdit}
-          />
-        )}
-      </For>
       <Show
-        when={props.canEdit}
+        when={triggerVariant() === 'pill' && !hasTags()}
         fallback={
-          <Show when={docTags.appliedTags().length === 0}>
-            <span class="text-ink-extra-muted">No tags</span>
-          </Show>
+          <>
+            <For each={docTags.appliedTags()}>
+              {(tag) => (
+                <TagChip
+                  tag={tag}
+                  docTags={docTags}
+                  canEdit={props.canEdit}
+                  onEdit={openEdit}
+                />
+              )}
+            </For>
+            <Show
+              when={props.canEdit}
+              fallback={
+                <Show when={!hasTags()}>
+                  <span class="text-ink-extra-muted">No tags</span>
+                </Show>
+              }
+            >
+              <TagPicker
+                docTags={docTags}
+                triggerClass={buttonClasses({
+                  variant: 'secondary',
+                  size: 'icon-xs',
+                  class: 'm-px',
+                })}
+                triggerLabel={t('common.addTags')}
+              >
+                <PlusIcon class="size-3" />
+              </TagPicker>
+            </Show>
+          </>
         }
       >
-        <Switch>
-          <Match when={triggerVariant() === 'pill' && !hasTags()}>
-            <TagPicker
-              docTags={docTags}
-              triggerClass={badgeTriggerClasses({
-                variant: 'outline',
-                size: 'sm',
-                class: 'm-px gap-1.5',
-              })}
-              triggerLabel="Add tags"
-            >
-              <PlusIcon class="size-3" />
-              <span>Add tags</span>
-            </TagPicker>
-          </Match>
-          <Match when={true}>
-            <TagPicker
-              docTags={docTags}
-              triggerClass={badgeTriggerClasses({
-                variant: 'outline',
-                size: 'sm',
-                class: 'm-px size-6 p-0',
-              })}
-              triggerLabel="Add tags"
-            >
-              <PlusIcon class="size-3" />
-            </TagPicker>
-          </Match>
-        </Switch>
+        <Show
+          when={props.canEdit}
+          fallback={
+            <span class="text-xs text-ink-muted">{t('common.emptyTags')}</span>
+          }
+        >
+          <TagPicker
+            docTags={docTags}
+            triggerClass={buttonClasses({
+              variant: 'outline',
+              size: 'xs',
+            })}
+            triggerLabel={t('common.addTags')}
+          >
+            <TagIcon class="size-4" />
+            {t('common.addTags')}
+          </TagPicker>
+        </Show>
       </Show>
       <TagEditorDialog
         open={editorMode() !== null}

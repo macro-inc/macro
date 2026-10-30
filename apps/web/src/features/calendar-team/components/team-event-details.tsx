@@ -1,9 +1,7 @@
+import { parseLocalDate } from '@core/util/local-date';
 import { createMemo, For, Show } from 'solid-js';
 import type { CalendarEvent, CalendarTimeFormat } from '../../calendar/types';
-import {
-  isTimedPointEvent,
-  parseLocalDate,
-} from '../../calendar/utils/calendar-date';
+import { isTimedPointEvent } from '../../calendar/utils/calendar-date';
 import { sanitizeCalendarDescription } from '../../calendar/utils/calendar-description';
 import { safeConferenceUrl } from '../../calendar/utils/conference-link';
 

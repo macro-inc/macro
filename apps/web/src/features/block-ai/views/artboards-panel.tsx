@@ -57,15 +57,15 @@ export function ArtboardsPanel(props: { viewer: AiViewer; editor: AiEditor }) {
           {viewer.artboards().length} artboards
         </span>
         <Button
+          aria-label="New artboard"
           variant="ghost"
           size="icon-sm"
-          label="New artboard"
           tooltip="New artboard"
           data-testid="ai-artboard-new"
           disabled={!editor.enabled()}
           onClick={add}
         >
-          <Plus />
+          <Plus class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
       <div class="min-h-0 flex-1 overflow-y-auto py-1">

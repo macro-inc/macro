@@ -56,8 +56,11 @@ retain their existing session/repository identities.
 
 - `cargo test -p agent_egress` (`SQLX_OFFLINE` unset).
 
-Code-mode minting attaches the session agent to a short-lived selected-user token;
-ordinary MCP owner tokens omit agent attribution.
+Session-egress Macro API tokens (`MacroApiTokens::mint`) carry the session's
+bound agent (`agent_session.bot_id`, read off the row as `SessionGrant.agent`) as
+their signed `agent_id` claim, so Macro's tools write as that agent. The bot
+never comes from the request. `MacroApiTokenSigner::mint_for_agent` callers
+(code mode) choose the claim themselves; `mint_for` signs none.
 
 ## Gotchas
 

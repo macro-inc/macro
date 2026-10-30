@@ -1449,6 +1449,8 @@ enum GraphqlInitiativeLiteral {
     DueBefore(String),
     /// Match projects due after this RFC 3339 timestamp.
     DueAfter(String),
+    /// Exact notification state for the requester; also opts in.
+    NotificationState(GraphqlNotificationState),
 }
 
 impl IntoFilterExpr<InitiativeLiteral> for GraphqlInitiativeLiteral {
@@ -1465,6 +1467,7 @@ impl IntoFilterExpr<InitiativeLiteral> for GraphqlInitiativeLiteral {
             Self::NameContains(name) => InitiativeLiteral::NameContains(name),
             Self::DueBefore(date) => InitiativeLiteral::DueBefore(GraphqlDateLiteral::parse(date)?),
             Self::DueAfter(date) => InitiativeLiteral::DueAfter(GraphqlDateLiteral::parse(date)?),
+            Self::NotificationState(state) => InitiativeLiteral::NotificationState(state.into()),
         };
         Ok(Expr::val(literal))
     }
@@ -1483,6 +1486,8 @@ filter_expr_input!(
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 enum GraphqlDatabaseRowLiteral {
+    /// Include accessible rows of every table; must be true.
+    Include(bool),
     /// Match the rows of a table.
     TableId(ID),
     /// Match one row.
@@ -1492,6 +1497,12 @@ enum GraphqlDatabaseRowLiteral {
 impl IntoFilterExpr<DatabaseRowLiteral> for GraphqlDatabaseRowLiteral {
     fn into_expr(self) -> InputResult<Expr<DatabaseRowLiteral>> {
         Ok(Expr::val(match self {
+            Self::Include(false) => {
+                return Err(InputError::new(
+                    "database row `include` must be true; omit the filter to exclude rows",
+                ));
+            }
+            Self::Include(true) => DatabaseRowLiteral::Include,
             Self::TableId(id) => DatabaseRowLiteral::TableId(parse_id(id, "tableId")?),
             Self::Id(id) => DatabaseRowLiteral::Id(parse_id(id, "id")?),
         }))

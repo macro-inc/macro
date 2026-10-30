@@ -135,16 +135,23 @@ jobs:
         CACHE_WASM_MANIFEST=crates/client/cache-wasm/Cargo.toml
         export NATIVE_TREE_EXCLUDE='(^|/)(android|macos|linux|windows|desktop)([_./-]|$)|\.(android|macos|linux|windows)\.|\.md$|^desktop-release\.json$|^\.helix/'
 
-        # native_tree_hash <commit>: prints the hash, fails if the path is missing.
+        # native_tree_listing <commit>: what the hash covers — the filtered ls-tree
+        # lines plus the cache wasm version — fails if the path is missing.
         # (--full-tree: ls-tree otherwise narrows its output to the current directory,
         # which would silently hash nothing when run from apps/web.)
-        native_tree_hash() {
+        native_tree_listing() {
           git rev-parse -q --verify "$1:${NATIVE_TREE_PATH}" >/dev/null || return 1
-          {
-            git ls-tree -r --full-tree "$1:${NATIVE_TREE_PATH}" \
-              | awk -F'\t' '$2 !~ ENVIRON["NATIVE_TREE_EXCLUDE"]'
-            echo "cache-wasm-version $(cache_wasm_version "$1")"
-          } | git hash-object --stdin
+          git ls-tree -r --full-tree "$1:${NATIVE_TREE_PATH}" \
+            | awk -F'\t' '$2 !~ ENVIRON["NATIVE_TREE_EXCLUDE"]'
+          echo "cache-wasm-version $(cache_wasm_version "$1")"
+        }
+
+        # native_tree_hash <commit>: prints the hash of the listing, and fails when the
+        # listing does (a pipe would hash nothing and succeed).
+        native_tree_hash() {
+          local listing
+          listing=$(native_tree_listing "$1") || return 1
+          git hash-object --stdin <<<"$listing"
         }
 
         # cache_wasm_version <commit>: the `version` of the client cache wasm package

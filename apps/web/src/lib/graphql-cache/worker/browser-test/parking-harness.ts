@@ -1,9 +1,17 @@
+import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
+import {
+  NotificationUpdatesDocument,
+  type NotificationUpdatesSubscription,
+} from '@service-storage/graphql/generated/graphql';
+import { notificationReceiptExchange } from '@service-storage/graphql-notification-receipt';
 import {
   createClient,
   fetchExchange,
   gql,
   stringifyDocument,
+  subscriptionExchange,
 } from '@urql/core';
+import { createRoot } from 'solid-js';
 import { normalizedCacheExchange } from '../../exchange/normalized-cache-exchange';
 import type { CacheHost } from '../../host/types';
 import { createWorkerCacheHost } from '../../host/worker-host';
@@ -52,13 +60,36 @@ const settling = Promise.withResolvers<void>();
 let result: Promise<unknown> | undefined;
 let readResult: Promise<{ data: unknown; error: boolean }> | undefined;
 let readApiRequests = 0;
+const receivedNotifications: string[] = [];
+const persistedNotifications: string[] = [];
+const notificationPersisted = Promise.withResolvers<void>();
+let emitNotification: (() => void) | undefined;
+let stopNotifications: (() => void) | undefined;
+const catchupQuery = 'query Catchup { user { id } }';
+const catchupRefreshed = Promise.withResolvers<void>();
+const catchupRevisions: string[] = [];
+const catchupBatches: number[] = [];
+const catchupBatchReported = Promise.withResolvers<void>();
+let catchupRefreshes = 0;
+let catchupRead: unknown;
+let catchupWrites: Promise<unknown> | undefined;
+let stopCatchup: (() => void) | undefined;
 function requireHost(): CacheHost {
   if (!host) throw new Error('cache not started');
   return host;
 }
 const api = {
   async start(seed = false) {
-    host ??= createWorkerCacheHost({ scope });
+    host ??= createWorkerCacheHost({
+      scope,
+      telemetrySink: {
+        emit(event) {
+          if (event.name !== 'graphql_cache.change_batch') return;
+          catchupBatches.push(event.count ?? 0);
+          catchupBatchReported.resolve();
+        },
+      },
+    });
     if (seed) {
       await host.writeQuery({ query, data });
       seedUuid = crypto.randomUUID();
@@ -95,6 +126,120 @@ const api = {
       visibility: document.visibilityState,
     };
   },
+  queueCatchup() {
+    const current = requireHost();
+    stopCatchup = createRoot((dispose) => {
+      const unsubscribe = current.onCacheChanged((revision) => {
+        catchupRevisions.push(revision);
+      });
+      const stopRefresh = subscribeToVisibleCacheChanges(current, async () => {
+        catchupRefreshes += 1;
+        catchupRead = await current.readQuery({ query: catchupQuery });
+        catchupRefreshed.resolve();
+      });
+      return () => {
+        unsubscribe();
+        stopRefresh();
+        dispose();
+      };
+    });
+    catchupWrites = Promise.all([
+      ...[
+        'SoupUpdates',
+        'ChannelUnreadPresence',
+        'CalendarChanges',
+        'Calendars',
+      ].map((name, index) =>
+        current.writeQuery({
+          query: `query ${name} { user { id } }`,
+          data: { user: { id: `catchup-${index}` } },
+        })
+      ),
+      current.calendarCommit({
+        coverage: [{ kind: 'timed', start: 0, end: 1 }],
+        freshness: 'fresh',
+      }),
+    ]);
+  },
+  async catchupDone() {
+    await catchupWrites;
+    await catchupRefreshed.promise;
+    await catchupBatchReported.promise;
+  },
+  catchupSnapshot: () => ({
+    revisions: [...catchupRevisions],
+    batches: [...catchupBatches],
+    refreshes: catchupRefreshes,
+    read: catchupRead,
+  }),
+  async startNotifications() {
+    const attached = Promise.withResolvers<void>();
+    const client = createClient({
+      url: 'https://parking.invalid/graphql',
+      exchanges: [
+        normalizedCacheExchange(requireHost()),
+        notificationReceiptExchange((patch) => {
+          if (patch.__typename === 'GraphqlNewNotification')
+            receivedNotifications.push(patch.notification.id);
+        }),
+        subscriptionExchange({
+          forwardSubscription: () => ({
+            subscribe(sink) {
+              emitNotification = () => {
+                const data: NotificationUpdatesSubscription = {
+                  notificationUpdates: {
+                    __typename: 'GraphqlNewNotification',
+                    notification: {
+                      __typename: 'GraphqlNotification',
+                      id: 'synthetic-notification',
+                      entityId: 'synthetic-reminder',
+                      entityType: 'DOCUMENT',
+                      targetEntityType: 'REMINDER',
+                      eventType: 'reminder',
+                      state: 'UNSEEN',
+                      sent: true,
+                      createdAt: '2026-01-01T00:00:00Z',
+                      updatedAt: '2026-01-01T00:00:00Z',
+                      viewedAt: null,
+                      senderId: null,
+                      metadata: {
+                        __typename: 'GraphqlReminderMetadata',
+                        reminderReminderId: 'synthetic-reminder',
+                        reminderDescription: 'Review the document',
+                        reminderScheduledFor: null,
+                      },
+                    },
+                  },
+                };
+                sink.next({ data });
+              };
+              attached.resolve();
+              return { unsubscribe() {} };
+            },
+          }),
+        }),
+      ],
+    });
+    const subscription = client
+      .subscription(NotificationUpdatesDocument, {})
+      .subscribe((result) => {
+        const patch = result.data?.notificationUpdates;
+        if (patch?.__typename !== 'GraphqlNewNotification') return;
+        persistedNotifications.push(patch.notification.id);
+        notificationPersisted.resolve();
+      });
+    stopNotifications = () => subscription.unsubscribe();
+    await attached.promise;
+  },
+  emitNotification() {
+    if (!emitNotification) throw new Error('notifications not started');
+    emitNotification();
+  },
+  notifications: () => ({
+    received: [...receivedNotifications],
+    persisted: [...persistedNotifications],
+  }),
+  notificationPersisted: () => notificationPersisted.promise,
   parked: () => parked.promise,
   async locks() {
     return (await navigator.locks.query()).held?.filter((lock) =>
@@ -195,6 +340,8 @@ const api = {
     );
   },
   dispose() {
+    stopCatchup?.();
+    stopNotifications?.();
     host?.dispose();
   },
 };

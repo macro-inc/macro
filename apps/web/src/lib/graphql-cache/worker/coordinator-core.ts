@@ -7,6 +7,10 @@ import {
   OWNER_EPOCH_LOST_ERROR_CODE,
   OWNER_LOCK_UNAVAILABLE_ERROR_CODE,
 } from '../protocol';
+import {
+  CacheChangeBatch,
+  type CoalescedCacheChange,
+} from './cache-change-batch';
 import type {
   DatabaseAction,
   DatabaseActionProof,
@@ -76,7 +80,7 @@ export type CoordinatorAction =
       request: CacheRequest;
     }
   | { kind: 'deliver-response'; tabId: string; response: CacheResponse }
-  | { kind: 'broadcast-push'; push: CachePush }
+  | { kind: 'broadcast-push'; push: CachePush; coalescedCount?: number }
   | {
       kind: 'reject-request';
       tabId: string;
@@ -162,8 +166,11 @@ export class CoordinatorCore {
   private readonly unavailableTabs = new Map<string, string>();
   /** Set once a newer app build took the database over; never cleared. */
   private supersededReason: string | undefined;
+  /** A newer build asked while this engine may still be changing the files. */
+  private supersedePending = false;
   private readonly queuedRequests: QueuedRequest[] = [];
   private readonly inFlight = new Map<RouteId, InFlightRequest>();
+  private readonly cacheChanges = new CacheChangeBatch();
   private currentEpoch = 0;
   private nextRouteId = 1;
   private staleMessageDrops = 0;
@@ -199,6 +206,12 @@ export class CoordinatorCore {
   /** Whether a newer app build took the database over. */
   get superseded(): boolean {
     return this.supersededReason !== undefined;
+  }
+
+  /** Whether a newer app build took the database over, or will once this
+   * engine has settled. */
+  get handingOver(): boolean {
+    return this.supersededReason !== undefined || this.supersedePending;
   }
 
   registerTab(tabId: string, visible = true): CoordinatorAction[] {
@@ -407,6 +420,10 @@ export class CoordinatorCore {
         openOutcome: ready.openOutcome,
       });
     }
+    if (this.supersedePending) {
+      actions.push(...this.completeSupersede());
+      return actions;
+    }
     // A hidden engine may have reset storage before it immediately drains.
     // Notify hosts of that outcome, but leave queued work for its successor.
     const handoff = this.handoffIfNeeded();
@@ -439,21 +456,46 @@ export class CoordinatorCore {
     }
 
     this.inFlight.delete(routeId);
-    if (!this.tabs.includes(request.tabId)) return [];
-    return [
-      {
+    const actions = this.broadcastCacheChanges(
+      this.cacheChanges.requestCompleted(this.inFlight.size === 0)
+    );
+    if (this.tabs.includes(request.tabId)) {
+      actions.push({
         kind: 'deliver-response',
         tabId: request.tabId,
         response: { ...response, id: request.request.id },
-      },
-    ];
+      });
+    }
+    return actions;
   }
 
   enginePush(ownerEpoch: OwnerEpoch, push: CachePush): CoordinatorAction[] {
     if (!this.acceptsEngineMessages(ownerEpoch)) {
       return [this.dropStale(ownerEpoch, undefined, 'stale-epoch')];
     }
-    return [{ kind: 'broadcast-push', push }];
+    if (push.kind !== 'cache-changed' && push.kind !== 'cache-hydrated') {
+      return [{ kind: 'broadcast-push', push }];
+    }
+    // The engine's local queue can look empty between MessagePort deliveries.
+    // Only the coordinator knows how much accepted work remains in transit.
+    this.cacheChanges.add(push);
+    if (
+      this.inFlight.size <= 1 ||
+      (push.kind === 'cache-changed' && push.reset)
+    ) {
+      return this.broadcastCacheChanges(this.cacheChanges.flush());
+    }
+    return [];
+  }
+
+  private broadcastCacheChanges(
+    changes: CoalescedCacheChange[]
+  ): CoordinatorAction[] {
+    return changes.map(({ push, count }) => ({
+      kind: 'broadcast-push',
+      push,
+      ...(count > 1 ? { coalescedCount: count } : {}),
+    }));
   }
 
   beginGracefulDeparture(
@@ -506,7 +548,11 @@ export class CoordinatorCore {
       kind: 'waiting-for-tab',
       nextDatabaseAction: 'open-existing',
     };
-    actions.push(...this.activateNext('open-existing'));
+    actions.push(
+      ...(this.supersedePending
+        ? this.completeSupersede()
+        : this.activateNext('open-existing'))
+    );
     this.assertInvariants();
     return actions;
   }
@@ -524,27 +570,36 @@ export class CoordinatorCore {
    * using the cache and moves to that build; a tab that registers later only
    * runs uncached. The owner's page leaves the way a navigating page does,
    * which stops its engine and frees the database, and nothing is elected
-   * afterwards. Refused while an engine is starting, recovering, or draining,
-   * because its files may be changing.
+   * afterwards. While an engine is opening, recovering, or draining the
+   * database its files may be changing, so the handover waits until that
+   * engine has settled: it completes when the engine becomes ready or drains.
    */
   supersede(): CoordinatorAction[] {
-    const { kind } = this.stateValue;
+    const state = this.stateValue;
+    if (this.supersededReason !== undefined) return [];
     if (
-      this.supersededReason !== undefined ||
-      (kind !== 'active' &&
-        kind !== 'waiting-for-tab' &&
-        kind !== 'parked' &&
-        kind !== 'failed')
+      state.kind === 'draining' ||
+      state.kind === 'resetting-after-loss' ||
+      (state.kind === 'activating' && startupPhaseMayTouchStorage(state.phase))
     ) {
+      this.supersedePending = true;
       return [];
     }
+    return this.completeSupersede();
+  }
+
+  private completeSupersede(): CoordinatorAction[] {
+    this.supersedePending = false;
     const reason = SUPERSEDED_REASON;
     this.supersededReason = reason;
-    const actions: CoordinatorAction[] = this.queuedRequests
-      .splice(0)
-      .map(({ tabId, request }) =>
-        this.rejectUnavailable(tabId, request.id, reason)
-      );
+    const actions: CoordinatorAction[] = [
+      ...this.broadcastCacheChanges(this.cacheChanges.flush()),
+      ...this.queuedRequests
+        .splice(0)
+        .map(({ tabId, request }) =>
+          this.rejectUnavailable(tabId, request.id, reason)
+        ),
+    ];
     for (const tabId of this.tabs) this.unavailableTabs.set(tabId, reason);
     actions.push({ kind: 'broadcast-cache-superseded', reason });
     this.assertInvariants();
@@ -567,6 +622,7 @@ export class CoordinatorCore {
     };
     this.assertInvariants();
     return [
+      ...this.broadcastCacheChanges(this.cacheChanges.flush()),
       {
         kind: 'terminal-failure',
         error: reason,
@@ -635,6 +691,9 @@ export class CoordinatorCore {
     }
     this.removeTabRecord(tabId);
     this.retiringTabs.delete(tabId);
+    if (this.inFlight.size === 0) {
+      actions.push(...this.broadcastCacheChanges(this.cacheChanges.flush()));
+    }
     this.assertInvariants();
     return actions;
   }
@@ -642,6 +701,16 @@ export class CoordinatorCore {
   resumeAfterLoss(): CoordinatorAction[] {
     const state = this.stateValue;
     if (state.kind !== 'resetting-after-loss') return [];
+    if (this.supersedePending) {
+      // The lost engine was promised to a newer build. Hand over now instead
+      // of electing a reset owner that would wipe the database it agreed to
+      // yield, queued mutations included.
+      this.stateValue = {
+        kind: 'waiting-for-tab',
+        nextDatabaseAction: state.databaseAction,
+      };
+      return this.completeSupersede();
+    }
     const candidate = this.chooseCandidate(state.previousTabId);
     if (!candidate) {
       this.stateValue = {
@@ -721,7 +790,8 @@ export class CoordinatorCore {
     error: string,
     errorCode?: CacheResponseErrorCode
   ): CoordinatorAction[] {
-    const actions: CoordinatorAction[] = [];
+    // Never carry a committed hint into another engine's revision space.
+    const actions = this.broadcastCacheChanges(this.cacheChanges.flush());
     for (const [routeId, request] of this.inFlight) {
       if (request.ownerEpoch !== ownerEpoch) continue;
       this.inFlight.delete(routeId);

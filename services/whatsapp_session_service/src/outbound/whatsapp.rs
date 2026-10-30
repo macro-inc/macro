@@ -6,16 +6,17 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use external_chat::domain::models::{MediaKind, MediaShape};
 use sqlx::PgPool;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
-    ChatUpdate, ClaimedSend, InboundEvent, MediaImport, MediaShape, MessageAnchor, OutboundMedia,
+    ChatUpdate, ClaimedSend, InboundEvent, MediaImport, MessageAnchor, OutboundMedia,
     OutgoingContent, SessionScope, Target,
 };
-use whatsapp_linked::domain::models::{GroupInfo, Identity, MediaKind, Participant};
+use whatsapp_linked::domain::models::{GroupInfo, Identity, Participant};
 use whatsapp_store_pg::kms::WhatsAppKms;
 use whatsapp_store_pg::{PgWhatsAppStore, WhatsAppStoreError};
 use whatsmeow::download::{DownloadError, MediaType};
@@ -473,6 +474,9 @@ fn rejected(error: &ClientError) -> Option<&'static str> {
         ClientError::RecipientAdJid
         | ClientError::BroadcastListUnsupported
         | ClientError::UnknownServer => Some("invalid_recipient"),
+        ClientError::RecipientNotOnWhatsApp => Some("recipient_not_on_provider"),
+        // Only the queries before the message (recipient lookups) are IQs.
+        _ if error.is_iq_code(429) => Some("rate_limited"),
         _ => None,
     }
 }

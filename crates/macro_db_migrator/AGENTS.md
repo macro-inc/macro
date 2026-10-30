@@ -28,6 +28,9 @@ Migration files belong in `../macro_db_client/migrations/`.
 - Use SQL fixtures for statements that target a historical schema; current-schema
   SQLx macros cannot validate columns that have since been removed or added.
 - Exercise concurrent indexes through SQLx's migrator, outside explicit transactions.
+- Keep the migrations fingerprint `build.rs` passes as a cfg: sccache keys this
+  crate on its arguments, and without it CI reused a migrator missing a renamed
+  migration.
 
 ## Related
 

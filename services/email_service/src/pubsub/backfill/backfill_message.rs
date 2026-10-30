@@ -2,6 +2,7 @@ use crate::pubsub::backfill::db_error::map_db_error;
 use crate::pubsub::backfill::email_api_error::map_email_api_error;
 use crate::pubsub::backfill::{increment_counters, write_slot};
 use crate::pubsub::context::PubSubContext;
+use crate::pubsub::inbox_sync::operations::pending_labels;
 use crate::pubsub::util::{CrmContactRecipient, enqueue_populate_crm_contacts};
 use crate::util::process_pre_insert::process_message_pre_insert;
 use email_api_client::domain::models::CalendarPart;
@@ -23,10 +24,27 @@ pub async fn backfill_message(
     link: &link::Link,
 ) -> Result<(), ProcessingError> {
     let p = &scope.payload;
-    let fetched = ctx
-        .email_api
-        .get_message(link.id, &p.message_provider_id)
+    // Sync may have stored the message since the backfill listed it; a
+    // re-sync must not undo a label write made meanwhile.
+    let stored =
+        email_db_client::messages::get_simple_messages::get_simple_message_by_provider_and_link(
+            &ctx.db,
+            &p.message_provider_id,
+            &link.id,
+        )
         .await
+        .map_err(|e| map_db_error(e, "Failed to look up the stored message"))?;
+    let fetch = Box::pin(ctx.email_api.get_message(link.id, &p.message_provider_id));
+    let (fetched, resync) = match &stored {
+        Some(stored) => {
+            let (fetched, snapshot) = pending_labels::resync_around(&ctx.db, stored.db_id, fetch)
+                .await
+                .map_err(|e| map_db_error(e, "Failed to read the stored message"))?;
+            (fetched, Some(snapshot))
+        }
+        None => (fetch.await, None),
+    };
+    let fetched = fetched
         .map_err(|error| map_email_api_error(error, "Failed to get provider message"))?
         .ok_or_else(|| {
             ProcessingError::NonRetryable(DetailedError {
@@ -48,6 +66,7 @@ pub async fn backfill_message(
             link.id,
             // we update the thread metadata once all messages in the thread have been backfilled
             false,
+            resync.as_ref(),
         ))
         .await;
     inserted.map_err(|e| map_db_error(e, "Failed to insert final message into database"))?;

@@ -43,5 +43,6 @@ pub use objects::{
 };
 pub use resolvers::{
     SoupEmailThreadMutationOutput, resolve_grouped_soup, resolve_soup, resolve_soup_agent_session,
-    resolve_soup_email_thread, resolve_soup_entity, resolve_soup_updates,
+    resolve_soup_email_thread, resolve_soup_email_threads, resolve_soup_entity,
+    resolve_soup_updates,
 };

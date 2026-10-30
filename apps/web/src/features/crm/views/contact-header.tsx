@@ -1,3 +1,4 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { formatDateAndTime, formatRelativeTimestamp } from '@entity';
@@ -95,7 +96,10 @@ export function ContactHeader(props: {
           </Show>
         </Avatar>
         <h1 class="min-w-0 flex-1 text-2xl font-semibold">
-          <Show when={props.contact} fallback={'Loading contact…'}>
+          <Show
+            when={props.contact}
+            fallback={<ListSkeleton.Bar class="h-6 w-48" />}
+          >
             {(contact) => <TitleEditor contact={contact()} />}
           </Show>
         </h1>

@@ -98,7 +98,10 @@ fn validate_favoritable(entity_type: EntityType) -> Result<(), FavoritesError> {
         | EntityType::ForeignEntity
         | EntityType::CrmCompany
         | EntityType::CrmContact
-        | EntityType::WhatsAppGroup => Ok(()),
+        | EntityType::ExternalChat
+        | EntityType::AgentSession
+        | EntityType::Database
+        | EntityType::Form => Ok(()),
         EntityType::User
         | EntityType::Team
         | EntityType::ChannelMessage
@@ -106,13 +109,10 @@ fn validate_favoritable(entity_type: EntityType) -> Result<(), FavoritesError> {
         | EntityType::CalendarEvent
         | EntityType::Reminder
         | EntityType::Skill
-        | EntityType::AgentSession
         | EntityType::ScheduledAction
         | EntityType::Initiative
-        // Databases and forms are not favoritable yet, and rows never are.
-        | EntityType::Database
         | EntityType::CrmPipeline
-        | EntityType::DatabaseRow
-        | EntityType::Form => Err(FavoritesError::UnsupportedEntityType(entity_type)),
+        // Database rows are never favoritable.
+        | EntityType::DatabaseRow => Err(FavoritesError::UnsupportedEntityType(entity_type)),
     }
 }

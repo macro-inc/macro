@@ -502,7 +502,12 @@ export function KanbanCard(props: {
           props.pending && 'ring-1 ring-ink/20'
         )}
         onMouseDown={(event) => {
-          if (!event.currentTarget.contains(event.target)) {
+          // A secondary press opens the card's menu; it must not restart an
+          // active drag's origin.
+          if (
+            event.button !== 0 ||
+            !event.currentTarget.contains(event.target)
+          ) {
             return;
           }
 

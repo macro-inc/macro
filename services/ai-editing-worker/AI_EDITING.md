@@ -145,11 +145,15 @@ writer also gets one of a few accent colors; the cursor lingers ~700ms after the
 writer finishes, then clears. We have some ugly code that manages resolving a
 block id to the `LoroText` that actually owns the characters for this :/
 
-**The peer id** Human peers get random ids from the whole 64b range, and we have
-it so that AI commits use a small reserved range in
-(`999999999999999000`–`999999999999999999`). This makes Markdown AI authorship easy to
-detect (`isAiPeer`) which history can use for grouping. Canvas instead uses
-full-width random session IDs and signed actor attribution, as described below.
+**The peer id** Human peers get random ids from the whole 64b range; AI commits
+draw a random id from a reserved 2^40 block under the `0xA1A1A1` prefix
+(`nextAiPeerId`), so Markdown AI authorship is easy to detect (`isAiPeer`). Never
+reuse an AI peer id: the sync service records the user and signed agent actor
+each peer registers with (`peer_user_map`), and history and blame label edits
+from that record, so a reused id would re-attribute every earlier edit made
+under it. The old `999999999999999000`–`999999999999999999` block is still
+recognized for existing history. Canvas instead uses full-width random session
+IDs and signed actor attribution, as described below.
 
 ## Comment marks
 

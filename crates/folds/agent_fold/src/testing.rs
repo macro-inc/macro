@@ -114,11 +114,22 @@ fn parse_line(session: AgentSessionId, line: &str) -> AgentSessionLog {
             )
     );
 
+    // Prompts keep the historic fixture user so existing assertions stay put.
+    // Other user-originated frames (a model change) take `user_id` from the
+    // line when the recording has one, so tests can tell them apart from a
+    // session-applied set-model that has no user.
+    let user_id = if is_prompt {
+        Some(MacroUserIdStr::try_from_email("eric@example.com").expect("test email parses"))
+    } else {
+        value
+            .get("user_id")
+            .and_then(|id| id.as_str())
+            .and_then(|id| MacroUserIdStr::try_from(id.to_owned()).ok())
+    };
+
     AgentSessionLog {
         agent_session_id: session,
-        user_id: is_prompt.then(|| {
-            MacroUserIdStr::try_from_email("eric@example.com").expect("test email parses")
-        }),
+        user_id,
         content,
         logged_at: None,
     }

@@ -66,11 +66,22 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 
 ## Gotchas
 
+- Project grouping uses the system Project property (initiative membership),
+  including canonical TASK assignments, rather than legacy folder `project_id`.
+  `SoupService::group_labels` names the groups a grouping field leaves
+  unlabeled (today, project groups, from the initiative names the caller can
+  read); REST group meta and GraphQL bins carry the result as `GroupLabels`,
+  and a key it leaves out keeps itself as its label.
+
 - `crm_association.rs` resolves CRM scope before filtering, sorting, and paging.
   Activity uses property edges rather than references and matches email within
   the caller's mailbox. Keep browser requests bounded; never expand every CRM
   record into client-side filters or raise ingress limits to fit them.
 
+- Agent sessions named by id (an `Id` literal in `cursor_soup`, which GraphQL
+  `agentSession` and its log use, and `by_ids`) also accept a grant on the
+  document or call whose live thread the session runs in, matching
+  `entity_access`. Broad lists use session grants only.
 - `expanded/` vs `unexpanded/` queries exist because hydrating full entities
   is expensive — don't widen `unexpanded` to return hydrated data; add a new
   `expanded` path instead.
@@ -79,6 +90,16 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - Keep the notified feed's notification lookup behind a lateral `OFFSET 0`
   fence so the caller's `user_notification` rows drive the join; aggregate the
   latest notification before applying the cursor or notification-state gates.
+- A notification-state conjunct drives a listing from the caller's
+  notifications (`strip_notification_conjunction`, which folds `(unseen OR
+  seen) AND unseen` to `unseen`): the dynamic query joins `NotificationItems`,
+  the calendar leg semi-joins `notified_event_ids_sql` over
+  `idx_user_notification_viewer_entity`. The per-row `EXISTS` fold stays only
+  for trees the stripper rejects; on the calendar leg it seq-scanned every
+  event in the table.
+- Calendar access is `owner_id = $1 OR source_link_id = ANY(ARRAY(...))`, not
+  an `EXISTS` over `macro_user_links`, so the planner can index both sides of
+  the OR.
 - Queries over a known id list (`*/by_ids.rs`, hydration) and the initiative
   listing (`initiative_access_clause`) check access per row with `EXISTS` on
   `entity_access`, matching sources with `= ANY(ARRAY(SELECT ...))` so they are

@@ -88,9 +88,23 @@ describe('individual settings search', () => {
       target: 'pending-invites',
     });
   });
-  it('finds team connections apart from personal integrations', () => {
-    expect(search('slack import')[0].tab).toBe('Team Connections');
-    expect(search('team github')[0].tab).toBe('Team Connections');
+  it('finds team connections on Integrations', () => {
+    expect(search('slack import')[0].tab).toBe('Connected');
+    expect(search('team github')[0].tab).toBe('Connected');
+  });
+  it('finds and targets each integration row by name', () => {
+    expect(search('granola')[0]).toMatchObject({
+      tab: 'Connected',
+      target: 'granola',
+    });
+    expect(search('outlook')[0]).toMatchObject({
+      tab: 'Connected',
+      target: 'outlook',
+    });
+    expect(search('claude code')[0]).toMatchObject({
+      tab: 'Connected',
+      target: 'claude-code-codex-and-chatgpt',
+    });
   });
   it('has no results for empty or unrelated queries', () => {
     expect(search('  ')).toEqual([]);

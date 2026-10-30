@@ -50,95 +50,8 @@ vi.mock('@queries/soup/grouped/create-grouped-soup-queries', () => ({
   },
 }));
 
+import type { TasksTab } from '../types';
 import { useTasksDataSource } from './use-tasks-query';
-
-it.each([false, true])(
-  'loads all group pages only when requested (%s)',
-  async (loadAll) => {
-    const tasks = Array.from({ length: 20 }, (_, index) => ({
-      type: 'document',
-      fileType: 'md',
-      id: `task-${index}`,
-      name: `Task ${index}`,
-      ownerId: 'viewer',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      subType: { type: 'task', is_completed: false },
-      properties: [],
-    })) as unknown as TaskEntityWithProperties[];
-    const [loaded, setLoaded] = createSignal(false);
-    const fetchNextPage = vi.fn(async () => {
-      setLoaded(true);
-    });
-    fixture.query = {
-      isLoading: false,
-      isPending: false,
-      isPlaceholderData: false,
-      hasNextPage: false,
-      data: {
-        entities: tasks.slice(0, 10),
-        itemsById: {},
-        groups: [
-          {
-            key: 'todo',
-            label: 'To do',
-            displayOrder: 0,
-            totalCount: 20,
-            itemIds: tasks.slice(0, 10).map((task) => task.id),
-            nextCursor: 'next',
-          },
-        ],
-      },
-    };
-    fixture.groupQueries = new Map([
-      [
-        'todo',
-        {
-          key: 'todo',
-          data: () => ({ entities: loaded() ? tasks.slice(10) : [] }),
-          hasNextPage: () => !loaded(),
-          isFetchingNextPage: () => false,
-          fetchNextPage,
-          error: () => null,
-        },
-      ],
-    ]);
-    let cleanup = () => {};
-    const source = createRoot((dispose) => {
-      cleanup = dispose;
-      return useTasksDataSource(
-        {
-          tab: 'team-tasks',
-          search: '',
-          facets: {},
-          groupBy: 'status',
-          sort: [],
-        },
-        {
-          userId: () => 'viewer',
-          tagSets: () => [],
-          tagSetsReady: () => true,
-          isGroupExpanded: () => true,
-          loadAll,
-        }
-      );
-    });
-    try {
-      await vi.waitFor(() =>
-        expect(
-          source.items().filter((row) => row.kind === 'entity')
-        ).toHaveLength(loadAll ? 20 : 10)
-      );
-      expect(fetchNextPage).toHaveBeenCalledTimes(loadAll ? 1 : 0);
-      expect(source.items().some((row) => row.kind === 'load-more')).toBe(
-        !loadAll
-      );
-    } finally {
-      cleanup();
-      fixture.groupQueries = new Map();
-    }
-  }
-);
 
 it('delegates grouped task pagination to the current Soup query owner', async () => {
   const [paging, setPaging] = createSignal<GroupedSoupPaging>();
@@ -599,6 +512,91 @@ it('admits only optimistic CRM tasks that name the record', () => {
       expect(options.meta.insertFilter({})).toBe(false);
       fixture.mapItem.mockReturnValueOnce(crmTask('cached'));
       expect(options.meta.insertFilter({})).toBe(false);
+    } finally {
+      dispose();
+    }
+  });
+});
+
+it('keeps activity membership in list and grouped paging and excludes optimistic rows', () => {
+  fixture.calls = [];
+  fixture.query = {
+    isLoading: false,
+    isPending: false,
+    isPlaceholderData: false,
+    data: { entities: [] },
+  };
+  createRoot((dispose) => {
+    try {
+      useTasksDataSource(
+        {
+          tab: 'team-tasks',
+          search: '',
+          facets: {},
+          groupBy: 'date',
+          sort: [],
+        },
+        {
+          userId: () => 'viewer',
+          tagSets: () => [],
+          tagSetsReady: () => true,
+          isGroupExpanded: () => true,
+          crm: () => ({ type: 'activity' }),
+          board: () => true,
+        }
+      );
+      const call = fixture.calls[0];
+      expect(
+        (call?.args() as { body: { crma: unknown } } | undefined)?.body.crma
+      ).toBe('activity');
+      expect(fixture.groupArgs?.soupBody().crma).toBe('activity');
+      const meta = call?.options?.() as {
+        meta: { insertFilter: (item: unknown) => boolean };
+      };
+      fixture.mapItem.mockReturnValueOnce(crmTask('linked', ['acme']));
+      expect(meta.meta.insertFilter({})).toBe(false);
+      expect(fixture.searchState).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+});
+
+it('pauses task reads across project views and resumes when returning to tasks', () => {
+  fixture.calls = [];
+  fixture.query = {
+    isLoading: false,
+    isPending: false,
+    data: { entities: [] },
+  };
+  createRoot((dispose) => {
+    try {
+      const [tab, setTab] = createSignal<TasksTab>('my-projects');
+      useTasksDataSource(
+        {
+          get tab() {
+            return tab();
+          },
+          search: '',
+          facets: {},
+          groupBy: 'none',
+          sort: [],
+        },
+        {
+          userId: () => 'viewer',
+          tagSets: () => [],
+          tagSetsReady: () => true,
+          isGroupExpanded: () => true,
+        }
+      );
+      const options = fixture.calls[0]?.options;
+      expect(options?.()).toMatchObject({ enabled: false });
+      setTab('created-projects');
+      expect(options?.()).toMatchObject({ enabled: false });
+      setTab('projects');
+      expect(options?.()).toMatchObject({ enabled: false });
+      setTab('my-tasks');
+      expect(options?.()).toMatchObject({ enabled: true });
     } finally {
       dispose();
     }

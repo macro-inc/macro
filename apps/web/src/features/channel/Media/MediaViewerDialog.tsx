@@ -94,12 +94,13 @@ function VideoViewerContent(props: {
         <LightboxToolbar isVisible={true}>
           <FileDownloadButton download={props.download} iconOnly />
           <Dialog.CloseButton
+            aria-label="Close"
+            tooltip="Close"
             as={Button}
             variant="ghost"
             size="icon-md"
-            label="Close"
           >
-            <XIcon />
+            <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
         </LightboxToolbar>
 

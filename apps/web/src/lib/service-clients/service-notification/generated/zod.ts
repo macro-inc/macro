@@ -67,7 +67,7 @@ export const unsubscribeItemParams = zod.object({
     'database',
     'database_row',
     'form',
-    'whatsapp_group',
+    'external_chat',
   ]),
   item_id: zod.string(),
 });
@@ -113,7 +113,7 @@ export const removeUnsubscribeItemParams = zod.object({
     'database',
     'database_row',
     'form',
-    'whatsapp_group',
+    'external_chat',
   ]),
   item_id: zod.string(),
 });
@@ -224,7 +224,7 @@ export const listTypedNotificationsResponse = zod
                 'database',
                 'database_row',
                 'form',
-                'whatsapp_group',
+                'external_chat',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -1080,23 +1080,24 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
-                          groupName: zod
-                            .string()
-                            .describe(
-                              'Group name, independent of its remote subject.'
-                            ),
+                          chatName: zod.string().describe("The chat's name."),
                           messageId: zod
                             .uuid()
                             .describe(
                               'Stable message id; retries use it as their notification id.'
                             ),
+                          provider: zod
+                            .enum(['whatsapp'])
+                            .describe(
+                              'The messaging service an external chat lives in.'
+                            ),
                         })
                         .describe(
-                          'A live message in an independently shared WhatsApp group.'
+                          'A live message in an independently shared external chat.'
                         ),
-                      tag: zod.enum(['whatsapp_group_message']),
+                      tag: zod.enum(['external_chat_message']),
                     })
-                    .describe('A live message in a shared WhatsApp group.'),
+                    .describe('A live message in a shared external chat.'),
                   zod
                     .object({
                       content: zod
@@ -2248,7 +2249,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                 'database',
                 'database_row',
                 'form',
-                'whatsapp_group',
+                'external_chat',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -3104,23 +3105,24 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
-                          groupName: zod
-                            .string()
-                            .describe(
-                              'Group name, independent of its remote subject.'
-                            ),
+                          chatName: zod.string().describe("The chat's name."),
                           messageId: zod
                             .uuid()
                             .describe(
                               'Stable message id; retries use it as their notification id.'
                             ),
+                          provider: zod
+                            .enum(['whatsapp'])
+                            .describe(
+                              'The messaging service an external chat lives in.'
+                            ),
                         })
                         .describe(
-                          'A live message in an independently shared WhatsApp group.'
+                          'A live message in an independently shared external chat.'
                         ),
-                      tag: zod.enum(['whatsapp_group_message']),
+                      tag: zod.enum(['external_chat_message']),
                     })
-                    .describe('A live message in a shared WhatsApp group.'),
+                    .describe('A live message in a shared external chat.'),
                   zod
                     .object({
                       content: zod
@@ -4266,7 +4268,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                 'database',
                 'database_row',
                 'form',
-                'whatsapp_group',
+                'external_chat',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -5122,23 +5124,24 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
-                          groupName: zod
-                            .string()
-                            .describe(
-                              'Group name, independent of its remote subject.'
-                            ),
+                          chatName: zod.string().describe("The chat's name."),
                           messageId: zod
                             .uuid()
                             .describe(
                               'Stable message id; retries use it as their notification id.'
                             ),
+                          provider: zod
+                            .enum(['whatsapp'])
+                            .describe(
+                              'The messaging service an external chat lives in.'
+                            ),
                         })
                         .describe(
-                          'A live message in an independently shared WhatsApp group.'
+                          'A live message in an independently shared external chat.'
                         ),
-                      tag: zod.enum(['whatsapp_group_message']),
+                      tag: zod.enum(['external_chat_message']),
                     })
-                    .describe('A live message in a shared WhatsApp group.'),
+                    .describe('A live message in a shared external chat.'),
                   zod
                     .object({
                       content: zod
@@ -6289,7 +6292,7 @@ export const getTypedNotificationByIdResponse = zod
         'database',
         'database_row',
         'form',
-        'whatsapp_group',
+        'external_chat',
       ])
       .describe('The type of an entity in Macro'),
   })
@@ -7067,21 +7070,24 @@ export const getTypedNotificationByIdResponse = zod
             .object({
               content: zod
                 .object({
-                  groupName: zod
-                    .string()
-                    .describe('Group name, independent of its remote subject.'),
+                  chatName: zod.string().describe("The chat's name."),
                   messageId: zod
                     .uuid()
                     .describe(
                       'Stable message id; retries use it as their notification id.'
                     ),
+                  provider: zod
+                    .enum(['whatsapp'])
+                    .describe(
+                      'The messaging service an external chat lives in.'
+                    ),
                 })
                 .describe(
-                  'A live message in an independently shared WhatsApp group.'
+                  'A live message in an independently shared external chat.'
                 ),
-              tag: zod.enum(['whatsapp_group_message']),
+              tag: zod.enum(['external_chat_message']),
             })
-            .describe('A live message in a shared WhatsApp group.'),
+            .describe('A live message in a shared external chat.'),
           zod
             .object({
               content: zod

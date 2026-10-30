@@ -1,8 +1,8 @@
-import { enableDictation, isFeatureEnabled } from '@core/constant/featureFlags';
 import { Telemetry } from '@macro-inc/observability';
 import { transcribeAudio } from '@queries/dictation/transcribe';
 import type { LexicalEditor } from 'lexical';
 import { $getRoot } from 'lexical';
+import { isDictationAvailable } from './availability';
 import { AudioRecorder, audioRecorder } from './browser/audio-recorder';
 import { createRecordedDictation } from './primitives/create-recorded-dictation';
 
@@ -12,7 +12,7 @@ export function createComposerDictation(editor: () => LexicalEditor) {
   return createRecordedDictation({
     // Off means the recorder is never created: no microphone prompt, no audio
     // in memory, and no transcription request.
-    supported: isFeatureEnabled(enableDictation) && AudioRecorder.isSupported(),
+    supported: isDictationAvailable() && AudioRecorder.isSupported(),
     startTrace: () => Telemetry.span('dictation.session'),
     createRecorder: (callbacks) => audioRecorder.createSession(callbacks),
     transcribe: (audio, signal, trace) =>

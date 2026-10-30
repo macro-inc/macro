@@ -142,6 +142,7 @@ fn initiative_filters_materialize_for_browser_and_server() {
         json!({"nameContains": "Launch"}),
         json!({"dueBefore": "2026-10-01T00:00:00Z"}),
         json!({"dueAfter": "2026-09-01T00:00:00Z"}),
+        json!({"notificationState": "UNSEEN"}),
     ] {
         let value = json!({"initiativeFilter": {"literal": literal}});
         let ast = materialize_graphql_filter(value.clone()).unwrap();
@@ -187,6 +188,33 @@ fn initiative_property_filters_preserve_entity_scope() {
             ..
         }))
     ));
+}
+
+#[test]
+fn database_row_include_materializes_and_false_is_rejected() {
+    let input = json!({"databaseRowFilter": {"literal": {"include": true}}});
+    let ast = materialize_graphql_filter(input.clone()).unwrap();
+    assert_eq!(
+        ast.database_row_filter.as_deref(),
+        Some(&Expr::val(DatabaseRowLiteral::Include))
+    );
+    let graphql: GraphqlEntityFilterAst = serde_json::from_value(input).unwrap();
+    assert_eq!(
+        serde_json::to_value(ast).unwrap(),
+        serde_json::to_value(graphql.into_ast().unwrap()).unwrap()
+    );
+    assert!(
+        materialize_graphql_filter(json!({
+            "databaseRowFilter": {"literal": {"include": false}}
+        }))
+        .is_err()
+    );
+    assert!(
+        materialize_graphql_filter(json!({}))
+            .unwrap()
+            .database_row_filter
+            .is_none()
+    );
 }
 
 #[test]

@@ -48,7 +48,6 @@ export type Leftover =
       kind: 'pipedream';
       id: string;
       title: string;
-      subtitle: string;
       appSlug: string;
       enabled: boolean;
     };
@@ -223,7 +222,6 @@ function curatedAiAndLeftovers(input: ConnectionsInput): {
       kind: 'pipedream',
       id: `pipedream:${row.app_slug}`,
       title: row.server_name,
-      subtitle: row.app_slug,
       appSlug: row.app_slug,
       enabled: row.enabled,
     });

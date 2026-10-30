@@ -8,7 +8,7 @@ use super::models::{
 };
 use agent_session::domain::model::AgentSessionId;
 use agent_session::domain::notifications::PendingNotification;
-use import_notion::domain::model::NotionId;
+use import_notion::domain::model::{NotionId, NotionPage};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -386,6 +386,25 @@ pub struct ImportedTaskProperties {
     pub assignee_email: Option<String>,
 }
 
+/// When a source page was created and last edited, so its copy sorts by
+/// when it was written there rather than by when it was copied in.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SourceDates {
+    /// When the page was created.
+    pub created: chrono::DateTime<chrono::Utc>,
+    /// When the page was last edited.
+    pub last_edited: chrono::DateTime<chrono::Utc>,
+}
+
+impl From<&NotionPage> for SourceDates {
+    fn from(page: &NotionPage) -> Self {
+        Self {
+            created: page.created,
+            last_edited: page.last_edited,
+        }
+    }
+}
+
 /// Properties recovered from a Notion page and attached to the imported
 /// Macro document. The creator applies these best-effort after the document
 /// exists, so unsupported or invalid values never prevent the body import.
@@ -591,7 +610,8 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
         relations: &TrackerTaskRelations,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Create a folder, inside `parent` when given. Returns the folder id.
+    /// Create a folder, inside `parent` when given, dated by what is written
+    /// into it rather than by when it was made. Returns the folder id.
     fn create_folder(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -608,9 +628,10 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
 
     /// Create document `id` from a Notion page (Notion's enhanced markdown,
     /// references resolved through `links`) inside `folder` when given,
-    /// applying `properties` best-effort. Returns the document id. Safe to
-    /// repeat: when document `id` exists already (an interrupted earlier
-    /// attempt), it is left as it is and its id returned.
+    /// applying `properties` best-effort and keeping the page's `dates` when
+    /// known. Returns the document id. Safe to repeat: when document `id`
+    /// exists already (an interrupted earlier attempt), it is left as it is
+    /// and its id returned.
     #[allow(clippy::too_many_arguments)]
     fn create_document(
         &self,
@@ -621,14 +642,16 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
         links: &NotionLinks,
         properties: &ImportedDocumentProperties,
         folder: Option<Uuid>,
+        dates: Option<SourceDates>,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
     /// Create task `id` from a Notion page (as for [`Self::create_document`],
     /// and as safe to repeat) inside `folder` when given, applying
-    /// `properties` best-effort. Returns the task id.
+    /// `properties` best-effort and keeping the page's `dates`. Returns the
+    /// task id.
     #[expect(
         clippy::too_many_arguments,
-        reason = "a task carries its id, content, links, properties and folder"
+        reason = "a task carries its id, content, links, properties, folder and dates"
     )]
     fn create_task(
         &self,
@@ -639,6 +662,7 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
         links: &NotionLinks,
         properties: &ImportedTaskProperties,
         folder: Option<Uuid>,
+        dates: Option<SourceDates>,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
     /// Create an empty database named `name`.

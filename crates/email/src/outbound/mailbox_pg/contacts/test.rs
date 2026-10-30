@@ -237,3 +237,24 @@ async fn an_in_flight_photo_cannot_restore_a_deleted_contact(db: PgPool) {
         None
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn photo_claims_take_due_sources_in_order_and_skip_backed_off_and_deleted_ones(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    sqlx::query!(r#"
+        INSERT INTO email_address_book_sources(link_id,folder_id,provider_id,emails,scan_id,photo_due_at,deleted_at) VALUES
+            ($1,'contacts','later','{}',gen_random_uuid(),now() + interval '1 hour',NULL),
+            ($1,'contacts','deleted','{}',gen_random_uuid(),now() - interval '3 minutes',now()),
+            ($1,'contacts','second','{}',gen_random_uuid(),now() - interval '1 minute',NULL),
+            ($1,'contacts','first','{}',gen_random_uuid(),now() - interval '2 minutes',NULL)
+    "#,link).execute(&db).await.unwrap();
+    let mut claimed = Vec::new();
+    while let Some(lease) = repo
+        .claim_photo(macro_uuid::generate_uuid_v7())
+        .await
+        .unwrap()
+    {
+        claimed.push(lease.contact.as_str().to_owned());
+    }
+    assert_eq!(claimed, ["first", "second"]);
+}

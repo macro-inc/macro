@@ -77,3 +77,28 @@ test('agent URLs navigate and removed links survive save and reopen', async ({
     fullPage: true,
   });
 });
+
+// Pasting j@m.c b and typing o after the c used to swallow the letter when
+// mailto:j@m.co autolinked mid-keystroke (.co is also the prefix of .com).
+test('typing o after j@m.c keeps the letter without wrapping mid-edit', async ({
+  page,
+}) => {
+  await page.goto(
+    '/src/lib/core/component/LexicalMarkdown/component/core/browser-test/links.html'
+  );
+  const editor = page.getByRole('textbox', { name: 'Message' });
+  await expect(editor).toBeVisible({ timeout: 30_000 });
+  await editor.click();
+  await page.keyboard.press('ControlOrMeta+A');
+  await page.keyboard.type('j@m.c b');
+  await expect(editor).toHaveText('j@m.c b');
+  await page.keyboard.press('End');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.type('o');
+  await expect(editor).toHaveText('j@m.co b');
+  await expect(editor.locator('a')).toHaveCount(0);
+  await page.keyboard.type('m');
+  await expect(editor).toHaveText('j@m.com b');
+  await expect(editor.locator('a')).toHaveCount(0);
+});

@@ -9,8 +9,18 @@ use crate::inbound::axum_router::{
     __path_health, __path_list_actions, __path_list_history, __path_set_action_enabled,
     __path_update_action, ScheduledActionResponse, SetScheduledActionEnabled,
 };
+#[expect(
+    unused_imports,
+    reason = "utoipa path macros require these generated symbols in scope"
+)]
+use crate::inbound::template_router::{
+    __path_activate_template, __path_get_template, __path_share_template, __path_unshare_template,
+};
 
-use crate::domain::event_trigger::{ActionTrigger, EventFilter, EventFilters, EventName};
+use crate::domain::event_trigger::{
+    ActionTrigger, EventFilter, EventFilters, EventName, GithubSelectorInput,
+    PayloadConditionInput, PayloadScalar,
+};
 use crate::domain::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionKind, AgentTask,
     AgentTaskAgent, CreateScheduledAction, ExecutionResource, ExecutionResourceType,
@@ -37,6 +47,10 @@ use model::response::EmptyResponse;
         crate::inbound::axum_router::delete_action,
         crate::inbound::axum_router::execute_action,
         crate::inbound::axum_router::list_history,
+        crate::inbound::template_router::share_template,
+        crate::inbound::template_router::get_template,
+        crate::inbound::template_router::unshare_template,
+        crate::inbound::template_router::activate_template,
     ),
     components(
         schemas(
@@ -52,6 +66,9 @@ use model::response::EmptyResponse;
             EventFilter,
             EventFilters,
             EventName,
+            GithubSelectorInput,
+            PayloadConditionInput,
+            PayloadScalar,
             CreateScheduledAction,
             UpdateScheduledAction,
             SetScheduledActionEnabled,
@@ -67,6 +84,10 @@ use model::response::EmptyResponse;
             ActionExecutionRecord,
             ScheduledActionUpdate,
             EmptyResponse,
+            crate::domain::templates::RoutineTemplate,
+            crate::domain::templates::ShareRoutineTemplate,
+            crate::domain::templates::TemplateVariable,
+            crate::domain::templates::VariableFill,
         ),
     ),
     tags(

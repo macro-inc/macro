@@ -106,7 +106,8 @@ specifically:
 - **`MacroConfig` reads only `APP_SECRETS_JSON` in ECS.** A plain container
   `environment:` entry is invisible to it. Put values that infra produces (ARNs,
   endpoints) into Doppler with a Pulumi `doppler.Secret`, as
-  `infra/stacks/preview-gateway` does. Plain `environment:` is for `ENVIRONMENT`,
+  `infra/stacks/agent-harness-service` does; that stack then needs
+  `doppler:dopplerToken` as `secure:` config. Plain `environment:` is for `ENVIRONMENT`,
   `DD_*`, and values read through `macro_env_var` or `OVERRIDE_*`.
 - **Secrets go in Doppler, not Secrets Manager.** Add the value to the service's
   Doppler project; it reaches the task through `DopplerEcsEnvironment` and the

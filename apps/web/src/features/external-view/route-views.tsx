@@ -1,8 +1,8 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useNavigate, useRouteParams } from '@app/lib/split-router';
 import {
+  externalChatRoute,
   externalRoute,
-  externalWhatsappGroupRoute,
   homeSplitRoute,
 } from '@app/routes/routes';
 import {
@@ -51,9 +51,9 @@ export const ExternalRouteView = withAuth(() => {
   );
 }, ExternalViewSkeleton);
 
-const WhatsAppGroupEntry = lazy(async () => ({
-  default: (await import('../whatsapp-group/whatsapp-group-entry'))
-    .WhatsAppGroupEntry,
+const ExternalChatEntry = lazy(async () => ({
+  default: (await import('../external-chat/external-chat-entry'))
+    .ExternalChatEntry,
 }));
 
 /** Touch drills into a group full-screen; Back returns to External's list. */
@@ -73,18 +73,18 @@ function BackToExternal() {
         )
       }
     >
-      <CaretLeftIcon />
+      <CaretLeftIcon class="size-3.5 touch:size-6" />
     </Button>
   );
 }
 
-/** `/external/whatsapp/:groupId`: a group in External's main pane. */
-export function ExternalWhatsAppGroupRouteView() {
-  const params = useRouteParams(externalWhatsappGroupRoute);
-  usePageViewTracking('whatsapp-group');
+/** `/external/chat/:chatId`: an added chat in External's main pane. */
+export function ExternalChatRouteView() {
+  const params = useRouteParams(externalChatRoute);
+  usePageViewTracking('external-chat');
   return (
-    <WhatsAppGroupEntry
-      groupId={params.groupId}
+    <ExternalChatEntry
+      chatId={params.chatId}
       leading={isTouchDevice() ? <BackToExternal /> : undefined}
     />
   );
