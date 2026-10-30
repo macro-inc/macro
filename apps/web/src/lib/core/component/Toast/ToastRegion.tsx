@@ -3,8 +3,11 @@ import { isMobile } from '@core/mobile/isMobile';
 import { Toast } from '@kobalte/core/toast';
 import { Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { createMobileToastSwipe } from './create-mobile-toast-swipe';
 
 export function ToastRegion() {
+  const mobileSwipe = createMobileToastSwipe();
+
   return (
     <Portal>
       {/*
@@ -56,6 +59,16 @@ export function ToastRegion() {
       */}
       <div
         class="fixed left-1/2 -translate-x-1/2 w-full max-w-[420px] px-(--mobile-chrome-gutter) pointer-events-none z-toast-region flex flex-col gap-5"
+        on:pointerdown={{
+          capture: true,
+          handleEvent: mobileSwipe.onPointerDown,
+        }}
+        on:pointermove={{
+          capture: true,
+          handleEvent: mobileSwipe.onPointerMove,
+        }}
+        on:pointerup={{ capture: true, handleEvent: mobileSwipe.clearSwipe }}
+        on:pointercancel={{ capture: true, handleEvent: mobileSwipe.clearSwipe }}
         style={{
           bottom: 'calc(var(--mobile-content-inset-bottom, 0px) + 12px)',
         }}
@@ -66,7 +79,7 @@ export function ToastRegion() {
           duration={Infinity}
           limit={1}
           pauseOnInteraction={false}
-          swipeDirection="left"
+          swipeDirection={mobileSwipe.direction()}
         >
           <Toast.List class="macro-toast-list" />
         </Toast.Region>
@@ -76,7 +89,7 @@ export function ToastRegion() {
           duration={Infinity}
           limit={1}
           pauseOnInteraction={false}
-          swipeDirection="left"
+          swipeDirection={mobileSwipe.direction()}
         >
           <Toast.List class="macro-toast-list" />
         </Toast.Region>
@@ -86,7 +99,7 @@ export function ToastRegion() {
           limit={1}
           duration={4500}
           pauseOnInteraction
-          swipeDirection="left"
+          swipeDirection={mobileSwipe.direction()}
         >
           <Toast.List class="macro-toast-list" />
         </Toast.Region>

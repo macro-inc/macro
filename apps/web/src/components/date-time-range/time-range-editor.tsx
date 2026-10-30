@@ -121,7 +121,7 @@ export function TimeRangeEditor(props: {
               tooltip="Clear"
               onClick={clear}
             >
-              <XIcon />
+              <XIcon class="size-3.5" />
             </Button>
           </Show>
         }

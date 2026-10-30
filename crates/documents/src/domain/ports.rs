@@ -8,6 +8,8 @@ pub mod editing;
 pub mod markdown;
 pub mod mentions;
 pub mod sync;
+#[cfg(test)]
+mod test;
 
 use std::future::Future;
 
@@ -378,10 +380,12 @@ pub trait TaskPropertiesPort: Send + Sync + 'static {
         entity_ids: Vec<String>,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Updates the tasks status
+    /// Updates the tasks status, credited to `credited_user` when they can edit
+    /// the task (see [`credited_task_edit_receipt`]).
     fn update_task_status(
         &self,
-        entity_id: &str,
+        access: &EntityAccessReceipt<EditAccessLevel>,
+        credited_user: Option<&MacroUserIdStr<'static>>,
         status: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
@@ -439,6 +443,30 @@ pub async fn task_property_edit_receipt<A: EntityAccessService>(
                 .await
         }
     }
+}
+
+/// Pick the edit receipt a task status change is written with.
+///
+/// The change is attributed to `credited_user` when they can edit the task, so
+/// it reads as their action wherever property events go (activity, routines).
+/// Otherwise it is written with `access` and stays uncredited, so the status
+/// still changes.
+pub async fn credited_task_edit_receipt<A: EntityAccessService>(
+    entity_access: &A,
+    access: &EntityAccessReceipt<EditAccessLevel>,
+    credited_user: Option<&MacroUserIdStr<'static>>,
+) -> EntityAccessReceipt<EditAccessLevel> {
+    let Some(user) = credited_user else {
+        return access.clone();
+    };
+    let entity = access.entity();
+    entity_access
+        .generate_entity_access_receipt(user, None, &entity.entity_id, entity.entity_type)
+        .await
+        .inspect_err(|error| {
+            tracing::info!(error = ?error, "task status change left uncredited");
+        })
+        .unwrap_or_else(|_| access.clone())
 }
 
 /// Use cases for relaying document content-change events.
@@ -583,10 +611,12 @@ pub trait DocumentService: Send + Sync + 'static {
         args: EditDocumentServiceArgs,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 
-    /// Updates the tasks status to what is provided
+    /// Updates the tasks status to what is provided, credited to
+    /// `credited_user` when they can edit the task
     fn update_task_status(
         &self,
         entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        credited_user: Option<MacroUserIdStr<'static>>,
         status: &str,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 

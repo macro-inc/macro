@@ -231,7 +231,7 @@ async fn delete_property_option_removes_option(pool: Pool<Postgres>) -> anyhow::
     assert!(repo.get_property_option(option_id).await?.is_some());
 
     let deleted = repo.delete_property_option(property_id, option_id).await?;
-    assert!(deleted);
+    assert!(deleted.is_some());
 
     assert!(repo.get_property_option(option_id).await?.is_none());
 
@@ -248,7 +248,7 @@ async fn delete_nonexistent_property_option(pool: Pool<Postgres>) -> anyhow::Res
     let deleted = repo
         .delete_property_option(PRIORITY_PROPERTY_ID.parse().unwrap(), Uuid::nil())
         .await?;
-    assert!(!deleted);
+    assert!(deleted.is_none());
 
     Ok(())
 }
@@ -312,8 +312,35 @@ async fn delete_property_option_strips_value_references(
         .id;
 
     // Delete option D.
-    let deleted = repo.delete_property_option(property_id, opt_d).await?;
-    assert!(deleted);
+    let deleted = repo
+        .delete_property_option(property_id, opt_d)
+        .await?
+        .expect("option D exists");
+
+    // One snapshot per entity that held D (the fixture's thread1 too), so the
+    // service can publish an entity event for each; doc1 never held D.
+    let mut stripped: Vec<_> = deleted
+        .into_iter()
+        .map(|m| (m.property.entity_id, m.value, m.previous_value))
+        .collect();
+    stripped.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(
+        stripped,
+        vec![
+            (
+                "doc_cascade".to_string(),
+                Some(PropertyValue::SelectOption(vec![opt_a, opt_b, opt_c])),
+                Some(PropertyValue::SelectOption(vec![
+                    opt_a, opt_b, opt_c, opt_d,
+                ])),
+            ),
+            (
+                "thread1".to_string(),
+                Some(PropertyValue::SelectOption(vec![])),
+                Some(PropertyValue::SelectOption(vec![opt_d])),
+            ),
+        ]
+    );
 
     // Read the raw stored value (bypassing the read-path cleaner) to prove
     // the dangling id is gone from storage, not just filtered on read.
@@ -488,7 +515,7 @@ async fn replace_property_options_applies_the_plan_in_one_pass(
         )
         .await?;
 
-    let PropertyOptionReplaceOutcome::Replaced(options) = outcome else {
+    let PropertyOptionReplaceOutcome::Replaced { options, .. } = outcome else {
         panic!("expected Replaced, got {outcome:?}");
     };
     let labels: Vec<(Uuid, String)> = options
@@ -554,11 +581,35 @@ async fn replace_property_options_strips_every_deleted_id(
         )
         .await?;
 
-    let PropertyOptionReplaceOutcome::Replaced(options) = outcome else {
+    let PropertyOptionReplaceOutcome::Replaced { options, mutations } = outcome else {
         panic!("expected Replaced, got {outcome:?}");
     };
     assert_eq!(options.len(), 2);
     assert!(options.iter().all(|o| o.id != medium && o.id != urgent));
+
+    // The fixture's proj1 held Medium and thread1 held Urgent.
+    let mut stripped: Vec<_> = mutations
+        .into_iter()
+        .map(|m| (m.property.entity_id, m.value))
+        .collect();
+    stripped.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(
+        stripped,
+        vec![
+            (
+                "doc_multi_delete".to_string(),
+                Some(PropertyValue::SelectOption(vec![low])),
+            ),
+            (
+                "proj1".to_string(),
+                Some(PropertyValue::SelectOption(vec![])),
+            ),
+            (
+                "thread1".to_string(),
+                Some(PropertyValue::SelectOption(vec![])),
+            ),
+        ]
+    );
 
     let raw: serde_json::Value = sqlx::query_scalar!(
         r#"

@@ -41,6 +41,8 @@ export default {
   copyId: 'Copy ID',
   share: 'Share',
   downloadDocx: 'Download',
+  downloadEml: 'Download .eml',
+  downloadEmlFailed: 'Failed to download email. Please try again.',
   senderToSignal: 'Sender → Signal',
   senderToNoise: 'Sender → Noise',
   blockSender: 'Block Sender',
@@ -172,6 +174,7 @@ export default {
   toastCountNotRestored: { other: '{{count}} could not be restored.' },
   toastNotificationsNotRestored: 'Some notifications could not be restored.',
   toastWithWarnings: '{{message}}. {{warnings}}',
+  toastWaitingToSync: '{{message}}, waiting to sync',
   toastMarkedRead: 'Marked as read',
   toastMarkedReadCount: {
     one: 'Marked {{count}} item as read',

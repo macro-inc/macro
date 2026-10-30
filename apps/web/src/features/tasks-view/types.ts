@@ -6,7 +6,8 @@ export type TaskCreateOptions = {
   composerContext?: TaskComposerContext;
 };
 
-export type TaskTab = 'my-tasks' | 'created-by-me' | 'team-tasks' | 'projects';
+export type ProjectTab = 'projects' | 'my-projects' | 'created-projects';
+export type TaskTab = 'my-tasks' | 'created-by-me' | 'team-tasks' | ProjectTab;
 export type TasksTab = TaskTab;
 
 export type TaskGroupBy =

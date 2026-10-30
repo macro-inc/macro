@@ -1,3 +1,4 @@
+import { PickerSheet } from '@components/app/mobile/PickerSheet';
 import BellSimpleIcon from '@icon/system/regular/bell-simple.svg';
 import CalendarDotsIcon from '@icon/system/regular/calendar-dots.svg';
 import CalendarXIcon from '@icon/system/regular/calendar-x.svg';
@@ -17,7 +18,7 @@ import { PropertyCaret } from '@property/extractors/PropertyCaret';
 import { PropertyPill } from '@property/extractors/PropertyPill';
 import type { EntityProperty } from '@property/types';
 import type { EventType } from '@service-storage/generated/schemas/eventType';
-import { cn, Layer, Select, Tooltip } from '@ui';
+import { cn, Layer, Select, Tabs, Tooltip } from '@ui';
 import { type Accessor, createMemo, createSignal, For, Show } from 'solid-js';
 import {
   formatReminderOffset,
@@ -233,38 +234,122 @@ function GuestsPopoverEditor(props: {
   return (
     <Show when={ctx.editorOpen()}>
       <EditorPopover portalScope="local">
-        <Show
-          when={props.currentGuests}
-          fallback={
-            <EventGuestPicker
-              options={props.options}
-              selected={props.selected}
-              onChange={props.onChange}
-              onClose={() => ctx.closeEditor()}
-            />
-          }
-        >
-          {(currentGuests) => {
-            const isCurrent = (guest: SelectedEventEditorGuest) =>
-              currentGuests().some(
-                (current) =>
-                  guestEmail(current).toLowerCase() ===
-                  guestEmail(guest).toLowerCase()
-              );
-            return (
-              <AddOnlyGuestsEditor
-                options={props.options}
-                current={currentGuests()}
-                added={props.selected.filter((guest) => !isCurrent(guest))}
-                onAddedChange={(added) =>
-                  props.onChange([...currentGuests(), ...added])
-                }
-                onClose={() => ctx.closeEditor()}
-              />
-            );
-          }}
-        </Show>
+        <GuestsEditor {...props} onClose={() => ctx.closeEditor()} />
       </EditorPopover>
+    </Show>
+  );
+}
+
+/** The add-only editor, or the picker, for guests chosen so far. */
+function GuestsEditor(props: {
+  selected: SelectedEventEditorGuest[];
+  currentGuests?: SelectedEventEditorGuest[];
+  options: Accessor<EventEditorGuestOption[]>;
+  onChange: (selected: SelectedEventEditorGuest[]) => void;
+  onClose: () => void;
+  /** Fill a sized container, such as a sheet, rather than a popover's height. */
+  fillHeight?: boolean;
+}) {
+  return (
+    <Show
+      when={props.currentGuests}
+      fallback={
+        <EventGuestPicker
+          options={props.options}
+          selected={props.selected}
+          onChange={props.onChange}
+          onClose={props.onClose}
+          fillHeight={props.fillHeight}
+        />
+      }
+    >
+      {(currentGuests) => {
+        const isCurrent = (guest: SelectedEventEditorGuest) =>
+          currentGuests().some(
+            (current) =>
+              guestEmail(current).toLowerCase() ===
+              guestEmail(guest).toLowerCase()
+          );
+        return (
+          <AddOnlyGuestsEditor
+            options={props.options}
+            current={currentGuests()}
+            added={props.selected.filter((guest) => !isCurrent(guest))}
+            onAddedChange={(added) =>
+              props.onChange([...currentGuests(), ...added])
+            }
+            onClose={props.onClose}
+          />
+        );
+      }}
+    </Show>
+  );
+}
+
+/**
+ * The guest editor in a sheet stacked over the composer's. Picks stay a
+ * draft until Done; Cancel, or dismissing the sheet, drops them.
+ */
+function GuestsSheetEditor(props: {
+  selected: SelectedEventEditorGuest[];
+  currentGuests?: SelectedEventEditorGuest[];
+  options: Accessor<EventEditorGuestOption[]>;
+  onChange: (selected: SelectedEventEditorGuest[]) => void;
+}) {
+  const ctx = useProperty();
+  // Undefined until the first pick, so each opening starts from the event's guests.
+  const [draft, setDraft] = createSignal<SelectedEventEditorGuest[]>();
+  const shown = () => draft() ?? props.selected;
+  const cancel = () => {
+    setDraft(undefined);
+    ctx.closeEditor();
+  };
+  const done = () => {
+    const picked = draft();
+    if (picked) props.onChange(picked);
+    cancel();
+  };
+
+  return (
+    <PickerSheet.Root open={ctx.editorOpen()} onCancel={cancel}>
+      <PickerSheet.Header title="Guests" onDone={done} />
+      <PickerSheet.Body>
+        <GuestsEditor
+          selected={shown()}
+          currentGuests={props.currentGuests}
+          options={props.options}
+          onChange={setDraft}
+          onClose={cancel}
+          fillHeight
+        />
+      </PickerSheet.Body>
+    </PickerSheet.Root>
+  );
+}
+
+/** The guest pill for a touch sheet: it opens the guests in a sheet of their own. */
+export function EventComposerGuestsSheetPill(
+  props: EventComposerGuestsPillProps
+) {
+  return (
+    <Show
+      when={props.readOnly}
+      fallback={
+        <PropertyRoot
+          property={guestsAsProperty(props.selected)}
+          canEdit={!props.disabled}
+        >
+          <GuestsPillTrigger {...props} />
+          <GuestsSheetEditor
+            selected={props.selected}
+            currentGuests={props.currentGuests}
+            options={props.options}
+            onChange={props.onChange}
+          />
+        </PropertyRoot>
+      }
+    >
+      <ReadOnlyEventComposerGuestsPill {...props} />
     </Show>
   );
 }
@@ -697,11 +782,12 @@ export interface EventComposerKindPillProps {
   readOnly?: boolean;
 }
 
-/** Compact selector for the kind of event being created. */
-export function EventComposerKindPill(props: EventComposerKindPillProps) {
-  // A read-only pill displays whatever type the event has, including
-  // status types the composer cannot create.
-  const options = createMemo<EventComposerKindOption[]>(() =>
+/**
+ * The kinds the composer offers; a read-only event shows whatever type it
+ * has, including status types the composer cannot create.
+ */
+function createEventKindOptions(props: EventComposerKindPillProps) {
+  return createMemo<EventComposerKindOption[]>(() =>
     props.readOnly
       ? [
           {
@@ -711,6 +797,28 @@ export function EventComposerKindPill(props: EventComposerKindPillProps) {
         ]
       : EVENT_KIND_OPTIONS
   );
+}
+
+/** The kinds of event as selectable labels, for a touch sheet. */
+export function EventComposerKindTabs(props: EventComposerKindPillProps) {
+  const options = createEventKindOptions(props);
+  return (
+    <Tabs
+      aria-label="Event kind"
+      options={options()}
+      value={eventKindOf(props.eventType)}
+      onChange={(kind) => {
+        if (!props.readOnly) props.onChange(kind);
+      }}
+      disabled={props.disabled}
+      touch="pills"
+    />
+  );
+}
+
+/** Compact selector for the kind of event being created. */
+export function EventComposerKindPill(props: EventComposerKindPillProps) {
+  const options = createEventKindOptions(props);
   const selectedOption = () =>
     options().find((option) => option.value === eventKindOf(props.eventType)) ??
     options()[0];

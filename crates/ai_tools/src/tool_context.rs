@@ -38,13 +38,15 @@ use databases::inbound::toolset::DatabasesToolContext;
 use databases_sql::toolset::DatabasesSqlToolContext;
 use databases_sql::{DatabasesSql, ViewOnlyAccess};
 use documents::{
-    domain::ports::{TaskPropertiesPort, task_property_edit_receipt},
+    domain::ports::{TaskPropertiesPort, credited_task_edit_receipt, task_property_edit_receipt},
     inbound::toolset::DocumentToolContext,
 };
 use email::{
     domain::service::EmailServiceImpl, inbound::toolset::EmailToolContext, outbound::EmailPgRepo,
 };
-use entity_access::domain::models::EditAccessLevel;
+use entity_access::domain::models::{
+    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, ViewAccessLevel,
+};
 use entity_access::domain::ports::EntityAccessService as _;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
@@ -62,6 +64,7 @@ use macro_event_broker::{
     NoopMacroEventBroker,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::service::property_value::PropertyValue;
 use notification::domain::service::SqsNotificationIngress;
 use notification::inbound::ai_tool::NotificationToolContext;
 use projects::inbound::toolset::ProjectToolContext;
@@ -400,6 +403,9 @@ fn message_service_with_side_effects(
                     Arc::new(access.clone()),
                 ),
                 realtime.clone(),
+                channels::outbound::pg_agent_creations::PgAgentCreations::new(
+                    pool.clone(),
+                ),
             ),
             messages::domain::delivery::DiscussionDelivery::new(
                 messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone())
@@ -765,7 +771,12 @@ pub fn build_team_tool_context(pool: sqlx::PgPool) -> ToolTeamToolContext {
 pub struct NoOpTaskProperties;
 
 impl TaskPropertiesPort for NoOpTaskProperties {
-    async fn update_task_status(&self, _entity_id: &str, _status: &str) -> anyhow::Result<()> {
+    async fn update_task_status(
+        &self,
+        _access: &EntityAccessReceipt<EditAccessLevel>,
+        _credited_user: Option<&MacroUserIdStr<'static>>,
+        _status: &str,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
     async fn attach_task_properties(&self, _entity_ids: Vec<String>) -> anyhow::Result<()> {
@@ -808,14 +819,57 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
             .map_err(Into::into)
     }
 
-    async fn update_task_status(&self, task_id: &str, status: &str) -> anyhow::Result<()> {
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            task_id = %access.entity().entity_id,
+            status,
+            unchanged = tracing::field::Empty,
+            credited = tracing::field::Empty
+        ),
+        err
+    )]
+    async fn update_task_status(
+        &self,
+        access: &EntityAccessReceipt<EditAccessLevel>,
+        credited_user: Option<&MacroUserIdStr<'static>>,
+        status: &str,
+    ) -> anyhow::Result<()> {
+        use properties::PropertiesService as _;
+
         let status_option = StatusOption::try_from(status).map_err(|e| anyhow::anyhow!(e))?;
-
-        self.system_properties
-            .update_task_status(task_id, status_option)
+        let current = self
+            .properties
+            .get_system_property_value(
+                &access.clone().try_into_requirement::<ViewAccessLevel>()?,
+                system_properties::SystemPropertyKey::Status,
+            )
             .await?;
-
-        Ok(())
+        // PR edits and comments re-send In Review; an unchanged status publishes nothing.
+        if current == Some(PropertyValue::SelectOption(vec![status_option.uuid()])) {
+            tracing::Span::current().record("unchanged", true);
+            return Ok(());
+        }
+        let access =
+            credited_task_edit_receipt(self.entity_access_service.as_ref(), access, credited_user)
+                .await;
+        tracing::Span::current().record(
+            "credited",
+            matches!(access.auth(), EntityAccessAuth::Authenticated(_)),
+        );
+        self.properties
+            .set_entity_property(
+                &access,
+                system_properties::SystemPropertyKey::STATUS_UUID,
+                Some(
+                    models_properties::api::requests::SetPropertyValue::SelectOption {
+                        option_id: status_option.uuid(),
+                    },
+                ),
+            )
+            .await
+            .map(|_| ())
+            .map_err(Into::into)
     }
 
     async fn set_entity_property(
@@ -1750,10 +1804,15 @@ impl ToolEntityCreator {
         let principal = Self::creation_principal(user);
 
         if let Some(status) = properties.status.as_deref()
-            && let Err(e) = self
-                .task_properties
-                .update_task_status(task_id, status)
-                .await
+            && let Err(e) = match StatusOption::try_from(status) {
+                Ok(option) => self
+                    .task_properties
+                    .system_properties
+                    .update_task_status(task_id, option)
+                    .await
+                    .map_err(anyhow::Error::from),
+                Err(e) => Err(anyhow::anyhow!(e)),
+            }
         {
             tracing::warn!(task_id, status, error = ?e, "failed to set imported task status");
         }
@@ -1931,6 +1990,12 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
     >,
 >;
 
+/// The custom MCP server tools, wired by hosts holding the MCP credentials
+/// key.
+pub type ToolMcpServerToolContext = mcp_client::inbound::toolset::McpServerToolContext<
+    mcp_client::outbound::pg_server_repo::PgServerRepo,
+>;
+
 /// Type alias for the import tool context, wired by hosts with connector access.
 pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<ToolImportService>;
 
@@ -2008,6 +2073,9 @@ pub struct ToolServiceContext {
     /// Import staging/tracking tools. `unwired` in hosts that can't build
     /// the import service — calls there fail with a clear error.
     pub import_tool_context: ToolImportToolContext,
+    /// Custom MCP server tools. `unwired` in hosts without the MCP
+    /// credentials key — calls there fail with a clear error.
+    pub mcp_server_tool_context: ToolMcpServerToolContext,
     /// Built per-request via a manual `FromRef` below so it can carry the
     /// running chat's id — the derive's field-clone would freeze it at
     /// startup with no chat id set.
@@ -2113,6 +2181,28 @@ impl ToolServiceContext {
         self.pipeline_tool_context.actor = actor;
         self.crm_transfer_tool_context.actor = actor;
         self.databases_sql_tool_context = self.databases_sql_tool_context.with_actor(actor);
+        self
+    }
+
+    /// Run the tools for `caller`, as the public MCP authenticated it: an
+    /// agent writes as itself; an MCP client writes as the Macro bot with its
+    /// name on the post ("via Claude Code"); a pasted API key writes as the
+    /// Macro bot.
+    pub fn for_caller(self, caller: &ai_toolset::ToolCaller) -> Self {
+        match caller {
+            ai_toolset::ToolCaller::Agent(agent) => self.with_actor(*agent),
+            ai_toolset::ToolCaller::McpClient { name: Some(name) } => self.with_via(name),
+            ai_toolset::ToolCaller::McpClient { name: None } | ai_toolset::ToolCaller::ApiKey => {
+                self
+            }
+        }
+    }
+
+    /// Label the posts the tools make with the client the user works
+    /// through.
+    fn with_via(mut self, client: &str) -> Self {
+        self.message_tool_context = self.message_tool_context.with_via(client.to_owned());
+        self.channel_tool_context = self.channel_tool_context.with_via(client.to_owned());
         self
     }
 

@@ -21,6 +21,7 @@ const BODY_LIMIT: usize = 64 * 1024;
 struct Response {
     status: StatusCode,
     location: Option<String>,
+    referrer_policy: Option<String>,
     body: String,
 }
 
@@ -41,6 +42,10 @@ async fn send(harness: &Harness, request: Request<Body>) -> Response {
         .headers()
         .get(header::LOCATION)
         .map(|value| value.to_str().expect("Location is text").to_owned());
+    let referrer_policy = response
+        .headers()
+        .get(header::REFERRER_POLICY)
+        .map(|value| value.to_str().expect("Referrer-Policy is text").to_owned());
     let bytes = axum::body::to_bytes(response.into_body(), BODY_LIMIT)
         .await
         .expect("body should be readable");
@@ -48,6 +53,7 @@ async fn send(harness: &Harness, request: Request<Body>) -> Response {
     Response {
         status,
         location,
+        referrer_policy,
         body: String::from_utf8(bytes.to_vec()).expect("body should be UTF-8"),
     }
 }
@@ -152,6 +158,83 @@ async fn authorize_explains_how_to_reconnect_an_unregistered_client() {
     assert!(response.body.contains("remove the Macro MCP connection"));
     assert!(response.body.contains("add it again, and sign in to Macro"));
     assert_eq!(response.location, None);
+    assert!(!harness.inflight.has_pending());
+}
+
+/// MCP Inspector on `http://127.0.0.1:6274` failed with FusionAuth's "Invalid
+/// origin uri" because the browser forwarded the inspector's Referer through
+/// this redirect. Every usable client, loopback on any port or a trusted HTTPS
+/// host, reaches FusionAuth without its origin.
+#[tokio::test]
+async fn authorize_withholds_the_client_origin_from_the_identity_provider() {
+    let harness = Harness::new();
+
+    for redirect_uri in [
+        "http://localhost:6274/oauth/callback",
+        "http://127.0.0.1:6274/oauth/callback",
+        "http://[::1]:6274/oauth/callback",
+        TRUSTED_REDIRECT_URI,
+    ] {
+        let registration = send(&harness, register_request(redirect_uri)).await;
+        assert_eq!(registration.status, StatusCode::OK, "{redirect_uri}");
+        let client_id = registration.json()["client_id"]
+            .as_str()
+            .expect("registration returns a client_id")
+            .to_owned();
+
+        let authorize = send(
+            &harness,
+            authorize_request(&client_id, redirect_uri, VICTIM_CODE_VERIFIER),
+        )
+        .await;
+
+        assert_eq!(
+            authorize.status,
+            StatusCode::TEMPORARY_REDIRECT,
+            "{redirect_uri}"
+        );
+        assert_eq!(
+            authorize.referrer_policy.as_deref(),
+            Some("no-referrer"),
+            "{redirect_uri}"
+        );
+    }
+}
+
+/// Loopback hosts are interchangeable for the policy but not for the
+/// registration: a client registered on `localhost` cannot have its code sent
+/// to `127.0.0.1`.
+#[tokio::test]
+async fn authorize_refuses_a_loopback_redirect_the_client_did_not_register() {
+    let harness = Harness::new();
+
+    let registration = send(
+        &harness,
+        register_request("http://localhost:6274/oauth/callback"),
+    )
+    .await;
+    assert_eq!(registration.status, StatusCode::OK);
+    let client_id = registration.json()["client_id"]
+        .as_str()
+        .expect("registration returns a client_id")
+        .to_owned();
+
+    let authorize = send(
+        &harness,
+        authorize_request(
+            &client_id,
+            "http://127.0.0.1:6274/oauth/callback",
+            VICTIM_CODE_VERIFIER,
+        ),
+    )
+    .await;
+
+    assert_eq!(authorize.status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        authorize.body,
+        "redirect_uri was not registered for this client"
+    );
+    assert_eq!(authorize.location, None);
     assert!(!harness.inflight.has_pending());
 }
 

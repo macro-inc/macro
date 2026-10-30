@@ -11,8 +11,8 @@ use crate::domain::model::{
     Author, Control, FoldedMessage, SessionMetadata, StopReason, ToolUseId, TurnId, TurnState,
 };
 use agent_client_protocol::schema::v1::{
-    CompleteElicitationNotification, CreateElicitationRequest, PromptRequest, RequestId,
-    RequestPermissionRequest, Response, SessionNotification, SessionUpdate,
+    CompleteElicitationNotification, ContentBlock, CreateElicitationRequest, PromptRequest,
+    RequestId, RequestPermissionRequest, Response, SessionNotification, SessionUpdate,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage, RawJsonRpcParams};
 use agent_runtime_protocol::domain::action::AgentAction;
@@ -491,7 +491,9 @@ impl FoldState {
                     .collect()
             }
             // Replay has no original prompt requests: user chunks are its
-            // authoritative prompts. Outside load, ignore prompt echoes.
+            // authoritative prompts. A live turn already has its prompt, so
+            // text chunks would echo it; an image frame would not, because
+            // the prompt was sent before the link was fetched.
             SessionUpdate::UserMessageChunk(chunk)
                 if self.replaying
                     || self
@@ -503,7 +505,12 @@ impl FoldState {
                     user_content_part(chunk.content).and_then(|part| self.replay_user_part(part)),
                 )
             }
-            SessionUpdate::UserMessageChunk(_) => Vec::new(),
+            SessionUpdate::UserMessageChunk(chunk) => StepChange::message(match chunk.content {
+                content @ ContentBlock::Image(_) => {
+                    user_content_part(content).and_then(|part| self.append_prompt_attachment(part))
+                }
+                _ => None,
+            }),
             SessionUpdate::ToolCall(call) => {
                 let mut changes =
                     StepChange::metadata(self.sniff_harness(&ToolFrame::of_call(&call)));

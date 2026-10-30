@@ -1,8 +1,12 @@
 //! Mapping tracker task fields and preserving all source content.
 use super::*;
 
+/// The id written for ledger row `ledger`, stable across replays. Stamped as
+/// a random (v4) UUID because project descriptions are collab surfaces, which
+/// only accept random ids; the bytes come from the random ledger id.
 pub(in crate::domain::service) fn target_id(ledger: Uuid) -> Uuid {
-    Uuid::new_v5(&ledger, b"tracker-target")
+    let derived = Uuid::new_v5(&ledger, b"tracker-target");
+    uuid::Builder::from_random_bytes(*derived.as_bytes()).into_uuid()
 }
 
 pub(in crate::domain::service) fn properties(issue: &Issue) -> ImportedTaskProperties {

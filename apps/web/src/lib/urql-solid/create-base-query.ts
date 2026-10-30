@@ -1,5 +1,6 @@
 import {
   type Accessor,
+  batch,
   createComputed,
   createMemo,
   createSignal,
@@ -59,32 +60,37 @@ export function createBaseQuery<
   initialObserver.setReference?.(result);
 
   const update = (next: Result): void => {
-    untrack(() => {
-      const reconciled = { ...next };
-      for (const key in reconciled) {
-        if (Object.is(previous[key], next[key])) {
-          // reconcile unwraps its entire input before comparing it. Existing
-          // store proxies let unwrap skip unchanged branches in constant time.
-          reconciled[key] = state[key];
-        } else if (
-          key === 'data' &&
-          (containsReactiveStore(next[key]) ||
+    // Effects must see the new data and loading flags in the same update.
+    batch(() =>
+      untrack(() => {
+        const reconciled = { ...next };
+        for (const key in reconciled) {
+          if (Object.is(previous[key], next[key])) {
+            // reconcile unwraps its entire input before comparing it. Existing
+            // store proxies let unwrap skip unchanged branches in constant time.
+            reconciled[key] = state[key];
+          } else if (
+            key !== 'data' ||
+            containsReactiveStore(next[key]) ||
             containsReactiveStore(previous[key]) ||
             !supportsStoreReconciliation(next[key]) ||
-            !supportsStoreReconciliation(previous[key]))
-        ) {
-          // Preserve store ownership and fields that Solid reconcile skips.
-          setState(
-            produce((draft) => {
-              draft[key] = next[key];
-            })
-          );
-          reconciled[key] = state[key];
+            !supportsStoreReconciliation(previous[key])
+          ) {
+            // Operations contain shared GraphQL documents and cached request
+            // identities. Reconcile only result data; mutating metadata can
+            // change an operation's name without changing its cached query text.
+            setState(
+              produce((draft) => {
+                draft[key] = next[key];
+              })
+            );
+            reconciled[key] = state[key];
+          }
         }
-      }
-      previous = next;
-      setState(reconcile(reconciled));
-    });
+        previous = next;
+        setState(reconcile(reconciled));
+      })
+    );
   };
 
   createComputed(() => {

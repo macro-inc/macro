@@ -66,7 +66,7 @@ export function CanvasDrawingToolbar(props: {
                 variant={props.tool === tool.id ? 'primary' : 'ghost'}
                 onClick={() => props.onTool(tool.id)}
               >
-                <Dynamic component={tool.icon} />
+                <Dynamic component={tool.icon} class="size-4" />
               </Toolbar.Button>
             )}
           </For>
@@ -87,7 +87,7 @@ export function CanvasDrawingToolbar(props: {
               props.onAttach?.({ x: rect.left + rect.width / 2, y: rect.top });
             }}
           >
-            <Paperclip />
+            <Paperclip class="size-4" />
           </Toolbar.Button>
         </Show>
       </Toolbar>
@@ -230,7 +230,7 @@ export function CanvasZoomToolbar(props: CanvasZoomProps) {
             tooltip="Zoom out"
             onClick={() => props.onZoom(1 / 1.2)}
           >
-            <Minus />
+            <Minus class="size-4" />
           </Toolbar.Button>
           <CanvasZoomMenu {...props} />
           <Toolbar.Button
@@ -238,7 +238,7 @@ export function CanvasZoomToolbar(props: CanvasZoomProps) {
             tooltip="Zoom in"
             onClick={() => props.onZoom(1.2)}
           >
-            <Plus />
+            <Plus class="size-4" />
           </Toolbar.Button>
         </Toolbar.Group>
       </Toolbar>

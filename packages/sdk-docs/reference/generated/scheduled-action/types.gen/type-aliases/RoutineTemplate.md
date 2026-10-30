@@ -2,7 +2,7 @@
 
 > **RoutineTemplate** = \{ `active_count`: `number`; `author`: `string`; `created_at`: `string`; `description`: `string`; `id`: `string`; `name`: `string`; `task`: \{\[`key`: `string`\]: `unknown`; \}; `trigger`: [`ActionTrigger`](ActionTrigger.md); `updated_at`: `string`; `variables`: [`TemplateVariable`](TemplateVariable.md)[]; \}
 
-A shared routine's snapshot, readable by any signed-in user with its ID.
+A shared routine's snapshot, readable by signed-in users with sharing enabled.
 
 ## Properties
 

@@ -425,6 +425,11 @@ export type ApiThread = {
     access_level: AccessLevel;
     created_at: string;
     db_id: string;
+    /**
+     * Whether any message was received rather than drafted or sent. Only
+     * threads with received mail can return to the inbox.
+     */
+    has_received_mail: boolean;
     inbox_visible: boolean;
     is_read: boolean;
     latest_inbound_message_ts?: string | null;
@@ -1047,6 +1052,8 @@ export type CreateLabelResponse = {
      */
     label: Label;
 };
+
+export type EmlFile = Blob | File;
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -3101,6 +3108,35 @@ export type GetMessageResponses = {
 };
 
 export type GetMessageResponse = GetMessageResponses[keyof GetMessageResponses];
+
+export type GetMessageEmlData = {
+    body?: never;
+    path: {
+        /**
+         * Message ID.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/email/messages/{id}/eml';
+};
+
+export type GetMessageEmlErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    429: ErrorResponse;
+    503: ErrorResponse;
+};
+
+export type GetMessageEmlError = GetMessageEmlErrors[keyof GetMessageEmlErrors];
+
+export type GetMessageEmlResponses = {
+    200: EmlFile;
+};
+
+export type GetMessageEmlResponse = GetMessageEmlResponses[keyof GetMessageEmlResponses];
 
 export type PatchSettingsData = {
     body: PatchSettingsRequest;

@@ -278,7 +278,7 @@ export function ToastContent(props: {
   const singleRow = () =>
     !props.embed && !hasBody() && (!hasActions() || inlineActions());
   const showDismiss = () => props.showCloseButton !== false;
-  const showCloseButton = () => showDismiss() && !hasActions();
+  const showCloseButton = () => showDismiss() && !hasActions() && !isMobile();
   const [height, setHeight] = createSignal<number>();
   let surface!: HTMLDivElement;
 
@@ -396,7 +396,7 @@ export function ToastContent(props: {
             <Toast.CloseButton
               as={Button}
               variant="ghost"
-              size={isMobile() ? 'icon-md' : 'icon-sm'}
+              size="icon-sm"
               aria-label={t('common.close')}
               class={cn(
                 'absolute right-2 z-10',

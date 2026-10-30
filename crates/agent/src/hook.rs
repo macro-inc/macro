@@ -1,7 +1,7 @@
 /// A [`rig_agent::agent::AgentHook`] that bridges rig lifecycle events into
 /// [`StreamPart`] items sent through a channel.
 use crate::AgentError;
-use crate::stream::{McpInfo, StreamPart, ToolCall, ToolResponse, Usage};
+use crate::stream::{McpInfo, StreamPart, ToolCall, ToolCallStart, ToolResponse, Usage};
 use crate::tool_result_limit::ToolResultLimit;
 use ai_toolset::{SearchableTool, ToolInfo};
 use rig_agent::agent::hook::{
@@ -13,6 +13,7 @@ use rig_agent::tool::ToolOutput;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -148,6 +149,28 @@ pub struct BridgeInputs {
     /// Cuts results too long for the model to read whole, when the host
     /// offers [`crate::ReadToolResult`] to page through them.
     pub result_limit: Option<ToolResultLimit>,
+    /// Report tool calls while the model is still writing them (see
+    /// [`StreamPart::ToolCallStarted`]).
+    pub stream_tool_calls: bool,
+}
+
+/// A call announced from its first argument delta and not yet finished.
+struct StartedCall {
+    /// rig's correlation id, shared by the call's deltas and (for every
+    /// provider rig ships) the finished call.
+    internal_call_id: String,
+    /// The id the announcement went out under.
+    id: String,
+}
+
+/// The ids streamed calls were announced under, so the finished call and its
+/// result are reported under the same one.
+#[derive(Default)]
+struct StreamedCalls {
+    started: Vec<StartedCall>,
+    /// Finished calls awaiting their result: rig's internal id to the id the
+    /// call was reported under.
+    finished: HashMap<String, String>,
 }
 
 /// The answer a user tool gives when it has not been finished.
@@ -155,14 +178,18 @@ const PENDING_USER_EXECUTION: &str = "PendingUserExecution";
 
 static CANCELLED_REASON: &str = "user cancelled";
 
-/// Retry budget for invalid tool calls recovered via
-/// [`StreamBridge::on_invalid_tool_call`]. Lets the common one-shot recovery —
-/// the model calls a searchable tool it never loaded, the bridge loads it, the
-/// call is retried — succeed, while bounding a model that keeps emitting names
-/// that don't exist anywhere. Past the budget the stream fails with
-/// `UnknownToolCall`, as it did before recovery existed. Retries also consume
-/// multi-turn depth.
-pub(crate) const MAX_INVALID_TOOL_CALL_RETRIES: usize = 2;
+/// Retries per run for tool calls to names that exist nowhere, not even the
+/// searchable catalog (see [`StreamBridge::handle_invalid_tool_call`]). Bounds
+/// a model that keeps hallucinating names; past it the run fails with
+/// `UnknownToolCall`, as it did before recovery existed. Calls that auto-load
+/// a catalog tool don't count: they are bounded by multi-turn depth, which
+/// every retry consumes.
+pub(crate) const MAX_UNKNOWN_TOOL_CALL_RETRIES: usize = 2;
+
+/// The retry budget handed to rig. rig counts every retry against one budget
+/// for the whole run, auto-loads included, so the bridge owns the budget (see
+/// [`MAX_UNKNOWN_TOOL_CALL_RETRIES`]) and rig's must never run out first.
+pub(crate) const RIG_INVALID_TOOL_CALL_RETRIES: usize = usize::MAX;
 
 /// Sends [`StreamPart`] items through an unbounded channel as the RIG agentic
 /// loop produces events.
@@ -181,9 +208,15 @@ pub struct StreamBridge {
     /// [`Self::on_invalid_tool_call`] to recover calls to tools the model
     /// discovered but never loaded.
     searchable_catalog: Arc<Vec<SearchableTool>>,
+    /// Retries spent this run on names not in the catalog; capped at
+    /// [`MAX_UNKNOWN_TOOL_CALL_RETRIES`].
+    unknown_tool_call_retries: Arc<AtomicUsize>,
     /// Finishes a user tool's pending answer before the model reads it, on
     /// hosts that can reach the user mid-turn (see [`UserToolFinisher`]).
     user_tool_finisher: Option<UserToolFinisher>,
+    /// Calls announced before they finished; `None` when the loop does not
+    /// stream tool calls.
+    streamed: Option<Arc<Mutex<StreamedCalls>>>,
     /// Cuts results too long for the model to read whole.
     result_limit: Option<ToolResultLimit>,
     /// the user has requested the stream stop
@@ -217,6 +250,7 @@ impl StreamBridge {
             register_loaded,
             tool_loads,
             user_tool_finisher,
+            stream_tool_calls,
             result_limit,
         } = inputs;
         let (tx, rx) = mpsc::unbounded_channel();
@@ -228,7 +262,9 @@ impl StreamBridge {
                 register_loaded,
                 tool_loads,
                 searchable_catalog,
+                unknown_tool_call_retries: Arc::default(),
                 user_tool_finisher,
+                streamed: stream_tool_calls.then(Arc::default),
                 result_limit,
                 cancel,
                 provider_ids: Arc::default(),
@@ -283,7 +319,8 @@ impl StreamBridge {
     /// never loaded — load it now and ask the model to retry; the next request
     /// is rebuilt from the live tool server, so the retried call is valid. For
     /// names that exist nowhere, the retry feedback points the model at
-    /// `SearchTools` instead of failing the stream on a hallucinated name.
+    /// `SearchTools` instead of failing the stream on a hallucinated name,
+    /// until [`MAX_UNKNOWN_TOOL_CALL_RETRIES`] is spent.
     pub(crate) async fn handle_invalid_tool_call(
         &self,
         tool_name: &str,
@@ -312,15 +349,23 @@ impl StreamBridge {
                      again, checking your arguments against them."
                 )))
             }
-            None => Some(InvalidToolCallAction::retry(format!(
-                "Unknown tool `{tool_name}`: no tool with that name exists in this session \
-                 or its connected integrations. Use `SearchTools` to find the \
-                 right tool, or continue without it."
-            ))),
+            None => {
+                let spent = self
+                    .unknown_tool_call_retries
+                    .fetch_add(1, Ordering::Relaxed);
+                if spent >= MAX_UNKNOWN_TOOL_CALL_RETRIES {
+                    return Some(InvalidToolCallAction::fail());
+                }
+                Some(InvalidToolCallAction::retry(format!(
+                    "Unknown tool `{tool_name}`: no tool with that name exists in this session \
+                     or its connected integrations. Use `SearchTools` to find the \
+                     right tool, or continue without it."
+                )))
+            }
         }
     }
 
-    pub(crate) fn handle_tool_call_delta(&self, provider_id: &str, internal_call_id: &str) {
+    fn capture_provider_id(&self, provider_id: &str, internal_call_id: &str) {
         if !provider_id.is_empty() {
             self.provider_ids
                 .lock()
@@ -345,6 +390,59 @@ impl StreamBridge {
         }
     }
 
+    /// Announce a tool call on its first delta - the one that names it - and
+    /// forward each argument fragment after it.
+    ///
+    /// The announcement uses the provider's id when available, preserving
+    /// Anthropic's model-visible tool ids across replay and prompt caching.
+    /// Rig's internal id correlates later deltas, execution and results.
+    pub(crate) fn handle_tool_call_delta(
+        &self,
+        provider_id: &str,
+        internal_call_id: &str,
+        tool_name: Option<&str>,
+        delta: &str,
+    ) -> ObservationAction {
+        if self.cancel.is_cancelled() {
+            return ObservationAction::stop(CANCELLED_REASON);
+        }
+        self.capture_provider_id(provider_id, internal_call_id);
+        let Some(streamed) = &self.streamed else {
+            return ObservationAction::Continue;
+        };
+        let mut streamed = streamed.lock().expect("streamed calls poisoned");
+        let known = streamed
+            .started
+            .iter()
+            .find(|call| call.internal_call_id == internal_call_id)
+            .map(|call| call.id.clone());
+        let id = match (known, tool_name) {
+            (Some(id), _) => id,
+            (None, Some(tool_name)) => {
+                let id = self.call_id(None, internal_call_id);
+                streamed.started.push(StartedCall {
+                    internal_call_id: internal_call_id.to_owned(),
+                    id: id.clone(),
+                });
+                let _ = self.tx.send(Ok(StreamPart::ToolCallStarted(ToolCallStart {
+                    id: id.clone(),
+                    name: tool_name.to_owned(),
+                    mcp: self.mcp_info(tool_name),
+                })));
+                id
+            }
+            // rig names a call before forwarding any of its arguments.
+            (None, None) => return ObservationAction::Continue,
+        };
+        if !delta.is_empty() {
+            let _ = self.tx.send(Ok(StreamPart::ToolCallArgs {
+                id,
+                delta: delta.to_owned(),
+            }));
+        }
+        ObservationAction::Continue
+    }
+
     pub(crate) fn handle_tool_call(
         &self,
         tool_name: &str,
@@ -359,8 +457,18 @@ impl StreamBridge {
             .ok()
             .filter(serde_json::Value::is_object)
             .unwrap_or_else(|| serde_json::json!({}));
-        let id = self.call_id(tool_call_id, internal_call_id);
-        let mcp = (self.routing)(tool_name).map(|i| match i {
+        let id = self.finished_call_id(tool_call_id, internal_call_id);
+        let _ = self.tx.send(Ok(StreamPart::ToolCall(ToolCall {
+            id,
+            name: tool_name.to_owned(),
+            json,
+            mcp: self.mcp_info(tool_name),
+        })));
+        ToolCallAction::Run
+    }
+
+    fn mcp_info(&self, tool_name: &str) -> Option<McpInfo> {
+        (self.routing)(tool_name).map(|i| match i {
             ToolInfo::ExternalTool {
                 service_name,
                 tool_name,
@@ -370,14 +478,46 @@ impl StreamBridge {
                 tool_name,
                 display_name,
             },
-        });
-        let _ = self.tx.send(Ok(StreamPart::ToolCall(ToolCall {
-            id,
-            name: tool_name.to_owned(),
-            json,
-            mcp,
-        })));
-        ToolCallAction::Run
+        })
+    }
+
+    /// The id a finished call is reported under: the one it was announced
+    /// under when it streamed, else the provider's, else rig's.
+    ///
+    /// Match by rig's correlation id or the provider id, never by tool name:
+    /// parallel calls of the same tool can finish in a different order.
+    fn finished_call_id(&self, tool_call_id: Option<&str>, internal_call_id: &str) -> String {
+        let unstreamed = self.call_id(tool_call_id, internal_call_id);
+        let Some(streamed) = &self.streamed else {
+            return unstreamed;
+        };
+        let mut streamed = streamed.lock().expect("streamed calls poisoned");
+        let announced = streamed
+            .started
+            .iter()
+            .position(|call| call.internal_call_id == internal_call_id || call.id == unstreamed);
+        let id = match announced {
+            Some(at) => streamed.started.remove(at).id,
+            None => unstreamed,
+        };
+        streamed
+            .finished
+            .insert(internal_call_id.to_owned(), id.clone());
+        id
+    }
+
+    /// The id a tool result is reported under: its call's.
+    fn result_id(&self, tool_call_id: Option<&str>, internal_call_id: &str) -> String {
+        self.streamed
+            .as_ref()
+            .and_then(|streamed| {
+                streamed
+                    .lock()
+                    .expect("streamed calls poisoned")
+                    .finished
+                    .remove(internal_call_id)
+            })
+            .unwrap_or_else(|| self.call_id(tool_call_id, internal_call_id))
     }
 
     pub(crate) async fn handle_tool_result(
@@ -408,7 +548,7 @@ impl StreamBridge {
             (self.register_loaded)(pending).await;
         }
 
-        let id = self.call_id(tool_call_id, internal_call_id);
+        let id = self.result_id(tool_call_id, internal_call_id);
         let json = if is_success {
             presentation_json(presentation)
         } else {
@@ -495,8 +635,12 @@ impl AgentHook for StreamBridge {
         _ctx: &HookContext,
         event: ToolCallDelta<'_>,
     ) -> ObservationAction {
-        self.handle_tool_call_delta(event.tool_call_id, event.internal_call_id);
-        ObservationAction::Continue
+        self.handle_tool_call_delta(
+            event.tool_call_id,
+            event.internal_call_id,
+            event.tool_name,
+            event.delta,
+        )
     }
 
     async fn on_invalid_tool_call(

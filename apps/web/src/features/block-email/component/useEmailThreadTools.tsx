@@ -3,8 +3,10 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
+import { downloadEmailMessageEml } from '@app/features/email-message/eml-download-adapter';
 import type { EmailThreadListNavigation } from '@app/features/email-thread/context/email-thread-context';
 import { useEmailThreadState } from '@app/features/email-thread/context/email-thread-state-context';
+import { selectEmlMessage } from '@app/features/email-thread/core/thread-messages';
 import {
   emailSenderBucket,
   makeMoveToProjectAction,
@@ -15,6 +17,7 @@ import {
   trashEmails,
 } from '@app/features/next-soup/utils';
 import { EmailReminderStatus } from '@app/features/reminders/email-reminder-status';
+import { t } from '@app/lib/i18n';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import { getPermissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
@@ -35,6 +38,7 @@ import CheckBoldIcon from '@icon/system/bold/check-bold.svg?component-solid';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
 import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import EnvelopeSimpleIcon from '@icon/system/regular/envelope-simple.svg';
 import EnvelopeSimpleOpenIcon from '@icon/system/regular/envelope-simple-open.svg';
 import TaskIcon from '@icon/system/regular/list-checks.svg';
@@ -201,6 +205,17 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
     });
   };
 
+  const emlMessage = () => {
+    const thread = emailCtx.thread();
+    return thread ? selectEmlMessage(thread) : undefined;
+  };
+
+  const downloadEml = () => {
+    const message = emlMessage();
+    if (!message) return;
+    fireAndForget(downloadEmailMessageEml(message), 'email-thread-tools');
+  };
+
   const shareTool: BlockTool = {
     group: 'sharing',
     label: 'Share',
@@ -278,6 +293,15 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       },
     },
     {
+      group: 'file',
+      get label() {
+        return t('entityActions.downloadEml');
+      },
+      icon: DownloadIcon,
+      action: downloadEml,
+      condition: () => !!emlMessage(),
+    },
+    {
       group: 'delete',
       label: 'Delete',
       icon: TrashIcon,
@@ -290,21 +314,27 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       label: 'Sender → Signal',
       icon: SignalIcon,
       action: () => emailCtx.markSenderSignal(),
-      condition: () => isOwnThread() && senderBucket() !== 'signal',
+      condition: () =>
+        isOwnThread() &&
+        emailCtx.canActOnSender() &&
+        senderBucket() !== 'signal',
     },
     {
       group: 'sender',
       label: 'Sender → Noise',
       icon: NoiseIcon,
       action: () => emailCtx.markSenderNoise(),
-      condition: () => isOwnThread() && senderBucket() !== 'noise',
+      condition: () =>
+        isOwnThread() &&
+        emailCtx.canActOnSender() &&
+        senderBucket() !== 'noise',
     },
     {
       group: 'sender',
       label: 'Block Sender',
       icon: ProhibitIcon,
       action: () => emailCtx.blockSender(),
-      condition: isOwnThread,
+      condition: () => isOwnThread() && emailCtx.canActOnSender(),
     },
   ];
 

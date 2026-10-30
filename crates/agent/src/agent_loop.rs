@@ -22,7 +22,6 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
 const DEFAULT_MAX_TURNS: usize = 200;
-const DEFAULT_MAX_TOKENS: u64 = 16_000;
 
 /// A session's system prompt, optionally split where the part every session
 /// of the agent repeats byte for byte ends, with an optional tail that
@@ -125,7 +124,8 @@ pub struct AgentLoop {
     reasoning_effort: Option<ReasoningEffort>,
     speed: ModelSpeed,
     max_turns: usize,
-    max_tokens: u64,
+    /// The output cap per model response; `None` asks for the model's maximum.
+    max_tokens: Option<u64>,
     recorder: Arc<dyn UsageRecorder>,
     user_tool_finisher: Option<UserToolFinisher>,
     result_limit: Option<ToolResultLimit>,
@@ -136,6 +136,8 @@ pub struct AgentLoop {
     /// Whether this loop enriches the runtime's GenAI spans (see
     /// [`Self::with_genai_telemetry`]).
     genai_telemetry: bool,
+    /// See [`Self::with_streamed_tool_calls`].
+    stream_tool_calls: bool,
     /// The router this loop's model calls use instead of the shared one, when
     /// a caller-supplied key pays for them (see [`Self::with_provider_api_key`]).
     router: Option<ModelRouter<MeteredHttpClient>>,
@@ -156,13 +158,14 @@ impl AgentLoop {
             reasoning_effort: None,
             speed: ModelSpeed::Standard,
             max_turns: DEFAULT_MAX_TURNS,
-            max_tokens: DEFAULT_MAX_TOKENS,
+            max_tokens: None,
             recorder,
             user_tool_finisher: None,
             result_limit: None,
             conversation_id: None,
             agent_name: None,
             genai_telemetry: true,
+            stream_tool_calls: false,
             router: None,
         }
     }
@@ -240,9 +243,10 @@ impl AgentLoop {
         self
     }
 
-    /// Override the default max output tokens.
+    /// Cap each model response at `n` output tokens instead of the model's
+    /// maximum.
     pub fn with_max_tokens(mut self, n: u64) -> Self {
-        self.max_tokens = n;
+        self.max_tokens = Some(n);
         self
     }
 
@@ -276,6 +280,24 @@ impl AgentLoop {
     /// calls run with `RequestContext::genai_telemetry` off.
     pub fn with_genai_telemetry(mut self, enabled: bool) -> Self {
         self.genai_telemetry = enabled;
+        self
+    }
+
+    /// Report each tool call as soon as the model names it, then its
+    /// arguments as they stream ([`StreamPart::ToolCallStarted`],
+    /// [`StreamPart::ToolCallArgs`]), before the finished
+    /// [`StreamPart::ToolCall`]. Off by default: a host that only renders
+    /// finished calls has nothing to do with the extra parts.
+    ///
+    /// A streamed call uses the provider id available on its first delta,
+    /// or rig's correlation id when none is available. Its final invocation
+    /// and result keep that id so the host updates the existing row.
+    ///
+    /// [`StreamPart::ToolCallStarted`]: crate::StreamPart::ToolCallStarted
+    /// [`StreamPart::ToolCallArgs`]: crate::StreamPart::ToolCallArgs
+    /// [`StreamPart::ToolCall`]: crate::StreamPart::ToolCall
+    pub fn with_streamed_tool_calls(mut self) -> Self {
+        self.stream_tool_calls = true;
         self
     }
 
@@ -342,7 +364,7 @@ impl AgentLoop {
             &SystemPrompt,
             &ToolSearch,
             usize,
-            u64,
+            Option<u64>,
             GenAiContext,
         ) -> ProviderAgent,
     ) -> Session
@@ -495,6 +517,7 @@ impl AgentLoop {
                 register_loaded,
                 tool_loads: tool_search.loads.clone(),
                 user_tool_finisher: self.user_tool_finisher.clone(),
+                stream_tool_calls: self.stream_tool_calls,
                 result_limit: self.result_limit.clone(),
             },
             recorder: self.recorder.clone(),

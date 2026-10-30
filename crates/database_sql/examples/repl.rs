@@ -46,6 +46,7 @@ const RENEWAL: Uuid = Uuid::from_u128(0x34);
 
 fn catalog() -> Catalog {
     Catalog {
+        scope: None,
         tables: vec![Table {
             id: TableId::from_uuid(DEALS),
             database_id: DatabaseId::from_uuid(CRM),

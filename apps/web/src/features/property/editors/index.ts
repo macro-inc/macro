@@ -6,4 +6,4 @@ export { InlineTextEditor } from './inline/InlineTextEditor';
 export { PropertyEditor } from './PropertyEditor';
 
 export {} from './popover/EntityEditor';
-export { PopoverEditor } from './popover/PopoverEditor';
+export { PopoverEditor, SheetEditor } from './popover/PopoverEditor';

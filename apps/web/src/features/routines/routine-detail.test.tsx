@@ -7,6 +7,10 @@ import type { RoutineTarget } from './core/routine-target';
 import { Routine } from './routine-detail';
 import type { HistoryRecord } from './views/routine-history';
 
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false, loading: false }),
+}));
+
 vi.mock('@app/lib/split-router', () => ({
   createSearchParamsCodec: () => ({}),
   createSearchParams: () => {
@@ -74,7 +78,7 @@ vi.mock('./routine-template', () => ({
   RoutineTemplatePage: (props: { scheduleId: string }) => (
     <div>Template for {props.scheduleId}</div>
   ),
-  openShareTemplateDialog: vi.fn(),
+  openShareRoutineDialog: vi.fn(),
 }));
 vi.mock('@core/block', () => ({ useBlockId: () => 'routine-id' }));
 vi.mock('@core/component/AI/constant', () => ({

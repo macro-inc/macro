@@ -13,6 +13,7 @@ import {
   enableDatabases,
   enableForms,
   enableGraphqlSoup,
+  enableProjects,
 } from '@core/constant/featureFlags';
 import {
   useChannelsContext,
@@ -31,6 +32,7 @@ import type {
   CrmContactEntity,
   DatabaseEntity,
   FormEntity,
+  InitiativeEntity,
   SkillEntity,
   SnippetEntity,
 } from '@entity';
@@ -47,6 +49,7 @@ import {
 import { queryReadyGate } from '@queries/gate';
 import { materializeCachedGraphqlHistoryItems } from '@queries/history/graphql';
 import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
+import { materializeCachedGraphqlInitiatives } from '@queries/soup/graphql/initiatives';
 import { useQuickAccessAgentSessionsQuery } from '@queries/soup/quick-access-agent-sessions';
 import { useQuickAccessInitiativesQuery } from '@queries/soup/quick-access-initiatives';
 import { useQuickAccessSkillsQuery } from '@queries/soup/quick-access-skills';
@@ -245,6 +248,25 @@ function channelToQuickAccessItem(
   };
 }
 
+function initiativeToQuickAccessItem(
+  initiative: InitiativeEntity,
+  viewedAt: DateValue | null | undefined
+): QuickAccessItem {
+  return {
+    kind: 'entity',
+    id: initiative.id,
+    bucket: 'initiative',
+    searchText: initiative.name,
+    sortTimestamp: toTimestamp(viewedAt) || toTimestamp(initiative.updatedAt),
+    timestamps: {
+      viewedAt,
+      updatedAt: initiative.updatedAt,
+      createdAt: initiative.createdAt,
+    },
+    data: { ...initiative, viewedAt },
+  };
+}
+
 function equalActivityMaps(
   previous: Map<string, DateValue>,
   next: Map<string, DateValue>
@@ -377,6 +399,7 @@ function sortIndexEntries(entries: IndexEntry[]): IndexEntry[] {
 /** Builds Quick Access from history and its supporting entity sources. */
 export function createQuickAccessValue(): QuickAccessContextValue {
   const crmFlag = useFeatureFlag(enableCrm);
+  const projectsFlag = useFeatureFlag(enableProjects);
   const graphqlFlag = useFeatureFlag(enableGraphqlSoup);
   // queries
   const historyQuery = useHistoryQuery();
@@ -937,30 +960,17 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const entries: IndexEntry[] = [];
     for (const initiative of initiativesAccessor()) {
       const viewedAt = viewedAtMap.get(initiative.id) ?? initiative.viewedAt;
-      const sortTimestamp =
-        toTimestamp(viewedAt) || toTimestamp(initiative.updatedAt);
-      const entity = { ...initiative, viewedAt };
-      const version = JSON.stringify(entity);
+      const item = initiativeToQuickAccessItem(initiative, viewedAt);
+      const version = JSON.stringify(item.data);
       const cached = itemCache.get(initiative.id);
       if (!cached || cached.version !== version) {
-        itemCache.set(initiative.id, {
-          version,
-          item: {
-            kind: 'entity',
-            id: initiative.id,
-            bucket: 'initiative',
-            searchText: initiative.name,
-            sortTimestamp,
-            timestamps: {
-              viewedAt,
-              updatedAt: initiative.updatedAt,
-              createdAt: initiative.createdAt,
-            },
-            data: entity,
-          },
-        });
+        itemCache.set(initiative.id, { version, item });
       }
-      entries.push({ id: initiative.id, bucket: 'initiative', sortTimestamp });
+      entries.push({
+        id: initiative.id,
+        bucket: 'initiative',
+        sortTimestamp: item.sortTimestamp,
+      });
     }
     return sortIndexEntries(entries);
   });
@@ -1090,8 +1100,9 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const projectedBuckets = createMemo(() =>
       (buckets.length ? buckets : BUCKET_COMBINATIONS.all).filter(
         (bucket) =>
-          (bucket !== 'crm_company' && bucket !== 'crm_contact') ||
-          crmFlag().enabled
+          ((bucket !== 'crm_company' && bucket !== 'crm_contact') ||
+            crmFlag().enabled) &&
+          (bucket !== 'initiative' || projectsFlag().enabled)
       )
     );
     const baseList = createLazyMemo(() => {
@@ -1183,12 +1194,14 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                 cachedCompanies,
                 cachedContacts,
                 cachedEmails,
+                cachedInitiatives,
               ] = await Promise.all([
                 materializeCachedGraphqlHistoryItems(projectionHost, missing),
                 materializeCachedGraphqlChannels(projectionHost, documents),
                 materializeCachedGraphqlCrmCompanies(projectionHost, missing),
                 materializeCachedGraphqlCrmContacts(projectionHost, missing),
                 materializeCachedEmailItems(projectionHost, documents),
+                materializeCachedGraphqlInitiatives(projectionHost, documents),
               ]);
               const historyById = new Map(
                 historyItems.map((item) => [item.id, item])
@@ -1204,6 +1217,12 @@ export function createQuickAccessValue(): QuickAccessContextValue {
               );
               const emailsById = new Map(
                 cachedEmails.map((item) => [item.id, item])
+              );
+              const initiativesById = new Map(
+                cachedInitiatives.map((initiative) => [
+                  initiative.id,
+                  initiative,
+                ])
               );
               return documents.flatMap((document): QuickAccessItem[] => {
                 const id = idOf(document.recordKey);
@@ -1221,6 +1240,15 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                         channel.viewedAt
                       ),
                     }),
+                  ];
+                }
+                const initiative = initiativesById.get(id);
+                if (initiative) {
+                  return [
+                    initiativeToQuickAccessItem(
+                      initiative,
+                      soupViewedAtMap().get(id)
+                    ),
                   ];
                 }
                 const cached = itemCache.get(id)?.item;
@@ -1300,9 +1328,13 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         .map((item) => {
           const cached = itemCache.get(item.id)?.item;
           if (!cached) return item;
-          // Projected channels carry current cache metadata even when the
-          // complete list still has an older name. Only overlay newer views.
-          if (item.kind === 'entity' && item.data.type === 'channel') {
+          // Projected channels and projects carry current cache metadata even
+          // when their REST list still has an older name. Only overlay newer
+          // views.
+          if (
+            item.kind === 'entity' &&
+            (item.data.type === 'channel' || item.data.type === 'initiative')
+          ) {
             const viewedAt = latestDate(
               item.timestamps.viewedAt,
               cached.timestamps.viewedAt

@@ -25,6 +25,11 @@ read their code, and follow that pattern rather than inventing a new one.
   control and show its touch replacement with the same one, or tablets get
   neither. Native checks (`isPlatform` in `@core/util/platform`) are for
   native bridges and platform-specific visual effects, not layout.
+- When a surface needs a different phone or touch layout, compose a separate
+  mobile view from shared parts (and a shared state primitive) instead of
+  branching on `isMobile()` / `isTouchDevice()` throughout one component;
+  extract the parts first if needed. The task composer
+  (`features/task-composer/views`) is the reference.
 - Gate hover and press styles with `not-touch:`; iOS leaves hover stuck.
 - No action lives only behind hover. `HoverCard` renders nothing on touch,
   so give it a tap path that opens a sheet, as `UserCardTrigger` does.
@@ -51,12 +56,31 @@ read their code, and follow that pattern rather than inventing a new one.
 - Phone drawers have a handle and no X; drag, backdrop, or Escape dismiss,
   and focus returns to the opener. No submenus at phone width: drill in
   place with a back row.
+- Actions that must stay in reach while a sheet scrolls sit in its pinned
+  chrome between the handle and `MobileDrawer.ScrollBody`, never in a sticky
+  band inside the scroll. A touch popover split exposes that slot as
+  `drawerHeader` on its panel context; see `MobileEventForm`. Content that
+  grows to fill its sheet (a composer's description) calls `fillDrawer` from
+  that context to open at a fixed height; see `MobileTaskComposer`.
+- Pick people, projects, tags, or other searchable lists from a touch sheet
+  with `PickerSheet` (`components/app/mobile`), not a dropdown: a full-height
+  sheet stacked over the current one with Cancel, a title, and Done, and no
+  handle or drag. Create the draft or picker session inside it so each opening
+  starts fresh, apply it only on Done, let the list fill `PickerSheet.Body`,
+  and cancel `pointerdown` and `mousedown` on the rows so the search field
+  keeps the keyboard. It hands focus back to the field that had it when it
+  opened, so its opener cancels `pointerdown` and `mousedown` too.
+  `Property.SheetEditor` (entity and date properties), `InlineTagsSheetPill`,
+  and the event composer's guest pill use it. Short lists (status, priority)
+  stay dropdowns: on touch, property menus leave focus where it was.
 - A backdrop tap only dismisses: `MobileDrawer` swallows the rest of that tap,
   so it never presses what the scrim covered, even when the sheet unmounts as
   it closes (a `<Show>` around it, or `openDialog`). It swallows only a tap
   that really closed the sheet, so an owner that keeps its sheet open while
   another is stacked on it leaves that sheet's controls pressable. Don't add
-  per-sheet delays or click guards for it.
+  per-sheet delays or click guards for it. A drag dismissal the owner refuses
+  (to confirm a discard, or while an action is pending) snaps the sheet back
+  open.
 - A sheet opened from another sheet stacks on it under its own scrim, which
   shares the sheets' layer (as Dialog's does), so the sheet beneath dims with
   the page and only the top sheet's handle stands out. Open it under the
@@ -77,6 +101,10 @@ read their code, and follow that pattern rather than inventing a new one.
 
 - Focus inputs on user intent only, never on mount. On touch, Enter in a
   composer inserts a newline; the send button submits.
+- iOS raises the keyboard only for a focus inside the tap. A tap that opens a
+  composer whose field mounts later calls `triggerFocusInput` in the tap (see
+  `raiseKeyboardForNewTaskTitle`), or a create menu item's `raiseKeyboard`;
+  popovers and the create menu leave focus with its stand-in.
 - UI over an editor must not take focus: cancel `pointerdown` and
   `mousedown` on its root (`keepEditorFocus` in `TouchSelectionToolbar`) or
   use `usePreserveFocusOnButtonTaps`; mark sibling regions
@@ -106,6 +134,10 @@ read their code, and follow that pattern rather than inventing a new one.
   `FloatRegionOrInline` with `px-(--mobile-chrome-gutter)` and
   `pointer-events-auto`. Style it with `island` / `glass`, size it with the
   px `--mobile-chrome-*` tokens (not rem), and pass Button a `depth`.
+- Mark selection with `ink`, never `accent`: a selected pill is `bg-ink
+  text-surface`, a selected dock button or drawer row stays at full ink while
+  its siblings dim (`text-ink-extra-muted`, `aria-current="page"`). Keep the
+  accent for attention — unread dots and filter counts.
 - Phones show one pane: open in place or as a front pane, never a new
   split. Desktop-only layouts fall back (board to list) and update the URL.
 - Suspense wraps content, never the router or chrome, with `ContentLoading`

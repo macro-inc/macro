@@ -13,6 +13,7 @@ import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import { messageSendMotion } from '@core/util/message-send-motion';
 import { openExternalUrl } from '@core/util/url';
+import { stripAgentContext } from '@macro-inc/lexical-core/utils/parsers';
 import type {
   FoldedMessage,
   MessagePart,
@@ -79,7 +80,11 @@ function AgentMessagePart(props: {
       <Match when={props.part.kind === 'text' && props.part}>
         {(part) => (
           <TextPart
-            text={part().text}
+            text={
+              props.message.author.kind === 'user'
+                ? stripAgentContext(part().text)
+                : part().text
+            }
             inFlight={props.inFlight}
             hideIncompleteXml={props.message.author.kind === 'agent'}
             observeRender={

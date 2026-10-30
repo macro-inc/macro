@@ -17,17 +17,19 @@ use super::{Cell, Row, group_order_index};
 /// Each option's place in its column's declared order.
 type OptionRanks = HashMap<OptionId, usize>;
 
-/// Sort fetched rows by column keys. A key on an item index cannot occur
-/// here: a row shape has no aggregates to refer to.
-pub fn rows(catalog: &Catalog, plan: &Plan, rows: &mut [Row]) {
+/// Sort fetched rows of a row shape selecting `columns`. A key on an item
+/// index (`ORDER BY 2`, or an `AS` label) sorts by the column that item
+/// selects; resolve has checked the index is in range.
+pub fn rows(catalog: &Catalog, plan: &Plan, columns: &[Uuid], rows: &mut [Row]) {
     let keys: Vec<(Uuid, Direction, OptionRanks)> = plan
         .order_by
         .iter()
-        .map(|order| {
-            let OrderKey::Column(column) = order.key else {
-                unreachable!("row shapes order by columns only");
+        .filter_map(|order| {
+            let column = match order.key {
+                OrderKey::Column(column) => column,
+                OrderKey::Item(index) => *columns.get(index)?,
             };
-            (column, order.direction, option_ranks(catalog, plan, column))
+            Some((column, order.direction, option_ranks(catalog, plan, column)))
         })
         .collect();
     rows.sort_by(|left, right| {

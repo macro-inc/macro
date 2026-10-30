@@ -38,7 +38,7 @@ use tokio::sync::mpsc;
 use tracing::Instrument as _;
 
 use crate::domain::auto_model::{AutoModelSelector, DefaultAutoModel, JevAutoModel};
-use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
+use crate::domain::engine::{AgentIdentity, ReplyDelivery, TurnEngine, TurnRequest};
 use crate::domain::tool_gate::{NativeToolGate, NativeToolVerdict, UngatedNativeTools};
 use crate::domain::tool_mode::{StandardTools, ToolMode, ToolModeSelector};
 use crate::inbound::ask_user::{AskUser, AskUserContext};
@@ -449,6 +449,7 @@ async fn drive_turn(
 ) -> Result<(), AgentError> {
     let TurnRequest {
         purpose,
+        delivery,
         session_id,
         awaiting,
         owner,
@@ -492,6 +493,10 @@ async fn drive_turn(
             "the agent's API key does not serve {model}"
         )));
     }
+    // The opening line runs on Macro's own fast model, so a turn the agent's
+    // key pays for goes without one; so does a reply read only once it is
+    // finished, which gains nothing from it.
+    let opening = !summarizing && agent_key.is_none() && delivery == ReplyDelivery::Streamed;
 
     // Started before anything else so its line is out before the turn's
     // model has a first token.
@@ -505,7 +510,7 @@ async fn drive_turn(
     // reply), `silent` (no line fit this follow-up), `turn_first` (the
     // turn's model spoke first), `no_verdict` (the
     // fast model failed or answered without one) or `timeout`.
-    let opener_span = if summarizing {
+    let opener_span = if !opening {
         tracing::Span::none()
     } else {
         tracing::info_span!(
@@ -518,9 +523,7 @@ async fn drive_turn(
         )
     };
     // A closed receiver has no verdict, and the turn's own stream follows.
-    // The opening line runs on Macro's own fast model, so a turn the agent's
-    // key pays for goes without one.
-    let mut opening_line = if summarizing || agent_key.is_some() {
+    let mut opening_line = if !opening {
         mpsc::channel(1).1
     } else {
         opener_span.in_scope(|| {
@@ -570,6 +573,7 @@ async fn drive_turn(
             &native_tools.prompt,
             &sdk_docs,
             session_id,
+            delivery,
             identity.as_ref(),
             instructions.as_deref(),
             user_memory.as_deref(),
@@ -606,11 +610,14 @@ async fn drive_turn(
     // reach the session actor as ACP frames, and the actor projects those onto
     // `invoke_agent` / `execute_tool` spans for every harness alike. Enriching
     // rig's spans too would report each turn twice.
+    // Calls stream as the model writes them, so the transcript shows a call
+    // from the moment it is named rather than once its arguments are whole.
     let mut agent_loop = AgentLoop::new(base_context.recorder.clone())
         .with_model(&model)
         .with_reasoning_effort(reasoning_effort)
         .with_speed(speed)?
         .with_genai_telemetry(false)
+        .with_streamed_tool_calls()
         .with_tool_result_limit(tool_results.clone());
     // Only the loop's own model calls run on the agent's key, so only they are
     // recorded against it; tools keep `usage_ctx`, since they call models on
@@ -839,7 +846,8 @@ fn elapsed_ms(since: tokio::time::Instant) -> u64 {
 
 /// The turn's system prompt, ordered so the longest possible prefix is
 /// cached: the agent-session preamble (which notes that an opening line may
-/// already be out, see [`opener`]) and the static Macro prompt (how to use the
+/// already be out, see [`opener`]; a session whose replies are read whole is
+/// told otherwise in its own part) and the static Macro prompt (how to use the
 /// product: mentions, tools, terminology), which are the same for every
 /// session of every agent; then the agent's identity, the session's own
 /// instructions when there are any, which session this is, and the owner's
@@ -859,6 +867,7 @@ fn system_prompt(
     tools_prompt: &impl std::fmt::Display,
     sdk_docs: &str,
     session_id: agent_session::domain::model::AgentSessionId,
+    delivery: ReplyDelivery,
     identity: Option<&AgentIdentity>,
     instructions: Option<&str>,
     user_memory: Option<&str>,
@@ -888,6 +897,10 @@ fn system_prompt(
          words of anything said earlier, summarized or not, run ContentSearch with \
          agentSessionIds [\"{session_id}\"]. ContentSearch remains a direct tool for scoped session-history search.\n</agent_session>"
     ));
+    if delivery == ReplyDelivery::Whole {
+        rest.push('\n');
+        rest.push_str(opener::NOT_OPENED);
+    }
     if let Some(memory) = user_memory {
         rest.push_str("\n<user_memory>\n");
         rest.push_str(memory);

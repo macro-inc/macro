@@ -110,6 +110,15 @@ jobs:
         bun scripts/android-version-check.mjs "$base"
       shell: bash
       working-directory: apps/web
+    - name: Keep the Android native build floor without a release
+      if: steps.labels.outputs.skip == 'true'
+      run: |
+        set -euo pipefail
+        base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | head -1)
+        git fetch -q --depth=1 origin "$base"
+        bun scripts/android-version-check.mjs --skip-release "$base"
+      shell: bash
+      working-directory: apps/web
     - id: auth
       name: Authenticate to Google Play
       if: steps.android-version.outputs.changed == 'true' && steps.labels.outputs.skip != 'true'
@@ -154,11 +163,11 @@ jobs:
               return 0
             fi
             if [[ "$mergeable" == "CONFLICTING" ]]; then
-              echo "::error::PR #${PR_NUMBER} conflicts with its base branch, so there is no merge result to check; resolve the conflicts first." >&2
+              echo "PR #${PR_NUMBER} conflicts with its base branch, so GitHub has no merge result for it." >&2
               return 1
             fi
             if (( $(date +%s) > deadline )); then
-              echo "::error::GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable}); retry in a minute." >&2
+              echo "GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable})." >&2
               return 1
             fi
             echo "Merge commit not computed yet (mergeable=${mergeable}); waiting." >&2
@@ -667,7 +676,7 @@ jobs:
       env:
         DOPPLER_TOKEN: ${{ secrets.IOS_RELEASE_DOPPLER_TOKEN }}
     - id: live
-      name: Require the App Store release to be live
+      name: Require Apple's approval of the App Store release
       if: (steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true') && steps.labels.outputs.skip != 'true'
       run: |
         # --- native tree ------------------------------------------------------------
@@ -688,7 +697,7 @@ jobs:
         # natively, and the team bumps that version when a cache change must ship, so
         # the bump — not every edit under crates/client — is the native signal. The
         # release stamps uploaded builds with the hash, the merge gate compares the
-        # live build's stamp against the merge result's, and the drift / head guards
+        # approved build's stamp against the merge result's, and the drift / head guards
         # compare commits with it. Must match nativeTreeHash() in
         # apps/web/scripts/ios-app-store.mjs and the iOS Native Check's change
         # detection (web_app_check_main/ios_native_check.rs).
@@ -696,16 +705,23 @@ jobs:
         CACHE_WASM_MANIFEST=crates/client/cache-wasm/Cargo.toml
         export NATIVE_TREE_EXCLUDE='(^|/)(android|macos|linux|windows|desktop)([_./-]|$)|\.(android|macos|linux|windows)\.|\.md$|^desktop-release\.json$|^\.helix/'
 
-        # native_tree_hash <commit>: prints the hash, fails if the path is missing.
+        # native_tree_listing <commit>: what the hash covers — the filtered ls-tree
+        # lines plus the cache wasm version — fails if the path is missing.
         # (--full-tree: ls-tree otherwise narrows its output to the current directory,
         # which would silently hash nothing when run from apps/web.)
-        native_tree_hash() {
+        native_tree_listing() {
           git rev-parse -q --verify "$1:${NATIVE_TREE_PATH}" >/dev/null || return 1
-          {
-            git ls-tree -r --full-tree "$1:${NATIVE_TREE_PATH}" \
-              | awk -F'\t' '$2 !~ ENVIRON["NATIVE_TREE_EXCLUDE"]'
-            echo "cache-wasm-version $(cache_wasm_version "$1")"
-          } | git hash-object --stdin
+          git ls-tree -r --full-tree "$1:${NATIVE_TREE_PATH}" \
+            | awk -F'\t' '$2 !~ ENVIRON["NATIVE_TREE_EXCLUDE"]'
+          echo "cache-wasm-version $(cache_wasm_version "$1")"
+        }
+
+        # native_tree_hash <commit>: prints the hash of the listing, and fails when the
+        # listing does (a pipe would hash nothing and succeed).
+        native_tree_hash() {
+          local listing
+          listing=$(native_tree_listing "$1") || return 1
+          git hash-object --stdin <<<"$listing"
         }
 
         # cache_wasm_version <commit>: the `version` of the client cache wasm package
@@ -746,11 +762,11 @@ jobs:
               return 0
             fi
             if [[ "$mergeable" == "CONFLICTING" ]]; then
-              echo "::error::PR #${PR_NUMBER} conflicts with its base branch, so there is no merge result to check; resolve the conflicts first." >&2
+              echo "PR #${PR_NUMBER} conflicts with its base branch, so GitHub has no merge result for it." >&2
               return 1
             fi
             if (( $(date +%s) > deadline )); then
-              echo "::error::GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable}); retry in a minute." >&2
+              echo "GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable})." >&2
               return 1
             fi
             echo "Merge commit not computed yet (mergeable=${mergeable}); waiting." >&2
@@ -759,13 +775,14 @@ jobs:
         }
         # ------------------------------------------------------------------------------
         set -euo pipefail
-        # The gate proper: the committed version + build must be live, built from the
-        # native code of the PR's current merge result.
+        # The gate proper: Apple must have approved the committed version + build
+        # (held for release or live), built from the native code of the PR's current
+        # merge result.
         merge=$(pr_merge_commit)
         native_tree_fetch "$merge"
         native_tree=$(native_tree_hash "$merge")
         echo "Merge result ${merge:0:10}: native tree ${native_tree}"
-        bun scripts/ios-app-store.mjs status --require-live --native-tree "$native_tree"
+        bun scripts/ios-app-store.mjs status --require-approved --native-tree "$native_tree"
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
@@ -821,7 +838,7 @@ jobs:
             lines.push('### iOS release check could not complete', '',
               `Failed step: **${failed.map(([id]) => names[id] ?? id).join(', ')}**.`, '',
               `See the [workflow logs](${runUrl}) for the error, fix it, then rerun the check.`,
-              'This failure does not establish whether the App Store release is live.');
+              'This failure does not establish whether Apple approved the App Store release.');
           } else if (!native && detectionComplete) {
             lines.push('### iOS release not required', '', 'This PR no longer changes native iOS code.');
           } else if (steps.labels?.outputs?.skip === 'true') {
@@ -829,16 +846,15 @@ jobs:
               'The `skip-ios-update` label bypasses this check. App Store availability has not been verified.');
           } else if (release) {
             const name = `iOS ${release.version} (build ${release.build})`;
-            if (release.kind === 'live') {
-              lines.push(`### ${name} is live and verified`, '',
-                'The App Store build matches this PR’s current merge result. The iOS release requirement is satisfied; other checks and approvals still apply.');
+            if (release.kind === 'approved') {
+              lines.push(`### ${name} is approved and verified`, '',
+                'Apple approved the App Store build, and it matches this PR’s current merge result. The iOS release requirement is satisfied; other checks and approvals still apply.');
+              if (release.state) lines.push('', `App Store state: \`${release.state}\`.`);
             } else {
-              lines.push(`### ${name} must be live before this PR can merge`, '', release.reason);
+              lines.push(`### ${name} must be approved before this PR can merge`, '', release.reason);
               if (release.state) lines.push('', `App Store state: \`${release.state}\`.`);
               if (release.kind === 'waiting') {
-                lines.push('', release.state === 'PENDING_DEVELOPER_RELEASE'
-                  ? 'Release the approved version in App Store Connect.'
-                  : 'Wait for Apple to approve and make the release available.');
+                lines.push('', 'Wait for Apple to approve the release.');
               } else if (release.kind === 'mismatch') {
                 lines.push('', 'Bump the release numbers, commit, push, then remove and re-add `ios-update` to release the current native code. Use `--no-min` for a release that does not need a higher native build floor.');
               } else {
@@ -846,9 +862,9 @@ jobs:
                   ? 'The `ios-update` label is already present. Follow the **iOS App Store Release** run; if it failed, fix the reported problem, then remove and re-add the label to retry. Resolve any rejection or metadata issue in App Store Connect first.'
                   : 'Once the other checks pass and the PR is ready, add **`ios-update`** to build, upload, and submit it for App Review.');
               }
-              lines.push('', 'After release, **iOS Release Watch** reruns this check within 30 minutes. You can also rerun it manually. Optionally enable **auto-merge** to merge once all requirements pass.');
+              lines.push('', 'After approval, **iOS Release Watch** reruns this check within 30 minutes. You can also rerun it manually. Optionally enable **auto-merge** to merge once all requirements pass.');
             }
-            lines.push('', `The next prod web deploy will use minimum supported iOS build **${release.floor}**, as committed in this PR.`,
+            lines.push('', `The next prod deploy releases ${name} on the App Store and makes the web bundle require iOS build **${release.floor}** or later, as committed in this PR.`,
               '', `[App Store Connect](${release.distributionUrl})`);
           } else {
             // No structured result means verification never completed; never infer an

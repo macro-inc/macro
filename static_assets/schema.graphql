@@ -3928,6 +3928,44 @@ input GraphqlEmailFilterAst {
 }
 
 """
+Why a thread is in or out of Focus.
+"""
+enum GraphqlEmailFocusCategory {
+	"""
+	A customer, client or user asking for help or giving feedback.
+	"""
+	CUSTOMER
+	"""
+	Mail from someone at the owner's own company.
+	"""
+	TEAM
+	"""
+	Mail from someone the owner corresponds with.
+	"""
+	KNOWN
+	"""
+	Relevant mail that fits no narrower category.
+	"""
+	OTHER
+	"""
+	A calendar invite, update or RSVP.
+	"""
+	CALENDAR
+	"""
+	Unsolicited outreach: a pitch, recruiting or a job application.
+	"""
+	OUTREACH
+	"""
+	Automated, bulk or templated mail.
+	"""
+	AUTOMATED
+	"""
+	Nothing marks the thread as relevant.
+	"""
+	LOW_RELEVANCE
+}
+
+"""
 Enriched email link accessible to the authenticated user.
 """
 type GraphqlEmailLink {
@@ -4139,6 +4177,36 @@ enum GraphqlEmailSyncStatus {
 	Synchronization is disabled.
 	"""
 	INACTIVE
+}
+
+"""
+The Focus classification of one email thread.
+"""
+type GraphqlEmailThreadFocus {
+	"""
+	Whether the thread belongs in Focus.
+	"""
+	isFocus: Boolean!
+	"""
+	The Focus category, or why the thread was left out.
+	"""
+	category: GraphqlEmailFocusCategory!
+	"""
+	Sort key for the Focus list, 0 to 100.
+	"""
+	importance: Int!
+	"""
+	The latest message waits on the owner's answer.
+	"""
+	needsReply: Boolean!
+	"""
+	An open loop the owner should come back to.
+	"""
+	needsFollowUp: Boolean!
+	"""
+	When the classification was made, in RFC 3339 format.
+	"""
+	classifiedAt: String!
 }
 
 """
@@ -5421,7 +5489,7 @@ enum GraphqlGroupByField {
 	"""
 	ENTITY_TYPE
 	"""
-	Group by containing project.
+	Group by the Project property (initiative membership).
 	"""
 	PROJECT
 	"""
@@ -5592,6 +5660,10 @@ input GraphqlInitiativeLiteral @oneOf {
 	Match projects due after this RFC 3339 timestamp.
 	"""
 	dueAfter: String
+	"""
+	Exact notification state for the requester; also opts in.
+	"""
+	notificationState: NotificationState
 }
 
 """
@@ -6772,6 +6844,14 @@ type GraphqlScheduledActionEventFilter {
 	"""
 	entityIds: [ID!]
 	"""
+	Which GitHub App deliveries satisfy a `GITHUB` filter.
+	"""
+	github: GraphqlScheduledActionGithubSelector
+	"""
+	Exact payload tests a GitHub delivery must pass, as a reader would state them.
+	"""
+	payloadMatch: [String!]!
+	"""
 	Yes/no question the triggering content must answer with yes before the routine runs.
 	"""
 	condition: String
@@ -6841,6 +6921,10 @@ enum GraphqlScheduledActionEventName {
 	A call the routine's owner joined ended.
 	"""
 	CALL_ENDED
+	"""
+	Macro's GitHub App received a delivery.
+	"""
+	GITHUB
 }
 
 """
@@ -6851,6 +6935,28 @@ type GraphqlScheduledActionEventsTrigger {
 	Event filters. A run starts when any filter matches.
 	"""
 	filters: [GraphqlScheduledActionEventFilter!]!
+}
+
+"""
+GitHub deliveries a filter watches. Empty lists match everything.
+"""
+type GraphqlScheduledActionGithubSelector {
+	"""
+	GitHub event names, such as `workflow_run`.
+	"""
+	events: [String!]!
+	"""
+	Payload actions, such as `completed`.
+	"""
+	actions: [String!]!
+	"""
+	Repositories, as `owner/name`.
+	"""
+	repositories: [String!]!
+	"""
+	Whether deliveries caused by bots also match.
+	"""
+	includeBots: Boolean!
 }
 
 """
@@ -7224,6 +7330,12 @@ type GraphqlSoupBin {
 	The grouping key.
 	"""
 	key: String!
+	"""
+	Display text for a group whose key alone does not identify it client
+	side, limited to what the viewer can read. Null when the client labels
+	the key itself or the viewer cannot read the entity behind it.
+	"""
+	label: String
 	"""
 	Total number of items in this group across all pages.
 	"""
@@ -8796,9 +8908,20 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	latestInboundMessageTs: String
 	"""
+	Whether any message was received rather than drafted or sent. Only
+	threads with received mail can return to the inbox.
+	"""
+	hasReceivedMail: Boolean!
+	"""
 	Most recent explicit return from an email reminder.
 	"""
 	reminderReturnedAt: String
+	"""
+	The thread's Focus classification: whether it belongs in Focus, why,
+	and how important it is. `null` until the thread is classified, and
+	for threads in inboxes the viewer does not own.
+	"""
+	focus: GraphqlEmailThreadFocus
 	"""
 	Timestamp of the latest outbound message, in RFC 3339 format: the SENT
 	view's sort key.
@@ -9534,6 +9657,13 @@ type GraphqlUser {
 	Fetch one accessible email thread by its canonical identifier.
 	"""
 	emailThread(input: EmailThreadInput!): GraphqlSoupEmailThread
+	"""
+	The viewer's Focus: signal threads in their own inboxes worth their
+	attention, highest priority first (importance, halved for every 2 days
+	since the latest inbound mail), with mail in the last `days` days
+	(default 30, at most 90). Each thread's `focus` field explains why.
+	"""
+	emailFocus(days: Int): [GraphqlSoupEmailThread!]!
 	"""
 	Fetch one accessible agent session by id, with its protocol log
 	reachable through `log`.
@@ -10934,9 +11064,13 @@ enum WorkFeedItemType {
 	"""
 	CHAT
 	"""
-	Projects.
+	Projects (folders).
 	"""
 	PROJECT
+	"""
+	Task projects (initiatives).
+	"""
+	INITIATIVE
 	"""
 	Email threads.
 	"""

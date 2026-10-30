@@ -1,4 +1,5 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
+import { createMobileToastSwipe } from '@core/component/Toast/create-mobile-toast-swipe';
 import {
   ToastContent,
   ToastType,
@@ -373,6 +374,7 @@ function StackDemo(props: ToastDemoProps = {}) {
 function AppPositionDemo() {
   const preview = createToastPreview({ appPosition: true });
   const [example, setExample] = createSignal('statuses');
+  const mobileSwipe = createMobileToastSwipe();
 
   return (
     <div class="flex w-full flex-col items-center gap-4">
@@ -407,6 +409,10 @@ function AppPositionDemo() {
       </Switch>
       <Portal>
         <div
+          on:pointerdown={{ capture: true, handleEvent: mobileSwipe.onPointerDown }}
+          on:pointermove={{ capture: true, handleEvent: mobileSwipe.onPointerMove }}
+          on:pointerup={{ capture: true, handleEvent: mobileSwipe.clearSwipe }}
+          on:pointercancel={{ capture: true, handleEvent: mobileSwipe.clearSwipe }}
           class={isMobile()
             ? 'fixed left-1/2 -translate-x-1/2 w-full max-w-[420px] px-(--mobile-chrome-gutter) pointer-events-none z-toast-region flex flex-col gap-5'
             : 'fixed bottom-5 right-5 m-0 w-95 max-w-[calc(100vw-32px)] pointer-events-none z-toast-region flex flex-col items-stretch gap-4'}
@@ -421,7 +427,7 @@ function AppPositionDemo() {
             duration={Infinity}
             limit={1}
             pauseOnInteraction={false}
-            swipeDirection={isMobile() ? 'left' : 'right'}
+            swipeDirection={isMobile() ? mobileSwipe.direction() : 'right'}
           >
             <Toast.List class="macro-toast-list" />
           </Toast.Region>
@@ -432,7 +438,7 @@ function AppPositionDemo() {
             limit={isMobile() ? 1 : 3}
             duration={4500}
             pauseOnInteraction
-            swipeDirection={isMobile() ? 'left' : 'right'}
+            swipeDirection={isMobile() ? mobileSwipe.direction() : 'right'}
           >
             <Toast.List
               class="macro-toast-list"
@@ -456,7 +462,7 @@ export default defineDoc({
     {
       id: 'app-position',
       title: 'App position',
-      description: 'Desktop toasts appear at the bottom-right; mobile toasts sit above the dock. These previews have their own queue, separate from real app notifications. Switching examples or leaving the page clears them.',
+      description: 'Desktop toasts appear at the bottom-right; mobile toasts sit above the dock and swipe away in either direction without a close icon. These previews have their own queue, separate from real app notifications. Switching examples or leaving the page clears them.',
       render: AppPositionDemo,
       fill: true,
     },
@@ -477,6 +483,7 @@ export default defineDoc({
       'Reserve persistent prompts for notices that need a response.',
       'Keep action labels short and retain meaningful content on mobile.',
       'Use primary actions with a secondary Dismiss button instead of a close icon.',
+      'Omit the close icon on mobile; retain swipe dismissal in either direction.',
       'Set actionLayout to inline for brief notices; keep stacked actions for longer prompts.',
       'Use the existing toast service so queueing, timing, and dismissal stay consistent.',
       'Use the shared Spinner for loading; keep the progress bar for known progress.',
