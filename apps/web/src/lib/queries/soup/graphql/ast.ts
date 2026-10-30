@@ -22,6 +22,7 @@ import type {
   GraphqlGroupByInput,
   GroupedSoupContinuationInput as GraphqlGroupedSoupContinuationInput,
   GroupedSoupInput as GraphqlGroupedSoupInput,
+  GraphqlInitiativeLiteral as GraphqlInitiativeLiteralInput,
   GraphqlProjectLiteral as GraphqlProjectLiteralInput,
   GraphqlFilterPropertiesLiteral as GraphqlPropertiesLiteralInput,
   SoupInitialInput as GraphqlSoupInitialInput,
@@ -58,6 +59,7 @@ type TargetAstKey =
   | 'calf'
   | 'df'
   | 'pf'
+  | 'if'
   | 'cf'
   | 'ef'
   | 'chanf'
@@ -425,6 +427,15 @@ function mapProjectLiteral(literal: unknown): GraphqlProjectLiteralInput {
     default:
       unsupported(`project literal ${field}`);
   }
+}
+
+function mapInitiativeLiteral(literal: unknown): GraphqlInitiativeLiteralInput {
+  const [field, value] = singleLiteralField(literal);
+  if (field === 'inc' && value === true) return { include: true };
+  if (field === 'id') return { id: mapString(value, 'id') };
+  if (field === 'o') return { owner: mapString(value, 'owner') };
+  if (field === 'ns') return { notificationState: mapNotificationState(value) };
+  return unsupported(`initiative literal ${field}`);
 }
 
 function mapChatLiteral(literal: unknown): GraphqlChatLiteralInput {
@@ -800,6 +811,8 @@ function makeGraphqlFilters(body: AstBody): GraphqlEntityFilterAstInput {
   if (body.df)
     filters.documentFilter = compileExprWithLeaf(body.df, mapDocumentPredicate);
   if (body.pf) filters.projectFilter = compileExpr(body.pf, mapProjectLiteral);
+  if (body.if)
+    filters.initiativeFilter = compileExpr(body.if, mapInitiativeLiteral);
   if (body.cf) filters.chatFilter = compileExpr(body.cf, mapChatLiteral);
   if (body.ef)
     filters.emailFilter = { tree: compileExpr(body.ef, mapEmailLiteral) };

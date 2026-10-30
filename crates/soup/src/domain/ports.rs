@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::domain::models::grouping::{GroupByField, GroupLabels};
 use crate::domain::models::{
     AdvancedSortParams, CrmPropertyEdge, EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst,
     NotifiedEntity, NotifiedSoupRequest, SimpleSortRequest, SoupErr, SoupProjectionHydration,
@@ -321,6 +322,17 @@ pub trait SoupService: Send + Sync + 'static {
         >,
     > + Send;
 
+    /// Display text for group keys that `group_by` leaves unlabeled, such as
+    /// the names behind entity-id keys, limited to what the user can read.
+    /// Keys the grouping labels on its own, or the user cannot read, are left
+    /// out.
+    fn group_labels<'a>(
+        &'a self,
+        user_id: MacroUserIdStr<'a>,
+        group_by: &'a GroupByField,
+        keys: &'a [String],
+    ) -> impl Future<Output = Result<GroupLabels, SoupErr>> + Send;
+
     /// Fetch the tag definitions visible to a user — their own plus their
     /// teams' — with options attached.
     fn caller_tag_sets<'a>(
@@ -441,6 +453,15 @@ where
         (**self).get_user_soup_grouped(req).await
     }
 
+    async fn group_labels<'a>(
+        &'a self,
+        user_id: MacroUserIdStr<'a>,
+        group_by: &'a GroupByField,
+        keys: &'a [String],
+    ) -> Result<GroupLabels, SoupErr> {
+        (**self).group_labels(user_id, group_by, keys).await
+    }
+
     async fn caller_tag_sets<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,
@@ -521,6 +542,15 @@ impl SoupService for NoOpSoupService {
         _req: GroupedSortRequest<'_>,
     ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
         Err::<std::vec::IntoIter<ItemGroupingInfo<SoupPropertiesField>>, _>(no_op_soup_err())
+    }
+
+    async fn group_labels<'a>(
+        &'a self,
+        _user_id: MacroUserIdStr<'a>,
+        _group_by: &'a GroupByField,
+        _keys: &'a [String],
+    ) -> Result<GroupLabels, SoupErr> {
+        Ok(GroupLabels::default())
     }
 
     async fn caller_tag_sets<'a>(

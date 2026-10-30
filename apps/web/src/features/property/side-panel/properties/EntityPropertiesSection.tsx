@@ -606,40 +606,43 @@ function SidePanelPropertyRow(props: {
             property={props.property}
             canEdit={ctx.canEdit}
             onSave={ctx.saveHandler.saveProperty}
-            onRefresh={ctx.onRefresh}
           >
-            <Switch
-              fallback={
-                <SinglePill
-                  getEmptyLabel={props.getEmptyLabel}
-                  property={props.property}
+            {(property) => (
+              <>
+                <Switch
+                  fallback={
+                    <SinglePill
+                      getEmptyLabel={props.getEmptyLabel}
+                      property={property()}
+                    />
+                  }
+                >
+                  <Match when={isInputType()}>
+                    <InputValue />
+                  </Match>
+                  <Match when={isMultiValueRow()}>
+                    <MultiValue property={property()}>
+                      <PropertyRowActions.Root
+                        canRemoveFromEntity={props.canRemoveFromEntity}
+                        canPinPendingProperty={props.canPinPendingProperty}
+                        property={props.property}
+                        onRemovePendingProperty={props.onRemovePendingProperty}
+                        onPropertyPinned={props.onPropertyPinned}
+                      >
+                        <PropertyRowActions.Pin />
+                        <PropertyRowActions.Remove />
+                      </PropertyRowActions.Root>
+                    </MultiValue>
+                  </Match>
+                </Switch>
+                <PropertyNS.PopoverEditor
+                  entitySelfFilter={{
+                    entityType: ctx.entityType,
+                    blockId: props.entityId,
+                  }}
                 />
-              }
-            >
-              <Match when={isInputType()}>
-                <InputValue />
-              </Match>
-              <Match when={isMultiValueRow()}>
-                <MultiValue property={props.property}>
-                  <PropertyRowActions.Root
-                    canRemoveFromEntity={props.canRemoveFromEntity}
-                    canPinPendingProperty={props.canPinPendingProperty}
-                    property={props.property}
-                    onRemovePendingProperty={props.onRemovePendingProperty}
-                    onPropertyPinned={props.onPropertyPinned}
-                  >
-                    <PropertyRowActions.Pin />
-                    <PropertyRowActions.Remove />
-                  </PropertyRowActions.Root>
-                </MultiValue>
-              </Match>
-            </Switch>
-            <PropertyNS.PopoverEditor
-              entitySelfFilter={{
-                entityType: ctx.entityType,
-                blockId: props.entityId,
-              }}
-            />
+              </>
+            )}
           </PropertyNS.Root>
           <Show when={!hasInlineAddAction()}>
             <PropertyRowActions.Root
@@ -809,11 +812,10 @@ function NonUserEntityValue(props: {
     const remaining = entities().filter(
       (entity) => entity.entity_id !== entityId
     );
-    await ctx.saveHandler.saveProperty(props.property, {
+    await propertyCtx.onSave?.(props.property, {
       valueType: 'ENTITY',
       refs: remaining.length > 0 ? remaining : null,
     });
-    ctx.onRefresh();
   };
 
   return (

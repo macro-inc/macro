@@ -240,6 +240,12 @@ where
             .and_then(|v| v.strip_prefix("sha256="))
             .ok_or(GithubError::InvalidWebhookSignature)?;
 
+        let delivery_id = parts
+            .headers
+            .get("X-GitHub-Delivery")
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
+
         let body = axum::body::to_bytes(body, usize::MAX)
             .await
             .map_err(|e| GithubError::Internal(e.into()))?;
@@ -247,7 +253,8 @@ where
         let event = state
             .service
             .validate_webhook_event(event_type, signature, &body)
-            .await?;
+            .await?
+            .with_delivery_id(delivery_id);
 
         Ok(GithubWebhookEventExtractor(event))
     }

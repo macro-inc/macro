@@ -326,6 +326,15 @@ impl SoupService for CountingSoupService {
         .into_iter())
     }
 
+    async fn group_labels<'a>(
+        &'a self,
+        _user_id: MacroUserIdStr<'a>,
+        _group_by: &'a soup::domain::models::grouping::GroupByField,
+        _keys: &'a [String],
+    ) -> Result<soup::domain::models::grouping::GroupLabels, soup::domain::models::SoupErr> {
+        Ok(Default::default())
+    }
+
     async fn caller_tag_sets<'a>(
         &self,
         _user_id: MacroUserIdStr<'a>,
@@ -811,6 +820,7 @@ impl graphql_email::SoupEmailThreadMetadataEdgeReader for RecordingEmailContentR
                     graphql_email::EmailThreadMetadataLoad::Found(EmailThreadMetadata {
                         thread_id,
                         link_id: Uuid::from_u128(900 + thread_id.as_u128()),
+                        has_received_mail: true,
                         latest_inbound_message_ts: (thread_id.as_u128() % 2 == 1)
                             .then(Default::default),
                         latest_outbound_message_ts: (thread_id.as_u128() % 2 == 1)

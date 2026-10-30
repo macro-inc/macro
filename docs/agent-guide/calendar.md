@@ -230,11 +230,30 @@ new session from the same meeting link must start a separate chat thread.
 
 
 Calendar event creation and editing open in a bottom sheet on touch devices,
-with scrollable content above the keyboard. When the form outgrows the sheet, as
-it does with the custom repeat builder open, the sheet scrolls down to the
-footer: Cancel and `Create event` or `Save`, plus `This event`/`All events` when
-editing a recurring event. Desktop retains the centered dialog.
-Dismissing a changed event still asks before discarding the draft.
+with scrollable content above the keyboard. `Create event` or `Save` sits at
+the top right of the sheet's pinned chrome, below the handle, so it stays in
+reach while the form scrolls. The title and description come first, then
+`Event` and `Out of office` as selectable labels. A section of rows holds
+All-day (switch on the right), Starts and Ends (date and time), and Repeat; a
+second has one row each for Calendar, Guests, Call, Location, and Reminders
+(Declines and Message for out-of-office events). Location is a text field in
+its row, so the sheet scrolls it above the keyboard. Guest permissions follow, one
+per row. Guests opens its own sheet over the composer, as tall as the event
+sheet, with Cancel, the `Guests` title, and Done; its list fills the sheet.
+Picks apply only on Done, and Cancel, the backdrop, or Escape drop them; the
+guest sheet has no handle and does not drag, since a drag there also reached
+the event sheet beneath. Picking a guest keeps the keyboard up. The title
+sits directly below the pinned chrome. The sheet has no Cancel: drag, the
+backdrop, or Escape dismiss it.
+`This event`/`All events` sits at the bottom when editing a recurring event.
+Desktop retains the centered dialog with inline dates, wrapping pills, and its
+Cancel footer; both layouts compose `EventFormParts` (`MobileEventForm` and
+`EventForm`), and the range rows compose `DateTimeRange` parts.
+Dismissing a changed event by swipe, backdrop tap or Escape still asks before
+discarding the draft; Keep editing returns to the sheet with the edits intact,
+and the prompt stays away until the next attempt to close. An event created
+from Home's **+ New** → Event opens the calendar on it once it saves, with its
+details showing; events created inside the calendar stay where they were made.
 
 On phones, event details use inset round action buttons and a transparent RSVP
 footer. Answering a recurring invitation opens a rounded glass sheet: choose
@@ -259,8 +278,8 @@ Connected calendars offers Connect account (pick Gmail or Outlook / Microsoft 36
 then consent), Connect calendar for accounts missing calendar permission (consent
 again for that account at its own provider with its address preselected, as
 Settings → Email's Enable calendar does), and Disconnect with confirmation. When
-the only linked account lacks calendar permission, the Google
-Calendar row shows just a filled Connect button for it, with no account list or
+the only linked account lacks calendar permission, the Calendar accounts row
+shows just a filled Connect button for it, with no account list or
 visibility note. Disconnect removes calendar access/data, not the Gmail connection.
 Settings → Calendar lists only the viewer's own inboxes. The **Enable calendar**
 toast (behind `enable-calendar-prompt-web` and `enable-calendar-prompt-mobile`)
@@ -342,7 +361,11 @@ is feature-gated and lists teammates with 24px avatars; its header has the same
 14px checkbox before the title, which shows or hides the grid overlay and is saved
 with the calendar visibility preferences. The teammate rows have no checkboxes and
 stay listed while the overlay is hidden. Clicking a teammate's row navigates to that
-date, opens read-only event details, and marks the row active. The left-aligned
+date, opens read-only event details, and marks the row active. With the overlay shown,
+the details wait for the event's chip and open on it, scrolled into view, the way a
+search result or notification opens; if the chip has not rendered after two seconds
+they open beside the row instead. With the overlay hidden they open beside the row.
+A card opened beside a row stays there when the event's chip mounts later. The left-aligned
 `Settings` control with a gear icon fills the sidebar footer; booking management
 lives in the `Booking links` dropdown rather than a separate footer shortcut.
 An account checkbox toggles its calendars together in one update. The checkbox
@@ -483,7 +506,15 @@ Events require connecting a Google account (`Connect calendar`). The
 section listing each connected account with a per-account `Enable` (grant calendar),
 `Reconnect` (expired Google authorization), or `Turn off` action, plus
 `Connect another account` to connect a new Google account
-(email + calendar).
+(email + calendar; the item and the `Connect email` dialog both say the email
+and calendar connect together). A Google consent that leaves the email
+permissions unchecked connects nothing: the callback returns to the calendar
+with a persistent `Email access required` prompt whose `Try again` reopens
+`Connect email` asking for the same permissions. The auth service also tries
+to revoke the partial grant at Google, unless an inbox for that address still
+works on it; when the revocation succeeds, Google lists every permission again
+on the retry instead of folding the earlier calendar grant into an "already
+has some access" notice.
 
 `Turn off` keeps its confirmation open with `Turning off…` until removal finishes;
 re-enabling is not offered while the old calendar is still being deleted. Reconnecting
@@ -774,8 +805,11 @@ overlay the grid as read-only chips titled `<name>: <event title>`. The sidebar'
 `Team out of office` section (shown only when the user belongs to a team with other members)
 is a collapsible list of the next 90 days of teammate absences. The checkbox in its header
 shows or hides the overlay (the list itself always shows); clicking a row navigates the grid
-to that date. Coverage depends on each teammate having connected their own calendar and using
-Google's out-of-office event type.
+to that date. The list shows ten rows and a `+N more` button that expands it to every row,
+scrolling inside a bounded height, with `Show less` to collapse it again. The choice survives
+the poll and count changes; when ten or fewer rows remain, the button hides. Reopening the
+narrow-pane overlay sidebar starts collapsed, as its section toggles do. Coverage depends on
+each teammate having connected their own calendar and using Google's out-of-office event type.
 
 The grid's pages and the list read the overlay from shared fixed 91-day windows,
 each fetched once and refreshed by one 30-second poll while the tab is focused, so

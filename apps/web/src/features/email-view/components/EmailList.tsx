@@ -58,6 +58,7 @@ import {
 } from 'solid-js';
 import type { CacheSnapshot } from 'virtua';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import { canMarkNotDone } from '../../next-soup/actions/can-mark-not-done';
 import {
   persistSoupNavigationTouchHighlight,
   soupNavigationTouchHighlight,
@@ -80,6 +81,12 @@ import { EMAIL_TOUR } from '../tour';
 import { useEmailListHotkeys } from '../use-email-list-hotkeys';
 import { EmailDateGroupHeader } from './EmailDateGroupHeader';
 import { EmailEmptyState } from './EmailEmptyState';
+import {
+  EmailFocusFlags,
+  EmailFocusNarrowScore,
+  EmailFocusScore,
+  emailFocusOf,
+} from './EmailFocusBadges';
 import { EmailRowActions, EmailStarAction } from './EmailRowActions';
 
 type EmailActionRow = {
@@ -429,6 +436,7 @@ export function EmailList(props: EmailListProps) {
       <EmailRowActions
         archived={archived()}
         canArchive={entityActionViewContext().supportsMarkDone}
+        canUnarchive={canMarkNotDone(props.row.entity)}
         pending={rowActionState.isPending(props.row.rowId)}
         onFocus={() => focusActionRow(props.row)}
         onArchive={() =>
@@ -768,6 +776,41 @@ export function EmailList(props: EmailListProps) {
                                     <ListEntity
                                       entity={entityRow().entity}
                                       onFilterByTag={filterByTag}
+                                      titleLeading={
+                                        <Show
+                                          when={emailFocusOf(
+                                            entityRow().entity
+                                          )}
+                                        >
+                                          {(focus) => (
+                                            <EmailFocusNarrowScore
+                                              focus={focus()}
+                                            />
+                                          )}
+                                        </Show>
+                                      }
+                                      meta={
+                                        <Show
+                                          when={emailFocusOf(
+                                            entityRow().entity
+                                          )}
+                                        >
+                                          {(focus) => (
+                                            <EmailFocusFlags focus={focus()} />
+                                          )}
+                                        </Show>
+                                      }
+                                      metaEnd={
+                                        <Show
+                                          when={emailFocusOf(
+                                            entityRow().entity
+                                          )}
+                                        >
+                                          {(focus) => (
+                                            <EmailFocusScore focus={focus()} />
+                                          )}
+                                        </Show>
+                                      }
                                       scheduleStatus={
                                         <Show
                                           when={source.reminderForThread?.(

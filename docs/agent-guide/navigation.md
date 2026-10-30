@@ -379,8 +379,12 @@ A desktop view's name opens the view switcher: clicking it shows the rail's apps
 in rail order, then the More apps, with a check on the current one. Choosing one
 replaces the view in that split, not the active split; Shift opens it in a new
 split. The navigation panel's title shows the name with a caret, sharing one
-hover background. Short names stay whole; long names ellipsize. Main headers show the name alone, with the same hover:
-`ViewSidebar.Title caret={false}` for plain titles, and the first breadcrumb
+hover background. Short names stay whole; long names ellipsize without shrinking
+the caret. Saved-view icons stay beside their labels on one line. List headers
+reserve the title's natural width and scroll the controls beside it when space
+runs out; the switcher trigger stays inside the header's clipping boundary.
+Main headers show the name alone, with the same hover: `ViewSidebar.Title caret={false}` for
+plain titles, and the first breadcrumb
 (Drive, Email, Tasks, Reviews) while it is the current page; deeper, that crumb
 returns to the list. Titles that name content rather than the view (Calendar's
 date, a channel, an agent session, a CRM record) do not switch views. Touch
@@ -810,6 +814,13 @@ databases, and forms support toggling; database and form favorites appear in Dri
 sidebar. Individual channel messages and pull requests are not favoritable. A
 favorited agent session disappears from the list once the session is deleted.
 
+Channel favorites show the same channel picture as regular channel rows, with
+the channel icon as a fallback when no picture is available. Direct-message
+favorites use the participant's avatar when available and the entity icon
+otherwise. Cached pictures remain visible when a background picture query
+rejects with an error; an omitted or unavailable channel preview uses the
+fallback icon.
+
 With the GraphQL local cache enabled, cached favorites remain visible when offline
 or when a background refresh fails. Toggle and reorder success while offline means
 the change was accepted into the durable queue, not yet confirmed by the server.
@@ -979,7 +990,8 @@ the person's name and email above Copy email, Copy name, Open contact (CRM teams
 only), DM, and Assign task. An agent's or bot's card offers Settings instead of
 DM when the viewer can configure it: Macro opens Settings → Agents, an agent the
 viewer manages opens straight into its Edit agent form, and a plain bot opens
-its page under Settings → Bots. Touch devices have no hover, so tapping the mention
+its page under Settings → Bots. An agent's avatar beside its channel messages
+opens the same card. Touch devices have no hover, so tapping the mention
 or the picture opens that same card as a bottom sheet; any action there runs and
 dismisses the sheet. Desktop keeps click-to-DM on the picture itself, which touch
 drops in favour of the card's DM action.
@@ -1064,6 +1076,7 @@ The event menu groups Macro activity triggers by surface:
 - **Tasks:** **Task created**, **Status changed**, **Priority changed**, and **Any property changed**.
 - **Email:** **New email received** in the routine owner's inbox, excluding spam, trash, drafts, and historical imports.
 - **Calls:** **Call started**, for calls the routine owner starts (receives the call and who has joined so far); and **Call ended**, for channel calls and meetings the owner joined (receives participants and transcript, cut short for long calls).
+- **GitHub:** presets for **Workflow failed**, **Workflow finished**, **Pull request opened**, **Pull request merged**, **Review requested**, **Review submitted**, **Issue opened**, **Comment added**, **Code pushed**, **Release published**, and **Any GitHub event**, from repositories Macro's GitHub app reaches for the routine owner. Until the owner connects GitHub, the group shows **Connect GitHub** instead.
 
 For messages, mentions, deletion, and task changes, choose specific accessible
 channels/documents/tasks or any accessible item in the same panel. Creation
@@ -1072,9 +1085,23 @@ triggers cover newly created accessible items; email covers the owner's inbox;
 join** — neither has an item picker. Calls the owner did not start never trigger
 **Call started**; calls they did not join never trigger **Call ended**. Mentions match only @ mentions of the routine owner. **Any property changed**
 also includes status and priority; overlapping selectors start only one run for
-the same event. These are Macro events, not incoming HTTP webhooks. Bot-authored
-or delegated changes do not retrigger routines. Saved legacy selectors remain
+the same event. Bot-authored or delegated Macro changes do not retrigger
+routines. Saved legacy selectors remain
 editable but are no longer offered in the new-trigger menu.
+
+A GitHub trigger panel edits the preset's **GitHub events** and **Actions**
+(comma-separated names GitHub sends, such as `workflow_run` and `completed`;
+empty means any), checks **Repositories** from the owner's reachable list
+(none checked means all), and **Also run for bots and apps** (off by default, so
+an agent acting through Macro's app can't retrigger itself). Deliveries only
+reach owners whose currently linked GitHub account installed the delivering
+installation, or whose team did. While GitHub is disconnected the panel shows
+**Connect GitHub** instead, and an enabled GitHub routine can't be saved. The
+panel also has **Only when the payload…** rows: a dotted field (`*` checks every list
+item, e.g. `pull_request.labels.*.name`), a comparison (**is**, **is one of**,
+**is not one of**, **matches** glob, **is set**, **is not set**) and a value.
+Every row must pass before the run is queued. The chip shows the repository
+after the trigger's label.
 
 When `enable-routine-conditions` is on, every activity trigger panel has an
 **Only run if** box for an optional yes/no question about each event, such as
@@ -1128,7 +1155,8 @@ their history and do not repeat.
 An `m-document-mention` with `blockName: "routine"`, the returned routine ID,
 and the saved name renders as a clickable mention in an agent reply. Once the
 routine is deleted the mention reads `Deleted` and clicking it shows a card
-instead of opening the routine. Routines do not appear in the mention menu.
+instead of opening the routine. Owners can mention their routines in channels
+(see Routine templates).
 Only the owner sees a routine's editor and can edit, enable, run, duplicate,
 delete, or view run history. Anyone else who opens a routine link sees its
 template when the owner shared one and routine sharing is enabled, and otherwise
@@ -1149,18 +1177,20 @@ already activated copies keep working. `VITE_ENABLE_ROUTINE_SHARING` overrides
 only the web gate; exercising templates needs the backend flag enabled too.
 
 A routine runs as its owner, so it is shared as a template, never directly.
-The three-dot menu's **Share as template** opens **Share: name**. It explains
-what people get, takes a **Description**, and lists **What changes for each
-person**: every mention in the instructions plus the schedules' time zone, each
-with tabs. People can be **The person activating** (the owner's own mention
-starts here), **Same for everyone**, or **They choose**; items are **Same for
-everyone** or **They choose**; the time zone is **Their time zone** or **Keep** the owner's
-zone. **Share template** publishes a snapshot of the saved routine;
-**Update template** re-snapshots it. Once shared, the dialog shows how many
-routines were activated from it, a channel-or-people picker with **Send** that
-posts the routine mention, **Copy template link** (the routine's own URL), and
-**Stop sharing**, which hides the template while activated routines keep
-running.
+The three-dot menu's **Share** opens the standard Share dialog, **Share:
+name**: a channel-or-people picker, an optional message, and **Share**, which
+posts the routine mention; below it, **Anyone with the link** shows **Just me**
+or **Shared** with the activation count, **Copy Link** (the routine's own URL),
+and, once shared, **Stop sharing**, which hides the template while activated
+routines keep running. Every Share and Copy Link first publishes a snapshot of
+the saved routine. The owner's own mention and the schedules' time zone fill in
+as whoever activates it; other references stay the same for everyone, and
+re-sharing keeps the fills an earlier template set.
+
+In a channel composer (including thread replies), the owner's routines appear
+under **Routines** in the `@` menu. Picking one publishes its template the same
+way, then inserts the mention, so everyone in the channel gets a card they can
+activate from. If publishing fails, the mention is not inserted.
 
 Opening a shared routine someone else owns shows the template laid out like a
 routine's Overview: **Activate for me** at the right of the top bar, then the

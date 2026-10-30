@@ -11,6 +11,7 @@ import type { TagMentionLifecycle } from '@core/component/LexicalMarkdown/plugin
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
   $getCaretRect,
+  focusEditorWithoutScroll,
   forceSetTextContent,
   initializeEditorEmpty,
   isRectFlushWith,
@@ -162,6 +163,8 @@ export function ComposeTaskTitleEditor(props: {
   onDeleteTagsAtStart?: () => boolean;
   portalScope?: PortalScope;
   ref?: (el: HTMLDivElement) => void;
+  /** Focus the title once its editor attaches, with the caret after its text. */
+  autofocus?: boolean;
 }) {
   const [state, setState] = createSignal(props.value());
   const [showPlaceholder, setShowPlaceholder] = createSignal(
@@ -270,6 +273,10 @@ export function ComposeTaskTitleEditor(props: {
   const onConnect = (el: HTMLDivElement) => {
     editor.setRootElement(el);
     setRootConnected(true);
+    if (props.autofocus) {
+      editor.update(() => $getRoot().selectEnd(), { discrete: true });
+      focusEditorWithoutScroll(editor);
+    }
   };
 
   return (

@@ -877,7 +877,7 @@ async fn cancelling_a_guard_holder_releases_the_subscription_for_another_instanc
 async fn subscription_for_customer(
     pool: sqlx::PgPool,
     statuses: &[(&str, stripe::SubscriptionStatus)],
-) -> Result<stripe::SubscriptionId, CustomerError> {
+) -> Result<Option<stripe::SubscriptionId>, CustomerError> {
     let server = MockServer::start().await;
     let list = stripe::List {
         data: statuses
@@ -923,7 +923,7 @@ async fn a_trialing_subscription_is_linked_when_none_is_active(pool: sqlx::PgPoo
     )
     .await
     .unwrap();
-    assert_eq!(found.as_str(), "sub_trial");
+    assert_eq!(found.as_ref().map(|id| id.as_str()), Some("sub_trial"));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -937,7 +937,7 @@ async fn an_active_subscription_wins_over_a_trial(pool: sqlx::PgPool) {
     )
     .await
     .unwrap();
-    assert_eq!(found.as_str(), "sub_active");
+    assert_eq!(found.as_ref().map(|id| id.as_str()), Some("sub_active"));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -950,5 +950,23 @@ async fn unpaid_or_incomplete_subscriptions_are_not_linked(pool: sqlx::PgPool) {
         ],
     )
     .await;
-    assert!(matches!(found, Err(CustomerError::SubscriptionNotActive)));
+    assert!(matches!(found, Ok(None)));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_failed_subscription_listing_is_an_error_not_a_free_customer(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/subscriptions"))
+        .respond_with(ResponseTemplate::new(500).set_body_json(json!({
+            "error": { "type": "api_error", "message": "stripe is down" }
+        })))
+        .mount(&server)
+        .await;
+
+    let found = repo(&server, pool)
+        .get_subscription_id_for_customer(&"cus_test".parse().unwrap())
+        .await;
+
+    assert!(matches!(found, Err(CustomerError::StorageLayerError(_))));
 }

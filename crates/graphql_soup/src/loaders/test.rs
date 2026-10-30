@@ -137,6 +137,15 @@ impl SoupService for RecordingSoupService {
         Ok(Vec::<ItemGroupingInfo<SoupPropertiesField>>::new().into_iter())
     }
 
+    async fn group_labels<'a>(
+        &'a self,
+        _user_id: MacroUserIdStr<'a>,
+        _group_by: &'a soup::domain::models::grouping::GroupByField,
+        _keys: &'a [String],
+    ) -> Result<soup::domain::models::grouping::GroupLabels, SoupErr> {
+        Ok(Default::default())
+    }
+
     async fn caller_tag_sets<'a>(
         &self,
         _user_id: MacroUserIdStr<'a>,
@@ -673,6 +682,29 @@ async fn pr_and_session_hydration_recheck_team_on_each_batch() {
     *team.0.lock().unwrap() = None;
     loader.load(&keys).await.unwrap();
     assert_eq!(soup.calls.lock().unwrap()[1].team_id, None);
+}
+
+fn depth<T>(expr: &Expr<T>) -> usize {
+    match expr {
+        Expr::And(left, right) | Expr::Or(left, right) => 1 + depth(left).max(depth(right)),
+        Expr::Not(inner) => 1 + depth(inner),
+        Expr::Literal(_) => 1,
+    }
+}
+
+#[test]
+fn a_full_batch_of_ids_is_a_shallow_tree() {
+    let ids = (0..500).map(Uuid::from_u128).collect::<Vec<_>>();
+    let tree = literal_tree(
+        ids.iter().copied().map(DocumentLiteral::Id).collect(),
+        DocumentLiteral::Id(Uuid::nil()),
+    );
+    assert!(depth(&tree) <= 10, "depth {}", depth(&tree));
+    let collected = collect_ids(&tree, |literal| match literal {
+        DocumentLiteral::Id(id) => Some(*id),
+        _ => None,
+    });
+    assert_eq!(collected, ids.into_iter().collect());
 }
 
 #[tokio::test]

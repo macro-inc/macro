@@ -36,6 +36,12 @@ async fn same_mailbox_replies_use_native_reply_creation_and_keep_the_correlation
     Mock::given(method("POST")).and(path("/v1.0/me/messages/parent/createReply"))
         .and(body_partial_json(json!({"message":{"subject":"Reply","body":{"contentType":"HTML","content":"<b>Hello</b>"}}})))
         .respond_with(ResponseTemplate::new(201).set_body_json(draft())).expect(1).mount(&server).await;
+    Mock::given(method("POST"))
+        .and(path("/v1.0/me/messages"))
+        .respond_with(ResponseTemplate::new(201).set_body_json(draft()))
+        .expect(0)
+        .mount(&server)
+        .await;
     api.create_draft(&token, &request).await.unwrap();
     let sent: Value =
         serde_json::from_slice(&server.received_requests().await.unwrap()[0].body).unwrap();
@@ -47,6 +53,122 @@ async fn same_mailbox_replies_use_native_reply_creation_and_keep_the_correlation
             .any(|p| p["id"] == CORRELATION_PROPERTY
                 && p["value"] == request.correlation.to_string())
     );
+}
+
+#[tokio::test]
+async fn a_parent_that_refuses_native_replies_gets_a_standalone_draft_with_its_content() {
+    let (server, api, token) = setup().await;
+    let mut request = request();
+    request.reply_to = Some(ProviderId::new("parent").unwrap());
+    Mock::given(method("POST"))
+        .and(path("/v1.0/me/messages/parent/createReply"))
+        .respond_with(
+            ResponseTemplate::new(400)
+                .insert_header("request-id", "refused-reply")
+                .set_body_json(json!({"error":{"code":"ErrorInvalidOperation","message":"Item type is invalid for creating a Reply."}})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let mut standalone = draft();
+    standalone["id"] = json!("standalone");
+    Mock::given(method("POST"))
+        .and(path("/v1.0/me/messages"))
+        .and(body_partial_json(json!({
+            "subject":"Reply",
+            "body":{"contentType":"HTML","content":"<b>Hello</b>"},
+            "from":{"emailAddress":{"address":"from@example.com"}},
+            "toRecipients":[{"emailAddress":{"address":"to@example.com"}}],
+            "singleValueExtendedProperties":[
+                {"id":CORRELATION_PROPERTY,"value":request.correlation.to_string()},
+                {"id":REVISION_PROPERTY,"value":"1"},
+                {"id":"String 0x1042","value":"<parent@example.com>"},
+                {"id":"String 0x1039","value":"<parent@example.com>"}
+            ]
+        })))
+        .respond_with(ResponseTemplate::new(201).set_body_json(standalone))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/v1.0/me/messages/standalone/attachments"))
+        .and(body_partial_json(json!({"name":"notes.txt","contentId":"notes@attachments.macro.com","contentBytes":"bm90ZXM="})))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({"id":"attachment","name":"notes.txt","size":5,"contentId":"notes@attachments.macro.com","isInline":false})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let created = api.create_draft(&token, &request).await.unwrap();
+    assert_eq!(created.id.as_str(), "standalone");
+    api.add_attachment(
+        &token,
+        &created.id,
+        AttachmentContent {
+            name: "notes.txt",
+            content_type: "text/plain",
+            content_id: "notes@attachments.macro.com",
+            inline: false,
+            data: b"notes",
+        },
+    )
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn other_native_reply_failures_surface_without_a_standalone_draft() {
+    for (status, code, expected) in [
+        (
+            429,
+            None,
+            EmailApiError::RateLimited {
+                retry_after: None,
+                origin: RateLimitOrigin::Provider { concurrency: false },
+            },
+        ),
+        (
+            503,
+            None,
+            EmailApiError::Transient {
+                message: "Microsoft Graph returned HTTP 503".into(),
+            },
+        ),
+        (
+            400,
+            Some("ErrorInvalidRecipients"),
+            EmailApiError::Permanent {
+                message: "Microsoft Graph returned HTTP 400".into(),
+            },
+        ),
+        (403, Some("ErrorInvalidOperation"), EmailApiError::Forbidden),
+        (
+            401,
+            Some("InvalidAuthenticationToken"),
+            EmailApiError::AuthRequired,
+        ),
+    ] {
+        let (server, api, token) = setup().await;
+        let mut request = request();
+        request.reply_to = Some(ProviderId::new("parent").unwrap());
+        Mock::given(method("POST"))
+            .and(path("/v1.0/me/messages/parent/createReply"))
+            .respond_with(
+                ResponseTemplate::new(status).set_body_json(json!({"error":{"code":code}})),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1.0/me/messages"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(draft()))
+            .expect(0)
+            .mount(&server)
+            .await;
+        assert_eq!(
+            api.create_draft(&token, &request).await.unwrap_err(),
+            expected,
+            "HTTP {status}"
+        );
+    }
 }
 
 #[test]

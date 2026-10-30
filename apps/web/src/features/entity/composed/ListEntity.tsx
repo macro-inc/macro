@@ -107,6 +107,7 @@ export function ListEntity(props: ListEntityProps) {
   const icon = children(() => props.icon);
   const titleTrailing = children(() => props.titleTrailing);
   const meta = children(() => props.meta);
+  const metaEnd = children(() => props.metaEnd);
   const scheduleStatus = children(() => props.scheduleStatus);
 
   const unread = () => unreadFilterFn(props.entity);
@@ -169,6 +170,7 @@ export function ListEntity(props: ListEntityProps) {
     icon: icon(),
     titleTrailing: titleTrailing(),
     meta: meta(),
+    metaEnd: metaEnd(),
     scheduleStatus: scheduleStatus(),
     referenceProperties: referenceProperties(),
     authorDisplayName: props.authorDisplayName,

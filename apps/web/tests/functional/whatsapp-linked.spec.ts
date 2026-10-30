@@ -620,6 +620,8 @@ test('External lists groups in Macro with unread counts and read-only tags', asy
 test('chats sort into direct messages, groups and communities on the page and in External', async ({
   page,
 }) => {
+  // Three full fixture navigations share this test's timeout.
+  test.slow();
   const state = server();
   state.account = {
     id: 'account-1',

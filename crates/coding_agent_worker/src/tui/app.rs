@@ -16,7 +16,7 @@ use super::logging::LogBuffer;
 use super::platform::{BrowserTarget, copy_to_clipboard};
 use super::process;
 use crate::config::{Config, HarnessCredentials};
-use crate::daemon::Daemon;
+use crate::daemon::{Daemon, InheritedAgent};
 use crate::outbound::pairing::{ClaimStatus, PairingClient};
 
 /// How often the dashboard re-reads the server.
@@ -121,13 +121,23 @@ pub(crate) struct App {
     pub(crate) spinner: usize,
     pub(crate) logs: LogBuffer,
     pub(crate) daemon: Option<Daemon>,
+    /// The agent the previous macrod handed over, relayed by the first start.
+    inherited: Option<InheritedAgent>,
+    /// A release staged for the next launch (Windows), shown until restart.
+    /// The persistent update log the Logs tab points at.
+    pub(crate) update_log: Option<PathBuf>,
+    pub(crate) update_ready: Option<String>,
     pub(crate) pending_browser: Option<BrowserTarget>,
     last_refresh: Option<Instant>,
     pub(crate) quit: bool,
 }
 
 impl App {
-    pub(crate) fn load(config_path: &Path, logs: LogBuffer) -> rootcause::Result<Self> {
+    pub(crate) fn load(
+        config_path: &Path,
+        logs: LogBuffer,
+        inherited: Option<InheritedAgent>,
+    ) -> rootcause::Result<Self> {
         let config = Config::load(config_path)?;
         let credentials = config
             .credentials
@@ -151,6 +161,9 @@ impl App {
             spinner: 0,
             logs,
             daemon: None,
+            inherited,
+            update_ready: None,
+            update_log: crate::update::log::user_log_path(),
             pending_browser: None,
             last_refresh: None,
             quit: false,
@@ -170,7 +183,14 @@ impl App {
         let Some(credentials) = self.credentials.clone() else {
             return false;
         };
-        match Daemon::start(self.config.clone(), credentials, &self.config_path).await {
+        match Daemon::start(
+            self.config.clone(),
+            credentials,
+            &self.config_path,
+            self.inherited.take(),
+        )
+        .await
+        {
             Ok(daemon) => {
                 self.daemon = Some(daemon);
                 true

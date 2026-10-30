@@ -41,6 +41,9 @@ macro_env_var::env_vars!(
     /// custom MCP servers a person added in Macro are the ones the egress
     /// proxy can refresh and stamp for their sandboxes.
     pub struct McpCredentialsKeySecretName;
+    /// Dedicated KMS key the public MCP OAuth broker encrypts the upstream
+    /// tokens behind its authorization codes with.
+    pub struct McpOauthKmsKeyId;
 );
 
 macro_env_var::maybe_env_vars!(
@@ -141,6 +144,8 @@ pub struct Config {
     pub database_url: DatabaseUrl,
     /// Shared Redis used for cross-replica command forwarding.
     pub redis_uri: RedisUri,
+    /// KMS key for the public MCP OAuth broker's authorization codes.
+    pub mcp_oauth_kms_key_id: McpOauthKmsKeyId,
     /// Base URL of the Daytona REST API.
     #[macro_config_default(String::from("https://app.daytona.io/api"))]
     pub daytona_api_url: String,
