@@ -625,10 +625,10 @@ address word that starts with the query ranks above recent substring matches
 (`gab` finds Gab Birman). Opened empty, the list puts colleagues on the sending
 inbox's domain first. A chip shows the name and its hover card the address.
 Press Send with To empty, then add a recipient: the error clears at once, as a
-missing message or subject error does once filled in. Reply on a bounce from
-`mailer-daemon@`, `postmaster@`, or Outlook's `MicrosoftExchange<hex>@` keeps
-the other participants and leaves the bounce sender out of To and Cc; a
-`noreply@` sender stays.
+missing message or subject error does once filled in. Suggestions leave out
+automated addresses (`notifications@`, `mailer-daemon@`, `postmaster@`,
+`bounce@` and no-reply or do-not-reply addresses); typing one in full still adds
+it. Reply on a bounce goes to its sender, as for any other message.
 When checking draft autosave, edit the body of a draft with uploaded or forwarded
 attachments, wait for the save, and reopen it; the attachments should remain visible.
 In a long thread, scroll away from the bottom while a draft save is pending.

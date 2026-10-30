@@ -26,13 +26,6 @@ export const convertContactInfoToEmailRecipient = (
   return { kind: 'contact', id, data: { ...contact, id, type: 'extracted' } };
 };
 
-// Senders of delivery failure reports; a reply there reaches no one on the
-// thread. Kept narrow on purpose: a noreply@ address can still be a person's.
-const BOUNCE_SENDER =
-  /^(mailer-daemon|postmaster|microsoftexchange[0-9a-f]{32})@/i;
-const isBounceSender = (email: string | undefined) =>
-  !!email && BOUNCE_SENDER.test(email);
-
 // Note: because of the logic, this works with a reference message that is either the message being replied to, or the draft.
 export const getReplyAllRecipients = (
   referenceMessage: EmailMessage | undefined,
@@ -45,15 +38,13 @@ export const getReplyAllRecipients = (
   );
   const isSelf = (email: string | undefined) =>
     !!email && self.has(email.toLowerCase());
-  const replyable = (contact: ContactInfo) =>
-    !isSelf(contact.email) && !isBounceSender(contact.email);
   let to: EmailRecipient[] = [];
 
   // If last message was from user - reply to the to recipients (cc is handled separately below)
   if (isSelf(referenceMessage.from?.email)) {
     if (referenceMessage.to && referenceMessage.to.length > 0) {
       to = referenceMessage.to
-        .filter(replyable)
+        .filter((recipient) => !isSelf(recipient.email))
         .map(convertContactInfoToEmailRecipient);
     }
     // Otherwise keep existing recipients
@@ -65,14 +56,13 @@ export const getReplyAllRecipients = (
     };
     const otherRecipients = referenceMessage.to.filter(
       (recipient) =>
+        !isSelf(recipient.email) &&
         recipient.email.toLowerCase() !== sender.email.toLowerCase()
     );
-    to = [sender, ...otherRecipients]
-      .filter(replyable)
-      .map(convertContactInfoToEmailRecipient);
+    to = [sender, ...otherRecipients].map(convertContactInfoToEmailRecipient);
   }
   const cc = (referenceMessage.cc ?? [])
-    .filter(replyable)
+    .filter((recipient) => !isSelf(recipient.email))
     .map(convertContactInfoToEmailRecipient);
   return { to, cc, bcc: [] };
 };
@@ -94,9 +84,7 @@ export const getReplyRecipientsFromParent = (
     // Last message was NOT the user - reply to the sender
     const sender: ContactInfo = replyingTo.from ?? { email: '' };
     return {
-      to: isBounceSender(sender.email)
-        ? []
-        : [convertContactInfoToEmailRecipient(sender)],
+      to: [convertContactInfoToEmailRecipient(sender)],
       cc: [],
       bcc: [],
     };

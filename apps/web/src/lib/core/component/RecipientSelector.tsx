@@ -131,6 +131,17 @@ function getRecipientOptionEmail(
   }
 }
 
+// Notification, bounce and no-reply mailboxes only crowd the suggestions.
+// Typing one in full still offers it as a typed address.
+function isAutomatedAddress(email: string) {
+  const local = email.split('@')[0];
+  return (
+    /^(?:notifications|mailer-daemon|postmaster|bounce)(?:[+._-]|$)/i.test(
+      local
+    ) || /(?:no[._-]?reply|do[._-]?not[._-]?reply)/i.test(local)
+  );
+}
+
 function getRecipientOptionName(option: CombinedRecipientItem) {
   switch (option.kind) {
     case 'user':
@@ -598,6 +609,15 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     for (const option of props.options()) {
       const item = option as CombinedRecipientItem;
       const email = getRecipientOptionEmail(item);
+
+      if (
+        item.kind === 'contact' &&
+        email &&
+        isAutomatedAddress(email) &&
+        !selectedEmails().has(email.toLowerCase())
+      ) {
+        continue;
+      }
 
       if (!props.includeSelf) {
         const emailLower = email?.toLowerCase();

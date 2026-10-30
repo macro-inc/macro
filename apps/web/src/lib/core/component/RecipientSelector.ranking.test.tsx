@@ -178,3 +178,46 @@ it.each(inboxes)(
     expect(first).toContain(`riley@${domain}`);
   }
 );
+
+const automated = [
+  contact('notifications@codehost.example', 'Code Host'),
+  contact('mailer-daemon@mail.example', 'Mail Delivery Subsystem'),
+  contact('postmaster@mail.example', 'Postmaster'),
+  contact('bounce+82731@lists.example', 'List Bounces'),
+  contact('noreply@vendor.example', 'Vendor Billing'),
+  contact('do-not-reply@shop.example', 'Shop Orders'),
+];
+
+it.each(inboxes)(
+  'leaves automated addresses out of $provider suggestions',
+  async ({ address }) => {
+    const selector = renderSelector(
+      [...automated, contact('notifier.jones@vendor.example', 'Nora Jones')],
+      address
+    );
+    fireEvent.input(selector.input, { target: { value: 'example' } });
+
+    const suggestions = await selector.suggestions();
+    expect(suggestions.join(' ')).toContain('Nora Jones');
+    for (const { data } of automated)
+      expect(suggestions.join(' ')).not.toContain(
+        'email' in data ? data.email : ''
+      );
+  }
+);
+
+it.each(inboxes)(
+  'adds an automated address typed in full in a $provider inbox',
+  async ({ address }) => {
+    const selector = renderSelector(automated, address);
+    fireEvent.input(selector.input, {
+      target: { value: 'noreply@vendor.example' },
+    });
+    await selector.suggestions();
+    fireEvent.keyDown(selector.input, { key: 'Enter' });
+
+    await waitFor(() =>
+      expect(selector.selectedEmails()).toEqual(['noreply@vendor.example'])
+    );
+  }
+);
