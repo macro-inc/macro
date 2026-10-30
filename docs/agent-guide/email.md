@@ -244,6 +244,32 @@ Email Status and Done are single choices that close the menu; attachment filters
 stay open for multiple selections. Tags supports search, pins selected tags first
 on opening, and is omitted when no tags exist. **f** opens the filter menu.
 
+### Search files
+
+A service-backed search (three or more characters) leads its results with a
+**Files** section, then an **Emails** heading above the threads. It lists the
+attachments of the top 25 results, read again from Soup by thread ID because
+search results carry no attachments. The lookup asks in the All view: the search
+already applied the tab. Files whose name contains every search term
+come first, then the rest in result order. Images with a Content-ID (treated as
+inline) and calendar invites are left out, and a file repeated within a thread
+appears once. Each row shows the file icon, name, sender, and date: those of the
+search hit on the file's message when there is one, otherwise the thread's
+latest message. Three files show at first; `Show N more files` expands the rest,
+`Show fewer files` collapses them, and new search text starts collapsed again.
+The section is absent when the results carry no files or the lookup fails, and
+it loads after the results without delaying them.
+
+Files rows are part of list navigation: `j`/`k` and the arrows move through
+them, though focus still starts on the first email. Enter or a click opens the
+attachment preview in a split. `Shift+Enter` or the row's **Open email** button
+opens the thread inline at the message carrying the file, expanded and
+highlighted; Shift-click opens it in a new split. Narrow lists put the sender
+and date under the filename. Touch devices have no search in the Email view (the
+dock opens the unified search), so the section appears only on desktop.
+To verify, search for a word in a thread with attachments, check that a matching
+filename sorts first, open the preview, then use Open email from another row.
+
 ### Read state and trash
 
 In the Email view, Status filters discovery on the server **before pagination**,

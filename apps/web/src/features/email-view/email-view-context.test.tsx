@@ -88,6 +88,7 @@ vi.mock('./route', () => ({
 vi.mock('./email-route', () => ({
   emailTabSearch: { namespace: 'mail' },
   emailDetailSearch: { namespace: 'email-detail' },
+  emailDetailSearchCodec: { serialize: (value: unknown) => value },
   emailTabSearchCodec: { serialize: (value: unknown) => value },
 }));
 
@@ -171,6 +172,29 @@ describe('email view inbox reconciliation', () => {
     expect(view.selectedThread()).toBeUndefined();
     expect(mocks.navigate).toHaveBeenCalledOnce();
   });
+});
+
+it('opens a thread inline at a message, and plain opens drop the target', () => {
+  const { view } = mount();
+
+  expect(view.openThread({ id: 'with-file', messageId: 'file-message' })).toBe(
+    true
+  );
+  const atMessage = mocks.navigate.mock.calls.at(-1)?.[1]?.search;
+  expect(atMessage['email-detail']).toEqual({
+    messageId: 'file-message',
+    seek: expect.any(String),
+  });
+
+  view.openThread({ id: 'with-file', messageId: 'file-message' });
+  expect(
+    mocks.navigate.mock.calls.at(-1)?.[1]?.search['email-detail'].seek
+  ).not.toBe(atMessage['email-detail'].seek);
+
+  view.openThread({ id: 'other' });
+  expect(mocks.navigate.mock.calls.at(-1)?.[1]?.search['email-detail']).toEqual(
+    {}
+  );
 });
 
 it('clears persisted text search when entering and leaving Email Reminders', () => {

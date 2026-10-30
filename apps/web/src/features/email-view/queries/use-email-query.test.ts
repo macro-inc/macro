@@ -10,11 +10,13 @@ import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EmailTab, EmailViewState } from '../types';
 import { buildEmailQuery } from './email-query';
+import type { EmailSearchFilesItem } from './email-search-files';
 import {
   type EmailDataSource,
   type EmailDataSourceItem,
   useEmailDataSource,
 } from './use-email-query';
+import type { useEmailSearchFiles } from './use-email-search-files';
 
 const localDrafts = vi.hoisted(() => ({ read: (): LocalDraft[] => [] }));
 vi.mock('@queries/email/local-draft-source', async () => ({
@@ -27,6 +29,20 @@ vi.mock('@queries/email/local-draft-source', async () => ({
 
 const searchQueryMock = vi.hoisted(() => vi.fn());
 const favoritesQueryMock = vi.hoisted(() => vi.fn());
+const searchFiles = vi.hoisted(() => ({
+  rows: [] as EmailSearchFilesItem[],
+  input: undefined as Parameters<typeof useEmailSearchFiles>[0] | undefined,
+  toggleExpanded: vi.fn(),
+}));
+vi.mock('./use-email-search-files', () => ({
+  useEmailSearchFiles: (input: Parameters<typeof useEmailSearchFiles>[0]) => {
+    searchFiles.input = input;
+    return {
+      rows: () => searchFiles.rows,
+      toggleExpanded: searchFiles.toggleExpanded,
+    };
+  },
+}));
 vi.mock('@queries/favorites/favorites', () => ({
   useFavoritesQuery: favoritesQueryMock,
 }));
@@ -422,9 +438,58 @@ describe('Email list query transitions', () => {
       refetch: vi.fn(async () => {}),
     });
     scheduledRows.current = [];
+    searchFiles.rows = [];
+    searchFiles.input = undefined;
     focusRows.current = [];
   });
   afterEach(() => dispose?.());
+
+  it('leads search results with the Files section without holding the results back', () => {
+    const fileRows: EmailSearchFilesItem[] = [
+      {
+        kind: 'section-header',
+        id: 'files-header',
+        sectionId: 'files',
+        label: 'Files',
+      },
+      {
+        kind: 'email-file',
+        id: 'email-file:invoice',
+        file: {
+          attachmentId: 'invoice',
+          filename: 'invoice.pdf',
+          matchesQuery: true,
+          thread: email('search'),
+        },
+      },
+    ];
+    const root = mount('  invoice ');
+    expect(searchFiles.input?.threads().map((entity) => entity.id)).toEqual([
+      'search',
+    ]);
+    expect(searchFiles.input?.query()).toBe('invoice');
+    expect(root.source.items()[0]).toMatchObject({ kind: 'entity' });
+
+    searchFiles.rows = fileRows;
+    root.setSearchEntities([email('search'), email('second')]);
+    expect(
+      root.source
+        .items()
+        .slice(0, 3)
+        .map((row) => (row.kind === 'entity' ? row.entity.id : row.id))
+    ).toEqual(['files-header', 'email-file:invoice', 'search']);
+    expect(ids(root.source)).toEqual(['search', 'second']);
+    expect(root.source.isLoading()).toBe(false);
+
+    root.source.toggleSearchFiles?.();
+    expect(searchFiles.toggleExpanded).toHaveBeenCalledOnce();
+  });
+
+  it('gives the Files section no threads outside search', () => {
+    searchFiles.rows = [];
+    mount();
+    expect(searchFiles.input?.threads()).toEqual([]);
+  });
 
   it('uses a stable Soup filter and renders without a separate favorites response', () => {
     const { source, setState, setEntities, setFavoriteIds, setFavoritesError } =
