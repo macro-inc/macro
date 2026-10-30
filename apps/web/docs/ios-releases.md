@@ -104,16 +104,8 @@ icon and app-name branding are Android-only.
    failing for another reason doesn't retry forever, and GitHub refuses to
    re-run runs older than 30 days: after a review that long, push a commit to
    get a fresh run.)
-5. The next prod deploy (`.github/workflows/release-production.yml`) does
-   two independent things:
-   - The **`iOS App Store Publish`** workflow
-     (`.github/workflows/ios-app-store-publish.yml`) runs
-     `ios-app-store.mjs publish`, which releases the version + build
-     committed at the deployed commit if it is held for release. A held
-     version whose PR is not in the deploy (approved, not merged yet) stays
-     held, and an already-live one is left alone. The web deploy does not
-     wait for it or depend on it; if it fails, release the version from
-     App Store Connect or re-run the workflow (it is manually dispatchable).
+5. The next prod deploy (`.github/workflows/release-production.yml`) ships
+   the web bundle, then releases the App Store version:
    - The web build (`just build-prod`) reads both platform floors from
      `min-native-build.json` into `MIN_NATIVE_BUILD_ANDROID` /
      `MIN_NATIVE_BUILD_IOS`, so `dist/bundle-manifest.json` carries
@@ -122,11 +114,23 @@ icon and app-name branding are Android-only.
      App Store" prompt instead (`NativeUpdateRequired` in
      `src/lib/tauri/TauriProvider.tsx`). The Android floor is independent:
      `just android-bump` raises it; see `docs/development/android.md`.
+   - Once the web deploy succeeds, the **`iOS App Store Publish`** workflow
+     (`.github/workflows/ios-app-store-publish.yml`) runs
+     `ios-app-store.mjs publish`, which releases the version + build
+     committed at the deployed commit if it is held for release. A held
+     version whose PR is not in the deploy (approved, not merged yet) stays
+     held, and an already-live one is left alone. A failed web deploy skips
+     the publish, so the native build never goes live ahead of its bundle;
+     a failed publish leaves the deploy alone. To retry, re-run the failed
+     job in the `Deploy Production Release` run, or release the version in
+     App Store Connect. A manual dispatch must run from the deployed release
+     tag (**Use workflow from** → the tag) and refuses a branch: `main` may
+     already commit another native PR's held version, whose bundle has not
+     deployed.
 
-   Because the App Store release starts with the deploy rather than before
-   it, older installs can see the update prompt shortly before the App
-   Store offers the update. They keep running their current bundle
-   meanwhile.
+   Because the App Store release starts after the web deploy, older
+   installs can see the update prompt shortly before the App Store offers
+   the update. They keep running their current bundle meanwhile.
 
 The bump is deliberately a local command rather than something the label
 workflow pushes: a `GITHUB_TOKEN` push never re-triggers required checks, so

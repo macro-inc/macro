@@ -16,6 +16,15 @@ jobs:
       contents: read
     timeout-minutes: 10
     steps:
+    - name: Require a release tag
+      run: |
+        if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
+          echo "Run this from the deployed release tag (\"Use workflow from\": the tag), not ${GITHUB_REF_NAME}:" \
+            "a branch can commit another PR's held version whose web bundle has not deployed." \
+            "To retry a failed publish, re-run the failed job in the Deploy Production Release run." >&2
+          exit 1
+        fi
+      shell: bash
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
