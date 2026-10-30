@@ -62,9 +62,9 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
     this.role = role;
 
     const capacity = {
-      desiredCount: config.requireNumber('pubsub_workers_desired_count'),
-      minCapacity: config.requireNumber('pubsub_workers_min_capacity'),
-      maxCapacity: config.requireNumber('pubsub_workers_max_capacity'),
+      desiredCount: Number(config.require('pubsub_workers_desired_count')),
+      minCapacity: Number(config.require('pubsub_workers_min_capacity')),
+      maxCapacity: Number(config.require('pubsub_workers_max_capacity')),
     };
     for (const [name, value] of Object.entries(capacity)) {
       if (!Number.isInteger(value) || value < 1) {

@@ -12,7 +12,9 @@ attachment storage, and Redis. Runtime code lives in `services/email_service`.
   count of 1 and autoscaling bounds of 1–2. Lower the production values after
   recovery. There is no expiry or automatic scale-down when the queue empties.
 - Keep desired count and autoscaling bounds in sync when changing capacity.
-  A deployment reapplies these values, including after manual ECS adjustments.
+  Deployments apply configuration changes but do not refresh Pulumi state;
+  manual ECS adjustments can persist when Pulumi sees no change. Refresh state
+  before reconciling out-of-band drift.
 - Per-task `BACKFILL_QUEUE_WORKERS` comes from the email service's Doppler config
   through `APP_SECRETS_JSON`. At 12 per task, 16 tasks provide 192 backfill
   workers at steady state; rolling deployments can temporarily overlap old and
