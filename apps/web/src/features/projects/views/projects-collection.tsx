@@ -642,7 +642,7 @@ export function ProjectsCollection(props: {
               aria-multiselectable="true"
               aria-activedescendant={list.focus.key()}
               tabIndex={0}
-              class="@container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
+              class="soup-list @container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
             >
               <ProjectListHeader />
               <Show when={backgroundError()}>

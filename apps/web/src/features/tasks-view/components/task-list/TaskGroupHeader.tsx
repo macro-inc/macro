@@ -117,7 +117,7 @@ export function TaskGroupHeader(props: {
             <button
               type="button"
               tabIndex={-1}
-              class="grid w-full grid-cols-[var(--soup-row-indicator-width)_minmax(0,1fr)] items-center gap-x-(--soup-row-column-gap) rounded-[inherit] pl-(--soup-row-padding-l) pr-3 py-2 text-left text-xs font-semibold tracking-tight touch:min-h-11"
+              class="grid min-w-0 w-full grid-cols-[var(--soup-row-indicator-width)_minmax(0,1fr)] items-center gap-x-(--soup-row-column-gap) whitespace-nowrap rounded-[inherit] pl-(--soup-row-padding-l) pr-3 py-2 text-left text-xs font-semibold tracking-tight touch:min-h-11"
               aria-expanded={props.expanded}
               onMouseMove={props.onFocus}
               onClick={props.onToggle}

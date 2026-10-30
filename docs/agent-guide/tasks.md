@@ -94,6 +94,9 @@ to read the full value.
 The project pill beneath a task title shows the project icon and name without
 a `Project:` prefix.
 Task rows and group headers share their leading gutter and icon alignment.
+Group headers keep their caret, value icon, label, and count on one line on phones;
+long labels truncate. The leading row space holds the unread indicator or selection
+checkbox so selecting tasks does not shift their content.
 Click or tap the leading status or priority icon to edit without opening the task.
 Both icons are 16px on desktop and narrow rows; priority sits directly beside the
 title, with a gap after status. Their pickers replace
