@@ -1086,14 +1086,16 @@ badge. Rows are the same conversation cards as search results on this tab.
 Opening a row marks it read, so it leaves the unread set, but the selected
 conversation stays in its place (without a dot) until another conversation is
 selected; it must not vanish from under the pointer. A new message in it puts
-the server's row back in its place. A conversation read on another device, or
-an unread notification arriving elsewhere, updates the list without a reload:
-the normalized cache evaluates membership from each channel's bounded unread
-witness (which now carries its entity identity, so channel-list rows are
-cache-maintained), and the bounded-edge refresh reconciles afterwards. Mark-read
-failures restore the row. The empty state says **No unread conversations** with
-a **Show all conversations** action that switches to All. A stored or linked
-`recents` tab from older builds opens All.
+the server's row back in its place. The dot clears as soon as the local read
+is applied; list membership is the server's and follows the same bounded-edge
+refresh the other channel lists use, so a conversation read on another device,
+or an unread notification arriving elsewhere, updates the list without a reload
+once that refresh lands. The browser index does not evaluate this filter
+locally: its unseen facts cover every notification kind, so they cannot tell an
+unread message from an invite. A mark-read failure relights the dot. The empty
+state says **No unread conversations** with a **Show all conversations** action
+that switches to All. A stored or linked `recents` tab from older builds opens
+All.
 
 Verify Unread in a visible browser with a latest-message preview containing an
 agent-session mention. Let its title resolve, scroll the preview out of view and

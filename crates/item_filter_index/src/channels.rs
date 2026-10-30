@@ -85,13 +85,11 @@ pub(super) fn check(expr: Option<&Expr<ChannelLiteral>>) -> Result<(), Unsupport
                 | ChannelLiteral::ChannelType(_)
                 | ChannelLiteral::Importance(_)
                 | ChannelLiteral::IsParticipant(_)
-        ) || matches!(
-            literal,
-            ChannelLiteral::NotificationState(state)
-                | ChannelLiteral::MessageNotificationState(state)
-                if active_notification_state(state)
-        )
+        ) || matches!(literal, ChannelLiteral::NotificationState(state) if active_notification_state(state))
     }) {
+        // `MessageNotificationState` is among the network-only literals: the
+        // local unseen facts cover every notification kind on the channel, so
+        // they cannot tell an unread message from an invite or a thread reply.
         return Err(UnsupportedReason::Literal("channel"));
     }
     // Mentioning participation widens the server candidate universe to team
@@ -144,13 +142,7 @@ fn fold(expr: &Expr<ChannelLiteral>) -> Result<Option<SqlPredicate>, CompileErro
                     None,
                 ),
                 ChannelLiteral::Importance(false) => (PredicateExpr::None, None),
-                // The channel-list projection snapshots only top-level message
-                // notifications, so the local unseen facts already carry the
-                // message-scoped meaning.
-                ChannelLiteral::NotificationState(state)
-                | ChannelLiteral::MessageNotificationState(state) => {
-                    (notification_state_expr(state), None)
-                }
+                ChannelLiteral::NotificationState(state) => (notification_state_expr(state), None),
                 _ => unreachable!("channel eligibility checked"),
             };
             let mut result = boolean(positive);

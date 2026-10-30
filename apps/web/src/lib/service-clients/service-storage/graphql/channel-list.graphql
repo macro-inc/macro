@@ -1,6 +1,4 @@
 # The aliased selection is unread evidence, never a complete list for bulk reads.
-# The witness's entity identity lets the cache index the row's unread-message
-# state, so unread-filtered channel lists stay cache-maintained.
 query ChannelListSoup($input: SoupInput!) {
 	user {
 		id
@@ -25,8 +23,6 @@ fragment ChannelListItemFields on GraphqlSoupEntity {
 			id
 			state
 			createdAt
-			entityId
-			targetEntityType
 		}
 	}
 }

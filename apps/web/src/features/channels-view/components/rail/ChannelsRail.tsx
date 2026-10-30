@@ -326,15 +326,21 @@ export function ChannelsRail(props: ChannelsRailProps) {
   );
   const sources: ChannelsSources = { ...props.sources, unread: unreadSource };
 
-  const channels = createMemo(() =>
-    deduplicateChannels([
+  // A disabled list keeps its last page, so the active tab's rows must win
+  // the dedupe: its copies carry the live unread witnesses.
+  const channels = createMemo(() => {
+    const browse = [
       props.sources.team_channels.items(),
       props.sources.channels.items(),
       props.sources.direct_messages.items(),
-      unreadSource.items(),
-      props.sources.search.items(),
-    ])
-  );
+    ];
+    const unread = unreadSource.items();
+    return deduplicateChannels(
+      tab() === 'unread'
+        ? [unread, ...browse, props.sources.search.items()]
+        : [...browse, unread, props.sources.search.items()]
+    );
+  });
 
   const searchResults = () => props.sources.search.items();
   const searchLoading = () => props.sources.search.isFetching();

@@ -56,8 +56,6 @@ export async function cacheNewChannelUnread(
     id: notification.id,
     state: notification.state,
     createdAt: notification.createdAt,
-    entityId: notification.entityId,
-    targetEntityType: notification.targetEntityType,
   };
   await host.writeQuery({
     query: relationshipQuery,
