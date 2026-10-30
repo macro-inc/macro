@@ -73,6 +73,11 @@ draft exactly like its trash button, `Cmd+Shift+U` opens the attach picker, and
 list and quote. Check discard from both a reply (the reply closes) and
 standalone compose (the view goes back), with focus in the body.
 
+Recipient fields turn complete addresses into chips when the typed or pasted
+text ends in a comma or semicolon, so `a@example.com, b@example.com,` adds both.
+Enter or a click picks the highlighted suggestion. Type, paste, or Tab straight
+after picking one and check that both recipients stay and the input is empty.
+
 Outlook connections support personal Outlook.com and individual Microsoft 365
 inboxes. Choose the inbox explicitly when testing mixed-provider accounts. The
 same thread, search, Signal/Noise, draft, and schedule surfaces apply to both
@@ -97,6 +102,9 @@ provider copy before choosing an explicit resend; a resend in flight shows as
 the send button's pending state. Switching the sender
 inbox copies the draft and attachments into the destination; wait for completion
 before sending. If the copy is interrupted, use retry or keep the original.
+A draft the provider could not save can still switch From, which moves it to an
+inbox that may accept it; a draft with an unfinished move or a conflict stays in
+its inbox until that is resolved.
 A draft opened from Drafts then shows its thread in the destination inbox,
 never the not-found page; a draft in compose stays open there. Keep editing
 after the switch and check that no "This draft changed while saving" notice
@@ -564,9 +572,15 @@ HTML messages with preserved sender typography retain their explicit sizes.
 Desktop reply actions sit together at the bottom right: discard, attach, schedule,
 then Send, with circular hover backgrounds inside the card's 16px padding.
 Standalone compose uses one right-aligned row inside its 16px content padding:
-delete, attach, format, schedule, and send. Touch compose uses its header toolbar.
+delete, attach, insert image, format, schedule, and send. Touch compose uses its
+header toolbar, which has no insert image button. **Insert image** opens an
+image-only picker and inlines the chosen images at the cursor, uploading and
+sized like pasted ones; a video chosen there is ignored.
 `R` and `Alt+R` (`Option+R` on macOS) open reply-all for the selected message,
 or the latest message when none is selected. `F` opens a forward and focuses To.
+A new email also focuses To once it mounts, unless the user already moved to
+another field: with the CPU throttled, click Subject right after opening compose
+and type; every character must stay in Subject.
 In new emails, replies, reply-alls, and forwards, `Cmd+Shift+C` (`Ctrl+Shift+C`)
 reveals and focuses Cc and `Cmd+Shift+B` does the same for Bcc, expanding a
 collapsed reply header; inside a composer they never fall through to the
@@ -606,6 +620,30 @@ inbox, saving, and reopening the draft. Send must fetch the original files from
 the receiving inbox while using the selected From inbox for delivery. A scheduled
 cross-inbox forward must not download a source whose inbox access was revoked
 after saving.
+Switch one message's composer between Reply and Forward on Gmail and Outlook.
+A reply sends without the forwarded message, including after a forward from that
+composer failed to send. A reply showing its quoted text sends the forwarded
+message once switched to Forward. A saved forward reopened from its thread, its
+local copy, or Undo still reads **Forwarding** with a `Forward — @mention…`
+placeholder: Forward keeps its recipients, and Reply turns it into a reply
+without the forwarded message. A reply quoting a message that was itself
+forwarded stays a reply. Collapsed content is named: **Show forwarded message**
+on a forward, **Show quoted text** on a reply. The toggle beside the editor keeps
+the name `forwarded message` or `quoted text` and reports whether it is pressed.
+With **Add to replies & forwards** on, the **Signature** bar sits between the
+written message and these controls on desktop and mobile, where sending inserts
+the signature above the quoted thread on Gmail and Outlook.
+Check recipient suggestions from a Gmail and an Outlook inbox. Typing a full
+address and pressing Enter commits that address, ahead of longer matches such
+as `teo+123456@macro.com`, whether or not it is a saved contact. A name or
+address word that starts with the query ranks above recent substring matches
+(`gab` finds Gab Rowan). Opened empty, the list puts colleagues on the sending
+inbox's domain first. A chip shows the name and its hover card the address.
+Press Send with To empty, then add a recipient: the error clears at once, as a
+missing message or subject error does once filled in. Suggestions leave out
+automated addresses (`notifications@`, `mailer-daemon@`, `postmaster@`,
+`bounce@` and no-reply or do-not-reply addresses); typing one in full still adds
+it. Reply on a bounce goes to its sender, as for any other message.
 When checking draft autosave, edit the body of a draft with uploaded or forwarded
 attachments, wait for the save, and reopen it; the attachments should remain visible.
 In a long thread, scroll away from the bottom while a draft save is pending.
@@ -625,15 +663,22 @@ also enables sending immediately. A late lookup must not overwrite that choice.
 Implicit senders omit `from` on edits and sends. An explicit sender is preserved
 even while inboxes load or after disconnection; an unavailable sender blocks Send
 until another connected inbox is selected. New emails default to the primary
-inbox after inboxes load. Repeat on mobile using the expanded `Cc/Bcc, From:` row.
+inbox after inboxes load; until then the desktop From row keeps its place with a
+placeholder. The first compose after sign-in, including from All inboxes, opens
+editable with Send available, because the device outbox is read at sign-in.
+Repeat on mobile using the expanded `Cc/Bcc, From:` row.
 
 With GraphQL draft queuing enabled, working copies and pending attachment bytes
 are saved on this device independently of the mutation queue. A failed server
 save must leave the draft discoverable in **Drafts** (including grouped views)
-and in its reply thread. Saving is silent on desktop and mobile: no saved or
-syncing text appears, including offline. A failure shows a banner inside the
-composer, above the recipients, with **Retry** (or **Retry discard**); it never
-appears in the toolbar or the mobile header actions. Verify the banner on mobile
+and in its reply thread. Saving is silent on desktop and mobile while online: no
+saved or syncing text appears. Offline, once an edit is saved only on this
+device, the composer shows **Saved on this device; waiting to sync** above the
+recipients until the server acknowledges it. A failure shows a banner in the same
+place with **Retry** (or **Retry discard**); while the local cache waits for
+another owner the banner keeps **Retry** and retries by itself, and once local
+storage needs recovery it offers **Reload** instead. Neither appears in the
+toolbar or the mobile header actions. Verify the banner on mobile
 sits below the header and that editing while failed continues saving locally
 without repeatedly submitting the rejected request. If sender metadata is still
 unavailable, the local draft is retained; reconnect and select an inbox before
@@ -742,7 +787,9 @@ Send and mark done (Shift+Cmd+Enter) and Mark done open the next email, counted
 from where the thread sat when it was opened (a reply draft lifts its thread to
 the top of Signal while it is written). If the user has already moved to
 another thread when the send finishes, the replied thread is marked done
-without navigating; Undo before then leaves it in the inbox.
+without navigating; Undo before then leaves it in the inbox. A delivered send
+keeps the thread done. If the send fails after it was queued, or is cancelled or
+restored, the thread returns to Inbox; verify this for Gmail and Outlook.
 Sending a message shows it in the open thread immediately, while delivery is
 still pending. It stays visible until the thread refresh confirms it, with no
 duplicate message. Failed delivery removes that message and restores the reply
@@ -752,8 +799,10 @@ Sending must leave the new message's reply composer closed. After delivery,
 focus belongs to the sent message card in the same thread pane, even while
 the thread refresh is still pending. Replying again requires clicking Reply
 or using a reply shortcut.
+Sending a new email opens its thread with the message already shown as sent; it
+must not show the draft or **Loading draft…** first.
 
-After a successful send, the `Email sent` notice offers `Undo`. Undo restores the
+After a send is queued, its notice offers `Undo`. Undo restores the
 sent envelope and editable content, including when the reply used another inbox;
 a slow background refresh must not keep the restored editor disabled. A rejected
 send reports failure and restores its original reply editor if it is still mounted.
@@ -783,11 +832,18 @@ status panel with **Cancel**.
 
 An authenticated app-level dispatcher submits online immediately and retries the
 same attempt independently of unrelated draft, archive, and property mutations.
-An online send shows **Email sent** with **Undo**: a new message opens its
+An online send shows **Sending…** with **Undo**: a new message opens its
 conversation and a reply closes its composer, and the message appears as sent
-there immediately, before the server or provider confirms it. An offline send
-shows **Email queued to send** and returns to the email list. Routine delivery
-is otherwise silent: the status panel shows a send only while it waits on this
+there immediately, before the server or provider confirms it. Once the server
+accepts the send, **Undo** stays on offer until the server's undo deadline (the
+accepted attempt's `sendTime`), not for a fixed client duration. The notice says
+**Email sent** only after delivery. This holds when another Mail tab delivers or
+cancels the send first, and a cancelled reply still returns its thread to Inbox.
+When the server cannot say how such a send ended, the notice only withdraws
+**Undo**. A send that fails after it was queued shows
+a persistent **Email failed to send**, and **Delivery unconfirmed** reports a
+send the provider did not confirm. An offline send shows **Email queued to
+send** and returns to the email list. The status panel shows a send only while it waits on this
 device (**Queued on this device**), needs attention, or is scheduled
 (**Scheduled**). On phones the panel sits below the safe area and the floating
 header. Only one active send can own a draft across tabs; queued composers
@@ -971,6 +1027,8 @@ send require reconnection for any draft with attachments. Online, clicking Send 
 a save debounce finishes must start or continue uploads; a queued save's confirmation
 must also resume pending uploads after reload. Pending or failed inline image/video
 uploads block Send and Schedule send until they have durable URLs or are removed.
+An inline image cut and pasted elsewhere in the body, or copied into another
+editor, while it uploads must unblock Send once that upload finishes.
 
 Queued sends survive query-cache recovery in independent account-scoped storage,
 retaining their original attempt IDs, frozen bodies, attachments and cancellation
@@ -1011,16 +1069,26 @@ completion must not archive the restored thread.
 
 With GraphQL Mail enabled, discarding the last draft in a thread must remove the
 thread from every local Mail view, including after queued replay. Discarding a
-standalone draft from its composer returns to the previous list after deletion
-is accepted, including offline; a failed deletion keeps the composer open.
-Check both the toolbar trash button and the mobile Delete Draft action.
+standalone draft from its composer returns to the previous list at once, even
+while a save or the deletion is still on the wire, including offline. The
+deletion finishes in the background; a failed deletion reports **Failed to
+delete draft** and keeps the draft. No empty **[No subject]** thread may show
+in between. Check both the toolbar trash button and the mobile Delete Draft
+action, including after a pasted image leaves a save pending.
+Clearing every field of a draft deletes it. Edits made while that delete is on
+the wire, such as re-adding a recipient during a slow Outlook delete, must save
+to a fresh draft (or the same draft when the delete failed) and never report
+**This draft session is no longer active**. Verify with the delete request
+delayed and with it timing out.
 In Email's inline detail, deletion closes the detail and preserves the current
 mail tab and filters; it must not navigate split history to an older composer.
 Discarding a reply draft must preserve the remaining conversation. A previously
 cached thread that the server no longer has must leave the lists after opening it or receiving
 a 404 while changing its labels; a cached record must not override the server's
 not-found response. Check the same behavior after REST discard. Offline/network
-errors alone must never evict a cached thread.
+errors alone must never evict a cached thread. An open thread the server answers
+404 for stops polling `email/threads/<id>/operations`; transient failures keep
+polling.
 
 Choosing or clearing a send time is local preparation only. The composer remains
 editable and autosaves normally, shows **Scheduled send: ...** (the time and the
@@ -1132,7 +1200,11 @@ A failed alias lookup for one inbox does not hide other inboxes' aliases. An
 invalid or unavailable selected alias is rejected on save/send, never silently
 replaced with the primary address.
 
-The sidebar and mobile inbox picker also list aliases beneath their inbox.
+The sidebar and mobile inbox picker also list aliases beneath their inbox, as
+address filters rather than accounts: an `@` glyph instead of a portrait, an
+`Alias` label, and `alias of <inbox>` in the accessible name and tooltip. Gmail
+can add a verified alias on its own (for example a Gmailify or "Check mail from
+other accounts" address), so an alias must never look like a connected inbox.
 Selecting one scopes mail to that inbox and the exact address in From/To/Cc/Bcc;
 search candidates are checked against the same GraphQL scope. Search and Reminders
 automatically advance nonmatching candidate pages until a match or exhaustion;
@@ -1142,8 +1214,11 @@ lookup shows an error without discarding already-confirmed rows. If a saved alia
 disappears from the catalog, the primary address must not look selected; use
 `All inboxes` or choose an available address to clear that scope. Scheduled mail
 matches its saved sender. `All inboxes` clears both the inbox and alias selection,
-and the selection survives reloads. With one inbox **and aliases**, the All row
-and address pickers remain available. To check without sending real mail, open
+and the selection survives reloads. Aliases never count toward multiple inboxes:
+with one inbox and aliases there is no `All inboxes` row, the inbox is the
+selected row, and choosing it clears an alias selection. Selecting an alias is a
+filter, so it adds the `from <alias>` header picker, the mobile Inbox section,
+and `All inboxes` until the user clears it. To check without sending real mail, open
 both pickers, select an alias, switch to the primary address, reopen a saved alias
 draft, and confirm the address remains unchanged. Alias discovery uses
 `MailAccounts`, draft saves use `saveEmailDraft`, and delivery uses
@@ -1163,8 +1238,8 @@ sending; the picker never displays another inbox as selected before that choice.
 With no explicit selection, an unavailable primary still falls back to
 the first linked inbox.
 The desktop account dropdown marks the selected inbox with a checkmark. With
-exactly one connected inbox and no aliases, the selector displays its address
-and omits `All inboxes`; the mobile filter drawer has no inbox section. The
+exactly one connected inbox and no alias selected, the selector displays its
+address and omits `All inboxes`; the mobile filter drawer has no inbox section. The
 touch sidebar keeps its existing account rows and shows up to four before
 scrolling independently. With many accounts, scroll to the last inbox in the
 dropdown and check that selecting it updates the selector and header filter.

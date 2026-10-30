@@ -74,7 +74,6 @@ export function useInlineEditor(): {
       }
       await ctx.onSave?.(property, apiValues);
       setIsEditing(false);
-      ctx.onRefresh?.();
     } catch {
       // onSave callers (mutations) own error UX via onError toasts.
     } finally {

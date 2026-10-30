@@ -63,3 +63,14 @@ fn dont_ask_again_answers_are_found_with_the_key_that_picks_them() {
         None
     );
 }
+
+#[test]
+fn only_claudes_exit_confirmation_is_dismissed_to_stay() {
+    let exit = "  Background work is running\n  The following will stop when you exit:\n  shell · Sleep for 30 seconds in background\n  ❯ 1. Exit and stop tasks\n    2. Move to background and exit\n    3. Stay\n  Enter to confirm · Esc to cancel\n";
+    assert!(exit_confirmation(TuiAgent::Claude, exit));
+    assert!(!exit_confirmation(TuiAgent::Codex, exit));
+    assert!(!exit_confirmation(
+        TuiAgent::Claude,
+        " Do you want to proceed?\n ❯ 1. Yes\n   2. No\n Esc to cancel\n"
+    ));
+}

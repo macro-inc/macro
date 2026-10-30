@@ -20,4 +20,9 @@ export default {
   'record-tasks': 'Tasks',
   'record-calls': 'Calls',
   'record-databases': 'Databases',
+
+  // Project sections.
+  projectSections: 'Project sections',
+  'project-overview': 'Overview',
+  'project-tasks': 'Tasks',
 };

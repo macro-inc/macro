@@ -25,6 +25,8 @@ crm = { path = "../crm", default-features = false, features = ["ports"] }
 documents = { path = "../documents", default-features = false, features = ["outbound", "ports"] }
 document_sub_type = { path = "../document_sub_type" }
 email = { path = "../email", default-features = false, features = ["outbound"] }
+github = { path = "../github", default-features = false, features = ["installation_claims"] }
+glob = { workspace = true }
 entity_access_management = { path = "../entity_access_management" }
 frecency = { path = "../frecency", features = ["postgres"] }
 feature_flags = { path = "../feature_flags" }

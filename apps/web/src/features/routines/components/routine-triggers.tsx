@@ -1,4 +1,5 @@
-import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
+import GithubIcon from '@icon/mcp-github.svg';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
@@ -33,6 +34,7 @@ import {
   describeTrigger,
   type EventTriggerDraft,
   eventScopeKind,
+  eventTriggerDescription,
   eventTriggerLabel,
   isGlobalEvent,
   type RoutineEventGroup,
@@ -50,10 +52,20 @@ type EventSlots = {
     trigger: Accessor<EventTriggerDraft>,
     change: (ids: string[] | undefined) => void
   ) => JSX.Element;
+  /** Settings particular to some events, such as GitHub's selector. */
+  renderEventSettings?: (
+    trigger: Accessor<EventTriggerDraft>,
+    change: (patch: Partial<EventTriggerDraft>) => void
+  ) => JSX.Element;
   /** Absent where conditions are unavailable. */
   renderEventCondition?: (
     trigger: Accessor<EventTriggerDraft>,
     change: (condition: string | undefined) => void
+  ) => JSX.Element;
+  /** Wraps a group's options, e.g. to ask for an account they need first. */
+  renderEventGroup?: (
+    group: RoutineEventGroup,
+    options: () => JSX.Element
   ) => JSX.Element;
 };
 
@@ -93,37 +105,53 @@ function TriggerIcon(props: { trigger: RoutineTriggerDraft; class: string }) {
       <Match when={group() === 'Calls'}>
         <PhoneIcon class={props.class} />
       </Match>
-      <Match when={group() === 'Documents'}>
-        <FileIcon class={props.class} />
+      <Match when={props.group === 'GitHub'}>
+        <GithubIcon class={props.class} />
       </Match>
     </Switch>
   );
 }
 
-/** Whether an event trigger watches particular items, read as "in …". */
-function hasScope(trigger: EventTriggerDraft) {
-  return !isGlobalEvent(trigger.events) || trigger.ids !== undefined;
+function TriggerIcon(props: { trigger?: RoutineTriggerDraft }) {
+  const group = (): RoutineEventGroup => {
+    if (props.trigger?.kind !== 'event') return 'Channels';
+    const kind = eventScopeKind(props.trigger);
+    if (kind === 'TASK') return 'Tasks';
+    if (kind === 'THREAD') return 'Email';
+    if (kind === 'DOCUMENT') return 'Documents';
+    if (kind === 'CALL_RECORD') return 'Calls';
+    if (kind === 'GITHUB') return 'GitHub';
+    return 'Channels';
+  };
+  return (
+    <Show
+      when={props.trigger?.kind === 'event'}
+      fallback={<ClockIcon class="size-3.5" />}
+    >
+      <EventIcon group={group()} class="size-3.5" />
+    </Show>
+  );
 }
 
-function scopeFieldLabel(trigger: EventTriggerDraft) {
-  return match(eventScopeKind(trigger))
-    .with('THREAD', () => 'Inbox')
-    .with('TASK', () => 'Which tasks')
-    .with('DOCUMENT', () => 'Which documents')
-    .with('CHANNEL', () => 'Which channels')
-    .with('CALL_RECORD', () => 'Which calls')
-    .exhaustive();
-}
-
-/** A new event trigger's settings: what it watches, then its AI check. */
-function EventSettings(
-  props: EventSlots & {
-    trigger: EventTriggerDraft;
-    onChange: (trigger: EventTriggerDraft) => void;
-  }
-) {
-  const [choosing, setChoosing] = createSignal(false);
-  const trigger = () => props.trigger;
+function TriggerChoices(props: {
+  onSelect: (trigger: RoutineTriggerDraft) => void;
+  renderEventGroup?: EventSlots['renderEventGroup'];
+}) {
+  let inputRef: HTMLInputElement | undefined;
+  onMount(() => inputRef?.focus());
+  const [search, setSearch] = createSignal('');
+  const matches = (text: string) =>
+    text.toLowerCase().includes(search().trim().toLowerCase());
+  const recurring = createMemo(() => {
+    const parts = parseRecurringSchedule(search());
+    return parts
+      ? { ...newScheduleTrigger(parts.frequency), ...parts }
+      : undefined;
+  });
+  const events = () =>
+    routineEvents.filter((event) =>
+      matches(`${event.group} ${event.label} ${event.description}`)
+    );
   return (
     <div class="grid gap-3">
       <p class="text-xs leading-4 text-ink-muted">
@@ -159,18 +187,67 @@ function EventSettings(
               )}
             />
           </button>
-          <Show when={choosing()}>
-            <div class="max-h-60 overflow-y-auto rounded-lg border border-edge-muted">
-              {props.renderEventScope(trigger, (ids) =>
-                props.onChange({ ...props.trigger, ids })
+        </Show>
+        <Show when={matches('Run once one-off')}>
+          <button
+            type="button"
+            data-trigger-option
+            class="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-hover focus-visible:bg-hover outline-none"
+            onClick={() => props.onSelect(newScheduleTrigger('once'))}
+          >
+            <ClockIcon class="size-4 text-ink-muted" /> Run once{' '}
+            <CaretRightIcon class="ml-auto size-3 text-ink-muted" />
+          </button>
+        </Show>
+        <For each={routineEventGroups}>
+          {(group) => (
+            <Show when={events().some((event) => event.group === group)}>
+              <p class="px-2 pb-1 pt-3 text-xs text-ink-extra-muted">{group}</p>
+              {(props.renderEventGroup ?? ((_, options) => options()))(
+                group,
+                () => (
+                  <For each={events().filter((event) => event.group === group)}>
+                    {(event) => (
+                      <button
+                        type="button"
+                        data-trigger-option
+                        title={event.description}
+                        class="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-hover focus-visible:bg-hover outline-none"
+                        onClick={() =>
+                          props.onSelect({
+                            id: crypto.randomUUID(),
+                            kind: 'event',
+                            events: [event.value],
+                            ids: isGlobalEvent([event.value]) ? undefined : [],
+                            ...structuredClone(event.preset),
+                          })
+                        }
+                      >
+                        <EventIcon
+                          group={group}
+                          class="size-4 shrink-0 text-ink-muted"
+                        />
+                        {event.label}
+                        <CaretRightIcon class="ml-auto size-3 text-ink-muted" />
+                      </button>
+                    )}
+                  </For>
+                )
               )}
-            </div>
-          </Show>
-        </div>
-      </Show>
-      {props.renderEventCondition?.(trigger, (condition) =>
-        props.onChange({ ...props.trigger, condition })
-      )}
+            </Show>
+          )}
+        </For>
+        <Show
+          when={
+            !recurring() &&
+            !events().length &&
+            !matches('Scheduled Hourly Daily Weekly Monthly Custom Cron') &&
+            !matches('Run once one-off')
+          }
+        >
+          <p class="px-2 py-3 text-sm text-ink-muted">No matching triggers</p>
+        </Show>
+      </div>
     </div>
   );
 }
@@ -349,20 +426,91 @@ function TriggerPanel(
           <Popover.Title class="sr-only">
             {props.isNew ? 'Add trigger' : 'Edit trigger'}
           </Popover.Title>
-          <PanelBody
-            trigger={props.trigger}
-            isNew={props.isNew}
-            renderEventLabel={props.renderEventLabel}
-            renderEventScope={props.renderEventScope}
-            renderEventCondition={props.renderEventCondition}
-            onSave={(value) => {
-              props.onSave(value);
-              props.onOpenChange(false);
-            }}
-            onClose={() => props.onOpenChange(false)}
-            onRemove={props.onRemove}
-            onBack={props.onBack}
-          />
+          <Show
+            when={pending()}
+            fallback={
+              <TriggerChoices
+                onSelect={edit}
+                renderEventGroup={props.renderEventGroup}
+              />
+            }
+          >
+            <div class="flex shrink-0 items-center gap-2 border-b border-edge-muted px-3 py-2">
+              <Show when={!props.trigger}>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Back to triggers"
+                  onClick={() => edit(undefined)}
+                >
+                  <ArrowLeftIcon class="size-4" />
+                </Button>
+              </Show>
+              <span class="text-sm font-medium">
+                {event()
+                  ? eventTriggerLabel(event()!)
+                  : schedule()?.frequency === 'once'
+                    ? 'Run once'
+                    : 'Scheduled'}
+              </span>
+            </div>
+            <div class="min-h-0 overflow-y-auto overscroll-contain p-3">
+              <Show when={schedule()}>
+                {(value) => (
+                  <RoutineScheduleSettings
+                    trigger={value()}
+                    onChange={(patch) => edit({ ...value(), ...patch })}
+                  />
+                )}
+              </Show>
+              <Show when={event()}>
+                {(value) => (
+                  <>
+                    <p class="mb-3 text-xs text-ink-muted">
+                      {eventTriggerDescription(value())}
+                    </p>
+                    {props.renderEventSettings?.(value, (patch) =>
+                      edit({ ...value(), ...patch })
+                    )}
+                    {props.renderEventScope(value, (ids) =>
+                      edit({ ...value(), ids })
+                    )}
+                    {props.renderEventCondition?.(value, (condition) =>
+                      edit({ ...value(), condition })
+                    )}
+                  </>
+                )}
+              </Show>
+              <Show when={error()}>
+                {(message) => (
+                  <p role="alert" class="mt-3 text-xs text-failure">
+                    {message()}
+                  </p>
+                )}
+              </Show>
+            </div>
+            <div class="flex shrink-0 items-center justify-end gap-2 border-t border-edge-muted p-2">
+              <Show when={props.onRemove}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="mr-auto text-ink-muted"
+                  onClick={() => {
+                    setOpen(false);
+                    props.onRemove?.();
+                  }}
+                >
+                  Remove trigger
+                </Button>
+              </Show>
+              <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="secondary" size="sm" onClick={save}>
+                {props.trigger ? 'Done' : 'Add trigger'}
+              </Button>
+            </div>
+          </Show>
         </Popover.Content>
       </Popover.Portal>
     </Popover>
@@ -846,68 +994,39 @@ export function RoutineTriggers(
     renderEventCondition: props.renderEventCondition,
   });
   return (
-    <Show
-      when={props.layout === 'rows'}
-      fallback={
-        <>
-          <For each={ids()}>
-            {(id) => (
-              <Show when={find(id)}>
-                {(trigger) => (
-                  <InlineToken
-                    {...slots()}
-                    trigger={trigger()}
-                    onSave={(value) => replace(id, value)}
-                    onRemove={() => remove(id)}
-                  />
-                )}
-              </Show>
-            )}
-          </For>
-          <AddTrigger
-            {...slots()}
-            label="Add trigger"
-            variant="outline"
-            size="sm"
-            onAdd={add}
+    <>
+      <For each={props.triggers.map((trigger) => trigger.id)}>
+        {(id) => (
+          <TriggerChip
+            trigger={props.triggers.find((trigger) => trigger.id === id)}
+            renderEventLabel={props.renderEventLabel}
+            renderEventScope={props.renderEventScope}
+            renderEventSettings={props.renderEventSettings}
+            renderEventCondition={props.renderEventCondition}
+            renderEventGroup={props.renderEventGroup}
+            onSave={(value) =>
+              props.onChange(
+                props.triggers.map((trigger) =>
+                  trigger.id === id ? value : trigger
+                )
+              )
+            }
+            onRemove={() =>
+              props.onChange(
+                props.triggers.filter((trigger) => trigger.id !== id)
+              )
+            }
           />
-        </>
-      }
-    >
-      <div class="flex min-w-0 flex-col gap-3.5">
-        <For each={ids()}>
-          {(id, index) => (
-            <Show when={find(id)}>
-              {(trigger) => (
-                <>
-                  <Show when={index() > 0}>
-                    <div class="flex items-center gap-2.5 text-xs text-ink-extra-muted">
-                      <span class="h-px flex-1 bg-edge-divider" />
-                      or
-                      <span class="h-px flex-1 bg-edge-divider" />
-                    </div>
-                  </Show>
-                  <TriggerSentence
-                    {...slots()}
-                    trigger={trigger()}
-                    onSave={(value) => replace(id, value)}
-                    onRemove={() => remove(id)}
-                  />
-                </>
-              )}
-            </Show>
-          )}
-        </For>
-        <div>
-          <AddTrigger
-            {...slots()}
-            label="Add trigger"
-            variant="ghost"
-            size="sm"
-            onAdd={add}
-          />
-        </div>
-      </div>
-    </Show>
+        )}
+      </For>
+      <TriggerChip
+        renderEventLabel={props.renderEventLabel}
+        renderEventScope={props.renderEventScope}
+        renderEventSettings={props.renderEventSettings}
+        renderEventCondition={props.renderEventCondition}
+        renderEventGroup={props.renderEventGroup}
+        onSave={(trigger) => props.onChange([...props.triggers, trigger])}
+      />
+    </>
   );
 }

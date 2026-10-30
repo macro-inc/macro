@@ -259,8 +259,8 @@ Connected calendars offers Connect account (pick Gmail or Outlook / Microsoft 36
 then consent), Connect calendar for accounts missing calendar permission (consent
 again for that account at its own provider with its address preselected, as
 Settings → Email's Enable calendar does), and Disconnect with confirmation. When
-the only linked account lacks calendar permission, the Google
-Calendar row shows just a filled Connect button for it, with no account list or
+the only linked account lacks calendar permission, the Calendar accounts row
+shows just a filled Connect button for it, with no account list or
 visibility note. Disconnect removes calendar access/data, not the Gmail connection.
 Settings → Calendar lists only the viewer's own inboxes. The **Enable calendar**
 toast (behind `enable-calendar-prompt-web` and `enable-calendar-prompt-mobile`)
@@ -342,7 +342,11 @@ is feature-gated and lists teammates with 24px avatars; its header has the same
 14px checkbox before the title, which shows or hides the grid overlay and is saved
 with the calendar visibility preferences. The teammate rows have no checkboxes and
 stay listed while the overlay is hidden. Clicking a teammate's row navigates to that
-date, opens read-only event details, and marks the row active. The left-aligned
+date, opens read-only event details, and marks the row active. With the overlay shown,
+the details wait for the event's chip and open on it, scrolled into view, the way a
+search result or notification opens; if the chip has not rendered after two seconds
+they open beside the row instead. With the overlay hidden they open beside the row.
+A card opened beside a row stays there when the event's chip mounts later. The left-aligned
 `Settings` control with a gear icon fills the sidebar footer; booking management
 lives in the `Booking links` dropdown rather than a separate footer shortcut.
 An account checkbox toggles its calendars together in one update. The checkbox
@@ -782,8 +786,11 @@ overlay the grid as read-only chips titled `<name>: <event title>`. The sidebar'
 `Team out of office` section (shown only when the user belongs to a team with other members)
 is a collapsible list of the next 90 days of teammate absences. The checkbox in its header
 shows or hides the overlay (the list itself always shows); clicking a row navigates the grid
-to that date. Coverage depends on each teammate having connected their own calendar and using
-Google's out-of-office event type.
+to that date. The list shows ten rows and a `+N more` button that expands it to every row,
+scrolling inside a bounded height, with `Show less` to collapse it again. The choice survives
+the poll and count changes; when ten or fewer rows remain, the button hides. Reopening the
+narrow-pane overlay sidebar starts collapsed, as its section toggles do. Coverage depends on
+each teammate having connected their own calendar and using Google's out-of-office event type.
 
 The grid's pages and the list read the overlay from shared fixed 91-day windows,
 each fetched once and refreshed by one 30-second poll while the tab is focused, so

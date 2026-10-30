@@ -3,9 +3,25 @@ import { MACRO_AGENT_PRINCIPAL_ID } from '@core/constant/macroAgent';
 import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
 import type { MessageData } from '@core/messages/types';
 import { cleanup, render } from '@solidjs/testing-library';
+import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MessageProvider } from './context';
 import { SenderIcon } from './SenderIcon';
+
+vi.mock('@core/component/UserCardTrigger', () => ({
+  UserCardTrigger: (props: {
+    user: { displayName: string; id?: string };
+    trigger: JSX.Element;
+  }) => (
+    <span
+      data-testid="user-card"
+      data-name={props.user.displayName}
+      data-id={props.user.id}
+    >
+      {props.trigger}
+    </span>
+  ),
+}));
 
 vi.mock('@core/component/UserIcon', () => ({
   UserIcon: (props: { id: string }) => (
@@ -66,6 +82,31 @@ describe('SenderIcon', () => {
     expect(icon.textContent).toBe('Helper');
     expect(icon.dataset.avatar).toBe('https://cdn/helper.png');
     expect(queryByTestId('user-icon')).toBeNull();
+  });
+
+  it('gives a team agent the user card that leads to its settings', () => {
+    const { getByTestId } = renderSender(
+      message(`bot|${TEAM_BOT_ID}`, {
+        type: 'bot',
+        id: TEAM_BOT_ID,
+        name: 'Helper',
+        avatar_url: 'https://cdn/helper.png',
+      })
+    );
+    const card = getByTestId('user-card');
+    expect(card.dataset.name).toBe('Helper');
+    expect(card.dataset.id).toBe(`bot|${TEAM_BOT_ID}`);
+    expect(card.querySelector('[data-testid="bot-icon"]')).not.toBeNull();
+  });
+
+  it('gives a first-party agent the user card', () => {
+    const { getByTestId } = renderSender(message(MACRO_AGENT_PRINCIPAL_ID));
+    expect(getByTestId('user-card').dataset.id).toBe(MACRO_AGENT_PRINCIPAL_ID);
+  });
+
+  it('leaves people to the card UserIcon already draws', () => {
+    const { queryByTestId } = renderSender(message('macro|peter@macro.com'));
+    expect(queryByTestId('user-card')).toBeNull();
   });
 
   it('draws people through UserIcon', () => {

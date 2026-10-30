@@ -289,6 +289,12 @@ Refused prompts, provider failures, and hosts without a Google Generative AI key
 display a failed tool call; the error tells the agent whether to rephrase, retry,
 or stop.
 
+Code-mode agents (`ExecuteCode`) and SDK callers reach the same flow through
+`macro.images.generate()` (`POST /cognition/images/generate`), which checks the
+acting user's AI allowance first (402 when exhausted). Post the result with
+`channel.send(text, { images: [image] })`: it arrives as a sized `static/image`
+attachment in the attachment grid, not as message markdown.
+
 ## Ask AI entry points
 
 **Ask AI** in desktop search (including Tab) and the command menu opens

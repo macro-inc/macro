@@ -1,4 +1,5 @@
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import { queryClient } from '@queries/client';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
 import {
@@ -9,8 +10,9 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
+import { QueryClientProvider } from '@tanstack/solid-query';
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow';
-import { createSignal, Show } from 'solid-js';
+import { type Accessor, createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from '../../../lib/core/component/Toast/Toast';
 import { DatabaseTitle } from '../../database/components/database-title';
@@ -48,9 +50,19 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
 const mocks = vi.hoisted(() => ({
   download: vi.fn(),
   csv: vi.fn(),
+  listWebhooks: vi.fn(),
+  createWebhook: vi.fn(),
 }));
 vi.mock('../../../lib/core/component/Toast/Toast', () => ({
   toast: { failure: vi.fn(), success: vi.fn() },
+}));
+vi.mock('@service-storage/client', () => ({
+  storageServiceClient: {
+    databases: {
+      listWebhooks: mocks.listWebhooks,
+      createWebhook: mocks.createWebhook,
+    },
+  },
 }));
 vi.mock('@filesystem/download', () => ({ downloadFile: mocks.download }));
 vi.mock('../queries/transfer', () => ({
@@ -60,6 +72,21 @@ vi.mock('../queries/transfer', () => ({
 
 let presenceStyles: HTMLStyleElement;
 beforeEach(() => {
+  queryClient.clear();
+  mocks.listWebhooks.mockReset().mockReturnValue(okAsync({ webhooks: [] }));
+  mocks.createWebhook.mockReset().mockImplementation(({ tableId }) =>
+    okAsync({
+      webhook: {
+        id: `webhook-${tableId}`,
+        databaseId: 'db',
+        tableId,
+        tokenPrefix: tableId,
+        createdBy: 'user',
+        createdAt: '2026-01-01T00:00:00Z',
+      },
+      token: `token-${tableId}`,
+    })
+  );
   presenceStyles = document.createElement('style');
   presenceStyles.textContent =
     '[role=menu], [role=dialog] { animation-name: none; }';
@@ -71,6 +98,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  queryClient.clear();
   presenceStyles.remove();
   vi.restoreAllMocks();
 });
@@ -80,7 +108,8 @@ function setup(
   remove = vi.fn(
     (): ResultAsync<void, DatabaseEntityFailure> => okAsync(undefined)
   ),
-  entityActions?: DatabaseEntityActions
+  entityActions?: DatabaseEntityActions,
+  selectedTable?: Accessor<TableDetail>
 ) {
   let editTitle: (() => void) | undefined;
   const editReady = vi.fn((edit: (() => void) | undefined) => {
@@ -88,35 +117,40 @@ function setup(
   });
   const [loaded, setLoaded] = createSignal(false);
   render(() => (
-    <>
-      <BlockItemSplitLabel
-        name={() => 'Customers'}
-        title={
-          <Show when={loaded()}>
-            <DatabaseTitle
-              name="Customers"
-              canEdit={grant !== 'view'}
-              onRename={vi.fn()}
-              onEditReady={editReady}
-            />
-          </Show>
-        }
-      />
-      <DatabasePageActions
-        detail={
-          {
-            database: { id: 'db', name: 'Customers', owner_id: 'owner' },
-            grant,
-            tables: [],
-          } as unknown as DatabaseDetail
-        }
-        table={{ table: { id: 'table', name: 'Contacts' } } as TableDetail}
-        entityActions={entityActions}
-        onImported={vi.fn()}
-        onRename={() => editTitle?.()}
-        onDelete={remove}
-      />
-    </>
+    <QueryClientProvider client={queryClient}>
+      <>
+        <BlockItemSplitLabel
+          name={() => 'Customers'}
+          title={
+            <Show when={loaded()}>
+              <DatabaseTitle
+                name="Customers"
+                canEdit={grant !== 'view'}
+                onRename={vi.fn()}
+                onEditReady={editReady}
+              />
+            </Show>
+          }
+        />
+        <DatabasePageActions
+          detail={
+            {
+              database: { id: 'db', name: 'Customers', owner_id: 'owner' },
+              grant,
+              tables: [],
+            } as unknown as DatabaseDetail
+          }
+          table={
+            selectedTable?.() ??
+            ({ table: { id: 'table', name: 'Contacts' } } as TableDetail)
+          }
+          entityActions={entityActions}
+          onImported={vi.fn()}
+          onRename={() => editTitle?.()}
+          onDelete={remove}
+        />
+      </>
+    </QueryClientProvider>
   ));
   setLoaded(true);
   return { remove, editReady };
@@ -299,4 +333,33 @@ describe('database page actions', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(remove).toHaveBeenCalledTimes(2);
   });
+});
+
+it('remounts webhook state for a new table without remounting for metadata changes', async () => {
+  const first: TableDetail = {
+    table: {
+      id: 'first',
+      database_id: 'db',
+      name: 'First',
+      position: 'a',
+      version: 1,
+    },
+    columns: [],
+    views: [],
+    sql_name: '"First"',
+  };
+  const [selected, setSelected] = createSignal(first);
+  setup('owner', undefined, undefined, selected);
+  await openMenu();
+  selectItem('Webhooks');
+  await screen.findByDisplayValue(/token-first/);
+  setSelected({
+    ...first,
+    table: { ...first.table, id: 'second', name: 'Second' },
+  });
+  await screen.findByDisplayValue(/token-second/);
+  expect(screen.queryByDisplayValue(/token-first/)).toBeNull();
+  expect(mocks.createWebhook).toHaveBeenCalledTimes(2);
+  setSelected({ ...selected() });
+  expect(mocks.createWebhook).toHaveBeenCalledTimes(2);
 });

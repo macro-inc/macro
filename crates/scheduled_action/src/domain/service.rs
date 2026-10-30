@@ -11,6 +11,7 @@ use entity_access::domain::{
     ports::ScheduledActionGrants,
 };
 use entity_registry::OwnedPurgeOutcome;
+use github::domain::{models::GithubError, ports::GithubInstallationClaims};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_owner::{CreationPrincipal, Owner};
@@ -31,7 +32,13 @@ use routine_program::RoutineProgram;
 #[cfg(test)]
 pub(crate) mod test;
 
-pub struct ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets = ModelOnlyTargets> {
+pub struct ScheduledActionServiceImpl<
+    Rpo,
+    Exe,
+    Grants,
+    Targets = ModelOnlyTargets,
+    Github = NoGithubLinks,
+> {
     repo: Arc<Rpo>,
     executor: Arc<Exe>,
     grants: Arc<Grants>,
@@ -39,6 +46,25 @@ pub struct ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets = ModelOnlyTarge
     event_management_enabled: bool,
     conditions_enabled: bool,
     targets: Targets,
+    github: Github,
+}
+
+/// Composition without GitHub: no owner counts as linked, so GitHub triggers
+/// cannot be enabled.
+pub struct NoGithubLinks;
+
+impl GithubInstallationClaims for NoGithubLinks {
+    async fn is_linked(&self, _user: &MacroUserIdStr<'_>) -> Result<bool, GithubError> {
+        Ok(false)
+    }
+
+    async fn has_claim(
+        &self,
+        _user: &MacroUserIdStr<'_>,
+        _installation_id: u64,
+    ) -> Result<bool, GithubError> {
+        Ok(false)
+    }
 }
 
 impl<Rpo: ScheduledActionRepo, Exe, Grants> ScheduledActionServiceImpl<Rpo, Exe, Grants> {
@@ -57,17 +83,18 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants> ScheduledActionServiceImpl<Rpo, Exe,
             event_management_enabled: false,
             conditions_enabled: false,
             targets: ModelOnlyTargets,
+            github: NoGithubLinks,
         }
     }
 }
 
-impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
-    ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets>
+impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
+    ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github>
 {
     pub fn with_target_validation<T: TaskTargetValidator>(
         self,
         targets: T,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, T> {
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, T, Github> {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
@@ -76,6 +103,24 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
             event_management_enabled: self.event_management_enabled,
             conditions_enabled: self.conditions_enabled,
             targets,
+            github: self.github,
+        }
+    }
+
+    /// Lets owners with a linked GitHub account enable GitHub triggers.
+    pub fn with_github_links<G: GithubInstallationClaims>(
+        self,
+        github: G,
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, G> {
+        ScheduledActionServiceImpl {
+            repo: self.repo,
+            executor: self.executor,
+            grants: self.grants,
+            dispatcher_tx: self.dispatcher_tx,
+            event_management_enabled: self.event_management_enabled,
+            conditions_enabled: self.conditions_enabled,
+            targets: self.targets,
+            github,
         }
     }
 
@@ -94,22 +139,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
         &self,
         receipt: &EntityAccessReceipt<T>,
     ) -> Result<ScheduledAction> {
-        if receipt.entity().entity_type != EntityType::ScheduledAction {
-            bail!("scheduled action receipt has the wrong entity type");
-        }
-        let Ok(id) = receipt.entity().entity_id.parse::<Uuid>() else {
-            bail!("scheduled action receipt id is not a uuid");
-        };
-        match self.repo.get_action(&id).await? {
-            Some(action)
-                if receipt
-                    .acting_user_id()
-                    .is_some_and(|user| action.owner.is_user(user)) =>
-            {
-                Ok(action)
-            }
-            _ => Err(ActionPolicyError::NotFound.into()),
-        }
+        granted_action(self.repo.as_ref(), receipt).await
     }
 
     /// Delete `action` and hand its removal to the dispatcher. The permit is
@@ -165,6 +195,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
     ) -> Result<ScheduledAction>
     where
         Targets: TaskTargetValidator,
+        Github: GithubInstallationClaims,
     {
         let owner = principal.owner();
         let owner_user = owner.as_user().ok_or(OwnerNotUserError {
@@ -174,7 +205,9 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
         self.check_event_management(&input.trigger)?;
         self.check_conditions(&input.trigger)?;
         self.targets.validate_task(&input.task, owner_user).await?;
-        self.check_program(&input.trigger, &input.task)?;
+        if input.enabled {
+            self.check_github(&input.trigger, owner_user).await?;
+        }
         let now = Utc::now();
         let next_run_at = next_run(&input.trigger)?;
         let event_activated_at = input.trigger.event_filters().is_some().then_some(now);
@@ -205,6 +238,21 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
         Ok(created)
     }
 
+    /// An enabled GitHub trigger needs its owner to have linked GitHub.
+    async fn check_github(&self, trigger: &ActionTrigger, owner: &MacroUserIdStr<'_>) -> Result<()>
+    where
+        Github: GithubInstallationClaims,
+    {
+        if trigger
+            .event_filters()
+            .is_some_and(|filters| filters.watches_github())
+            && !self.github.is_linked(owner).await?
+        {
+            return Err(ActionPolicyError::GithubNotLinked.into());
+        }
+        Ok(())
+    }
+
     async fn replace_configuration(
         &self,
         mut action: ScheduledAction,
@@ -212,6 +260,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
     ) -> Result<ScheduledAction>
     where
         Targets: TaskTargetValidator,
+        Github: GithubInstallationClaims,
     {
         require_explicit_selection(&action.task, &input.task)?;
         let trigger_changed = !same_trigger(&action.trigger, &input.trigger);
@@ -236,7 +285,10 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
             self.targets
                 .validate_task(&input.task, action.owner_user()?)
                 .await?;
-            self.check_program(&input.trigger, &input.task)?;
+            if input.enabled {
+                self.check_github(&input.trigger, action.owner_user()?)
+                    .await?;
+            }
             if trigger_changed || (!action.enabled && input.enabled) {
                 action.next_run_at = next_run(&input.trigger)?;
             }
@@ -265,6 +317,29 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
             .await
             .map_err(|e| anyhow::anyhow!("failed to dispatch update event: {e}"))?;
         Ok(updated)
+    }
+}
+
+/// The routine a receipt names, when the receipt's user owns it.
+pub(crate) async fn granted_action<R: ScheduledActionRepo, T: RequiredPermission>(
+    repo: &R,
+    receipt: &EntityAccessReceipt<T>,
+) -> Result<ScheduledAction> {
+    if receipt.entity().entity_type != EntityType::ScheduledAction {
+        bail!("scheduled action receipt has the wrong entity type");
+    }
+    let Ok(id) = receipt.entity().entity_id.parse::<Uuid>() else {
+        bail!("scheduled action receipt id is not a uuid");
+    };
+    match repo.get_action(&id).await? {
+        Some(action)
+            if receipt
+                .acting_user_id()
+                .is_some_and(|user| action.owner.is_user(user)) =>
+        {
+            Ok(action)
+        }
+        _ => Err(ActionPolicyError::NotFound.into()),
     }
 }
 
@@ -312,9 +387,10 @@ fn same_trigger(left: &ActionTrigger, right: &ActionTrigger) -> bool {
     left == right
 }
 
-impl<Rpo, Exe, Grants, Targets> ScheduledActionService
-    for ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets>
+impl<Rpo, Exe, Grants, Targets, Github> ScheduledActionService
+    for ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github>
 where
+    Github: GithubInstallationClaims,
     Rpo: ScheduledActionRepo,
     Grants: ScheduledActionGrants,
     Targets: TaskTargetValidator,

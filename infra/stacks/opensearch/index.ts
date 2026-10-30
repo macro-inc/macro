@@ -151,6 +151,9 @@ const opensearchDomain = new aws.opensearch.Domain(
     advancedOptions: {
       // when set to false, bulk operations requires more specific index targeting for safety, preventing accidental operations across multiple indices.
       'rest.action.multi.allow_explicit_index': 'true',
+      // Already live on both domains (root endpoint reports 7.10.2). Declared
+      // so deploys stop diffing it; changing advanced options is blue/green.
+      override_main_response_version: 'true',
     },
     // https://docs.aws.amazon.com/opensearch-service/latest/developerguide/fgac.html#fgac-recommendations
     // We use the simple username/password policy as it allows for simplest connection to the opensearch domain

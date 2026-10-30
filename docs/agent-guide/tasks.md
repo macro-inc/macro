@@ -406,8 +406,10 @@ The shared board primitives remain independent of Tasks queries and mutations.
 
 Project grouping in the task list matches the Project column: tasks group by
 their initiative Project property, with unassigned tasks under **No Project**.
-Legacy folder membership does not affect these groups. Project headers resolve
-through the same authorized identity query as the Project column. Verify two
+Legacy folder membership does not affect these groups. Projects sort by name with
+**No Project** last. Headers show the name the server labels the group with; a
+group still labeled by its key resolves the name through the same authorized
+identity query as the Project column. Verify two
 projects and an unassigned task on desktop and mobile; changing or clearing a
 task’s Project must move it to the matching group without reloading.
 
@@ -756,9 +758,11 @@ shows the Projects return breadcrumb and the project name, with the same Share
 and side-panel controls as task detail. `Project actions` (the dots button
 after the name) opens the row context menu's entries for this project,
 including `Delete` for its owner. Choose Overview or Tasks using the inset
-tabs in that top bar. In Tasks, an outlined circular search button expands into
-a focused `Search in <project name>` field. Close or Escape clears the query and
-restores focus to the button. The task toolbar stays the same height and scrolls
+tabs in that top bar; below 600px they collapse to icons, with tooltips on
+desktop, and the project name truncates instead. In Tasks, an outlined
+circular search button expands into a focused `Search in <project name>` field.
+Close or Escape clears the query and restores focus to the button. The task
+toolbar stays the same height and scrolls
 horizontally in narrow splits, keeping list controls, Add existing tasks, and New
 task accessible. Opening an associated task extends the breadcrumb trail; choose
 the project breadcrumb to return, or Projects to restore the collection and its
@@ -771,6 +775,11 @@ editor inserts a project mention. A link to a project discussion stays a link.
 Project properties live in the shared floating information panel and honor
 project access. Editors can rename the project; its owner can delete it.
 Deleting a project leaves its tasks in the workspace.
+Opening a project without access shows `You don't have access to this project`
+with the same Request access row and access level as documents. The owner
+reviews it under Share's `Permission requests`, and once granted the open
+project loads in place. Losing access while the project is open switches to
+that view. A deleted project shows `Project unavailable` with Try again.
 
 Project information panels start closed and float over the content at every
 width, both in the Tasks project view and standalone initiative blocks. Opening
