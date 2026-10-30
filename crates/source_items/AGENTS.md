@@ -13,8 +13,8 @@ replica-mode loads; `entity_access` and the item tables stay authoritative.
 - `crates/macro_db_client/migrations/*_source_items.sql`: the table, its read
   index and the triggers, which record changes per statement and rewrite rows
   at commit under per-bucket mutex rows (header comment).
-- `src/backfill.rs`: fills rows for items that predate the triggers, through the
-  same `source_items_refresh` function the triggers use.
+- `src/backfill.rs`: fills rows for items that predate the triggers, through
+  `source_items_refresh`, which locks buckets and rebuilds the way a commit does.
 - `src/audit.rs`, `src/audit.sql`: counts rows that differ from the inputs, in
   one read-only snapshot.
 - `src/bin/source_items.rs`: `backfill` and `audit` subcommands for rollout.
@@ -44,3 +44,8 @@ replica-mode loads; `entity_access` and the item tables stay authoritative.
   `25000` otherwise, because an older snapshot could miss a concurrent change.
 - Never write `source_items` outside the triggers and the backfill: a hand
   edit is drift that only the backfill repairs.
+- Name every permanent object with its schema in the migration's functions; they
+  run at COMMIT under whatever search_path the writer set.
+- Writers of the inputs cannot use `PREPARE TRANSACTION` (the change record is a
+  temporary table), and `SET CONSTRAINTS ALL IMMEDIATE` rewrites rows per
+  statement, holding buckets for the rest of the transaction.

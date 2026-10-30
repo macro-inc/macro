@@ -28,7 +28,9 @@ holds the backfill, the audit and the tests.
    buckets as a commit does, so it is safe to run alongside writers and to
    interrupt and rerun. Contention retries after one second with a 200 ms lock
    timeout, and 30 failed attempts on one batch stop the run. The first run also
-   creates the mutex rows, so watch database load and replication lag.
+   creates the mutex rows, so watch database load and replication lag. On a
+   synthetic copy at production scale (11.8M documents, 13.9M grants) it wrote
+   13.1M rows in 9 minutes and the audit took 69 seconds.
 3. **Audit the primary and every replica soup reads:**
 
    ```sh
@@ -53,14 +55,16 @@ holds the backfill, the audit and the tests.
 
 Statement triggers only record what changed, in a session temporary table; they
 take no locks, so no writer waits on anything it did not wait on before. At
-commit, a deferred trigger locks a mutex row per touched item's bucket
-(`source_items_mutex`, created on first use), in bucket order and in one
-statement, then rewrites those items' rows in later statements. Each rewrite
-therefore reads what the previous committer on that item committed. A
-transaction at commit waits only for other transactions at commit, which never
-wait on application locks, so the projection cannot add a deadlock to any
-application lock order. Mutex rows are row locks, so a transaction touching any
-number of items cannot fill PostgreSQL's shared lock table.
+commit, a deferred trigger first re-queues itself behind the transaction's other
+deferred constraint checks, then takes ACCESS SHARE on the five inputs, locks a
+mutex row per touched item's bucket (`source_items_mutex`, created on first use)
+in bucket order in one statement, and rewrites those items' rows in later
+statements. Each rewrite therefore reads what the previous committer on that
+item committed. A transaction holding buckets is past its statements and its
+deferred checks and waits only for other such transactions, so the projection
+cannot add a deadlock to any application lock order. Mutex rows are row locks,
+so a transaction touching any number of items cannot fill PostgreSQL's shared
+lock table.
 
 Grant changes rewrite only the (item, source) rows they touched, saves only sort
 keys, and inserts, deletes and subtype changes the item's rows; rows are rebuilt
@@ -72,6 +76,12 @@ A bulk change rewrites its items' rows at commit while holding their buckets, so
 another transaction's commit on one of those items waits for it. Deleting a
 team that sees 200,000 items, for example, briefly delays commits that touch
 those items; it does not block saves in the middle of a transaction.
+
+`SET CONSTRAINTS ALL IMMEDIATE` makes the rewrite run at the end of each
+statement instead; that stays exact, but the buckets are then held while the
+transaction continues. The temporary tables rule out `PREPARE TRANSACTION`, and
+`DISCARD TEMP` fails inside a transaction that wrote an input (between
+transactions it is harmless).
 
 For a read regression, set `SOUP_SOURCE_ITEMS_ENABLED=false` and restart.
 Drift can only come from disabling the triggers or writing `source_items` by
