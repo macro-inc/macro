@@ -59145,6 +59145,23 @@ export const whatsappDisconnectResponse = zod
   .describe('Result of disconnecting an account.');
 
 /**
+ * @summary Import earlier messages of the caller's chats that wait for their phone
+(`backfill.state` `waiting_for_phone`). WhatsApp must be open on the phone.
+ */
+export const whatsappImportHistoryResponseStartedMin = 0;
+
+export const whatsappImportHistoryResponse = zod
+  .object({
+    started: zod
+      .number()
+      .min(whatsappImportHistoryResponseStartedMin)
+      .describe(
+        'Chats that started importing earlier messages from the phone.'
+      ),
+  })
+  .describe("Result of the owner's Import.");
+
+/**
  * @summary Ask whether a phone number has a WhatsApp account, to start a direct chat
 with it; poll the lookup until it is no longer `pending`. Found numbers
 join the chat list, so `POST /external-chats` adds them.

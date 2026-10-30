@@ -16612,6 +16612,16 @@ export type WhatsAppDisconnectRequest = {
 };
 
 /**
+ * Result of the owner's Import.
+ */
+export type WhatsAppHistoryImport = {
+    /**
+     * Chats that started importing earlier messages from the phone.
+     */
+    started: number;
+};
+
+/**
  * The owner asking whether a phone number has a WhatsApp account, to start
  * a direct chat with it.
  */
@@ -25027,6 +25037,19 @@ export type WhatsappDisconnectResponses = {
 };
 
 export type WhatsappDisconnectResponse = WhatsappDisconnectResponses[keyof WhatsappDisconnectResponses];
+
+export type WhatsappImportHistoryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/whatsapp/history-import';
+};
+
+export type WhatsappImportHistoryResponses = {
+    200: WhatsAppHistoryImport;
+};
+
+export type WhatsappImportHistoryResponse = WhatsappImportHistoryResponses[keyof WhatsappImportHistoryResponses];
 
 export type WhatsappStartLookupData = {
     body: WhatsAppLookupRequest;

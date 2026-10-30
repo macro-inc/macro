@@ -19464,6 +19464,25 @@
         }
       }
     },
+    "/whatsapp/history-import": {
+      "post": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Import earlier messages of the caller's chats that wait for their phone\n(`backfill.state` `waiting_for_phone`). WhatsApp must be open on the phone.",
+        "operationId": "whatsapp_import_history",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhatsAppHistoryImport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/whatsapp/lookups": {
       "post": {
         "tags": ["whatsapp_linked::inbound::router"],
@@ -45567,6 +45586,19 @@
             "type": "integer",
             "format": "int64",
             "description": "Fences retries against a later reconnect or replacement."
+          }
+        }
+      },
+      "WhatsAppHistoryImport": {
+        "type": "object",
+        "description": "Result of the owner's Import.",
+        "required": ["started"],
+        "properties": {
+          "started": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Chats that started importing earlier messages from the phone.",
+            "minimum": 0
           }
         }
       },

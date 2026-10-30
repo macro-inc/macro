@@ -401,7 +401,9 @@ export const storageExcluded = [
   'whatsappCancelPairing',
   'whatsappConnect',
   'whatsappDisconnect',
-  // Phone-number lookups need the owner's own session: WhatsApp bans bulk checks.
+  // History imports and phone-number lookups need the owner's own session:
+  // each wakes their phone, and WhatsApp bans bulk checks.
+  'whatsappImportHistory',
   'whatsappLookup',
   'whatsappPairing',
   'whatsappPasskey',

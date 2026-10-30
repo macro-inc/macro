@@ -2335,6 +2335,7 @@ export * from './whatsAppChats';
 export * from './whatsAppConnect';
 export * from './whatsAppDisconnect';
 export * from './whatsAppDisconnectRequest';
+export * from './whatsAppHistoryImport';
 export * from './whatsAppLookup';
 export * from './whatsAppLookupChatJid';
 export * from './whatsAppLookupRequest';
