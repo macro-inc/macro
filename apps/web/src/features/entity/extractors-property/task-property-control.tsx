@@ -95,7 +95,7 @@ export function TaskPropertyControl(props: {
                     >
                       <Property.Icon
                         property={shown()}
-                        class="size-4 mobile:size-5"
+                        class="min-h-4 min-w-4 mobile:min-h-5 mobile:min-w-5"
                       />
                     </Show>
                   }
@@ -104,7 +104,7 @@ export function TaskPropertyControl(props: {
                     statusId={statusId()}
                     completed={props.entity.subType.is_completed}
                     size="xs"
-                    class="mobile:size-5"
+                    class="size-5"
                   />
                 </Show>
               </Property.EditTrigger>

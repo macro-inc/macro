@@ -132,7 +132,7 @@ export function TaskGroupHeader(props: {
                 <span class="flex size-full items-center justify-center rounded-xs group-hover/header:bg-ink/5">
                   <CaretRightIcon
                     class={cn(
-                      'size-2.5 transition-transform',
+                      'size-4 transition-transform',
                       props.expanded && 'rotate-90'
                     )}
                   />
@@ -141,8 +141,8 @@ export function TaskGroupHeader(props: {
               <div class="flex min-w-0 items-center gap-2">
                 <span
                   class={cn(
-                    'flex h-4.5 shrink-0 items-center justify-center',
-                    alignWithRows() ? 'w-6 touch:w-9' : 'w-4'
+                    'flex h-5 shrink-0 items-center justify-center',
+                    alignWithRows() ? 'w-6 touch:w-9' : 'w-5'
                   )}
                 >
                   <Switch>
@@ -162,7 +162,7 @@ export function TaskGroupHeader(props: {
                     >
                       <PropertyValueIcon
                         optionId={props.row.groupId}
-                        class="size-4 shrink-0"
+                        class="min-h-4 min-w-4 shrink-0"
                       />
                     </Match>
                     <Match when={props.groupBy === 'assignee'}>

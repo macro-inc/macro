@@ -39,7 +39,7 @@ export function TaskBoardColumnIcon(props: {
       }
     >
       <Match when={hasOptionIcon()}>
-        <PropertyValueIcon optionId={props.id} class="size-4" />
+        <PropertyValueIcon optionId={props.id} class="min-h-4 min-w-4" />
       </Match>
       <Match
         when={
@@ -128,7 +128,7 @@ export function TaskBoardProperty(props: {
                   <Match when={hasSelectIcon()}>
                     <Property.Icon
                       property={shown()}
-                      class="size-3.5 shrink-0"
+                      class="min-h-3.5 min-w-3.5 shrink-0"
                     />
                   </Match>
                 </Switch>

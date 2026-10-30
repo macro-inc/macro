@@ -11,9 +11,9 @@ cache; the row does not search for related entities. Narrow rows compact these
 pills to icons, with full names available in tooltips and the overflow menu.
 
 Task list status and priority editing use `extractors-property/task-property-control.tsx`
-in the leading icon slots before the title, with 16px desktop glyphs and 20px phone
-glyphs inside unchanged hit targets. The priority glyph sits 8px before the title on
-desktop and 8px on phones; status keeps the row gap before priority on desktop.
+in the leading icon slots before the title. Status and Urgent glyphs use 20px on
+both desktop and phones; other priority glyphs use 16px on desktop and 20px on
+phones, inside unchanged hit targets. Priority stays directly before the title.
 The controls share the property editor and mutation path across wide task rows and narrow entity rows,
 including optimistic values and rollback. Narrow rows omit duplicate trailing Status and Priority properties;
 wide task rows omit the separate Status and Priority columns.

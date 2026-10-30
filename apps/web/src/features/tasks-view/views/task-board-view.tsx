@@ -384,7 +384,7 @@ function TaskBoardColumnHeader(props: {
   return (
     <>
       <span
-        class="flex size-4 shrink-0 items-center justify-center"
+        class="flex size-5 shrink-0 items-center justify-center"
         aria-hidden="true"
       >
         <Suspense>

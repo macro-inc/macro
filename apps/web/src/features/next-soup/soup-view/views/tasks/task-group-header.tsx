@@ -85,7 +85,7 @@ export const TaskGroupHeader = (
       <Layer depth={3}>
         <div class="flex items-center justify-center size-4.5 rounded-xs group-hover/header:bg-ink/5">
           <ChevronRightIcon
-            class={cn('size-2.5', {
+            class={cn('size-4', {
               'rotate-90': props.group.isExpanded(),
             })}
           />
@@ -112,7 +112,10 @@ export const TaskGroupHeader = (
         >
           {(value) => (
             <>
-              <PropertyValueIcon optionId={value()} class="size-4 shrink-0" />
+              <PropertyValueIcon
+                optionId={value()}
+                class="min-h-4 min-w-4 shrink-0"
+              />
               <span class="truncate">{props.group.label}</span>
             </>
           )}
