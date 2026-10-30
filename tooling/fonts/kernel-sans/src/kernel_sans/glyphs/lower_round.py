@@ -457,25 +457,32 @@ def _s_shape(p, w):
     white = P.XH + 2 * P.OS - 2 * wt - wsp
     sp1 = P.XH + P.OS - wt - white * 0.477
     sp0 = sp1 - wsp
-    # Upper ring (a little narrower); its bottom stroke is the spine.
-    xu0, xu1 = w * 0.035, w * 0.97
+    # The sides next to the terminals are 0.94 x stem, so each ring's
+    # counter sits 0.03 x stem off its outer centre. The spine's edges hand
+    # over from one ring to the other at those centres, where both curves
+    # are flat and meet in one node: the top edge at xt (the lower ring's
+    # outer, the upper ring's counter), the bottom edge at xb (the upper
+    # ring's outer, the lower ring's counter). No patch is needed between
+    # them, so no sliver or zero-length segment is left at the joins.
+    xt = w / 2
+    xb = xt - s * 0.03
+    # Upper ring (a little narrower, 0.935 w); its bottom stroke is the spine.
+    hu = w * 0.4675
+    xu0, xu1 = xb - hu, xb + hu
     ub = (xu0, sp0, xu1, P.XH + P.OS)
     U = squircle(*ub, p.sq) - squircle(
         xu0 + s, sp0 + wsp, xu1 - s * 0.94, P.XH + P.OS - wt, p.sq_in
     )
-    cxu = (xu0 + xu1) / 2
     ct = P.XH * 0.735
-    U = U - (right_of(cxu) & below(ct))
+    U = U - (right_of(xt) & below(ct))
     U = U - chamfer(_ox(*ub, p.sq, ct, "right"), ct, p.cut, "se")
     # Lower ring; its top stroke is the spine.
     lb = (0, -P.OS, w, sp1)
     L = squircle(*lb, p.sq) - squircle(s * 0.94, -P.OS + wt, w - s, sp1 - wsp, p.sq_in)
-    cxl = w / 2
     cb = P.XH * 0.27
-    L = L - (left_of(cxl) & above(cb))
+    L = L - (left_of(xb) & above(cb))
     L = L - chamfer(_ox(*lb, p.sq, cb, "left"), cb, p.cut, "nw")
-    mid = rect(min(cxu, cxl) - 1, sp0, max(cxu, cxl) + 1, sp1)
-    return U + L + mid
+    return U + L
 
 
 @glyph("s", 0x0073)

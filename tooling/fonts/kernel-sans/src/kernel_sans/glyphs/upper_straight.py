@@ -480,7 +480,7 @@ def Z(p):
 def AE(p):
     s = p.cstem
     h = p.chair
-    xs = p.w(440, 1.0)  # left edge of the E stem
+    xs = p.w(450, 0.9)  # left edge of the E stem
     # The A's thin up-stroke runs from the baseline at x = 0 into the E stem,
     # crossing the stem's left edge clearly below the top arm (an apex crotch
     # like A's); the top arm caps it like A's flat apex.

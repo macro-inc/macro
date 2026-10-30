@@ -312,17 +312,19 @@ def m(p):
     # join as the first; its outer curve is aimed at a point on the first
     # shoulder 0.62 stem left of the middle stem's right edge, so the two
     # meet in a shallow valley at the same place at every weight.
-    # The arch starts 0.85 stem left of the middle stem's right edge, so its
-    # outer curve fills that valley in one piece (the counter's part left of
-    # the middle stem lies inside the first arch and the stem).
+    # The valley (solid, so the middle stem's edge stays straight up to the
+    # crotch) and the arch meet edge to edge at that edge: overlapping them
+    # on the same curve left a 1-unit segment there.
     xv = x1 - s * 0.62
-    a2, _ = _arch_through(
-        p, x1, x2, yc, (xv, _sq_y(obox1, p.sq, xv)), crotch, x1 - s * 0.85
+    a2, obox2 = _arch_through(
+        p, x1, x2, yc, (xv, _sq_y(obox1, p.sq, xv)), crotch, x1
     )
+    valley = squircle(*obox2, n=p.sq) & rect(x1 - s * 0.85, yc, x1, P.XH + 50)
     shape = (
         rect(0, 0, s, P.XH, nw=p.cut)
         + a1
         + rect(x1 - s, 0, x1, yc)
+        + valley
         + a2
         + rect(x2 - s, 0, x2, yc)
     )
