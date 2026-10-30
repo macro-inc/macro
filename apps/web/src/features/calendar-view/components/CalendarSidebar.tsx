@@ -247,7 +247,13 @@ export function TeamOooUpcomingList() {
               size="xs"
               class="self-start"
               aria-expanded={expanded()}
-              onClick={() => setExpanded((value) => !value)}
+              onClick={(event) => {
+                const toggle = event.currentTarget;
+                setExpanded((value) => !value);
+                // The section is last in the sidebar, so the longer list
+                // pushes this focused control below the fold.
+                toggle.scrollIntoView({ block: 'nearest' });
+              }}
             >
               {expanded() ? 'Show less' : `+${hiddenCount()} more`}
             </Button>

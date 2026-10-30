@@ -14,7 +14,7 @@ import {
 import userEvent from '@testing-library/user-event';
 import { addDays, format } from 'date-fns';
 import { createSignal } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TeamOooUpcomingList } from './CalendarSidebar';
 
 const requests = vi.hoisted(() => ({
@@ -102,6 +102,11 @@ const rows = () =>
 const toggle = () =>
   screen.queryByRole('button', { name: /more$|^Show less$/ });
 
+const scrollIntoView = vi.fn();
+beforeEach(() => {
+  Element.prototype.scrollIntoView = scrollIntoView;
+});
+
 afterEach(() => {
   cleanup();
   setSelectedEvent(undefined);
@@ -150,6 +155,7 @@ describe('TeamOooUpcomingList', () => {
     expect(toggle()).toBe(control);
     expect(control.textContent).toBe('Show less');
     expect(control.getAttribute('aria-expanded')).toBe('true');
+    expect(scrollIntoView.mock.contexts.at(-1)).toBe(control);
 
     await user.click(control);
 
