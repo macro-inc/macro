@@ -1,8 +1,10 @@
-"""Variable font: interpolate Light, Regular and ExtraBold masters on wght.
+"""Variable font: every static weight is a master on wght.
 
 Masters are drawn with the same boolean constructions as the statics;
 compat.py brings their contours into one structure before the cubic outlines
-are converted to compatible quadratics.
+are converted to compatible quadratics. Because every static is a master,
+the named instances reproduce the statics even where a parameter is not
+linear in the stem (thinner heavy horizontals, capped dots, superiors).
 """
 
 import os
@@ -24,7 +26,7 @@ from .compat import IncompatibleGlyph, match_masters
 from .fontbuild import build_font, pin_timestamps
 from .glyphs import Drawer, ordered_names
 
-MASTERS = (300, 400, 800)  # 400 is the default master
+MASTERS = tuple(sorted(P.WEIGHTS))  # 400 is the default master
 DEFAULT = 400
 
 
@@ -117,7 +119,7 @@ def build_variable(out_dir):
         inst.designLocation = {"Weight": P.STEMS[w]}
         doc.addInstance(inst)
 
-    vf, _, _ = varLib.build(doc, exclude=["MVAR"])
+    vf, _, _ = varLib.build(doc)
     _name_variable(vf)
     pin_timestamps(vf)
     buildStatTable(
@@ -136,6 +138,7 @@ def build_variable(out_dir):
                 ],
             }
         ],
+        macNames=False,
     )
     os.makedirs(os.path.join(out_dir, "variable"), exist_ok=True)
     ttf = os.path.join(out_dir, "variable", f"{P.PS_FAMILY}[wght].ttf")

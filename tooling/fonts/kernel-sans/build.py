@@ -54,16 +54,30 @@ def build_static(wght, out_dir, formats, strict=True):
 
 
 def compat(only):
-    """Report glyphs whose 300/400/800 outlines can't be made point-compatible."""
+    """Report glyphs whose master outlines can't be made point-compatible.
+    Every module is loaded so composites find their bases; `only` limits
+    the report. A glyph that fails to draw counts as a failure."""
     from kernel_sans.variable import MASTERS, compatible_outlines
 
-    for mod, err in glyphs.load_modules(only=only, strict=False).items():
+    for mod, err in glyphs.load_modules(strict=False).items():
         print(f"!! module {mod} failed to import:\n{err}", file=sys.stderr)
-    drawn = {w: glyphs.Drawer(P.params(w), strict=False).draw_all() for w in MASTERS}
-    names = [n for n in drawn[MASTERS[0]] if all(n in drawn[w] for w in MASTERS)]
-    if only:
-        names = [n for n in names if glyphs.REGISTRY[n].module in only]
-    _, bad = compatible_outlines(drawn, names)
+    drawers = {w: glyphs.Drawer(P.params(w), strict=False) for w in MASTERS}
+    drawn = {w: d.draw_all() for w, d in drawers.items()}
+    names = [
+        n
+        for n in glyphs.ordered_names()
+        if not only or glyphs.REGISTRY[n].module in only
+    ]
+    bad = {}
+    for w, d in drawers.items():
+        for name, err in d.errors.items():
+            if name in names:
+                bad.setdefault(
+                    name, f"failed to draw at {w}: {err.strip().splitlines()[-1]}"
+                )
+    ok = [n for n in names if n not in bad]
+    _, incompatible = compatible_outlines(drawn, ok)
+    bad.update(incompatible)
     for name, why in sorted(bad.items()):
         print(f"{name}: {why}")
     print(f"{len(names) - len(bad)}/{len(names)} glyphs interpolation-compatible")

@@ -399,19 +399,33 @@ def _equalise(runs_by_master):
     """runs_by_master: list (per master) of one run each. Returns runs with
     the same node count and segment types."""
     fr = [_fractions(r) for r in runs_by_master]
-    gaps = [b - a for f in fr for a, b in zip([0.0] + f, f + [1.0])]
+    gaps = [b - a for f in fr for a, b in zip([0.0, *f], [*f, 1.0], strict=True)]
     tol = min([0.06] + [g * 0.5 for g in gaps if g > 0])
-    clusters = []
-    for f in sorted(x for fs in fr for x in fs):
-        if clusters and f - clusters[-1][-1] < tol:
-            clusters[-1].append(f)
+    # Cluster the nodes of all masters by position along the run. A cluster
+    # holds at most one node per master, so nodes that drift together at
+    # some weights still stay distinct.
+    clusters = []  # [{master index: fraction}]
+    for f, m in sorted((x, m) for m, fs in enumerate(fr) for x in fs):
+        last = clusters[-1] if clusters else None
+        if last and m not in last and f - max(last.values()) < tol:
+            last[m] = f
         else:
-            clusters.append([f])
-    centres = [sum(c) / len(c) for c in clusters]
+            clusters.append({m: f})
+    centres = [sum(c.values()) / len(c) for c in clusters]
     out = []
-    for run, fs in zip(runs_by_master, fr):
-        missing = [c for c in centres if not any(abs(c - f) < tol for f in fs)]
-        for c in sorted(missing):
+    for m, run in enumerate(runs_by_master):
+        own = [c.get(m) for c in clusters]
+        cuts = []
+        for i, c in enumerate(centres):
+            if own[i] is not None:
+                continue
+            # Place the missing node between this master's own neighbours,
+            # so the node order matches the other masters.
+            lo = max([0.0] + [f for f in own[:i] if f is not None] + cuts)
+            hi = min([1.0] + [f for f in own[i + 1 :] if f is not None])
+            eps = (hi - lo) * 0.25
+            cuts.append(min(max(c, lo + eps), hi - eps))
+        for c in sorted(cuts, reverse=True):
             run = _split_run(run, c)
         out.append(run)
     n = {len(r) for r in out}
