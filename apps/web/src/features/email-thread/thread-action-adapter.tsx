@@ -1,9 +1,7 @@
 import { useEmail } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
-import {
-  useEmailLinksQuery,
-  useNonPrimaryEmailLinkIdHeader,
-} from '@queries/email/link';
+import { useInboxEmail } from '@queries/email/inbox-email';
+import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
 import {
   blockSenderWithToast,
   markSenderNoiseWithToast,
@@ -26,17 +24,17 @@ export function createThreadActionAdapter(
     toHeaderLinkId
   );
   const read = createThreadReadAdapter(threadId, threadSource, toHeaderLinkId);
-  const currentUserEmail = useEmail();
-  const linksQuery = useEmailLinksQuery();
+  const viewerEmail = useInboxEmail(() => threadSource()?.link_id);
+  const loginEmail = useEmail();
 
-  // A linked inbox can have an address other than the login, and mail sent
-  // from it is the viewer's own too. Until links load, no sender is known.
+  // Mail sent from the Macro login is the viewer's own too, even in an inbox
+  // linked under another address. Until the inbox address loads, no sender
+  // is known.
   const getSenderEmail = (): string | undefined => {
     const thread = threadSource();
-    const links = linksQuery.data?.links;
-    if (!thread || !links) return undefined;
-    const inbox = links.find((link) => link.id === thread.link_id);
-    return selectThreadSender(thread, currentUserEmail(), inbox?.email_address);
+    return thread
+      ? selectThreadSender(thread, viewerEmail(), loginEmail())
+      : undefined;
   };
 
   const blockSender = () => {

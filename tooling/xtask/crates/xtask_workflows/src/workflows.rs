@@ -16,6 +16,7 @@ mod assign_author;
 mod assign_labels;
 mod build_agent_daemon_on_tag;
 mod build_appimage_on_tag;
+mod build_cef_codecs;
 mod build_desktop_on_tag;
 mod build_dmg_on_tag;
 mod build_web_app;
@@ -282,6 +283,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "deploy_website",
         file_name: "deploy_website.yml",
         render_yaml: || render_patched(deploy_website::deploy_website, deploy_website::patch),
+    },
+    WorkflowFile {
+        slug: "build_cef_codecs",
+        file_name: "build_cef_codecs.yml",
+        render_yaml: || render_gh_workflow(build_cef_codecs::build_cef_codecs)(),
     },
     WorkflowFile {
         slug: "ensure_daytona_snapshot",

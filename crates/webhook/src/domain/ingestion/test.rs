@@ -703,6 +703,7 @@ fn message_event_cases() -> Vec<EventCase> {
         EventCase::new(
             TestBrokerEvent::Message(Event::with_schema_version(
                 MessageTopicEvent::Patched(MessagePatchedMetadata {
+                    completed_reply: None,
                     parent: channel.clone(),
                     message_id,
                     thread_id: None,

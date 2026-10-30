@@ -79,6 +79,11 @@ example `Added to favorites, waiting to sync`) rather than confirming it. A REST
 star and a mute fail offline with an error toast and roll back instead of
 waiting for reconnect, so pressing them again works at once.
 
+Recipient fields turn complete addresses into chips when the typed or pasted
+text ends in a comma or semicolon, so `a@example.com, b@example.com,` adds both.
+Enter or a click picks the highlighted suggestion. Type, paste, or Tab straight
+after picking one and check that both recipients stay and the input is empty.
+
 Outlook connections support personal Outlook.com and individual Microsoft 365
 inboxes. Choose the inbox explicitly when testing mixed-provider accounts. The
 same thread, search, Signal/Noise, draft, and schedule surfaces apply to both
@@ -297,6 +302,10 @@ offline action followed by reconnect. Also wait for provider/metadata synchroniz
 before Undo, and repeat after reloading: an archived received thread can lose its
 inbox-sorting timestamp but must still be unarchivable. Sent-only threads and
 unsent drafts cannot be unarchived; sent mail addressed back to its sender can.
+Threads without received mail hide Mark Not Done in the header, row, menu, and
+hotkeys. REST Soup rows lack that fact, so their row action stays and then says
+the thread stays done. Older sent-only threads still offer it until their
+metadata is next recomputed, and the server rejects it.
 With GraphQL Soup enabled, bulk Mark Not Done settles per email: a rejected
 sent-only/draft thread stays done, while successful and durably queued siblings
 remain restored. Only accepted
@@ -314,7 +323,7 @@ write fills. Home's work-feed Done and Undo return no notification rows, so they
 still read every notification reader again. In the
 network panel one `e` in the Email view sends its two mutations and no `Soup`,
 `SoupNotifications` or `ChannelUnreadPresence` query. Verify the open-thread header too: with GraphQL enabled,
-Mark Not Done remains available for an archived thread whose inbox timestamp is
+Mark Not Done remains available for an archived received thread whose inbox timestamp is
 missing; the server decides whether its received-message history allows restoration.
 The REST path retains its timestamp preflight, whole-batch handling, notification
 ordering, and existing cache reconciliation.
@@ -988,7 +997,10 @@ identity after settlement without replacing the editor's current text.
 
 With the persistent GraphQL Email cache enabled, a new standalone draft saved
 offline appears immediately in Drafts and the other matching Mail tabs, including
-date-grouped lists. A draft changes a conversation's preview, read state, and sort
+date-grouped lists, but never in Inbox, before or after reconnect. On Gmail and
+Outlook alike, a draft brings its conversation into Inbox only as a reply to
+received mail; draft-only and sent-only conversations stay in Archived. A draft
+changes a conversation's preview, read state, and sort
 time according to that tab; discarding it restores the remaining conversation's
 metadata. `Showing cached mail` still means only synchronized and locally created
 items are available.

@@ -234,7 +234,9 @@ with scrollable content above the keyboard. When the form outgrows the sheet, as
 it does with the custom repeat builder open, the sheet scrolls down to the
 footer: Cancel and `Create event` or `Save`, plus `This event`/`All events` when
 editing a recurring event. Desktop retains the centered dialog.
-Dismissing a changed event still asks before discarding the draft.
+Dismissing a changed event by Cancel, swipe, backdrop tap or Escape still asks
+before discarding the draft; Keep editing returns to the sheet with the edits
+intact, and the prompt stays away until the next attempt to close.
 
 On phones, event details use inset round action buttons and a transparent RSVP
 footer. Answering a recurring invitation opens a rounded glass sheet: choose
@@ -259,8 +261,8 @@ Connected calendars offers Connect account (pick Gmail or Outlook / Microsoft 36
 then consent), Connect calendar for accounts missing calendar permission (consent
 again for that account at its own provider with its address preselected, as
 Settings → Email's Enable calendar does), and Disconnect with confirmation. When
-the only linked account lacks calendar permission, the Google
-Calendar row shows just a filled Connect button for it, with no account list or
+the only linked account lacks calendar permission, the Calendar accounts row
+shows just a filled Connect button for it, with no account list or
 visibility note. Disconnect removes calendar access/data, not the Gmail connection.
 Settings → Calendar lists only the viewer's own inboxes. The **Enable calendar**
 toast (behind `enable-calendar-prompt-web` and `enable-calendar-prompt-mobile`)

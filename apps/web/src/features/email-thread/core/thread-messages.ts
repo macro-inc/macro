@@ -1,20 +1,23 @@
 import type { EmailMessage } from '../../email-message/core/email-message';
+import { isViewerAddress } from '../../email-message/core/email-user';
 import type { EmailThread } from './email-thread';
 
 /**
- * Sender actions historically target the earliest sender other than the
- * viewer, at any of the viewer's addresses.
+ * Sender actions target the earliest sender other than the viewer: the
+ * inbox's own address or any other address of theirs. With no inbox address
+ * the viewer is unknown, so no sender is.
  */
 export function selectThreadSender(
   thread: EmailThread,
-  ...viewerEmails: (string | undefined)[]
+  viewerEmail?: string,
+  ...otherViewerEmails: (string | undefined)[]
 ) {
-  const viewer = new Set(
-    viewerEmails.flatMap((email) => (email ? [email.toLowerCase()] : []))
-  );
+  if (!viewerEmail) return undefined;
+  const viewer = [viewerEmail, ...otherViewerEmails];
   return selectThreadMessages(thread).messages.find(
     (message) =>
-      message.from?.email && !viewer.has(message.from.email.toLowerCase())
+      message.from?.email &&
+      !viewer.some((email) => isViewerAddress(message.from?.email, email))
   )?.from?.email;
 }
 

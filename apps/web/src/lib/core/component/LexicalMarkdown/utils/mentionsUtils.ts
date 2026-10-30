@@ -426,6 +426,13 @@ export type ExternalChatMentionItem = {
   data: { id: string; name: string; provider: ExternalChatProvider };
 };
 
+/** One of the viewer's routines; mentioning it in a channel shares it. */
+export type RoutineMentionItem = {
+  kind: 'routine';
+  id: string;
+  data: { id: string; name: string };
+};
+
 export type MentionItem =
   | QuickAccessItem
   | DateMentionItem
@@ -433,7 +440,8 @@ export type MentionItem =
   | AgentSessionMentionItem
   | BookingLinkMentionItem
   | CalendarEventMentionItem
-  | ExternalChatMentionItem;
+  | ExternalChatMentionItem
+  | RoutineMentionItem;
 
 /**
  * Type guard for DateMentionItem.

@@ -78,7 +78,7 @@ vi.mock('./routine-template', () => ({
   RoutineTemplatePage: (props: { scheduleId: string }) => (
     <div>Template for {props.scheduleId}</div>
   ),
-  openShareTemplateDialog: vi.fn(),
+  openShareRoutineDialog: vi.fn(),
 }));
 vi.mock('@core/block', () => ({ useBlockId: () => 'routine-id' }));
 vi.mock('@core/component/AI/constant', () => ({

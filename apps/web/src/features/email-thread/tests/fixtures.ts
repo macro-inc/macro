@@ -16,6 +16,7 @@ export function thread(
     link_id: 'inbox',
     access_level: 'owner',
     inbox_visible: true,
+    has_received_mail: true,
     is_read: true,
     messages,
     ...overrides,

@@ -345,6 +345,7 @@ fn discussion(
     let prompt_message_id = message.id;
     match message.thread_id.filter(|root| *root != message.id) {
         Some(root_id) => DiscussionContext {
+            agent_request: None,
             surface,
             prompt_message_id,
             sender,
@@ -353,6 +354,7 @@ fn discussion(
             channel: Vec::new(),
         },
         None => DiscussionContext {
+            agent_request: None,
             surface,
             prompt_message_id,
             sender,
