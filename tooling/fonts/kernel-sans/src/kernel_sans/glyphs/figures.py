@@ -1148,12 +1148,16 @@ def florin(p):
     upper = upper - chamfer(xt, _oy(ub, n, xt), p.ccut, "ne")
     # Lower hook: the same turned half a turn.
     lower = upper.rotate180(xs + s / 2, (top + bot) / 2)
-    lcy = top + bot - ucy
-    # The stem meets both hooks edge to edge at their vertical extremes.
-    stem = rect(xs, lcy, xs + s, ucy)
+    # The stem meets both hooks edge to edge at their cuts. Its ends come
+    # from the hooks' own (float32) bounds: computed in float64, the lower
+    # end missed the rotated cut by 2e-5 and pathops kept the hook as a
+    # separate contour at some weights.
+    stem = rect(xs, lower.bounds()[3], xs + s, upper.bounds()[1])
     bar_y = P.XH - h / 2
     bar = rect(xs - p.w(118, 0.3), bar_y - h / 2, xs + s + p.w(118, 0.3), bar_y + h / 2)
-    sh = (upper + lower + stem + bar).skew(11, cy=(top + bot) / 2)
+    # Stem first: unioning the two disjoint hooks first made pathops drop
+    # most of the stem at some weights.
+    sh = (stem + bar + upper + lower).skew(11, cy=(top + bot) / 2)
     return _fit(p, sh)
 
 
@@ -1228,7 +1232,20 @@ def _wave(p, cx, cy, half_w, amp, t=None):
     ae = math.radians(62)
     de = (math.cos(ae), math.sin(ae))  # end direction, towards the crest
     he = we / (2 * math.sin(ae))
-    phi = math.radians(47)  # the middle runs steeply, so crest and trough stay round
+    # The middle runs steeply, so crest and trough stay round. At heavy
+    # weights the stroke is thick for the amplitude and the inner crest
+    # drops below the middle's tangent, which folds the inner edge into a
+    # cusp; steepen the middle until the chord from the middle to the inner
+    # crest is 6 degrees steeper than its tangent.
+    phi = math.radians(47)
+    for _ in range(8):
+        nm = (math.sin(phi), math.cos(phi))
+        mx, my = cx - nm[0] * wm / 2, cy - nm[1] * wm / 2
+        chord = math.atan2(cy + amp - wy / 2 - my, cx - half_w * 0.44 - mx)
+        need = math.pi - chord + math.radians(6)
+        if phi >= need - 1e-9:
+            break
+        phi = need
     dm = (math.cos(phi), -math.sin(phi))
     nm = (math.sin(phi), math.cos(phi))
     k = 0.64
