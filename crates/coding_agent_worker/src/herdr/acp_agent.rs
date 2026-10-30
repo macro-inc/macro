@@ -340,6 +340,10 @@ struct Live {
     path: Option<PathBuf>,
     cursor: Cursor,
     pending: VecDeque<LogEvent>,
+    /// This process launched the agent or saw it running. Only such an
+    /// agent's disappearance is a close: a session restored after herdr
+    /// itself restarted finds every agent gone without anyone closing them.
+    seen_alive: bool,
     /// `_session/closed` was sent for this agent. A relaunch starts a new
     /// `Live`, so a later close of the new agent is reported again.
     closed_reported: bool,
@@ -572,6 +576,7 @@ impl Adapter {
             path: record.transcript,
             cursor: Cursor::default(),
             pending: VecDeque::new(),
+            seen_alive: false,
             closed_reported: false,
         };
         if live.path.is_none() {
@@ -652,19 +657,24 @@ impl Adapter {
 
     /// Tell the client, once per native agent, that the agent was closed in
     /// herdr - its tab or pane ended by the person or the agent. Only herdr's
-    /// explicit `agent_not_found` counts: a socket error, timeout, or
-    /// unreadable answer may be transient and is never reported. The next
+    /// explicit `agent_not_found` for an agent this process saw running
+    /// counts: a socket error, timeout, or unreadable answer may be transient,
+    /// and an agent missing since startup was lost, not closed. The next
     /// prompt still relaunches the session.
     async fn report_if_closed(&self, herdr: &HerdrCli, session: &Session, live: &mut Live) {
         if live.closed_reported {
             return;
         }
-        let Ok(Err(error)) =
-            tokio::time::timeout(CLOSED_CHECK_TIMEOUT, herdr.agent_info(&live.name)).await
-        else {
-            return;
-        };
-        if !error.missing_agent() {
+        let error =
+            match tokio::time::timeout(CLOSED_CHECK_TIMEOUT, herdr.agent_info(&live.name)).await {
+                Ok(Ok(_)) => {
+                    live.seen_alive = true;
+                    return;
+                }
+                Ok(Err(error)) => error,
+                Err(_) => return,
+            };
+        if !live.seen_alive || !error.missing_agent() {
             return;
         }
         live.closed_reported = true;
@@ -969,6 +979,7 @@ impl Adapter {
             path: None,
             cursor: Cursor::default(),
             pending: VecDeque::new(),
+            seen_alive: true,
             closed_reported: false,
         })
     }

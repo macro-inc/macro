@@ -185,7 +185,7 @@ async fn a_session_with_work_in_flight_stays_visible(pool: PgPool) {
     .await
     .unwrap();
 
-    for state in ["starting", "running", "blocked"] {
+    for state in ["starting", "running", "blocked", "stopping"] {
         let session = create_session(&repo, new_session(bot, None, None)).await;
         sqlx::query!(
             "UPDATE agent_session SET turn_state = $2 WHERE id = $1",

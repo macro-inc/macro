@@ -118,7 +118,7 @@ pub trait AutoArchiveRepo: Send + Sync + 'static {
 
     /// Archive the session for `reason` and record why, in one step, when the trigger is on
     /// for it and nothing still needs it: it is not archived, has never been archived by a
-    /// trigger, has no turn starting, running, or waiting for input, has no queued prompts, and
+    /// trigger, has no turn starting, running, stopping, or waiting for input, has no queued prompts, and
     /// does not answer a conversation. Whether it archived.
     fn auto_archive(
         &self,

@@ -197,6 +197,7 @@ impl<B: BotFacts + 'static> AutoArchiveRepo for PgAgentSessionRepo<B> {
               AND session.turn_state IS DISTINCT FROM 'starting'
               AND session.turn_state IS DISTINCT FROM 'running'
               AND session.turn_state IS DISTINCT FROM 'blocked'
+              AND session.turn_state IS DISTINCT FROM 'stopping'
               AND NOT EXISTS (
                   SELECT 1 FROM agent_session_auto_archive archive
                   WHERE archive.agent_session_id = session.id

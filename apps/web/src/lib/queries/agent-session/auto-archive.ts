@@ -17,6 +17,8 @@ function sessionAutoArchiveQueryOptions(sessionId: string | undefined) {
         agentHarnessServiceClient.getSessionAutoArchive(sessionId!)
       ),
     enabled: Boolean(sessionId),
+    // A trigger or a restore can change the record while it sits in the cache.
+    staleTime: 0,
   });
 }
 

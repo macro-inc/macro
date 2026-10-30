@@ -845,7 +845,13 @@ async fn a_closed_native_agent_is_reported_once_and_other_herdr_failures_never()
         "#!/bin/sh\nprintf '%s\\n' 'could not connect to the herdr socket' >&2\nexit 1\n",
     )
     .unwrap();
-    for script in [&not_found, &unreachable] {
+    let running = root.path().join("running");
+    std::fs::write(
+        &running,
+        "#!/bin/sh\nprintf '%s\\n' '{\"result\":{\"agent\":{\"agent_status\":\"idle\",\"state_change_seq\":1}}}'\n",
+    )
+    .unwrap();
+    for script in [&not_found, &unreachable, &running] {
         std::fs::set_permissions(script, std::fs::Permissions::from_mode(0o700)).unwrap();
     }
     let id = uuid::Uuid::new_v4().to_string();
@@ -859,6 +865,15 @@ async fn a_closed_native_agent_is_reported_once_and_other_herdr_failures_never()
     let mut guard = session.live.lock().await;
     let live = guard.as_mut().unwrap();
 
+    // Restored with its agent already gone, as after herdr itself restarted.
+    adapter
+        .report_if_closed(&HerdrCli::new(&not_found, None), &session, live)
+        .await;
+    assert!(output.try_recv().is_err());
+
+    adapter
+        .report_if_closed(&HerdrCli::new(&running, None), &session, live)
+        .await;
     adapter
         .report_if_closed(&HerdrCli::new(&unreachable, None), &session, live)
         .await;
