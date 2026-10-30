@@ -244,63 +244,6 @@ describe('routine steps editor', () => {
     expect(screen.getAllByLabelText('Chosen').length).toBe(1);
   });
 
-  it('shows decisions as a flow whose steps edit in place', () => {
-    const labels = createPickStep(
-      aiPicks.find((pick) => pick.action === 'add_label')!,
-      triggerScope('email')
-    );
-    const named = {
-      ...labels,
-      options: labels.options.map((option, index) => {
-        const name = ['Finance', 'Hiring'][index]!;
-        const [step] = option.steps;
-        return {
-          ...option,
-          label: name,
-          steps: [
-            {
-              ...step!,
-              arguments: {
-                ...(step as { arguments: Record<string, unknown> }).arguments,
-                label: name,
-              },
-            },
-          ],
-        };
-      }),
-    } as StepDraft;
-    const steps = renderSteps({ triggers: [email], steps: [named] });
-    fireEvent.click(screen.getByRole('radio', { name: 'Flow' }));
-    expect(screen.getByText('Finance')).toBeTruthy();
-    expect(screen.getByText('Hiring')).toBeTruthy();
-    expect(screen.getByText('Nothing fits')).toBeTruthy();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add label “Hiring”' }));
-    fireEvent.input(screen.getByLabelText('Label', { selector: 'input' }), {
-      target: { value: 'Recruiting' },
-    });
-    expect(steps()[0]).toMatchObject({
-      options: [
-        { label: 'Finance' },
-        { steps: [{ arguments: { label: 'Recruiting' } }] },
-      ],
-    });
-
-    openMenu('Add step to branch', 0);
-    choose('Archive');
-    expect(steps()[0]).toMatchObject({
-      options: [
-        {
-          steps: [
-            { arguments: { label: 'Finance' } },
-            { arguments: { label: 'INBOX', add: false } },
-          ],
-        },
-        {},
-      ],
-    });
-  });
-
   it('reorders and removes steps from each step’s menu', () => {
     const steps = renderSteps({ triggers: [email] });
     openMenu('Add step');

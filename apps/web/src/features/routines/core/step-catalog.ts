@@ -884,3 +884,21 @@ export function triggerFields(
     ])
     .otherwise(() => []);
 }
+
+/** What a step is called: its action, its kind of decision, or Ask AI. */
+export function stepTitle(step: StepDraft): string {
+  return match(step)
+    .with({ kind: 'agent' }, () => 'Ask AI')
+    .with({ kind: 'if' }, () => 'If')
+    .with({ kind: 'choose' }, (step) => describeChoice(step))
+    .with({ kind: 'tool' }, (step) => describeToolStep(step))
+    .exhaustive();
+}
+
+/** A routine's steps in a line: its first step, and how many follow. */
+export function describeSteps(steps: StepDraft[]): string {
+  const [first] = steps;
+  if (!first) return 'No steps';
+  const more = flattenSteps(steps).length - 1;
+  return more ? `${stepTitle(first)} · ${more} more` : stepTitle(first);
+}

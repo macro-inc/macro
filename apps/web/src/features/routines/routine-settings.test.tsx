@@ -61,6 +61,15 @@ vi.mock('./queries/routine-sources', () => ({
   }),
 }));
 
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+);
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();

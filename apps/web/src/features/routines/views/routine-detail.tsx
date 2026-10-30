@@ -1,16 +1,23 @@
+import { SidePanel } from '@components/app/side-panel';
+import {
+  EntityMetadata,
+  EntityMetadataRow,
+} from '@components/app/side-panel/EntityMetadata';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import DotsIcon from '@icon/system/regular/dots-three.svg';
 import ShareIcon from '@icon/system/regular/share-network.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
-import { Button, ButtonGroup, Dropdown } from '@ui';
+import { Button, Dropdown, ToggleSwitch } from '@ui';
 import { type Accessor, createSignal, Match, Show, Switch } from 'solid-js';
 import { RoutineEditor } from '../components/routine-editor';
 import { RoutineRunButton } from '../components/routine-run-button';
+import { RoutineRunVisibility } from '../components/routine-run-visibility';
 import { RoutineSteps } from '../components/routine-step-editor';
 import type { RoutineDetailSlots } from '../context/routine-slots';
 import type { RoutineDetailSource } from '../context/routine-sources';
+import { DEFAULT_RUN_VISIBILITY } from '../core/draft';
 import type { HistoryResource } from '../core/history';
 import {
   createEmptyDraft,
@@ -105,7 +112,6 @@ export function RoutineDetailView(props: {
           showHistory={isOwned()}
           onTab={setTab}
           onBack={back}
-          enabled={isActive()}
           runActions={
             isOwned() && (
               <RoutineRunButton
@@ -128,12 +134,11 @@ export function RoutineDetailView(props: {
             isOwned() && (
               <Dropdown placement="bottom-start">
                 <Dropdown.Trigger
-                  as={ButtonGroup.Button}
                   variant="ghost"
                   size="icon-sm"
                   aria-label="Routine actions"
                 >
-                  <DotsIcon class="size-5" />
+                  <DotsIcon class="size-4" />
                 </Dropdown.Trigger>
                 <Dropdown.Content portalScope="local">
                   <Dropdown.Group>
@@ -161,19 +166,82 @@ export function RoutineDetailView(props: {
               </Dropdown>
             )
           }
-          properties={
-            <Show when={props.onOpenTemplate && routine().templateId}>
-              {(templateId) => (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => props.onOpenTemplate?.(templateId())}
+          details={
+            <>
+              <SidePanel.Footer>
+                <EntityMetadata
+                  ownerId={routine().ownerId}
+                  createdAt={routine().createdAt}
                 >
-                  Created from template
-                  <ArrowUpRightIcon class="size-3.5" />
-                </Button>
-              )}
-            </Show>
+                  <EntityMetadataRow label="Next run">
+                    {nextRun()}
+                  </EntityMetadataRow>
+                </EntityMetadata>
+              </SidePanel.Footer>
+              <SidePanel.Section
+                id="routine-properties"
+                title="Properties"
+                order={10}
+                defaultOpen
+              >
+                <SidePanel.Grid>
+                  <SidePanel.Row label="Status">
+                    <ToggleSwitch
+                      label={isActive() ? 'Enabled' : 'Disabled'}
+                      labelClass="text-xs text-ink-muted"
+                      checked={isActive()}
+                      disabled={!isOwned() || activationDisabled()}
+                      onChange={(enabled) => props.source.setEnabled(enabled)}
+                    />
+                  </SidePanel.Row>
+                  <SidePanel.Row label="Runs">
+                    <RoutineRunVisibility
+                      value={state()?.runVisibility ?? DEFAULT_RUN_VISIBILITY}
+                      onChange={(runVisibility) =>
+                        setState((draft) => ({ ...draft, runVisibility }))
+                      }
+                    />
+                  </SidePanel.Row>
+                  <Show when={state()}>
+                    {(draft) => (
+                      <Show
+                        when={
+                          firstAgent(draftSteps(draft())) || draft().apps.length
+                        }
+                      >
+                        <SidePanel.Row label="Apps">
+                          <props.slots.Apps
+                            apps={draft().apps}
+                            onChange={(apps) =>
+                              setState((current) => ({ ...current, apps }))
+                            }
+                          />
+                        </SidePanel.Row>
+                      </Show>
+                    )}
+                  </Show>
+                </SidePanel.Grid>
+              </SidePanel.Section>
+              <Show when={props.onOpenTemplate && routine().templateId}>
+                {(templateId) => (
+                  <SidePanel.Section
+                    id="routine-template"
+                    title="Template"
+                    order={20}
+                    defaultOpen
+                  >
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => props.onOpenTemplate?.(templateId())}
+                    >
+                      Created from template
+                      <ArrowUpRightIcon class="size-3.5" />
+                    </Button>
+                  </SidePanel.Section>
+                )}
+              </Show>
+            </>
           }
           nextRun={nextRun()}
           steps={
@@ -197,18 +265,6 @@ export function RoutineDetailView(props: {
                     lastRun={latestStepRun(props.source.history())}
                   />
                 </Show>
-              )}
-            </Show>
-          }
-          apps={
-            <Show when={state()}>
-              {(draft) => (
-                <props.slots.Apps
-                  apps={draft().apps}
-                  onChange={(apps) =>
-                    setState((current) => ({ ...current, apps }))
-                  }
-                />
               )}
             </Show>
           }

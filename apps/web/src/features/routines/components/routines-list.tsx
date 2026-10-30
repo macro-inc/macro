@@ -6,8 +6,8 @@ import {
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
-import { Button } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { Button, Tabs } from '@ui';
+import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { RoutineRow } from '../core/types';
 import { RoutineListRow, RoutineRowLayout } from './routine-row';
 
@@ -25,13 +25,43 @@ export function RoutinesList(props: {
   onRetry: () => void;
 }) {
   const [search, setSearch] = createSignal('');
+  const [show, setShow] = createSignal<'all' | 'on'>('all');
   let list: HTMLDivElement | undefined;
   const filtered = () =>
-    props.rows.filter((row) =>
-      `${row.name} ${row.creator} ${row.target}`
-        .toLowerCase()
-        .includes(search().trim().toLowerCase())
+    props.rows.filter(
+      (row) =>
+        (show() === 'all' || row.enabled) &&
+        `${row.name} ${row.when} ${row.does}`
+          .toLowerCase()
+          .includes(search().trim().toLowerCase())
     );
+  const groups = () =>
+    (
+      [
+        { key: 'activity', title: 'When something happens' },
+        { key: 'schedule', title: 'On a schedule' },
+      ] as const
+    )
+      .map((group) => ({
+        ...group,
+        rows: filtered().filter((row) => row.group === group.key),
+      }))
+      .filter((group) => group.rows.length > 0);
+  const tabs = (): JSX.Element => (
+    <Tabs
+      aria-label="Show routines"
+      options={[
+        { value: 'all', label: 'All', count: props.rows.length },
+        {
+          value: 'on',
+          label: 'On',
+          count: props.rows.filter((row) => row.enabled).length,
+        },
+      ]}
+      value={show()}
+      onChange={setShow}
+    />
+  );
   return (
     <div class="flex size-full min-h-0 min-w-0 flex-col">
       <Show
@@ -43,6 +73,7 @@ export function RoutinesList(props: {
                 Routines
               </h1>
             </Show>
+            <div class="mb-3">{tabs()}</div>
             <div class="flex min-w-0 items-center justify-between gap-3">
               <SearchBar
                 ref={(input) =>
@@ -67,7 +98,12 @@ export function RoutinesList(props: {
         }
       >
         <ListHeader
-          title={<h1 class="text-sm font-semibold text-ink">Routines</h1>}
+          title={
+            <div class="flex min-w-0 items-center gap-3">
+              <h1 class="text-sm font-semibold text-ink">Routines</h1>
+              {tabs()}
+            </div>
+          }
         >
           <ViewCreateButton
             presentation="toolbar"
@@ -110,27 +146,41 @@ export function RoutinesList(props: {
             role="row"
             class="text-xs font-medium text-ink-extra-muted"
           >
-            <span role="columnheader">Routine</span>
-            <span role="columnheader">Created by</span>
-            <span role="columnheader">Status</span>
-            <span role="columnheader">Runs with</span>
-            <span role="columnheader" class="px-2">
-              Enabled
+            <span role="columnheader" class="sr-only">
+              On
             </span>
+            <span role="columnheader">Routine</span>
+            <span role="columnheader">When</span>
+            <span role="columnheader">Then</span>
+            <span role="columnheader">Last run</span>
           </RoutineRowLayout>
         </div>
         <div
           role="rowgroup"
           class="min-w-[748px] @max-[760px]/routines:min-w-0"
         >
-          <For each={filtered()}>
-            {(row) => (
-              <RoutineListRow
-                row={row}
-                pending={props.pendingId === row.id}
-                onOpen={props.onOpen}
-                onToggle={props.onToggle}
-              />
+          <For each={groups()}>
+            {(group) => (
+              <>
+                <div
+                  role="row"
+                  class="px-4 pb-1 pt-4 text-xs font-medium text-ink-extra-muted"
+                >
+                  <span role="cell" aria-colspan={5}>
+                    {group.title}
+                  </span>
+                </div>
+                <For each={group.rows}>
+                  {(row) => (
+                    <RoutineListRow
+                      row={row}
+                      pending={props.pendingId === row.id}
+                      onOpen={props.onOpen}
+                      onToggle={props.onToggle}
+                    />
+                  )}
+                </For>
+              </>
             )}
           </For>
         </div>
@@ -147,14 +197,14 @@ export function RoutinesList(props: {
                   ? 'Loading routines…'
                   : props.error
                     ? 'Routines are unavailable'
-                    : search().trim()
+                    : search().trim() || show() === 'on'
                       ? 'No matching routines'
                       : 'No routines yet'}
               </p>
               <Show when={!props.loading && !props.error && !search().trim()}>
                 <p>
-                  Create a routine to run an agent on a schedule or a Macro
-                  event.
+                  Create a routine to act on new email, tasks and messages, or
+                  on a schedule.
                 </p>
               </Show>
             </div>

@@ -90,3 +90,22 @@ export function latestStepRun(
       undefined
     );
 }
+
+/** A run in a line: why it failed, or what it decided or did first. */
+export function summarizeRun(
+  record: HistoryRecord,
+  steps: StepDraft[] | undefined
+): string {
+  if (record.success === false) {
+    const failed = record.steps?.find(
+      (step) => (step.kind === 'tool' || step.kind === 'agent') && step.error
+    );
+    const reason =
+      failed?.kind === 'tool' || failed?.kind === 'agent'
+        ? failed.error
+        : record.error;
+    return reason ? `Failed: ${reason}` : 'Failed';
+  }
+  const [first] = record.steps ?? [];
+  return first ? describeHistoryStep(first, steps) : 'Ran';
+}

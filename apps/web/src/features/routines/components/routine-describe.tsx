@@ -1,4 +1,5 @@
-import MagicWandIcon from '@phosphor/magic-wand.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import { Button, TextField } from '@ui';
 import { createSignal, Show } from 'solid-js';
 
@@ -42,26 +43,18 @@ export function RoutineDescribe(props: {
           rows={3}
           autofocus
           class="border-none bg-transparent text-base shadow-none"
-          placeholder="When an invoice email arrives, label it Finance and create a task to pay it"
+          placeholder="Describe what should happen, and when. “When an invoice arrives, label it Finance and make a task to pay it.”"
           onKeyDown={(event: KeyboardEvent) => {
             if (event.key === 'Enter' && !event.shiftKey) {
               event.preventDefault();
               event.stopPropagation();
-              void submit();
+              fireAndForget(submit(), 'routines');
             }
           }}
         />
       </TextField>
       <div class="flex items-center justify-between gap-2">
-        <Show
-          when={error()}
-          fallback={
-            <span class="text-xs text-ink-extra-muted">
-              AI drafts the trigger and steps. You review them before anything
-              runs.
-            </span>
-          }
-        >
+        <Show when={error()} fallback={<span />}>
           {(message) => (
             <span role="alert" class="text-xs text-failure">
               {message()}
@@ -73,10 +66,10 @@ export function RoutineDescribe(props: {
           variant="primary"
           class="shrink-0 gap-1.5"
           disabled={props.disabled || pending() || !description().trim()}
-          onClick={() => void submit()}
+          onClick={() => fireAndForget(submit(), 'routines')}
         >
-          <MagicWandIcon class="size-3.5" />
-          {pending() ? 'Drafting…' : 'Draft'}
+          <SparkleIcon class="size-3.5" />
+          {pending() ? 'Drafting…' : 'Draft it'}
         </Button>
       </div>
     </section>

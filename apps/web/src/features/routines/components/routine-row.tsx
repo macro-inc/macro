@@ -1,8 +1,3 @@
-import {
-  modelProvider,
-  ProviderIcon,
-} from '@core/component/AI/component/ProviderIcon';
-import { EntityIcon } from '@core/component/EntityIcon';
 import { Layout as EntityLayout } from '@entity/core/Layout';
 import { Slot as EntitySlot } from '@entity/core/Slot';
 import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
@@ -12,7 +7,7 @@ import type { RoutineRow } from '../core/types';
 
 /**
  * Shared geometry keeps routine properties aligned with their column headers.
- * A narrow list (a phone) drops the headers and collapses the row to one line.
+ * A narrow list (a phone) drops the headers, When and Then.
  */
 export function RoutineRowLayout(
   props: ParentProps<Pick<JSX.HTMLAttributes<HTMLDivElement>, 'class' | 'role'>>
@@ -21,12 +16,25 @@ export function RoutineRowLayout(
     <EntityLayout
       role={props.role}
       class={cn(
-        'grid min-h-10 min-w-[740px] grid-cols-[minmax(12rem,1fr)_8rem_7rem_minmax(8rem,12rem)_7rem] items-center gap-2 px-3 touch:min-h-11 @max-[760px]/routines:min-w-0 @max-[760px]/routines:grid-cols-[minmax(0,1fr)_auto_auto_auto]',
+        'grid min-h-10 min-w-[740px] grid-cols-[2rem_minmax(11rem,1.2fr)_minmax(9rem,1fr)_minmax(9rem,1fr)_minmax(9rem,1fr)] items-center gap-2 px-3 touch:min-h-11 @max-[760px]/routines:min-w-0 @max-[760px]/routines:grid-cols-[2rem_minmax(0,1fr)_minmax(0,auto)]',
         props.class
       )}
     >
       {props.children}
     </EntityLayout>
+  );
+}
+
+function TextCell(props: { text: string; class?: string }) {
+  return (
+    <EntitySlot
+      role="cell"
+      class={cn('min-w-0 text-xs text-ink-muted', props.class)}
+    >
+      <Tooltip label={props.text} class="min-w-0 max-w-full">
+        <span class="block truncate">{props.text}</span>
+      </Tooltip>
+    </EntitySlot>
   );
 }
 
@@ -53,10 +61,34 @@ export function RoutineListRow(props: {
   return (
     <div
       role="row"
-      class="soup-list-entity @container/entity mx-1 min-w-[740px] rounded-xl py-0.5 hover:bg-list-hover focus-within:bg-list-highlighted @max-[760px]/routines:min-w-0"
+      class={cn(
+        'soup-list-entity @container/entity mx-1 min-w-[740px] rounded-xl py-0.5 hover:bg-list-hover focus-within:bg-list-highlighted @max-[760px]/routines:min-w-0',
+        !props.row.enabled && 'text-ink-muted'
+      )}
       onClick={() => props.onOpen(props.row.id)}
     >
       <RoutineRowLayout class="px-2 text-sm">
+        <EntitySlot
+          role="cell"
+          class="min-w-0"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <Layer depth={2}>
+            <Tooltip label={toggleDescription()}>
+              <button
+                type="button"
+                aria-label={`Enabled for ${props.row.name}`}
+                aria-pressed={props.row.enabled}
+                aria-busy={props.pending}
+                disabled={toggleDisabled()}
+                class="inline-flex items-center rounded-full p-1.5 outline-none hover:bg-surface/50 focus-visible:ring-2 focus-visible:ring-edge-focus disabled:opacity-50"
+                onClick={() => props.onToggle(props.row)}
+              >
+                <InlineCheckbox checked={props.row.enabled} />
+              </button>
+            </Tooltip>
+          </Layer>
+        </EntitySlot>
         <EntitySlot role="cell" class="min-w-0">
           <Tooltip label={props.row.name} class="min-w-0 max-w-full">
             <button
@@ -68,78 +100,30 @@ export function RoutineListRow(props: {
             </button>
           </Tooltip>
         </EntitySlot>
-        <EntitySlot
-          role="cell"
-          class="min-w-0 text-xs text-ink-muted @max-[760px]/routines:hidden"
-        >
-          <Tooltip label={props.row.creator} class="max-w-full">
-            <span class="truncate">{props.row.creator}</span>
-          </Tooltip>
-        </EntitySlot>
-        <EntitySlot role="cell" class="min-w-0 text-xs">
-          <span
-            class={cn(
-              'inline-flex items-center gap-1.5',
-              props.row.status === 'Active' || props.row.status === 'Running'
-                ? 'text-accent'
-                : 'text-ink-muted'
-            )}
-          >
-            <span
-              aria-hidden="true"
-              class={cn(
-                'size-1.5 rounded-full',
-                props.row.status === 'Active' || props.row.status === 'Running'
-                  ? 'bg-accent'
-                  : 'bg-ink-extra-muted'
-              )}
-            />
-            {props.row.status}
-          </span>
-        </EntitySlot>
+        <TextCell text={props.row.when} class="@max-[760px]/routines:hidden" />
+        <TextCell text={props.row.does} class="@max-[760px]/routines:hidden" />
         <EntitySlot role="cell" class="min-w-0 text-xs text-ink-muted">
-          <Tooltip label={props.row.target} class="min-w-0 max-w-full">
-            <span class="inline-flex min-w-0 max-w-full items-center gap-1.5">
-              <Show
-                when={modelProvider(props.row.targetModel)}
-                fallback={
-                  <EntityIcon targetType="chat" size="xs" class="shrink-0" />
-                }
+          <Show when={props.row.lastRun}>
+            {(run) => (
+              <Tooltip
+                label={`${run().at} · ${run().summary}`}
+                class="min-w-0 max-w-full"
               >
-                <ProviderIcon
-                  model={props.row.targetModel}
-                  class="size-3.5 shrink-0"
-                />
-              </Show>
-              <span class="truncate @max-[760px]/routines:sr-only">
-                {props.row.target}
-              </span>
-            </span>
-          </Tooltip>
-        </EntitySlot>
-        <EntitySlot
-          role="cell"
-          class="min-w-0 text-xs"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <Layer depth={2}>
-            <Tooltip label={toggleDescription()}>
-              <button
-                type="button"
-                aria-label={`Enabled for ${props.row.name}`}
-                aria-pressed={props.row.enabled}
-                aria-busy={props.pending}
-                disabled={toggleDisabled()}
-                class="inline-flex min-w-0 items-center gap-2 rounded-full px-2 py-1.5 text-ink-muted outline-none hover:bg-surface/50 focus-visible:ring-2 focus-visible:ring-edge-focus disabled:opacity-50"
-                onClick={() => props.onToggle(props.row)}
-              >
-                <InlineCheckbox checked={props.row.enabled} />
-                <span class="@max-[760px]/routines:hidden">
-                  {props.row.enabled ? 'Enabled' : 'Disabled'}
+                <span class="flex min-w-0 items-center gap-1.5">
+                  <span
+                    aria-hidden="true"
+                    class={cn(
+                      'size-1.5 shrink-0 rounded-full',
+                      run().failed ? 'bg-failure' : 'bg-success'
+                    )}
+                  />
+                  <span class="truncate">
+                    {run().at} · {run().summary}
+                  </span>
                 </span>
-              </button>
-            </Tooltip>
-          </Layer>
+              </Tooltip>
+            )}
+          </Show>
         </EntitySlot>
       </RoutineRowLayout>
     </div>

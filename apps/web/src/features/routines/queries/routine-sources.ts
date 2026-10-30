@@ -1,5 +1,8 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
+import type {
+  ScheduledAction,
+  ScheduledActionResponse,
+} from '@service-scheduled-action/generated/schemas';
 import type { Accessor } from 'solid-js';
 import { createMemo, onMount } from 'solid-js';
 import type {
@@ -27,7 +30,9 @@ import {
   useUpdateScheduleMutation,
 } from './schedules';
 
-function toRoutine(schedule: ScheduledAction): RoutineSnapshot {
+function toRoutine(
+  schedule: ScheduledAction & Pick<ScheduledActionResponse, 'last_run'>
+): RoutineSnapshot {
   if (!schedule.id) throw new Error('Routine has no ID');
   return {
     id: schedule.id,
@@ -47,6 +52,7 @@ function toRoutine(schedule: ScheduledAction): RoutineSnapshot {
     ]),
     draft: draftFromSchedule(schedule),
     templateId: schedule.template_id ?? undefined,
+    lastRun: schedule.last_run ? toHistoryRecord(schedule.last_run) : undefined,
   };
 }
 

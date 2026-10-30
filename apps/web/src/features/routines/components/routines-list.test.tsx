@@ -14,16 +14,25 @@ vi.mock('@service-storage/websocket', () => ({
   createWebSocketJob: vi.fn(),
 }));
 
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+);
+
 afterEach(cleanup);
 const rows: RoutineRow[] = [
   {
     id: 'mine',
     name: 'Morning briefing',
-    creator: 'You',
     createdAt: '',
-    target: 'Sonnet 5.5',
-    targetModel: 'anthropic/claude-sonnet-5-5',
-    schedule: 'Weekdays at 9 AM',
+    when: 'Weekdays at 9:00 AM',
+    does: 'Ask AI · Sonnet 5.5',
+    group: 'schedule',
+    lastRun: { at: '9:00 AM', failed: false, summary: 'Asked AI' },
     status: 'Active',
     enabled: true,
     editable: true,
@@ -31,10 +40,15 @@ const rows: RoutineRow[] = [
   {
     id: 'revenue',
     name: 'Revenue signals',
-    creator: 'You',
     createdAt: '',
-    target: 'Finance agent',
-    schedule: 'Every Friday',
+    when: 'When: New email received',
+    does: 'Ask AI · Finance agent',
+    group: 'activity',
+    lastRun: {
+      at: 'Monday',
+      failed: true,
+      summary: 'Failed: No label named "Receipts" in this thread\'s inbox.',
+    },
     status: 'Paused',
     enabled: false,
     editable: true,
@@ -105,15 +119,26 @@ describe('routines list', () => {
     expect(props.onToggle).not.toHaveBeenCalled();
     expect(props.onOpen).not.toHaveBeenCalled();
   });
-  it('marks each target with the provider of the model it runs on', () => {
+  it('groups routines by what starts them and shows how each last ran', () => {
     setup();
-    const providerOf = (name: string) =>
-      screen
-        .getByText(name)
-        .parentElement?.querySelector('[data-ai-provider]')
-        ?.getAttribute('data-ai-provider');
-    expect(providerOf('Sonnet 5.5')).toBe('anthropic');
-    expect(providerOf('Finance agent')).toBeUndefined();
+    expect(screen.getByText('When something happens')).toBeTruthy();
+    expect(screen.getByText('On a schedule')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Monday · Failed: No label named "Receipts" in this thread\'s inbox.'
+      )
+    ).toBeTruthy();
+    expect(screen.getByText('9:00 AM · Asked AI')).toBeTruthy();
+  });
+  it('shows only routines that are on under On', () => {
+    setup();
+    fireEvent.click(screen.getByRole('radio', { name: /^On/ }));
+    expect(
+      screen.getByRole('button', { name: 'Morning briefing' })
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: 'Revenue signals' })
+    ).toBeNull();
   });
   it('opens a blank routine without a templates section', () => {
     const props = setup();

@@ -80,7 +80,10 @@ vi.mock('./routine-template', () => ({
   ),
   openShareTemplateDialog: vi.fn(),
 }));
-vi.mock('@core/block', () => ({ useBlockId: () => 'routine-id' }));
+vi.mock('@core/block', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/block')>()),
+  useBlockId: () => 'routine-id',
+}));
 vi.mock('@core/component/AI/constant', () => ({
   defaultModelForPlan: () => 'claude-sonnet-4-6',
 }));
@@ -119,6 +122,7 @@ vi.mock('@components/app/split-layout/layout', () => ({
   }),
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
+  useSplitPanel: () => undefined,
   useSplitPanelOrThrow: () => ({
     handle: { setDisplayName: mocks.setDisplayName },
     setTitleFileMenuRef: vi.fn(),
@@ -404,7 +408,7 @@ describe('routine execution target autosave', () => {
     expect(
       screen.queryByRole('button', { name: 'Routine actions' })
     ).toBeNull();
-    expect(screen.queryByRole('tab', { name: 'Run History' })).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'Runs' })).toBeNull();
     mocks.changePrompt('Changed');
     expect(mocks.update).not.toHaveBeenCalled();
   });
@@ -609,7 +613,7 @@ describe('routine execution target autosave', () => {
     expect(screen.getByText(/Next run/)).toBeTruthy();
     setSchedules([{ ...cron, enabled: false }]);
     expect(activationItem().textContent).toContain('Enable routine');
-    expect(screen.getByText('Paused')).toBeTruthy();
+    expect(screen.getByText('Next run: Paused')).toBeTruthy();
     fireEvent.keyDown(activationItem(), { key: 'Escape' });
     await vi.advanceTimersByTimeAsync(0);
     fireEvent.click(runButton());
@@ -668,8 +672,8 @@ describe('routine history integration', () => {
       await vi.advanceTimersByTimeAsync(300);
       const saved = mocks.update.mock.lastCall![0].body;
       setSchedules([{ ...cron, ...saved }]);
-      fireEvent.click(screen.getByRole('tab', { name: 'Run History' }));
-      fireEvent.click(screen.getByRole('tab', { name: 'Run History' }));
+      fireEvent.click(screen.getByRole('tab', { name: 'Runs' }));
+      fireEvent.click(screen.getByRole('tab', { name: 'Runs' }));
       fireEvent.click(screen.getByText('Run transcript'));
       expect(mocks.openWithSplit).toHaveBeenLastCalledWith(
         { type: 'chat', id: 'chat-id' },
@@ -704,7 +708,7 @@ describe('routine history integration', () => {
       expect(
         screen.getByRole('textbox', { name: 'Instructions' })
       ).toBeTruthy();
-      fireEvent.click(screen.getByRole('tab', { name: 'Run History' }));
+      fireEvent.click(screen.getByRole('tab', { name: 'Runs' }));
       const labels = screen.getAllByText(
         status === 'pending' ? 'Loading…' : 'Run unavailable'
       );
@@ -719,7 +723,7 @@ describe('routine history integration', () => {
     mocks.chatMetadata = () => ({});
     mocks.agentMetadata = () => undefined;
     render(() => <Routine />);
-    fireEvent.click(screen.getByRole('tab', { name: 'Run History' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Runs' }));
     const unavailable = screen.getAllByText('Run unavailable');
     expect(unavailable).toHaveLength(2);
     for (const label of unavailable) fireEvent.click(label);
@@ -764,10 +768,10 @@ describe('routine editor triggers', () => {
     settings.focus();
     fireEvent.keyDown(settings, { key: 'ArrowRight' });
     await vi.advanceTimersByTimeAsync(300);
-    const history = screen.getByRole('tab', { name: 'Run History' });
+    const history = screen.getByRole('tab', { name: 'Runs' });
     expect(history.getAttribute('aria-selected')).toBe('true');
     expect(history.getAttribute('aria-controls')).toBe(
-      screen.getByRole('tabpanel', { name: 'Run History' }).id
+      screen.getByRole('tabpanel', { name: 'Runs' }).id
     );
     expect(screen.getByText('Run transcript')).toBeTruthy();
   });
@@ -788,7 +792,7 @@ describe('routine editor triggers', () => {
         }),
       }),
     });
-    fireEvent.click(screen.getByRole('tab', { name: 'Run History' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Runs' }));
     expect(screen.getByText('Run transcript')).toBeTruthy();
   });
   it('retains cron editing, duplication, run-now, and history navigation', async () => {
@@ -828,7 +832,7 @@ describe('routine editor triggers', () => {
     expect(mocks.run).toHaveBeenCalledExactlyOnceWith({
       scheduleId: 'routine-id',
     });
-    fireEvent.click(screen.getByRole('tab', { name: 'Run History' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Runs' }));
     fireEvent.click(screen.getByText('Run transcript'));
     expect(mocks.openWithSplit).toHaveBeenCalledWith(
       { type: 'chat', id: 'chat-id' },
@@ -838,7 +842,11 @@ describe('routine editor triggers', () => {
 
   it('saves whether the routine’s runs show in Home and Agents', async () => {
     render(() => <Routine />);
-    const visibility = screen.getByRole('button', { name: 'Runs hidden' });
+    // A narrow pane shows the details panel on request.
+    fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
+    const visibility = await screen.findByRole('button', {
+      name: 'Runs hidden',
+    });
     visibility.focus();
     fireEvent.keyDown(visibility, { key: 'Enter' });
     fireEvent.keyDown(

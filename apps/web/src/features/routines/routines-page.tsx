@@ -56,7 +56,6 @@ function RoutinesContent() {
           source={source}
           userId={userId}
           targetLabel={display.targetLabel}
-          targetModel={display.targetModel}
           registerSearchFocus={(focus) => (focusSearch = focus)}
           onCreate={create}
           onOpen={(id) => open(id)}

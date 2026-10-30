@@ -147,6 +147,15 @@ vi.mock('@queries/agents/models', () => ({
   }),
 }));
 
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+);
+
 let styles: HTMLStyleElement;
 beforeEach(() => {
   vi.clearAllMocks();
@@ -176,11 +185,13 @@ async function mount(): Promise<void> {
   // A new routine starts on the start screen; an unsent draft resumes editing.
   await waitFor(() =>
     expect(
-      screen.queryByRole('button', { name: /Start blank/ }) ??
+      screen.queryByRole('button', { name: /Start from scratch/ }) ??
         screen.queryByRole('textbox', { name: 'Routine name' })
     ).toBeTruthy()
   );
-  const blank = screen.queryByRole('button', { name: /Start blank/ });
+  const blank = screen.queryByRole('button', {
+    name: /Start from scratch/,
+  });
   if (blank) {
     fireEvent.click(blank);
     const add = await screen.findByRole('button', { name: 'Add step' });
@@ -721,13 +732,13 @@ describe('routine composer start', () => {
         <RoutineCreator onCreated={host.created} />
       </QueryClientProvider>
     ));
-    expect(
-      await screen.findByRole('heading', {
-        name: 'What should this routine do?',
-      })
-    ).toBeTruthy();
+    const brief = await screen.findByRole('article', {
+      name: 'Routine template: Morning brief',
+    });
     expect(screen.queryByRole('button', { name: 'Create routine' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /Morning brief/ }));
+    fireEvent.click(
+      within(brief).getByRole('button', { name: 'Use template' })
+    );
     expect(
       (
         await screen.findByRole<HTMLInputElement>('textbox', {

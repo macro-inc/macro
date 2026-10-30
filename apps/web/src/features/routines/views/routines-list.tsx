@@ -9,18 +9,12 @@ export function RoutinesListView(props: {
   source: RoutineListSource;
   userId: Accessor<string | undefined>;
   targetLabel(target: RoutineTarget): string;
-  targetModel(target: RoutineTarget): string | undefined;
   showTitle?: boolean;
   registerSearchFocus?: (focus: () => void) => void;
   onCreate(): void;
   onOpen(id: string): void;
 }) {
-  const rows = createRoutineRows(
-    props.source,
-    props.userId,
-    props.targetLabel,
-    props.targetModel
-  );
+  const rows = createRoutineRows(props.source, props.userId, props.targetLabel);
   return (
     <RoutinesList
       showTitle={props.showTitle}

@@ -36,7 +36,6 @@ export function RoutineSettings() {
         source={source}
         userId={userId}
         targetLabel={display.targetLabel}
-        targetModel={display.targetModel}
         showTitle={false}
         onCreate={create}
         onOpen={open}
