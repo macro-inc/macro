@@ -70,6 +70,35 @@ def _t(p, case=False):
     return t * 0.96 if case else t
 
 
+def _up(p):
+    """Stem growth above Regular only (0 at Light and Regular). Used, like
+    p.hair, for proportions that change only towards ExtraBold; the kink sits
+    on the Regular master, so the variable font still interpolates."""
+    return max(0.0, p.grow)
+
+
+def _contrast(p):
+    """Horizontal / vertical stroke ratio of the house (p.hair / p.stem):
+    0.88 up to Regular, thinning to 0.74 at ExtraBold."""
+    return p.hair / p.stem
+
+
+def _curve(p, case=False):
+    """(side, horizontal) strokes of the open curved marks: breve, cedilla and
+    ogonek share them so they read as one hand. Sides are 0.8 of the straight
+    mark stroke; horizontals follow the house contrast a little more strongly
+    (0.8 of the side at Regular, 0.72 at ExtraBold) so the small counters of
+    the cups and hooks stay open."""
+    ws = 0.8 * _t(p, case)
+    return ws, ws * (0.8 - 0.08 * _up(p) / 70)
+
+
+def _mark_cut(ws):
+    """45-degree chamfer leg on a mark's free terminal: 0.36 of the mark's own
+    stroke, the same proportion as p.cut to the stem."""
+    return 0.36 * ws
+
+
 def _mark(shape, p, top=None, bottom=None):
     """Spacing mark with small even sidebearings. `top` / `bottom` set the
     attachment x (in drawn coordinates) when it is not the outline centre."""
@@ -233,23 +262,30 @@ def _chevron(p, case, flip=False):
 
 
 def _dot_size(p, case):
-    return (0.72 if case else 0.75) * p.stem + 18
+    """Accent dots are the house dot (the i dot and the period)."""
+    return p.dot
 
 
 def _dot_y(p, case):
-    """Centre height of dieresis / dotaccent dots."""
+    """Centre height of dieresis / dotaccent dots. Lowercase dots line up with
+    the i dot (top at the ascender), so i, ï and ü show one dot; .case dots
+    span the .case zone (772-930) at ExtraBold."""
     if case:
-        return 840 + 0.12 * p.grow
-    return 702 - 0.08 * p.grow
+        return 846 + 0.08 * p.grow
+    return P.ASC - _dot_size(p, case) / 2
 
 
 def _dieresis_shape(p, case, narrow=False):
     d = _dot_size(p, case)
-    gap = p.w(112 if case else 100, 0.2)
+    # The gap narrows towards ExtraBold, where the dots are large.
+    gap = p.w(104 if case else 95, -0.28)
     if narrow:
-        # For the i: smaller dots set closer, so the dieresis stays about as
-        # wide as the dotless i and clears neighbouring ascenders (naïf, haïk).
-        d, gap = d * 0.92, p.w(66, 0.2)
+        # For the i: the dots set closer so the pair overhangs the dotless i
+        # by at most about half a sidebearing and clears neighbouring
+        # ascenders (naïf, haïk, laïque). That fits the full house dot up to
+        # Regular; towards ExtraBold, where the sidebearings are tight, the
+        # dots give up 10% of their side rather than crowd an l or k.
+        d, gap = d * (1 - 0.1 * _up(p) / 70), p.w(56, 0.1) - 0.3 * _up(p)
     y = _dot_y(p, case)
     off = (d + gap) / 2
     return dot(-off, y, d) + dot(off, y, d)
@@ -271,16 +307,21 @@ def _macron_shape(p, case):
 
 
 def _ring_shape(p, case):
+    """A squircle ring, lighter than the other marks (a closed ring reads
+    darker than an open stroke). Above Regular it grows faster than the
+    stroke and its top and bottom thin with the house contrast, so the
+    counter stays at least 80 units each way at ExtraBold. The .case ring
+    sits on the .case floor at every weight (clear of the apex of A) and
+    grows up, to about 958 at ExtraBold, inside the line box."""
+    up = _up(p)
     if case:
-        # Heavier rings grow down towards the apex of A rather than up past
-        # the .case zone, so the counter stays round.
-        b = UC_BOT - 0.24 * p.grow
-        w, h = p.w(174, 0.6), p.w(150, 0.36)
+        b = UC_BOT
+        w, h = p.w(174, 0.6) + 0.15 * up, p.w(150, 0.36) + 0.16 * up
     else:
         b = LC_BOT - 4 - 0.1 * p.grow
-        w, h = p.w(170, 0.45), p.w(164, 0.35)
+        w, h = p.w(170, 0.45) + 0.4 * up, p.w(164, 0.35) + 0.1 * up
     ws = 0.3 * p.stem + 26
-    wt = ws * 0.86
+    wt = ws * _contrast(p)
     return ring(-w / 2, b, w / 2, b + h, ws, wt, n=p.sq, n_in=p.sq_in)
 
 
@@ -290,9 +331,7 @@ def _breve_shape(p, case):
     b = _bot(case)
     h = (100 if case else 118) + 0.25 * p.grow
     w = p.w(244 if case else 220, 0.9)
-    t = _t(p, case)
-    ws = t * 0.8
-    wb = t * 0.76
+    ws, wb = _curve(p, case)
     r = h * 0.7  # height of the curved part; above it the sides run straight
     top, cy = b + h, b + r
     rxi, ryi = w / 2 - ws, r - wb
@@ -307,7 +346,7 @@ def _breve_shape(p, case):
         _rev(_quadrant(0, cy, rxi, ryi, p.sq_in, 2)),
         (-rxi, top),
     ])
-    c = p.cut * 0.45  # shorter than the straight part of the tip at every weight
+    c = _mark_cut(ws)  # shorter than the straight part of the tip at every weight
     return shape - chamfer(-w / 2, top, c, "nw") - chamfer(w / 2, top, c, "ne")
 
 
@@ -374,24 +413,21 @@ def _tilde_shape(p, case):
 # Cedilla and ogonek
 
 
-def _hook_t(p):
-    return 0.45 * p.stem + 26
-
-
 def _cedilla_shape(p):
     """A short stub hanging from the letter into a squircle hook that turns
     right and back left, ending in a chamfered tail. Its top overlaps the
-    base by 14 units so it joins c, C, s, t... at every weight."""
-    t = _hook_t(p)
-    st, wt, wb, ws = t * 0.8, t * 0.6, t * 0.64, t * 0.86
+    base by 14 units so it joins c, C, s, t... at every weight. Strokes and
+    chamfer come from `_curve` / `_mark_cut`, shared with ogonek and breve."""
+    ws, wh = _curve(p)
+    st, wt, wb = ws * 0.92, wh, wh
     top, yt = 14, -34
-    h = p.w(126, 0.55)
+    h = p.w(130, 0.5)  # its foot stays above the descender (-199 at ExtraBold)
     rx = p.w(96, 0.6)
     yb = yt - h
     cy, ry = (yt + yb) / 2, h / 2
     cyi, ryi, rxi = (yt - wt + yb + wb) / 2, (h - wt - wb) / 2, rx - ws
     xt = -rx * 0.5
-    c = p.cut * 0.45
+    c = _mark_cut(ws)
     q0 = _quadrant(0, cy, rx, ry, p.sq, 0)
     q0 = _split(q0, _solve(q0, 0, st / 2))[0]  # up to the stub's right edge
     return _contour((-st / 2, top), [
@@ -411,18 +447,20 @@ def _cedilla_shape(p):
 
 def _ogonek_shape(p):
     """The left half of a tall squircle ring, its top meeting the letter and
-    its foot running right into a thinner chamfered tail."""
-    t = _hook_t(p)
-    ws, wt, wb = t * 0.88, t * 0.72, t * 0.6
+    its foot running right into a chamfered tail. Same strokes and chamfers
+    as the cedilla; it widens with weight so its inner curve keeps about the
+    same radius (about 28 units) instead of closing into a slot."""
+    ws, wh = _curve(p)
+    wt, wb = wh, wh
     top = 10
     h = p.w(180, 0.3)
-    rx = p.w(158, 0.6) / 2
+    rx = p.w(160, 1.0) / 2
     n, n_in = p.sq * 0.87, p.sq_in * 0.9
     yb = top - h
     cy, ry = (top + yb) / 2, h / 2
     cyi, ryi, rxi = (top - wt + yb + wb) / 2, (h - wt - wb) / 2, rx - ws
-    xt = rx * 0.9
-    c = p.cut * 0.45
+    xt = rx * 0.85
+    c = _mark_cut(ws)
     shape = _contour((0, top), [
         _quadrant(0, cy, rx, ry, n, 1),
         _quadrant(0, cy, rx, ry, n, 2),
@@ -433,7 +471,7 @@ def _ogonek_shape(p):
         _rev(_quadrant(0, cyi, rxi, ryi, n_in, 2)),
         _rev(_quadrant(0, cyi, rxi, ryi, n_in, 1)),
     ])
-    return shape - chamfer(0, top, p.cut * 0.5, "ne")
+    return shape - chamfer(0, top, c, "ne")
 
 
 # ---------------------------------------------------------------------------

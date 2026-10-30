@@ -18,6 +18,7 @@ from ..geom import (
     band,
     below,
     chamfer,
+    crotch_trap,
     diag,
     dot,
     half_plane,
@@ -78,7 +79,7 @@ def _comma(p, x0, y0):
     """The comma: the period's square at (x0, y0) with a wedge tail growing
     down and to the left from its bottom edge."""
     s = p.dot
-    c = s * 0.3
+    c = s * 0.22  # the dot's chamfer (geom.dot)
     tail = s * 0.6 + 92  # length of the tail below the square
     tw = s * 0.34  # width of the flat tail end
     tl = x0 - s * 0.06  # left corner of the tail end
@@ -200,6 +201,14 @@ def colon(p):
     return G(per.shape + per.shape.move(0, P.XH - s), width=per.width)
 
 
+@glyph("colon.case")
+def colon_case(p):
+    """The colon raised so its dots centre on the figures' and capitals'
+    middle (CAP / 2): 09:30, TIME:. calt picks it between figures."""
+    g = ref("colon")
+    return G(g.shape.move(0, (P.CAP - P.XH) / 2), width=g.width)
+
+
 @glyph("semicolon", 0x003B)
 def semicolon(p):
     s, sb, adv = _period(p)
@@ -260,10 +269,12 @@ def _question(p):
     top_b = yb_c + ry_b
     ya = top_b - wt  # bottom of the hook's outer box
     cy = (ya + top) / 2
-    # Upper hook: top half, left side down to the terminal (kept clear of
-    # the squircle's quadrant join at cy so the outline is the same at every
-    # weight).
-    y_cut = cy - p.cut - (top - cy) * 0.06
+    # Upper hook: top half, left side down to the terminal, which is cut
+    # just under the hook's widest point (as in Inter) so the aperture above
+    # the neck stays open at heavy weights. Its chamfer always reaches past
+    # the squircle's quadrant join at cy, so the outline is the same at every
+    # weight.
+    y_cut = cy - 0.45 * p.cut
     hook = ring(0, ya, W, top, ws, wt, n=n, n_in=n_in)
     hook = hook - (left_of(W / 2) & below(y_cut)) - (right_of(W / 2) & below(cy))
     xt = outer_x(0, W, ya, top, n, y_cut, side="left")
@@ -357,7 +368,7 @@ def _tick(p, x0):
     """A straight quote: a slightly tapered vertical tick from cap height."""
     w = p.stem * 1.0
     h = P.CAP * 0.36
-    wb = w * 0.72
+    wb = w * 0.78
     cx = x0 + w / 2
     c = 0.36 * w
     sh = poly([
@@ -377,7 +388,9 @@ def quotesingle(p):
 
 @glyph("quotedbl", 0x0022)
 def quotedbl(p):
-    pitch = p.stem + p.stem * 0.6 + 60
+    # The gap grows more slowly than the ticks (about 64 / 71 / 99 at the
+    # top at 300 / 400 / 800), so the pair stays one mark at heavy weights.
+    pitch = p.stem * 1.4 + 38
     return G(_lr(_tick(p, 0) + _tick(p, pitch)), l=p.sb * 1.25, r=p.sb * 1.25)
 
 
@@ -417,13 +430,13 @@ for _sfx, _yc, _codes in (("", P.AXIS, (0x2039, 0x203A, 0x00AB, 0x00BB)), (".cas
 
 
 def _dash(p, length, yc, sb):
-    t = p.hair * 1.05
+    t = p.hair * 1.12  # about 63 / 81 / 126 at 300 / 400 / 800, as in Inter
     return G(rect(0, yc - t / 2, length, yc + t / 2), l=sb, r=sb)
 
 
 @glyph("hyphen", 0x002D, 0x00AD)
 def hyphen(p):
-    return _dash(p, p.w(214, 0.5), P.AXIS, p.sb * 0.82)
+    return _dash(p, p.w(280, 0.5), P.AXIS, p.sb * 0.82)
 
 
 @glyph("endash", 0x2013)
@@ -438,7 +451,7 @@ def emdash(p):
 
 @glyph("hyphen.case")
 def hyphen_case(p):
-    return _dash(p, p.w(214, 0.5), P.CASE_AXIS, p.sb * 0.82)
+    return _dash(p, p.w(280, 0.5), P.CASE_AXIS, p.sb * 0.82)
 
 
 @glyph("endash.case")
@@ -481,7 +494,9 @@ def _paren(p, dy=0):
 
 
 def _paren_sb(p):
-    return p.sbr * 1.35, p.sbr * 0.7
+    """(outer, inner): the inner side is a full round sidebearing, so (on)
+    and (10) don't look clamped."""
+    return p.sbr * 1.35, p.sbr * 1.0
 
 
 _pair("parenleft", "parenright", (0x0028, 0x0029), _paren, _paren_sb)
@@ -497,7 +512,7 @@ def _bracket(p, dy=0):
 
 
 def _bracket_sb(p):
-    return p.sb * 1.35, p.sb * 0.75
+    return p.sb * 1.35, p.sbr * 1.05
 
 
 _pair("bracketleft", "bracketright", (0x005B, 0x005D), _bracket, _bracket_sb)
@@ -545,7 +560,7 @@ def _brace(p, dy=0):
 
 
 def _brace_sb(p):
-    return p.sb * 0.9, p.sb * 0.75
+    return p.sb * 0.9, p.sbr * 1.05
 
 
 _pair("braceleft", "braceright", (0x007B, 0x007D), _brace, _brace_sb)
@@ -865,38 +880,51 @@ def registered(p):
     return G(sh + _small_r(p, rx0, ry0, rh, rw, st, th), l=p.csbr * 0.6, r=p.csbr * 0.6)
 
 
+def _small_m(p, x0, y0, h, w, st):
+    """A small M built like the capital: square-topped vertical sides,
+    diagonals that start inside the side tops and meet at a flat vertex on
+    the baseline, and ink traps at the three inner vertices."""
+    td = st * 0.94  # diagonals (M: 0.86 / 0.92 of its sides)
+    fv = st * 0.87  # flat vertex on the baseline
+    e = st * 0.3  # diagonals start inside the side tops
+    top = y0 + h
+    cx = x0 + w / 2
+    # Left diagonal by its left edge, from (cx - fv/2, y0) up to (x0 + e, top).
+    xb, xt = cx - fv / 2, x0 + e
+    hw = td * math.hypot(xt - xb, h) / h
+
+    def xl(y):  # the left diagonal's left edge at height y
+        return xb + (xt - xb) * (y - y0) / h
+
+    yl = y0 + (x0 + st - xb) * h / (xt - xb)  # where it meets the side's inner edge
+    yv = y0 + (fv / 2 - hw) * h / (xt - xb)  # inner vertex, on the centre line
+    left = [(x0, y0), (x0 + st, y0), (x0 + st, yl), (xb, y0)]
+    right = [(2 * cx - x, y) for x, y in reversed(left)]
+    sh = poly(left + right + [(x0 + w, top), (2 * cx - xt - hw, top), (cx, yv), (xt + hw, top), (x0, top)])
+    d = p.trap * 0.5
+    down = (xb - xt, -h)  # along the left diagonal, downwards
+    up = (xt - xb, h)
+    sh = sh - crotch_trap((x0 + st, yl), (0, -1), down, d)
+    sh = sh - crotch_trap((2 * cx - x0 - st, yl), (0, -1), (-down[0], down[1]), d)
+    sh = sh - crotch_trap((cx, yv), up, (-up[0], up[1]), d)
+    return sh
+
+
 @glyph("trademark", 0x2122)
 def trademark(p):
-    """™ : superior T and M hanging from the cap height."""
+    """™ : superior T and M hanging from the cap height, drawn like the
+    capitals (square tops, the M's vertex on its baseline) with strokes that
+    grow more slowly than the text above Regular."""
     reg = P.params(400)
     st = _damp(p.stem * 0.66, reg.stem * 0.66, 0.6)
-    th = _damp(p.hair * 0.66, reg.hair * 0.66, 0.6)
+    th = _damp(p.hair * 0.7, reg.hair * 0.7, 0.6)
     h = P.CAP * 0.37
     top = P.CAP
     y0 = top - h
-    c = 0.36 * st
-    tw = h * 0.86 + 0.3 * p.grow
-    T = rect(0, top - th, tw, top) + rect(tw / 2 - st / 2, y0, tw / 2 + st / 2, top - th + 1)
-    mx0 = tw + 48 + 0.2 * p.grow
-    mx1 = mx0 + h * 1.1 + 0.8 * p.grow
-    mid = (mx0 + mx1) / 2
-    dw = st * 0.88
-    vy_out = y0 + h * 0.1  # the V's lowest point
-    dx = mid - (mx0 + st)
-    # Upper edges run from the stems' inner top corners to the inner vertex.
-    # The lower edges are parallel, dv below.
-    dy_guess = top - vy_out
-    for _ in range(20):
-        dv = dw * math.hypot(dx, dy_guess) / dx
-        dy_guess = top - (vy_out + dv)
-    vy_in = vy_out + dv
-    k = (top - vy_in) / dx  # slope of the diagonals
-    ya = vy_out + (mid - (mx0 + st * 0.5)) * k
-    V = poly([
-        (mx0 + st * 0.5, top), (mx0 + st, top), (mid, vy_in), (mx1 - st, top), (mx1 - st * 0.5, top),
-        (mx1 - st * 0.5, ya), (mid, vy_out), (mx0 + st * 0.5, ya),
-    ])
-    M = rect(mx0, y0, mx0 + st, top, nw=c) + rect(mx1 - st, y0, mx1, top, ne=c) + V
+    tw = h * 0.84 + 0.2 * p.grow
+    T = rect(0, top - th, tw, top) + rect(tw / 2 - st / 2, y0, tw / 2 + st / 2, top - th / 2)
+    mx0 = tw + 46 + 0.15 * p.grow
+    M = _small_m(p, mx0, y0, h, h * 1.08 + 0.6 * p.grow, st)
     return G(T + M, l=p.csb * 0.55, r=p.csb * 0.55)
 
 
@@ -910,22 +938,24 @@ def _arrow_sb(p):
     return p.sb * 1.0
 
 
-@glyph("arrowright", 0x2192)
-def arrowright(p):
-    sh = _arrow(p, p.w(ARROW_LEN, 0.5)).move(0, P.AXIS)
-    return G(sh, l=_arrow_sb(p), r=_arrow_sb(p))
+# Horizontal arrows sit on the math axis; their .case forms (A→B, with
+# capitals and figures) on the case axis, like hyphen.case.
+for _sfx, _yc in (("", P.AXIS), (".case", P.CASE_AXIS)):
 
+    @glyph("arrowright" + _sfx, *((0x2192,) if not _sfx else ()))
+    def arrowright(p, yc=_yc):
+        sh = _arrow(p, p.w(ARROW_LEN, 0.5)).move(0, yc)
+        return G(sh, l=_arrow_sb(p), r=_arrow_sb(p))
 
-@glyph("arrowleft", 0x2190)
-def arrowleft(p):
-    sh = _arrow(p, p.w(ARROW_LEN, 0.5)).flip_x(0).move(0, P.AXIS)
-    return G(sh, l=_arrow_sb(p), r=_arrow_sb(p))
+    @glyph("arrowleft" + _sfx, *((0x2190,) if not _sfx else ()))
+    def arrowleft(p, yc=_yc):
+        sh = _arrow(p, p.w(ARROW_LEN, 0.5)).flip_x(0).move(0, yc)
+        return G(sh, l=_arrow_sb(p), r=_arrow_sb(p))
 
-
-@glyph("arrowboth", 0x2194)
-def arrowboth(p):
-    sh = _arrow(p, p.w(ARROW_LEN + 160, 0.5), heads=(True, True)).move(0, P.AXIS)
-    return G(sh, l=_arrow_sb(p), r=_arrow_sb(p))
+    @glyph("arrowboth" + _sfx, *((0x2194,) if not _sfx else ()))
+    def arrowboth(p, yc=_yc):
+        sh = _arrow(p, p.w(ARROW_LEN + 160, 0.5), heads=(True, True)).move(0, yc)
+        return G(sh, l=_arrow_sb(p), r=_arrow_sb(p))
 
 
 @glyph("arrowup", 0x2191)
@@ -940,24 +970,24 @@ def arrowdown(p):
     return G(sh, l=_arrow_sb(p), r=_arrow_sb(p))
 
 
-def _diag_arrow(p, deg):
+def _diag_arrow(p, deg, cy=P.CAP / 2 - 30):
     side = 560 + 0.3 * p.grow
     t = p.hair * 1.1
     length = (side - t * 0.36) * SQ2
     sh = _arrow(p, length).rotate(deg)
     b = sh.bounds()
-    cy = (P.CAP) / 2 - 30
     return sh.move(0, cy - (b[1] + b[3]) / 2)
 
 
-@glyph("uni2197", 0x2197)
-def arrow_ne(p):
-    return G(_diag_arrow(p, 45), l=_arrow_sb(p), r=_arrow_sb(p))
+for _sfx, _cy in (("", P.CAP / 2 - 30), (".case", P.CAP / 2)):
 
+    @glyph("uni2197" + _sfx, *((0x2197,) if not _sfx else ()))
+    def arrow_ne(p, cy=_cy):
+        return G(_diag_arrow(p, 45, cy), l=_arrow_sb(p), r=_arrow_sb(p))
 
-@glyph("uni2198", 0x2198)
-def arrow_se(p):
-    return G(_diag_arrow(p, -45), l=_arrow_sb(p), r=_arrow_sb(p))
+    @glyph("uni2198" + _sfx, *((0x2198,) if not _sfx else ()))
+    def arrow_se(p, cy=_cy):
+        return G(_diag_arrow(p, -45, cy), l=_arrow_sb(p), r=_arrow_sb(p))
 
 
 __all__ = ["PROOF_TEXT"]

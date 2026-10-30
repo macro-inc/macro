@@ -1,17 +1,18 @@
 """Straight and diagonal lowercase: f h i j k l m r t u v w x y z, the dotless
-i and j, and the f_i / f_l ligatures.
+i and j, the f_i / f_l ligatures and the tailed l.ss02.
 
 Shoulders (h m r u) reuse n's arch from `parts.arch` with the same joins and
-ink traps. Hooks (f t j) share one construction, `_hook`: a squircle quadrant
-turning a stem into a horizontal stroke that ends in a vertical cut with its
-outer corner chamfered. Diagonals (k v w x y z) are built from their edges
-so the flat vertices and flat-cut ends land exactly where they should.
+ink traps (`geom.stem_trap`). Hooks (f t j l.ss02) share one construction,
+`_hook`: a squircle quadrant turning a stem into a horizontal stroke that ends
+in a vertical cut with its outer corner chamfered. Diagonals (k v w x y z) are
+built from their edges so the flat vertices and flat-cut ends land exactly
+where they should; their inner vertices take `geom.crotch_trap`.
 """
 
 import math
 
 from .. import params as P
-from ..geom import Shape, above, below, chamfer, column, dot, half_plane, left_of, notch, poly, rect, right_of, squircle
+from ..geom import above, below, chamfer, column, crotch_trap, dot, half_plane, left_of, poly, rect, right_of, squircle, stem_trap, superness
 from . import G, glyph
 from .parts import arch, solve_cx
 
@@ -77,19 +78,32 @@ def _arch_through(p, xl, xr, yc, out_pt, join_in):
 
 
 def _shoulder_trap(p, x, y, side="right", up=True):
-    """n's ink trap where an arch leaves a stem edge x at the crotch height y
-    (geom.stem_trap with the same tip and mouth), except that the cut starts
-    just below the crotch, so the crotch itself is always removed and no
-    sliver of the arch's inner curve survives next to it at any weight."""
-    d = p.trap * 1.3
-    if d < 1:
-        return Shape()
-    sx = 1 if side == "right" else -1
-    sy = 1 if up else -1
-    tip = (x - sx * d * 0.22, y + sy * d)
-    a = (x + sx * (d * 0.05 + 0.3), y - sy * (d * 0.4 + 4))
-    b = (x + sx * d * 0.95, y + sy * d * 1.1)
-    return notch(tip, a, b)
+    """n's ink trap where an arch leaves a stem edge x at the crotch height y."""
+    return stem_trap(x, y, p.trap * 1.3, side=side, up=up)
+
+
+def _sq_tangent(box, n, deg):
+    """Point on the upper-right quadrant of `squircle(*box, n)` (the drawn
+    cubic, not the ideal curve) where the outline falls `deg` degrees below
+    the horizontal, going right."""
+    x0, y0, x1, y1 = box
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    rx, ry = (x1 - x0) / 2, (y1 - y0) / 2
+    k = superness(n)
+    want = math.tan(math.radians(deg))
+    lo, hi = 0.0, 1.0  # t = 0 at the right extreme, 1 at the top
+    for _ in range(60):
+        t = (lo + hi) / 2
+        dx = 2 * (1 - t) * t * (1 - k) * rx + t * t * k * rx
+        dy = (1 - t) ** 2 * k * ry + 2 * (1 - t) * t * (1 - k) * ry
+        if dy > want * dx:
+            lo = t
+        else:
+            hi = t
+    t = (lo + hi) / 2
+    pts = [(cx + rx, cy), (cx + rx, cy + k * ry), (cx + k * rx, cy + ry), (cx, cy + ry)]
+    c = [(1 - t) ** 3, 3 * (1 - t) ** 2 * t, 3 * (1 - t) * t * t, t**3]
+    return (sum(ci * q[0] for ci, q in zip(c, pts)), sum(ci * q[1] for ci, q in zip(c, pts)))
 
 
 def _hook(p, x0, y_end, rise, rx, ext, wb):
@@ -131,40 +145,6 @@ def _unit(dx, dy):
     return (dx / d, dy / d)
 
 
-def _crotch_trap(c, d1, d2, depth, reach=1.25):
-    """Ink trap at an acute crotch `c` whose two edges run into the white
-    along unit directions d1 and d2. The cut starts on the two edges `reach *
-    depth` from the crotch and deepens it by `depth` along the bisector, so
-    the crotch stays a clean V."""
-    if depth < 1:
-        return Shape()
-    bx, by = d1[0] + d2[0], d1[1] + d2[1]
-    bl = math.hypot(bx, by)
-    bx, by = bx / bl, by / bl
-    tip = (c[0] - bx * depth, c[1] - by * depth)
-    m = depth * reach
-    # Nudge the mouth points a hair into the white so no sliver survives.
-    a = (c[0] + d1[0] * m + bx * 1.5, c[1] + d1[1] * m + by * 1.5)
-    b = (c[0] + d2[0] * m + bx * 1.5, c[1] + d2[1] * m + by * 1.5)
-    return notch(tip, a, b)
-
-
-def _arm_trap(p, x, y, d_arm, depth):
-    """Ink trap where a diagonal arm leaves a stem's right edge x upwards at
-    height y (k): like the shoulder trap, the cut runs down along the stem
-    edge, biting only a little into the stem, and opens along the arm. The
-    mouth points scale with the depth so the crotch is always inside the
-    cut."""
-    if depth < 1:
-        return Shape()
-    tip = (x - depth * 0.25, y - depth)
-    a = (x + depth * 0.04, y + depth * 0.5)
-    m = depth * 1.1
-    nx, ny = -d_arm[1], d_arm[0]  # off the arm's upper edge, into the white
-    b = (x + d_arm[0] * m + nx * depth * 0.04, y + d_arm[1] * m + ny * depth * 0.04)
-    return notch(tip, a, b)
-
-
 def _edge_stroke(xb, yb, xt, yt, w, side="left"):
     """A straight stroke of perpendicular thickness w with flat (horizontal)
     ends at yb and yt, positioned by one edge running (xb, yb) -> (xt, yt).
@@ -190,8 +170,13 @@ def _i_stem(p, height=P.XH):
     return rect(0, 0, p.stem, height, nw=p.cut)
 
 
+I_DOT_GAP = 64  # least white between the i/j dot and the stem (Inter ExtraBold)
+
+
 def _i_dot(p, cx):
-    side = p.dot
+    # The dot's top stays at the ascender; at ExtraBold p.dot would leave
+    # only 62 units above the stem, so it gives up a unit or two there.
+    side = min(p.dot, P.ASC - P.XH - I_DOT_GAP)
     return dot(cx, P.ASC - side / 2, side)
 
 
@@ -202,6 +187,16 @@ def _i_dot(p, cx):
 @glyph("l", 0x006C)
 def l(p):
     return G(_i_stem(p, P.ASC), l=p.sb, r=p.sb)
+
+
+@glyph("l.ss02")
+def l_ss02(p):
+    # Stylistic set 2 (distinct I, l and 1): l with a short tail turning
+    # right at the baseline, drawn like t's foot but shorter.
+    s = p.stem
+    hook, yc, _ = _hook(p, 0, -P.OS, p.w(160, 0.2), p.w(124, 0.62), p.w(88, 0.25), p.hair * 1.04)
+    shape = hook + rect(0, yc, s, P.ASC, nw=p.cut)
+    return G(shape, l=p.sb, r=p.sbr * 0.3, anchors={"top": s / 2, "bottom": s / 2})
 
 
 @glyph("dotlessi", 0x0131)
@@ -283,6 +278,9 @@ def u(p):
     return G(shape, l=p.sb * 0.92, r=p.sb, anchors={"bottom": xr - s / 2})
 
 
+R_FALL = 28  # steepest fall of r's underside at the terminal, in degrees
+
+
 @glyph("r", 0x0072)
 def r(p):
     s = p.stem
@@ -295,6 +293,16 @@ def r(p):
     lo, hi = cxo + p.cut, ibox[2]
     x_term = lo + (hi - lo) * 0.6
     flag = a & left_of(x_term)
+    # The terminal is cut vertically, so its lower corner is 90 degrees less
+    # the fall of the counter's curve there. The heavy counter is narrow and
+    # already falls steeply under the cut (a blade). Past the point where it
+    # falls R_FALL degrees, run the underside straight on along its tangent,
+    # which keeps that corner at 90 - R_FALL at every weight.
+    tx, ty = _sq_tangent(ibox, p.sq_in, R_FALL)
+    slope = math.tan(math.radians(R_FALL))
+    # Half a unit below the tangent, so the cut meets the curve cleanly.
+    spur = half_plane((tx + 400, ty - 0.5 - 400 * slope), (tx, ty - 0.5)) & right_of(tx)
+    flag = flag - spur
     flag = flag - chamfer(x_term, _sq_y(obox, p.sq, x_term), p.cut, "ne")
     shape = rect(0, 0, s, P.XH, nw=p.cut) + flag
     shape = shape - _shoulder_trap(p, s, crotch)
@@ -338,7 +346,7 @@ def _f_hook(p, x0, ext):
 def _f_dims(p):
     """(bar left of the stem, hook reach past the stem, bar right of the
     stem). The hook and the bar end on the same vertical."""
-    return p.w(70, 0.35), p.w(114, 0.3), p.w(114, 0.3)
+    return p.w(86, 0.15), p.w(122, 0.2), p.w(122, 0.2)
 
 
 def _f_parts(p, ext=None):
@@ -354,7 +362,9 @@ def _f_parts(p, ext=None):
 
 
 def _f_metrics(p):
-    return p.sbr * 0.5, -p.sbr * 0.1
+    # The hook and bar overhang the next letter; kerning tightens f before
+    # round letters and leaves it at this distance from stems.
+    return p.sbr * 0.5, p.sbr * 0.25
 
 
 @glyph("f", 0x0066)
@@ -440,10 +450,11 @@ def k(p):
     leg = leg - half_plane(c0, (c0[0] + ad[0], c0[1] + ad[1]))
     shape = rect(0, 0, s, P.ASC, nw=p.cut) + arm + leg
     # Ink traps: the acute crotch above the arm at the stem, and the one
-    # under the arm where the leg branches off.
-    shape = shape - _arm_trap(p, s, y_up, ad, p.trap * 1.3)
+    # under the arm where the leg branches off. Both are vertices of two
+    # straight edges, so they take the short vertex trap.
+    shape = shape - crotch_trap((s, y_up), (0, 1), ad, p.trap)
     c2 = _isect((s, y_low), ad, (xr_leg - hw_l, 0), ld)
-    shape = shape - _crotch_trap(c2, (-ad[0], -ad[1]), (-ld[0], -ld[1]), p.trap * 0.9, reach=0.8)
+    shape = shape - crotch_trap(c2, (-ad[0], -ad[1]), (-ld[0], -ld[1]), p.trap)
     return G(shape, l=p.sb, r=p.sbr * 0.3)
 
 
@@ -476,7 +487,14 @@ def _v_geom(p, W, vw, w):
 
 
 def _v_width(p):
-    return p.w(470, 0.9)
+    return p.w(505, 0.9)
+
+
+# Diagonal sides: wider than DESIGN.md's 0.35 * sbr, because the flat-cut
+# stroke ends reach the sidebearing over their whole width.
+V_SB = 0.48
+W_SB = 0.52
+X_SB = 0.5
 
 
 @glyph("v", 0x0076)
@@ -488,8 +506,8 @@ def v(p):
     shape = left + left.flip_x(W / 2)
     d1 = _unit(-vx0, P.XH)
     d2 = (-d1[0], d1[1])
-    shape = shape - _crotch_trap(c, d1, d2, p.trap * 1.3)
-    return G(shape, l=p.sbr * 0.35, r=p.sbr * 0.35)
+    shape = shape - crotch_trap(c, d1, d2, p.trap)
+    return G(shape, l=p.sbr * V_SB, r=p.sbr * V_SB)
 
 
 @glyph("y", 0x0079)
@@ -507,13 +525,13 @@ def y(p):
     shape = left + right
     d1 = _unit(-vx0, P.XH)
     d2 = (-d1[0], d1[1])
-    shape = shape - _crotch_trap(c, d1, d2, p.trap * 1.3)
-    return G(shape, l=p.sbr * 0.35, r=p.sbr * 0.35, anchors={"top": W / 2})
+    shape = shape - crotch_trap(c, d1, d2, p.trap)
+    return G(shape, l=p.sbr * V_SB, r=p.sbr * V_SB, anchors={"top": W / 2})
 
 
 @glyph("w", 0x0077)
 def w(p):
-    W = p.w(706, 1.5)
+    W = p.w(751, 1.5)
     wo = p.stem * 0.93  # outer strokes
     wi = p.stem * 0.84  # inner strokes
     vw = p.stem * 0.86  # bottom vertices
@@ -537,17 +555,17 @@ def w(p):
     d_in = _unit(xt_l - xb_l, P.XH)  # stroke 2 runs up-right
     # Bottom crotch: stroke 1's right edge meets stroke 2's left edge.
     c1 = _isect((vx0 + hw1, 0), d_out, (xb_l, 0), d_in)
-    trap = _crotch_trap(c1, d_out, d_in, p.trap * 1.2)
+    trap = crotch_trap(c1, d_out, d_in, p.trap)
     shape = shape - trap - trap.flip_x(W / 2)
     # Apex crotch: stroke 2's right edge meets stroke 3's left edge, below.
     c2 = (W / 2, _isect((vx0 + vw, 0), d_in, (W - vx0 - vw, 0), (-d_in[0], d_in[1]))[1])
-    shape = shape - _crotch_trap(c2, (-d_in[0], -d_in[1]), (d_in[0], -d_in[1]), p.trap * 1.2)
-    return G(shape, l=p.sbr * 0.35, r=p.sbr * 0.35)
+    shape = shape - crotch_trap(c2, (-d_in[0], -d_in[1]), (d_in[0], -d_in[1]), p.trap)
+    return G(shape, l=p.sbr * W_SB, r=p.sbr * W_SB)
 
 
 @glyph("x", 0x0078)
 def x(p):
-    Wb = p.w(452, 0.95)  # bottom span
+    Wb = p.w(477, 0.95)  # bottom span
     Wt = Wb - p.w(30, 0.1)  # top span is a touch narrower
     wa = p.stem * 0.95  # falling stroke
     wb_ = p.stem * 0.88  # rising stroke
@@ -559,7 +577,7 @@ def x(p):
     hw_b = _hw_between(Wb - inset, 0, wb_, -1, P.XH)
     rise, _ = _edge_stroke(hw_b, 0, Wb - inset, P.XH, wb_, side="right")
     shape = fall + rise
-    return G(shape, l=p.sbr * 0.3, r=p.sbr * 0.3)
+    return G(shape, l=p.sbr * X_SB, r=p.sbr * X_SB)
 
 
 @glyph("z", 0x007A)
@@ -588,4 +606,5 @@ def z(p):
     pr1 = (R1[0] + d[0] * ext, R1[1] + d[1] * ext)
     diag_s = poly([pl0, pr0, pr1, pl1]) & rect(0, 0, W - inset, P.XH)
     shape = top_bar + base + diag_s
-    return G(shape, l=p.sbr * 0.6, r=p.sbr * 0.6)
+    # The bars are open sides: nearly a full round sidebearing.
+    return G(shape, l=p.sbr * 0.9, r=p.sbr * 0.9)

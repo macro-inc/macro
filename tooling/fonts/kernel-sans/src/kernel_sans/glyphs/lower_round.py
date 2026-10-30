@@ -16,7 +16,7 @@ import math
 from types import SimpleNamespace
 
 from .. import params as P
-from ..geom import Shape, above, below, chamfer, diag, left_of, poly, rect, right_of, ring, squircle, stroke, superness
+from ..geom import Shape, above, below, chamfer, diag, left_of, poly, rect, right_of, ring, squircle, stem_trap, stroke, superness
 from . import G, glyph, ref
 from .parts import outer_x, solve_cx
 
@@ -286,10 +286,11 @@ def _a_shape(p, xr, ae_e=None):
     hook = hook - chamfer(_ox(*hb, p.sq, ct, "left"), ct, p.cut, "sw")
     # Lower bowl: drawn as a bowl on the right of a stem at -xs, mirrored.
     yi0, yi1 = -P.OS + wb, yb1 - wt
+    in_top, in_bot = yi1 - c_lo * 0.30, yi0 + c_lo * 0.30
     bw = _bowl_on_stem(
         p, -xs, 0, -P.OS, yb1, s * 1.03, wt, wb,
-        out_top=yb1 - wt * 0.08, in_top=yi1 - c_lo * 0.30,
-        out_bot=wb * 0.1, in_bot=yi0 + c_lo * 0.30,
+        out_top=yb1 - wt * 0.08, in_top=in_top,
+        out_bot=wb * 0.1, in_bot=in_bot,
     )
     bowl = bw.shape
     if ae_e is None:
@@ -308,7 +309,13 @@ def _a_shape(p, xr, ae_e=None):
         clip = (lo + e_in) / 2
         bowl = (bw.out & right_of(-clip)) - (bw.cnt & right_of(-xs))
         stem = rect(xs, yb1 * 0.4, clip, yc_h)
-    shape = hook + bowl.flip_x(0) + stem - bw.traps(p.trap * 0.65).flip_x(0)
+    # Bowl-join traps, as in n (geom.stem_trap). Exception to the 1.3 *
+    # p.trap rule: this counter is short and leaves the stem steeply, so a
+    # deeper notch reaches past its top and leaves a barb of black between
+    # the curve and the cut at ExtraBold.
+    d = p.trap * 0.65
+    traps = stem_trap(-xs, in_top, d) + stem_trap(-xs, in_bot, d, up=False)
+    shape = hook + bowl.flip_x(0) + stem - traps.flip_x(0)
     return shape, cx_h, xs
 
 
@@ -328,14 +335,20 @@ def _e_shape(p, x0, w, ws=None):
     """e filling x0..x0+w, carved out of its outer squircle (eye, lower
     counter and aperture removed in one go, so no two edges coincide)."""
     ws = p.stem * 1.02 if ws is None else ws
-    wt = p.hair * 1.04
+    heavy = max(0.0, p.grow) / 70  # 0 up to Regular, 1 at ExtraBold
+    wt = p.hair * (1.04 - 0.04 * heavy)
     x1 = x0 + w
     y0, y1 = -P.OS, P.XH + P.OS
     outer = squircle(x0, y0, x1, y1, p.sq)
     inner = squircle(x0 + ws, y0 + wt, x1 - ws, y1 - wt, p.sq_in)
-    hb = p.hair * 0.94
-    bar_c = P.XH * 0.5 + hb * 0.3
-    bar_b, bar_t = bar_c - hb / 2, bar_c + hb / 2
+    # The bar thins a little faster than the other horizontals above Regular
+    # (as in Inter) and is placed so the eye keeps a fixed share (0.46) of
+    # the white between the top and bottom strokes. A bar centred at a fixed
+    # height, or one that rises as it thickens, closes the eye at ExtraBold.
+    hb = p.hair * (0.94 - 0.1 * heavy)
+    white = (y1 - wt) - (y0 + wt) - hb
+    bar_t = y1 - wt - white * 0.46
+    bar_b = bar_t - hb
     cx = (x0 + x1) / 2
     cb = P.XH * 0.24  # lower terminal
     eye = inner & above(bar_t)
@@ -346,7 +359,9 @@ def _e_shape(p, x0, w, ws=None):
 
 @glyph("e", 0x0065)
 def e(p):
-    return G(_e_shape(p, 0, p.w(476, 1.0)), l=p.sbr, r=p.sbr * 0.85)
+    # The bar ends flush with the right extreme, so the right side reads
+    # nearly as full as o's and gets almost a round sidebearing.
+    return G(_e_shape(p, 0, p.w(476, 1.0)), l=p.sbr, r=p.sbr * 0.92)
 
 
 # ---------------------------------------------------------------------------
@@ -360,10 +375,16 @@ def _s_shape(p, w):
     The upper ring is a touch narrower; the terminals are cut horizontally
     (top at right, bottom at left) with chamfered outer corners."""
     s = p.stem
-    wsp = (p.stem + p.hair) / 2 * 1.02
-    y_sp = P.XH * 0.515
-    sp0, sp1 = y_sp - wsp / 2, y_sp + wsp / 2
-    wt = p.hair * 1.04
+    heavy = max(0.0, p.grow) / 70  # 0 up to Regular, 1 at ExtraBold
+    # All three horizontals follow p.hair (which thins relative to the stem
+    # above Regular), so the counters stay open at ExtraBold instead of
+    # closing to slits. The spine is placed so the upper counter keeps the
+    # same share of the white at every weight.
+    wsp = p.hair * 1.09
+    wt = p.hair * (1.04 - 0.06 * heavy)
+    white = P.XH + 2 * P.OS - 2 * wt - wsp
+    sp1 = P.XH + P.OS - wt - white * 0.477
+    sp0 = sp1 - wsp
     # Upper ring (a little narrower); its bottom stroke is the spine.
     xu0, xu1 = w * 0.035, w * 0.97
     ub = (xu0, sp0, xu1, P.XH + P.OS)
@@ -385,7 +406,7 @@ def _s_shape(p, w):
 
 @glyph("s", 0x0073)
 def s_(p):
-    return G(_s_shape(p, p.w(434, 0.8)), l=p.sbr * 0.85, r=p.sbr * 0.85)
+    return G(_s_shape(p, p.w(434, 1.0)), l=p.sbr * 0.92, r=p.sbr * 0.92)
 
 
 # ---------------------------------------------------------------------------
@@ -403,7 +424,7 @@ def ae(p):
     ebox = (ex0, -P.OS, ex0 + we, P.XH + P.OS)
     a_shape, _, _ = _a_shape(p, xr, ae_e=(ebox, ex0 + ws_e))
     e_shape = _e_shape(p, ex0, we, ws=ws_e)
-    return G(a_shape + e_shape, l=p.sbr * 0.95, r=p.sbr * 0.85)
+    return G(a_shape + e_shape, l=p.sbr * 0.95, r=p.sbr * 0.92)
 
 
 @glyph("oe", 0x0153)
@@ -414,7 +435,7 @@ def oe(p):
     ws = p.stem * 1.04
     o_shape = ring(0, -P.OS, wo, P.XH + P.OS, ws, p.hair, n=p.sq, n_in=p.sq_in)
     e_shape = _e_shape(p, wo - ws * 0.92, p.w(456, 1.0), ws=ws)
-    return G(o_shape + e_shape, l=p.sbr, r=p.sbr * 0.85)
+    return G(o_shape + e_shape, l=p.sbr, r=p.sbr * 0.92)
 
 
 @glyph("oslash", 0x00F8)

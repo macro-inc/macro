@@ -3,15 +3,17 @@ zero), superiors and vulgar fractions, percent and per-mille, currency signs,
 math operators, degree, mu and the ordinals.
 
 Figures sit on the cap height (720) with the capital overshoot `P.COS`, use
-`p.fstem` / `p.fhair` and the capital squircle exponents, and share one
-tabular advance (`_fw`): each is drawn from x = 0 and centred in it by `_fit`.
-6 and 9 have straight tails (DIN-like) blended into the bowl. Math operators
-share that advance and centre on `P.AXIS`; their `.case` forms sit on
-`P.CASE_AXIS`. Superiors, fraction parts and the ordinals are the full
-shapes drawn 150 weight units heavier and scaled by `SUP`.
+`p.fstem` / `p.fhair` and the capital squircle exponents. The tabular `.tf`
+forms share one advance (`_fw`): each is drawn from x = 0 and centred in it
+by `_fit`. The default figures are those outlines respaced with their own
+sidebearings (`PROP_SB`). 6 and 9 have straight tails (DIN-like) blended into
+the bowl. Math operators share the tabular advance and centre on `P.AXIS`;
+their `.case` forms sit on `P.CASE_AXIS`. Superiors, fraction parts and the
+ordinals are the full shapes drawn 150 weight units heavier and scaled by
+`SUP`.
 
-Ink traps at diagonal crotches use `_crotch`, a V-notch whose shape scales
-with its depth (minimum 8 units) so every master keeps the same corners.
+Ink traps at the inner vertices of straight edges (1, 2, 4, 6, 9, yen) use
+`geom.crotch_trap` at depth `p.trap`, like the letters.
 """
 
 import math
@@ -24,6 +26,7 @@ from ..geom import (
     above,
     below,
     chamfer,
+    crotch_trap,
     diag,
     dot,
     left_of,
@@ -35,7 +38,7 @@ from ..geom import (
     stroke,
 )
 from . import G, glyph, ref
-from .parts import arch, outer_x
+from .parts import arch, outer_x, solve_cx
 
 PROOF_TEXT = [
     "H0H1H2H3H4H5H6H7H8H9H",
@@ -60,9 +63,9 @@ def _ni(p):
 
 
 def _fh(p):
-    """Figure horizontal stroke: thins a little with weight, like the capital
-    hairline, so counters stay open in ExtraBold."""
-    return p.fhair * (1.0 - 0.07 * max(0.0, p.grow) / 70)
+    """Figure horizontal stroke: thins with weight like the capital hairline
+    (0.78 of the stem at ExtraBold), so counters stay open."""
+    return p.fhair * (1.0 - 0.12 * max(0.0, p.grow) / 70)
 
 
 def _fw(p):
@@ -111,40 +114,6 @@ def _handles(p0, t0, p3, t3, k0, k3):
     a = (dx * (-t3[1]) - dy * (-t3[0])) / det
     b = (t0[0] * dy - t0[1] * dx) / det  # corner = p3 + b * t3 (b < 0)
     return (x0 + k0 * a * t0[0], y0 + k0 * a * t0[1]), (x3 + k3 * b * t3[0], y3 + k3 * b * t3[1])
-
-
-def _unit(a_deg):
-    a = math.radians(a_deg)
-    return (math.cos(a), math.sin(a))
-
-
-def _crotch(x, y, a1, a2, depth):
-    """Ink trap at a crotch (x, y) whose two edges leave it into the white at
-    angles a1 and a2 (degrees): the wedge points into the black, opposite
-    the bisector of the white angle."""
-    if depth < 1:
-        return Shape()
-    # Below ~8 units the notch is invisible anyway, and so small that its
-    # corners blur into the curve differently per weight; keep it at least
-    # that big so every master has the same notch.
-    depth = max(depth, 8.0)
-    u1, u2 = _unit(a1), _unit(a2)
-    bx, by = u1[0] + u2[0], u1[1] + u2[1]
-    m = math.hypot(bx, by)
-    bx, by = bx / m, by / m
-    e = depth * 0.5
-
-    def mouth(u):
-        # A point on the edge, pushed a little into the white. Everything
-        # scales with depth, so the notch has the same shape (and corners)
-        # at every weight.
-        nx, ny = -u[1], u[0]
-        if nx * bx + ny * by < 0:
-            nx, ny = -nx, -ny
-        return (x + u[0] * e + nx * depth * 0.12, y + u[1] * e + ny * depth * 0.12)
-
-    tip = (x - bx * depth, y - by * depth)
-    return poly([mouth(u1), tip, mouth(u2), (x + bx * e, y + by * e)])
 
 
 def _sq_pts(box, n, per=180):
@@ -285,9 +254,11 @@ def _one(p):
     i_top = (s, P.CAP + s * math.tan(a))
     i_bot = (i_top[0] + nrm[0] * t, i_top[1] + nrm[1] * t)
     flag = poly([e_top, i_top, i_bot, e_bot]) & below(P.CAP) & left_of(s * 0.5)
-    stem = rect(0, 0, s, P.CAP)
+    # The flag covers the stem's top-left corner, so only the free top-right
+    # corner takes the house chamfer.
+    stem = rect(0, 0, s, P.CAP, ne=p.ccut)
     crotch = P.CAP - t / math.cos(a)
-    return stem + flag - _crotch(0, crotch, 270, 180 + math.degrees(a), p.trap)
+    return stem + flag - crotch_trap((0, crotch), 270, 180 + math.degrees(a), p.trap)
 
 
 def _two(p):
@@ -338,7 +309,16 @@ def _two(p):
     base = rect(0, 0, w + p.w(6, 0.1), hb)
     crotch_x = mo[0] - d[0] * (mo[1] - hb) / d[1]
     shape = up + spine + base
-    return shape - _crotch(crotch_x, hb, 0, math.degrees(th), p.trap)
+    return shape - crotch_trap((crotch_x, hb), 0, d, p.trap)
+
+
+def _waist(p, k):
+    """Centre and thickness of the waist of 3 and 8. The centre stays put at
+    every weight and the waist thins a little faster than the other
+    horizontals, so the upper counter keeps at least 0.8 of the lower one's
+    height in ExtraBold (Inter keeps about 0.9)."""
+    g = max(0.0, p.grow) / 70
+    return P.CAP * 0.525, _fh(p) * (k - 0.06 * g)
 
 
 def _three(p):
@@ -349,8 +329,7 @@ def _three(p):
     wu = p.w(420, 1.0)
     xr_u = wl - p.w(16, 0.1)
     xu0 = xr_u - wu
-    ym = P.CAP * 0.555
-    hm = h * 0.96
+    ym, hm = _waist(p, 0.96)
     ub = (xu0, ym - hm / 2, xr_u, P.CAP + P.COS)
     ui = (xu0 + ws * 0.97, ub[1] + hm, xr_u - ws * 0.97, ub[3] - h)
     lb = (0, -P.COS, wl, ym + hm / 2)
@@ -388,12 +367,11 @@ def _four(p):
     dg = poly([(0, yb), (ox0, oy0), (xs, P.CAP), (xs + hw, P.CAP), (hw - hb * dx / dy, yb)])
     dg = dg & left_of(xs + s * 0.5)
     shape = stem + bar + dg
-    ang = math.degrees(math.atan2(dx, dy))  # diagonal's lean from vertical
     # Crotch where the inner edge meets the stem.
     yc = oy0 + (xs - hw) * dy / dx
-    shape = shape - _crotch(xs, yc, -90, 180 + 90 - ang, p.trap)
+    shape = shape - crotch_trap((xs, yc), 270, (-dx, -dy), p.trap)
     # Crotch where the inner edge meets the bar.
-    shape = shape - _crotch(hw, oy0, 0, 90 - ang, p.trap)
+    shape = shape - crotch_trap((hw, oy0), 0, (dx, dy), p.trap)
     return shape
 
 
@@ -419,7 +397,14 @@ def _five(p):
     lo = lo - chamfer(_ox(lb, n, ytl, "left"), ytl, p.ccut, "nw")
     # The stem stops where the shoulder's counter leaves it, so the bowl
     # opens to the left with no tooth; its free foot gets the sw chamfer.
-    ysb = join_in - 2
+    # The arch reaches 1 unit into the stem, where its counter has already
+    # dropped below join_in (more steeply at heavy weights): stop the foot
+    # just below that point so no sliver of the arch shows under it.
+    ry_i = top - h - yc
+    xri = w - ws
+    cx_i = solve_cx(xri, xl, join_in, yc, ry_i, ni)
+    y_in = _oy((2 * cx_i - xri, yc - ry_i, xri, top - h), ni, xl - 1)
+    ysb = min(join_in, y_in) - 2
     stem = rect(xs, ysb, xl, P.CAP, sw=p.ccut)
     bar = rect(xs, P.CAP - h, w - p.w(28, 0.2), P.CAP)
     return shoulder + lo + stem + bar
@@ -462,7 +447,9 @@ def _six(p):
     shape = (squircle(*box, n=n) + tail) - squircle(*ibox, n=ni)
     crotch, a_curve = _ray_hit_sq(a_r, (-d[0], -d[1]), box, n)
     if crotch is not None:
-        shape = shape - _crotch(crotch[0], crotch[1], math.degrees(math.atan2(d[1], d[0])), a_curve, p.trap)
+        # The bowl edge is convex, so its tangent stays in the white and the
+        # trap opens cleanly on that side too.
+        shape = shape - crotch_trap(crotch, d, a_curve, p.trap)
     return shape
 
 
@@ -491,8 +478,7 @@ def _eight(p):
     h = _fh(p)
     wl = p.w(480, 1.2)
     wu = p.w(436, 1.05)
-    ym = P.CAP * 0.56
-    hm = h * 0.94
+    ym, hm = _waist(p, 0.94)
     lb = (0, -P.COS, wl, ym + hm / 2)
     li = (ws * 1.03, lb[1] + h, wl - ws * 1.03, lb[3] - hm)
     xu0 = (wl - wu) / 2
@@ -579,16 +565,16 @@ def nine(p):
 # running text. The tabular forms stay available through tnum (.tf).
 
 PROP_SB = {
-    "zero": (0.9, 0.9),
-    "one": (0.45, 1.25),
-    "two": (0.8, 0.8),
-    "three": (0.7, 0.85),
-    "four": (0.55, 0.75),
-    "five": (0.85, 0.8),
-    "six": (0.9, 0.8),
-    "seven": (0.6, 0.5),
-    "eight": (0.85, 0.85),
-    "nine": (0.8, 0.9),
+    "zero": (1.0, 1.0),
+    "one": (0.8, 1.35),
+    "two": (1.15, 1.1),
+    "three": (1.0, 1.0),
+    "four": (0.95, 0.95),
+    "five": (1.1, 0.95),
+    "six": (1.0, 0.9),
+    "seven": (0.85, 0.65),
+    "eight": (0.95, 0.95),
+    "nine": (0.9, 1.0),
 }
 
 
@@ -955,12 +941,12 @@ def yen(p):
     arm_r = diag(cx, yj - 60, w - hw_top, P.CAP, t) & above(yj - 60)
     stem = rect(cx - s / 2, 0, cx + s / 2, yj)
     sh = arm_l + arm_r + stem
-    # Crotch between the arms.
+    # Crotch between the arms: their inner edges meet on the centre line,
+    # half the arm thickness (measured vertically) above the centrelines.
     dxa = cx - hw_top
     k = (P.CAP - (yj - 60)) / dxa
-    y_cr = (yj - 60) + k * (hw_top * 0 + (t / 2) / math.sin(math.atan(k)))
-    ang = math.degrees(math.atan(k))
-    sh = sh - _crotch(cx, y_cr, ang, 180 - ang, p.trap)
+    y_cr = (yj - 60) + (t / 2) / math.cos(math.atan(k))
+    sh = sh - crotch_trap((cx, y_cr), (-1.0, k), (1.0, k), p.trap)
     bl, br = cx - p.w(196, 0.4), cx + p.w(196, 0.4)
     h = h * 0.88
     ym = P.CAP * 0.275
@@ -1250,7 +1236,8 @@ def logicalnot(p):
     t = _mt(p)
     y = P.AXIS + p.w(40, 0.2)
     drop = p.w(150, 0.3)
-    sh = rect(cx - a, y - t / 2, cx + a, y + t / 2) + rect(cx + a - t * 1.04, y - drop, cx + a, y, se=p.cut)
+    # The tick is the free end of a bar, so it stays square.
+    sh = rect(cx - a, y - t / 2, cx + a, y + t / 2) + rect(cx + a - t * 1.04, y - drop, cx + a, y)
     return _math(p, sh)
 
 
@@ -1311,8 +1298,10 @@ def mu(p):
     s = p.stem
     sh, xr = n_shape(p, 0, p.w(300, -1.0), cut=False)
     sh = sh.rotate180(xr / 2, P.XH / 2)
-    sh = sh + rect(0, P.DESC, s, P.XH, nw=p.cut, sw=p.cut)
-    sh = sh - chamfer(xr, P.XH, p.cut, "ne")
+    # The turned n brings its square-topped right stem to the left, so the
+    # left stem's nw chamfer is cut after the union.
+    sh = sh + rect(0, P.DESC, s, P.XH, sw=p.cut)
+    sh = sh - chamfer(0, P.XH, p.cut, "nw") - chamfer(xr, P.XH, p.cut, "ne")
     return G(sh, l=p.sb, r=p.sb * 0.92)
 
 
@@ -1379,19 +1368,81 @@ def ordmasculine(p):
     return G(o_ + bar, l=p.sbr, r=p.sbr)
 
 
+def _loop(v_top, v_bot, th, x_end, y_top, y_bot, n, blend=0.45):
+    """Segments (for `_path`) of one loop of the infinity, from its upper
+    vertex `v_top` round its far end to its lower vertex `v_bot`. The loop
+    leaves each vertex as a straight diagonal at `th` degrees from the
+    horizontal, blends into a flat top / bottom, and turns round a squircle
+    end whose extreme is at x = x_end. Drawn for the left loop (x_end left of
+    the vertices); mirror it for the right one."""
+    from ..geom import superness
+
+    k = superness(n)
+    c, s = math.cos(math.radians(th)), math.sin(math.radians(th))
+    cy, ry = (y_top + y_bot) / 2, (y_top - y_bot) / 2
+    segs = []
+    # Corner where the diagonal from v_top would meet the top line; the blend
+    # starts `r` before it on both lines.
+    xc_t = v_top[0] - (y_top - v_top[1]) / s * c
+    xc_b = v_bot[0] - (v_bot[1] - y_bot) / s * c
+    r = blend * (min(xc_t, xc_b) - x_end)
+    xt = min(xc_t, xc_b) - r
+    rx = xt - x_end
+    up, dn = (-c, s), (-c, -s)  # away from the vertices, along the diagonals
+    pt = (xc_t + r * c, y_top - r * s)
+    pb = (xc_b + r * c, y_bot + r * s)
+    kb = 0.68  # a 42-degree turn: a little fuller than a circular arc (0.64)
+    segs.append(pt)
+    h1, h2 = _handles(pt, up, (xt, y_top), (-1.0, 0.0), kb, kb)
+    segs.append((h1, h2, (xt, y_top)))
+    segs.append(((xt - k * rx, y_top), (x_end, cy + k * ry), (x_end, cy)))
+    segs.append(((x_end, cy - k * ry), (xt - k * rx, y_bot), (xt, y_bot)))
+    h1, h2 = _handles((xt, y_bot), (1.0, 0.0), pb, (-dn[0], -dn[1]), kb, kb)
+    segs.append((h1, h2, pb))
+    segs.append(v_bot)
+    return segs
+
+
+def _mirror_segs(start, segs):
+    """The same run of segments mirrored about x = 0 and walked backwards:
+    returns (new_start, new_segs)."""
+    m = lambda q: (-q[0], q[1])
+    pts = [start] + [sg if not isinstance(sg[0], tuple) else sg[2] for sg in segs]
+    out = []
+    for i in range(len(segs), 0, -1):
+        sg = segs[i - 1]
+        if isinstance(sg[0], tuple):
+            out.append((m(sg[1]), m(sg[0]), m(pts[i - 1])))
+        else:
+            out.append(m(pts[i - 1]))
+    return m(pts[-1]), out
+
+
 @glyph("infinity", 0x221E)
 def infinity(p):
+    """Two squircle loops whose inner strokes cross as an X at the centre, so
+    it reads as one crossing stroke rather than two fused rings. The centre
+    column of ink is the crossing's height, td / cos(th): about 1.3 x fhair
+    at Regular."""
     n, ni = _n(p), _ni(p)
     t = _mt(p)
     g = max(0.0, p.grow) / 70
-    ws = t * (1.0 - 0.1 * g)
-    h = t * (0.9 - 0.15 * g)
-    lw = p.w(330, 1.0)
+    ws = t * (1.0 - 0.1 * g)  # far ends of the loops
+    h = t * (0.9 - 0.15 * g)  # tops and bottoms
+    td = (ws + h) / 2 * 0.98  # the crossing diagonals
+    th = 42.0
+    c, s = math.cos(math.radians(th)), math.sin(math.radians(th))
+    half = p.w(300, 0.9)
     hh = p.w(150, 0.5)
     cy = P.AXIS
-    a = (0, cy - hh, lw, cy + hh)
-    b = (lw - ws, cy - hh, 2 * lw - ws, cy + hh)
-    ai = (a[0] + ws, a[1] + h, a[2] - ws, a[3] - h)
-    bi = (b[0] + ws, b[1] + h, b[2] - ws, b[3] - h)
-    sh = (squircle(*a, n=n) + squircle(*b, n=n)) - squircle(*ai, n=ni) - squircle(*bi, n=ni)
+    # Outer silhouette: one contour that pinches to a V above and below the
+    # crossing.
+    vt, vb = (0.0, cy + td / (2 * c)), (0.0, cy - td / (2 * c))
+    left = _loop(vt, vb, th, -half, cy + hh, cy - hh, n)
+    _, right = _mirror_segs(vt, left)
+    outer = _path(vt, left + right)
+    # Counters: teardrops pointing at the crossing.
+    vi = (-td / (2 * s), cy)
+    counter = _path(vi, _loop(vi, vi, th, -half + ws, cy + hh - h, cy - hh + h, ni)[:-1])
+    sh = outer - counter - counter.flip_x(0.0)
     return G(sh, l=p.csbr * 0.8, r=p.csbr * 0.8)
