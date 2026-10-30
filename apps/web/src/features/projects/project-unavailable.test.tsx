@@ -19,8 +19,7 @@ import { ProjectUnavailable } from './project-unavailable';
 afterEach(cleanup);
 const projectId = '01992d2f-8444-7000-8000-000000000001';
 
-function renderUnavailable() {
-  const onRetry = vi.fn(async () => {});
+function renderUnavailable(onRetry = vi.fn(async () => {})) {
   const view = render(() => (
     <ProjectUnavailable
       projectId={projectId}
@@ -34,16 +33,21 @@ function renderUnavailable() {
 it('lets a viewer without access request it and reloads the project once granted', async () => {
   const fake = fakeSharingSource({ accessLevel: null });
   source = fake.source;
-  const view = renderUnavailable();
+  const reload = Promise.withResolvers<void>();
+  const view = renderUnavailable(vi.fn(() => reload.promise));
   expect(view.getByText("You don't have access to this project")).toBeTruthy();
   expect(view.queryByRole('alert')).toBeNull();
   fireEvent.click(view.getByRole('button', { name: 'Request access' }));
   expect(source.submit).toHaveBeenCalledWith('view', undefined);
   fake.setState((current) => ({ ...current, accessLevel: 'view' }));
   expect(view.onRetry).toHaveBeenCalledOnce();
-  // The request view holds until the reloaded project replaces it.
+  // The request view holds while the project reloads.
   expect(view.getByText("You don't have access to this project")).toBeTruthy();
   expect(view.queryByText(/Project unavailable/)).toBeNull();
+  // A reload that leaves the project unavailable offers Try again.
+  reload.resolve();
+  expect(await view.findByRole('button', { name: 'Try again' })).toBeTruthy();
+  expect(view.queryByText("You don't have access to this project")).toBeNull();
 });
 
 it('keeps the unavailable notice for a project whose request state cannot load', () => {
@@ -57,6 +61,7 @@ it('keeps the unavailable notice for a project whose request state cannot load',
   expect(view.queryByRole('button', { name: 'Request access' })).toBeNull();
   fireEvent.click(view.getByRole('button', { name: 'Try again' }));
   expect(view.onRetry).toHaveBeenCalledOnce();
+  expect(source.refresh).toHaveBeenCalledOnce();
 });
 
 it('keeps the unavailable notice when the viewer already has access', () => {
