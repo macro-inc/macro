@@ -175,6 +175,10 @@ fn deferred_channel_predicates_and_widened_access_stay_network_only() {
     for expr in [
         Expr::val(ChannelLiteral::ThreadId(Uuid::from_u128(1))),
         Expr::val(ChannelLiteral::NotificationState(NotificationState::Done)),
+        // Unread-message membership needs notification kinds the local facts lack.
+        Expr::val(ChannelLiteral::MessageNotificationState(
+            NotificationState::Unseen,
+        )),
         Expr::val(ChannelLiteral::IsParticipant(false)),
         Expr::is_not(Expr::val(ChannelLiteral::IsParticipant(true))),
         Expr::or(

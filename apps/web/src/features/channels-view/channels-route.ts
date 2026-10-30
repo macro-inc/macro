@@ -6,7 +6,12 @@ export const channelsSearch = {
   namespace: 'channels',
   schema: z
     .object({
-      tab: z.enum(['browse', 'recents', 'threads']),
+      // The Recent tab was replaced by Unread; an older link to it opens All
+      // and keeps its message target.
+      tab: z.preprocess(
+        (value) => (value === 'recents' ? 'browse' : value),
+        z.enum(['browse', 'unread', 'threads'])
+      ),
       messageId: z.string(),
       threadId: z.string(),
       seek: z.string(),

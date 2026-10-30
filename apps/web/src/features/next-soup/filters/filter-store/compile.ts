@@ -131,6 +131,11 @@ const FIELD_CONFIG: Record<
     field: 'NotificationState',
     notification: 'done',
   },
+  channelMessageSeen: {
+    target: 'chanf',
+    field: 'MessageNotificationState',
+    notification: 'seen',
+  },
   channelImportance: { target: 'chanf', field: 'Importance' },
   channelIsParticipant: { target: 'chanf', field: 'IsParticipant' },
   channelSenderId: { target: 'chanf', field: 'Sender' },

@@ -474,7 +474,11 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
 - Refresh the channel list's bounded unread edge when opening a conversation,
-  including an empty unread result after a read on another device.
+  including an empty unread result after a read on another device. Channel
+  lists are server pages the notification refresh keeps current, not locally
+  evaluated membership: the bounded witness carries no entity identity, and the
+  cache's unseen facts cannot tell an unread message from an invite, so the
+  Unread tab's `channelMessageSeen` literal is network-only in the browser index.
 - Keep channel rail and title menus on `CHANNEL_ACTION_VIEW_CONTEXT`, including
   the shared desktop `Open in new split` action and its mobile/capacity guards.
 - Route supported move, trash, restore, permanent-delete, duplicate, and share-policy

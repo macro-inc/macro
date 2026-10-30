@@ -857,7 +857,7 @@ with the same full sidebar contents. With no conversation selected, the
 slide-over opens on its own and closes once a conversation is picked; the
 backdrop or `Escape` still dismisses it. There is no separate skinny sidebar mode.
 
-On desktop, the Chat rail has `All` and `Recent` tabs in a flat, shared track
+On desktop, the Chat rail has `All` and `Unread` tabs in a flat, shared track
 aligned with New. Choices use equal widths, a transparent outlined track with
 1px padding, and fully rounded pill shapes. The 32px selected state matches
 New's fill and border without an extra shadow. All contains an optional
@@ -1053,7 +1053,7 @@ conversation or explicitly navigating to a message must still work.
 The search action beside the tabs opens a search field below them and replaces
 the active tab contents with matching channels and direct messages from one
 activity-ordered source. Search results use compact rows on `All` and
-conversation cards on `Recent`. Switching tabs preserves the active search and
+conversation cards on `Unread`. Switching tabs preserves the active search and
 query, then scrolls the results to the selected channel when present or to the
 start. Closing search restores the active tab and applies the same scroll
 behavior to its lists. An empty result uses the standard search empty state
@@ -1067,15 +1067,40 @@ search results loads the next search page; clearing the query restores ordinary
 list pagination. Check a matching query, a query for a conversation absent from
 the ordinary list, a query with no matches, and a clear/reopen cycle. Mobile dock
 search uses the independent Search route described below.
-Recent search includes both channels and DMs, including service hits without
+Search includes both channels and DMs, including service hits without
 message previews. It does not require message metadata or an importance filter.
 Loaded conversation metadata is preserved when a service hit has the same ID.
 Pending and placeholder service results never appear as current hits. Ordinary
 list errors do not affect an active search.
-Collapsing a section does not discard its loaded pages. Recent has its own
+Collapsing a section does not discard its loaded pages. Unread has its own
 pagination cursor. Each list is virtualized, so offscreen conversations may not
 exist in the DOM.
-Verify Recent in a visible browser with a latest-message preview containing an
+
+### Unread tab
+
+`Unread` lists the conversations whose row would show an unread dot: channels
+and DMs the user is in with an unseen notification on a top-level message or
+mention (the channel filter literal `messageNotificationState: UNSEEN`). The
+server filters and pages them by latest activity; the rail never loads every
+conversation to find the unread ones, and the list keeps paging on scroll like
+Recent did. Replies and mentions inside threads, reactions, invites, and calls
+do not list a conversation, matching the dot, the section counts, and the Chat
+badge. Rows are the same conversation cards as search results on this tab.
+
+The list shows the server's unread page kept consistent with the rows' dots:
+a row whose dot has cleared (read here, or on another device) leaves at once,
+and the page refresh the other channel lists share reconciles membership
+afterwards, including rows an unread notification adds elsewhere. Opening a row
+marks it read, but the selected conversation stays in its place without a dot
+until another conversation is selected; it must not vanish from under the
+pointer. A new message in it puts the server's row back in its place. The
+browser index does not evaluate this filter locally: its unseen facts cover
+every notification kind, so they cannot tell an unread message from an invite.
+A mark-read failure relights the dot and the row. The empty state says **No
+unread conversations** with a **Show all conversations** action that switches
+to All. A stored or linked `recents` tab from older builds opens All.
+
+Verify Unread in a visible browser with a latest-message preview containing an
 agent-session mention. Let its title resolve, scroll the preview out of view and
 back, then switch to All. The title should update without repeatedly remounting
 the mention, and scrolling and navigation must remain responsive; a headless
@@ -1150,7 +1175,7 @@ Inbox badge still uses its own full Soup query for channel/thread membership.
 
 With GraphQL enabled, channel lists request at most one unread message notification
 per channel through an aliased, filtered `notifications` edge. An empty edge means
-no unread messages; invites and call notifications do not light the dot. Recent
+no unread messages; invites and call notifications do not light the dot. Unread
 cards still use the latest-message preview. Full notification edges load only for
 an opened unread conversation, so mark-read and message targeting retain their
 complete top-level inputs in Chat and thread-scoped inputs in Inbox. Reopening
@@ -1168,7 +1193,7 @@ The dot and DM unread count must clear without reloading, even when the complete
 unread response is empty and no mark-read mutation runs. Another unread DM must
 keep its dot.
 
-Check cached Home → Chat navigation, All/Recent/search, and unread state after a
+Check cached Home → Chat navigation, All/Unread/search, and unread state after a
 read, a new notification, deletion, and reconnect, without reloading the page.
 With the mark-read response delayed, channel/DM dots, section counts, and new-activity
 targets should clear as soon as the local read is applied. A failed read restores

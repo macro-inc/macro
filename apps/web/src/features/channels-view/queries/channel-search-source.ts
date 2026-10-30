@@ -49,7 +49,7 @@ export function createChannelSearchSource(options: {
               .with('direct_messages', () => ['direct_message'])
               .with('team_channels', () => ['team'])
               .with('channels', () => ['public', 'private'])
-              .with('recents', 'search', 'threads', () => undefined)
+              .with('recents', 'unread', 'search', 'threads', () => undefined)
               .exhaustive(() => undefined),
           },
         },

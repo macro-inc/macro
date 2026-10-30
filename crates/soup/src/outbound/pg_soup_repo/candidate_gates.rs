@@ -165,6 +165,14 @@ pub(super) fn uuid_guarded(id_sql: &str, gate: String) -> String {
     format!("CASE WHEN {id_sql} ~ '{UUID_PATTERN}' THEN {gate} ELSE FALSE END")
 }
 
+/// Notifications on a channel's top-level messages (sends, mentions, and
+/// document mentions outside threads), over a `notification n` row: the rows
+/// behind the channel row's unread dot. The channels crate's list clause and the
+/// notification crate's `top_level_messages_only` filter spell the same
+/// predicate; keep the three in step.
+const TOP_LEVEL_MESSAGE_NOTIFICATION_SQL: &str = "n.notification_event_type IN ('channel_message_send', 'channel_mention', 'document_mention') \
+    AND COALESCE(n.metadata->>'threadId', n.metadata->>'thread_id') IS NULL";
+
 /// Channels are participant-gated, not `entity_access` rows, are never
 /// soft-deleted (purges delete their activity instead), and carry no
 /// properties — a properties filter is settled type-wide in
@@ -182,16 +190,20 @@ pub(super) fn channel_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> St
         filter.and_then(|f| f.channel_filter.as_deref()),
         |literal| {
             let predicate = match literal {
-                ChannelLiteral::NotificationState(state) => NotificationPredicate::state(*state),
+                ChannelLiteral::NotificationState(state) => format!(
+                    "{} AND n.secondary_event_item_type IS DISTINCT FROM 'channel_message'",
+                    NotificationPredicate::state(*state).sql()
+                ),
+                ChannelLiteral::MessageNotificationState(state) => format!(
+                    "{} AND {TOP_LEVEL_MESSAGE_NOTIFICATION_SQL}",
+                    NotificationPredicate::state(*state).sql()
+                ),
                 _ => return None,
             };
             Some(build_notification_exists_clause(
                 "cp.channel_id",
                 "channel",
-                &format!(
-                    "{} AND n.secondary_event_item_type IS DISTINCT FROM 'channel_message'",
-                    predicate.sql()
-                ),
+                &predicate,
             ))
         },
     );

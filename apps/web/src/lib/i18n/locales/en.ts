@@ -1,4 +1,5 @@
 import channelLabels from './en/channel-labels';
+import channels from './en/channels';
 import commandMenu from './en/command-menu';
 import commands from './en/commands';
 import common from './en/common';
@@ -19,6 +20,7 @@ import viewMenus from './en/view-menus';
  */
 export default {
   channelLabels,
+  channels,
   commandMenu,
   commands,
   common,

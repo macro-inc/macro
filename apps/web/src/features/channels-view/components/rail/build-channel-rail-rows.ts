@@ -71,7 +71,7 @@ export function buildChannelSectionRows(options: {
 }
 
 /**
- * The keyboard-navigable rows of the All tab (or the flat Recent list), in
+ * The keyboard-navigable rows of the All tab (or the flat Unread list), in
  * visual order. Collapsed sections contribute only their heading.
  */
 export function buildChannelRailRows(
@@ -95,11 +95,11 @@ export function buildChannelRailRows(
     ];
   }
 
-  if (tab === 'recents') {
-    return items.recents.map((channel, localIndex) => ({
+  if (tab === 'unread') {
+    return items.unread.map((channel, localIndex) => ({
       kind: 'conversation',
-      id: `channel:${channel.id}`,
-      scope: 'recents',
+      id: rowKeyForChannel(channel.id),
+      scope: 'unread',
       localIndex,
       channel,
     }));

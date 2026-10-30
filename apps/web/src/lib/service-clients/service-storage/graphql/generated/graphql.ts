@@ -704,28 +704,34 @@ export type GraphqlChannelExpr =
 /** GraphQL input representing the channel literal. */
 export type GraphqlChannelLiteral =
   {   /** The channel id option. */
-  channelId: string | number; channelType?: never; importance?: never; isParticipant?: never; mention?: never; notificationState?: never; organizationId?: never; sender?: never; teamId?: never; threadId?: never; }
+  channelId: string | number; channelType?: never; importance?: never; isParticipant?: never; mention?: never; messageNotificationState?: never; notificationState?: never; organizationId?: never; sender?: never; teamId?: never; threadId?: never; }
   |  { channelId?: never;   /** The channel type option. */
-  channelType: GraphqlChannelTypeFilter; importance?: never; isParticipant?: never; mention?: never; notificationState?: never; organizationId?: never; sender?: never; teamId?: never; threadId?: never; }
+  channelType: GraphqlChannelTypeFilter; importance?: never; isParticipant?: never; mention?: never; messageNotificationState?: never; notificationState?: never; organizationId?: never; sender?: never; teamId?: never; threadId?: never; }
   |  { channelId?: never; channelType?: never;   /** The importance option. */
-  importance: boolean; isParticipant?: never; mention?: never; notificationState?: never; organizationId?: never; sender?: never; teamId?: never; threadId?: never; }
+  importance: boolean; isParticipant?: never; mention?: never; messageNotificationState?: never; notificationState?: never; organizationId?: never; sender?: never; teamId?: never; threadId?: never; }
   |  { channelId?: never; channelType?: never; importance?: never;   /**
    * The is participant option. Filters by whether the requesting user is an
    * active participant; its presence widens the candidate set to team channels
    * of the user's teams they have not joined.
    */
-  isParticipant: boolean; mention?: never; notificationState?: never; organizationId?: never; sender?: never; teamId?: never; threadId?: never; }
+  isParticipant: boolean; mention?: never; messageNotificationState?: never; notificationState?: never; organizationId?: never; sender?: never; teamId?: never; threadId?: never; }
   |  { channelId?: never; channelType?: never; importance?: never; isParticipant?: never;   /** The mention option. */
-  mention: string; notificationState?: never; organizationId?: never; sender?: never; teamId?: never; threadId?: never; }
-  |  { channelId?: never; channelType?: never; importance?: never; isParticipant?: never; mention?: never;   /** Exact notification state for the requester. */
+  mention: string; messageNotificationState?: never; notificationState?: never; organizationId?: never; sender?: never; teamId?: never; threadId?: never; }
+  |  { channelId?: never; channelType?: never; importance?: never; isParticipant?: never; mention?: never;   /**
+   * Exact notification state for the requester on the channel's top-level
+   * messages only (sends, mentions, and document mentions outside threads):
+   * the rows behind the channel's unread dot.
+   */
+  messageNotificationState: NotificationState; notificationState?: never; organizationId?: never; sender?: never; teamId?: never; threadId?: never; }
+  |  { channelId?: never; channelType?: never; importance?: never; isParticipant?: never; mention?: never; messageNotificationState?: never;   /** Exact notification state for the requester. */
   notificationState: NotificationState; organizationId?: never; sender?: never; teamId?: never; threadId?: never; }
-  |  { channelId?: never; channelType?: never; importance?: never; isParticipant?: never; mention?: never; notificationState?: never;   /** The organization id option. */
+  |  { channelId?: never; channelType?: never; importance?: never; isParticipant?: never; mention?: never; messageNotificationState?: never; notificationState?: never;   /** The organization id option. */
   organizationId: number; sender?: never; teamId?: never; threadId?: never; }
-  |  { channelId?: never; channelType?: never; importance?: never; isParticipant?: never; mention?: never; notificationState?: never; organizationId?: never;   /** The sender option. */
+  |  { channelId?: never; channelType?: never; importance?: never; isParticipant?: never; mention?: never; messageNotificationState?: never; notificationState?: never; organizationId?: never;   /** The sender option. */
   sender: string; teamId?: never; threadId?: never; }
-  |  { channelId?: never; channelType?: never; importance?: never; isParticipant?: never; mention?: never; notificationState?: never; organizationId?: never; sender?: never;   /** The team id option. */
+  |  { channelId?: never; channelType?: never; importance?: never; isParticipant?: never; mention?: never; messageNotificationState?: never; notificationState?: never; organizationId?: never; sender?: never;   /** The team id option. */
   teamId: string | number; threadId?: never; }
-  |  { channelId?: never; channelType?: never; importance?: never; isParticipant?: never; mention?: never; notificationState?: never; organizationId?: never; sender?: never; teamId?: never;   /** The thread id option. */
+  |  { channelId?: never; channelType?: never; importance?: never; isParticipant?: never; mention?: never; messageNotificationState?: never; notificationState?: never; organizationId?: never; sender?: never; teamId?: never;   /** The thread id option. */
   threadId: string | number; };
 
 /** The two operands of a recursive `ChannelThreadFilterExpr` binary expression. */

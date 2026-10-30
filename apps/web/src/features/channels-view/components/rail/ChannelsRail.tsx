@@ -69,6 +69,7 @@ import { resolveChannelLabelMemberships } from '../../core/smart-tags';
 import {
   type ChannelsSourceScope,
   type ChannelsSources,
+  createUnreadListSource,
   deduplicateChannels,
   resolveReferencedChannels,
   useChannelsByIdsQuery,
@@ -118,7 +119,7 @@ const BROWSE_QUERY_SCOPES = [
   'channels',
   'direct_messages',
 ] as const;
-const CHANNEL_TAB_IDS: ChannelsTab[] = ['browse', 'recents'];
+const CHANNEL_TAB_IDS: ChannelsTab[] = ['browse', 'unread'];
 const CHANNEL_TAB_IDS_WITH_THREADS: ChannelsTab[] = [
   ...CHANNEL_TAB_IDS,
   'threads',
@@ -319,15 +320,21 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const channelCalls = useChannelCalls();
 
-  const channels = createMemo(() =>
-    deduplicateChannels([
+  // A disabled list keeps its last page, so the active tab's rows must win
+  // the dedupe: its copies carry the live unread witnesses.
+  const channels = createMemo(() => {
+    const browse = [
       props.sources.team_channels.items(),
       props.sources.channels.items(),
       props.sources.direct_messages.items(),
-      props.sources.recents.items(),
-      props.sources.search.items(),
-    ])
-  );
+    ];
+    const unread = props.sources.unread.items();
+    return deduplicateChannels(
+      tab() === 'unread'
+        ? [unread, ...browse, props.sources.search.items()]
+        : [...browse, unread, props.sources.search.items()]
+    );
+  });
 
   const searchResults = () => props.sources.search.items();
   const searchLoading = () => props.sources.search.isFetching();
@@ -412,6 +419,13 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const channelActivity = useChannelRailActivity(allChannels, channelCalls);
 
+  const unreadSource = createUnreadListSource(
+    props.sources.unread,
+    () => selectedChannel()?.id,
+    (channelId) => channelActivity.unreadChannelIds().has(channelId)
+  );
+  const sources: ChannelsSources = { ...props.sources, unread: unreadSource };
+
   const isLabelOpen = (labelId: string) =>
     !state.collapsedLabels.includes(labelId);
 
@@ -456,6 +470,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
         channels: props.sources.channels.items(),
         direct_messages: props.sources.direct_messages.items(),
         recents: props.sources.recents.items(),
+        unread: unreadSource.items(),
         threads: props.sources.threads.items(),
       },
       channelSectionRows()
@@ -558,7 +573,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
           ? sectionScrollRoots().favorites
           : row.kind === 'conversation' && row.group
             ? sectionScrollRoots()[row.group]
-            : tab() === 'recents'
+            : tab() === 'unread'
               ? listRoot()
               : tab() === 'threads'
                 ? sectionScrollRoots().threads
@@ -583,7 +598,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
         ? channelSectionRows().map((row) =>
             row.kind === 'conversation' ? row.channel.id : undefined
           )
-        : props.sources[scope].items().map((channel) => channel.id);
+        : sources[scope].items().map((channel) => channel.id);
 
     const selectedIndex = rendered.indexOf(selectedChannel()?.id ?? '');
 
@@ -598,7 +613,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
     }
 
     const scrollRoot =
-      scope === 'recents' ? listRoot() : sectionScrollRoots()[scope];
+      scope === 'unread' || scope === 'recents'
+        ? listRoot()
+        : sectionScrollRoots()[scope];
     if (scrollRoot?.isConnected) scrollRoot.scrollTop = 0;
   };
 
@@ -661,8 +678,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
     const searchOpen = props.searchOpen;
     const sourcesReady = searchOpen
       ? !props.sources.search.isLoading()
-      : tab() === 'recents'
-        ? !props.sources.recents.isLoading()
+      : tab() === 'unread'
+        ? !unreadSource.isLoading()
         : tab() === 'threads'
           ? !props.sources.threads.isLoading()
           : BROWSE_QUERY_SCOPES.every(
@@ -675,8 +692,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
       if (searchOpen) {
         scrollSearchToSelectedOrStart();
-      } else if (tab() === 'recents') {
-        scrollScopeToSelectedOrStart('recents');
+      } else if (tab() === 'unread') {
+        scrollScopeToSelectedOrStart('unread');
       } else if (tab() === 'threads') {
         scrollThreadsToSelectedOrStart();
       } else {
@@ -728,7 +745,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
           const row = current?.item;
           if (direction !== 1 || row?.kind !== 'conversation') return true;
 
-          const source = props.sources[row.scope];
+          const source = sources[row.scope];
           const renderedCount =
             row.scope === 'team_channels'
               ? channelSectionRows().length
@@ -1213,7 +1230,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     list,
     tab,
     selectTab,
-    sources: props.sources,
+    sources,
     favorites,
     channelById,
     selectedChannel,

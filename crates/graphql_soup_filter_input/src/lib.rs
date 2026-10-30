@@ -1049,6 +1049,10 @@ enum GraphqlChannelLiteral {
     IsParticipant(bool),
     /// Exact notification state for the requester.
     NotificationState(GraphqlNotificationState),
+    /// Exact notification state for the requester on the channel's top-level
+    /// messages only (sends, mentions, and document mentions outside threads):
+    /// the rows behind the channel's unread dot.
+    MessageNotificationState(GraphqlNotificationState),
 }
 
 impl IntoFilterExpr<ChannelLiteral> for GraphqlChannelLiteral {
@@ -1069,6 +1073,9 @@ impl IntoFilterExpr<ChannelLiteral> for GraphqlChannelLiteral {
             Self::Importance(importance) => ChannelLiteral::Importance(importance),
             Self::IsParticipant(is_participant) => ChannelLiteral::IsParticipant(is_participant),
             Self::NotificationState(state) => ChannelLiteral::NotificationState(state.into()),
+            Self::MessageNotificationState(state) => {
+                ChannelLiteral::MessageNotificationState(state.into())
+            }
         };
         Ok(Expr::val(literal))
     }

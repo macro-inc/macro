@@ -1,6 +1,6 @@
 import type { ChannelEntity } from '@entity/types/entity';
 import { QueryClient } from '@tanstack/query-core';
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
 const useSoupAstItemsQuery = vi.hoisted(() =>
@@ -45,7 +45,13 @@ vi.mock('@entity', () => ({
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user-1' }));
 
 import { useChannelByIdQuery } from '@channel/Channel/channel-entity';
-import { resolveReferencedChannels, useChannelsSources } from './queries';
+import {
+  channelsQueryArgs,
+  createUnreadListSource,
+  filterChannelsForScope,
+  resolveReferencedChannels,
+  useChannelsSources,
+} from './queries';
 
 const channelEntity = (id: string) =>
   ({
@@ -101,21 +107,21 @@ describe('channel list query selection', () => {
       return dispose;
     });
     try {
-      // Five channel lists, the Threads rail's threads and their channels,
+      // Six channel lists, the Threads rail's threads and their channels,
       // then the selected conversation.
-      expect(useSoupAstItemsQuery).toHaveBeenCalledTimes(8);
-      for (const [, options] of useSoupAstItemsQuery.mock.calls.slice(0, 5)) {
+      expect(useSoupAstItemsQuery).toHaveBeenCalledTimes(9);
+      for (const [, options] of useSoupAstItemsQuery.mock.calls.slice(0, 6)) {
         expect(options?.().graphqlProjection).toBe('channel-list');
         expect(options?.().staleTime).toBe(30_000);
       }
-      for (const [, options] of useSoupAstItemsQuery.mock.calls.slice(5, 7)) {
+      for (const [, options] of useSoupAstItemsQuery.mock.calls.slice(6, 8)) {
         expect(options?.().staleTime).toBe(30_000);
       }
       // The Threads rail's channels, fetched by id, are rail rows too.
-      const [, channelsByIdOptions] = useSoupAstItemsQuery.mock.calls[6];
+      const [, channelsByIdOptions] = useSoupAstItemsQuery.mock.calls[7];
       expect(channelsByIdOptions?.().graphqlProjection).toBe('channel-list');
       const [selectionArgs, selectionOptions] =
-        useSoupAstItemsQuery.mock.calls[7];
+        useSoupAstItemsQuery.mock.calls[8];
       expect(selectionArgs().transport).toBe('rest');
       expect(selectionOptions?.().graphqlProjection).toBeUndefined();
       expect(selectionOptions?.().staleTime).toBe(0);
@@ -150,6 +156,112 @@ describe('channel list query selection', () => {
       dispose();
       graphqlSoup.enabled = false;
     }
+  });
+});
+
+describe('Unread list', () => {
+  it('asks the server for unread top-level messages in joined conversations by activity', () => {
+    const { params, body } = channelsQueryArgs('unread');
+    expect(params).toMatchObject({ limit: 100, sort_method: 'updated_at' });
+    expect(body.chanf).toEqual({
+      '&': [
+        { l: { MessageNotificationState: 'unseen' } },
+        { l: { IsParticipant: true } },
+      ],
+    });
+    // Rows the server returns are shown as they come; nothing is hidden locally.
+    expect(filterChannelsForScope('unread', [channelEntity('x')])).toHaveLength(
+      1
+    );
+  });
+
+  it('keeps the selected conversation in place after it is read, until another is selected', () => {
+    createRoot((dispose) => {
+      const unread = (id: string, witness: string) => ({
+        ...channelEntity(id),
+        unreadNotifications: [
+          { id: witness, state: 'unseen' as const, createdAt: '2026-01-01' },
+        ],
+      });
+      const [items, setItems] = createSignal<ChannelEntity[]>([
+        unread('a', 'n1'),
+        unread('b', 'n2'),
+        unread('c', 'n3'),
+      ]);
+      const [selected, setSelected] = createSignal<string | undefined>();
+      const [dots, setDots] = createSignal(new Set(['a', 'b', 'c']));
+      const source = createUnreadListSource(
+        {
+          items,
+          isLoading: () => false,
+          isFetching: () => false,
+          error: () => undefined,
+          hasMore: () => false,
+          isLoadingMore: () => false,
+          loadMore: async () => {},
+          refresh: async () => {},
+        },
+        selected,
+        (id) => dots().has(id)
+      );
+      const ids = () => source.items().map((channel) => channel.id);
+
+      setSelected('b');
+      // Reading b clears its dot and, later, removes it from the server page.
+      setDots(new Set(['a', 'c']));
+      expect(ids()).toEqual(['a', 'b', 'c']);
+      setItems([unread('a', 'n1'), unread('c', 'n3')]);
+      expect(ids()).toEqual(['a', 'b', 'c']);
+      expect(source.items()[1].unreadNotifications).toEqual([]);
+
+      // A new message puts b back; the server copy wins over the retained one.
+      setDots(new Set(['a', 'b', 'c']));
+      setItems([unread('b', 'n4'), unread('a', 'n1'), unread('c', 'n3')]);
+      expect(ids()).toEqual(['b', 'a', 'c']);
+      expect(source.items()[0].unreadNotifications).toHaveLength(1);
+
+      setDots(new Set(['a', 'c']));
+      setItems([unread('a', 'n1'), unread('c', 'n3')]);
+      expect(ids()).toEqual(['b', 'a', 'c']);
+
+      // Selecting another conversation drops the read one.
+      setSelected('c');
+      expect(ids()).toEqual(['a', 'c']);
+
+      // A selection that was never unread is not added.
+      setSelected('z');
+      expect(ids()).toEqual(['a', 'c']);
+      dispose();
+    });
+  });
+
+  it('drops a row whose dot cleared elsewhere before the page refreshes', () => {
+    createRoot((dispose) => {
+      const [items] = createSignal<ChannelEntity[]>([
+        channelEntity('a'),
+        channelEntity('b'),
+      ]);
+      const [dots, setDots] = createSignal(new Set(['a', 'b']));
+      const source = createUnreadListSource(
+        {
+          items,
+          isLoading: () => false,
+          isFetching: () => false,
+          error: () => undefined,
+          hasMore: () => false,
+          isLoadingMore: () => false,
+          loadMore: async () => {},
+          refresh: async () => {},
+        },
+        () => undefined,
+        (id) => dots().has(id)
+      );
+      expect(source.items().map((channel) => channel.id)).toEqual(['a', 'b']);
+      // Read on another device: the dot clears first, the server page later.
+      setDots(new Set(['b']));
+      expect(source.items().map((channel) => channel.id)).toEqual(['b']);
+      dispose();
+    });
   });
 });
 

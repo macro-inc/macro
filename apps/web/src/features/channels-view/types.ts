@@ -1,4 +1,4 @@
-export type ChannelsTab = 'browse' | 'recents' | 'threads';
+export type ChannelsTab = 'browse' | 'unread' | 'threads';
 
 /** The All tab's conversation lists, each its own paginated query. */
 export type ChannelsGroup = 'team_channels' | 'channels' | 'direct_messages';
@@ -11,7 +11,8 @@ export type ChannelsSortGroup = ChannelsGroup | 'threads';
 /** Collapsible sections of the All tab. */
 export type ChannelsRailSection = 'favorites' | ChannelsGroup;
 
-export type ChannelsQueryScope = ChannelsGroup | 'recents';
+/** Lists backed by one channel query: the All tab groups, the mobile Recent feed, and the Unread tab. */
+export type ChannelsQueryScope = ChannelsGroup | 'recents' | 'unread';
 
 export type ChannelsViewState = {
   tab: ChannelsTab;

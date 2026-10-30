@@ -448,3 +448,38 @@ fn channel_lifecycle_in_turso() {
         cache_turso::TursoStorage::open_in_memory("soup-channels").unwrap(),
     ));
 }
+
+/// The sidebar's channel lists select one unread top-level witness per
+/// channel without its entity identity, so the row has no complete
+/// notification snapshot and stays out of local evaluation: channel lists are
+/// server pages refreshed after notification writes, not cache-maintained
+/// membership. Adding `entityId`/`targetEntityType` to that edge would flip
+/// them to local evaluation, where the unseen facts cannot tell an unread
+/// message from an invite or a thread reply.
+#[test]
+fn bounded_unread_edge_without_entity_identity_stays_server_maintained() {
+    const LIST: &str = r#"query ChannelList { user { id soup(input: {initial: {}}) { items {
+        __typename id cacheProjection
+        ... on GraphqlSoupChannel {
+            ownerId channelType channelTeamId: teamId organizationId isParticipant createdAt updatedAt
+            unreadNotifications: notifications(filter: {states: [UNSEEN], topLevelMessagesOnly: true}, limit: 1) {
+                id state createdAt
+            }
+        }
+    } } } }"#;
+    let mut unread = row(1);
+    unread.as_object_mut().unwrap().remove("notifications");
+    unread["unreadNotifications"] =
+        json!([{ "id": id(101), "state": "UNSEEN", "createdAt": "2025-01-02T00:00:00Z" }]);
+    let projections = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
+        LIST,
+        None,
+        &data(vec![unread]),
+    )
+    .unwrap();
+    assert!(matches!(
+        projections.as_slice(),
+        [ProjectionMutation::MarkIncomplete { .. }]
+    ));
+}

@@ -87,6 +87,9 @@ pub(super) fn check(expr: Option<&Expr<ChannelLiteral>>) -> Result<(), Unsupport
                 | ChannelLiteral::IsParticipant(_)
         ) || matches!(literal, ChannelLiteral::NotificationState(state) if active_notification_state(state))
     }) {
+        // `MessageNotificationState` is among the network-only literals: the
+        // local unseen facts cover every notification kind on the channel, so
+        // they cannot tell an unread message from an invite or a thread reply.
         return Err(UnsupportedReason::Literal("channel"));
     }
     // Mentioning participation widens the server candidate universe to team

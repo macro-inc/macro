@@ -24,6 +24,7 @@ export default {
   projectsCreatedByMe: 'Projects created by me',
   newProject: 'New project',
   recent: 'Recent',
+  threads: 'Threads',
   people: 'People',
   teams: 'Teams',
   missed: 'Missed',

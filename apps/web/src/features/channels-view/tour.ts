@@ -32,7 +32,7 @@ export const channelsTour = defineViewTour({
       entryLabel: 'Show the channel list to continue',
       title: 'Channels and DMs, together',
       description:
-        'Organize work in shared channels, and use DMs for smaller conversations. All and Recent help you return to the right discussion.',
+        'Organize work in shared channels, and use DMs for smaller conversations. All lists every conversation; Unread shows the ones waiting for you.',
     },
     {
       target: CHANNELS_TOUR.create,

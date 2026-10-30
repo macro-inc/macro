@@ -91,6 +91,18 @@ export const CHANNELS_QUERY_DEFINITIONS = {
     }),
     matches: isDirectMessage,
   },
+  /**
+   * Conversations with an unread top-level message or mention, newest activity
+   * first: the same notifications that light a row's dot. The server filters
+   * and pages them, so the list never walks every conversation to find them.
+   */
+  unread: {
+    params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'updated_at' },
+    filters: defineQueryFilters({
+      include: { channelMessageSeen: false, channelIsParticipant: [true] },
+    }),
+    matches: () => true,
+  },
   search: {
     params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'updated_at' },
     filters: defineQueryFilters({
@@ -338,7 +350,7 @@ function useChannelsDataSource(
       (query.data?.entities ?? []).filter(isChannelEntity)
     );
 
-    if (scope === 'recents') return channels;
+    if (scope === 'recents' || scope === 'unread') return channels;
 
     return sortChannels(
       channels,
@@ -367,6 +379,46 @@ function useChannelsDataSource(
   };
 }
 
+/**
+ * The Unread list as shown: the server's unread page kept consistent with the
+ * rows' dots, plus the selected conversation.
+ *
+ * A row whose dot the local read state has already cleared (read here or on
+ * another device) leaves at once instead of waiting for the page to refresh.
+ * The selected conversation is the exception: opening a row marks it read,
+ * which would otherwise pull it out from under the pointer, so it stays in
+ * place without a dot until another conversation is selected.
+ */
+export function createUnreadListSource(
+  source: ChannelsDataSource,
+  selectedChannelId: Accessor<string | undefined>,
+  hasUnread: (channelId: string) => boolean
+): ChannelsDataSource {
+  const retained = createMemo<
+    { channel: ChannelEntity; index: number } | undefined
+  >((previous) => {
+    const id = selectedChannelId();
+    if (id === undefined) return undefined;
+    const items = source.items();
+    const index = items.findIndex((channel) => channel.id === id);
+    if (index >= 0) return { channel: items[index], index };
+    return previous?.channel.id === id ? previous : undefined;
+  });
+  const items = createMemo<ChannelEntity[]>(() => {
+    const selected = selectedChannelId();
+    const shown = source
+      .items()
+      .filter((channel) => channel.id === selected || hasUnread(channel.id));
+    const kept = retained();
+    if (!kept || shown.some((channel) => channel.id === kept.channel.id))
+      return shown;
+    const read = { ...kept.channel, unreadNotifications: [] };
+    const at = Math.min(kept.index, shown.length);
+    return [...shown.slice(0, at), read, ...shown.slice(at)];
+  });
+  return { ...source, items };
+}
+
 export function useChannelsSources(
   enabled: (scope: ChannelsSourceScope) => boolean,
   sortBy: (group: ChannelsSortGroup) => ChannelListSort
@@ -390,6 +442,11 @@ export function useChannelsSources(
     recents: useChannelsDataSource(
       'recents',
       () => enabled('recents'),
+      () => undefined
+    ),
+    unread: useChannelsDataSource(
+      'unread',
+      () => enabled('unread'),
       () => undefined
     ),
     search: useChannelsDataSource(

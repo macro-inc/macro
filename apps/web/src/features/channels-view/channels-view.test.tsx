@@ -195,6 +195,7 @@ vi.mock('./channels-view-context', () => ({
   }),
 }));
 vi.mock('./queries', () => ({
+  createUnreadListSource: (source: unknown) => source,
   filterChannelsForScope: (_scope: string, channels: ChannelEntity[]) =>
     channels,
   deduplicateChannels: (collections: ChannelEntity[][]) => [
@@ -214,6 +215,7 @@ vi.mock('./queries', () => ({
       channels: { items: () => mocks.rows() },
       direct_messages: { items: () => mocks.rows() },
       recents: { items: () => mocks.rows() },
+      unread: { items: () => [] },
       search: { items: () => [] },
     };
   },
@@ -323,7 +325,13 @@ describe('mobile dock search wiring', () => {
     render(() => <ChannelsView />);
     expect(screen.getByText('hutch')).toBeTruthy();
     expect(mocks.sourceEnabled('recents')).toBe(true);
-    for (const scope of ['channels', 'direct_messages', 'threads', 'search']) {
+    for (const scope of [
+      'channels',
+      'direct_messages',
+      'unread',
+      'threads',
+      'search',
+    ]) {
       expect(mocks.sourceEnabled(scope)).toBe(false);
     }
     setText('Julia');

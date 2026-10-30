@@ -46,7 +46,11 @@ const channelsExpandedGroupsSchema = z.preprocess(
 
 const channelsEntryStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
-  tab: z.enum(['browse', 'recents', 'threads']).default('browse'),
+  // The Recent tab was replaced by Unread; a saved choice of it opens All.
+  tab: z.preprocess(
+    (value) => (value === 'recents' ? 'browse' : value),
+    z.enum(['browse', 'unread', 'threads']).default('browse')
+  ),
   expandedGroups: channelsExpandedGroupsSchema.default({
     favorites: true,
     team_channels: true,
