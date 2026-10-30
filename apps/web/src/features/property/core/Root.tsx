@@ -36,14 +36,22 @@ interface PropertyRootProps
  * A pick the source has not shown yet. `base` is unset while the save runs;
  * after it succeeds, the pick stays until the source emits a newer property.
  * The definition ID survives a new property's ID assignment mid-save, but not
- * a Root that is reused for another property. `entityNames` are the names the
- * picker showed, so a chip names the pick before its own read loads.
+ * a Root that is reused for another property.
  */
 type PendingValue = {
   value: PropertyApiValues;
-  entityNames?: ReadonlyMap<string, string>;
   propertyDefinitionId: string;
   base?: Property;
+};
+
+/**
+ * The names the last pick's picker showed, by entity ID. They outlive the
+ * pending value: a chip's own read can answer after the source shows the pick,
+ * and chips use these names only while that read loads.
+ */
+type PickedNames = {
+  names: ReadonlyMap<string, string>;
+  propertyDefinitionId: string;
 };
 
 export function Root(props: PropertyRootProps) {
@@ -66,30 +74,30 @@ export function Root(props: PropertyRootProps) {
   // Editors close before their save finishes, and the source only catches up
   // once the cache projects the write, so show the pick until then.
   const [pending, setPending] = createSignal<PendingValue>();
-  const shownPending = createMemo(() => {
+  const property = createMemo(() => {
     const current = pending();
     return current &&
       current.propertyDefinitionId === local.property.propertyDefinitionId &&
       (current.base === undefined || current.base === local.property)
-      ? current
-      : undefined;
-  });
-  const property = createMemo(() => {
-    const current = shownPending();
-    return current
       ? withApiValues(local.property, current.value)
       : local.property;
   });
+  const [picked, setPicked] = createSignal<PickedNames>();
 
   const save: PropertyPickFn = async (saved, value, entityNames) => {
     const onSave = local.onSave;
     if (!onSave) return;
     const entry: PendingValue = {
       value,
-      entityNames,
       propertyDefinitionId: saved.propertyDefinitionId,
     };
     setPending(entry);
+    setPicked(
+      entityNames && {
+        names: entityNames,
+        propertyDefinitionId: saved.propertyDefinitionId,
+      }
+    );
     try {
       await onSave(saved, value);
       if (pending() === entry) setPending({ ...entry, base: local.property });
@@ -127,7 +135,13 @@ export function Root(props: PropertyRootProps) {
 
   const value: PropertyRootContextValue = {
     property,
-    pickedEntityName: (entityId) => shownPending()?.entityNames?.get(entityId),
+    pickedEntityName: (entityId) => {
+      const current = picked();
+      return current?.propertyDefinitionId ===
+        local.property.propertyDefinitionId
+        ? current.names.get(entityId)
+        : undefined;
+    },
     canEdit: () => local.canEdit ?? false,
     get onSave() {
       return local.onSave && save;

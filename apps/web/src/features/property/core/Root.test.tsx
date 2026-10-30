@@ -162,7 +162,7 @@ function PickProject() {
   );
 }
 
-it('names a picked entity from its picker only while the pick is shown', async () => {
+it('names a picked entity until its own read can answer, on its property only', async () => {
   const [source, setSource] = createSignal<EntityProperty>(project);
   const saves: PromiseWithResolvers<void>[] = [];
   const onSave = vi.fn(() => {
@@ -186,17 +186,17 @@ it('names a picked entity from its picker only while the pick is shown', async (
 
   saves[0].resolve();
   await saves[0].promise;
-  expect(pickedName()).toBe('Website redesign');
-
+  // The source can show the pick before the chip's own read answers.
   setSource({
     ...project,
     value: [{ entity_id: 'redesign', entity_type: 'INITIATIVE' }],
   });
-  expect(pickedName()).toBe('');
-
-  fireEvent.click(screen.getByText('Pick redesign'));
   expect(pickedName()).toBe('Website redesign');
-  saves[1].reject(new Error('rejected'));
-  await expect(saves[1].promise).rejects.toThrow('rejected');
+
+  setSource({
+    ...project,
+    propertyId: 'status-assignment',
+    propertyDefinitionId: 'status-definition',
+  });
   expect(pickedName()).toBe('');
 });
