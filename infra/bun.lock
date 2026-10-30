@@ -80,10 +80,6 @@
       "name": "cloud-storage-service-stack",
       "version": "0.0.0",
     },
-    "stacks/connect-api": {
-      "name": "connect-api-stack",
-      "version": "0.0.0",
-    },
     "stacks/connection-gateway": {
       "name": "connection-gateway-stack",
       "version": "0.0.0",
@@ -571,8 +567,6 @@
     "color-name": ["color-name@1.1.4", "", {}, "sha512-dOy+3AuW3a2wNbZHIuMZpTcgjGuLU/uBL/ubcZF9OXbDo8ff4O8yVp5Bf0efS8uEoYo5q4Fx7dY9OgQGXgAsQA=="],
 
     "common-ancestor-path": ["common-ancestor-path@2.0.0", "", {}, "sha512-dnN3ibLeoRf2HNC+OlCiNc5d2zxbLJXOtiZUudNFSXZrNSydxcCsSpRzXwfu7BBWCIfHPw+xTayeBvJCP/D8Ng=="],
-
-    "connect-api-stack": ["connect-api-stack@workspace:stacks/connect-api"],
 
     "connection-gateway-stack": ["connection-gateway-stack@workspace:stacks/connection-gateway"],
 

@@ -6,7 +6,6 @@ const SERVICE_NAMES = [
   'notification-service',
   'contacts-service',
   'calendar-service',
-  'connect-api',
   'cloud-storage-service',
   'search-processing-service',
   'unfurl-service',

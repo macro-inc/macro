@@ -3,9 +3,8 @@ use super::*;
 #[test]
 fn local_binaries_are_unique_and_complete() {
     let bins = local_binaries();
-    assert_eq!(bins.len(), 17, "{bins:?}");
+    assert_eq!(bins.len(), 16, "{bins:?}");
     assert!(bins.contains(&"whatsapp_session_service"));
-    assert!(bins.contains(&"connect_api"));
     assert!(bins.contains(&"pubsub_workers"));
     assert!(bins.contains(&"seed_cli"));
     assert!(bins.contains(&"document_upload_finalizer_local_worker"));

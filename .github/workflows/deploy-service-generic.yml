@@ -12,7 +12,6 @@ on:
           - authentication-service
           - bulk-upload
           - calendar-service
-          - connect-api
           - connection-gateway
           - contacts-service
           - convert-service

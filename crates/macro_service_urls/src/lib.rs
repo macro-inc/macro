@@ -628,12 +628,6 @@ service_url! {
             dev: "https://dev-gateway.macro.com/calendar",
             prod: "https://gateway.macro.com/calendar",
         },
-        /// Macro Connect API URL.
-        pub ConnectApiUrl {
-            local: "http://localhost:8112",
-            dev: "https://dev-gateway.macro.com/connect",
-            prod: "https://gateway.macro.com/connect",
-        },
         /// Image proxy service API URL.
         pub ImageProxyServiceUrl {
             local: "http://localhost:8097",
