@@ -52,9 +52,11 @@ draft queue runner, or live-update subscriptions. Signing in activates them in
 the same tab, including after a session expiry. Queued draft writes wait for
 authenticated user info; unrelated mutations can continue draining.
 
-Verify expiry followed by signing into a different account without reloading:
-the new account's lists must load and receive live updates, and the previous
-account's cached data must be absent. Logout wipes local caches before retiring
+A confirmed expiry loads `/welcome` as a new page, as logout does, so email
+drafts work after the next sign-in. Verify expiry followed by signing into a
+different account: the new account's lists must load and receive live updates,
+email composers must accept input, and the previous account's cached data must
+be absent. Logout wipes local caches before retiring
 their clients. Mounted query observers must receive the next account's data
 after the wipe. Previous account data must not return through initial data,
 placeholder data, or a later query reset.
