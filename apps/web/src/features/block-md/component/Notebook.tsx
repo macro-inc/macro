@@ -32,6 +32,7 @@ import {
   untrack,
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
+import { isKeyboardFocusedControl } from '../util/isKeyboardFocusedControl';
 import { DocumentDiscussion } from './DocumentDiscussion';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
@@ -205,7 +206,8 @@ export function Notebook(props: {
         scopeId: currentScopeId,
         hotkeyToken: TOKENS.block.focus,
         description: 'Focus Title or Markdown Editor',
-        keyDownHandler: () => {
+        keyDownHandler: (event) => {
+          if (isKeyboardFocusedControl(event?.target)) return false;
           const titleEditor = md.titleEditor;
           const markdownEditor = md.editor;
           const docName = untrack(documentName);
