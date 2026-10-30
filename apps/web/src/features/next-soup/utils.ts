@@ -52,6 +52,7 @@ import {
   ENTITY_ID_DATA_ATTRIBUTE,
   entityIdSelector,
 } from '@core/dom-selectors';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import type { DateValue } from '@core/util/date';
@@ -126,6 +127,7 @@ import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-qu
 import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
 import { applyGraphqlDoneOptimistic } from './actions/graphql-done-optimism';
+import { claimPhoneOpenTap, holdPhoneOpenUntilReady } from './hold-phone-open';
 import {
   searchLocationTarget,
   searchLocationUpdates,
@@ -685,6 +687,10 @@ export const openEntityInSplitFromUnifiedList = async (
   }
 
   const blockOrchestrator = splitManager.getOrchestrator();
+  // A phone tap claims its turn before any await, so a newer tap cancels it.
+  const phoneOpen = isMobile()
+    ? { tap: claimPhoneOpenTap(), splitId: splitManager.activeSplitId() }
+    : undefined;
 
   // Latest opens do not need notifications to choose their destination. Snapshot
   // the list row before navigation can dispose its Solid store, and hydrate only
@@ -808,6 +814,27 @@ export const openEntityInSplitFromUnifiedList = async (
       channelReadScope: options.channelReadScope,
     });
   };
+  // Phones hold the pressed row until the pane can slide in with content. A
+  // newer tap, or leaving the list meanwhile, cancels this open.
+  if (phoneOpen) {
+    const isSourceUnchanged = () => {
+      const currentSource =
+        splitHandle?.content() ?? splitManager.activeSplit()?.content();
+      return (
+        splitManager.activeSplitId() === phoneOpen.splitId &&
+        currentSource?.type === sourceContent?.type &&
+        currentSource?.id === sourceContent?.id
+      );
+    };
+    const shouldOpen = await holdPhoneOpenUntilReady({
+      content,
+      channelTarget,
+      tap: phoneOpen.tap,
+      isSourceUnchanged,
+    });
+    if (!shouldOpen) return;
+  }
+
   const result = splitManager.openWithSplit(splitContent, {
     search: target ? searchLocationUpdates(content.id, target) : undefined,
     onApplied: markNotificationsSeen,
