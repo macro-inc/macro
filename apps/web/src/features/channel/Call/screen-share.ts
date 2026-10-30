@@ -1,5 +1,7 @@
+import { t } from '@app/lib/i18n';
 import type { Span } from '@macro-inc/observability';
 import type { Room } from 'livekit-client';
+import { callMediaErrorType } from './call-media-telemetry';
 import {
   captureScreenSource,
   listScreenCaptureSources,
@@ -7,8 +9,15 @@ import {
 } from './desktop-screen-capture';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 import { pickScreenSource } from './ScreenSourcePicker';
+import { ScreenShareError } from './screen-share-error';
 
 export type ScreenShareStart = 'shared' | 'cancelled';
+
+/** Keeps the cause's type on the span, which records only the wrapper. */
+function shareFailed(span: Span, message: string, cause: unknown) {
+  span.setAttr('call.media.screen_share.error_type', callMediaErrorType(cause));
+  return new ScreenShareError(message, { cause });
+}
 
 /**
  * Starts sharing a screen. The macOS desktop app picks the source in Macro's
@@ -21,7 +30,9 @@ export async function startScreenShare(
 ): Promise<ScreenShareStart> {
   const listed = await listScreenCaptureSources();
   if (listed.isErr()) {
-    if (listed.error.kind === 'native') throw listed.error.error;
+    if (listed.error.kind === 'native') {
+      throw shareFailed(span, t('calls.shareFailed'), listed.error.error);
+    }
     span.setAttr('call.media.screen_share.picker', 'browser');
     await room.localParticipant.setScreenShareEnabled(true);
     return 'shared';
@@ -44,14 +55,24 @@ export async function startScreenShare(
   }
   span.setAttr('call.media.screen_share.source_kind', source.kind);
 
-  const track = await captureScreenSource(source.id);
+  let track: MediaStreamTrack;
+  try {
+    track = await captureScreenSource(source.id);
+  } catch (error) {
+    // macOS refuses capture until Screen Recording is allowed.
+    const message =
+      callMediaErrorType(error) === 'NotAllowedError'
+        ? t('calls.screenAccessNeeded')
+        : t('calls.shareFailed');
+    throw shareFailed(span, message, error);
+  }
   try {
     await room.localParticipant.publishTrack(track, {
       source: LK_TRACK_SOURCE.ScreenShare,
     });
   } catch (error) {
     track.stop();
-    throw error;
+    throw shareFailed(span, t('calls.shareFailed'), error);
   }
   return 'shared';
 }
