@@ -64,6 +64,11 @@ pub enum ChannelLiteral {
     IsParticipant(bool),
     /// An entity has a non-deleted notification in this exact state.
     NotificationState(crate::NotificationState),
+    /// The channel has a non-deleted notification in this exact state on one of
+    /// its top-level messages: a message send, a mention, or a document mention
+    /// outside a thread. Replies, thread mentions, reactions, invites, and calls
+    /// do not count, so `Unseen` is exactly the channel row's unread dot.
+    MessageNotificationState(crate::NotificationState),
 }
 
 impl ExpandFrame<ChannelLiteral> for ChannelFilters {

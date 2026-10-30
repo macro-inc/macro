@@ -540,6 +540,25 @@ static CHANNEL_LIST_SELECT: &str = r#"
     END) DESC, pc.id::text DESC
 "#;
 
+/// Notifications on a channel's top-level messages, as a predicate over a
+/// `notification n` row: the rows the channel's
+/// `notifications(topLevelMessagesOnly: true)` edge lists and the sidebar's
+/// unread dot counts. The notification crate's `top_level_messages_only` filter
+/// and the soup candidate gate spell the same predicate; keep the three in step.
+#[cfg(feature = "list")]
+const TOP_LEVEL_MESSAGE_NOTIFICATION_SQL: &str = "n.notification_event_type IN ('channel_message_send', 'channel_mention', 'document_mention') \
+    AND COALESCE(n.metadata->>'threadId', n.metadata->>'thread_id') IS NULL";
+
+/// Which of the channel's notifications a state filter reads.
+#[cfg(feature = "list")]
+#[derive(Clone, Copy)]
+enum ChannelNotificationScope {
+    /// Every notification whose primary item is the channel.
+    Channel,
+    /// Only notifications on the channel's top-level messages.
+    TopLevelMessages,
+}
+
 /// Matches channels where the user has a live notification in `state`.
 ///
 /// Unseen and seen rows are few per user and usually the newest of a channel,
@@ -550,8 +569,17 @@ static CHANNEL_LIST_SELECT: &str = r#"
 /// Done rows accumulate without bound and the oldest one usually matches, so
 /// the per-channel `EXISTS` stays cheaper for them.
 #[cfg(feature = "list")]
-fn build_channel_notification_state_clause(state: item_filters::NotificationState) -> String {
-    let predicate = notification_state_predicate(state);
+fn build_channel_notification_state_clause(
+    state: item_filters::NotificationState,
+    scope: ChannelNotificationScope,
+) -> String {
+    let predicate = match scope {
+        ChannelNotificationScope::Channel => notification_state_predicate(state).to_string(),
+        ChannelNotificationScope::TopLevelMessages => format!(
+            "{} AND {TOP_LEVEL_MESSAGE_NOTIFICATION_SQL}",
+            notification_state_predicate(state)
+        ),
+    };
     match state {
         item_filters::NotificationState::Unseen | item_filters::NotificationState::Seen => {
             format!(
@@ -634,7 +662,13 @@ fn build_channel_list_filter(ast: Option<&Expr<ChannelLiteral>>) -> String {
             )
         }
         filter_ast::ExprFrame::Literal(ChannelLiteral::NotificationState(state)) => {
-            build_channel_notification_state_clause(state)
+            build_channel_notification_state_clause(state, ChannelNotificationScope::Channel)
+        }
+        filter_ast::ExprFrame::Literal(ChannelLiteral::MessageNotificationState(state)) => {
+            build_channel_notification_state_clause(
+                state,
+                ChannelNotificationScope::TopLevelMessages,
+            )
         }
     });
     if formatting.is_empty() {

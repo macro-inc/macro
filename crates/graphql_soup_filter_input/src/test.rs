@@ -1,6 +1,8 @@
 use filter_ast::Expr;
 use item_filters::ast::{
-    channel::ChannelThreadLiteral, chat::ChatLiteral, document::DocumentLiteral,
+    channel::{ChannelLiteral, ChannelThreadLiteral},
+    chat::ChatLiteral,
+    document::DocumentLiteral,
 };
 use serde_json::{Value, json};
 
@@ -270,6 +272,25 @@ fn channel_thread_has_replies_materializes_for_browser_and_server() {
             serde_json::to_value(input.into_ast().unwrap()).unwrap()
         );
     }
+}
+
+#[test]
+fn channel_message_notification_state_materializes_for_browser_and_server() {
+    let value = json!({
+        "channelFilter": {"literal": {"messageNotificationState": "UNSEEN"}}
+    });
+    let ast = materialize_graphql_filter(value.clone()).unwrap();
+    assert!(matches!(
+        ast.channel_filter.as_deref(),
+        Some(Expr::Literal(ChannelLiteral::MessageNotificationState(
+            item_filters::NotificationState::Unseen
+        )))
+    ));
+    let input: GraphqlEntityFilterAst = serde_json::from_value(value).unwrap();
+    assert_eq!(
+        serde_json::to_value(ast).unwrap(),
+        serde_json::to_value(input.into_ast().unwrap()).unwrap()
+    );
 }
 
 #[test]

@@ -201,6 +201,27 @@ fn negated_properties_filter_keeps_propertyless_channels() {
 }
 
 #[test]
+fn channel_gate_pre_applies_message_scoped_notification_states() {
+    use crate::outbound::pg_soup_repo::candidate_gates::channel_gate;
+    let filter = EntityFilterAst {
+        channel_filter: Some(std::sync::Arc::new(filter_ast::Expr::val(
+            item_filters::ast::channel::ChannelLiteral::MessageNotificationState(
+                item_filters::NotificationState::Unseen,
+            ),
+        ))),
+        ..EntityFilterAst::default()
+    };
+    let gate = channel_gate("t.entity_id", Some(&filter));
+    assert!(gate.contains("un.state = 'unseen'"), "{gate}");
+    assert!(
+        gate.contains("n.notification_event_type IN ('channel_message_send', 'channel_mention', 'document_mention')"),
+        "{gate}"
+    );
+    assert!(gate.contains("'threadId'"), "{gate}");
+    assert!(!gate.contains("secondary_event_item_type"), "{gate}");
+}
+
+#[test]
 fn impossible_document_filter_drops_documents() {
     let link_ids = [uuid::Uuid::from_u128(1)];
     let filter = EntityFilterAst {

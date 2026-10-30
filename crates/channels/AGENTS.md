@@ -66,10 +66,13 @@ DMs, and the shared message store other domains discuss things on.
   records, calls) are authorized in `ChannelServiceImpl::get_attachment_references`
   through the `CommentParentAccess` port; the repo returns every parent. A
   service built without `with_comment_parent_access` withholds them.
-- The channel list's unseen/seen filter matches a set built once from the
+- The channel list's unseen/seen filters match a set built once from the
   user's notifications (`= ANY(ARRAY(...))`). A per-channel `EXISTS` or plain
   `IN` walks every candidate channel's notification history; that was ~24% of
-  the prod read replica's buffer hits.
+  the prod read replica's buffer hits. `MessageNotificationState` narrows that
+  same set to top-level message notifications (`TOP_LEVEL_MESSAGE_NOTIFICATION_SQL`,
+  the twin of the notification crate's `top_level_messages_only`); it backs the
+  Chat rail's Unread tab and must keep matching the channel row's unread dot.
 
 ## Related
 

@@ -340,15 +340,147 @@ async fn seed_channel_list_notifications(pool: &Pool<Postgres>) -> anyhow::Resul
 
 #[test]
 fn channel_list_pending_states_read_the_user_notifications_once() {
+    use super::ChannelNotificationScope::{Channel, TopLevelMessages};
     use item_filters::NotificationState::{Done, Seen, Unseen};
 
-    for state in [Unseen, Seen] {
-        let sql = super::build_channel_notification_state_clause(state);
-        assert!(sql.contains("= ANY(ARRAY("), "{sql}");
-        assert!(!sql.contains("n.event_item_id = (c.id)"), "{sql}");
+    for scope in [Channel, TopLevelMessages] {
+        for state in [Unseen, Seen] {
+            let sql = super::build_channel_notification_state_clause(state, scope);
+            assert!(sql.contains("= ANY(ARRAY("), "{sql}");
+            assert!(!sql.contains("n.event_item_id = (c.id)"), "{sql}");
+        }
+        let done = super::build_channel_notification_state_clause(Done, scope);
+        assert!(done.contains("n.event_item_id = (c.id)::text"), "{done}");
     }
-    let done = super::build_channel_notification_state_clause(Done);
-    assert!(done.contains("n.event_item_id = (c.id)::text"), "{done}");
+    let messages = super::build_channel_notification_state_clause(Unseen, TopLevelMessages);
+    assert!(
+        messages.contains("n.notification_event_type IN ("),
+        "{messages}"
+    );
+    assert!(messages.contains("'threadId'"), "{messages}");
+    let channel = super::build_channel_notification_state_clause(Unseen, Channel);
+    assert!(!channel.contains("n.notification_event_type"), "{channel}");
+}
+
+fn message_state(state: item_filters::NotificationState) -> Expr<ChannelLiteral> {
+    Expr::val(ChannelLiteral::MessageNotificationState(state))
+}
+
+/// left-user participates in c11, c13 and c21. Unseen notifications: c11 a
+/// top-level message, c13 a thread reply and a reaction, c21 an invite and a
+/// mention inside a thread; a seen top-level mention on c21.
+async fn seed_channel_message_notifications(pool: &Pool<Postgres>) -> anyhow::Result<()> {
+    insert_channel_notification(
+        pool,
+        LEFT_USER,
+        TEAM_A_AUTO_ACTIVE,
+        "channel_message_send",
+        serde_json::json!({ "messageId": MSG1 }),
+        false,
+        false,
+    )
+    .await?;
+    insert_channel_notification(
+        pool,
+        LEFT_USER,
+        TEAM_A_MANUAL,
+        "channel_message_send",
+        serde_json::json!({ "messageId": REPLY1, "threadId": MSG1 }),
+        false,
+        false,
+    )
+    .await?;
+    insert_channel_notification(
+        pool,
+        LEFT_USER,
+        TEAM_A_MANUAL,
+        "channel_message_reaction",
+        serde_json::json!({ "messageId": MSG1 }),
+        false,
+        false,
+    )
+    .await?;
+    insert_channel_notification(
+        pool,
+        LEFT_USER,
+        TEAM_B_AUTO,
+        "channel_invite",
+        serde_json::json!({}),
+        false,
+        false,
+    )
+    .await?;
+    insert_channel_notification(
+        pool,
+        LEFT_USER,
+        TEAM_B_AUTO,
+        "channel_mention",
+        serde_json::json!({ "messageId": REPLY2, "threadId": MSG2 }),
+        false,
+        false,
+    )
+    .await?;
+    insert_channel_notification(
+        pool,
+        LEFT_USER,
+        TEAM_B_AUTO,
+        "channel_mention",
+        serde_json::json!({ "messageId": MSG3 }),
+        false,
+        true,
+    )
+    .await
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_list_filters_by_message_notification_state(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use item_filters::NotificationState::{Seen, Unseen};
+
+    seed_channel_message_notifications(&pool).await?;
+    let repo = repo(pool);
+
+    // Only the top-level message lights c11; c13's reply and reaction and
+    // c21's invite and thread mention are unseen but not unread messages.
+    assert_eq!(
+        channel_ids_matching(&repo, LEFT_USER, message_state(Unseen)).await,
+        HashSet::from([TEAM_A_AUTO_ACTIVE])
+    );
+    assert_eq!(
+        channel_ids_matching(&repo, LEFT_USER, channel_state(Unseen)).await,
+        HashSet::from([TEAM_A_AUTO_ACTIVE, TEAM_A_MANUAL, TEAM_B_AUTO])
+    );
+    assert_eq!(
+        channel_ids_matching(&repo, LEFT_USER, message_state(Seen)).await,
+        HashSet::from([TEAM_B_AUTO])
+    );
+    assert_eq!(
+        channel_ids_matching(&repo, LEFT_USER, Expr::is_not(message_state(Unseen))).await,
+        HashSet::from([TEAM_A_MANUAL, TEAM_B_AUTO])
+    );
+    // The sidebar's Unread list: unread messages in joined channels, by activity.
+    assert_eq!(
+        channel_ids_matching(
+            &repo,
+            LEFT_USER,
+            Expr::and(
+                message_state(Unseen),
+                Expr::val(ChannelLiteral::IsParticipant(true))
+            )
+        )
+        .await,
+        HashSet::from([TEAM_A_AUTO_ACTIVE])
+    );
+    assert!(
+        channel_ids_matching(&repo, USER_A, message_state(Unseen))
+            .await
+            .is_empty()
+    );
+    Ok(())
 }
 
 #[sqlx::test(
@@ -1677,6 +1809,27 @@ async fn insert_channel_message_notification(
     done: bool,
     seen: bool,
 ) -> anyhow::Result<()> {
+    insert_channel_notification(
+        pool,
+        user_id,
+        channel_id,
+        "channel_message_send",
+        serde_json::json!({ "messageId": message_id }),
+        done,
+        seen,
+    )
+    .await
+}
+
+async fn insert_channel_notification(
+    pool: &Pool<Postgres>,
+    user_id: &str,
+    channel_id: Uuid,
+    event_type: &str,
+    metadata: serde_json::Value,
+    done: bool,
+    seen: bool,
+) -> anyhow::Result<()> {
     let notification_id = Uuid::new_v4();
     sqlx::query!(
         r#"
@@ -1688,18 +1841,12 @@ async fn insert_channel_message_notification(
             service_sender,
             metadata
         )
-        VALUES (
-            $1,
-            'channel_message_send',
-            $2,
-            'channel',
-            'channels-test',
-            jsonb_build_object('messageId', $3::text)
-        )
+        VALUES ($1, $2, $3, 'channel', 'channels-test', $4)
         "#,
         notification_id,
+        event_type,
         channel_id.to_string(),
-        message_id.to_string(),
+        metadata,
     )
     .execute(pool)
     .await?;

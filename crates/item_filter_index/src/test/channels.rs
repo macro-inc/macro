@@ -69,13 +69,18 @@ fn general_soup_supports_channels_without_enabling_legacy_profiles() {
     let active = predicate(Some(Expr::val(ChannelLiteral::NotificationState(
         NotificationState::Unseen,
     ))));
+    let unread_messages = predicate(Some(Expr::val(ChannelLiteral::MessageNotificationState(
+        NotificationState::Unseen,
+    ))));
     let mut doc = channel(true, None, None);
     assert!(!doc.matches(&active));
+    assert!(!doc.matches(&unread_messages));
     doc.exact_facts.push(ExactFact {
         attribute: vocabulary::notification_unseen(),
         value: ExactValue::new(Uuid::from_u128(2).as_bytes()).unwrap(),
     });
     assert!(doc.matches(&active));
+    assert!(doc.matches(&unread_messages));
 }
 
 #[test]
@@ -175,6 +180,9 @@ fn deferred_channel_predicates_and_widened_access_stay_network_only() {
     for expr in [
         Expr::val(ChannelLiteral::ThreadId(Uuid::from_u128(1))),
         Expr::val(ChannelLiteral::NotificationState(NotificationState::Done)),
+        Expr::val(ChannelLiteral::MessageNotificationState(
+            NotificationState::Done,
+        )),
         Expr::val(ChannelLiteral::IsParticipant(false)),
         Expr::is_not(Expr::val(ChannelLiteral::IsParticipant(true))),
         Expr::or(

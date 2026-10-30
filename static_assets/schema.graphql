@@ -2824,6 +2824,12 @@ input GraphqlChannelLiteral @oneOf {
 	Exact notification state for the requester.
 	"""
 	notificationState: NotificationState
+	"""
+	Exact notification state for the requester on the channel's top-level
+	messages only (sends, mentions, and document mentions outside threads):
+	the rows behind the channel's unread dot.
+	"""
+	messageNotificationState: NotificationState
 }
 
 """

@@ -448,3 +448,88 @@ fn channel_lifecycle_in_turso() {
         cache_turso::TursoStorage::open_in_memory("soup-channels").unwrap(),
     ));
 }
+
+/// The sidebar's channel lists select one unread top-level witness per
+/// channel. With the witness's entity identity the row projects a complete
+/// snapshot whose unseen facts are exactly the unread-message dot, so unread
+/// lists stay cache-maintained; without it the row is not queryable locally.
+#[test]
+fn bounded_unread_edge_projects_complete_message_facts_only_with_entity_identity() {
+    const WITH_IDENTITY: &str = r#"query ChannelList { user { id soup(input: {initial: {}}) { items {
+        __typename id cacheProjection
+        ... on GraphqlSoupChannel {
+            ownerId channelType channelTeamId: teamId organizationId isParticipant createdAt updatedAt
+            unreadNotifications: notifications(filter: {states: [UNSEEN], topLevelMessagesOnly: true}, limit: 1) {
+                id state createdAt entityId targetEntityType
+            }
+        }
+    } } } }"#;
+    const WITHOUT_IDENTITY: &str = r#"query ChannelList { user { id soup(input: {initial: {}}) { items {
+        __typename id cacheProjection
+        ... on GraphqlSoupChannel {
+            ownerId channelType channelTeamId: teamId organizationId isParticipant createdAt updatedAt
+            unreadNotifications: notifications(filter: {states: [UNSEEN], topLevelMessagesOnly: true}, limit: 1) {
+                id state createdAt
+            }
+        }
+    } } } }"#;
+    let mut unread = row(1);
+    unread.as_object_mut().unwrap().remove("notifications");
+    unread["unreadNotifications"] = json!([{
+        "id": id(101), "state": "UNSEEN", "createdAt": "2025-01-02T00:00:00Z",
+        "entityId": id(1), "targetEntityType": "CHANNEL"
+    }]);
+    let projections = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
+        WITH_IDENTITY,
+        None,
+        &data(vec![unread.clone()]),
+    )
+    .unwrap();
+    let [ProjectionMutation::Replace(document)] = projections.as_slice() else {
+        panic!("complete channel")
+    };
+    assert_eq!(
+        document
+            .exact_facts
+            .iter()
+            .filter(|fact| fact.attribute == vocabulary::notification_unseen())
+            .count(),
+        1
+    );
+
+    let mut read = unread.clone();
+    read["unreadNotifications"] = json!([]);
+    let projections = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
+        WITH_IDENTITY,
+        None,
+        &data(vec![read]),
+    )
+    .unwrap();
+    let [ProjectionMutation::Replace(document)] = projections.as_slice() else {
+        panic!("complete read channel")
+    };
+    assert!(
+        !document
+            .exact_facts
+            .iter()
+            .any(|fact| fact.attribute == vocabulary::notification_unseen())
+    );
+
+    let mut anonymous = unread;
+    anonymous["unreadNotifications"] = json!([{
+        "id": id(101), "state": "UNSEEN", "createdAt": "2025-01-02T00:00:00Z"
+    }]);
+    let projections = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
+        WITHOUT_IDENTITY,
+        None,
+        &data(vec![anonymous]),
+    )
+    .unwrap();
+    assert!(matches!(
+        projections.as_slice(),
+        [ProjectionMutation::MarkIncomplete { .. }]
+    ));
+}
