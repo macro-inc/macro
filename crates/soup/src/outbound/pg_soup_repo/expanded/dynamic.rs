@@ -1456,6 +1456,7 @@ fn build_query<'a>(
     exclude_frecency: bool,
     sort_method: SimpleSortMethod,
     item_source: ItemSource,
+    viewer: &str,
     document_ids: &mut DocumentIdArrays,
 ) -> QueryBuilder<'a, Postgres> {
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
@@ -1559,39 +1560,52 @@ fn build_query<'a>(
     }
 
     let properties_filter = filter_ast.properties_filter.as_deref();
-    // Building the document arm binds its id arrays, so build the arms only for
-    // a query that reads them.
-    let feed = if item_source == ItemSource::SourceItems && Feed::serves(sort_method) {
-        let document = include_documents.then(|| {
+    // An arm comes from source_items when the projection can order this sort and
+    // the arm's filter lets a source scan stop at the page; otherwise it reads its
+    // item table, as every arm does with the projection disabled. Building the
+    // document arm binds its id arrays, so only the arm the query reads is built.
+    let projected = item_source == ItemSource::SourceItems && Feed::serves(sort_method);
+    let document_arm = (projected && include_documents)
+        .then(|| {
             FeedArm::document(
                 document_filter,
                 properties_filter,
                 optimized_notification_predicate.is_some() && document_notification.is_some(),
+                viewer,
                 document_ids,
             )
-        });
-        let chat = include_chats.then(|| {
+        })
+        .flatten();
+    let chat_arm = (projected && include_chats)
+        .then(|| {
             FeedArm::chat(
                 chat_filter,
                 properties_filter,
                 optimized_notification_predicate.is_some() && chat_notification.is_some(),
             )
-        });
-        let project = include_projects.then(|| {
+        })
+        .flatten();
+    let project_arm = (projected && include_projects)
+        .then(|| {
             FeedArm::project(
                 project_filter,
                 properties_filter,
                 optimized_notification_predicate.is_some() && project_notification.is_some(),
             )
-        });
-        Feed::new(
-            sort_method,
-            exclude_frecency,
-            [document, chat, project].into_iter().flatten(),
-        )
-    } else {
-        None
-    };
+        })
+        .flatten();
+    let documents_from_table = include_documents && document_arm.is_none();
+    let chats_from_table = include_chats && chat_arm.is_none();
+    let projects_from_table = include_projects && project_arm.is_none();
+    let feed = projected
+        .then(|| {
+            Feed::new(
+                sort_method,
+                exclude_frecency,
+                [document_arm, chat_arm, project_arm].into_iter().flatten(),
+            )
+        })
+        .flatten();
     if let Some(feed) = &feed {
         feed.push_ctes(&mut builder);
     }
@@ -1604,49 +1618,48 @@ fn build_query<'a>(
 
     if let Some(feed) = &feed {
         feed.push_members(&mut builder, &mut needs_separator);
-    } else {
-        if include_documents {
-            push_union_separator(&mut builder, &mut needs_separator);
-            // Document top clause (lightweight). The document_sub_type join is
-            // only needed by filters that reference `dt` (Importance / CBM);
-            // SubType literals render as their own EXISTS probes.
-            let needs_task_property_joins =
-                document_filter_needs_task_property_joins(document_filter);
-            builder.push(document_top_clause(sort_method, needs_task_property_joins));
-            if optimized_notification_predicate.is_some() && document_notification.is_some() {
-                builder.push(build_notification_join("d", "document"));
-            }
-            if needs_task_property_joins {
-                builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
-            }
-            builder.push(document_top_where_clause(sort_method));
-            builder.push(build_document_filter(document_filter, Some(document_ids)));
-            builder.push(build_properties_filter(properties_filter, "d.id"));
-        }
+    }
 
-        if include_chats {
-            push_union_separator(&mut builder, &mut needs_separator);
-            // Chat top clause (lightweight)
-            builder.push(chat_top_clause(sort_method));
-            if optimized_notification_predicate.is_some() && chat_notification.is_some() {
-                builder.push(build_notification_join("c", "chat"));
-            }
-            builder.push(chat_top_where_clause());
-            builder.push(build_chat_filter(chat_filter));
-            builder.push(build_properties_filter(properties_filter, "c.id"));
+    if documents_from_table {
+        push_union_separator(&mut builder, &mut needs_separator);
+        // Document top clause (lightweight). The document_sub_type join is
+        // only needed by filters that reference `dt` (Importance / CBM);
+        // SubType literals render as their own EXISTS probes.
+        let needs_task_property_joins = document_filter_needs_task_property_joins(document_filter);
+        builder.push(document_top_clause(sort_method, needs_task_property_joins));
+        if optimized_notification_predicate.is_some() && document_notification.is_some() {
+            builder.push(build_notification_join("d", "document"));
         }
+        if needs_task_property_joins {
+            builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
+        }
+        builder.push(document_top_where_clause(sort_method));
+        builder.push(build_document_filter(document_filter, Some(document_ids)));
+        builder.push(build_properties_filter(properties_filter, "d.id"));
+    }
 
-        if include_projects {
-            push_union_separator(&mut builder, &mut needs_separator);
-            // Project top clause (lightweight)
-            builder.push(project_top_clause(sort_method));
-            if optimized_notification_predicate.is_some() && project_notification.is_some() {
-                builder.push(build_notification_join("p", "project"));
-            }
-            builder.push(project_top_where_clause());
-            builder.push(build_project_filter(project_filter));
-            builder.push(build_properties_filter(properties_filter, "p.id"));
+    if chats_from_table {
+        push_union_separator(&mut builder, &mut needs_separator);
+        // Chat top clause (lightweight)
+        builder.push(chat_top_clause(sort_method));
+        if optimized_notification_predicate.is_some() && chat_notification.is_some() {
+            builder.push(build_notification_join("c", "chat"));
         }
+        builder.push(chat_top_where_clause());
+        builder.push(build_chat_filter(chat_filter));
+        builder.push(build_properties_filter(properties_filter, "c.id"));
+    }
+
+    if projects_from_table {
+        push_union_separator(&mut builder, &mut needs_separator);
+        // Project top clause (lightweight)
+        builder.push(project_top_clause(sort_method));
+        if optimized_notification_predicate.is_some() && project_notification.is_some() {
+            builder.push(build_notification_join("p", "project"));
+        }
+        builder.push(project_top_where_clause());
+        builder.push(build_project_filter(project_filter));
+        builder.push(build_properties_filter(properties_filter, "p.id"));
     }
 
     if include_initiatives {
@@ -2077,6 +2090,7 @@ async fn expanded_dynamic_cursor_soup_hydrated(
         exclude_frecency,
         *cursor.sort_method(),
         item_source,
+        user_id.as_ref(),
         &mut document_ids,
     );
     let mut query = builder

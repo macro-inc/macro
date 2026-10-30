@@ -223,6 +223,7 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
             false,
             SimpleSortMethod::UpdatedAt,
             ItemSource::SourceItems,
+            "macro|viewer@example.com",
             &mut DocumentIdArrays::starting_at(9),
         )
         .sql()
@@ -237,6 +238,7 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
             false,
             SimpleSortMethod::UpdatedAt,
             ItemSource::SourceItems,
+            "macro|viewer@example.com",
             &mut DocumentIdArrays::starting_at(9),
         )
         .sql()
@@ -248,6 +250,7 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
         false,
         SimpleSortMethod::UpdatedAt,
         ItemSource::SourceItems,
+        "macro|viewer@example.com",
         &mut DocumentIdArrays::starting_at(9),
     );
     let (candidates, details) = query.sql().split_once("Combined AS").unwrap();

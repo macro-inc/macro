@@ -191,6 +191,7 @@ fn arrays_follow_fixed_binds(item_source: ItemSource) {
             false,
             SimpleSortMethod::UpdatedAt,
             item_source,
+            "macro|viewer@example.com",
             &mut flat_ids,
         )
         .sql()

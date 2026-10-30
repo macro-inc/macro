@@ -111,6 +111,16 @@ enum Driver {
 }
 
 impl Driver {
+    fn single_kind(notified: bool, pinned: bool) -> Self {
+        if notified {
+            Driver::Notifications
+        } else if pinned {
+            Driver::Lookup
+        } else {
+            Driver::Sources
+        }
+    }
+
     fn reads_in_order(self) -> bool {
         match self {
             Driver::Sources | Driver::Owner => true,
@@ -147,19 +157,23 @@ pub(super) struct FeedArm {
 }
 
 impl FeedArm {
+    /// `None` when the item tables should list documents for this filter instead; see
+    /// [`served_by_scan`].
     pub(super) fn document(
         filter_ast: Option<&Expr<DocumentLiteral>>,
         properties: Option<&Expr<PropertiesLiteral>>,
         notified: bool,
+        viewer: &str,
         document_ids: &mut DocumentIdArrays,
-    ) -> Self {
+    ) -> Option<Self> {
         // Property rows retain their entity type when a document changes subtype.
         // Only document predicates can narrow the current listing kind.
         let mut document = true;
         let mut task = true;
-        let mut owner = false;
+        let mut owned_by_viewer = false;
         let mut updated_at_bounds = Vec::new();
-        for conjunct in Conjuncts::of(filter_ast).iter() {
+        let conjuncts = Conjuncts::of(filter_ast);
+        for conjunct in conjuncts.iter() {
             match conjunct {
                 Expr::Literal(DocumentLiteral::SubType(DocumentSubType::Task))
                 | Expr::Literal(DocumentLiteral::Importance(false))
@@ -173,7 +187,9 @@ impl FeedArm {
                 {
                     task = false
                 }
-                Expr::Literal(DocumentLiteral::Owner(_)) => owner = true,
+                Expr::Literal(DocumentLiteral::Owner(owner)) if owner.principal_id() == viewer => {
+                    owned_by_viewer = true
+                }
                 Expr::Literal(DocumentLiteral::UpdatedAt(lit)) => {
                     updated_at_bounds.push(lit.clone())
                 }
@@ -186,11 +202,26 @@ impl FeedArm {
             matches!(lit, DocumentLiteral::Id(_) | DocumentLiteral::ProjectId(_))
         }) {
             Driver::Lookup
-        } else if owner {
+        } else if owned_by_viewer {
             Driver::Owner
         } else {
             Driver::Sources
         };
+        let served = |conjunct: &Expr<DocumentLiteral>| match conjunct {
+            Expr::Literal(DocumentLiteral::SubType(DocumentSubType::Task))
+            | Expr::Literal(DocumentLiteral::UpdatedAt(_)) => true,
+            Expr::Not(inner) => matches!(
+                **inner,
+                Expr::Literal(DocumentLiteral::SubType(DocumentSubType::Task))
+            ),
+            Expr::Literal(DocumentLiteral::Owner(owner)) => {
+                driver == Driver::Owner && owner.principal_id() == viewer
+            }
+            _ => false,
+        };
+        if !served_by_scan(driver, &conjuncts, served, properties) {
+            return None;
+        }
         // `Importance` and `IncludeCbmAtmNc` filters read these aliases.
         let joins = if document_filter_needs_task_property_joins(filter_ast) {
             format!(
@@ -199,7 +230,7 @@ impl FeedArm {
         } else {
             String::new()
         };
-        FeedArm {
+        Some(FeedArm {
             entity: FeedEntity::Document,
             kinds: [("document", document), ("task", task)]
                 .into_iter()
@@ -210,15 +241,18 @@ impl FeedArm {
             filter: build_document_filter(filter_ast, Some(document_ids)),
             properties: properties.cloned(),
             updated_at_bounds,
-        }
+        })
     }
 
+    /// `None` when the item tables should list chats for this filter instead; see
+    /// [`served_by_scan`].
     pub(super) fn chat(
         filter_ast: Option<&Expr<ChatLiteral>>,
         properties: Option<&Expr<PropertiesLiteral>>,
         notified: bool,
-    ) -> Self {
-        let updated_at_bounds = Conjuncts::of(filter_ast)
+    ) -> Option<Self> {
+        let conjuncts = Conjuncts::of(filter_ast);
+        let updated_at_bounds = conjuncts
             .iter()
             .filter_map(|conjunct| match conjunct {
                 Expr::Literal(ChatLiteral::UpdatedAt(lit)) => Some(lit.clone()),
@@ -228,22 +262,30 @@ impl FeedArm {
         let pinned = pins_rows(filter_ast, |lit| {
             matches!(lit, ChatLiteral::ChatId(_) | ChatLiteral::ProjectId(_))
         });
-        FeedArm::single_kind(
-            FeedEntity::Chat,
-            build_chat_filter(filter_ast),
-            properties,
-            notified,
-            pinned,
-            updated_at_bounds,
-        )
+        let driver = Driver::single_kind(notified, pinned);
+        let served = |conjunct: &Expr<ChatLiteral>| {
+            matches!(conjunct, Expr::Literal(ChatLiteral::UpdatedAt(_)))
+        };
+        served_by_scan(driver, &conjuncts, served, properties).then(|| {
+            FeedArm::single_kind(
+                FeedEntity::Chat,
+                driver,
+                build_chat_filter(filter_ast),
+                properties,
+                updated_at_bounds,
+            )
+        })
     }
 
+    /// `None` when the item tables should list projects for this filter instead; see
+    /// [`served_by_scan`].
     pub(super) fn project(
         filter_ast: Option<&Expr<ProjectLiteral>>,
         properties: Option<&Expr<PropertiesLiteral>>,
         notified: bool,
-    ) -> Self {
-        let updated_at_bounds = Conjuncts::of(filter_ast)
+    ) -> Option<Self> {
+        let conjuncts = Conjuncts::of(filter_ast);
+        let updated_at_bounds = conjuncts
             .iter()
             .filter_map(|conjunct| match conjunct {
                 Expr::Literal(ProjectLiteral::UpdatedAt(lit)) => Some(lit.clone()),
@@ -256,34 +298,32 @@ impl FeedArm {
                 ProjectLiteral::ProjectId(_) | ProjectLiteral::ProjectIdSelf(_)
             )
         });
-        FeedArm::single_kind(
-            FeedEntity::Project,
-            build_project_filter(filter_ast),
-            properties,
-            notified,
-            pinned,
-            updated_at_bounds,
-        )
+        let driver = Driver::single_kind(notified, pinned);
+        let served = |conjunct: &Expr<ProjectLiteral>| {
+            matches!(conjunct, Expr::Literal(ProjectLiteral::UpdatedAt(_)))
+        };
+        served_by_scan(driver, &conjuncts, served, properties).then(|| {
+            FeedArm::single_kind(
+                FeedEntity::Project,
+                driver,
+                build_project_filter(filter_ast),
+                properties,
+                updated_at_bounds,
+            )
+        })
     }
 
     fn single_kind(
         entity: FeedEntity,
+        driver: Driver,
         filter: String,
         properties: Option<&Expr<PropertiesLiteral>>,
-        notified: bool,
-        pinned: bool,
         updated_at_bounds: Vec<DateLiteral>,
     ) -> Self {
         FeedArm {
             entity,
             kinds: entity.kinds().to_vec(),
-            driver: if notified {
-                Driver::Notifications
-            } else if pinned {
-                Driver::Lookup
-            } else {
-                Driver::Sources
-            },
+            driver,
             joins: String::new(),
             filter,
             properties: properties.cloned(),
@@ -585,6 +625,43 @@ fn whole_sort_key(sort: FeedSort, updated_at: &str) -> String {
         FeedSort::ViewedAt => {
             r#"COALESCE(uh."updatedAt", '1970-01-01 00:00:00'::timestamp)::timestamptz"#.to_string()
         }
+    }
+}
+
+/// Whether reading the arm from `source_items` costs at most a constant factor more than the item
+/// tables, whatever the data. Lookups and notifications start from a bounded set of items. A scan
+/// of the user's sources applies every conjunct its index does not serve row by row, and stops at
+/// the page only once enough rows pass: a selective conjunct makes each source scan run to its end,
+/// where the item tables can start from that predicate's own index (another user's documents, a
+/// property value). Those arms read the item tables. A negated literal only skips the rows it
+/// names, so it cannot make a scan read more than every row once per source.
+fn served_by_scan<T: Clone>(
+    driver: Driver,
+    conjuncts: &Conjuncts<T>,
+    served: impl Fn(&Expr<T>) -> bool,
+    properties: Option<&Expr<PropertiesLiteral>>,
+) -> bool {
+    match driver {
+        Driver::Lookup | Driver::Notifications => true,
+        Driver::Sources | Driver::Owner => {
+            conjuncts
+                .iter()
+                .all(|conjunct| served(conjunct) || !selective(conjunct))
+                && !properties
+                    .is_some_and(|properties| selective(&push_not_inward(properties, false)))
+        }
+    }
+}
+
+/// Whether `expr`, with negations pushed onto its literals, can keep only a small fraction of
+/// rows. A literal can; a negated literal keeps all but the rows it names. A conjunction is as
+/// selective as its most selective side, a disjunction as its least.
+fn selective<T>(expr: &Expr<T>) -> bool {
+    match expr {
+        Expr::Literal(_) => true,
+        Expr::Not(_) => false,
+        Expr::And(a, b) => selective(a) || selective(b),
+        Expr::Or(a, b) => selective(a) && selective(b),
     }
 }
 

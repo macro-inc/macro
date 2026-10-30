@@ -2,6 +2,7 @@ use super::super::{
     DocumentIdArrays, ExpandedDynamicCursorArgs, ItemSource, build_query,
     expanded_dynamic_cursor_soup_hydrated,
 };
+use super::FeedArm;
 use crate::domain::models::{
     SimpleSortQuery, SimpleSortRequest, SoupDocumentServerFacts, SoupProjectionHydration,
 };
@@ -551,6 +552,7 @@ fn shapes_reach_every_driver_and_phase() {
                     false,
                     sort,
                     ItemSource::SourceItems,
+                    USER,
                     &mut DocumentIdArrays::starting_at(9),
                 );
                 let (candidates, _) = query.sql().split_once("Combined AS").unwrap();
@@ -680,4 +682,158 @@ async fn source_items_pages_match_after_writes(pool: PgPool) -> anyhow::Result<(
         assert!(everything.contains(&shown), "{shown} should still show");
     }
     Ok(())
+}
+
+/// Arms whose filter a source scan cannot stop early on read the item tables; the rest read
+/// `source_items`. Each case: (description, document filter, properties filter, notified, projected).
+#[test]
+fn selective_filters_read_the_item_tables() {
+    let user = || Owner::from_principal_str(USER).unwrap();
+    let other = || Owner::from_principal_str("macro|user-2@example.com").unwrap();
+    let doc = |literal| Expr::val(literal);
+    let later = DateLiteral::GreaterThan(february(1, 0));
+    let cases: Vec<(
+        &str,
+        Option<Expr<DocumentLiteral>>,
+        Option<Expr<PropertiesLiteral>>,
+        bool,
+        bool,
+    )> = vec![
+        ("unfiltered", None, None, false, true),
+        (
+            "tasks",
+            Some(doc(DocumentLiteral::SubType(DocumentSubType::Task))),
+            None,
+            false,
+            true,
+        ),
+        (
+            "not tasks",
+            Some(Expr::is_not(doc(DocumentLiteral::SubType(
+                DocumentSubType::Task,
+            )))),
+            None,
+            false,
+            true,
+        ),
+        (
+            "owned by the viewer",
+            Some(doc(DocumentLiteral::Owner(user()))),
+            None,
+            false,
+            true,
+        ),
+        (
+            "owned by someone else",
+            Some(doc(DocumentLiteral::Owner(other()))),
+            None,
+            false,
+            false,
+        ),
+        (
+            "not owned by the viewer",
+            Some(Expr::is_not(doc(DocumentLiteral::Owner(user())))),
+            None,
+            false,
+            true,
+        ),
+        (
+            "owned by anyone",
+            Some(Expr::or(
+                doc(DocumentLiteral::Owner(user())),
+                Expr::is_not(doc(DocumentLiteral::Owner(user()))),
+            )),
+            None,
+            false,
+            true,
+        ),
+        (
+            "not snippets and not attachments",
+            Some(Expr::and(
+                Expr::is_not(doc(DocumentLiteral::SubType(DocumentSubType::Snippet))),
+                Expr::is_not(doc(DocumentLiteral::IsEmailAttachment(true))),
+            )),
+            None,
+            false,
+            true,
+        ),
+        (
+            "snippets",
+            Some(doc(DocumentLiteral::SubType(DocumentSubType::Snippet))),
+            None,
+            false,
+            false,
+        ),
+        (
+            "attachments",
+            Some(doc(DocumentLiteral::IsEmailAttachment(true))),
+            None,
+            false,
+            false,
+        ),
+        (
+            "created after",
+            Some(doc(DocumentLiteral::CreatedAt(later.clone()))),
+            None,
+            false,
+            false,
+        ),
+        (
+            "updated after",
+            Some(doc(DocumentLiteral::UpdatedAt(later))),
+            None,
+            false,
+            true,
+        ),
+        (
+            "named",
+            Some(doc(DocumentLiteral::NameContains("plan".into()))),
+            None,
+            false,
+            false,
+        ),
+        (
+            "one id",
+            Some(doc(DocumentLiteral::Id(document(1)))),
+            None,
+            false,
+            true,
+        ),
+        (
+            "low priority",
+            None,
+            Some(Expr::val(low_priority(None))),
+            false,
+            false,
+        ),
+        (
+            "not low priority",
+            None,
+            Some(Expr::is_not(Expr::val(low_priority(None)))),
+            false,
+            true,
+        ),
+        (
+            "notified, someone else's",
+            Some(doc(DocumentLiteral::Owner(other()))),
+            None,
+            true,
+            true,
+        ),
+    ];
+    for (description, filter, properties, notified, projected) in cases {
+        let arm = FeedArm::document(
+            filter.as_ref(),
+            properties.as_ref(),
+            notified,
+            USER,
+            &mut DocumentIdArrays::starting_at(9),
+        );
+        assert_eq!(arm.is_some(), projected, "{description}");
+    }
+    assert!(FeedArm::chat(None, None, false).is_some());
+    assert!(
+        FeedArm::chat(Some(&Expr::val(ChatLiteral::Owner(user()))), None, false).is_none(),
+        "chats have no owner driver"
+    );
 }
