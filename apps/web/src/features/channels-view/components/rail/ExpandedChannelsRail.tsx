@@ -507,7 +507,7 @@ function ExpandedBrowse() {
         for (const group of ['favorites', 'team_channels', 'channels'] as const)
           rail.registerScrollRef(group, element);
       }}
-      class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto px-(--sidebar-content-inset)"
+      class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto px-(--sidebar-gutter)"
     >
       <Virtualizer
         ref={(handle) => {
@@ -535,7 +535,7 @@ function DirectMessages() {
   return (
     <div
       class={cn(
-        'shrink-0 border-t border-edge-muted px-(--sidebar-content-inset)',
+        'shrink-0 border-t border-edge-muted px-(--sidebar-gutter)',
         state().open && 'flex h-1/3 min-h-24 flex-col'
       )}
     >
@@ -573,7 +573,7 @@ function ExpandedSearchResults(props: { search: ChannelRailSearch }) {
   return (
     <div
       ref={setScrollRoot}
-      class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto px-(--sidebar-content-inset)"
+      class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto px-(--sidebar-gutter)"
     >
       <Show
         when={props.search.isLoading() && props.search.results().length === 0}

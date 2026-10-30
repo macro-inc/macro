@@ -898,6 +898,8 @@ Favorites explains how to add a favorite. Private conversations use a lock icon 
 the sidebar and mobile feed, including favorited private conversations.
 All section headers use the shared collapsible-section styling. Channel sections
 have a leading folder icon, Favorites a star, and Direct messages a chat bubble.
+Section, DM, and search containers use the 8px outer sidebar gutter; headings
+and rows add their own item padding so headings align with the Chat title.
 Content is indented by 8px under every section, including Favorites, custom
 sections, DMs, and empty states. Search results remain unindented. The
 caret stays hidden in expanded sections until hover and remains visible when
