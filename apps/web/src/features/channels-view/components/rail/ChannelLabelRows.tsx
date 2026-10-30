@@ -102,7 +102,7 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
             (unreadOnly() && !hasVisibleChannels()))
         }
       >
-        <p class="px-2 pb-2 text-xs text-ink-extra-muted">
+        <p class="pr-2 pb-2 pl-4 text-xs text-ink-extra-muted">
           {unreadOnly()
             ? t('channelSections.noUnreadConversations')
             : props.label.rule

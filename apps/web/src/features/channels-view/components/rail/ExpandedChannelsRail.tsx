@@ -414,47 +414,53 @@ function SectionStatus(props: { group: ChannelsGroup }) {
 function BrowseRow(props: { row: ChannelRailRow }) {
   const rail = useChannelsRail();
   return (
-    <Switch>
-      <Match when={props.row.kind === 'section' ? props.row : undefined}>
-        {(row) => (
-          <>
-            <SectionHeading group={row().group} />
-            <Show
-              when={
-                row().group === 'favorites' &&
-                rail.isGroupOpen('favorites') &&
-                !rail.list.items.all().some((row) => row.kind === 'favorite')
-              }
-            >
-              <p class="px-2 py-2 text-xs text-ink-extra-muted">
-                {rail.sectionPreferences('favorites').unreadOnly
-                  ? t('channelSections.noUnreadConversations')
-                  : t('channelSections.emptyFavorites')}
-              </p>
-            </Show>
-          </>
-        )}
-      </Match>
-      <Match when={props.row.kind === 'status' ? props.row : undefined}>
-        {(row) => <SectionStatus group={row().group} />}
-      </Match>
-      <Match when={props.row.kind === 'label' ? props.row : undefined}>
-        {(row) => <ChannelLabelRow label={row().label} />}
-      </Match>
-      <Match when={props.row.kind === 'favorite' ? props.row : undefined}>
-        {(row) => <ChannelFavoriteRow favorite={row().favorite} />}
-      </Match>
-      <Match when={props.row.kind === 'conversation' ? props.row : undefined}>
-        {(row) => (
-          <ChannelOption
-            channel={row().channel}
-            rowId={row().id}
-            labelId={row().labelId}
-            draggable={canLabelChannel(row().channel)}
-          />
-        )}
-      </Match>
-    </Switch>
+    <div
+      classList={{
+        'pl-2': props.row.kind !== 'section' && props.row.kind !== 'label',
+      }}
+    >
+      <Switch>
+        <Match when={props.row.kind === 'section' ? props.row : undefined}>
+          {(row) => (
+            <>
+              <SectionHeading group={row().group} />
+              <Show
+                when={
+                  row().group === 'favorites' &&
+                  rail.isGroupOpen('favorites') &&
+                  !rail.list.items.all().some((row) => row.kind === 'favorite')
+                }
+              >
+                <p class="py-2 pr-2 pl-4 text-xs text-ink-extra-muted">
+                  {rail.sectionPreferences('favorites').unreadOnly
+                    ? t('channelSections.noUnreadConversations')
+                    : t('channelSections.emptyFavorites')}
+                </p>
+              </Show>
+            </>
+          )}
+        </Match>
+        <Match when={props.row.kind === 'status' ? props.row : undefined}>
+          {(row) => <SectionStatus group={row().group} />}
+        </Match>
+        <Match when={props.row.kind === 'label' ? props.row : undefined}>
+          {(row) => <ChannelLabelRow label={row().label} />}
+        </Match>
+        <Match when={props.row.kind === 'favorite' ? props.row : undefined}>
+          {(row) => <ChannelFavoriteRow favorite={row().favorite} />}
+        </Match>
+        <Match when={props.row.kind === 'conversation' ? props.row : undefined}>
+          {(row) => (
+            <ChannelOption
+              channel={row().channel}
+              rowId={row().id}
+              labelId={row().labelId}
+              draggable={canLabelChannel(row().channel)}
+            />
+          )}
+        </Match>
+      </Switch>
+    </div>
   );
 }
 
@@ -529,7 +535,7 @@ function DirectMessages() {
             setScrollRoot(element);
             rail.registerScrollRef('direct_messages', element);
           }}
-          class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto"
+          class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto pl-2"
         >
           <Virtualizer
             ref={pagination.registerVirtualizer}

@@ -896,9 +896,11 @@ personal section. Each custom section is a top-level heading, independent of the
 Team channels disclosure. Empty sections remain visible with a short hint; empty
 Favorites explains how to add a favorite. Private conversations use a lock icon in
 the sidebar and mobile feed, including favorited private conversations.
-All section headers use the shared collapsible-section styling, and channel rows
-align across sections. The caret stays hidden in expanded sections until hover
-and remains visible when collapsed. Team-shared sections show a neutral Shared
+All section headers use the shared collapsible-section styling and a leading
+Rows icon. Content is indented by 8px under every section, including Favorites,
+custom sections, DMs, and empty states. Search results remain unindented. The
+caret stays hidden in expanded sections until hover and remains visible when
+collapsed. Team-shared sections show a neutral Shared
 badge next to the name, before the caret. Personal sections have no scope icon or
 badge. Header focus backgrounds fill the entire header row, including its
 trailing controls, with no extra right padding.
