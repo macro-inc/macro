@@ -44,6 +44,7 @@ use bots::outbound::pg_bots_repo::PgBotsRepo;
 use chrono::{DateTime, Utc};
 use entity_access_db_utils::{
     EntityAccessSourceType, EntityType, delete_entity_access_rows, insert_entity_access_row,
+    raise_user_entity_access,
 };
 use entity_registry::BotFacts;
 use entity_registry_db_utils::{
@@ -860,20 +861,13 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         if let (Some(owner_id), Some(user)) = (owner_id, prompter.acting_user())
             && owner_id != user.as_ref()
         {
-            sqlx::query!(
-                r#"
-                INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
-                VALUES ($1, 'agent_session', $2, 'user', $3)
-                ON CONFLICT (entity_id, entity_type, source_id, source_type)
-                WHERE granted_from_project_id IS NULL
-                DO UPDATE SET access_level = EXCLUDED.access_level, updated_at = NOW()
-                WHERE entity_access.access_level < EXCLUDED.access_level
-                "#,
-                id.as_uuid(),
-                user.as_ref(),
-                crate::domain::sharing::JOINED_PROMPTER_ACCESS as _,
+            raise_user_entity_access(
+                &mut *transaction,
+                user.clone(),
+                &id.as_uuid(),
+                EntityType::AgentSession,
+                crate::domain::sharing::JOINED_PROMPTER_ACCESS,
             )
-            .execute(&mut *transaction)
             .await
             .context("failed to grant the prompter access to the agent session")?;
             upsert_user_history(&mut transaction, user.as_ref(), &id.as_uuid())
