@@ -180,7 +180,9 @@ function hasStepDetail(record: HistoryRecord): boolean {
   return Boolean(
     record.id &&
       !record.skipped &&
-      record.steps?.some((step) => step.kind !== 'agent' || step.error)
+      (record.steps?.some((step) => step.kind !== 'agent' || step.error) ||
+        // A run that failed before any step or session opens its reason.
+        (record.success === false && record.error && !record.resource))
   );
 }
 
@@ -201,7 +203,7 @@ function stepLines(
       ? record.error
       : undefined;
   return {
-    title: first ?? 'Ran steps',
+    title: first ?? (record.success === false ? 'Run failed' : 'Ran steps'),
     summary: failure ?? (rest.join(' · ') || undefined),
     failure: Boolean(failure),
   };
@@ -275,7 +277,7 @@ function RunEntry(props: {
       keyed
       fallback={
         <Show
-          when={props.record.steps?.length}
+          when={props.record.steps?.length || hasStepDetail(props.record)}
           fallback={
             <RunRow
               record={props.record}

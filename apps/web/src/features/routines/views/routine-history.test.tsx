@@ -173,9 +173,17 @@ describe('routine history', () => {
           ]}
         />
       ));
-      // A run that failed before any step says so; others lost their transcript.
-      fireEvent.click(screen.getByText(/^Run (unavailable|failed)$/));
-      expect(screen.queryByRole('button')).toBeNull();
+      // A run that failed before any step opens its reason beside the list;
+      // the others lost their transcript and open nothing.
+      const reason = screen.queryByRole('region', { name: 'Run details' });
+      if (reason) {
+        expect(within(reason).getByRole('alert').textContent).toContain(
+          'Preparation failed'
+        );
+      } else {
+        fireEvent.click(screen.getByText('Run unavailable'));
+        expect(screen.queryByRole('button')).toBeNull();
+      }
       expect(source.onOpen).not.toHaveBeenCalled();
       expect(source.createChatMetadata).not.toHaveBeenCalled();
       expect(source.createAgentMetadata).not.toHaveBeenCalled();
@@ -412,6 +420,30 @@ describe('routine history steps', () => {
         : step.kind === 'if'
           ? `Urgent? ${step.answer ? 'yes' : 'no'}`
           : 'Asked AI';
+
+  it('opens why a run failed before any step', () => {
+    const reason =
+      'This routine decides about or reads the item that triggered it, so it only runs when an activity event triggers it.';
+    const failed = toHistoryRecord({
+      id: 'run-failed',
+      result: { version: 1, resource: null, error: reason },
+      start_time: '2026-10-09T10:00:00Z',
+      end_time: '2026-10-09T10:00:01Z',
+      is_success: false,
+    });
+    render(() => (
+      <RoutineHistory
+        {...sources()}
+        records={[failed, weekly('run-weekly')]}
+        isPending={false}
+        describeStep={describeRunStep}
+      />
+    ));
+    fireEvent.click(within(row('Run failed')).getByRole('button'));
+    // The row truncates the reason; the details read it in full.
+    const details = within(screen.getByRole('region', { name: 'Run details' }));
+    expect(details.getByRole('alert').textContent).toContain(reason);
+  });
 
   it('reads each run in two lines and shows the newest one beside the list', () => {
     const agentOnly = record('agent', 'agent-run', {
