@@ -59,6 +59,18 @@ it('keeps Enter for the document after a click on a control', () => {
   expect(ownsEnter(button)).toBe(false);
 });
 
+it('hands Enter back after a click on the control keyboard focus is on', () => {
+  const ownsEnter = track();
+  const button = add('<button>Copy</button>');
+
+  button.focus();
+  expect(ownsEnter(button)).toBe(true);
+
+  button.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+
+  expect(ownsEnter(button)).toBe(false);
+});
+
 it('forgets a control once focus moves on', () => {
   const ownsEnter = track();
   const button = add('<button>Open</button>');

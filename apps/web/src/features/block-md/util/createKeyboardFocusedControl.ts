@@ -15,8 +15,16 @@ export function createKeyboardFocusedControl() {
         ? target
         : undefined;
   };
+  // Clicking the focused control fires no focusin, so a press has to clear it.
+  const clear = () => {
+    control = undefined;
+  };
   document.addEventListener('focusin', track);
-  onCleanup(() => document.removeEventListener('focusin', track));
+  document.addEventListener('pointerdown', clear, true);
+  onCleanup(() => {
+    document.removeEventListener('focusin', track);
+    document.removeEventListener('pointerdown', clear, true);
+  });
   return (target: EventTarget | null | undefined) =>
     control !== undefined && target === control;
 }
