@@ -112,6 +112,9 @@ type ThreadListProps = {
 const NEAR_TOP_THRESHOLD = 800;
 const HISTORY_BUFFER_VIEWPORTS = 3;
 const WEBKIT_HISTORY_BUFFER_VIEWPORTS = 6;
+// How far above the reading position WebKit keeps rows measured: about as far
+// as one long momentum fling travels.
+const WEBKIT_MEASURED_HISTORY_VIEWPORTS = 12;
 const EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE = 64;
 
 const clamp = (value: number, min: number, max: number) =>
@@ -221,6 +224,49 @@ export function ThreadList(props: ThreadListProps) {
     },
   });
 
+  // Assigned once the virtualizer exists; its first range is computed inside
+  // the constructor, before the binding below is initialized.
+  let measured: { instance: typeof virtualizer } | undefined;
+  // The core reuses extracted indexes while the visible range holds still,
+  // so a pass that stopped at its unmeasured-row cap would not resume once
+  // those rows are measured. Measurements past such a pass start the next.
+  const [historyPass, setHistoryPass] = createSignal(0);
+  let resumeHistoryAfter: number | undefined;
+
+  // A WebKit gesture cannot move the native top boundary, so rows above that
+  // are taller than their estimate grow only the visual adjustment, and a
+  // fling stops at scrollTop 0 with history still above it. Keep the rows a
+  // fling can reach mounted and measured before it starts, a few unmeasured
+  // rows per pass, so the native extent above them is the real one.
+  function withMeasuredHistory(range: Range): number[] {
+    const indexes = defaultRangeExtractor(range);
+    const instance = measured?.instance;
+    const first = indexes[0];
+    const visibleStart = instance?.measurementsCache[range.startIndex]?.start;
+    if (
+      !scrollCompensation ||
+      !instance ||
+      first === undefined ||
+      visibleStart === undefined
+    )
+      return indexes;
+    const buffer = viewportSize() * WEBKIT_MEASURED_HISTORY_VIEWPORTS;
+    const added: number[] = [];
+    let unmeasured = 0;
+    let top = instance.measurementsCache[first]?.start ?? visibleStart;
+    for (let index = first - 1; index >= 0; index--) {
+      const item = instance.measurementsCache[index];
+      if (!item || visibleStart - top >= buffer || unmeasured >= OVERSCAN)
+        break;
+      added.unshift(index);
+      top = item.start;
+      if (!instance.itemSizeCache.has(item.key)) unmeasured += 1;
+    }
+    resumeHistoryAfter =
+      unmeasured >= OVERSCAN ? instance.itemSizeCache.size : undefined;
+    return added.length === 0 ? indexes : [...added, ...indexes];
+  }
+
   const virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
     // Do not consume initialOffset against an empty query result. Enabling
     // with the first page lets TanStack render the latest rows immediately.
@@ -289,12 +335,13 @@ export function ThreadList(props: ThreadListProps) {
               )
           : 0,
     get rangeExtractor() {
+      historyPass();
       const index =
         props.targetId === undefined
           ? -1
           : props.keys().indexOf(props.targetId);
       return (range: Range) => {
-        const indexes = defaultRangeExtractor(range);
+        const indexes = withMeasuredHistory(range);
         if (index < 0 || index >= range.count || indexes.includes(index))
           return indexes;
         return [...indexes, index].sort((a, b) => a - b);
@@ -368,8 +415,19 @@ export function ThreadList(props: ThreadListProps) {
           instance.scrollToEnd();
         }
       }),
-    onChange: scheduleScrollState,
+    onChange: (instance) => {
+      scheduleScrollState();
+      if (
+        resumeHistoryAfter !== undefined &&
+        instance.itemSizeCache.size > resumeHistoryAfter
+      ) {
+        resumeHistoryAfter = undefined;
+        queueMicrotask(() => setHistoryPass((pass) => pass + 1));
+      }
+    },
   });
+
+  measured = { instance: virtualizer };
 
   function writeScroll(...[offset, options, instance]: Parameters<ScrollToFn>) {
     // Size corrections happen before the Solid adapter publishes its new

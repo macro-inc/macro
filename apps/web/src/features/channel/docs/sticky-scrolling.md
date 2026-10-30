@@ -65,6 +65,12 @@ active. Size and prepend corrections counter-shift the rows instead of writing
 snapshots include that adjustment. After touch release and 150ms without input or scrolling,
 the adjustment is removed and committed to the DOM offset in the same task.
 The sizer retains its logical height and clips shifted overflow during this period.
+Because a gesture never moves the native extent, rows above that are taller than
+their 96px estimate would only grow the adjustment, and a long fling stops at
+`scrollTop` 0 with history still above it. On WebKit the range extractor
+therefore keeps rows up to twelve viewports above the reading position mounted
+and measured before a gesture reaches them, adding at most six unmeasured rows
+per range pass.
 Reaching either scroll boundary releases the shifted origin; explicit message,
 reply, latest, and pinned viewport/inset navigation flush it before computing targets.
 Elastic overscroll must return in bounds before a correction is committed. Touch end

@@ -189,6 +189,50 @@ describe('history loading ahead of scrolling', () => {
     expect(f.paginate).toHaveBeenCalledTimes(3);
   });
 
+  it.each([true, false])(
+    'measures rows taller than the estimate ahead of a gesture (safari=%s)',
+    async (safari) => {
+      platform.safari = safari;
+      // Browsers report an observed element once, which is how rows mounted
+      // during a scroll get measured.
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          constructor(readonly callback: ResizeObserverCallback) {}
+          observe(target: Element) {
+            queueMicrotask(() =>
+              this.callback(
+                [{ target } as ResizeObserverEntry],
+                this as unknown as ResizeObserver
+              )
+            );
+          }
+          unobserve() {}
+          disconnect() {}
+        }
+      );
+      // Rows three times the estimate, as long agent transcripts are: a
+      // fling over unmeasured rows hits the native top while history remains.
+      const keys = Array.from({ length: 40 }, (_, index) => String(index));
+      for (const key of keys) rowHeights.set(key, 300);
+      const { container } = render(() => (
+        <ThreadList keys={() => keys}>{({ id }) => <div>{id}</div>}</ThreadList>
+      ));
+      const mounted = () =>
+        [...container.querySelectorAll('[data-index]')].map((row) =>
+          Number(row.getAttribute('data-index'))
+        );
+      // Rows 38-39 fill the viewport. Safari measures twelve viewports
+      // (4800px, rows 22-37) above them, more than one pass of six unmeasured
+      // rows; others mount only the default overscan of six (rows 32-37).
+      await waitFor(() => expect(mounted()).toContain(32));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      if (safari) expect(Math.min(...mounted())).toBeLessThanOrEqual(22);
+      else expect(Math.min(...mounted())).toBe(32);
+      expect(Math.max(...mounted())).toBe(39);
+    }
+  );
+
   it('does not repeat a request for an unchanged boundary', async () => {
     const f = setup();
     await waitFor(() => expect(f.paginate).toHaveBeenCalledOnce());
