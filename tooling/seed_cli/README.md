@@ -38,12 +38,14 @@ existing values and sharing choices are preserved. Fixture data is in
 Seed an isolated set of channel-testing personas into your running instance:
 
 ```bash
-just seed-scenario --instance channel-access apply --file seed/scenarios/channel-access.json
-just seed-scenario --instance channel-access matrix --file seed/scenarios/channel-access.json
-just seed-scenario --instance channel-access status --file seed/scenarios/channel-access.json
+just seed-scenario apply --file seed/scenarios/channel-access.json
+just seed-scenario matrix --file seed/scenarios/channel-access.json
+just seed-scenario status --file seed/scenarios/channel-access.json
 ```
 
-Use your actual instance name and include `--port-base` if you started with one.
+These commands target the default stack. For a named stack, add `--instance <name>`
+before `apply`, `matrix`, or `status` (for example, `--instance channel-access`).
+Include `--port-base` if you started with one.
 The scenario creates four users with emails ending in `@channel-access.seed.macro.local`:
 Alex (`owner`), Morgan (`member`), Riley (`requester`), and Sam (`outsider`).
 Alex, Morgan, and Riley share a team; Sam does not.
