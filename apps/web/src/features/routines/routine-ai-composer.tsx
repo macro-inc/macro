@@ -4,7 +4,7 @@ import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { getDefaultTimezone } from '@core/util/cron';
 import { useQuickAccessEntities } from '@property/editors/selectors/entityUtils';
-import type { Accessor } from 'solid-js';
+import { type Accessor, onCleanup } from 'solid-js';
 import { createAgentRosterSource } from '../agents-view/queries/agent-roster-source';
 import { RoutineDescribe } from './components/routine-describe';
 import type { ScheduleDraft } from './core/draft';
@@ -35,6 +35,12 @@ export function RoutineAiComposer(props: {
     items.flatMap((item) =>
       item.data.name ? [{ name: item.data.name, id: item.id }] : []
     );
+  // Leaving for a template or a blank routine discards a draft still on its
+  // way, so it can't replace what the user picked.
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
   const describe = async (description: string) => {
     const draft = await composeRoutine(
       description,
@@ -65,6 +71,7 @@ export function RoutineAiComposer(props: {
       },
       databaseModelForPlan(hasPaidAccess())
     );
+    if (disposed) return undefined;
     if (typeof draft === 'string') return draft;
     props.apply(
       {
