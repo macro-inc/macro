@@ -34,10 +34,11 @@ from .parts import open_bowl, outer_x
 
 PROOF_TEXT = [
     "H.H,H:H;H!H?H n.n,n:n;n!n?n",
-    "“Quoted” ‘text’ — (parens) [brackets] {braces}",
-    "hello@macro.com  R&D  A→B ← ↑ ↓ ↗ ↘ ↔ © ® ™ § ¶",
-    "(HOH) [HOH] {HOH} «HOH» ‹n› H–H—H n-n H/O\\n n|n ¦",
-    "n*n † ‡ • n·n n… ¿n? ¡n! „non“ ‚non‘ 'n' \"n\" n_n",
+    "\u201cQuoted\u201d \u2018text\u2019 \u2014 (parens) [brackets] {braces}",
+    "hello@macro.com  R&D  A\u2192B \u2190 \u2191 \u2193 \u2197 \u2198 \u2194 \u00a9 \u00ae \u2122 \u00a7 \u00b6",
+    "(HELLO) [WORLD] \u00abNEXT\u00bb \u2013 \u2014 \u2039n\u203a n\u2013n n\u2014n n-n H-H",
+    "(HOH) [HOH] {HOH} n/o\\n n|n \u00a6 n_n n*n \u2020 \u2021 \u2022 n\u00b7n n\u2026",
+    "\u00bfnon? \u00a1non! \u201enon\u201c \u201anon\u2018 'n' \"n\" n@o.co H&O",
 ]
 
 SQ2 = math.sqrt(2)
@@ -68,7 +69,7 @@ def _comma(p, x0, y0):
     down and to the left from its bottom edge."""
     s = p.dot
     c = s * 0.3
-    tail = s * 0.55 + 85  # length of the tail below the square
+    tail = s * 0.6 + 92  # length of the tail below the square
     tw = s * 0.34  # width of the flat tail end
     tl = x0 - s * 0.06  # left corner of the tail end
     return poly([
@@ -709,7 +710,7 @@ def daggerdbl(p):
 
 
 def _bullet(p, yc):
-    side = p.dot + 90
+    side = p.dot + 110
     return dot(0, yc, side)
 
 
@@ -733,7 +734,7 @@ def at(p):
     runs straight down and hooks into the foot of the a's stem; below the
     hook the ring is open. The ring's terminal ends travelling sideways, so
     it is cut vertically with the house chamfer on its outer corner."""
-    W = p.w(840, 1.5)
+    W = p.w(840, 1.9)
     y0, y1 = -150, 730
     cy = (y0 + y1) / 2
     n, n_in = p.sq, p.sq_in
@@ -744,7 +745,7 @@ def at(p):
     xs = xr - st
     ha = 480 + 0.2 * p.grow
     oy0, oy1 = cy - ha / 2 - P.OS, cy + ha / 2 + P.OS  # the a, with overshoots
-    xa0 = xr - p.w(372, 0.8)
+    xa0 = xr - p.w(372, 1.2)
     # Ring, open at the lower right.
     x_cut = W * 0.73
     ringsh = ring(0, y0, W, y1, ws, wt, n=n, n_in=n_in) - (right_of(x_cut) & below(cy))
@@ -848,8 +849,8 @@ def section(p):
     """§ : two squircle S shapes sharing their middle bowl, so it reads as
     three stacked bowls: the top one open at the lower right below its
     terminal, the middle one closed, the bottom one the top turned round."""
-    W = p.w(420, 1.0)
-    ws, wt = p.stem * 1.02, p.hair
+    W = p.w(420, 1.4)
+    ws, wt = p.stem * 1.02, _damp(p.hair, P.params(400).hair, 0.8)
     n, n_in = p.sq, p.sq_in
     top = P.CAP + P.COS
     bot = -130

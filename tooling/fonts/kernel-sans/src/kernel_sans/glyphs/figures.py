@@ -484,12 +484,12 @@ def _six(p):
     a_r = (a_l[0] + hw, P.CAP)
     # Blend: from the bowl's left extreme up into the tail's outer edge.
     x_at = lambda y: a_l[0] - (P.CAP - y) * d[0] / d[1]
-    ym = tp[1] + (P.CAP - tp[1]) * 0.22
+    ym = tp[1] + (P.CAP - tp[1]) * 0.3
     mo = (x_at(ym), ym)
     # The blend leaves the bowl's left extreme leaning out by a few degrees,
     # so it crosses the squircle cleanly instead of grazing it.
-    lean = (-0.07, 1.0)
-    o1, o2 = _handles((0.0, cy), lean, mo, d, 0.62, 0.5)
+    lean = (-0.035, 1.0)
+    o1, o2 = _handles((0.0, cy), lean, mo, d, 0.56, 0.72)
     r = (x_at(tp[1]) + hw, tp[1])  # inner edge, level with the tangent point
     tail = _path((0.0, cy), [(o1, o2, mo), a_l, a_r, r, (cx, cy - 0.1 * (cy - box[1]))])
     shape = (squircle(*box, n=n) + tail) - squircle(*ibox, n=ni)
@@ -1111,7 +1111,7 @@ def multiply(p):
 def divide(p):
     cx, cy = _cx(p), P.AXIS
     ds = p.dot * 0.95
-    off = _arm(p) * 0.66
+    off = _mt(p) / 2 + p.w(48, 0.35) + ds / 2
     sh = _minus(p, cx, cy) + dot(cx, cy + off, ds) + dot(cx, cy - off, ds)
     return _math(p, sh)
 
@@ -1216,6 +1216,27 @@ def asciicircum(p):
     b = sh.bounds()
     sh = sh.move(w / 2 - (b[0] + b[2]) / 2, P.CAP - b[3])
     return G(sh, width=w)
+
+
+# Case forms: the same operators centred on P.CASE_AXIS, for use with
+# capitals and figures (features.py maps them in `case`).
+CASE_OPERATORS = [
+    "plus", "minus", "multiply", "divide", "equal", "plusminus", "less", "greater",
+    "lessequal", "greaterequal", "notequal", "asciitilde", "approxequal", "logicalnot",
+]
+
+
+def _case_form(base):
+    def draw(p):
+        g = base(p)
+        return G(g.shape.move(0, P.CASE_AXIS - P.AXIS), width=g.width)
+
+    draw.__name__ = base.__name__ + "_case"
+    return draw
+
+
+for _name in CASE_OPERATORS:
+    glyph(_name + ".case")(_case_form(globals()[_name]))
 
 
 # ---------------------------------------------------------------------------
