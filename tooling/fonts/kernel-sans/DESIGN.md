@@ -24,7 +24,7 @@ wins; note the exception in a comment.
 - Strokes: lowercase verticals `p.stem`, round sides `p.stem * 1.03`,
   horizontals `p.hair`; capitals `p.cstem` / `p.chair`; figures `p.fstem` /
   `p.fhair`. Diagonals are drawn by perpendicular thickness about
-  `0.95 * stem`; thin diagonals of N, M, W, w about `0.85 * stem`.
+  `0.95 * stem`; thinner diagonals of N, M, W, w about `0.9 * stem`.
 - Forms: double-storey a, single-storey g, straight-tailed y, k whose arm meets
   the stem, R with a straight leg from the bowl, G with a bar and no spur,
   M with vertical sides, J sitting on the baseline, 1 without a base.

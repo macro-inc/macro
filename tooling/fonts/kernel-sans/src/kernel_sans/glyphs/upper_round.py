@@ -18,7 +18,7 @@ import math
 import pathops
 
 from .. import params as P
-from ..geom import Shape, band, chamfer, diag, notch, poly, rect, right_of, superness
+from ..geom import Shape, band, chamfer, crotch_trap, diag, poly, rect, right_of, superness
 from . import G, glyph, ref
 from .parts import open_bowl, outer_x
 
@@ -193,7 +193,11 @@ def P_(p):
 @glyph("Thorn", 0x00DE)
 def Thorn(p):
     s = p.cstem
-    bowl = _Bowl(p, s, P.CAP * 0.218, P.CAP * 0.794, p.w(469, 0.85), p.chair, p.chair, s * 1.02, 0.635, x_out=s - 2)
+    # The bowl grows taller with weight (as in Inter) so its counter stays
+    # open at ExtraBold.
+    y0 = P.CAP * (0.218 - 0.00024 * p.grow)
+    y1 = P.CAP * (0.794 + 0.0004 * p.grow)
+    bowl = _Bowl(p, s, y0, y1, p.w(469, 0.85), p.chair, p.chair, s * 1.02, 0.635, x_out=s - 2)
     shape = (rect(0, 0, s, P.CAP, nw=p.ccut) + bowl.outer) - bowl.counter
     return G(shape, l=p.csb, r=p.csbr * 1.15)
 
@@ -233,26 +237,16 @@ def R(p):
         else:
             hi_ = mid
     cx_, cy_ = _bez(q, hi_)
-    # The trap is cut the way stem_trap cuts n: it runs up the leg's right
-    # edge into the black and opens towards the bowl.
+    # Ink trap in the white wedge between the leg's right edge (running down
+    # from the crotch) and the bowl's underside (running right). The wedge is
+    # acute (about 60-72 degrees) and the bowl is nearly flat there, so it is
+    # cut like the vertex traps of K and V: a short notch continuing the wedge,
+    # depth p.trap, mouth 0.6 of it. (A stem_trap laid along the leg would
+    # open only a sliver onto the bowl and read as a slit.)
     ul = math.hypot(slope, 1.0)
-    u = (slope / ul, 1.0 / ul)  # up along the leg edge
-    nr = (u[1], -u[0])  # out of the leg, into the white crotch
-    d2 = _bez_d(q, hi_)  # along the bowl, away from the leg
-    cos_w = -(u[0] * d2[0] + u[1] * d2[1]) / math.hypot(*d2)
-    wedge = math.degrees(math.acos(max(-1.0, min(1.0, cos_w))))
-    # The leg is wider at heavy weights, so it meets the bowl higher up the
-    # curve and the crotch opens; scale the trap by how acute the white angle
-    # is so it never notches an open join.
-    d = p.trap * 1.05 * min(1.0, max(0.3, (110 - wedge) / 40))
-
-    def at(ku, kn):
-        return (cx_ + (u[0] * ku + nr[0] * kn) * d, cy_ + (u[1] * ku + nr[1] * kn) * d)
-
-    # tip in the leg above the crotch, a in the white below it (the a-tip side
-    # crosses the leg edge, not the bowl), b inside the bowl.
-    tip, a, b = at(1.0, -0.22), at(-1.33, 0.1), at(1.0, 0.85)
-    shape = shape - notch(tip, a, b)
+    down_leg = (-slope / ul, -1.0 / ul)
+    along_bowl = _bez_d(q, hi_)
+    shape = shape - crotch_trap((cx_, cy_), down_leg, along_bowl, p.trap)
     return G(shape, l=p.csb, r=p.csbr * 0.5, anchors={"top": w / 2})
 
 
@@ -445,4 +439,5 @@ def OE(p):
         + rect(xe, ym - p.chair / 2, xs + p.w(440, 0.55), ym + p.chair / 2)
         + rect(xe, 0, xs + p.w(470, 0.65), p.chair)
     )
-    return G((outer - counter) + arms, l=p.csbr, r=p.csb * 0.45)
+    # Open right side like E: about 0.75 of the straight sidebearing.
+    return G((outer - counter) + arms, l=p.csbr, r=p.csb * 0.75)

@@ -3,7 +3,10 @@
 Built like `H` in core.py: capital stems `p.cstem`, arms and bars `p.chair`,
 the house 45-degree chamfer (`p.ccut`) only on free stem tops, square corners
 where a stem turns into an arm, flat-cut diagonal ends and vertices, and ink
-traps (`p.trap`) at the acute crotches of diagonals.
+traps at the inner vertices of diagonals (`geom.crotch_trap`, depth `p.trap`).
+
+Open right sides (E F L T Z) take a real sidebearing, a fraction of `p.csb`,
+so they shrink with weight like the straight ones.
 
 Diagonals are slanted strokes between the baseline and the cap height (or two
 other heights) placed by one of their edges; joins are found by intersecting
@@ -13,7 +16,7 @@ those edges, so every weight uses the same construction.
 import math
 
 from .. import params as P
-from ..geom import Shape, notch, poly, rect
+from ..geom import crotch_trap, poly, rect
 from . import G, glyph
 
 CAP = P.CAP
@@ -24,18 +27,12 @@ PROOF_TEXT = [
     "HHAHHOAOO HHVHHOVOO HHWHHOWOO",
     "FLAT MINT KLAXON ZENITH",
     "WAVY TAXI KNELT MAZE ÆTHELWIN",
+    "TEXT FIZZ LATTE NEW WAVE MIX",
 ]
-
-TRAP = 1.3  # ink-trap depth as a multiple of p.trap (n uses the same)
 
 
 # ---------------------------------------------------------------------------
 # Private helpers
-
-
-def _unit(dx, dy):
-    d = math.hypot(dx, dy)
-    return dx / d, dy / d
 
 
 def _meet(a0, a1, b0, b1):
@@ -93,22 +90,23 @@ class _Slant:
         return poly([(self.xl(y0), y0), (self.xr(y0), y0), (self.xr(y1), y1), (self.xl(y1), y1)])
 
 
-def _vtrap(v, d1, d2, depth, spread=1.5):
-    """Ink trap at a crotch vertex v where two edges leave v along directions
-    d1 and d2 with the white counter between them. Cuts a wedge whose mouth
-    sits on the two edges `spread * depth` from v and whose tip deepens the
-    crotch by `depth` along the bisector (like geom.stem_trap, for crotches
-    between two diagonals or a diagonal and a stem)."""
-    if depth < 1:
-        return Shape()
-    u1, u2 = _unit(*d1), _unit(*d2)
-    bx, by = _unit(u1[0] + u2[0], u1[1] + u2[1])  # into the white
-    tip = (v[0] - bx * depth, v[1] - by * depth)
-    ln = depth * spread
-    ins = 0.08 * ln + 0.6  # start just inside the white so the cut opens cleanly
-    a = (v[0] + u1[0] * ln + bx * ins, v[1] + u1[1] * ln + by * ins)
-    b = (v[0] + u2[0] * ln + bx * ins, v[1] + u2[1] * ln + by * ins)
-    return notch(tip, a, b)
+MOUTH = 0.6  # crotch_trap's default mouth, as a fraction of the depth
+MAX_LEN = 1.9  # longest vertex trap, mouth to tip, in p.trap: about n's shoulder trap
+
+
+def _vtrap(p, v, d1, d2, k=1.0):
+    """Ink trap at the inner vertex v of two straight edges leaving v along
+    d1 and d2: geom.crotch_trap at depth k * p.trap. The more acute the
+    crotch, the further along the edges crotch_trap must reach to open its
+    mouth, so below about 37 degrees (the stem joins of M, N and AE, about
+    22-30 degrees) the depth shrinks until the notch is no longer than n's
+    shoulder trap instead of becoming a slit. A V Y K and the M vertex keep
+    the full depth."""
+    a1 = math.atan2(d1[1], d1[0])
+    a2 = math.atan2(d2[1], d2[0])
+    half = abs(math.remainder(a1 - a2, math.tau)) / 2
+    length = 1 + (MOUTH / 2) / math.tan(half)  # mouth-to-tip length per unit depth
+    return crotch_trap(v, d1, d2, k * p.trap * min(1.0, MAX_LEN / length), MOUTH)
 
 
 def _down(edge):
@@ -145,12 +143,23 @@ def I(p):
     return G(rect(0, 0, s, CAP, nw=p.ccut), l=p.csb, r=p.csb)
 
 
+@glyph("I.ss02")
+def I_ss02(p):
+    """I with short square bars at top and bottom (ss02), so it can't be read
+    as l or 1. The bars are arms, so their ends stay square."""
+    s = p.cstem
+    h = p.chair
+    x0, x1 = s / 2 - 1.3 * s, s / 2 + 1.3 * s  # about 2.6 stems, centred
+    shape = rect(0, 0, s, CAP) + rect(x0, CAP - h, x1, CAP) + rect(x0, 0, x1, h)
+    return G(shape, l=p.csb * 0.7, r=p.csb * 0.7)
+
+
 @glyph("L", 0x004C)
 def L(p):
     s = p.cstem
     w = p.w(430, 0.55)
     shape = rect(0, 0, s, CAP, nw=p.ccut) + rect(s * 0.5, 0, w, p.chair)
-    return G(shape, l=p.csb, r=p.csb * 0.3)
+    return G(shape, l=p.csb, r=p.csb * 0.55)
 
 
 @glyph("E", 0x0045)
@@ -158,7 +167,7 @@ def E(p):
     s = p.cstem
     w = p.w(470, 0.65)
     shape = rect(0, 0, s, CAP) + _e_arms(p, s * 0.5, w - p.w(4, 0.05), w - p.w(30, 0.1), w, MID_Y)
-    return G(shape, l=p.csb, r=p.csb * 0.45)
+    return G(shape, l=p.csb, r=p.csb * 0.75)
 
 
 @glyph("F", 0x0046)
@@ -168,7 +177,7 @@ def F(p):
     h = p.chair
     mid_y = CAP * 0.49
     shape = rect(0, 0, s, CAP) + rect(s * 0.5, CAP - h, w, CAP) + rect(s * 0.5, mid_y - h / 2, w - p.w(36, 0.1), mid_y + h / 2)
-    return G(shape, l=p.csb, r=p.csb * 0.38)
+    return G(shape, l=p.csb, r=p.csb * 0.7)
 
 
 @glyph("T", 0x0054)
@@ -178,7 +187,7 @@ def T(p):
     h = p.chair
     cx = w / 2
     shape = rect(0, CAP - h, w, CAP) + rect(cx - s / 2, 0, cx + s / 2, CAP - h / 2)
-    return G(shape, l=p.csbr * 0.42, r=p.csbr * 0.42)
+    return G(shape, l=p.csb * 0.52, r=p.csb * 0.52)
 
 
 @glyph("A", 0x0041)
@@ -197,7 +206,7 @@ def A(p):
         (right.lt + right.hw, CAP), (left.lt, CAP),
     ])
     shape = shape + rect(left.xc(bar_y), bar_y - h / 2, right.xc(bar_y), bar_y + h / 2)
-    shape = shape - _vtrap(crotch, _down(left.right()), _down(right.left()), p.trap * TRAP)
+    shape = shape - _vtrap(p, crotch, _down(left.right()), _down(right.left()))
     return G(shape, l=p.csbr * 0.3, r=p.csbr * 0.3)
 
 
@@ -214,7 +223,7 @@ def V(p):
         (cx - fb / 2, 0), (cx + fb / 2, 0), (w, CAP), (right.lt, CAP), crotch,
         (left.hw, CAP), (0, CAP),
     ])
-    shape = shape - _vtrap(crotch, _up(left.right()), _up(right.left()), p.trap * TRAP)
+    shape = shape - _vtrap(p, crotch, _up(left.right()), _up(right.left()))
     return G(shape, l=p.csbr * 0.3, r=p.csbr * 0.3)
 
 
@@ -222,7 +231,7 @@ def V(p):
 def W(p):
     s = p.cstem
     w = p.w(910, 2.2)
-    t_dn, t_up = s * 0.92, s * 0.84  # down-strokes heavier, as in V
+    t_dn, t_up = s * 0.95, s * 0.9  # down-strokes heavier, as in V
     fb = s * 0.8  # flat bottom vertices
     fa = s * 0.8  # flat middle apex, at the cap height
     c1 = w * 0.255
@@ -240,10 +249,9 @@ def W(p):
         (0, CAP), (b1l, 0), (b1r, 0), ap, (b2l, 0), (b2r, 0), (w, CAP), (s4.lt, CAP),
         v2, (ar, CAP), (al, CAP), v1, (s1.hw, CAP),
     ])
-    d = p.trap * TRAP
-    shape = shape - _vtrap(v1, _up(s1.right()), _up(s2.left()), d)
-    shape = shape - _vtrap(v2, _up(s3.right()), _up(s4.left()), d)
-    shape = shape - _vtrap(ap, _down(s2.right()), _down(s3.left()), d)
+    shape = shape - _vtrap(p, v1, _up(s1.right()), _up(s2.left()))
+    shape = shape - _vtrap(p, v2, _up(s3.right()), _up(s4.left()))
+    shape = shape - _vtrap(p, ap, _down(s2.right()), _down(s3.left()))
     return G(shape, l=p.csbr * 0.3, r=p.csbr * 0.3)
 
 
@@ -252,7 +260,7 @@ def M(p):
     s = p.cstem
     w = p.w(710, 1.8)
     sm = s * 0.92  # vertical sides
-    td = s * 0.86  # diagonals
+    td = s * 0.93  # diagonals
     fv = s * 0.8  # flat vertex on the baseline
     e = sm * 0.3  # diagonals start inside the stem tops
     cx = w / 2
@@ -265,10 +273,9 @@ def M(p):
         (0, 0), (sm, 0), (sm, yl), (cx - fv / 2, 0), (cx + fv / 2, 0), (w - sm, yr),
         (w - sm, 0), (w, 0), (w, CAP), (rd.lt, CAP), v, (ld.lt + ld.hw, CAP), (0, CAP),
     ])
-    d = p.trap * TRAP
-    shape = shape - _vtrap((sm, yl), (0, -1), _down(ld.left()), d)
-    shape = shape - _vtrap((w - sm, yr), (0, -1), _down(rd.right()), d)
-    shape = shape - _vtrap(v, _up(ld.right()), _up(rd.left()), d)
+    shape = shape - _vtrap(p, (sm, yl), (0, -1), _down(ld.left()))
+    shape = shape - _vtrap(p, (w - sm, yr), (0, -1), _down(rd.right()))
+    shape = shape - _vtrap(p, v, _up(ld.right()), _up(rd.left()))
     return G(shape, l=p.csb, r=p.csb)
 
 
@@ -276,8 +283,8 @@ def M(p):
 def N(p):
     s = p.cstem
     w = p.w(580, 1.2)
-    sn = s * 0.88  # thin stems
-    td = s * 0.96  # heavier diagonal
+    sn = s * 0.92  # thin stems
+    td = s * 0.97  # heavier diagonal
     e = sn * 0.3
     c = p.ccut
     dg = _Slant(w - e, e, td, "r", "l")
@@ -287,9 +294,8 @@ def N(p):
         (0, 0), (sn, 0), (sn, yl), (dg.lb, 0), (w, 0), (w, CAP - c), (w - c, CAP),
         (w - sn, CAP), (w - sn, yr), (dg.lt + dg.hw, CAP), (0, CAP),
     ])
-    d = p.trap * TRAP
-    shape = shape - _vtrap((sn, yl), (0, -1), _down(dg.left()), d)
-    shape = shape - _vtrap((w - sn, yr), (0, 1), _up(dg.right()), d)
+    shape = shape - _vtrap(p, (sn, yl), (0, -1), _down(dg.left()))
+    shape = shape - _vtrap(p, (w - sn, yr), (0, 1), _up(dg.right()))
     return G(shape, l=p.csb, r=p.csb)
 
 
@@ -321,7 +327,7 @@ def Y(p):
         (xl, 0), (xr, 0), pr, (w, CAP), (ra.lt, CAP), crotch,
         (la.lt + la.hw, CAP), (0, CAP), pl,
     ])
-    shape = shape - _vtrap(crotch, _up(la.right()), _up(ra.left()), p.trap * TRAP)
+    shape = shape - _vtrap(p, crotch, _up(la.right()), _up(ra.left()))
     return G(shape, l=p.csbr * 0.3, r=p.csbr * 0.3)
 
 
@@ -346,11 +352,10 @@ def K(p):
         (0, 0), (s, 0), p1, j, (leg.lb, 0), (leg.lb + leg.hw, 0), q,
         (arm.lt + arm.hw, CAP), (arm.lt, CAP), p2, (s, CAP), (c, CAP), (0, CAP - c),
     ])
-    d = p.trap * TRAP
-    # Arm against stem: acute, a full trap. Arm against leg: nearly square,
-    # so a shallower, narrower wedge keeps it from reading as a bite.
-    shape = shape - _vtrap(p2, (0, 1), _up(arm.left()), d, spread=1.2)
-    shape = shape - _vtrap(q, _down(leg.right()), _up(arm.right()), d * 0.8, spread=1.0)
+    # Arm against stem: a short notch at the vertex, not a crack into the
+    # stem. Arm against leg: nearly square, so a shallower one.
+    shape = shape - _vtrap(p, p2, (0, 1), _up(arm.left()))
+    shape = shape - _vtrap(p, q, _down(leg.right()), _up(arm.right()), k=0.8)
     return G(shape, l=p.csb, r=p.csbr * 0.3)
 
 
@@ -365,7 +370,7 @@ def Z(p):
         (0, 0), (w, 0), (w, h), (dg.lb + dg.hw, h), (xt1, CAP - h), (xt1, CAP),
         (xt0, CAP), (xt0, CAP - h), (dg.lt, CAP - h), (0, h),
     ])
-    return G(shape, l=p.csb * 0.45, r=p.csb * 0.45)
+    return G(shape, l=p.csb * 0.65, r=p.csb * 0.65)
 
 
 @glyph("AE", 0x00C6)
@@ -389,5 +394,5 @@ def AE(p):
         + rect(xs + s * 0.5, 0, xs + ew, h)
     )
     yc = dg.y_at("r", xs)
-    shape = shape - _vtrap((xs, yc), (0, -1), _down(dg.right()), p.trap * TRAP)
-    return G(shape, l=p.csbr * 0.3, r=p.csb * 0.45)
+    shape = shape - _vtrap(p, (xs, yc), (0, -1), _down(dg.right()))
+    return G(shape, l=p.csbr * 0.3, r=p.csb * 0.75)

@@ -203,7 +203,9 @@ def measure(drawn, left, right):
     k = FACTOR * (ref_white - white)
     ref_gap = ref_min if ref_min is not None else ref_white
     if min_gap is not None:
-        k = max(k, FLOOR * ref_gap - min_gap)
+        # The floor only limits how far a pair closes up; spacing, not
+        # kerning, decides pairs that already sit close.
+        k = max(k, min(0.0, FLOOR * ref_gap - min_gap))
     # Never let any part of the glyphs (the dot of j, the arm of T) collide.
     full = _closest(prof, left, right, max(bl[1], br[1]), min(bl[3], br[3]))
     if full is not None:
