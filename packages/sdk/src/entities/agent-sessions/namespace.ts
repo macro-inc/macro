@@ -1,5 +1,6 @@
 import type {
   AgentMode,
+  AutoArchivePreferencesBody,
   CodingPreferencesBody,
   SandboxSize,
 } from '../../../generated/agent-harness/types.gen';
@@ -70,6 +71,18 @@ export class AgentSessionNamespace {
   /** What the caller's new coding sessions are told to do beyond their assignment. */
   codingPreferences(): Promise<CodingPreferencesBody> {
     return AgentSession.codingPreferences(this.client);
+  }
+
+  /** Which triggers archive the caller's sessions by default; each is off unless chosen. */
+  autoArchivePreferences(): Promise<AutoArchivePreferencesBody> {
+    return AgentSession.autoArchivePreferences(this.client);
+  }
+
+  /** Replace which triggers archive the caller's sessions by default. */
+  setAutoArchivePreferences(
+    preferences: AutoArchivePreferencesBody,
+  ): Promise<AutoArchivePreferencesBody> {
+    return AgentSession.setAutoArchivePreferences(this.client, preferences);
   }
 
   /** Replace the caller's coding preferences. */

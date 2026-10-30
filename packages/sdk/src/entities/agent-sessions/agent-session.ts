@@ -5,6 +5,8 @@ import type {
   AgentSessionChangesResponse,
   AgentSessionLogResponse,
   AgentSessionResponse,
+  AutoArchivePreferencesBody,
+  AutoArchiveReason,
   CodingPreferencesBody,
   ControlResponse,
   PromptAttachment,
@@ -25,6 +27,34 @@ import { CodeExecution } from './code-execution';
 import { QueuedAction } from './queued-action';
 import { type CreateReviewOptions, SessionReview } from './review';
 import { ToolApproval } from './tool-approval';
+
+/**
+ * One session's auto-archive choices. A trigger left `undefined` follows the
+ * owner's default.
+ */
+export type AutoArchiveOverrides = {
+  /** Archive once every linked pull request is closed and at least one merged. */
+  onPullRequestMerged?: boolean;
+  /** Archive once the runtime session backing it is deliberately closed. */
+  onRuntimeClosed?: boolean;
+};
+
+/** A session's auto-archive settings, and the archive a trigger made. */
+export type SessionAutoArchive = {
+  /** The session's own choices. */
+  overrides: AutoArchiveOverrides;
+  /** The owner's defaults, which apply where the session has no choice. */
+  defaults: AutoArchivePreferencesBody;
+  /**
+   * The archive a trigger made, if one did. A session archives itself at most
+   * once; `restoredAt` is set once a person restored it.
+   */
+  archived?: {
+    reason: AutoArchiveReason;
+    archivedAt: string;
+    restoredAt?: string;
+  };
+};
 
 /** A session's history folded into readable messages, oldest first. */
 export type FoldedAgentSessionLog = {
@@ -296,6 +326,45 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     );
   }
 
+  /** This session's auto-archive settings, and the archive a trigger made. */
+  async autoArchive(): Promise<SessionAutoArchive> {
+    const { overrides, defaults, archived } = unwrap(
+      await this.client.agentHarness.getAgentSessionAutoArchive({
+        path: { session_id: this.id },
+      }),
+    );
+    return {
+      overrides: {
+        onPullRequestMerged: overrides.onPullRequestMerged ?? undefined,
+        onRuntimeClosed: overrides.onRuntimeClosed ?? undefined,
+      },
+      defaults,
+      archived: archived
+        ? {
+            reason: archived.reason,
+            archivedAt: archived.archivedAt,
+            restoredAt: archived.restoredAt ?? undefined,
+          }
+        : undefined,
+    };
+  }
+
+  /**
+   * Replace this session's auto-archive choices. Owner only; a trigger left
+   * `undefined` follows the owner's default.
+   */
+  async setAutoArchive(overrides: AutoArchiveOverrides): Promise<void> {
+    unwrap(
+      await this.client.agentHarness.putAgentSessionAutoArchive({
+        path: { session_id: this.id },
+        body: {
+          onPullRequestMerged: overrides.onPullRequestMerged ?? null,
+          onRuntimeClosed: overrides.onRuntimeClosed ?? null,
+        },
+      }),
+    );
+  }
+
   /** Rename this session. */
   async rename(name: string): Promise<void> {
     await this.mutate((client) =>
@@ -358,6 +427,25 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     client: MacroClient,
   ): Promise<CodingPreferencesBody> {
     return unwrap(await client.agentHarness.getAgentCodingPreferences());
+  }
+
+  /** Which triggers archive the caller's sessions by default; each is off unless chosen. */
+  static async autoArchivePreferences(
+    client: MacroClient,
+  ): Promise<AutoArchivePreferencesBody> {
+    return unwrap(await client.agentHarness.getAgentAutoArchivePreferences());
+  }
+
+  /** Replace which triggers archive the caller's sessions by default. */
+  static async setAutoArchivePreferences(
+    client: MacroClient,
+    preferences: AutoArchivePreferencesBody,
+  ): Promise<AutoArchivePreferencesBody> {
+    return unwrap(
+      await client.agentHarness.putAgentAutoArchivePreferences({
+        body: preferences,
+      }),
+    );
   }
 
   /** Replace the caller's coding preferences. */

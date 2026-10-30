@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AgentSessionsForPullRequestData, AgentSessionsForPullRequestErrors, AgentSessionsForPullRequestResponses, AgentSessionsForPullRequestsData, AgentSessionsForPullRequestsErrors, AgentSessionsForPullRequestsResponses, AnswerAgentSessionToolApprovalData, AnswerAgentSessionToolApprovalErrors, AnswerAgentSessionToolApprovalResponses, ChooseAgentModeData, ChooseAgentModeErrors, ChooseAgentModeResponses, ClassifyData, ClassifyErrors, ClassifyResponses, ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, CreateSessionReviewData, CreateSessionReviewErrors, CreateSessionReviewResponses, DecideSessionReviewData, DecideSessionReviewErrors, DecideSessionReviewResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, DiscoverAgentCapabilitiesHandlerData, DiscoverAgentCapabilitiesHandlerErrors, DiscoverAgentCapabilitiesHandlerResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, ExtractData, ExtractErrors, ExtractResponses, GetAgentCodingPreferencesData, GetAgentCodingPreferencesErrors, GetAgentCodingPreferencesResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionChangesData, GetAgentSessionChangesErrors, GetAgentSessionChangesPatchData, GetAgentSessionChangesPatchErrors, GetAgentSessionChangesPatchResponses, GetAgentSessionChangesResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionFoldedLogData, GetAgentSessionFoldedLogErrors, GetAgentSessionFoldedLogResponses, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionPermissionsData, GetAgentSessionPermissionsErrors, GetAgentSessionPermissionsResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, GetCodeExecutionData, GetCodeExecutionErrors, GetCodeExecutionResponses, GetSessionReviewData, GetSessionReviewErrors, GetSessionReviewResponses, LinkAgentSessionPullRequestData, LinkAgentSessionPullRequestErrors, LinkAgentSessionPullRequestResponses, ListAgentConversationsData, ListAgentConversationsErrors, ListAgentConversationsResponses, ListAgentRepositoriesData, ListAgentRepositoriesErrors, ListAgentRepositoriesResponses, ListAgentRepositoryBranchesData, ListAgentRepositoryBranchesErrors, ListAgentRepositoryBranchesResponses, ListAgentSessionPullRequestsData, ListAgentSessionPullRequestsErrors, ListAgentSessionPullRequestsResponses, ListExecutionReviewsData, ListExecutionReviewsErrors, ListExecutionReviewsResponses, LoadAgentModelsHandlerData, LoadAgentModelsHandlerErrors, LoadAgentModelsHandlerResponses, PreviewAgentSessionsData, PreviewAgentSessionsErrors, PreviewAgentSessionsResponses, PutAgentCodingPreferencesData, PutAgentCodingPreferencesErrors, PutAgentCodingPreferencesResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, RefreshAgentSessionChangesData, RefreshAgentSessionChangesErrors, RefreshAgentSessionChangesResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses, ReportAgentSessionAppConnectedData, ReportAgentSessionAppConnectedErrors, ReportAgentSessionAppConnectedResponses, RetryAgentConversationTurnData, RetryAgentConversationTurnErrors, RetryAgentConversationTurnResponses, SetAgentSessionArchivedData, SetAgentSessionArchivedErrors, SetAgentSessionArchivedResponses, StartFreshAgentConversationData, StartFreshAgentConversationErrors, StartFreshAgentConversationResponses, SteerQueuedActionData, SteerQueuedActionErrors, SteerQueuedActionResponses, UnlinkAgentSessionPullRequestData, UnlinkAgentSessionPullRequestErrors, UnlinkAgentSessionPullRequestResponses, UpdateAgentSessionPermissionsData, UpdateAgentSessionPermissionsErrors, UpdateAgentSessionPermissionsResponses, WarmAgentSessionHandlerData, WarmAgentSessionHandlerResponses } from './types.gen';
+import type { AgentSessionsForPullRequestData, AgentSessionsForPullRequestErrors, AgentSessionsForPullRequestResponses, AgentSessionsForPullRequestsData, AgentSessionsForPullRequestsErrors, AgentSessionsForPullRequestsResponses, AnswerAgentSessionToolApprovalData, AnswerAgentSessionToolApprovalErrors, AnswerAgentSessionToolApprovalResponses, ChooseAgentModeData, ChooseAgentModeErrors, ChooseAgentModeResponses, ClassifyData, ClassifyErrors, ClassifyResponses, ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, CreateSessionReviewData, CreateSessionReviewErrors, CreateSessionReviewResponses, DecideSessionReviewData, DecideSessionReviewErrors, DecideSessionReviewResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, DiscoverAgentCapabilitiesHandlerData, DiscoverAgentCapabilitiesHandlerErrors, DiscoverAgentCapabilitiesHandlerResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, ExtractData, ExtractErrors, ExtractResponses, GetAgentAutoArchivePreferencesData, GetAgentAutoArchivePreferencesErrors, GetAgentAutoArchivePreferencesResponses, GetAgentCodingPreferencesData, GetAgentCodingPreferencesErrors, GetAgentCodingPreferencesResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionAutoArchiveData, GetAgentSessionAutoArchiveErrors, GetAgentSessionAutoArchiveResponses, GetAgentSessionChangesData, GetAgentSessionChangesErrors, GetAgentSessionChangesPatchData, GetAgentSessionChangesPatchErrors, GetAgentSessionChangesPatchResponses, GetAgentSessionChangesResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionFoldedLogData, GetAgentSessionFoldedLogErrors, GetAgentSessionFoldedLogResponses, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionPermissionsData, GetAgentSessionPermissionsErrors, GetAgentSessionPermissionsResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, GetCodeExecutionData, GetCodeExecutionErrors, GetCodeExecutionResponses, GetSessionReviewData, GetSessionReviewErrors, GetSessionReviewResponses, LinkAgentSessionPullRequestData, LinkAgentSessionPullRequestErrors, LinkAgentSessionPullRequestResponses, ListAgentConversationsData, ListAgentConversationsErrors, ListAgentConversationsResponses, ListAgentRepositoriesData, ListAgentRepositoriesErrors, ListAgentRepositoriesResponses, ListAgentRepositoryBranchesData, ListAgentRepositoryBranchesErrors, ListAgentRepositoryBranchesResponses, ListAgentSessionPullRequestsData, ListAgentSessionPullRequestsErrors, ListAgentSessionPullRequestsResponses, ListExecutionReviewsData, ListExecutionReviewsErrors, ListExecutionReviewsResponses, LoadAgentModelsHandlerData, LoadAgentModelsHandlerErrors, LoadAgentModelsHandlerResponses, PreviewAgentSessionsData, PreviewAgentSessionsErrors, PreviewAgentSessionsResponses, PutAgentAutoArchivePreferencesData, PutAgentAutoArchivePreferencesErrors, PutAgentAutoArchivePreferencesResponses, PutAgentCodingPreferencesData, PutAgentCodingPreferencesErrors, PutAgentCodingPreferencesResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionAutoArchiveData, PutAgentSessionAutoArchiveErrors, PutAgentSessionAutoArchiveResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, RefreshAgentSessionChangesData, RefreshAgentSessionChangesErrors, RefreshAgentSessionChangesResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses, ReportAgentSessionAppConnectedData, ReportAgentSessionAppConnectedErrors, ReportAgentSessionAppConnectedResponses, RetryAgentConversationTurnData, RetryAgentConversationTurnErrors, RetryAgentConversationTurnResponses, SetAgentSessionArchivedData, SetAgentSessionArchivedErrors, SetAgentSessionArchivedResponses, StartFreshAgentConversationData, StartFreshAgentConversationErrors, StartFreshAgentConversationResponses, SteerQueuedActionData, SteerQueuedActionErrors, SteerQueuedActionResponses, UnlinkAgentSessionPullRequestData, UnlinkAgentSessionPullRequestErrors, UnlinkAgentSessionPullRequestResponses, UpdateAgentSessionPermissionsData, UpdateAgentSessionPermissionsErrors, UpdateAgentSessionPermissionsResponses, WarmAgentSessionHandlerData, WarmAgentSessionHandlerResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -55,6 +55,27 @@ export class Sdk extends HeyApiClient {
     }) {
         super(args);
         Sdk.__registry.set(this, args?.key);
+    }
+    
+    /**
+     * Read which triggers archive the caller's sessions by default.
+     */
+    public getAgentAutoArchivePreferences<ThrowOnError extends boolean = false>(options?: Options<GetAgentAutoArchivePreferencesData, ThrowOnError>): RequestResult<GetAgentAutoArchivePreferencesResponses, GetAgentAutoArchivePreferencesErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetAgentAutoArchivePreferencesResponses, GetAgentAutoArchivePreferencesErrors, ThrowOnError>({ url: '/agent-auto-archive-preferences', ...options });
+    }
+    
+    /**
+     * Replace which triggers archive the caller's sessions by default.
+     */
+    public putAgentAutoArchivePreferences<ThrowOnError extends boolean = false>(options: Options<PutAgentAutoArchivePreferencesData, ThrowOnError>): RequestResult<PutAgentAutoArchivePreferencesResponses, PutAgentAutoArchivePreferencesErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<PutAgentAutoArchivePreferencesResponses, PutAgentAutoArchivePreferencesErrors, ThrowOnError>({
+            url: '/agent-auto-archive-preferences',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
     
     /**
@@ -332,6 +353,27 @@ export class Sdk extends HeyApiClient {
     public setAgentSessionArchived<ThrowOnError extends boolean = false>(options: Options<SetAgentSessionArchivedData, ThrowOnError>): RequestResult<SetAgentSessionArchivedResponses, SetAgentSessionArchivedErrors, ThrowOnError> {
         return (options.client ?? this.client).put<SetAgentSessionArchivedResponses, SetAgentSessionArchivedErrors, ThrowOnError>({
             url: '/agent-sessions/{session_id}/archived',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Read a session's auto-archive settings and whether a trigger archived it.
+     */
+    public getAgentSessionAutoArchive<ThrowOnError extends boolean = false>(options: Options<GetAgentSessionAutoArchiveData, ThrowOnError>): RequestResult<GetAgentSessionAutoArchiveResponses, GetAgentSessionAutoArchiveErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetAgentSessionAutoArchiveResponses, GetAgentSessionAutoArchiveErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}/auto-archive', ...options });
+    }
+    
+    /**
+     * Replace a session's own auto-archive choices. Owner only.
+     */
+    public putAgentSessionAutoArchive<ThrowOnError extends boolean = false>(options: Options<PutAgentSessionAutoArchiveData, ThrowOnError>): RequestResult<PutAgentSessionAutoArchiveResponses, PutAgentSessionAutoArchiveErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<PutAgentSessionAutoArchiveResponses, PutAgentSessionAutoArchiveErrors, ThrowOnError>({
+            url: '/agent-sessions/{session_id}/auto-archive',
             ...options,
             headers: {
                 'Content-Type': 'application/json',
