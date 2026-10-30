@@ -372,8 +372,8 @@ def crotch_trap(v, d1, d2, depth, mouth=0.6):
     v is the vertex where the two edges meet (the tip of the white wedge);
     d1 and d2 are the directions of the two edges going away from v along
     the white wedge. The trap continues the wedge `depth` into the black and
-    opens `mouth * depth` wide where it crosses the edges, so its tip angle
-    stays at least about 30 degrees. Use depth = p.trap for vertices (stem
+    opens `mouth * depth` wide where it crosses the edges, which keeps it a
+    short, open notch rather than a slit. Use depth = p.trap for vertices (stem
     shoulders use stem_trap with 1.3 * p.trap)."""
     if depth < 1:
         return Shape()

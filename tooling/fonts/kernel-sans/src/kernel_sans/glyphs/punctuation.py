@@ -41,6 +41,7 @@ PROOF_TEXT = [
     "(HELLO) [WORLD] \u00abNEXT\u00bb \u2013 \u2014 \u2039n\u203a n\u2013n n\u2014n n-n H-H",
     "(HOH) [HOH] {HOH} n/o\\n n|n \u00a6 n_n n*n \u2020 \u2021 \u2022 n\u00b7n n\u2026",
     "\u00bfnon? \u00a1non! \u201enon\u201c \u201anon\u2018 'n' \"n\" n@o.co H&O",
+    "09:30 17:45 H:H n:n KERNEL\u2122 \u00a9 2026 \u00a7 4 H\u2192O",
 ]
 
 SQ2 = math.sqrt(2)
@@ -190,7 +191,7 @@ def _pair(left, right, codes, draw, sb):
 
 @glyph("comma", 0x002C)
 def comma(p):
-    s, sb, adv = _period(p)
+    _, sb, adv = _period(p)
     return G(_comma(p, sb, 0), width=adv)
 
 
@@ -224,8 +225,11 @@ def periodcentered(p):
 
 @glyph("ellipsis", 0x2026)
 def ellipsis(p):
-    s, sb, adv = _period(p)
-    pitch = s + 2 * sb * 0.82
+    s, sb, _ = _period(p)
+    # The gap follows the dot, not the sidebearing (which shrinks with
+    # weight): about 108 / 115 / 143 at 300 / 400 / 800, so the heavy dots
+    # don't clump.
+    pitch = s + s * 0.5 + 64
     shape = Shape()
     for i in range(3):
         shape = shape + dot(sb + s / 2 + i * pitch, s / 2, s)
@@ -744,7 +748,7 @@ def _tangent_point(x0, y0, x1, y1, n, slope):
 # leg's foot drifts left as weight grows to keep the tail's counter open.
 # At ExtraBold (verticals damped by `damp`) the lower counter is about 128
 # and the loop's about 123 wide, as in Inter.
-AMP = dict(lx=500, lxk=1.5, uw=272, uwk=1.75, m=-1.3, foot=60, footk=-0.7, ytail=0.44, damp=0.85)
+AMP = {"lx": 500, "lxk": 1.5, "uw": 272, "uwk": 1.75, "m": -1.3, "foot": 60, "footk": -0.7, "ytail": 0.44, "damp": 0.85}
 
 
 @glyph("ampersand", 0x0026)
@@ -904,13 +908,10 @@ def _small_m(p, x0, y0, h, w, st):
     e = st * 0.3  # diagonals start inside the side tops
     top = y0 + h
     cx = x0 + w / 2
-    # Left diagonal by its left edge, from (cx - fv/2, y0) up to (x0 + e, top).
+    # Left diagonal by its left edge, from (cx - fv/2, y0) up to (x0 + e, top);
+    # hw is its horizontal width. The right half mirrors it about cx.
     xb, xt = cx - fv / 2, x0 + e
     hw = td * math.hypot(xt - xb, h) / h
-
-    def xl(y):  # the left diagonal's left edge at height y
-        return xb + (xt - xb) * (y - y0) / h
-
     yl = y0 + (x0 + st - xb) * h / (xt - xb)  # where it meets the side's inner edge
     yv = y0 + (fv / 2 - hw) * h / (xt - xb)  # inner vertex, on the centre line
     left = [(x0, y0), (x0 + st, y0), (x0 + st, yl), (xb, y0)]
