@@ -16,7 +16,8 @@ import { historyPromptText, waitingForPhone } from '../core/history-import';
  * the phone, and on iOS one it can't finish in the background shows a
  * "syncing stopped" notification. One prompt covers all the owner's chats
  * waiting for the phone. It leaves while they import and comes back if the
- * phone didn't answer; a close sticks until another chat needs it.
+ * phone didn't answer. It is the only way to start an import, so a close
+ * lasts for this session only.
  */
 export function WhatsAppHistoryImportPrompt() {
   const userId = useUserId();
@@ -35,7 +36,6 @@ export function WhatsAppHistoryImportPrompt() {
         .map((chat) => chat.id)
         .sort()
         .join(','),
-    persistKey: 'macro:whatsapp-history-prompt:dismissed',
     itemsLoaded: () => chats.isSuccess && userId() !== undefined,
     toast: (group) => ({
       title: 'Import WhatsApp history',

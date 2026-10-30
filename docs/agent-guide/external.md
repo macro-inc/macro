@@ -139,7 +139,8 @@ After adding, earlier messages (up to 500 messages or 90 days) come from the
 owner's phone only when they press **Import** in the bottom-right prompt
 **Import WhatsApp history** ("Open WhatsApp on your phone and keep it open,
 then import …"), shown app-wide while any of their chats is
-`waiting_for_phone`; closing it sticks until another chat needs it. **Import**
+`waiting_for_phone`; closing it hides it until the next load (it is the only
+way to start an import). **Import**
 posts `/whatsapp/history-import`. The detail's `backfill` drives the header's
 subtitle: **WhatsApp · Importing history…** while `pending`/`running`,
 **WhatsApp · Earlier messages not imported. Open WhatsApp on your phone, then
