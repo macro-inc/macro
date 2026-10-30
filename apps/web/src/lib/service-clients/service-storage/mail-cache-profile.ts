@@ -19,7 +19,7 @@ async function installedNativeProfile(): Promise<string> {
     );
     const platform = getNativeMobilePlatform();
     const minimum =
-      platform === 'ios' ? 192 : platform === 'android' ? 20 : null;
+      platform === 'ios' ? 193 : platform === 'android' ? 20 : null;
     return minimum !== null &&
       Number.isInteger(nativeBuild) &&
       nativeBuild >= minimum

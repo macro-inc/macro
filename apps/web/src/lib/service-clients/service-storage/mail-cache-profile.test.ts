@@ -29,7 +29,8 @@ describe('Mail capsule capability', () => {
 
   it.each([
     ['ios', 191, 'soup-mail-v2'],
-    ['ios', 192, 'soup-mail-v5'],
+    ['ios', 192, 'soup-mail-v2'],
+    ['ios', 193, 'soup-mail-v5'],
     ['android', 19, 'soup-mail-v2'],
     ['android', 20, 'soup-mail-v5'],
     ['desktop', 0, 'soup-mail-v2'],
