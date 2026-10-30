@@ -28,6 +28,50 @@ const LOADING_SKELETON_ROWS = [0, 1, 2];
 export const COLLAPSED_SECTION_HEIGHT = 32;
 const SectionContainerContext = createContext<() => HTMLElement | undefined>();
 
+/** Shared heading for built-in and custom Chat sections. */
+export function ChannelSectionHeading(props: {
+  id: string;
+  label: string;
+  title?: string;
+  open: boolean;
+  focused: boolean;
+  unreadCount: number;
+  onToggle: () => void;
+  icon?: JSX.Element;
+  children?: JSX.Element;
+}) {
+  return (
+    <div class="group/sidebar-section flex h-10 items-center gap-1 pt-2">
+      <button
+        id={props.id}
+        type="button"
+        role="treeitem"
+        tabIndex={-1}
+        title={props.title}
+        aria-expanded={props.open}
+        class={cn(
+          'flex min-w-0 flex-1 items-center gap-1 rounded-lg px-2 py-1 text-left text-xs font-medium text-ink-muted',
+          props.focused && 'bg-hover text-ink'
+        )}
+        onClick={props.onToggle}
+      >
+        {props.icon}
+        <span class="truncate">{props.label}</span>
+        <CaretDownIcon
+          class={cn(
+            'size-3 shrink-0 transition-transform',
+            !props.open && '-rotate-90'
+          )}
+        />
+        <Show when={props.unreadCount > 0}>
+          <span class="text-xs text-accent">{props.unreadCount}</span>
+        </Show>
+      </button>
+      {props.children}
+    </div>
+  );
+}
+
 function SectionScrollArea(props: {
   contentRef: (element: HTMLDivElement) => void;
   containerClass?: string;

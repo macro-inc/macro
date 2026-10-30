@@ -888,7 +888,12 @@ On desktop, Chat has one conversation sidebar, without All, Recent, or Threads
 view tabs. Favorites and Team channels appear first, followed by custom sections.
 Other joined public and private channels remain in Channels until assigned to a
 personal section. Each custom section is a top-level heading, independent of the
-Team channels disclosure. Empty sections remain visible.
+Team channels disclosure. Empty sections remain visible with a short hint; empty
+Favorites explains how to add a favorite. Private conversations use a lock icon in
+the sidebar and mobile feed, including favorited private conversations.
+All section headers share the same compact styling, and channel rows align across
+sections. Personal sections show a person icon; team-shared sections show a group
+icon to the left of the name.
 
 The upper sidebar uses one virtualized scroll area instead of dividing available
 height between sections. Direct messages have a separate collapsible panel fixed
@@ -910,15 +915,18 @@ Turning the flag off hides section controls and stops label reads without
 deleting saved labels. The New conversation action remains independent of the
 label service and its feature flag.
 
-Use the section action beside New to create a Personal section or Shared
-section. Personal sections are private to the account, including for team
+Use **Manage sections** beside New to create a Personal section or Shared
+section, edit an existing section, or expand/collapse all sections. Personal
+sections are private to the account, including for team
 members, and accept joined team, public, or private channels. Shared sections
 retain the team's existing label permissions and accept only channels from that
 team. Neither kind accepts DMs. A personal assignment never changes a shared
 assignment. Names are unique within each scope, case-insensitively.
 
-The heading menu renames or deletes a section and marks its visible channels
-read. Shared edits apply to the team; personal edits affect only the account.
+Each heading has a visible options menu to rename or delete the section, edit
+its smart rule, expand/collapse it, and mark its visible channels read. The same
+actions are available in **Manage sections**. Shared edits apply to the team;
+personal edits affect only the account.
 Deleting a section does not delete its conversations or change channel access.
 Use a channel's Add to section menu to change the personal or shared assignment.
 The two scopes remain separate in that menu.
@@ -933,7 +941,9 @@ classify support channels by their names or silently create a Support section.
 Verify personal and shared creation, same-name sections in different scopes,
 private-channel assignment, and rejecting private-channel assignment to a shared
 section. Check collapse and reload, stale requests after an account change,
-empty sections, assignment failures, and one channel in both scopes. Scroll a
+empty sections, assignment failures, and one channel in both scopes. Check the
+Manage sections menu, keyboard access, rename-dialog focus, expand/collapse all,
+and deletion without deleting the channels. Scroll a
 long sidebar with many sections and confirm that the DM heading remains
 available at the bottom. Keyboard navigation and section shortcuts must follow
 the same order as the rendered rows.

@@ -8,7 +8,10 @@ import {
   splitProps,
 } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelLabelMenuItems, ChannelsCreateMenu } from './ChannelLabelRows';
+import {
+  ChannelLabelMenuItems,
+  ChannelsSectionsMenu,
+} from './ChannelLabelRows';
 
 const rail = vi.hoisted(() => ({
   channelTagsEnabled: (): boolean => false,
@@ -20,6 +23,8 @@ const rail = vi.hoisted(() => ({
   createLabel: vi.fn(),
   createSmartTag: vi.fn(),
   setChannelLabel: vi.fn(),
+  isLabelOpen: () => true,
+  labelUnreadCount: () => 0,
 }));
 
 vi.mock('./ChannelsRailContext', () => ({ useChannelsRail: () => rail }));
@@ -79,11 +84,13 @@ describe('channel tag flag in rail menus', () => {
   it('offers personal and shared sections only after labels load', async () => {
     setEnabled(true);
     setLabelsAvailable(false);
-    render(() => <ChannelsCreateMenu />);
-    expect(screen.queryByRole('button', { name: 'New section' })).toBeNull();
+    render(() => <ChannelsSectionsMenu />);
+    expect(
+      screen.queryByRole('button', { name: 'Manage sections' })
+    ).toBeNull();
 
     setLabelsAvailable(true);
-    fireEvent.keyDown(screen.getByRole('button', { name: 'New section' }), {
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Manage sections' }), {
       key: 'ArrowDown',
     });
     const personal = await screen.findByRole('menuitem', {
@@ -96,13 +103,15 @@ describe('channel tag flag in rail menus', () => {
     expect(rail.createLabel).toHaveBeenCalledWith([], 'personal');
 
     setLabelsAvailable(false);
-    expect(screen.queryByRole('button', { name: 'New section' })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Manage sections' })
+    ).toBeNull();
   });
 
   it('removes an open section menu when the flag turns off', async () => {
     setEnabled(true);
-    render(() => <ChannelsCreateMenu />);
-    fireEvent.keyDown(screen.getByRole('button', { name: 'New section' }), {
+    render(() => <ChannelsSectionsMenu />);
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Manage sections' }), {
       key: 'ArrowDown',
     });
     expect(
@@ -110,7 +119,9 @@ describe('channel tag flag in rail menus', () => {
     ).toBeTruthy();
     setEnabled(false);
     expect(screen.queryByRole('menu')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'New section' })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Manage sections' })
+    ).toBeNull();
     expect(rail.createSmartTag).not.toHaveBeenCalled();
   });
 

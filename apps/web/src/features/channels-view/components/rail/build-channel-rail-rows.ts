@@ -105,24 +105,22 @@ export function buildChannelRailRows(
   }
 
   const rows: ChannelRailRow[] = [];
-  if (items.favorites.length > 0) {
-    rows.push({
-      kind: 'section',
-      id: 'section:favorites',
-      group: 'favorites',
-    });
-    if (expandedGroups.favorites) {
-      rows.push(
-        ...items.favorites.map(
-          (favorite): ChannelRailRow => ({
-            kind: 'favorite',
-            id: rowKeyForFavorite(favorite),
-            group: 'favorites',
-            favorite,
-          })
-        )
-      );
-    }
+  rows.push({
+    kind: 'section',
+    id: 'section:favorites',
+    group: 'favorites',
+  });
+  if (expandedGroups.favorites) {
+    rows.push(
+      ...items.favorites.map(
+        (favorite): ChannelRailRow => ({
+          kind: 'favorite',
+          id: rowKeyForFavorite(favorite),
+          group: 'favorites',
+          favorite,
+        })
+      )
+    );
   }
 
   const labelledIds = new Set(

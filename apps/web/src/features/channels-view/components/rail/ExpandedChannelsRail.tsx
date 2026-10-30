@@ -6,7 +6,6 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type ChannelEntity, Entity } from '@entity';
-import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import SortIcon from '@icon/system/regular/sort-ascending.svg';
 import {
@@ -40,7 +39,7 @@ import { ChannelFavoriteRow } from './ChannelFavoriteRows';
 import {
   ChannelLabelMenuItems,
   ChannelLabelRow,
-  ChannelsCreateMenu,
+  ChannelsSectionsMenu,
 } from './ChannelLabelRows';
 import {
   ChannelAvatar,
@@ -59,6 +58,7 @@ import {
   useChannelsRail,
 } from './ChannelsRailContext';
 import {
+  ChannelSectionHeading,
   RailListError,
   RailListLoading,
   RailListLoadingMore,
@@ -360,7 +360,7 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
         <div class="min-w-0 flex-1">
           <ConversationsCreateMenu presentation="sidebar" />
         </div>
-        <ChannelsCreateMenu />
+        <ChannelsSectionsMenu />
       </ViewSidebar.Primary>
       <Show when={rail.channelTagsEnabled() && !rail.labelsAvailable()}>
         <div
@@ -393,40 +393,33 @@ function SectionHeading(props: { group: 'favorites' | ChannelsGroup }) {
     return group ? rail.channelActivity.unreadCount(group) : 0;
   };
   return (
-    <div class="group/sidebar-section flex h-10 items-center gap-1 pt-2">
-      <button
-        id={domIdForRow(rail.railId, key())}
-        type="button"
-        role="treeitem"
-        tabIndex={-1}
-        aria-expanded={open()}
-        class={cn(
-          'flex min-w-0 flex-1 items-center gap-1 rounded-lg px-2 py-1 text-left text-xs font-medium text-ink-muted',
-          rail.list.focus.key() === key() && 'bg-hover text-ink'
-        )}
-        onClick={() => rail.toggleGroup(props.group)}
-      >
-        <span class="truncate">{title()}</span>
-        <CaretDownIcon
-          class={cn(
-            'size-3 shrink-0 transition-transform',
-            !open() && '-rotate-90'
-          )}
-        />
-        <Show when={unreadCount() > 0}>
-          <span class="text-xs text-accent">{unreadCount()}</span>
-        </Show>
-      </button>
+    <ChannelSectionHeading
+      id={domIdForRow(rail.railId, key())}
+      label={title()}
+      open={open()}
+      focused={rail.list.focus.key() === key()}
+      unreadCount={unreadCount()}
+      onToggle={() => rail.toggleGroup(props.group)}
+    >
       <Show when={channelGroup()}>
         {(group) => <ChannelSortDropdown group={group()} label={title()} />}
       </Show>
-    </div>
+    </ChannelSectionHeading>
   );
 }
 
 function SectionStatus(props: { group: ChannelsGroup }) {
   const rail = useChannelsRail();
   const source = () => rail.sources[props.group];
+  const hasConversations = () =>
+    rail.list.items
+      .all()
+      .some(
+        (row) =>
+          row.kind === 'conversation' &&
+          row.group === props.group &&
+          !row.labelId
+      );
   return (
     <div class="px-2">
       <Switch>
@@ -448,7 +441,7 @@ function SectionStatus(props: { group: ChannelsGroup }) {
             {t('channelSections.loadMore')}
           </Button>
         </Match>
-        <Match when={source().items().length === 0}>
+        <Match when={!hasConversations()}>
           <p class="py-2 text-xs text-ink-extra-muted">
             {t('channelSections.empty')}
           </p>
@@ -459,20 +452,32 @@ function SectionStatus(props: { group: ChannelsGroup }) {
 }
 
 function BrowseRow(props: { row: ChannelRailRow }) {
+  const rail = useChannelsRail();
   return (
     <Switch>
       <Match when={props.row.kind === 'section' ? props.row : undefined}>
-        {(row) => <SectionHeading group={row().group} />}
+        {(row) => (
+          <>
+            <SectionHeading group={row().group} />
+            <Show
+              when={
+                row().group === 'favorites' &&
+                rail.isGroupOpen('favorites') &&
+                rail.favorites().length === 0
+              }
+            >
+              <p class="px-2 py-2 text-xs text-ink-extra-muted">
+                {t('channelSections.emptyFavorites')}
+              </p>
+            </Show>
+          </>
+        )}
       </Match>
       <Match when={props.row.kind === 'status' ? props.row : undefined}>
         {(row) => <SectionStatus group={row().group} />}
       </Match>
       <Match when={props.row.kind === 'label' ? props.row : undefined}>
-        {(row) => (
-          <div class="pt-2">
-            <ChannelLabelRow label={row().label} />
-          </div>
-        )}
+        {(row) => <ChannelLabelRow label={row().label} />}
       </Match>
       <Match when={props.row.kind === 'favorite' ? props.row : undefined}>
         {(row) => <ChannelFavoriteRow favorite={row().favorite} />}

@@ -267,6 +267,7 @@ describe('buildChannelRailRows', () => {
     );
 
     expect(rows.map((row) => row.id)).toEqual([
+      'section:favorites',
       'section:team_channels',
       'channel:acme',
       'channel:zeta',
@@ -298,6 +299,7 @@ describe('buildChannelRailRows', () => {
     );
 
     expect(rows.map((row) => row.id)).toEqual([
+      'section:favorites',
       'section:team_channels',
       'channel:deals',
       'status:team_channels',
@@ -309,10 +311,10 @@ describe('buildChannelRailRows', () => {
       'section:direct_messages',
       'channel:dm',
     ]);
-    expect(rows[4]).toMatchObject({
+    expect(rows[5]).toMatchObject({
       group: 'channels',
       scope: 'channels',
-      localIndex: 4,
+      localIndex: 5,
     });
   });
 
@@ -338,6 +340,7 @@ describe('buildChannelRailRows', () => {
     );
 
     expect(rows.map((row) => row.id)).toEqual([
+      'section:favorites',
       'section:team_channels',
       'section:channels',
       'channel:private',
@@ -373,13 +376,13 @@ describe('buildChannelRailRows', () => {
       expect.objectContaining({
         kind: 'conversation',
         id: 'channel:deals',
-        localIndex: 1,
+        localIndex: 2,
       }),
-      expect.objectContaining({ kind: 'label', id: 'label:l1', localIndex: 3 }),
+      expect.objectContaining({ kind: 'label', id: 'label:l1', localIndex: 4 }),
       expect.objectContaining({
         kind: 'conversation',
         id: 'channel:acme:label:l1',
-        localIndex: 4,
+        localIndex: 5,
         labelId: 'l1',
         scope: 'team_channels',
       }),
