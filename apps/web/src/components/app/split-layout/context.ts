@@ -102,6 +102,12 @@ export type SplitPanelContextType = {
    * for actions that stay in reach; absent outside a touch popover.
    */
   drawerHeader?: Accessor<HTMLElement | undefined>;
+  /**
+   * Opens the touch sheet at full height while the calling owner lives, for
+   * content that grows to fill it (a composer's body); other content keeps
+   * the sheet at its natural height. Absent outside a touch popover.
+   */
+  fillDrawer?: () => void;
   layoutRefs: {
     headerLeft?: HTMLDivElement;
     headerRight?: HTMLDivElement;

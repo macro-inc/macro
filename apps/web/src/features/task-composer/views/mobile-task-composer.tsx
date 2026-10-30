@@ -10,6 +10,9 @@ import { TaskComposer } from './task-composer-parts';
 export function MobileTaskComposer(props: {
   composer: TaskComposerController;
 }) {
+  // Opens as tall as the other composer sheets, the description taking the
+  // room above the properties.
+  props.composer.fillSheet();
   // The keyboard leaves too little room for the whole composer, so the header
   // pins to the top of the sheet's scroll to keep Create Task in reach. It
   // only takes a background while pinned over content; at rest it would show
@@ -56,8 +59,9 @@ export function MobileTaskComposer(props: {
         </div>
       </EntityComposer.Header>
       <TaskComposer.Recovery />
-      {/* The sheet sizes the composer to its content, so nothing needs
-          clipping, and the property row can scroll to the sheet's edges. */}
+      {/* The sheet scrolls rather than shrinking the composer below its
+          content, so nothing needs clipping, and the property row can scroll
+          to the sheet's edges. */}
       <EntityComposer.Main class="overflow-visible">
         <TaskComposer.Title />
         <TaskComposer.Body />

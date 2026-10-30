@@ -2,12 +2,13 @@ import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { Dialog, Panel } from '@ui';
+import { cn, Dialog, Panel } from '@ui';
 import {
   type ComponentProps,
   createMemo,
   createSignal,
   For,
+  onCleanup,
   Show,
   Suspense,
 } from 'solid-js';
@@ -70,6 +71,11 @@ function PopoverSplitModal(props: {
   const [displayName, setDisplayName] = createSignal(props.popover.content.id);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
   const [drawerHeader, setDrawerHeader] = createSignal<HTMLElement>();
+  const [fillsDrawer, setFillsDrawer] = createSignal(false);
+  const fillDrawer = () => {
+    setFillsDrawer(true);
+    onCleanup(() => setFillsDrawer(false));
+  };
   const [titleFileMenuRef, setTitleFileMenuRef] =
     createSignal<HTMLDivElement>();
   const [titleFileMenuTrigger, setTitleFileMenuTrigger] =
@@ -134,6 +140,7 @@ function PopoverSplitModal(props: {
     isPanelActive: () => true,
     panelRef,
     drawerHeader,
+    ...(isTouchDevice() ? { fillDrawer } : {}),
     panelSize: { width: null, height: null },
     contentOffsetTop,
     setContentOffsetTop,
@@ -172,7 +179,7 @@ function PopoverSplitModal(props: {
     <SplitPanelContext.Provider value={stubPanelContext}>
       <SoupContextProvider>
         <Show when={props.popover.mount}>
-          <Panel.Body>
+          <Panel.Body class={cn(fillsDrawer() && 'flex flex-auto flex-col')}>
             <Suspense>
               <Dynamic component={props.popover.mount.element} />
             </Suspense>
@@ -215,6 +222,7 @@ function PopoverSplitModal(props: {
             ref={attachPanel}
             aria-label={displayName()}
             maxHeight={92}
+            targetHeight={fillsDrawer() ? 92 : undefined}
           >
             <MobileDrawer.Handle />
             {/* Before the scroll body so it exists when the content mounts;
@@ -222,8 +230,12 @@ function PopoverSplitModal(props: {
             <div ref={setDrawerHeader} class="shrink-0 empty:hidden" />
             <MobileDrawer.ScrollBody>
               {/* As in Dialog's drawer: at its natural height the body's
-                  overflow-clip cannot clip the drawer's scroll body. */}
-              <div class="shrink-0">
+                  overflow-clip cannot clip the drawer's scroll body. Filling
+                  content grows past it but never shrinks below it, so a
+                  sheet the keyboard shortens still scrolls. */}
+              <div
+                class={fillsDrawer() ? 'flex flex-auto flex-col' : 'shrink-0'}
+              >
                 <Content />
               </div>
             </MobileDrawer.ScrollBody>

@@ -63,6 +63,11 @@ export type TaskComposerHost = {
   resolveAppLink: MentionLinkResolver | undefined;
   /** Whether the composer floats over the layout rather than filling a split. */
   isPopover: Accessor<boolean>;
+  /**
+   * Opens the touch sheet at full height for as long as the calling owner
+   * lives, so the composer's body can fill it.
+   */
+  fillSheet(): void;
   setDisplayName(name: string): void;
   close(): void;
   /** Opens another composer on a recovered submission. */
@@ -643,6 +648,7 @@ export function createTaskComposer(
     editorConfig,
     portalScope,
     isPopover: host.isPopover,
+    fillSheet: host.fillSheet,
     isCreating,
     errorMessage,
     setErrorMessage,
