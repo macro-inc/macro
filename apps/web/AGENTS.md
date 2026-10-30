@@ -778,7 +778,8 @@ call the reviewed workspace tools, and show separate task/project totals.
 
 Cognition, routines, preview control, and MCP share `agent_harness_service`.
 Agent replies can use the existing `m-document-mention` format with
-`blockName: "routine"`; routines do not appear in the mention menu.
+`blockName: "routine"`; the `@` menu offers routines only to their owner in
+channel composers, where picking one shares it as a template.
 Direct local hosts use port 8101 with the existing feature prefixes; the
 instance proxy retains `/cognition`, `/scheduled-action`, and `/preview`.
 
