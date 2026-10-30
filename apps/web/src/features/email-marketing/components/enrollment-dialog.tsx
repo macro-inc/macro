@@ -1,14 +1,15 @@
-import { Dialog } from '@kobalte/core/dialog';
+import X from '@icon/system/regular/x.svg';
+import { ActionDialogShell, Button, Dialog, Input } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { Campaign, MarketingContact } from '../core/model';
 import { normalizeEmail } from '../core/model';
 
+/** @deprecated Kept only for the browser-test fixture; use `@ui` Button. */
 export const primaryButton =
   'inline-flex items-center justify-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-page hover:opacity-85 disabled:opacity-40';
+/** @deprecated Kept only for the browser-test fixture; use `@ui` Button. */
 export const secondaryButton =
   'inline-flex items-center justify-center gap-2 rounded-lg border border-edge-muted bg-page px-3 py-2 text-sm font-medium hover:bg-panel disabled:opacity-40';
-export const inputClass =
-  'w-full rounded-lg border border-edge-muted bg-input px-3 py-2 text-sm outline-none focus:border-accent';
 
 function defaultStart() {
   const date = new Date(Date.now() + 30 * 60_000);
@@ -29,6 +30,7 @@ export function EnrollmentDialog(props: {
   onSearchCrm: (query: string) => Promise<MarketingContact[]>;
 }) {
   const [search, setSearch] = createSignal('');
+  // Normalized emails, so a CRM case variant still matches a local contact.
   const [selected, setSelected] = createSignal<string[]>([]);
   const [start, setStart] = createSignal(defaultStart());
   const [consent, setConsent] = createSignal(false);
@@ -49,48 +51,63 @@ export function EnrollmentDialog(props: {
         .toLowerCase()
         .includes(search().toLowerCase())
     );
+  const isSelected = (email: string) =>
+    selected().includes(normalizeEmail(email));
   const already = (email: string) =>
-    props.enrolledEmails.includes(normalizeEmail(email));
+    props.enrolledEmails.map(normalizeEmail).includes(normalizeEmail(email));
   const chosen = () =>
-    all().filter((contact) => selected().includes(contact.email));
+    all().filter(
+      (contact) => isSelected(contact.email) && !already(contact.email)
+    );
+  const searchCrm = async () => {
+    setSearching(true);
+    setSearchError('');
+    try {
+      setRemote(await props.onSearchCrm(search()));
+    } catch (cause) {
+      setSearchError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setSearching(false);
+    }
+  };
+  const enroll = async () => {
+    if (await props.onEnroll(chosen(), new Date(start()))) props.onClose();
+  };
   return (
     <Dialog
       open
+      position="center"
+      class="w-[min(620px,calc(100vw-16px))]"
       onOpenChange={(open) => {
         if (!open && !props.busy) props.onClose();
       }}
+      onEscapeKeyDown={(event) => {
+        if (props.busy) event.preventDefault();
+      }}
     >
-      <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-100 bg-ink/20 backdrop-blur-sm" />
-        <Dialog.Content
-          class="fixed left-1/2 top-1/2 z-101 flex max-h-[88vh] w-[min(620px,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-2xl border border-edge-muted bg-page p-6 shadow-xl"
-          onEscapeKeyDown={(event) => {
-            if (props.busy) event.preventDefault();
-          }}
-        >
-          <div class="flex items-start justify-between">
-            <div>
-              <Dialog.Title class="text-lg font-semibold">
-                Enroll contacts
-              </Dialog.Title>
-              <Dialog.Description class="mt-1 text-sm text-ink-muted">
-                Add people to {props.campaign.name}.
-              </Dialog.Description>
-            </div>
-            <button
-              type="button"
-              aria-label="Close enrollment"
-              class="p-1 text-ink-muted"
-              disabled={props.busy}
-              onClick={props.onClose}
-            >
-              ✕
-            </button>
+      <ActionDialogShell class="max-h-[88vh]">
+        <div class="flex shrink-0 items-start justify-between gap-3 border-b border-edge-divider px-5 py-4">
+          <div>
+            <ActionDialogShell.Title>Enroll contacts</ActionDialogShell.Title>
+            <ActionDialogShell.Description class="mt-1">
+              Add people to {props.campaign.name}.
+            </ActionDialogShell.Description>
           </div>
-          <div class="mt-5 flex gap-2">
-            <input
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Close enrollment"
+            disabled={props.busy}
+            onClick={() => props.onClose()}
+          >
+            <X aria-hidden="true" class="size-4" />
+          </Button>
+        </div>
+        <ActionDialogShell.Body class="space-y-4">
+          <div class="flex gap-2">
+            <Input
               aria-label="Search enrollment contacts"
-              class={inputClass}
               placeholder="Search contacts by name or email"
               value={search()}
               onInput={(event) => {
@@ -98,33 +115,21 @@ export function EnrollmentDialog(props: {
                 setSearchError('');
               }}
             />
-            <button
+            <Button
               type="button"
-              class={`${secondaryButton} shrink-0`}
+              variant="secondary"
               disabled={searching() || props.busy}
-              onClick={async () => {
-                setSearching(true);
-                setSearchError('');
-                try {
-                  setRemote(await props.onSearchCrm(search()));
-                } catch (cause) {
-                  setSearchError(
-                    cause instanceof Error ? cause.message : String(cause)
-                  );
-                } finally {
-                  setSearching(false);
-                }
-              }}
+              onClick={searchCrm}
             >
               {searching() ? 'Searching…' : 'Search CRM'}
-            </button>
+            </Button>
           </div>
           <Show when={searchError()}>
-            <p class="mt-2 text-xs text-failure" role="alert">
+            <p class="text-xs text-failure" role="alert">
               {searchError()}
             </p>
           </Show>
-          <div class="mt-3 min-h-28 flex-1 overflow-y-auto rounded-lg border border-edge-muted">
+          <div class="max-h-72 min-h-28 overflow-y-auto rounded-lg border border-edge-muted">
             <Show
               when={filtered().length}
               fallback={
@@ -145,17 +150,18 @@ export function EnrollmentDialog(props: {
                       disabled={
                         props.busy ||
                         already(contact.email) ||
-                        (!selected().includes(contact.email) &&
-                          selected().length >= 50)
+                        (!isSelected(contact.email) && selected().length >= 50)
                       }
-                      checked={selected().includes(contact.email)}
-                      onChange={(event) =>
+                      checked={isSelected(contact.email)}
+                      onChange={(event) => {
+                        const email = normalizeEmail(contact.email);
+                        const checked = event.currentTarget.checked;
                         setSelected((before) =>
-                          event.currentTarget.checked
-                            ? [...before, contact.email]
-                            : before.filter((email) => email !== contact.email)
-                        )
-                      }
+                          checked
+                            ? [...new Set([...before, email])]
+                            : before.filter((item) => item !== email)
+                        );
+                      }}
                     />
                     <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-panel text-xs font-medium text-ink-muted">
                       {(contact.name || contact.email)
@@ -182,22 +188,21 @@ export function EnrollmentDialog(props: {
               </For>
             </Show>
           </div>
-          <label class="mt-4 space-y-1 text-xs font-medium">
+          <label class="block space-y-1 text-xs font-medium">
             Start sending <span class="text-ink-muted">your local time</span>
-            <input
+            <Input
               aria-label="Sequence start time"
-              class={inputClass}
               type="datetime-local"
               value={start()}
               disabled={props.busy}
               onInput={(event) => setStart(event.currentTarget.value)}
             />
           </label>
-          <p class="mt-2 text-xs text-ink-muted">
+          <p class="text-xs text-ink-muted">
             Starts at least 10 minutes from now. Each contact receives{' '}
             {props.campaign.steps.length} emails following the sequence delays.
           </p>
-          <label class="mt-4 flex items-start gap-2 text-xs text-ink-muted">
+          <label class="flex items-start gap-2 text-xs text-ink-muted">
             <input
               type="checkbox"
               aria-label="Confirm permission to email"
@@ -211,30 +216,27 @@ export function EnrollmentDialog(props: {
             </span>
           </label>
           <Show when={props.error}>
-            <p class="mt-3 text-xs text-failure" role="alert">
+            <p class="text-xs text-failure" role="alert">
               {props.error}
             </p>
           </Show>
-          <div class="mt-5 flex items-center justify-between border-t border-edge-muted pt-4">
-            <span class="text-xs text-ink-muted">
-              {chosen().length} selected · up to 50 at a time
-            </span>
-            <button
-              type="button"
-              class={primaryButton}
-              disabled={!chosen().length || !consent() || props.busy}
-              onClick={async () => {
-                if (await props.onEnroll(chosen(), new Date(start())))
-                  props.onClose();
-              }}
-            >
-              {props.busy
-                ? 'Scheduling…'
-                : `Enroll ${chosen().length || ''} contact${chosen().length === 1 ? '' : 's'}`}
-            </button>
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
+        </ActionDialogShell.Body>
+        <ActionDialogShell.Footer class="justify-between">
+          <span class="text-xs text-ink-muted">
+            {chosen().length} selected · up to 50 at a time
+          </span>
+          <Button
+            type="button"
+            variant="primary"
+            disabled={!chosen().length || !consent() || props.busy}
+            onClick={enroll}
+          >
+            {props.busy
+              ? 'Scheduling…'
+              : `Enroll ${chosen().length || ''} contact${chosen().length === 1 ? '' : 's'}`}
+          </Button>
+        </ActionDialogShell.Footer>
+      </ActionDialogShell>
     </Dialog>
   );
 }

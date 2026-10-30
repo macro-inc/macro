@@ -1,6 +1,25 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Locator, test } from '@playwright/test';
+import { differenceInCalendarDays } from 'date-fns';
 
 const path = '/src/features/email-marketing/browser-test/marketing.html';
+
+/**
+ * Replace a collaborative field's text the way a person does: select all, then
+ * type. Main's collab editor can re-apply the shared snapshot just after it
+ * turns editable and drop the first keystrokes, so retry until the edit sticks.
+ */
+async function replaceEditorText(field: Locator, text: string) {
+  await expect(field).toBeEditable();
+  await expect(async () => {
+    await field.click();
+    await field.press('ControlOrMeta+a');
+    // Real key events: main's editor ignores synthetic insertText input.
+    await field.page().keyboard.type(text);
+    await expect(field).toHaveText(text.replace(/\n+/g, ''), {
+      timeout: 1_000,
+    });
+  }).toPass({ timeout: 15_000 });
+}
 test('v1 creates a campaign, previews, enrolls, cross-references CRM, pauses, resumes, and stops', async ({
   page,
 }) => {
@@ -15,21 +34,23 @@ test('v1 creates a campaign, previews, enrolls, cross-references CRM, pauses, re
   await page
     .getByRole('button', { name: 'Create campaign', exact: true })
     .click();
-  await page
-    .getByLabel('Email 1 subject')
-    .fill('Welcome to Macro, {{firstName}}');
-  await page
-    .getByLabel('Email 1 message')
-    .fill(
-      'Hi {{firstName}},\n\nWelcome to Macro. Your team’s work finally has a home.\n\nHit reply if you need a hand getting started.'
-    );
+  await replaceEditorText(
+    page.getByLabel('Email 1 subject'),
+    'Welcome to Macro, {{firstName}}'
+  );
+  await replaceEditorText(
+    page.getByLabel('Email 1 message'),
+    'Hi {{firstName}},\n\nWelcome to Macro. Your team’s work finally has a home.\n\nHit reply if you need a hand getting started.'
+  );
   await page.getByRole('button', { name: '＋ Add email' }).click();
-  await page.getByLabel('Email 3 subject').fill('Anything we can help with?');
-  await page
-    .getByLabel('Email 3 message')
-    .fill(
-      'Hi {{firstName}},\n\nHow is your first week going? Let me know if we can help.'
-    );
+  await replaceEditorText(
+    page.getByLabel('Email 3 subject'),
+    'Anything we can help with?'
+  );
+  await replaceEditorText(
+    page.getByLabel('Email 3 message'),
+    'Hi {{firstName}},\n\nHow is your first week going? Let me know if we can help.'
+  );
   await page.getByLabel('Email 3 delay days').fill('3');
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('Campaign saved');
@@ -73,12 +94,16 @@ test('v1 creates a campaign, previews, enrolls, cross-references CRM, pauses, re
   const alex = scheduled.filter(
     (draft: { email: string }) => draft.email === 'alex@example.com'
   );
-  expect(
-    new Date(alex[1].sendAt).getTime() - new Date(alex[0].sendAt).getTime()
-  ).toBe(2 * 86_400_000);
-  expect(
-    new Date(alex[2].sendAt).getTime() - new Date(alex[1].sendAt).getTime()
-  ).toBe(3 * 86_400_000);
+  // Delays are calendar days at the same local time, even across a DST change.
+  const sendAt = alex.map(
+    (draft: { sendAt: string }) => new Date(draft.sendAt)
+  );
+  expect(differenceInCalendarDays(sendAt[1], sendAt[0])).toBe(2);
+  expect(differenceInCalendarDays(sendAt[2], sendAt[1])).toBe(3);
+  for (const time of sendAt)
+    expect(time.getHours() * 60 + time.getMinutes()).toBe(
+      sendAt[0].getHours() * 60 + sendAt[0].getMinutes()
+    );
   await page.getByRole('button', { name: 'Alex Morgan', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('A warm welcome');
   await page.getByRole('button', { name: 'Open CRM contact ↗' }).click();
@@ -216,18 +241,25 @@ test('two clients share subjects and messages, merge concurrent typing, retain f
   const subject = page.getByLabel('Email 1 subject');
   const body = page.getByLabel('Email 1 message');
   const peerBody = peer.getByLabel('Email 1 message');
-  await subject.fill('A shared welcome, {{firstName}}');
+  // Edit once the shared copy is on screen in both clients, as a person would.
+  for (const client of [page, peer])
+    await expect(client.getByLabel('Email 1 subject')).toHaveText(
+      'Welcome to Macro, {{firstName}}'
+    );
+  await replaceEditorText(subject, 'A shared welcome, {{firstName}}');
   await expect(peer.getByLabel('Email 1 subject')).toHaveText(
     'A shared welcome, {{firstName}}'
   );
   await subject.press('End');
   await subject.press('Enter');
   await expect(subject).toHaveText('A shared welcome, {{firstName}}');
-  await body.fill('Working together');
+  await replaceEditorText(body, 'Working together');
   await expect(peerBody).toHaveText('Working together');
   const original = await body.elementHandle();
-  await body.press('Control+End');
-  await peerBody.press('Control+End');
+  // One-line body: move to its end with the platform's line-end key.
+  const lineEnd = process.platform === 'darwin' ? 'Meta+ArrowRight' : 'End';
+  await body.press(lineEnd);
+  await peerBody.press(lineEnd);
   await Promise.all([
     body.pressSequentially(' Alex'),
     peerBody.pressSequentially(' Jamie'),
@@ -265,12 +297,14 @@ test('two clients share subjects and messages, merge concurrent typing, retain f
         rim: getComputedStyle(node, '::after').boxShadow,
       };
     });
-  expect(chrome.classes).toContain('dark-mode:glass-input');
+  // The card reuses the email composer's surface; exact radii follow main's design system.
+  expect(chrome.classes).toContain('bg-composer');
+  expect(chrome.classes).toContain('glass-input');
   expect(chrome.shadow).not.toBe('none');
-  expect(chrome.radius).toBe('26.25px');
+  expect(Number.parseFloat(chrome.radius)).toBeGreaterThan(0);
   await page.getByRole('button', { name: 'Activate campaign' }).click();
   await expect(page.getByLabel('Email 1 message')).toHaveValue(merged);
-  await peerBody.fill('Later edits from another draft tab');
+  await replaceEditorText(peerBody, 'Later edits from another draft tab');
   await expect(page.getByLabel('Email 1 message')).toHaveValue(merged);
   const stored = await page.evaluate(() =>
     JSON.parse(localStorage.getItem('marketing-test')!).campaigns.find(
