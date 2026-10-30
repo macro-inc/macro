@@ -36,6 +36,7 @@ function context(
 ): PropertyRootContextValue {
   return {
     property: () => value,
+    pickedEntityName: () => undefined,
     canEdit: () => canEdit,
     onEdit,
     editorOpen: () => false,

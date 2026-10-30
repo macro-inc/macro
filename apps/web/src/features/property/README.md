@@ -11,7 +11,12 @@ Debug page: `/props-debug` (LOCAL_ONLY).
 
 `Property.Root` shows a pick from the moment an editor saves it until the save
 settles and the source emits a newer property, and drops it if the save fails.
-Pass its children as a function (`{(property) => ...}`) and render from that
+The entity editor also passes the names its picker showed, and `Property.Text`
+shows them while the picked entity's own read loads, so a pick never reads
+"Loading…". This holds only while the Root stays mounted: key rows by
+definition ID, not property ID or object identity, so a property's first save
+(which assigns its ID) and later emissions keep the same Root. Pass its
+children as a function (`{(property) => ...}`) and render from that
 property, not the prop you passed in. Save handlers keep their own caches
 current, so `Property.Root` editors never refetch properties after a save;
 side-panel collections own their refresh (below).

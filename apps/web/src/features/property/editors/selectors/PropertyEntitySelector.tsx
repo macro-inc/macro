@@ -48,7 +48,7 @@ type EntityInputProps = {
   selectedOptions: () => Set<string>;
   setSelectedOptions: (
     options: Set<string>,
-    entityInfo?: { id: string; entity_type: EntityType }[]
+    entityInfo?: { id: string; entity_type: EntityType; name: string }[]
   ) => void;
   onClose?: () => void;
   pinnedOptions?: PinnedOption[];
@@ -366,6 +366,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       {
         id: entity.id,
         entity_type: entityType,
+        name: getEntityName(entity),
       },
     ]);
 
