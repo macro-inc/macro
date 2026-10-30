@@ -25,11 +25,37 @@ import { deepEqual, getRootContainerByType } from './utils';
 
 type TreeSchema = LoroTreeSchema<LoroMapSchema<Record<string, SchemaType>>>;
 
-/** Read containers through their schemas: Loro's JSON tree includes native IDs. */
+const SCHEMA_CONTAINS_TREE = new WeakMap<SchemaType, boolean>();
+
+/** Whether a tree container can appear under `schema`; schemas may be recursive. */
+function containsTreeSchema(schema: SchemaType): boolean {
+  const known = SCHEMA_CONTAINS_TREE.get(schema);
+  if (known !== undefined) return known;
+  const visited = new Set<SchemaType>();
+  const visit = (current: SchemaType): boolean => {
+    if (visited.has(current)) return false;
+    visited.add(current);
+    if (isLoroTreeSchema(current)) return true;
+    if (isListLikeSchema(current)) return visit(current.itemSchema);
+    if (current.type === 'loro-map' || isRootSchemaType(current))
+      return Object.values(current.definition).some(visit);
+    return false;
+  };
+  const contains = visit(schema);
+  SCHEMA_CONTAINS_TREE.set(schema, contains);
+  return contains;
+}
+
+/**
+ * Read containers through their schemas: Loro's JSON tree includes native IDs.
+ * Subtrees without a tree read as one native `toJSON`, which is the same value
+ * without a call into Loro per container.
+ */
 export function readContainer(
   container: Container,
   schema: SchemaType | undefined
 ): unknown {
+  if (!schema || !containsTreeSchema(schema)) return container.toJSON();
   if (container instanceof LoroTree && schema && isLoroTreeSchema(schema)) {
     const visit = (nodes: ReturnType<LoroTree['roots']>): unknown[] =>
       nodes.map((node) => ({
@@ -71,7 +97,11 @@ export function readDocument(doc: LoroDoc, schema: SchemaType | undefined) {
   const state = doc.toJSON();
   if (schema && isRootSchemaType(schema)) {
     for (const [key, field] of Object.entries(schema.definition)) {
-      if (isContainerSchema(field) && key in state) {
+      if (
+        isContainerSchema(field) &&
+        key in state &&
+        containsTreeSchema(field)
+      ) {
         const container = getRootContainerByType(
           doc,
           key,

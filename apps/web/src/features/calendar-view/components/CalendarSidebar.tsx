@@ -20,9 +20,9 @@ import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { UserIcon } from '@core/component/UserIcon';
 import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import CloseIcon from '@phosphor/x.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { Key } from '@solid-primitives/keyed';
 import { Checkbox, cn, Calendar as MiniCalendar } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -40,6 +40,7 @@ import {
 import { CalendarCallSidebar } from '../calendar-call-sidebar';
 import { CALENDAR_TOUR } from '../tour';
 import {
+  CalendarCreateBookingLinkItem,
   CalendarCreateCallItem,
   CalendarCreateEventItem,
 } from './CalendarCreateItems';
@@ -251,6 +252,7 @@ function CalendarTeamOooSection() {
       <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
         <CollapsibleSection.Header>
           <Checkbox
+            size="sm"
             checked={calendarView.isSourceVisible(TEAM_OOO_SOURCE_ID)}
             onChange={(visible) =>
               calendarView.setSourceVisibility(TEAM_OOO_SOURCE_ID, visible)
@@ -258,7 +260,7 @@ function CalendarTeamOooSection() {
             title="Show on calendar"
             class="h-full shrink-0 pr-1 pl-(--sidebar-item-inset)"
           >
-            <Checkbox.Control class="size-3.5 [&_svg]:size-2.5" />
+            <Checkbox.Control />
             <Checkbox.Label class="absolute inset-0">
               <span class="sr-only">
                 Show team out of office on the calendar
@@ -283,7 +285,7 @@ function CalendarSidebarOverlayClose() {
   return (
     <Show when={shell.aside.isOverlay() && isTouchDevice()}>
       <ViewSidebar.Control
-        label="Close calendar navigation"
+        aria-label="Close calendar navigation"
         onClick={shell.aside.collapse}
       >
         <CloseIcon class="size-4" />
@@ -330,7 +332,6 @@ export function CalendarSidebar() {
           presentation={isTouchDevice() ? undefined : 'sidebar'}
           size="md"
           class="h-(--sidebar-row-height) w-full min-w-0 justify-start gap-(--sidebar-label-gap) px-(--sidebar-item-inset) text-left touch:h-11"
-          contentClass="w-[var(--kb-popper-anchor-width)] min-w-40"
           trigger={
             <>
               <ViewSidebar.Icon>
@@ -343,6 +344,7 @@ export function CalendarSidebar() {
         >
           <CalendarCreateEventItem onSelect={closeOverlay} />
           <CalendarCreateCallItem onSelect={closeOverlay} />
+          <CalendarCreateBookingLinkItem onSelect={closeOverlay} />
         </CalendarCreateMenu>
       </ViewSidebar.Primary>
       <ViewSidebar.Content class="pt-2">

@@ -34,7 +34,7 @@ vi.mock('@queries/import', () => ({
     isPlaceholderData: false,
     data: { runs: [], entities: imports.entities },
   }),
-  useNotionImportReportQuery: () => ({
+  useWorkspaceImportReportQuery: () => ({
     get isPending() {
       return imports.report === undefined;
     },
@@ -42,7 +42,7 @@ vi.mock('@queries/import', () => ({
       return imports.report;
     },
   }),
-  useCancelNotionImportMutation: () => ({ mutateAsync: imports.cancel }),
+  useCancelWorkspaceImportMutation: () => ({ mutateAsync: imports.cancel }),
 }));
 
 function entity(

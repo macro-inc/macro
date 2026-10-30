@@ -1,6 +1,6 @@
 use super::*;
 
-async fn link_email(pool: &PgPool, link_id: Uuid) -> String {
+pub(super) async fn link_email(pool: &PgPool, link_id: Uuid) -> String {
     sqlx::query_scalar!(
         "SELECT email_address FROM email_links WHERE id = $1",
         link_id

@@ -1,6 +1,6 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
-import ArrowClockwiseIcon from '@phosphor/arrow-clockwise.svg';
-import WarningIcon from '@phosphor/warning-circle.svg';
+import ArrowClockwiseIcon from '@icon/system/regular/arrow-clockwise.svg';
+import WarningIcon from '@icon/system/regular/warning-circle.svg';
 import { Button } from '@ui/components/Button';
 import { For } from 'solid-js';
 
@@ -18,7 +18,7 @@ export function DatabaseLoadFailure(props: {
       <WarningIcon class="size-7 text-ink-muted" />
       <p class="text-sm font-medium">{props.title}</p>
       <p class="max-w-96 text-xs text-ink-muted">{props.message}</p>
-      <Button size="sm" class="gap-2" onClick={props.onRetry}>
+      <Button variant="ghost" size="sm" class="gap-2" onClick={props.onRetry}>
         <ArrowClockwiseIcon class="size-3.5" />
         Try again
       </Button>

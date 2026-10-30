@@ -53,8 +53,8 @@ vi.mock('../agents-view/queries/agent-roster-source', () => ({
     availabilityLoading: () => false,
   }),
 }));
-vi.mock('./queries/home-agent-prompt', () => ({
-  buildHomeAgentPrompt: mocks.buildPrompt,
+vi.mock('@app/features/agents-view/queries/composer-prompt', () => ({
+  buildAgentPrompt: mocks.buildPrompt,
 }));
 vi.mock('../agents-view/views/NewChatPage', () => ({
   NewChatPage: (props: {

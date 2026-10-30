@@ -3,7 +3,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import {
   type ImportState,
   useDiscoverMutation,
@@ -197,7 +197,7 @@ export function SlackChannelImportCard(
               {runLabel(run())}
             </p>
             <Button
-              variant="accent"
+              variant="primary"
               size="sm"
               disabled={
                 discovering() || !query.isSuccess || importChannels.isPending
@@ -299,7 +299,7 @@ export function SlackChannelImportCard(
           </Show>
           <div class="flex flex-col items-start gap-3">
             <Button
-              variant="accent"
+              variant="primary"
               size="sm"
               disabled={!importIds().length || importChannels.isPending}
               onClick={startImport}

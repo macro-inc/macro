@@ -92,6 +92,10 @@ pub struct SourcedAttachment {
     pub content_type: String,
     /// The file's raw bytes.
     pub bytes: Vec<u8>,
+    /// Sent as part of the message body instead of as a file. The only such
+    /// part is an invitation's `text/calendar` body (RFC 6047), which Gmail
+    /// and Outlook answer with Yes, Maybe and No.
+    pub is_inline: bool,
 }
 
 /// A forwarded attachment linking a draft to an original message's attachment.

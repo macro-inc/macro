@@ -70,6 +70,11 @@ planning is still `running`.
    * @minimum 0
    */
   imported: number;
+  /**
+   * Tracker issues in the plan.
+   * @minimum 0
+   */
+  issues?: number;
   /** Whether the user is on a team. Without one, everything the import
 writes stays visible only to them. */
   onTeam?: boolean;
@@ -78,6 +83,11 @@ writes stays visible only to them. */
    * @minimum 0
    */
   pages: number;
+  /**
+   * Tracker groups written as Macro projects.
+   * @minimum 0
+   */
+  projects?: number;
   /** The review the plan is tied to, once presented. */
   reviewId?: NotionImportReportReviewId;
   scanned?: NotionImportReportScanned;
@@ -113,6 +123,8 @@ for the team; they link to the teammate's copy once it is written.
    * @minimum 0
    */
   waitingOnTeammates?: number;
+  /** Provider items skipped because they were unreadable, or optional features unavailable. */
+  warnings?: string[];
   /**
    * Plan objects being written now.
    * @minimum 0

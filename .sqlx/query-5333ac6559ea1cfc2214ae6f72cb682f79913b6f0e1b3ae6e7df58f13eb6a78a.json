@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_pairing p SET passkey_response = NULL, updated_at = now()\n            FROM (SELECT id, passkey_response FROM whatsapp_pairing WHERE id = $1 AND account_id = $2 AND consumed_at IS NULL FOR UPDATE) old\n            WHERE p.id = old.id AND old.passkey_response IS NOT NULL\n            RETURNING old.passkey_response AS \"response!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "response!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "5333ac6559ea1cfc2214ae6f72cb682f79913b6f0e1b3ae6e7df58f13eb6a78a"
+}

@@ -285,6 +285,17 @@ impl<E: SoupEntityEdges> GraphqlWorkFeedEntry<E> {
     }
 }
 
+/// A place in the feed's order: newest `sortAt` first, then entity id
+/// descending.
+#[derive(SimpleObject)]
+#[graphql(name = "WorkFeedPosition")]
+pub struct GraphqlWorkFeedPosition {
+    /// The sort time, RFC 3339.
+    sort_at: String,
+    /// The entity id that breaks ties at `sortAt`.
+    entity_id: String,
+}
+
 /// One page of the viewer's work feed, newest first.
 #[derive(SimpleObject)]
 #[graphql(name = "WorkFeedPage")]
@@ -293,6 +304,11 @@ pub struct GraphqlWorkFeedPage<E: SoupEntityEdges> {
     entries: Vec<GraphqlWorkFeedEntry<E>>,
     /// Cursor for the next page; absent once the feed is exhausted.
     next_cursor: Option<String>,
+    /// Where this page's read stopped, the position `nextCursor` resumes
+    /// after; absent once the feed is exhausted. A filtered page can read
+    /// past its last entry, so a live change placed after that entry but not
+    /// after this position belongs to this page rather than a later one.
+    next_position: Option<GraphqlWorkFeedPosition>,
 }
 
 impl<E: SoupEntityEdges> GraphqlWorkFeedPage<E> {
@@ -304,7 +320,11 @@ impl<E: SoupEntityEdges> GraphqlWorkFeedPage<E> {
                 .into_iter()
                 .map(GraphqlWorkFeedEntry::new)
                 .collect(),
-            next_cursor: page.next.map(|next| next.encode()),
+            next_cursor: page.next.as_ref().map(|next| next.encode()),
+            next_position: page.next.map(|next| GraphqlWorkFeedPosition {
+                sort_at: next.sort_at.to_rfc3339(),
+                entity_id: next.entity_id,
+            }),
         }
     }
 }

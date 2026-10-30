@@ -85,6 +85,11 @@ export type CalendarEventRole = 'organizer' | 'guest';
  * organizes, and say why. Reminders may go to one copy; name its inbox. Read
  * those three methods' documentation before changing a meeting held through
  * several inboxes: it says what each change does from each copy.
+ *
+ * {@link CalendarEvent.addToCalendar} adds a shared meeting only while none
+ * of the user's calendars holds it. Refused with `already_on_calendar`, it is
+ * refused on every calendar, so tell the user the meeting is already on their
+ * calendar and never offer to add it to another one.
  */
 export class CalendarNamespace {
   /** Find up to 30 owned markdown documents for meeting notes, plus available extra team audiences. */

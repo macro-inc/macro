@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
@@ -33,7 +34,7 @@ export const makeMarkUnreadAction = () => {
 
     const failed = targets.filter((_, i) => results[i]?.status === 'rejected');
     if (failed.length > 0) {
-      toast.failure('Failed to mark as unread');
+      toast.failure(t('entityActions.toastMarkUnreadFailed'));
       // Restore the optimistically-flipped rows to the server's state.
       failed.forEach((entity) => refetchSoupEntity(entity.id, 'emailThread'));
       return;
@@ -41,8 +42,8 @@ export const makeMarkUnreadAction = () => {
 
     toast.success(
       targets.length > 1
-        ? `Marked ${targets.length} items as unread`
-        : 'Marked as unread',
+        ? t('entityActions.toastMarkedUnreadCount', { count: targets.length })
+        : t('entityActions.toastMarkedUnread'),
       { duration: 3_000, stack: true, hideOnMobile: true }
     );
   };
@@ -87,15 +88,15 @@ export const makeMarkReadAction = () => {
 
     const failed = targets.filter((_, i) => results[i]?.status === 'rejected');
     if (failed.length > 0) {
-      toast.failure('Failed to mark as read');
+      toast.failure(t('entityActions.toastMarkReadFailed'));
       failed.forEach((entity) => refetchSoupEntity(entity.id, 'emailThread'));
       return;
     }
 
     toast.success(
       targets.length > 1
-        ? `Marked ${targets.length} items as read`
-        : 'Marked as read',
+        ? t('entityActions.toastMarkedReadCount', { count: targets.length })
+        : t('entityActions.toastMarkedRead'),
       { duration: 3_000, stack: true, hideOnMobile: true }
     );
   };

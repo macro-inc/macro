@@ -869,7 +869,16 @@ export type CrmCompanySearchResponseItem = {
 /**
  * Data type for property values, determining storage and validation.
  */
-export type DataType = 'BOOLEAN' | 'DATE' | 'NUMBER' | 'STRING' | 'SELECT_NUMBER' | 'SELECT_STRING' | 'TAG' | 'ENTITY' | 'LINK';
+export type DataType = 'BOOLEAN' | 'DATE' | 'DATE_RANGE' | 'NUMBER' | 'STRING' | 'SELECT_NUMBER' | 'SELECT_STRING' | 'TAG' | 'ENTITY' | 'LINK';
+
+/**
+ * A span of time from `start` to `end`, both included. The end is never
+ * before the start: a range that would end earlier does not deserialize.
+ */
+export type DateRange = {
+    end: string;
+    start: string;
+};
 
 /**
  * The document filters used to filter down what documents you search over.
@@ -1470,7 +1479,8 @@ export type InitiativeFilters = {
     /**
      * Opt this query into initiatives at all. Initiatives are off by
      * default — see [`crate::ast::initiative::InitiativeLiteral::Include`].
-     * Asking for specific `initiative_ids` or `owners` also opts in.
+     * Asking for specific `initiative_ids`, `owners` or `notification_filters`
+     * also opts in.
      */
     include?: boolean;
     /**
@@ -1482,9 +1492,13 @@ export type InitiativeFilters = {
      */
     name?: string | null;
     /**
-     * Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot
-     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
-     * owner.
+     * Filter by initiative notification state.
+     */
+    notification_filters?: NotificationFilters;
+    /**
+     * Filter by initiative owner principal — a user ('macro|user@example.com'), a
+     * bot ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include
+     * every owner.
      */
     owners?: Array<string>;
 };
@@ -1722,6 +1736,13 @@ export type PropertyValue = {
      * Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}
      */
     value: string;
+} | {
+    type: 'DateRange';
+    /**
+     * Date range value
+     * Serializes as: {"type": "DateRange", "value": {"start": "2025-01-01T00:00:00Z", "end": "2025-01-31T00:00:00Z"}}
+     */
+    value: DateRange;
 } | {
     type: 'SelectOption';
     /**

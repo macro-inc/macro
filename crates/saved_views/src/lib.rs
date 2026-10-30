@@ -1,3 +1,4 @@
+pub mod domain;
 mod pgsql;
 mod storage;
 use chrono::{DateTime, Utc};
@@ -7,8 +8,8 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 pub use pgsql::PgViewStorage;
-pub use storage::{ExcludedDefaultViewStorage, ViewPatch, ViewStorage};
-#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub use storage::{ExcludedDefaultViewStorage, ViewPatch};
+#[derive(Clone, Serialize, Deserialize, Debug, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct View {
     pub id: Uuid,
@@ -20,6 +21,14 @@ pub struct View {
     pub config: serde_json::Value,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    /// Optimistic-write revision, omitted from legacy REST responses.
+    #[serde(skip)]
+    #[schema(ignore)]
+    pub revision: i64,
+    /// Requested share; effective visibility is determined by the service.
+    #[serde(skip)]
+    #[schema(ignore)]
+    pub shared_team_id: Option<Uuid>,
 }
 
 impl View {
@@ -32,6 +41,8 @@ impl View {
             config,
             created_at: now,
             updated_at: now,
+            revision: 1,
+            shared_team_id: None,
         }
     }
 }
@@ -41,7 +52,7 @@ impl View {
 ///
 /// It is important that the frontend can quickly iterate on default views, for that reason
 /// we don't keep track of default views in the database, only those that are explicitly excluded.
-#[derive(Serialize, Deserialize, Debug, ToSchema)]
+#[derive(Clone, Serialize, Deserialize, Debug, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ExcludedDefaultView {
     id: Uuid,

@@ -9,7 +9,14 @@ import {
   waitFor,
 } from '@solidjs/testing-library';
 import { CombinedError } from '@urql/core';
-import { batch, createSignal, For, type JSX, Show } from 'solid-js';
+import {
+  batch,
+  createSignal,
+  For,
+  type JSX,
+  type ParentProps,
+  Show,
+} from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -79,6 +86,7 @@ vi.mock('@app/components/view-shell', () => ({
     Main: mocks.pass,
     TopBar: mocks.pass,
   },
+  ViewSidebar: { Title: (props: ParentProps) => <h1>{props.children}</h1> },
 }));
 vi.mock('@app/features/next-soup/utils', () => ({
   getChannelEntityTarget: mocks.resolveTarget,
@@ -202,6 +210,7 @@ vi.mock('./queries', () => ({
   useChannelsSources: (enabled: (scope: string) => boolean) => {
     mocks.sourceEnabled = enabled;
     return {
+      team_channels: { items: () => mocks.rows() },
       channels: { items: () => mocks.rows() },
       direct_messages: { items: () => mocks.rows() },
       recents: { items: () => mocks.rows() },

@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { type EntityData, InlineEntity } from '@entity';
 import { cn } from '@ui';
@@ -41,7 +42,7 @@ export function SoupEntityActionDrawer(props: SoupEntityActionDrawerProps) {
     >
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />
-        <MobileDrawer.Content aria-label="Entity actions">
+        <MobileDrawer.Content aria-label={t('entityActions.entityActions')}>
           <MobileDrawer.Handle />
 
           <Show when={props.entity}>

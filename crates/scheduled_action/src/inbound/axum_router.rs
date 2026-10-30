@@ -7,6 +7,7 @@ use crate::domain::models::{
 };
 use crate::domain::ports::ScheduledActionService;
 use crate::domain::target_validation::TargetValidationError;
+use crate::domain::templates::TemplateInputError;
 use agent_session::domain::routines::RoutineSessionError;
 use ai_billing::{AiAdmissionError, inbound::admission::AiAdmissionErrorBody};
 use axum::extract::{FromRef, Path, Query, State, rejection::JsonRejection};
@@ -522,12 +523,16 @@ impl IntoResponse for ScheduledActionApiError {
             };
             return (status, policy.to_string()).into_response();
         }
+        if let Some(input) = error.downcast_ref::<TemplateInputError>() {
+            return (StatusCode::BAD_REQUEST, input.to_string()).into_response();
+        }
         if let Some(validation) = error.downcast_ref::<TargetValidationError>() {
             let status = match validation {
                 TargetValidationError::InvalidTask | TargetValidationError::AgentsDisabled => {
                     StatusCode::BAD_REQUEST
                 }
-                TargetValidationError::ExplicitAgentRequired => StatusCode::CONFLICT,
+                TargetValidationError::ExplicitAgentRequired
+                | TargetValidationError::ExplicitAppsRequired => StatusCode::CONFLICT,
             };
             return (status, validation.to_string()).into_response();
         }
@@ -541,6 +546,9 @@ impl IntoResponse for ScheduledActionApiError {
                     (StatusCode::NOT_FOUND, session.to_string())
                 }
                 RoutineSessionError::Forbidden => (StatusCode::FORBIDDEN, session.to_string()),
+                RoutineSessionError::AppNotConnected | RoutineSessionError::AppsUnsupported => {
+                    (StatusCode::UNPROCESSABLE_ENTITY, session.to_string())
+                }
                 RoutineSessionError::Conflict => (StatusCode::CONFLICT, session.to_string()),
                 RoutineSessionError::RuntimeUnavailable | RoutineSessionError::OperationFailed => (
                     StatusCode::SERVICE_UNAVAILABLE,

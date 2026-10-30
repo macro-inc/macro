@@ -488,3 +488,42 @@ async fn a_reviewed_run_reports_its_review_and_a_cancel_survives_the_write_endin
         "a deleted session no longer hears of the run"
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn workspace_sources_have_independent_leases_roots_and_adoption(pool: PgPool) {
+    let repo = PgImportRepo::new(pool);
+    let owner = user("multi-source");
+    let holder = Uuid::now_v7();
+    let linear = repo.for_source(ImportSource::Linear);
+    let jira = repo.for_source(ImportSource::Jira);
+    for source in [
+        ImportSource::Notion,
+        ImportSource::Linear,
+        ImportSource::Jira,
+    ] {
+        repo.start_run(&owner, source, &[]).await.unwrap();
+    }
+    let job = NotionJob::TrackerPlan {
+        sharing: NotionSharing::Personal,
+    };
+    assert!(linear.take_run(&owner, holder, LEASE, &job).await.unwrap());
+    assert!(jira.take_run(&owner, holder, LEASE, &job).await.unwrap());
+    let root = Uuid::now_v7();
+    linear.set_root_folder(&owner, root).await.unwrap();
+    assert_eq!(jira.root_folder(&owner).await.unwrap(), None);
+    assert!(linear.release_lease(&owner, holder).await.unwrap());
+    assert!(jira.renew_lease(&owner, holder, LEASE).await.unwrap());
+    assert!(
+        jira.adopt_stalled_runs(Some(&owner), Uuid::now_v7(), LEASE, STALE, 10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let adopted = linear
+        .adopt_stalled_runs(Some(&owner), Uuid::now_v7(), LEASE, STALE, 10)
+        .await
+        .unwrap();
+    assert_eq!(adopted.len(), 1);
+    assert_eq!(adopted[0].job, Some(job));
+    assert_eq!(repo.root_folder(&owner).await.unwrap(), None);
+}

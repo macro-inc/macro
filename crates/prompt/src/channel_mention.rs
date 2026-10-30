@@ -36,30 +36,17 @@ Sending email is not available from a channel: there is no SendEmail tool here. 
 draft or send an email, say you cannot do that from a channel and suggest asking Macro in an AI
 chat or using the email composer.
 
-## Sharing what you create or link
+## Sharing what you link
 
-Linking an item in a channel does not give the channel access to it; only sharing does. So
-whenever your reply links an item you created, edited, or found this turn (a document,
-calendar event, chat, database, form, project, call, email thread, or agent session), the
-last line of your reply must be exactly:
+Items you create while answering this message and link in your reply, as a mention chip (the
+XML mention tags) or an attachment, are shared with this channel as the person who asked you.
+Existing items you link are not shared, including ones you created for an earlier message. A plain URL to a Macro item is never shared and does not render
+as a chip, so always link Macro items with mention tags. Never ask whether to share.
 
-Do you want me to share this with the members of the channel?
-
-Ask even when you just created the item at the user's request, and even when you think the
-channel might already see it; you cannot tell, so ask. Do not share it in the same turn.
-Name the item only when "this" would be ambiguous. The only exceptions:
-- The user already asked you to share it: call `ShareWithChannel` instead of asking.
-- The item is this channel or a message already in it.
-
-Before you send any reply, check: does it link an item? If so, is that question the last
-line? If not, add it.
-
-A later message in this thread that agrees ("yes", "yeah", "please", "go ahead", "share it")
-answers that question. Call `ShareWithChannel` for that item and this channel — `channelId` is
-the `id` on the conversation parent above; a calendar chip is entity type `calendar_event` and
-its `documentId` is the event id — then reply with only "Okay." Do not repeat the earlier answer. Agreement to a
-different question is not agreement to share. If they decline, acknowledge in a few words and
-do not share. If the tool says you cannot share it, say that plainly instead of "Okay."
+Call `ShareWithChannel` only when the user asks you to share an existing item. `channelId` is
+the `id` on the conversation parent above; a calendar chip is entity type `calendar_event`
+whose `entityId` is the chip's `documentId`. If the tool says you cannot share it, say that
+plainly.
 "##;
 
 static INTENT: &str = "The model replies to the marked mention, treats the <thread> block as \
@@ -69,10 +56,10 @@ user's time zone when the block names one — asking rather than silently assumi
 does not — treats tool calls as executing immediately (no composer or pending \
 confirmation to point the user at), only takes explicitly requested actions, checks before \
 creating events with attendees, declines email drafting/sending with a pointer to AI chat \
-or the email composer, and when a reply links an item ends \
-by asking \"Do you want me to share this with the members of the channel?\" — always, \
-including for items it just created, since linking does not grant access — then, on a yes \
-in the thread, calls ShareWithChannel and replies only \"Okay.\"";
+or the email composer, links Macro items only as mention chips (never \
+plain URLs), knowing that linked items it created while answering the message are shared with \
+the channel as the person who asked while existing items it links are not, never asks whether to share, \
+and calls ShareWithChannel only when the user asks to share an existing item.";
 
 /// The channel-mention prompt for the Macro channel bot.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
@@ -82,17 +69,21 @@ mod test {
     use super::PROMPT;
 
     #[test]
-    fn a_linked_item_is_offered_to_the_channel_and_shared_only_after_yes() {
+    fn items_created_for_the_message_are_shared_and_the_bot_never_asks() {
         let instructions = PROMPT.instructions.as_ref();
+        assert!(instructions.contains("Items you create while answering this message and link"));
+        assert!(instructions.contains("Existing items you link are not shared"));
+        assert!(instructions.contains("A plain URL to a Macro item is never shared"));
+        assert!(instructions.contains("Never ask whether to share."));
+        assert!(!instructions.contains("Do you want me to share this"));
         assert!(
-            instructions.contains("Do you want me to share this with the members of the channel?")
+            instructions.contains(
+                "`ShareWithChannel` only when the user asks you to share an existing item"
+            )
         );
-        assert!(instructions.contains("`ShareWithChannel`"));
-        assert!(instructions.contains("Ask even when you just created the item"));
-        assert!(instructions.contains("reply with only \"Okay.\""));
         assert!(instructions.contains("calendar_event"));
         assert!(instructions.contains("`channelId` is\nthe `id` on the conversation parent"));
-        assert!(instructions.contains("its `documentId` is the event id"));
-        assert!(PROMPT.intent.contains("ShareWithChannel"));
+        assert!(instructions.contains("whose `entityId` is the chip's `documentId`"));
+        assert!(PROMPT.intent.contains("never asks whether to share"));
     }
 }

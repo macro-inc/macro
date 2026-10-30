@@ -10,5 +10,5 @@ export type PropertyValueOneOfNineType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const PropertyValueOneOfNineType = {
-  SelectOption: 'SelectOption',
+  DateRange: 'DateRange',
 } as const;

@@ -4,7 +4,7 @@ import { schedulingKeys } from '@app/features/scheduling/queries/keys';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { schedulingClient } from '@service-email/scheduling';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import type {
   FormBookingEvent,
@@ -29,6 +29,31 @@ function bookingLinksOf(
     }));
 }
 
+// Cached callbacks stay at module scope so they never retain the form.
+function bookingSettingsQueryOptions(
+  scopeId: string,
+  teamId: string | undefined,
+  enabled: boolean
+) {
+  return queryOptions({
+    queryKey: schedulingKeys.settings(scopeId).queryKey,
+    queryFn: async () =>
+      (await throwOnErr(() => schedulingClient.settings(teamId))).profile,
+    enabled,
+    retry: false,
+  });
+}
+
+function publicProfileQueryOptions(profileId: string, enabled: boolean) {
+  return queryOptions({
+    queryKey: schedulingKeys.publicProfile(profileId).queryKey,
+    queryFn: async () =>
+      (await throwOnErr(() => schedulingClient.profile(profileId))).profile,
+    enabled,
+    retry: false,
+  });
+}
+
 /**
  * The viewer's booking links: their own, then their team's. Read through
  * the Calendar settings' own cache entries, so a link created there shows
@@ -38,22 +63,22 @@ export function createBookingLinksSource(
   userId: Accessor<string | undefined>,
   enabled: Accessor<boolean>
 ): ReadSource<FormBookingLink[]> {
-  const personal = useQuery(() => ({
-    queryKey: schedulingKeys.settings(userId() ?? 'me').queryKey,
-    queryFn: async () =>
-      (await throwOnErr(() => schedulingClient.settings())).profile,
-    enabled: enabled() && !!userId(),
-    retry: false,
-  }));
+  const personal = useQuery(() =>
+    bookingSettingsQueryOptions(
+      userId() ?? 'me',
+      undefined,
+      enabled() && !!userId()
+    )
+  );
   const team = useCurrentTeamQuery(enabled);
   const teamId = () => (team.isSuccess ? team.data?.team.id : undefined);
-  const teamProfile = useQuery(() => ({
-    queryKey: schedulingKeys.settings(teamId() ?? '').queryKey,
-    queryFn: async () =>
-      (await throwOnErr(() => schedulingClient.settings(teamId()))).profile,
-    enabled: enabled() && !!teamId(),
-    retry: false,
-  }));
+  const teamProfile = useQuery(() =>
+    bookingSettingsQueryOptions(
+      teamId() ?? '',
+      teamId(),
+      enabled() && !!teamId()
+    )
+  );
   return {
     value: () => {
       if (!personal.isSuccess) return undefined;
@@ -79,16 +104,9 @@ export function createBookingLinksSource(
 export function createBookingEventSource(
   target: Accessor<FormBookingTarget | undefined>
 ): ReadSource<FormBookingEvent | null> {
-  const profile = useQuery(() => ({
-    queryKey: schedulingKeys.publicProfile(target()?.profileId ?? '').queryKey,
-    queryFn: async () => {
-      const profileId = target()?.profileId ?? '';
-      return (await throwOnErr(() => schedulingClient.profile(profileId)))
-        .profile;
-    },
-    enabled: !!target(),
-    retry: false,
-  }));
+  const profile = useQuery(() =>
+    publicProfileQueryOptions(target()?.profileId ?? '', !!target())
+  );
   return {
     value: () => {
       const current = target();

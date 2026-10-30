@@ -1,16 +1,22 @@
 import { useCrmContactMentionSource } from '@app/features/crm/record-adapter';
+import { externalChatApi } from '@app/features/external-chat/queries/production-api';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { BlockName } from '@core/block';
 import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant/fileType';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
-import { enableCrm, isFeatureEnabled } from '@core/constant/featureFlags';
+import {
+  enableCrm,
+  enableWhatsappLinked,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import {
   type EntityBucket,
   type EntityItem,
   useQuickAccess,
 } from '@core/context/quickAccess';
+import { useUserId } from '@core/context/user';
 import clickOutside from '@core/directive/clickOutside';
 import { isMobile } from '@core/mobile/isMobile';
 import type { ChannelWithParticipants, IUser } from '@core/user';
@@ -20,6 +26,8 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type { EmailEntity } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
+import { useExternalChatsQuery } from '@queries/external-chats';
+import { queryReadyGate } from '@queries/gate';
 import type { HistoryItem as Item } from '@queries/history/history';
 import { Key } from '@solid-primitives/keyed';
 import { createLazyMemo } from '@solid-primitives/memo';
@@ -45,6 +53,7 @@ import type { MenuOperations } from '../../../shared/inlineMenu';
 import type {
   AgentSessionMentionItem,
   DateMentionItem,
+  ExternalChatMentionItem,
   MentionItem,
   UserMentionRecord,
 } from '../../../utils/mentionsUtils';
@@ -255,6 +264,35 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         enabled: () => !props.sources || props.sources.includes('emails'),
       });
 
+  // A WhatsApp chat mentioned in a channel is shared with its members; only
+  // its owner can do that, so only the viewer's own chats are offered.
+  const externalChatsEnabled = () =>
+    !hasCustomEntities() &&
+    props.block === 'channel' &&
+    props.menu.isOpen() &&
+    isFeatureEnabled(enableWhatsappLinked) &&
+    (!props.sources || props.sources.includes('externalChats'));
+  const userId = useUserId();
+  const externalChatsQuery = useExternalChatsQuery(externalChatApi, () =>
+    externalChatsEnabled() ? (userId() ?? '') : ''
+  );
+  const externalChats = createLazyMemo((): ExternalChatMentionItem[] => {
+    if (!externalChatsEnabled() || !queryReadyGate(externalChatsQuery))
+      return [];
+    const term = searchTerm().trim().toLocaleLowerCase();
+    return externalChatsQuery.data
+      .filter(
+        (chat) =>
+          chat.ownerId === userId() &&
+          chat.name.toLocaleLowerCase().includes(term)
+      )
+      .map((chat) => ({
+        kind: 'externalChat',
+        id: chat.id,
+        data: { id: chat.id, name: chat.name, provider: chat.provider },
+      }));
+  });
+
   const dateOptions = useDateSearch({ query: searchTerm });
   const dates = createLazyMemo((): DateMentionItem[] => {
     return dateOptions().map(
@@ -266,7 +304,9 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     );
   });
 
+  // Every composer mounts this menu closed; fetch only once it opens.
   const bookingLinksEnabled = () =>
+    props.menu.isOpen() &&
     !hasCustomEntities() &&
     (!props.sources || props.sources.includes('bookingLinks'));
   const { bookingLinks } = useBookingLinkMention({
@@ -341,13 +381,14 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       ...users,
       ...(sourceEnabled('documents') ? (docs() ?? []) : []),
       ...(sourceEnabled('channels') ? (channels() ?? []) : []),
+      ...externalChats(),
       ...(sourceEnabled('agentSessions') ? agentSessions() : []),
       ...(sourceEnabled('companies') ? (companies() ?? []) : []),
       ...(sourceEnabled('emails') ? (emails() ?? []) : []),
       ...(sourceEnabled('calendarEvents') ? calendarEvents() : []),
       ...(sourceEnabled('dates') ? (dates() ?? []) : []),
     ];
-    return sortMobileMentions(combined, searchTerm(), users);
+    return sortMobileMentions(combined, searchTerm(), users, true);
   });
 
   const bucketConfigs = createLazyMemo((): BucketConfig[] => {
@@ -367,6 +408,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
             (sourceEnabled('documents') ? docsMention.totalCount() : 0) +
             (sourceEnabled('agentSessions') ? agentSessions().length : 0) +
             (sourceEnabled('channels') ? channelsMention.totalCount() : 0) +
+            externalChats().length +
             (sourceEnabled('companies')
               ? (companyMention?.totalCount() ?? 0)
               : 0) +
@@ -446,6 +488,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         hasMore: channelsMention.hasMore,
         isLoadingMore: channelsMention.isLoadingMore,
         loadMore: channelsMention.loadMore,
+      },
+      {
+        id: 'externalChats',
+        label: 'WhatsApp chats',
+        getData: externalChats,
+        getFullCount: () => externalChats().length,
       },
       {
         id: 'agentSessions',

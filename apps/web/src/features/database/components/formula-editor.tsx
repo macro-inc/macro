@@ -1,6 +1,6 @@
 import type { Formula } from '@core/database-sql/generated/types';
 import { fireAndForget } from '@core/util/fireAndForget';
-import FunctionIcon from '@phosphor/function.svg';
+import FunctionIcon from '@icon/system/regular/function.svg';
 import { Button } from '@ui/components/Button';
 import { inputClasses } from '@ui/components/Input';
 import {
@@ -310,7 +310,7 @@ export function FormulaEditor(props: {
           >
             {(column) => (
               <Button
-                variant="outline"
+                variant="secondary"
                 size="xs"
                 disabled={!tools()}
                 onClick={() => {
@@ -347,7 +347,7 @@ export function FormulaEditor(props: {
           Cancel
         </Button>
         <Button
-          variant="cta"
+          variant="primary"
           size="sm"
           disabled={!canSave()}
           onClick={() => fireAndForget(save(), 'database')}

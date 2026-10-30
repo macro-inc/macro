@@ -120,7 +120,7 @@ function MobileDrawerItem(props: ComponentProps<'button'>) {
     <button
       type="button"
       class={cn(
-        'flex min-h-11 w-full items-center gap-3 rounded-[20px] px-3 py-2.5 text-left text-sm text-ink transition-colors hover:bg-ink/6 active:bg-ink/10 aria-checked:bg-ink/8 aria-pressed:bg-ink/8 aria-[checked=mixed]:bg-ink/8 focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-40',
+        'flex min-h-11 w-full items-center gap-3 rounded-[20px] px-3 py-2.5 text-left text-sm text-ink transition-colors hover:bg-ink/6 active:bg-ink/10 aria-checked:bg-ink/8 aria-pressed:bg-ink/8 aria-[checked=mixed]:bg-ink/8 aria-[current=page]:bg-ink/8 aria-[current=page]:font-medium focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-40',
         local.class
       )}
       {...rest}
@@ -247,9 +247,10 @@ function dismissesDrawer(event: PointerEvent) {
  * The rest of a tap that dismisses a drawer must not reach what its scrim
  * covered. Corvu dismisses on the tap's pointerdown or pointerup, and a sheet
  * its owner unmounts on close (a `<Show>` around it, or `openDialog`'s host)
- * takes the scrim with it, so the tap's mouse events and click are hit-tested
- * against the control underneath and press it. Swallow them until the tap's
- * click, the next pointerdown or a key press.
+ * takes the scrim with it, so pointerup can dismiss the parent and mouse events
+ * can press the control underneath. Swallow them until the tap's
+ * click, the next pointerdown or a key press, but only once the drawer has
+ * really closed: an owner that keeps it open leaves the tap to its target.
  */
 function swallowRestOfTap() {
   const listening = new AbortController();
@@ -259,7 +260,7 @@ function swallowRestOfTap() {
     event.stopPropagation();
     if (event.type === 'click') listening.abort();
   };
-  for (const type of ['mousedown', 'mouseup', 'click'])
+  for (const type of ['pointerup', 'mousedown', 'mouseup', 'click'])
     window.addEventListener(type, swallow, {
       capture: true,
       signal: listening.signal,
@@ -276,7 +277,16 @@ function swallowRestOfTap() {
  */
 export const MobileDrawer = Object.assign(
   (props: ComponentProps<typeof Drawer>) => {
-    const [local, rest] = splitProps(props, ['onOutsidePointer']);
+    const [local, rest] = splitProps(props, [
+      'onOutsidePointer',
+      'onOpenChange',
+    ]);
+    let uncontrolledOpen = props.initialOpen ?? false;
+    let disposed = false;
+    onCleanup(() => {
+      disposed = true;
+    });
+    const closed = () => disposed || !(props.open ?? uncontrolledOpen);
     return (
       <Drawer
         breakPoints={[0.8]}
@@ -284,10 +294,22 @@ export const MobileDrawer = Object.assign(
         noOutsidePointerEvents={false}
         restoreFocus={false}
         {...rest}
+        onOpenChange={(open) => {
+          uncontrolledOpen = open;
+          local.onOpenChange?.(open);
+        }}
         onOutsidePointer={(event) => {
           if (!dismissesDrawer(event)) event.preventDefault();
           local.onOutsidePointer?.(event);
-          if (!event.defaultPrevented) swallowRestOfTap();
+          if (event.defaultPrevented) return;
+          // Corvu asks to close next, but the owner may keep the drawer open:
+          // a sheet stacked from another dismiss stack (an imperative
+          // dialog's host) is outside it, and the tap belongs to that sheet.
+          // The microtask runs after the close request and before the tap's
+          // mouse events.
+          queueMicrotask(() => {
+            if (closed()) swallowRestOfTap();
+          });
         }}
       />
     );

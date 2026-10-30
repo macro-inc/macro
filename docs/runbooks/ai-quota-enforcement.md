@@ -25,9 +25,16 @@ admission and recording:
 | True, real user, billable feature | Check existing allowance; fail closed on validation error | `true` when existing producer records usage |
 | True, exempt feature | No quota billing I/O | `false` |
 | Genuinely system-owned work | No user quota billing I/O | `false` |
+| Paid for by an agent's own API key (`agent_api_key_id` set) | No admission for that turn | `false`, row references the key |
 | Rejected before execution | No provider work | No usage row for work not executed |
 | Historical rows / inserts omitting column | Never retrospectively classified | `false` |
 | Disabled after activation | Stop admission and new counting | Existing booleans unchanged |
+
+**Agent API keys:** turns of an in-memory agent with its own Anthropic or
+OpenAI key (see [agent API keys](../agent-guide/ai-chat.md#agent-api-keys))
+skip admission and record `ai_usage.agent_api_key_id`, which keeps them out
+of `count_usage`. Only the loop's own model calls run on the key; tools,
+opening lines, and summaries in those turns still use Macro's keys and count.
 
 **Exempt:** Memory, AiProjection, CallSummary, Dictation, ChatRename.
 **Billable:** Chat, Automation, DynamicCompletionsApi, ChannelBot, AiEditing,
@@ -267,6 +274,8 @@ inspect the content type and code rather than assuming every 503 is billing.
 - Optional chat/session naming is independently admitted as ChatRename, an exempt
   feature, so the gate does no quota billing I/O and never charges the user; a
   refusal retains the existing/default title without failing successful primary work.
+  Post-turn session retitling (the Jev check and the Haiku retitle) is admitted the
+  same way, once per finished turn, before either model runs.
   Optional bot/trigger inference (including image captions) skips classification
   on failure, without AI fallback or implied approval. Explicit mentions still
   route deterministically; downstream execution has its own gate and failures.

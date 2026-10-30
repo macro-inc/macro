@@ -262,3 +262,36 @@ fn initiative_name_literals_are_escaped_and_not_like_patterns() {
     assert!(sql.contains("'O''Reilly_%'"));
     assert!(sql.contains("strpos("));
 }
+
+#[test]
+fn notification_conjunction_folds_to_the_side_that_implies_the_other() {
+    use item_filters::NotificationState::{Done, Seen, Unseen};
+    let state = |state| Expr::val(DocumentLiteral::NotificationState(state));
+    let inbox = || Expr::or(state(Unseen), state(Seen));
+    let strip = |expr: &Expr<DocumentLiteral>| {
+        strip_notification_conjunction(expr, |literal| match literal {
+            DocumentLiteral::NotificationState(state) => Some(NotificationPredicate::state(*state)),
+            _ => None,
+        })
+    };
+
+    // The unread feed: `(unseen OR seen) AND unseen` needs only the unseen witness.
+    let (predicate, rest) = strip(&Expr::and(inbox(), state(Unseen))).unwrap();
+    assert_eq!(predicate, NotificationPredicate::state(Unseen));
+    assert!(rest.is_none());
+
+    let (predicate, rest) = strip(&Expr::and(
+        Expr::and(state(Unseen), Expr::val(DocumentLiteral::Importance(true))),
+        inbox(),
+    ))
+    .unwrap();
+    assert_eq!(predicate, NotificationPredicate::state(Unseen));
+    assert!(matches!(
+        rest,
+        Some(Expr::Literal(DocumentLiteral::Importance(true)))
+    ));
+
+    // Neither side implies the other: different rows may witness each.
+    assert!(strip(&Expr::and(state(Unseen), state(Seen))).is_none());
+    assert!(strip(&Expr::and(inbox(), state(Done))).is_none());
+}

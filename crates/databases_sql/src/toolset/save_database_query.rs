@@ -126,7 +126,7 @@ fn query_block_markdown(
     prompt: &str,
     display_mode: QueryDatabaseDisplay,
     chart: Option<&ToolChart>,
-) -> String {
+) -> Result<String, ToolCallError> {
     let json = serde_json::to_string(&QueryBlock {
         query_id,
         database_id,
@@ -135,10 +135,18 @@ fn query_block_markdown(
         display_mode,
         chart,
     })
-    .expect("a query block always serializes");
+    .map_err(|error| ToolCallError {
+        description: format!(
+            "The query was saved as {query_id}, but its block could not be written: {error}"
+        ),
+        internal_error: error.into(),
+    })?;
     // `<` only occurs inside strings; escaping it keeps a title such as
     // "</m-db-query>" from closing the tag early.
-    format!("<m-db-query>{}</m-db-query>", json.replace('<', "\\u003c"))
+    Ok(format!(
+        "<m-db-query>{}</m-db-query>",
+        json.replace('<', "\\u003c")
+    ))
 }
 
 fn invalid(description: impl Into<String>) -> ToolCallError {
@@ -253,7 +261,7 @@ where
                 prompt,
                 self.display_mode,
                 self.chart.as_ref(),
-            ),
+            )?,
         })
     }
 }

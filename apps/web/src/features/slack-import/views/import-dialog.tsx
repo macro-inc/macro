@@ -1,9 +1,9 @@
 import { formatDate } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
-import ArrowsClockwiseIcon from '@phosphor/arrows-clockwise.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import FileZipIcon from '@phosphor/file-zip.svg';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
+import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import FileZipIcon from '@icon/system/regular/file-zip.svg';
 import { ActionDialogShell, Button, cn, Dialog } from '@ui';
 import {
   createEffect,
@@ -346,8 +346,7 @@ export function ImportDialog(props: Props): JSX.Element {
     if (current === 'selecting') {
       return (
         <Button
-          variant="strong"
-          depth={2}
+          variant="secondary"
           disabled={!selected().size || !confirmed() || busy()}
           onClick={() =>
             fireAndForget(
@@ -372,8 +371,7 @@ export function ImportDialog(props: Props): JSX.Element {
           when={controller()?.job()}
           fallback={
             <Button
-              variant="strong"
-              depth={2}
+              variant="secondary"
               disabled={busy()}
               onClick={() =>
                 fireAndForget(
@@ -387,8 +385,7 @@ export function ImportDialog(props: Props): JSX.Element {
           }
         >
           <Button
-            variant="strong"
-            depth={2}
+            variant="secondary"
             disabled={busy()}
             onClick={() =>
               fireAndForget(
@@ -405,8 +402,7 @@ export function ImportDialog(props: Props): JSX.Element {
     if (recoveredUpload()) {
       return (
         <Button
-          variant="strong"
-          depth={2}
+          variant="secondary"
           disabled={busy() || cancelling()}
           onClick={() =>
             fireAndForget(runAction(finalizeHistory), 'slack-import')
@@ -677,10 +673,10 @@ export function ImportDialog(props: Props): JSX.Element {
             <div class="flex items-center gap-2">
               <Show when={historyOpen() || showProgress() || source.error()}>
                 <Button
+                  aria-label="Refresh progress"
+                  tooltip="Refresh progress"
                   variant="ghost"
                   size="icon-md"
-                  depth={2}
-                  label="Refresh progress"
                   disabled={busy()}
                   onClick={() =>
                     fireAndForget(
@@ -689,13 +685,12 @@ export function ImportDialog(props: Props): JSX.Element {
                     )
                   }
                 >
-                  <ArrowsClockwiseIcon />
+                  <ArrowsClockwiseIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
               </Show>
               <Show when={canCancel()}>
                 <Button
                   variant="ghost"
-                  depth={2}
                   disabled={cancelPending()}
                   onClick={() => fireAndForget(cancel(), 'slack-import')}
                 >
@@ -711,7 +706,6 @@ export function ImportDialog(props: Props): JSX.Element {
               >
                 <Button
                   variant="ghost"
-                  depth={2}
                   onClick={() => {
                     setImportSelected(false);
                     queueMicrotask(() => methodButton?.focus());
@@ -723,18 +717,13 @@ export function ImportDialog(props: Props): JSX.Element {
               <Show when={canChooseAnother()}>
                 <Button
                   variant="ghost"
-                  depth={2}
                   disabled={busy() || cancelling()}
                   onClick={resetSession}
                 >
                   Choose another archive
                 </Button>
               </Show>
-              <Button
-                variant="ghost"
-                depth={2}
-                onClick={() => changeOpen(false)}
-              >
+              <Button variant="ghost" onClick={() => changeOpen(false)}>
                 Close
               </Button>
               {primaryAction()}
@@ -930,22 +919,12 @@ function JobHistory(props: {
       <Show when={props.paged || props.page?.nextCursor}>
         <div class="flex items-center gap-2">
           <Show when={props.paged}>
-            <Button
-              variant="outline"
-              size="sm"
-              depth={2}
-              onClick={props.onNewest}
-            >
+            <Button variant="secondary" size="sm" onClick={props.onNewest}>
               Newest imports
             </Button>
           </Show>
           <Show when={props.page?.nextCursor}>
-            <Button
-              variant="outline"
-              size="sm"
-              depth={2}
-              onClick={props.onOlder}
-            >
+            <Button variant="secondary" size="sm" onClick={props.onOlder}>
               Older imports
             </Button>
           </Show>

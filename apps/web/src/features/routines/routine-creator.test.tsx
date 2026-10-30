@@ -273,6 +273,7 @@ describe('routine composer execution selection', () => {
       const expectedTask: Record<string, unknown> = {
         prompt: '',
         user_prompt: 'Summarize updates',
+        mcp_servers: [],
       };
       if (target === 'model') expectedTask.model = 'vendor/custom-model';
       else expectedTask.agent = { bot_id: agentId };

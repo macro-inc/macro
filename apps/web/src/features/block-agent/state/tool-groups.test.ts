@@ -87,6 +87,21 @@ describe('segmentParts', () => {
     ]);
   });
 
+  it('splits a running group around a compaction that landed inside it', () => {
+    const compaction: MessagePart = {
+      kind: 'control',
+      control: { kind: 'compact' },
+      outcome: { kind: 'accepted' },
+    };
+    expect(
+      segmentParts([tool({ status: 'running' }), compaction, tool()])
+    ).toEqual([
+      { kind: 'tools', start: 0, end: 1 },
+      { kind: 'part', start: 1, end: 2 },
+      { kind: 'tools', start: 2, end: 3 },
+    ]);
+  });
+
   describe.each([
     {
       label: 'native',

@@ -1473,6 +1473,18 @@ impl CacheEngine {
                 }
             }
             if let Some(mail) = request.mail {
+                let baseline = request
+                    .baseline
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|entry| {
+                        soup_filter_cache_adapter::reconciliation_baseline_entry(
+                            entry.key,
+                            &entry.sort_timestamp,
+                        )
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(err_js)?;
                 let generation = state.mail_generation.clone();
                 let result = soup_filter_cache_adapter::mail::page_current(
                     state.engine_mut()?,
@@ -1482,6 +1494,7 @@ impl CacheEngine {
                     &request.sort_direction,
                     request.limit,
                     mail,
+                    &baseline,
                 )
                 .await
                 .map_err(|error| match error {

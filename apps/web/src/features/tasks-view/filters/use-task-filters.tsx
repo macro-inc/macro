@@ -9,12 +9,17 @@ import { idToDisplayName } from '@core/user/util';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { useTagFilterGroup } from '@property/tags/use-tag-filter-group';
 import { useContacts } from '@queries/contacts/contacts';
+import { Tooltip } from '@ui';
 import { batch, createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
 import { requestAiTaskFilterPlan } from '../queries/ai-task-filter-plan';
 import { useTasksView } from '../tasks-view-context';
 import type { AiTaskFilterCatalog } from './ai-task-filter';
-import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from './task-facets';
+import {
+  TASK_PRIORITY_OPTIONS,
+  TASK_STATUS_OPTIONS,
+  TASK_VIEWER,
+} from './task-facets';
 
 const AI_FILTER_UNAVAILABLE_MESSAGE =
   'AI filtering is unavailable right now. Try again in a moment.';
@@ -31,7 +36,7 @@ export type TaskFilterGroupId =
   | 'tags';
 
 export function useTaskFilters() {
-  const { state, setFacets, setState } = useTasksView();
+  const { state, setFacets, setState, savedViews } = useTasksView();
   const contacts = useContacts();
   const currentUserId = useUserId();
   const tagGroup = useTagFilterGroup();
@@ -45,7 +50,7 @@ export function useTaskFilters() {
       people.unshift({ id: me, email: '', name: idToDisplayName(me) });
     }
 
-    return people.map((person) => ({
+    const options = people.map((person) => ({
       id: person.id,
       label:
         person.id === me
@@ -63,49 +68,98 @@ export function useTaskFilters() {
         />
       ),
     }));
+    return savedViews
+      ? [
+          {
+            id: TASK_VIEWER,
+            label: 'Me',
+            content: () => (
+              <Tooltip label="Matches whoever opens this saved view." as="span">
+                Me
+              </Tooltip>
+            ),
+            icon: () => (
+              <UserIcon
+                id={me ?? ''}
+                size="sm"
+                class="size-3.5"
+                suppressClick
+                showTooltip={false}
+              />
+            ),
+          },
+          ...options,
+        ]
+      : options;
   });
+
+  const withUnavailable = (
+    id: TaskFilterGroupId,
+    options: ListFilterGroup<TaskFilterGroupId, string>['options']
+  ) => [
+    ...options,
+    ...(state.facets[id] ?? [])
+      .filter((selected) => !options.some((option) => option.id === selected))
+      .map((selected) => ({
+        id: selected,
+        label: `Unavailable ${id === 'tags' ? 'tag' : 'option'}`,
+      })),
+  ];
 
   const groups = createMemo(
     (): ListFilterGroup<TaskFilterGroupId, string>[] => [
       {
         id: 'status',
         label: 'Status',
-        options: TASK_STATUS_OPTIONS.map((option) => ({
-          ...option,
-          icon: () => (
-            <PropertyValueIcon
-              optionId={option.propertyOptionId}
-              class="size-3.5"
-            />
-          ),
-        })),
+        options: withUnavailable(
+          'status',
+          TASK_STATUS_OPTIONS.map((option) => ({
+            ...option,
+            icon: () => (
+              <PropertyValueIcon
+                optionId={option.propertyOptionId}
+                class="size-3.5"
+              />
+            ),
+          }))
+        ),
       },
       {
         id: 'priority',
         label: 'Priority',
-        options: TASK_PRIORITY_OPTIONS.map((option) => ({
-          ...option,
-          icon: () => (
-            <PropertyValueIcon
-              optionId={option.propertyOptionId}
-              class="size-3.5"
-            />
-          ),
-        })),
+        options: withUnavailable(
+          'priority',
+          TASK_PRIORITY_OPTIONS.map((option) => ({
+            ...option,
+            icon: () => (
+              <PropertyValueIcon
+                optionId={option.propertyOptionId}
+                class="size-3.5"
+              />
+            ),
+          }))
+        ),
       },
       {
         id: 'assignees',
         label: 'Assignee',
         searchPlaceholder: 'Search assignees...',
-        options: peopleOptions(),
+        options: withUnavailable('assignees', peopleOptions()),
       },
       {
         id: 'created-by',
         label: 'Created by',
         searchPlaceholder: 'Search creators...',
-        options: peopleOptions(),
+        options: withUnavailable('created-by', peopleOptions()),
       },
-      ...(tagGroup().options.length > 0 ? [tagGroup()] : []),
+      ...(tagGroup().options.length > 0 || (state.facets.tags?.length ?? 0) > 0
+        ? [
+            {
+              ...tagGroup(),
+              options: withUnavailable('tags', tagGroup().options),
+            },
+          ]
+        : []),
     ]
   );
 
@@ -166,6 +220,7 @@ export function useTaskFilters() {
     clear: () => setFacets({}),
     groups,
     isSelected,
+    selectedIds: (groupId: TaskFilterGroupId) => state.facets[groupId] ?? [],
     setSelected,
   };
 }

@@ -16,7 +16,7 @@ export function conversationState(
   if (turn === 'blocked') return 'waiting';
   if (turn === 'running' || turn === 'stopping') return 'working';
   if (turn === 'starting') return 'starting';
-  if (turn === 'disconnected') return 'dormant';
+  if (turn === 'disconnected' || turn === 'failed') return 'dormant';
   if (!status || STARTING.has(status)) return 'starting';
   return 'dormant';
 }

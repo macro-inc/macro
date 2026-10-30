@@ -25,9 +25,9 @@ vi.mock('@app/features/soup/entity-notifications', () => ({
 vi.mock('@app/features/soup/SoupEntityActionsDropdown', () => ({
   SoupEntityActionsDropdown: (props: {
     entity: ChannelEntity;
-    triggerProps?: { label?: string };
+    triggerProps?: { 'aria-label'?: string };
   }) => (
-    <button type="button" aria-label={props.triggerProps?.label}>
+    <button type="button" aria-label={props.triggerProps?.['aria-label']}>
       {props.entity.id}
     </button>
   ),
@@ -64,7 +64,7 @@ vi.mock('@channel/channel-invite-button', () => ({
   ChannelInviteButton: () => null,
 }));
 vi.mock('@channel/components/ChannelTopIcon', () => ({
-  ChannelTopIcon: () => null,
+  ChannelTitleIcon: () => null,
 }));
 vi.mock('@channel/Participants/ChannelParticipantsTab', () => ({
   ChannelParticipantsTab: () => null,

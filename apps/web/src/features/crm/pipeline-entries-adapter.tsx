@@ -52,6 +52,7 @@ export function createCrmPipelineEntries(
       const saved = await savePipelineEntryCell(
         deps.storage,
         entry,
+        props.record.type,
         cell,
         value,
         option !== undefined

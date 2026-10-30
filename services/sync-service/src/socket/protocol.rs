@@ -5,7 +5,8 @@ use worker::Result;
 
 use crate::{
     auth::WriteAccess,
-    durable_object::{DocumentSyncSession, Wsm},
+    domain::document::writing_peers,
+    durable_object::{SyncSession, Wsm},
     error::ResultExt,
     generated::schema::{FromPeer, FromRemote},
     lexical_service::LexicalServiceClient,
@@ -136,11 +137,7 @@ pub fn send_initial_sync(socket: &Socket, snapshot: &[u8], awareness: &[u8]) -> 
 }
 
 /// Broadcasts an awareness update to every connected peer except `from`.
-pub fn broadcast_awareness(
-    dss: &DocumentSyncSession,
-    from: &Socket,
-    awareness: &[u8],
-) -> Result<()> {
+pub fn broadcast_awareness(dss: &SyncSession, from: &Socket, awareness: &[u8]) -> Result<()> {
     for socket in dss.get_sockets() {
         if socket == *from {
             continue;
@@ -169,7 +166,7 @@ pub async fn process_message(
     session_storage: &SessionStorage,
     awareness: &EphemeralStore,
     message: FromPeer<'_>,
-    dss: &DocumentSyncSession,
+    dss: &SyncSession,
     telemetry: &mut InboundMessageTelemetry,
 ) -> Result<()> {
     // Loading the document after hibernation can yield to a revocation. Check
@@ -254,6 +251,20 @@ pub async fn process_message(
                 }
             }
 
+            // Map every peer the update was written with, not only the one the
+            // client registered, so history can name its author. Before the
+            // ack: a failure here makes the client resend and retry it.
+            let mut writers = Vec::new();
+            for update in &updates {
+                writers.extend(
+                    writing_peers(update)
+                        .map_err(|error| worker::Error::from(error.to_string()))?,
+                );
+            }
+            Wsm::new(dss, sender.websocket())
+                .add_writing_peerids(&writers, document_id)
+                .await?;
+
             // ACK only after the update is durably stored.
             sender
                 .send(FromRemote::RemoteUpdateAck { id })
@@ -337,7 +348,7 @@ pub async fn process_message(
 /// A commenter's updates are accepted only when they change nothing but
 /// comment marks. Anything that cannot be checked is refused.
 async fn changes_only_comment_marks(
-    dss: &DocumentSyncSession,
+    dss: &SyncSession,
     document_state: &DocumentState,
     updates: &[SliceWrapper<'_, u8>],
 ) -> bool {

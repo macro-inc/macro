@@ -50,9 +50,24 @@ impl NotionPlanRepo for PgImportRepo {
         .flatten();
         sqlx::query!(
             r#"
+            WITH RECURSIVE retained AS (
+                SELECT entity.id, entity.parent_id
+                FROM import_entity AS entity
+                WHERE entity.user_id = $1 AND entity.source = $2
+                  AND EXISTS (
+                      SELECT 1 FROM import_entity_written AS written
+                      WHERE written.import_id = entity.id
+                  )
+                UNION
+                SELECT parent.id, parent.parent_id
+                FROM import_entity AS parent
+                JOIN retained AS child ON child.parent_id = parent.id
+                WHERE parent.user_id = $1 AND parent.source = $2
+            )
             DELETE FROM import_entity
             WHERE user_id = $1 AND source = $2 AND status = 'staged'
               AND metadata->'plan' IS NOT NULL
+              AND id NOT IN (SELECT id FROM retained)
             "#,
             user.as_ref(),
             source.as_ref(),
@@ -265,7 +280,7 @@ impl NotionPlanRepo for PgImportRepo {
                    initiator, metadata, entity_id, entity_type, last_error, waiting_on, created_at,
                    updated_at
             FROM import_entity
-            WHERE source = 'notion' AND foreign_id = ANY($2::text[])
+            WHERE source = $3 AND foreign_id = ANY($2::text[])
               AND status IN ('importing', 'imported')
               AND user_id <> $1
               AND team_id IS NOT NULL
@@ -273,6 +288,7 @@ impl NotionPlanRepo for PgImportRepo {
             "#,
             user.as_ref(),
             foreign_ids,
+            self.workspace_source.as_ref(),
         )
         .fetch_all(&self.pool)
         .await?;
@@ -462,17 +478,18 @@ impl PgImportRepo {
             SELECT holder.id, holder.status, holder.entity_id, holder.entity_type,
                    EXISTS (
                        SELECT 1 FROM import_run AS run
-                       WHERE run.user_id = holder.user_id AND run.source = 'notion'
+                       WHERE run.user_id = holder.user_id AND run.source = $4
                          AND run.status = 'importing' AND run.lease_expires_at > NOW()
                    ) AS "live!"
             FROM import_entity AS holder
-            WHERE holder.source = 'notion' AND holder.team_id = $2 AND holder.foreign_id = $3
+            WHERE holder.source = $4 AND holder.team_id = $2 AND holder.foreign_id = $3
               AND holder.status IN ('importing', 'imported') AND holder.user_id <> $1
             FOR UPDATE OF holder
             "#,
             user.as_ref(),
             team_id,
             own.foreign_id,
+            self.workspace_source.as_ref(),
         )
         .fetch_optional(&mut *transaction)
         .await?;

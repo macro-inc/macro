@@ -33,8 +33,10 @@ const channel = (
 const { canExecute } = makeRenameAction({ userId: () => ME });
 
 describe('makeRenameAction.canExecute', () => {
-  it('leaves database renaming to the native database block', () => {
-    expect(canExecute(entity('database', { grant: 'owner' }))).toBe(false);
+  it('allows editors and owners to rename a database from the list', () => {
+    expect(canExecute(entity('database', { grant: 'owner' }))).toBe(true);
+    expect(canExecute(entity('database', { grant: 'edit' }))).toBe(true);
+    expect(canExecute(entity('database', { grant: 'view' }))).toBe(false);
   });
 
   it('allows the owner of a private channel to rename it', () => {
@@ -103,5 +105,13 @@ describe('makeRenameAction.canExecute', () => {
     expect(canExecute(entity('channel_thread'))).toBe(false);
     expect(canExecute(entity('email'))).toBe(false);
     expect(canExecute(entity('foreign'))).toBe(false);
+  });
+
+  it('offers only what the rename mutation renames', () => {
+    expect(canExecute(entity('call'))).toBe(true);
+    expect(canExecute(entity('chat'))).toBe(true);
+    expect(canExecute(entity('calendar_event'))).toBe(false);
+    expect(canExecute(entity('initiative'))).toBe(false);
+    expect(canExecute(entity('routine'))).toBe(false);
   });
 });

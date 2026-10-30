@@ -1,7 +1,7 @@
 use std::cmp::min;
 
 use base64::Engine;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD};
 use models_email::gmail::{
     ListMessagesResponse, MessageResource, MinimalMessageResource, SendMessagePayload,
     SentMessageResource,
@@ -135,6 +135,50 @@ pub(crate) async fn get_message(
     }
 
     decode_json_response(response).await.map(Some)
+}
+
+/// Gets a message's original RFC 822 bytes using `format=raw`.
+#[tracing::instrument(skip(client, access_token), err)]
+pub(crate) async fn get_raw_message(
+    client: &GmailClient,
+    access_token: &str,
+    message_provider_id: &str,
+) -> Result<Option<Vec<u8>>, GmailApiHttpError> {
+    let url = format!(
+        "{}/users/me/messages/{}",
+        client.base_url, message_provider_id
+    );
+    let response = client
+        .inner
+        .get(url)
+        .bearer_auth(access_token)
+        .query(&[("format", "raw")])
+        .send()
+        .await
+        .map_err(GmailApiHttpError::transport)?;
+
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
+    if !response.status().is_success() {
+        return Err(unsuccessful_response(response).await);
+    }
+
+    let message: RawMessageResource = decode_json_response(response).await?;
+    URL_SAFE
+        .decode(&message.raw)
+        .or_else(|_| URL_SAFE_NO_PAD.decode(&message.raw))
+        .map(Some)
+        .map_err(|error| {
+            GmailApiHttpError::InvalidResponse(format!(
+                "raw message was not valid base64url: {error}"
+            ))
+        })
+}
+
+#[derive(serde::Deserialize)]
+struct RawMessageResource {
+    raw: String,
 }
 
 // Gets a message without the body using `format=minimal`.

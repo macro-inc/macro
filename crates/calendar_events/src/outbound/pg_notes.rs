@@ -26,6 +26,7 @@ impl NoteRepository for PgNoteRepository {
     ) -> Result<Vec<DocumentNoteLink>, Self::Err> {
         let rows = sqlx::query!(r#"
             SELECT note.event_id, note.occurrence_key, document.name AS document_name,
+                calendar_note_event_visible($1, note.event_id, note.occurrence_key) AS "can_view_meeting!",
                 CASE WHEN calendar_note_event_visible($1, note.event_id, note.occurrence_key)
                      THEN CASE WHEN event.owner_id = $1 OR EXISTS (
                          SELECT 1 FROM macro_user_links delegate
@@ -34,10 +35,11 @@ impl NoteRepository for PgNoteRepository {
                      ELSE 'Unavailable meeting' END AS "event_title!",
                 team.id AS "team_id?", team.name AS "team_name?"
             FROM calendar_event_notes note
-            JOIN "Document" document ON document.id = note.document_id AND document.owner = $1 AND document."deletedAt" IS NULL
+            JOIN "Document" document ON document.id = note.document_id AND document."deletedAt" IS NULL
             JOIN calendar_events event ON event.id = note.event_id
             LEFT JOIN team ON team.id = note.team_id
             WHERE note.document_id = $2
+              AND (document.owner = $1 OR calendar_note_event_visible($1, note.event_id, note.occurrence_key))
             ORDER BY note.created_at, note.event_id, note.occurrence_key
         "#, user, document).fetch_all(&self.pool).await?;
         Ok(rows
@@ -47,12 +49,44 @@ impl NoteRepository for PgNoteRepository {
                 event_id: row.event_id,
                 occurrence_key: row.occurrence_key,
                 event_title: row.event_title,
+                can_view_meeting: row.can_view_meeting,
+                event: None,
+                team_event: None,
                 team: row
                     .team_id
                     .zip(row.team_name)
                     .map(|(id, name)| NoteTeam { id, name }),
             })
             .collect())
+    }
+
+    async fn team_reference_sources(
+        &self,
+        user: &str,
+        document: &str,
+    ) -> Result<Vec<NoteReferenceSource>, rootcause::Report> {
+        super::pg_team::PgCalendarTeamRepository::new(self.pool.clone())
+            .note_reference_sources(user, document)
+            .await
+    }
+
+    async fn reference_previews(
+        &self,
+        user: &str,
+        targets: Vec<NoteTarget>,
+    ) -> Result<Vec<crate::domain::models::CalendarMentionPreview>, rootcause::Report> {
+        use crate::domain::ports::CalendarRepository;
+        let items = targets
+            .into_iter()
+            .map(|target| crate::domain::models::CalendarMentionRequestItem {
+                event_id: target.event_id,
+                occurrence_key: (target.occurrence_key != "single")
+                    .then_some(target.occurrence_key),
+            })
+            .collect();
+        super::pg::PgCalendarRepository::new(self.pool.clone())
+            .mention_previews(user, items, chrono::Utc::now())
+            .await
     }
 
     async fn visible(&self, user: &str, target: &NoteTarget) -> Result<bool, Self::Err> {

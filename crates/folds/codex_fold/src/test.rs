@@ -12,6 +12,10 @@ fn completed(item: Value) -> String {
 #[test]
 fn a_command_turn_streams_messages_commands_and_its_end() {
     let mut log = CodexLog::default();
+    assert!(
+        log.entry(&event(json!({"type": "task_started"})))
+            .is_empty()
+    );
     assert_eq!(
         log.entry(&completed(json!({
             "type": "AgentMessage", "id": "m1", "phase": "commentary",
@@ -53,6 +57,7 @@ fn a_command_turn_streams_messages_commands_and_its_end() {
 #[test]
 fn failed_multiline_commands_are_clipped_and_marked() {
     let mut log = CodexLog::default();
+    log.entry(&event(json!({"type": "task_started"})));
     let events = log.entry(&completed(json!({
         "type": "CommandExecution", "id": "exec-2",
         "command": ["/bin/bash", "-lc", "npm test\necho done"],
@@ -71,6 +76,7 @@ fn failed_multiline_commands_are_clipped_and_marked() {
 #[test]
 fn reasoning_file_changes_and_aborts_are_translated() {
     let mut log = CodexLog::default();
+    log.entry(&event(json!({"type": "task_started"})));
     assert_eq!(
         log.entry(&completed(json!({"type": "Reasoning", "id": "r", "summary_text": ["Plan the app"], "raw_content": []}))),
         [LogEvent::Update(json!({
@@ -142,30 +148,75 @@ fn malformed_records_do_not_poison_following_records() {
     assert_eq!(actual, expected);
 }
 
-#[test]
-fn api_messages_snapshot() {
+/// The ACP lines macrod sends the harness for a rollout, as `herdr::acp_agent`
+/// forwards them.
+fn macrod_wire(rollout: &str) -> Vec<String> {
     let mut native = CodexLog::default();
-    let mut wire = String::new();
-    for event in include_str!("../fixtures/conversation.jsonl")
+    rollout
         .lines()
         .flat_map(|line| native.entry(line))
-    {
-        let (method, params) = match event {
-            LogEvent::ModelChanged(_) => continue,
-            LogEvent::Update(update) => {
-                ("session/update", json!({"sessionId":"s", "update":update}))
-            }
-            LogEvent::TurnEnded(stop) => (
-                "_session/turn_complete",
-                json!({"sessionId":"s", "outcome":{"kind":if stop == "cancelled" {"cancelled"} else {"finished"}}}),
-            ),
-        };
-        wire.push_str(&json!({"direction":"to_server", "content":{"type":"acp", "jsonrpc":"2.0", "method":method, "params":params}}).to_string());
-        wire.push('\n');
-    }
+        .filter_map(|event| {
+            let (method, params) = match event {
+                LogEvent::ModelChanged(_) => return None,
+                LogEvent::Update(update) => {
+                    ("session/update", json!({"sessionId":"s", "update":update}))
+                }
+                // With no prompt waiting, macrod ends the late item's turn.
+                LogEvent::LateUpdate(update) => {
+                    return Some(vec![
+                        json!({"direction":"to_server", "content":{"type":"acp", "jsonrpc":"2.0", "method":"session/update", "params":{"sessionId":"s", "update":update}}}).to_string(),
+                        json!({"direction":"to_server", "content":{"type":"acp", "jsonrpc":"2.0", "method":"_session/turn_complete", "params":{"sessionId":"s", "outcome":{"kind":"finished"}}}}).to_string(),
+                    ]);
+                }
+                LogEvent::TurnEnded(stop) => (
+                    "_session/turn_complete",
+                    json!({"sessionId":"s", "outcome":{"kind":if stop == "cancelled" {"cancelled"} else {"finished"}}}),
+                ),
+            };
+            Some(vec![json!({"direction":"to_server", "content":{"type":"acp", "jsonrpc":"2.0", "method":method, "params":params}}).to_string()])
+        })
+        .flatten()
+        .collect()
+}
+
+#[test]
+fn api_messages_snapshot() {
+    let wire = macrod_wire(include_str!("../fixtures/conversation.jsonl")).join("\n");
     let messages = agent_fold::domain::fold::fold(agent_fold::testing::parse_log(&wire));
     assert!(messages.len() >= 3, "native turns must reach API messages");
     insta::assert_json_snapshot!(messages);
+}
+
+#[test]
+fn a_background_command_finishing_after_its_turn_leaves_the_session_idle() {
+    use agent_fold::domain::lifecycle::LifecycleFold;
+    use agent_fold::domain::model::TurnState;
+
+    // Recorded: Codex logs a background command's completion after the
+    // `task_complete` of the turn that started it.
+    let wire = macrod_wire(include_str!("../fixtures/background_command.jsonl"));
+    let mut observed = LifecycleFold::new();
+    for entry in agent_fold::testing::parse_log(&wire.join("\n")) {
+        let _ = observed.push(entry);
+    }
+    assert_eq!(observed.inner().metadata().turn, TurnState::Idle);
+
+    // The same turn prompted from Macro: macrod answers the prompt when the
+    // turn ends, and the late command arrives after that answer.
+    let (turn, late) = wire.split_at(wire.len() - 2);
+    let mut prompted = vec![
+        json!({"direction":"to_runtime", "content":{"type":"acp", "jsonrpc":"2.0", "id":1, "method":"session/prompt", "params":{"sessionId":"s", "prompt":[{"type":"text", "text":"Make Enter move to the next row."}]}}}).to_string(),
+    ];
+    prompted.extend_from_slice(turn);
+    prompted.push(
+        json!({"direction":"to_server", "content":{"type":"acp", "jsonrpc":"2.0", "id":1, "result":{"stopReason":"end_turn"}}}).to_string(),
+    );
+    prompted.extend_from_slice(late);
+    let mut fold = LifecycleFold::new();
+    for entry in agent_fold::testing::parse_log(&prompted.join("\n")) {
+        let _ = fold.push(entry);
+    }
+    assert_eq!(fold.inner().metadata().turn, TurnState::Idle);
 }
 
 #[test]
