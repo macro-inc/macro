@@ -282,15 +282,15 @@ def _chevron(p, case, flip=False):
 # Dots
 
 
-# Least white between the i dot and the stem; the same rule as the i dot in
-# lower_straight (Inter ExtraBold keeps about this much).
+# Least white under an accent dot at ExtraBold. 4 units more than the i dot
+# in lower_straight, so the .case dots fit the 772-930 .case zone.
 I_DOT_GAP = 64
 
 
 def _dot_size(p, case):
     """Accent dots are the house dot, capped like the i dot: p.dot up to
     about Bold, then no taller than leaves I_DOT_GAP under a dot hanging
-    from the ascender (156 at ExtraBold). The .case dots use the same side,
+    from the ascender (156 at ExtraBold, against the i dot's 160). The .case dots use the same side,
     so the 772-930 .case zone holds them at every weight."""
     return min(p.dot, P.ASC - P.XH - I_DOT_GAP)
 
