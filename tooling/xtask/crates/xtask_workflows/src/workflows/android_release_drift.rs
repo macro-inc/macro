@@ -13,7 +13,8 @@
 //! Unlike App Store review, a Play production release cannot be withdrawn
 //! once submitted: if the stale bundle was already promoted, the comment
 //! says so loudly and the follow-up should ship as soon as possible. The
-//! iOS counterpart is [`super::ios_release_drift`].
+//! production status remains unknown when authentication or the lookup fails.
+//! The iOS counterpart is [`super::ios_release_drift`].
 
 use gh_workflow::{
     Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Use,
@@ -21,6 +22,9 @@ use gh_workflow::{
 };
 
 use crate::workflows::{runners, steps};
+
+#[cfg(test)]
+mod test;
 
 const CHANGED: &str = "steps.detect.outputs.changed == 'true'";
 
@@ -185,8 +189,10 @@ fn comment() -> Step<Run> {
             bump='cd apps/web && just android-bump'
             if [[ "$PROMOTED" == "true" ]]; then
               body="🚨 Android native changes were pushed to this PR after version code ${VERSION_CODE} had already been promoted to Google Play production, so that bundle is (or is about to be) live with native code this PR no longer matches. A Play release cannot be withdrawn: bump (\`${bump}\`), commit, re-add the \`android-update\` label, and ship the follow-up as soon as possible. The label was removed."
+            elif [[ "$PROMOTED" == "false" ]]; then
+              body="🤖 Android native code changed after this PR's Play release started. Google Play reports that version code ${VERSION_CODE} has not been promoted to production. The \`android-update\` label was removed; any bundle on the internal track remains there for testers. Once in-progress release runs have stopped and the PR is ready again, bump (\`${bump}\`), commit, push, and re-add \`android-update\`."
             else
-              body="🤖 Android native code changed after this PR's Play release started, so the release was stopped: any in-progress build was cancelled and the \`android-update\` label removed. If a bundle already reached the internal track it stays there (internal testers only). When the PR is ready again, bump (\`${bump}\`), commit, push, and re-add \`android-update\`."
+              body="⚠️ Android native code changed after this PR's Play release started, but Google Play production status could not be verified. The prior bundle may already be in review or live. The \`android-update\` label was removed. Keep the reviewed-SHA authentication restriction and verify production status in Play Console or through a check from an approved revision. Treat the prior release as potentially live until verified."
             fi
             gh pr comment "$PR_NUMBER" --repo "$GH_REPO" --body "$body"
         "#})
