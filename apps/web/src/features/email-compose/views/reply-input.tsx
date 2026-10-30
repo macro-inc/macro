@@ -725,7 +725,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
                 variant="ghost"
                 size="xs"
                 class="text-ink-extra-muted hover:text-ink-muted hover:bg-active"
-                onclick={(e: MouseEvent) => {
+                onClick={(e: MouseEvent) => {
                   e.stopPropagation();
                   setQuoteCollapsed(false);
                   setComposerExpanded(true);
