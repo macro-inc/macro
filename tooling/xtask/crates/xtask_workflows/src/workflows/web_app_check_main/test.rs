@@ -408,20 +408,40 @@ fn test_job_keeps_vitest_module_cache_on_the_cache_volume() {
 /// persisted credentials. The local endpoint records the request, then rejects
 /// it: fetching repository objects is irrelevant to this authentication test.
 #[test]
-fn native_tree_fetch_sends_one_authorization_header() {
+fn native_fetches_send_one_authorization_header() {
     use std::io::{BufRead, BufReader, Write};
     use std::net::TcpListener;
     use std::process::Command;
 
-    for persisted in [false, true] {
+    for (source, fetch, persisted) in [
+        (
+            include_str!("../scripts/ios_native_tree.sh"),
+            "native_tree_fetch",
+            false,
+        ),
+        (
+            include_str!("../scripts/ios_native_tree.sh"),
+            "native_tree_fetch",
+            true,
+        ),
+        (
+            include_str!("../scripts/android_git_fetch.sh"),
+            "gh_fetch",
+            false,
+        ),
+        (
+            include_str!("../scripts/android_git_fetch.sh"),
+            "gh_fetch",
+            true,
+        ),
+    ] {
         let repo = tempfile::tempdir().expect("temporary checkout");
         let listener = TcpListener::bind("127.0.0.1:0").expect("local HTTP endpoint");
         let url = format!(
             "http://{}/",
             listener.local_addr().expect("endpoint address")
         );
-        let script =
-            include_str!("../scripts/ios_native_tree.sh").replace("https://github.com/", &url);
+        let script = source.replace("https://github.com/", &url);
         let (sender, receiver) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
             let (mut socket, _) = listener.accept().expect("Git HTTP request");
@@ -455,7 +475,7 @@ if [[ "$TEST_PERSISTED" == true ]]; then
   git config "http.${{TEST_URL}}.extraheader" "AUTHORIZATION: basic checkout-token"
 fi
 {script}
-native_tree_fetch HEAD
+{fetch} HEAD
 "#
             ))
             .current_dir(repo.path())
@@ -480,7 +500,7 @@ native_tree_fetch HEAD
                     String::from_utf8_lossy(&output.stderr)
                 )),
             ["AUTHORIZATION: basic eC1hY2Nlc3MtdG9rZW46dGVzdC10b2tlbg=="],
-            "persisted credentials: {persisted}"
+            "fetch helper: {fetch}; persisted credentials: {persisted}"
         );
     }
 }

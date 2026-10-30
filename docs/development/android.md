@@ -298,8 +298,10 @@ attribute.repository_id=assertion.repository_id
 
 Use issuer `https://token.actions.githubusercontent.com`. Restrict the provider's
 attribute condition to the numeric repository and owner IDs (available from
-`gh api repos/macro-inc/macro --jq '{repository: .id, owner: .owner.id}'`), the
-publishing workflow on `main`, and its branch identity:
+`gh api repos/macro-inc/macro --jq '{repository: .id, owner: .owner.id}'`).
+The initial condition below permits only the manual publishing workflow on
+`main`; automatic PR releases also need the explicit grants described in
+"Authorize an approved PR release" below:
 
 ```text
 assertion.repository_id == '1092407718' &&
@@ -316,8 +318,8 @@ principalSet://iam.googleapis.com/projects/1024168288732/locations/global/worklo
 
 In GitHub → Settings → Secrets and variables → Actions → Variables, add these
 **repository variables**, which contain identifiers, not secrets. The workflow
-checks its branch, and the Google provider independently enforces both the branch
-and workflow identity:
+checks its branch, and the Google provider independently enforces the approved
+ref and workflow identity:
 
 | Variable | Value |
 | --- | --- |
@@ -357,6 +359,47 @@ gh variable set GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER --repo macro-inc/macro \
 gh variable set GOOGLE_PLAY_SERVICE_ACCOUNT --repo macro-inc/macro \
   --body google-play-publisher@macro-435922.iam.gserviceaccount.com
 ```
+
+#### Authorize an approved PR release
+
+The initial provider condition rejects the PR-based native check and release
+workflows. Before releasing a reviewed same-repository PR, an identity
+administrator must extend that condition with narrowly scoped alternatives:
+
+- Keep the numeric repository and owner ID checks around every alternative,
+  and retain the existing manual publisher on `main`.
+- Permit `android-release-watch.yml@refs/heads/main` only with the main ref and
+  main subject, for `schedule` or `workflow_dispatch` events.
+- Permit the specific approved `refs/pull/<PR_NUMBER>/merge` only for
+  `pull_request` events, the `repo:macro-inc/macro:pull_request` subject,
+  `base_ref == 'main'`, and these exact workflow paths at that same merge ref:
+  `web-app-check-main.yml`, `android-play-release.yml`, and
+  `android-release-drift.yml` under `macro-inc/macro/.github/workflows/`.
+
+Check the PR's head repository before granting its merge ref. Do not replace the
+approved PR ref with a wildcard over all PRs: PR workflows execute the proposed
+code with the publishing identity. The grant follows later revisions of that PR,
+so remove its alternative after the PR merges or closes. Keep the main watcher
+permission so it can verify releases and rerun native gates.
+
+Back up the existing provider before applying the reviewed CEL condition:
+
+```sh
+gcloud iam workload-identity-pools providers describe macro \
+  --project=macro-435922 --location=global \
+  --workload-identity-pool=github-play --format=json > provider-before.json
+
+gcloud iam workload-identity-pools providers update-oidc macro \
+  --project=macro-435922 --location=global \
+  --workload-identity-pool=github-play \
+  --attribute-condition="$(cat approved-play-condition.cel)"
+```
+
+Keep the existing attribute mappings and service-account role binding. Verify the
+updated condition, then rerun the failed Android native-check job: successful
+authentication must reach the Play status check before triggering the release.
+See [GitHub's OIDC claims](https://docs.github.com/en/actions/reference/security/oidc)
+for the distinction between PR subjects and branch subjects.
 
 #### Manual upload (fallback)
 
@@ -416,9 +459,9 @@ retrying. Failed or no-op attempts discard their pending edit when possible;
 commits are never automatically retried. The workflow summary reports submission,
 not confirmation that the release is already available to users.
 
-Promotion remains a separate manual action; building a GitHub release or uploading
-to internal testing never triggers production promotion. It uses the existing
-workflow identity, so no Google identity-provider changes are required.
+The fallback promotion command is a separate manual action and uses the existing
+main publishing identity. The PR release workflow promotes automatically after
+its internal upload and requires the approved PR identity grant described above.
 
 ## Firebase
 
