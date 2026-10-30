@@ -38,9 +38,10 @@ scan() {
   report "$source" "phone number" "$(grep -oE '(\+[0-9]{1,3}[ .-]?)?\(?[0-9]{3}\)?[ .-][0-9]{3}[ .-][0-9]{4}' <<<"$text" || true)"
   report "$source" "support or chat link" "$(grep -oiE 'https?://([a-z0-9-]+\.slack\.com/(archives|client|team)|app\.slack\.com/client|app\.intercom\.(com|io)|[a-z0-9-]+\.zendesk\.com/agent|app\.frontapp\.com|discord\.com/channels|mail\.google\.com|app\.hubspot\.com|app\.usepylon\.com|app\.plain\.com|app\.crisp\.chat|secure\.helpscout\.net)[^[:space:])>]*' <<<"$text" || true)"
   # Links to workspace items (channels, documents, chats, emails). Tasks are
-  # the issue tracker and may be linked like GitHub issues.
+  # the issue tracker and may be linked like GitHub issues; agent sessions are
+  # the provenance coding agents link from the pull requests they open.
   report "$source" "Macro workspace link" "$(grep -oiE 'https?://([a-z0-9-]+\.)?macro\.com/app/[a-z-]+/[A-Za-z0-9-]+[^[:space:])>`]*' <<<"$text" \
-    | grep -viE '/app/tasks?/' || true)"
+    | grep -viE '/app/(tasks?|agent)/' || true)"
   # `@scope/package` names end in a slash and are not mentions.
   report "$source" "@mention" "$(grep -oE '(^|[[:space:](])@[A-Za-z0-9][A-Za-z0-9-]*/?' <<<"$prose" \
     | sed -E 's/^[[:space:](]*//' | grep -v '/$' \
