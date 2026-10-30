@@ -501,8 +501,12 @@ let cacheInitializationFailed = false;
 const cacheRecovery = createCacheRecovery(() =>
   Telemetry.span('graphql.cache_recovery', async (span) => {
     const session = cacheSessionGeneration;
-    cachedClient = undefined;
-    getGraphqlSoupClient();
+    // A host whose read was refused mid-handoff is still running; prove it
+    // readable now instead of stacking another registration on it.
+    if (!cachedCacheHost || cachedCacheHost.disabled) {
+      cachedClient = undefined;
+      getGraphqlSoupClient();
+    }
     const host = cachedCacheHost;
     if (!host || host.disabled)
       throw new Error('Local cache could not restart.');
@@ -1895,6 +1899,7 @@ export function mapGraphqlSoupItem(
             providerId: entity.providerId ?? undefined,
             ownerId: entity.ownerId,
             inboxVisible: entity.inboxVisible,
+            hasReceivedMail: entity.hasReceivedMail,
             name: entity.emailName ?? undefined,
             snippet: entity.snippet ?? undefined,
             senderEmail: entity.senderEmail ?? undefined,

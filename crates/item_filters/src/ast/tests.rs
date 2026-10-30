@@ -1683,6 +1683,33 @@ fn initiatives_expand_with_properties_without_enabling_legacy_queries() {
 }
 
 #[test]
+fn initiative_notification_states_opt_in() {
+    use initiative::{InitiativeLiteral, initiatives_requested};
+    let filter = EntityFilters {
+        initiative_filters: crate::InitiativeFilters {
+            notification_filters: crate::NotificationFilters {
+                states: vec![
+                    crate::NotificationState::Unseen,
+                    crate::NotificationState::Seen,
+                    crate::NotificationState::Unseen,
+                ],
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let ast = EntityFilterAst::new_from_filters(filter).unwrap().unwrap();
+    let tree = ast.initiative_filter.as_deref().unwrap();
+    assert!(initiatives_requested(Some(tree)));
+    assert!(matches!(
+        tree,
+        Expr::Or(a, b)
+            if matches!(**a, Expr::Literal(InitiativeLiteral::NotificationState(crate::NotificationState::Unseen)))
+                && matches!(**b, Expr::Literal(InitiativeLiteral::NotificationState(crate::NotificationState::Seen)))
+    ));
+}
+
+#[test]
 fn database_rows_are_requested_by_include_or_id_outside_a_not() {
     use database_row::{DatabaseRowLiteral, database_rows_requested};
     let table = Uuid::from_u128(0x7ab1e);

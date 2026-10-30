@@ -167,6 +167,44 @@ const callEndedRoutineWire = {
   },
 };
 
+const githubRoutineWire = {
+  kind: 'routine',
+  routine_id: '00000000-0000-0000-0000-0000000000f2',
+  name: 'Fix failing CI',
+  owner: {
+    id: 'macro|julia@example.com',
+    name: 'Julia',
+    email: 'julia@example.com',
+  },
+  instructions: 'Find why CI failed and open a fix.',
+  triggers: [
+    {
+      type: 'events',
+      events: ['github'],
+      github: {
+        events: ['workflow_run'],
+        actions: ['completed'],
+        repositories: ['macro-inc/macro'],
+        include_bots: false,
+      },
+      payload_match: ['workflow_run.conclusion in ["failure"]'],
+    },
+  ],
+  firing: {
+    type: 'event',
+    event: {
+      event: 'github',
+      delivery: {
+        event: 'workflow_run',
+        action: 'completed',
+        repository: 'macro-inc/macro',
+        sender: 'octocat',
+        payload: { workflow_run: { name: 'CI', conclusion: 'failure' } },
+      },
+    },
+  },
+};
+
 function endpoint() {
   const app = new Hono();
   fromHono(app).post('/agent-context', AgentContextEndpoint);
@@ -186,6 +224,7 @@ describe('agent-context request schema', () => {
       dispatchedWire,
       callStartedRoutineWire,
       callEndedRoutineWire,
+      githubRoutineWire,
     ]) {
       const parsed = agentContextRequest.safeParse({
         promptMarkdown: 'please fix',
@@ -234,6 +273,7 @@ describe('POST /agent-context', () => {
       dispatchedWire,
       callStartedRoutineWire,
       callEndedRoutineWire,
+      githubRoutineWire,
     ]) {
       const response = await post({ promptMarkdown: 'please fix', trigger });
       expect(response.status).toBe(200);

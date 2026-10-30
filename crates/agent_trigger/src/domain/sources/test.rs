@@ -67,6 +67,7 @@ fn the_message_source_carries_the_persisted_parent_through() {
     );
 
     let patched = MessageMacroEvent::patched(messages::domain::events::MessagePatchedMetadata {
+        completed_reply: None,
         parent: MessageParent::parse("document", "doc-1").unwrap(),
         message_id: Uuid::from_u128(2),
         thread_id: None,
@@ -128,4 +129,49 @@ fn a_task_joining_a_project_decodes_as_a_project_addition() {
     assert_eq!(added.actor.actor.as_user(), Some(&user));
     assert!(decoded.assignment.is_none());
     assert!(decoded.posted.is_none());
+}
+
+#[test]
+fn completed_bot_reply_mentions_reach_the_existing_trigger_path() {
+    let posted = MessagePostedMetadata {
+        parent: MessageParent::Channel(Uuid::from_u128(1)),
+        message_id: Uuid::from_u128(2),
+        thread_id: Some(Uuid::from_u128(3)),
+        root_id: Uuid::from_u128(3),
+        sender: ChannelSender::new_from_bot(bot_id::MACRO_NEW_BOT_ID),
+        triggered_by: Some(sender().as_ref().to_owned()),
+        content: "handoff".into(),
+        mentions: vec![messages::domain::models::SimpleMention {
+            entity_type: "bot".into(),
+            entity_id: bot_id::CURSOR_BOT_ID.into_storage_id().to_string(),
+        }],
+        attachments: vec![],
+        created_at: Utc::now(),
+    };
+    let patched = MessageMacroEvent::patched(messages::domain::events::MessagePatchedMetadata {
+        completed_reply: Some(posted.clone()),
+        parent: posted.parent.clone(),
+        message_id: posted.message_id,
+        thread_id: posted.thread_id,
+        root_id: posted.root_id,
+        actor: posted.sender.clone(),
+        content: posted.content.clone(),
+        edited_at: None,
+        updated_at: Utc::now(),
+    });
+    let trigger = MessageTriggerEvents::decode(&record(&patched))
+        .unwrap()
+        .into_trigger();
+    assert_eq!(trigger.posted.unwrap().posted, posted);
+
+    let mut old_payload = serde_json::to_value(&patched.event().event).unwrap();
+    old_payload["metadata"]
+        .as_object_mut()
+        .unwrap()
+        .remove("completed_reply");
+    let older: messages::outbound::broker::MessageTopicEvent =
+        serde_json::from_value(old_payload).unwrap();
+    assert!(
+        matches!(older, messages::outbound::broker::MessageTopicEvent::Patched(p) if p.completed_reply.is_none())
+    );
 }

@@ -19,7 +19,9 @@ Outlook (Microsoft Graph) outbound adapters.
 - `src/outbound/gmail.rs`: the Gmail adapter (feature `outbound-gmail`).
 - `src/outbound/outlook.rs`: the Microsoft Graph adapter (feature
   `outbound-outlook`); every Graph call goes through `outlook/transport.rs`,
-  which owns request headers, provider error mapping, and write-failure logs.
+  which owns request headers, provider error mapping, write-failure logs,
+  and one `outlook.graph_request` span per attempt (with an
+  `outlook.graph_admission` child for the per-mailbox gate wait).
 
 ## Scope
 
@@ -78,7 +80,12 @@ Outlook (Microsoft Graph) outbound adapters.
   through it.
 - Graph answers a bodyless POST or PATCH without `Content-Length: 0` with 411
   Length Required. `transport.rs` adds the header, so new Graph calls must go
-  through `request`/`conditional_request` rather than the raw client.
+  through `request`/`conditional_request` rather than the raw client. Use
+  `graph_request` only when a caller must branch on the Graph status, error
+  code, or request id; the others drop them.
+- Same-mailbox Outlook replies use `createReply`. When Graph refuses it with
+  400 `ErrorInvalidOperation`, `create_draft` creates a standalone draft that
+  carries the same correlation and RFC reply headers.
 
 ## Related
 

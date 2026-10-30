@@ -77,7 +77,7 @@ export function EmailSettings() {
               <SettingsRow
                 stackOnNarrow
                 label="Calendars"
-                description="Manage the calendars connected to your Google accounts."
+                description="Manage the calendars connected to your email accounts."
               >
                 <Button
                   variant="ghost"

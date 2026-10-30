@@ -3,13 +3,14 @@ import { message } from '../../email-message/tests/messages';
 import type { EmailComposeContext } from '../context/compose-capabilities';
 import type { EmailReplySession } from '../context/email-form-inputs';
 import { createEmailFormState } from '../primitives/email-form-state';
+import { registerToggleAppendedThread } from '../primitives/prepare-email-body';
 import {
   createReplyComposer,
   type ReplyComposerOptions,
 } from '../primitives/reply-composer';
 import { createEmailEditor, setEmailEditorText } from './editor';
 
-/** A reply composer on a real editor, addressed to a thread of one message. */
+/** A reply composer on a real, connected editor, addressed to a thread of one message. */
 export function mountReplyComposer(
   composeContext: EmailComposeContext,
   replyingTo = () => message('parent'),
@@ -28,6 +29,7 @@ export function mountReplyComposer(
 ) {
   return createRoot((dispose) => {
     const editor = createEmailEditor('Ready to send');
+    registerToggleAppendedThread(editor);
     const parent = replyingTo();
     const form = createEmailFormState(
       {
@@ -67,6 +69,7 @@ export function mountReplyComposer(
       { container: () => undefined, footer: () => undefined },
       () => form
     );
+    state.handleEditorConnect();
     state.onContentChange('Ready to send');
     return {
       ...state,

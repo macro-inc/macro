@@ -188,6 +188,18 @@ export const enableTasksReviews = defineFlag({
   default: onInDev,
 });
 
+/**
+ * Sends a new session's first prompt on its create. A harness that predates
+ * `promptActionId` and `promptAttachments` ignores them, duplicating the
+ * prompt bubble and dropping its files, so deployed environments stay off
+ * until that harness is live; local stacks build both together.
+ */
+export const enableFirstPromptOnCreate = defineFlag({
+  key: 'enable-first-prompt-on-create',
+  env: 'ENABLE_FIRST_PROMPT_ON_CREATE',
+  default: LOCAL_ONLY || undefined,
+});
+
 /** Gantt is visible in local previews; deployed apps retain the remote rollout. */
 export const enableGantt = defineFlag({
   key: 'enable-gantt',

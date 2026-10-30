@@ -39,6 +39,11 @@ fn a_different_slug_than_the_one_asked_for_is_not_that_app() {
 }
 
 #[test]
+fn a_hidden_app_is_not_connectable() {
+    assert!(connectable_catalog_entry("linkedin", app("linkedin", Some("oauth"))).is_none());
+}
+
+#[test]
 fn app_categories_are_optional_for_older_directory_responses() {
     let app: AppResponse = serde_json::from_str(r#"{"name_slug":"linear","name":"Linear"}"#)
         .expect("valid app response");

@@ -2,9 +2,9 @@
 //! `ios-update` label, i.e. a PR whose iOS build is (or is about to be) in
 //! App Review. Web-only pushes are fine: the embedded web bundle is replaced
 //! over the air after the merge. Native pushes make the uploaded build
-//! stale, and with release type "after approval" a stale build Apple approves
-//! goes straight to the App Store — so when `apps/web/tauri` changed this
-//! workflow:
+//! stale, and a stale build Apple approves blocks the PR's next submission
+//! (App Store Connect allows one version in flight) — so when
+//! `apps/web/tauri` changed this workflow:
 //!
 //! 1. cancels any [`super::ios_app_store_release`] run still building the
 //!    old head and waits for it to stop,
@@ -17,8 +17,10 @@
 //!    keeps the marketing version and `submit` takes the withdrawn version
 //!    record over.
 //!
-//! If Apple had already approved or released the stale build there is
-//! nothing to withdraw; the comment then says so loudly.
+//! If Apple had already approved the stale build there is nothing to
+//! withdraw. Held for release, it stays off the App Store but must be removed
+//! in App Store Connect before the next submission; already releasing, it
+//! needs a follow-up release. The comment says which.
 
 use gh_workflow::{
     Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Use,
@@ -162,6 +164,8 @@ fn comment() -> Step<Run> {
             bump='cd apps/web && doppler run --project ios-release --config prd -- just ios-bump'
             if [[ "$WITHDRAW_OUTCOME" != "success" ]]; then
               body="🚨 Native changes were pushed to this PR after its App Store release started, but withdrawing the App Review submission **failed** (see the [workflow run](${RUN_URL})). If a submission is pending, remove it from review in App Store Connect by hand so the stale build cannot go live. The \`ios-update\` label was removed; when the PR is ready again, bump (\`${bump}\`), commit, push, and re-add \`ios-update\`."
+            elif [[ -n "$HELD" ]]; then
+              body="📱 Native changes were pushed to this PR after Apple had already approved iOS ${HELD}. That build is held for release, so it will not go live on its own, but it blocks the next submission: remove it in App Store Connect (Developer Reject). Then bump (\`${bump}\`), commit, push, and re-add \`ios-update\`. The label was removed."
             elif [[ -n "$LIVE" ]]; then
               body="🚨 Native changes were pushed to this PR after Apple had already approved iOS ${LIVE}, so that build is (or is about to be) live with native code this PR no longer matches. Bump (\`${bump}\`), commit, re-add the \`ios-update\` label, and ship the follow-up as soon as possible. The label was removed."
             else
@@ -171,6 +175,7 @@ fn comment() -> Step<Run> {
         "#})
         .if_condition(after_withdraw())
         .shell("bash")
+        .add_env(("HELD", "${{ steps.withdraw.outputs.held }}"))
         .add_env(("LIVE", "${{ steps.withdraw.outputs.live }}"))
         .add_env(("WITHDRAW_OUTCOME", "${{ steps.withdraw.outcome }}"))
         .add_env((

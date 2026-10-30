@@ -12,7 +12,6 @@ import type {
   CreateScheduledAction,
   RoutineTemplate,
   ScheduledAction,
-  ShareRoutineTemplate,
 } from '@service-scheduled-action/generated/schemas';
 import { blockNameToItemType } from '@service-storage/itemType';
 import {
@@ -22,7 +21,10 @@ import {
   useQuery,
 } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
+import { templateShareBody } from '../core/template';
 import { scheduledActionKeys } from './keys';
+import { draftFromSchedule } from './routine-draft';
+import { routineQueryOptions } from './routines';
 import { invalidateSchedules } from './schedules';
 
 /** A routine that isn't shared has no template: `null`, not an error. */
@@ -66,21 +68,27 @@ function setTemplate(scheduleId: string, template: RoutineTemplate | null) {
   );
 }
 
-export function useShareTemplateMutation(
-  callbacks?: MutationCallbacks<
-    RoutineTemplate,
-    Error,
-    { scheduleId: string; body: ShareRoutineTemplate }
-  >
-) {
-  return useMutation(() => ({
-    mutationFn: (args: { scheduleId: string; body: ShareRoutineTemplate }) =>
-      throwOnErr(() => scheduledActionClient.shareTemplate(args)),
-    ...withCallbacks(
-      { onSuccess: (template) => setTemplate(template.id, template) },
-      callbacks
-    ),
-  }));
+/**
+ * Shares a routine as a template, or brings its template up to date with the
+ * routine's saved setup. Repeating it publishes the same snapshot again.
+ */
+export async function publishRoutineTemplate(
+  scheduleId: string
+): Promise<RoutineTemplate> {
+  const [routine, shared] = await Promise.all([
+    queryClient.fetchQuery(routineQueryOptions(scheduleId)),
+    queryClient.fetchQuery(routineTemplateQueryOptions(scheduleId)),
+  ]);
+  const body = templateShareBody({
+    draft: draftFromSchedule(routine),
+    authorId: routine.owner,
+    shared,
+  });
+  const template = await throwOnErr(() =>
+    scheduledActionClient.shareTemplate({ scheduleId, body })
+  );
+  setTemplate(scheduleId, template);
+  return template;
 }
 
 export function useUnshareTemplateMutation(

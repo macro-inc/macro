@@ -3,6 +3,7 @@ export {
   InlineEntityTagsPill,
   InlineFetchedEntityTagsPill,
   InlineTagsPill,
+  InlineTagsSheetPill,
 } from './EntityRowTags';
 export {
   canTagEntity,

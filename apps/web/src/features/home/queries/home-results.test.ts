@@ -103,6 +103,63 @@ describe('home channel thread scope', () => {
   });
 });
 
+describe('home projects', () => {
+  const projectClause = (facets: Record<string, string[]>) =>
+    JSON.stringify(
+      buildHomeQuery({ ...context, facets, tab: 'signal' }).body.if ?? null
+    );
+
+  it('opts projects with a not-done notification into Signal', () => {
+    const body = projectClause({});
+    expect(body).toContain('{"ns":"unseen"}');
+    expect(body).toContain('{"ns":"seen"}');
+    expect(body).not.toContain('"done"');
+  });
+
+  it('keeps them under the Projects type filter', () => {
+    const body = projectClause({ type: ['initiatives'] });
+    expect(body).toContain('"inc"');
+    expect(body).toContain('{"ns":"unseen"}');
+  });
+
+  it('drops them under a type filter that leaves them out', () => {
+    for (const types of [
+      ['documents'],
+      ['folders'],
+      ['email', 'channels'],
+      ['none'],
+    ]) {
+      expect(projectClause({ type: types })).toBe('null');
+    }
+  });
+
+  it('filters them by seen state with the Read facet', () => {
+    // The not-done base clause stays; the facet ANDs the seen state onto it.
+    const unread = projectClause({ read: ['unread'] });
+    expect(unread.startsWith('{"&":[')).toBe(true);
+    expect(unread.endsWith('{"l":{"ns":"unseen"}}]}')).toBe(true);
+    // Read means seen or done; the base clause still excludes done rows.
+    expect(
+      projectClause({ read: ['read'] }).endsWith(
+        '{"|":[{"l":{"ns":"seen"}},{"l":{"ns":"done"}}]}]}'
+      )
+    ).toBe(true);
+  });
+
+  it('never asks Noise for projects, whatever the facets say', () => {
+    const cases: Record<string, string[]>[] = [
+      {},
+      { type: ['initiatives'] },
+      { read: ['unread'] },
+    ];
+    for (const facets of cases) {
+      expect(
+        buildHomeQuery({ ...context, facets, tab: 'noise' }).body.if
+      ).toBeUndefined();
+    }
+  });
+});
+
 describe('home date buckets', () => {
   it('buckets a notified row by its notification on the notification tabs', () => {
     const signal = { tab: 'signal' as const, capabilities };

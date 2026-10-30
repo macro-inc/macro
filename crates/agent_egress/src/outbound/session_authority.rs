@@ -18,6 +18,7 @@
 use agent_session::domain::ports::AgentSessionRepo;
 use agent_session::domain::{credentials::authenticate_session, error::AgentSessionError};
 use model_owner::Owner;
+use tracing::Level;
 
 use crate::domain::error::EgressError;
 use crate::domain::model::{McpServerListing, McpServerSlug, RepoSlug, SessionGrant, SessionToken};
@@ -43,7 +44,7 @@ impl<Sessions> SessionAuthority for StoredTokenSessionAuthority<Sessions>
 where
     Sessions: AgentSessionRepo,
 {
-    #[tracing::instrument(skip_all, err)]
+    #[tracing::instrument(skip_all, err(level = Level::DEBUG))]
     async fn authorize(&self, token: &SessionToken) -> Result<SessionGrant, EgressError> {
         let session = authenticate_session(&self.sessions, &token.hash())
             .await

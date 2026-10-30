@@ -59,8 +59,10 @@ Discussion link scrolling has a backend-free browser regression:
 Phone sheets stacked on each other (Connect email over Settings, Add guests,
 RSVP scope and the delete confirmation over event details) have a backend-free
 browser regression for backdrop taps that must not press what the scrim covers,
-including mixed pointerdown/pointerup dismissal, and for taps inside the top
-sheet that must still press its own controls:
+including mixed pointerdown/pointerup dismissal, for taps inside the top
+sheet that must still press its own controls, and for swipes whose owner keeps
+the sheet open (a discard prompt, a pending confirmation, event details under a
+stacked sheet), which must bring it back on screen:
 `bunx playwright test --config src/components/app/mobile/browser-test/playwright.config.ts`.
 
 Composer typeahead menus choosing the side with room for their full list
@@ -164,6 +166,11 @@ Block formatting passes a forward copy of the selection to Lexical's
 `$setBlocksType` so backward selections include their first paragraph and keep
 the editor's actual selection direction. The Markdown core browser suite's
 `quotes.browser.e2e.ts` checks Quote through the floating toolbar and after saving.
+The same suite checks multi-paragraph plain-text, HTML, and Lexical pastes into
+empty quotes and selections within a quote on desktop, tablet, and phone.
+Selections across adjacent quotes stay quoted; ranges containing unquoted blocks
+retain normal paste behavior.
+Keep pasted paragraphs quoted through the shared clipboard insertion command.
 
 A frontend dev server runs against the **dev** backend, so this needs no local stack, Docker, Rust build, or `sudo`:
 
@@ -244,6 +251,15 @@ on desktop and mobile. Tool results render through
 `lib/core/component/AI/component/tool/Canvas.tsx`; edits arrive through live sync.
 The shared plain-text Lexical codec is `packages/lexical-core/canvas-text.ts`.
 
+## Message notification reads
+
+Gate automatic message notification reads on the actual message element
+intersecting the visible scroll area, excluding floating chrome and background
+tabs. Share visibility observers per thread list, including standalone threads;
+never treat virtualized overscan or a visible thread parent as seeing its replies.
+The backend-free desktop/phone/tablet regression is
+`bunx playwright test --config src/features/notifications/browser-test/playwright.config.ts`.
+
 ## Development Patterns
 
 Route database row rename and delete through `renameDatabase` and
@@ -254,7 +270,13 @@ by default; keep saved per-capture choices and explicit toggles authoritative.
 Use `/app/debug/diff-view-ui` to exercise the 40/41-line boundary.
 
 Project grouping in Soup and its live cache projection uses the system Project
-property (initiative membership), with an empty key labeled No Project.
+property (initiative membership), with an empty key labeled No Project. The
+server labels each project group with the initiative name the viewer can read;
+headers resolve a name themselves only while a group is still labeled by its
+key, and projects sort by name with No Project last. Data a grouped list shows
+about its groups (labels, order, membership) is computed on the server and
+mirrored by the cache's local grouping projection; never add a side cache in
+feature code to cover a remount.
 
 Keep persistent list hotkeys free of mounted-view closures, and clear
 virtualizer accessors when their view unmounts.
@@ -323,7 +345,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   controls live under collapsed Advanced settings. See the
   [Bots walkthrough](../../docs/agent-guide/settings.md#bots).
 - Label the notification permission toast **Enable Desktop Notifications** in
-  the desktop app and keep its Enable action on the native notification provider.
+  the desktop app and **Enable Notifications** in the Android app, and keep
+  their Enable action on the native notification provider.
 - Keep signed-out Drive document routes on the shared detail viewer without
   mounting private list/sidebar sources; let document access checks decide visibility.
 - Gate account-only queries, comment readers, and account WebSockets on confirmed
@@ -398,7 +421,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, `sm`/`icon-sm` semantic islands (28px controls) with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for Tabs, New, and Search. Drive and Tasks list-header filter, layout, sort, and grouping islands use `md`/`icon-md` (32px) to match New and Search. Preserve touch layouts. Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
 - Keep desktop model and effort controls separate: the model selector opens the catalog and the speedometer opens the runtime's advertised slider stops; retain the mobile effort sheet.
 - Passive PR mentions must not retry initial GitHub status failures on remount; preserve confirmed status through refetch errors and keep pending data reads out of their parent Suspense boundary.
-- PR description and comment images are remote URL images: rewrite GitHub blob/`raw` links to `raw.githubusercontent.com` and load them through the image proxy so COEP does not block github.com.
+- PR description and comment images are remote URL images: rewrite GitHub blob/`raw` links to `raw.githubusercontent.com` and load them through the image proxy so COEP does not block github.com. Load Macro's own static-file URLs directly: a composer image reaches the server as Markdown and comes back as a URL image, and the proxy needs a session cookie that a `crossorigin="anonymous"` image never sends.
 - Keep native booking exit navigation in the route shell, outside page loading boundaries, and use the router so the native hash route stays intact.
 - Diagnose native full reloads with `native_webview_started`, `native_diagnostic_recovered`, and the shared `frontend_instance_id`; use `reloadApp(reason)` for frontend reloads and keep breadcrumbs content-free. Treat `previous_document_*` checkpoints as last-observed lifecycle evidence, never a crash verdict; clear them on logout. `previous_document_last_*` comes from the native navigation breadcrumb (route and entity type, never ids). See [frontend checkpoints](docs/native-reload-diagnostics.md) and `tauri/src-tauri/README.md`.
 - Pass `$APPLOCALDATA` (Application Support on Apple platforms) as the native HTTP cookie storage directory; the plugin owns the `.cookies` filename. Never use purgeable caches. The location change intentionally requires one new sign-in, without migration. See `tauri/src-tauri/README.md#native-authentication-cookies`.
@@ -413,8 +436,15 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - All API/network calls live in service-clients.
 - Open projects through `openProject` (`features/projects/open-project.ts`): it
   retargets an already-open project split to the section or comment in place.
-  Opening the legacy `initiative-view` component route beside an open project
-  mounts a redirect shim that stays on "Loading project".
+  Shared open paths (unified list rows) use its `projectHostedContent`, whose
+  identity is the project itself, so the router focuses the split already
+  showing it. Opening the legacy `initiative-view` component route beside an
+  open project mounts a redirect shim that stays on "Loading project".
+- A hosted detail pane (a project under Tasks, a call, a PR) registers as its
+  host shell, so the split manager's entity reuse cannot see it; the router's
+  claims decide who shows it. `openWithSplit` activates the source split before
+  a replace, so a visit the router yields to the claiming pane leaves that pane
+  active (`tests/claimed-replace.test.ts`).
 - Bound Discussion comment readiness waits to ten seconds; recover from initial layout interruptions until the message is visible, and release the target on user input (including scrollbar pointer-down), timeout, or successful arrival.
 - Keep early DOCX opens loading while exports return processing (409); retry only
   that response, with a bounded wait. See the Word editor walkthrough in
@@ -467,8 +497,6 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Preserve loaded block content on initial access confirmation when its loader
   supplies no permissions; reload only on a later confirmed permission change.
   Apply shared access in place only after a successful permissionless load.
-  Request state can report an owner as edit, so compare a loaded level with
-  the confirmed one through `matchesConfirmedAccess`.
 - Grouped Soup's `graphql/create-grouped-soup-live-query.ts` owns initial and
   continuation pages plus their local predicate projection. Group readers only
   delegate paging; pass the parent's live `groupedPaging` accessor from every
@@ -563,6 +591,10 @@ pending-notification intent for bootstrap and live taps so newer taps supersede
 older work. Older native builds and pushes retain authenticated notification
 lookup. The local bridge and native release requirement are documented in
 [`docs/ios-releases.md`](docs/ios-releases.md).
+
+Cold channel push launches retain Home behind the target channel so the mobile
+header Back control and swipe-back have a destination. Keep this launch layout
+in `notificationLaunchPath`; warm taps retain their current pane stack.
 
 Bound the pre-router bridge handoff to 1.5 seconds and release the native cover
 on failure or timeout without consuming the pending tap. Late responses must
@@ -763,7 +795,8 @@ call the reviewed workspace tools, and show separate task/project totals.
 
 Cognition, routines, preview control, and MCP share `agent_harness_service`.
 Agent replies can use the existing `m-document-mention` format with
-`blockName: "routine"`; routines do not appear in the mention menu.
+`blockName: "routine"`; the `@` menu offers routines only to their owner in
+channel composers, where picking one shares it as a template.
 Direct local hosts use port 8101 with the existing feature prefixes; the
 instance proxy retains `/cognition`, `/scheduled-action`, and `/preview`.
 
@@ -802,7 +835,8 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 ### Creation choices and notifications
 
 - Reuse `CreateMenuItem` for explanatory New menu entries: original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
-- Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus.
+- Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button.
+- Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
 
 ### Sidebar tag dragging
 
@@ -811,3 +845,7 @@ Keep existing tags and apply to the selected rows when the drop row is selected.
 Use the shared scoped drag helpers and overlayIcon for the tag chip.
 The backend-free browser regression is
 `bunx playwright test --config src/features/property/tags/browser-test/playwright.config.ts`.
+
+Use `features/channel/channel-icon.tsx` for conversation identity in rows,
+favorites, and headers: channel pictures or hashtags, human/self-DM avatars,
+and bot personas share one renderer; keep surface sizing in the caller.

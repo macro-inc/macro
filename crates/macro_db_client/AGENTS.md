@@ -113,3 +113,8 @@ draft generation so Undo/resend cannot inherit an old deletion.
 The import ledger accepts Jira Cloud sources with `jira_issue`, `jira_project`
 and `jira_epic` kinds. Jira has its own concurrent partial team-claim index; source
 and kind constraints expand without rewriting existing rows and validate separately.
+
+`mcp_oauth_*` tables hold the public MCP OAuth broker's state (registrations,
+refresh token bindings, pending authorizations, issued codes); their queries and
+expiry sweep belong to `mcp_auth_proxy`. Rows carry `expires_at` and have no
+foreign keys; the broker deletes expired rows.

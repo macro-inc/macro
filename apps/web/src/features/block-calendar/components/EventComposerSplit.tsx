@@ -4,12 +4,17 @@ import {
   defaultEditorInitialValues,
   type EventEditorInitialValues,
 } from '@app/features/calendar/components/composer/event-form-model';
+import type { EventFormProps } from '@app/features/calendar/components/composer/event-form-state';
+import { MobileEventForm } from '@app/features/calendar/components/composer/MobileEventForm';
 import { createGuestInviteController } from '@app/features/calendar/hooks/create-guest-invite-controller';
 import {
   useCalendarGuestInvitesFlag,
   useCalendarInvitationForwardFlag,
 } from '@app/features/calendar/hooks/use-calendar-ui-flag';
-import { useEventEditor } from '@app/features/calendar/hooks/use-event-editor';
+import {
+  type CreatedCalendarEvent,
+  useEventEditor,
+} from '@app/features/calendar/hooks/use-event-editor';
 import { useSyncedCalendarEvent } from '@app/features/calendar/hooks/use-synced-calendar-event';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { viewerReplacesGuests } from '@app/features/calendar/utils/event-guest-editing';
@@ -41,6 +46,18 @@ function EditorForwardInvitation(props: {
   );
 }
 
+/** The touch sheet's layout wherever the panel offers the sheet's pinned chrome. */
+function PanelEventForm(props: EventFormProps) {
+  const panel = useSplitPanelOrThrow();
+  return (
+    <Show when={panel.drawerHeader?.()} fallback={<EventForm {...props} />}>
+      {(headerMount) => (
+        <MobileEventForm {...props} headerMount={headerMount()} />
+      )}
+    </Show>
+  );
+}
+
 /** Standalone create/edit event composer hosted in a popover split. */
 type EventComposerSplitProps = {
   event?: CalendarEvent;
@@ -48,6 +65,8 @@ type EventComposerSplitProps = {
   onCalendarChange?: (calendarId: string, color: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
   onSaveSuccess?: () => void;
+  /** Called with a new event once it exists, before the composer closes. */
+  onCreated?: (created: CreatedCalendarEvent) => void;
 };
 
 export function EventComposerSplit(props: EventComposerSplitProps) {
@@ -91,6 +110,7 @@ function EventComposerContent(
     invitationForwardEnabled,
     syncedEvent: useSyncedCalendarEvent(() => props.event),
     onDetailsLocked: () => controller.resetDetails(),
+    onCreated: (created) => props.onCreated?.(created),
     onSaved: () => {
       props.onSaveSuccess?.();
       close();
@@ -118,7 +138,7 @@ function EventComposerContent(
 
   return (
     <div ref={attachHotkeys} class="flex h-full min-h-0 flex-col p-4 text-ink">
-      <EventForm
+      <PanelEventForm
         controller={controller}
         macroCallsEnabled={macroCallsEnabled()}
         isEdit={isEdit()}
