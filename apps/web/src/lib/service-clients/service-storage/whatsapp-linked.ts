@@ -6,6 +6,7 @@ import type { WhatsAppAccountView } from './generated/schemas/whatsAppAccountVie
 import type { WhatsAppChats } from './generated/schemas/whatsAppChats';
 import type { WhatsAppDisconnect } from './generated/schemas/whatsAppDisconnect';
 import type { WhatsAppDisconnectRequest } from './generated/schemas/whatsAppDisconnectRequest';
+import type { WhatsAppHistoryImport } from './generated/schemas/whatsAppHistoryImport';
 import type { WhatsAppLookup } from './generated/schemas/whatsAppLookup';
 import type { WhatsAppLookupRequest } from './generated/schemas/whatsAppLookupRequest';
 import type { WhatsAppPairing } from './generated/schemas/whatsAppPairing';
@@ -52,6 +53,9 @@ export const whatsappLinkedClient = {
     post<WhatsAppLookup>(`${root}/lookups`, {
       phoneNumber,
     } satisfies WhatsAppLookupRequest),
+  /** Imports earlier messages of the caller's chats waiting for their phone. */
+  importHistory: () =>
+    post<WhatsAppHistoryImport>(`${root}/history-import`, {}),
   /** A lookup's progress; poll it until it isn't `pending`. */
   lookup: (id: string) =>
     fetchWithToken<WhatsAppLookup, WhatsAppErrorCode>(

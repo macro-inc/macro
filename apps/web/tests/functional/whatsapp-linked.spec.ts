@@ -10,6 +10,7 @@ import type {
   WhatsAppAccount,
   WhatsAppAccountView,
   WhatsAppDisconnect,
+  WhatsAppHistoryImport,
   WhatsAppLookup,
   WhatsAppLookupRequest,
   WhatsAppPairing,
@@ -23,7 +24,12 @@ type Chat = {
   kind: 'group' | 'direct';
   name: string;
   lastActivityAt: string | null;
-  added: { id: string; name: string } | null;
+  added: {
+    id: string;
+    name: string;
+    /** The added chat's history import, as the chat list reports it. */
+    backfill?: { state: string; imported: number };
+  } | null;
   shared?: { id: string; name: string; ownerId: string };
   /** The account's chat with itself. */
   self?: boolean;
@@ -67,6 +73,8 @@ type LinkedServer = {
   registered: string[];
   /** Lookups started so far, by id: the number asked about. */
   lookups: Record<string, string>;
+  /** Times the owner pressed Import. */
+  historyImports: number;
 };
 
 /** A person's phone-number JID. */
@@ -138,6 +146,7 @@ function server(): LinkedServer {
     files: {},
     registered: [],
     lookups: {},
+    historyImports: 0,
   };
 }
 
@@ -402,6 +411,7 @@ async function mount(page: Page, state: LinkedServer, query = '') {
               unreadCount: item.added?.id === CHAT_ID ? 2 : 0,
               canSend: item.added?.id === CHAT_ID,
               sendReason: item.added?.id === CHAT_ID ? null : 'not_added',
+              backfill: item.added?.backfill ?? null,
               community: item.community ?? null,
             })),
         });
@@ -475,6 +485,18 @@ async function mount(page: Page, state: LinkedServer, query = '') {
             })),
           },
         });
+      if (path === 'whatsapp/history-import' && method === 'POST') {
+        state.historyImports += 1;
+        let started = 0;
+        for (const chat of state.chats)
+          if (chat.added?.backfill?.state === 'waiting_for_phone') {
+            chat.added.backfill = { state: 'pending', imported: 0 };
+            started += 1;
+          }
+        return route.fulfill({
+          json: { started } satisfies WhatsAppHistoryImport,
+        });
+      }
       if (path === 'whatsapp/lookups' && method === 'POST') {
         const { phoneNumber }: WhatsAppLookupRequest = route
           .request()
@@ -721,6 +743,59 @@ for (const mobile of [false, true]) {
         kind: 'direct',
       });
       expect(Object.values(state.lookups)).toEqual(['+5550009', '+5550007']);
+      expect(unexpected).toEqual([]);
+    });
+  });
+}
+
+for (const mobile of [false, true]) {
+  test.describe(`${mobile ? 'mobile' : 'desktop'} history import`, () => {
+    test.use({
+      viewport: mobile
+        ? { width: 390, height: 844 }
+        : { width: 1440, height: 900 },
+      isMobile: mobile,
+      hasTouch: mobile,
+    });
+    test('the phone is asked for earlier messages only when the owner imports', async ({
+      page,
+    }) => {
+      const state = server();
+      state.account = {
+        id: 'account-1',
+        userId: USER_ID,
+        authorizationGeneration: 4,
+        identityJid: phoneJid('14155550142:3'),
+        state: 'connected',
+      };
+      const crit = state.chats.find((chat) => chat.added?.id === CHAT_ID);
+      if (!crit?.added) throw new Error('missing the added group');
+      crit.added.backfill = { state: 'waiting_for_phone', imported: 0 };
+      const unexpected = await mount(page, state);
+
+      const prompt = page.getByRole('status', {
+        name: 'Import WhatsApp history',
+      });
+      await expect(prompt).toBeVisible();
+      await expect(
+        prompt.getByText(
+          'Open WhatsApp on your phone and keep it open, then import the earlier messages of design-crit.'
+        )
+      ).toBeVisible();
+      expect(state.historyImports).toBe(0);
+      await page.screenshot({
+        path: process.env.WHATSAPP_SCREENSHOT_DIR
+          ? join(
+              process.env.WHATSAPP_SCREENSHOT_DIR,
+              `whatsapp-history-prompt-${mobile ? 'mobile' : 'desktop'}.png`
+            )
+          : test.info().outputPath('whatsapp-history-prompt.png'),
+      });
+
+      await prompt.getByRole('button', { name: 'Import' }).click();
+      await expect(prompt).toHaveCount(0);
+      expect(state.historyImports).toBe(1);
+      expect(crit.added.backfill).toEqual({ state: 'pending', imported: 0 });
       expect(unexpected).toEqual([]);
     });
   });
@@ -1358,7 +1433,9 @@ test('history imported after adding shows up older, with the import state', asyn
   state.backfill = { state: 'waiting_for_phone', imported: 0 };
   const unexpected = await mount(page, state, `?chat=${CHAT_ID}`);
   await expect(
-    page.getByText('WhatsApp · Waiting for your phone to import history')
+    page.getByText(
+      'WhatsApp · Earlier messages not imported. Open WhatsApp on your phone, then import them.'
+    )
   ).toBeVisible();
   // The phone answers; the next read (push or fallback re-fetch) shows it.
   state.backfill = { state: 'done', imported: 1 };
