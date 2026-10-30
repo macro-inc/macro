@@ -1,7 +1,9 @@
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { PropertiesProvider } from '@property/context/PropertiesContext';
+import { useProperty } from '@property/core/context';
 import type { Property } from '@property/types';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { InlinePropertyValue } from './InlinePropertyValue';
 
@@ -12,11 +14,16 @@ vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => 'layout',
 }));
 vi.mock('@property/editors/popover/EntityEditor', () => ({
-  EntityEditor: () => <div>Project picker</div>,
+  EntityEditor: () => (
+    <Show when={useProperty().editorOpen()}>
+      <div>Project picker</div>
+    </Show>
+  ),
 }));
 vi.mock('@property/hooks/usePropertyEntityDisplay', () => ({
   usePropertyEntityDisplay: () => ({
     name: () => 'Launch',
+    icon: () => null,
     nativeProjectId: () => 'launch',
     isLoading: () => false,
   }),
@@ -69,6 +76,8 @@ it("keeps a composer's draft in place when its project is clicked", () => {
   renderPill();
 
   expect(screen.queryByRole('button', { name: 'Change project' })).toBeNull();
+  expect(screen.queryByText('Project picker')).toBeNull();
+
   fireEvent.click(screen.getByRole('button', { name: /Launch/ }));
 
   expect(screen.getByText('Project picker')).toBeTruthy();
