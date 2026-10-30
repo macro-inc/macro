@@ -903,7 +903,10 @@ with the same sort and `+` controls as the All tab's sections. Conversations
 lists only channels and DMs that hold threads the user takes part in; it pages
 through the user's threads and loads their channels, so scrolling the section
 reveals more. Selecting a row filters the main pane instead of opening the
-conversation. `All threads` clears the filter.
+conversation. `All threads` clears the filter. At desktop width the rail stays
+docked on Threads with no **Hide navigation** control. In narrow splits the tab
+neither opens nor closes the slide-over, so switching between `Threads`, `All`,
+and `Recent` inside it keeps it open.
 
 The main pane is a virtualized list of channel threads the user takes part in,
 newest reply first. It loads more as it nears the end and returns to the top
