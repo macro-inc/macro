@@ -1567,7 +1567,9 @@ Its carets should still expand the results, and reduced motion disables animatio
 Check that rich result controls still work and `DisplayResults` stays visible
 between surrounding groups. In **AgentMessage (end-to-end)**, expand the group
 and confirm unknown tools have no individual disclosure or JSON payload. Repeat
-at a narrow viewport width.
+at a narrow viewport width. `/app/debug/agent-progress` renders the same replies
+in the session and as channel messages side by side; **Expand all** opens every
+group and tool result at once.
 
 A thought row reads **Thinking** and shimmers only while it is the last part
 of the turn the session is working on. Earlier thoughts settle to **Thought**
