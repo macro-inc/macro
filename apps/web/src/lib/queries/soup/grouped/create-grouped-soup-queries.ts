@@ -1,6 +1,8 @@
+import { deepEqual } from '@core/util/compareUtils';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
+import { Telemetry } from '@macro-inc/observability';
 import { useQueryClient } from '@queries/client';
 import { createInfiniteQueries } from '@queries/create-infinite-queries';
 import { groupedCacheVersion } from '@queries/soup/cache';
@@ -223,6 +225,8 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
   });
 
   const [groupDataVersion, setGroupDataVersion] = createSignal(0);
+  // In-flight continuation re-walks per group; a Load More waits for its own.
+  const rewalks = new Map<string, Promise<void>>();
 
   const list = createMemo(() => {
     if (usesGraphql()) return graphqlQueries.list();
@@ -237,6 +241,8 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
         return untrack(query.data);
       },
       fetchNextPage: async () => {
+        // Paging during a re-walk would cancel its refetch midway.
+        await rewalks.get(query.key);
         const result = await query.fetchNextPage();
         setGroupDataVersion((version) => version + 1);
         return result;
@@ -295,26 +301,52 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
       query: { key: string; refetch: () => Promise<{ isError: boolean }> },
       initialPage: GroupQueryPage
     ) => {
-      const result = await query.refetch();
-      // A chain that could not be rebuilt falls back to its first page rather
-      // than keeping rows that follow the old boundary.
-      if (result.isError) {
+      const queryKey = soupKeys.groupedGroup({
+        params: args.soupParams(),
+        body: args.soupBody(),
+        groupBy: field,
+        groupKey: query.key,
+      }).queryKey;
+      const span = Telemetry.span('soup.grouped_rest_rewalk');
+      span.setAttr('grouping.group_key', query.key);
+      await span.run(async () => {
+        const result = await query.refetch();
+        if (!result.isError) {
+          span.setAttr('grouping.rewalk_outcome', 'replaced');
+          return;
+        }
+        // A chain that could not be rebuilt falls back to its first page
+        // rather than keeping rows that follow the old boundary, unless a
+        // later parent page already replaced that first page.
+        let outcome = 'superseded';
         queryClient.setQueryData<InfiniteData<GroupQueryPage, string | null>>(
-          soupKeys.groupedGroup({
-            params: args.soupParams(),
-            body: args.soupBody(),
-            groupBy: field,
-            groupKey: query.key,
-          }).queryKey,
-          { pages: [initialPage], pageParams: [null] }
+          queryKey,
+          (existing) => {
+            if (!existing || !deepEqual(existing.pages[0], initialPage)) {
+              return existing;
+            }
+            outcome = 'reset';
+            return { pages: [initialPage], pageParams: [null] };
+          }
         );
-      }
+        span.setAttr('grouping.rewalk_outcome', outcome);
+        span.error('continuation rewalk failed');
+      });
       setGroupDataVersion((version) => version + 1);
     };
     for (const query of queries.list()) {
       const initialPage = stale.get(query.key);
-      if (initialPage)
-        fireAndForget(rewalk(query, initialPage), 'grouped-soup');
+      if (!initialPage) continue;
+      const run = async () => {
+        try {
+          await rewalk(query, initialPage);
+        } finally {
+          if (rewalks.get(query.key) === pending) rewalks.delete(query.key);
+        }
+      };
+      const pending = run();
+      rewalks.set(query.key, pending);
+      fireAndForget(pending, 'grouped-soup');
     }
   };
 
