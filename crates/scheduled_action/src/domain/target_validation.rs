@@ -24,6 +24,8 @@ pub enum TargetValidationError {
     ExplicitAgentRequired,
     #[error("this routine requires apps; reload or upgrade your client before updating")]
     ExplicitAppsRequired,
+    #[error("this routine has steps; reload or upgrade your client before updating")]
+    ExplicitStepsRequired,
 }
 
 /// Default acceptance policy for composition roots that have not enabled agents.
@@ -109,6 +111,13 @@ pub(super) fn require_explicit_selection(previous: &Value, incoming: &Value) -> 
         && incoming.get("mcp_servers").is_none()
     {
         return Err(TargetValidationError::ExplicitAppsRequired.into());
+    }
+    // A client that predates steps, or a tab loaded before they were added,
+    // sends a single agent task; saving it would delete the steps.
+    if previous.get("steps").is_some_and(|steps| !steps.is_null())
+        && incoming.get("steps").is_none()
+    {
+        return Err(TargetValidationError::ExplicitStepsRequired.into());
     }
     Ok(())
 }

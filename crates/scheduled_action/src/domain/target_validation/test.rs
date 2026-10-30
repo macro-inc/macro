@@ -318,6 +318,22 @@ fn programs_never_trip_the_old_client_agent_guard() {
     );
 }
 
+#[test]
+fn an_update_from_before_steps_cannot_replace_them() {
+    let program = json!({ "steps": [{ "type": "tool", "tool": "Comment", "arguments": {} }] });
+    let error = require_explicit_selection(
+        &program,
+        &json!({ "model": "m", "prompt": "", "user_prompt": "x" }),
+    )
+    .unwrap_err();
+    assert_eq!(
+        error.downcast_ref::<TargetValidationError>(),
+        Some(&TargetValidationError::ExplicitStepsRequired)
+    );
+    // A program may still be replaced by another program.
+    require_explicit_selection(&program, &json!({ "steps": [] })).unwrap();
+}
+
 #[tokio::test]
 async fn a_program_hands_its_apps_to_its_agent_and_an_update_must_restate_them() {
     let sessions = Arc::new(Sessions::default());

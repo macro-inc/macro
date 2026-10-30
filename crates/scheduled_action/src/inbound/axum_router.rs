@@ -542,7 +542,8 @@ impl IntoResponse for ScheduledActionApiError {
                 | TargetValidationError::InvalidProgram(_)
                 | TargetValidationError::AgentsDisabled => StatusCode::BAD_REQUEST,
                 TargetValidationError::ExplicitAgentRequired
-                | TargetValidationError::ExplicitAppsRequired => StatusCode::CONFLICT,
+                | TargetValidationError::ExplicitAppsRequired
+                | TargetValidationError::ExplicitStepsRequired => StatusCode::CONFLICT,
             };
             return (status, validation.to_string()).into_response();
         }
