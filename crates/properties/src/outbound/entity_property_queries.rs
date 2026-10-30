@@ -100,6 +100,94 @@ pub async fn entity_values_in_transaction(
         .collect())
 }
 
+/// Set one property on many entities of one type inside a caller's
+/// transaction, each to its value or, with `None`, cleared: a few
+/// statements however many entities there are. A value already stored is
+/// left untouched; answers how many stored values changed. The caller
+/// serializes writers of these values.
+pub async fn set_entity_values_in_transaction(
+    tx: &mut sqlx::PgConnection,
+    entity_type: EntityType,
+    property_definition_id: Uuid,
+    values: &[(String, Option<PropertyValue>)],
+) -> Result<u64, PropertyQueryError> {
+    let mut ids = Vec::new();
+    let mut set = Vec::new();
+    let mut stored = Vec::new();
+    let mut cleared = Vec::new();
+    let mut changed = 0;
+    for (entity_id, value) in values {
+        match value {
+            Some(value) => {
+                ids.push(macro_uuid::generate_uuid_v7());
+                set.push(entity_id.clone());
+                stored.push(serde_json::to_value(value)?);
+            }
+            None => cleared.push(entity_id.clone()),
+        }
+    }
+    if !set.is_empty() {
+        // Updating the cells already there first keeps the insert, and the
+        // checks its triggers run per row, to the cells that are new.
+        changed += sqlx::query!(
+            r#"
+            UPDATE entity_properties
+            SET values = cell.value, updated_at = NOW()
+            FROM UNNEST($1::text[], $2::jsonb[]) AS cell(entity_id, value)
+            WHERE entity_properties.entity_type = $3
+              AND entity_properties.property_definition_id = $4
+              AND entity_properties.entity_id = cell.entity_id
+              AND entity_properties.values IS DISTINCT FROM cell.value
+            "#,
+            &set,
+            &stored,
+            entity_type as EntityType,
+            property_definition_id,
+        )
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+        changed += sqlx::query!(
+            r#"
+            INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+            SELECT cell.id, cell.entity_id, $3, $4, cell.value
+            FROM UNNEST($1::uuid[], $2::text[], $5::jsonb[]) AS cell(id, entity_id, value)
+            WHERE NOT EXISTS (
+                SELECT 1 FROM entity_properties stored
+                WHERE stored.entity_id = cell.entity_id
+                  AND stored.entity_type = $3
+                  AND stored.property_definition_id = $4
+            )
+            ON CONFLICT (entity_id, entity_type, property_definition_id)
+            DO UPDATE SET values = EXCLUDED.values, updated_at = NOW()
+            "#,
+            &ids,
+            &set,
+            entity_type as EntityType,
+            property_definition_id,
+            &stored,
+        )
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+    }
+    if !cleared.is_empty() {
+        changed += sqlx::query!(
+            r#"
+            DELETE FROM entity_properties
+            WHERE entity_type = $1 AND property_definition_id = $2 AND entity_id = ANY($3)
+            "#,
+            entity_type as EntityType,
+            property_definition_id,
+            &cleared,
+        )
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+    }
+    Ok(changed)
+}
+
 /// Upsert an entity property value (insert or update).
 /// If the property doesn't exist, it will be created and attached to the entity.
 /// If it exists, the value will be updated. The returned snapshot carries the

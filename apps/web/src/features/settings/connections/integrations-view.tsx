@@ -318,7 +318,7 @@ function IntegrationsOverview(
         <IntegrationsListHeader />
         <div
           role="rowgroup"
-          class="flex flex-col [&>[role=row]+[role=row]]:border-t [&>[role=row]+[role=row]]:border-ink/5"
+          class="flex flex-col [&>[role=row]:not(:first-child)]:border-t [&>[role=row]:not(:first-child)]:border-ink/5"
         >
           <For each={customLeftovers()}>
             {(leftover) => <LeftoverRow leftover={leftover} />}

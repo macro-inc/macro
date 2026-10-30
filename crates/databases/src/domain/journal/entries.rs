@@ -15,7 +15,16 @@ use super::{
 use crate::domain::models::{PropertyDefinitionId, Write, Writes};
 
 /// What the adapter reads under the batch's locks, before it writes.
+/// Derived columns' cells are not read: they follow the others, so an undo
+/// derives them again rather than writing them back.
 pub fn reads(writes: &Writes) -> Reads {
+    let derived = |column: &ColumnId| {
+        writes
+            .journal
+            .schema
+            .column(*column)
+            .is_some_and(|image| image.formula.is_some())
+    };
     let mut reads = Reads::default();
     for (op, write) in writes.journal.ops.iter().zip(&writes.writes) {
         match write {
@@ -48,12 +57,12 @@ pub fn reads(writes: &Writes) -> Reads {
                 column_id,
                 definition_id,
                 ..
-            } => reads.columns.push((*table_id, *column_id, *definition_id)),
+            } if !derived(column_id) => reads.columns.push((*table_id, *column_id, *definition_id)),
             Write::ReplaceColumn {
                 table_id,
                 replacement,
                 ..
-            } => reads.columns.push((
+            } if !derived(&replacement.column.id) => reads.columns.push((
                 *table_id,
                 replacement.column.id,
                 replacement.column.property_definition_id,

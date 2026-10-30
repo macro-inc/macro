@@ -232,6 +232,34 @@ impl<Properties> PgDatabasesRepo<Properties> {
     pub fn new(pool: PgPool, properties: Properties) -> Self {
         Self { pool, properties }
     }
+
+    /// Every table of a live database with a derived column, ordered by
+    /// database and table.
+    pub async fn tables_with_derived_columns(
+        &self,
+    ) -> Result<Vec<(DatabaseId, TableId)>, PgDatabasesRepoError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT DISTINCT t.database_id, t.id
+            FROM database_columns c
+            JOIN database_tables t ON t.id = c.table_id
+            JOIN database_entities d ON d.database_id = t.database_id
+            WHERE c.config ->> 'kind' = 'derived' AND d.trashed_at IS NULL
+            ORDER BY t.database_id, t.id
+            "#
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                (
+                    DatabaseId::from_uuid(row.database_id),
+                    TableId::from_uuid(row.id),
+                )
+            })
+            .collect())
+    }
 }
 
 impl<Properties> DatabasesRepo for PgDatabasesRepo<Properties>

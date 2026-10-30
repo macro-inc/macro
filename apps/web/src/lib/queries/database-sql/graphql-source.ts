@@ -476,7 +476,7 @@ function tableRows(
 }
 
 /** A row's cells by property definition; an empty property is no cell. */
-function rowCells(item: DatabaseRowItem): Record<string, Cell> {
+export function rowCells(item: DatabaseRowItem): Record<string, Cell> {
   const cells: Record<string, Cell> = {};
   for (const property of item.properties) {
     const value = cell(property.value);

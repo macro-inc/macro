@@ -4,6 +4,33 @@ import type { DatabaseRow } from '../core/table';
 import { createHeldGridRows } from './held-grid-rows';
 
 describe('held grid rows', () => {
+  it('keeps the displayed rows stable when focus moves between visible records', () => {
+    createRoot((dispose) => {
+      const [records, setRecords] = createSignal<DatabaseRow[]>([
+        { rowId: 'first', cells: { title: 'First' } },
+        { rowId: 'last', cells: { title: 'Last' } },
+      ]);
+      const grid = createHeldGridRows({
+        rows: () => [...records(), { rowId: 'draft', cells: { title: null } }],
+        knownRows: records,
+      });
+      const displayed = grid.rows();
+      grid.setEditingRowId('first');
+      expect(grid.rows()).toBe(displayed);
+      grid.setEditingRowId('last');
+      expect(grid.rows()).toBe(displayed);
+      grid.setEditingRowId(undefined);
+      expect(grid.rows()).toBe(displayed);
+
+      setRecords([{ rowId: 'first', cells: { title: 'Changed' } }]);
+      expect(grid.rows()).toEqual([
+        { rowId: 'first', cells: { title: 'Changed' } },
+        { rowId: 'draft', cells: { title: null } },
+      ]);
+      dispose();
+    });
+  });
+
   it('keeps the row being typed in at its place after it leaves the view, until the edit ends', () => {
     createRoot((dispose) => {
       const [rows, setRows] = createSignal<DatabaseRow[]>([

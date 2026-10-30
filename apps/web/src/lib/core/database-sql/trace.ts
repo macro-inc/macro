@@ -347,6 +347,11 @@ export function traceDatabaseSqlRun<
       );
     })
     .orTee((failure) => {
+      if (failure.kind === 'cancelled') {
+        runSpan.setAttr('database_sql.cancelled', true);
+        finish({ error: 'cancelled' }, failure);
+        return;
+      }
       const engineError = failure.error;
       const detail = {
         ...(engineError

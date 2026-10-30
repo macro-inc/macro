@@ -495,7 +495,8 @@ pub fn cell_value(value: &PropertyValue) -> Option<CellValue> {
 }
 
 /// A row's stored cells, by definition, as the before-image keeps them: by
-/// the column of its table each definition is bound to.
+/// the column of its table each definition is bound to. Derived columns'
+/// cells are left out: they follow the others, and no op writes them.
 pub fn row_cells(
     schema: &SchemaImage,
     table: TableId,
@@ -504,7 +505,9 @@ pub fn row_cells(
     cells
         .iter()
         .filter_map(|(definition, value)| {
-            let column = schema.column_for(table, *definition)?;
+            let column = schema
+                .column_for(table, *definition)
+                .filter(|column| column.formula.is_none())?;
             Some((column.id, cell_value(value)?))
         })
         .collect()

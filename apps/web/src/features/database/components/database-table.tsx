@@ -1,3 +1,4 @@
+import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
@@ -5,6 +6,13 @@ import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { Key } from '@solid-primitives/keyed';
+import { createElementSize } from '@solid-primitives/resize-observer';
+import {
+  createVirtualizer,
+  defaultRangeExtractor,
+  measureElement,
+  type Range,
+} from '@tanstack/solid-virtual';
 import { DragDropProvider, DragOverlay } from '@thisbeyond/solid-dnd';
 import { getHashedPaletteColor } from '@ui/utils/palette';
 import {
@@ -18,6 +26,7 @@ import {
   on,
   onCleanup,
   Show,
+  untrack,
 } from 'solid-js';
 import { createHorizontalReorder } from '../../../components/drag-drop/create-horizontal-reorder';
 import { createReorderItem } from '../../../components/drag-drop/create-reorder';
@@ -86,6 +95,27 @@ const EDITOR_FIELDS =
   'input:not([type="checkbox"]), textarea, [contenteditable="true"]';
 /** Portaled editors keep the cell current while they hold focus. */
 const PORTALED_EDITORS = '[role="dialog"], [role="listbox"]';
+/** A row's height until one is measured. */
+const ROW_HEIGHT = 47;
+// Half a 500-record page: the next page is requested well before the last row.
+const PREFETCH_ROW_COUNT = 250;
+/**
+ * Rows mounted beyond the viewport in the scroll direction, and behind it.
+ * Generous behind too: reversing a fast scroll must find rows already there.
+ */
+const ROWS_AHEAD = 60;
+const ROWS_BEHIND = 40;
+/** Row lines extend this far past the mounted rows, moving in steps this size. */
+const ROW_LINES_STEP = 100;
+/**
+ * Main-thread time per frame spent turning row previews into live rows. Large
+ * enough to finish the rows in view in a frame or two: each frame of upgrades
+ * repaints the viewport and delays the tiles prepainted around it.
+ */
+const UPGRADE_BUDGET_MS = 50;
+/** Rows turn live only once scrolling has paused this long. */
+const UPGRADE_DELAY_MS = 400;
+const PENDING_ROW_COUNT = 100;
 
 export type DatabaseTableProps = {
   model: DatabaseTableModel;
@@ -93,6 +123,8 @@ export type DatabaseTableProps = {
   titleColumnId?: string;
   isUnsavedRow?: (rowId: string) => boolean;
   onRowFocus?: (rowId: string | undefined) => void;
+  onLoadMore?: () => void;
+  hasMoreRows?: boolean;
   onCellFocus?: (cell: DatabaseCellFocus | undefined) => void;
   remoteUsers?: DatabaseCellPresence[];
   /** Scrolled into view and briefly tinted, e.g. the target of a relation. */
@@ -107,6 +139,11 @@ export type DatabaseTableProps = {
     row: Accessor<DatabaseRow>,
     column: Accessor<DatabaseViewColumn>,
     options?: GridCellEditorOptions
+  ) => JSX.Element;
+  /** What a cell shows while the grid scrolls, before `renderCell` mounts. */
+  renderCellPreview?: (
+    row: Accessor<DatabaseRow>,
+    column: Accessor<DatabaseViewColumn>
   ) => JSX.Element;
   getRowTitle: (row: DatabaseRow) => string;
   onOpen: (rowId: string) => void;
@@ -140,6 +177,7 @@ export type DatabaseTableProps = {
 
 export function DatabaseTable(props: DatabaseTableProps) {
   const columns = () => props.model.visibleColumns();
+  const rows = () => props.model.rows();
   const addColumn = children(() =>
     props.canEdit ? props.addColumn : undefined
   );
@@ -147,14 +185,60 @@ export function DatabaseTable(props: DatabaseTableProps) {
     addColumn
       .toArray()
       .some((child) => child != null && typeof child !== 'boolean');
-  const rows = () => props.model.table.getRowModel().rows;
   const summaryRows = createMemo(() =>
-    rows()
-      .filter((row) => !props.isUnsavedRow?.(row.id))
-      .map((row) => row.original)
+    rows().filter((row) => !props.isUnsavedRow?.(row.rowId))
   );
   let scrollContainer!: HTMLDivElement;
   let gridElement!: HTMLDivElement;
+  const [header, setHeader] = createSignal<HTMLDivElement>();
+  const headerSize = createElementSize(header);
+  const [focusedRow, setFocusedRow] = createSignal<string>();
+  let pendingFocus: { rowId: string; column: number } | undefined;
+  const cellElement = (rowId: string, column: number) => {
+    const index = selection.rowIndex().get(rowId);
+    return gridElement?.querySelector<HTMLElement>(
+      `[data-grid-row="${index}"][data-grid-column="${column}"]`
+    );
+  };
+  const revealRow = (rowId: string) => {
+    setFocusedRow(rowId);
+    const index = selection.rowIndex().get(rowId);
+    const item =
+      index === undefined ? undefined : virtualizer.measurementsCache[index];
+    // Before the grid mounts there is nothing to scroll.
+    if (!item || !gridElement) return;
+    // Rows start below the sticky header, which also covers the top of the viewport.
+    const headerHeight = headerSize.height ?? 40;
+    const summaryHeight =
+      gridElement.querySelector<HTMLElement>('[data-grid-summary]')
+        ?.offsetHeight ?? 0;
+    if (item.start < scrollContainer.scrollTop + headerHeight)
+      virtualizer.scrollToOffset(item.start - headerHeight);
+    else if (
+      item.end >
+      scrollContainer.scrollTop + scrollContainer.clientHeight - summaryHeight
+    )
+      virtualizer.scrollToOffset(
+        item.end + summaryHeight - scrollContainer.clientHeight
+      );
+  };
+  const focusRequestedCell = () => {
+    if (!pendingFocus) return;
+    const { rowId, column } = pendingFocus;
+    previewRows.get(rowId)?.upgrade();
+    const cell = cellElement(rowId, column);
+    if (!cell) return;
+    pendingFocus = undefined;
+    const columnId = columns()[column - 1]?.id;
+    const editor = columnId ? control(rowId, columnId) : undefined;
+    if (editor) {
+      editor.focus();
+      return;
+    }
+    (
+      cell.querySelector<HTMLElement>('button, input, [tabindex]') ?? cell
+    ).focus();
+  };
   const columnReorder = createHorizontalReorder({
     order: () => columns().map((column) => column.id),
     getViewport: () => scrollContainer,
@@ -188,22 +272,17 @@ export function DatabaseTable(props: DatabaseTableProps) {
     controls.get(rowId)?.get(columnId);
   const editRequestedCell = () => {
     if (!pendingEdit || !props.canEdit) return;
+    previewRows.get(pendingEdit.rowId)?.upgrade();
     const editor = control(pendingEdit.rowId, pendingEdit.columnId);
     if (!editor) return;
+    const column =
+      columns().findIndex(({ id }) => id === pendingEdit?.columnId) + 1;
+    const cell = cellElement(pendingEdit.rowId, column);
+    if (!cell) return;
     const { selectAll } = pendingEdit;
     pendingEdit = undefined;
     editor.edit(undefined, { selectAll });
   };
-  props.controlsRef?.({
-    editCell: (rowId, columnId) => {
-      pendingEdit = { rowId, columnId };
-      editRequestedCell();
-    },
-    renameColumn: (columnId) => {
-      requestedHeader = columnId;
-      renameRequestedHeader();
-    },
-  });
   const register = (
     rowId: string,
     columnId: string,
@@ -222,11 +301,12 @@ export function DatabaseTable(props: DatabaseTableProps) {
     }
     row.set(columnId, editor);
     editRequestedCell();
+    queueMicrotask(focusRequestedCell);
   };
   const navigate = (rowId: string, columnId: string, direction: 1 | -1) => {
     if (!props.canEdit) return false;
     const editableColumns = columns().filter(canEditCell);
-    const rowIndex = rows().findIndex((row) => row.id === rowId);
+    const rowIndex = rows().findIndex((row) => row.rowId === rowId);
     const columnIndex = editableColumns.findIndex(
       (column) => column.id === columnId
     );
@@ -238,17 +318,19 @@ export function DatabaseTable(props: DatabaseTableProps) {
       return false;
     const row = rows()[Math.floor(nextIndex / editableColumns.length)];
     const column = editableColumns[nextIndex % editableColumns.length];
-    pendingEdit = { rowId: row.id, columnId: column.id };
+    pendingEdit = { rowId: row.rowId, columnId: column.id };
+    revealRow(row.rowId);
     editRequestedCell();
     return true;
   };
   const navigateRow = (rowId: string, columnId: string, direction: 1 | -1) => {
     if (!props.canEdit) return false;
     const column = columns().find((candidate) => candidate.id === columnId);
-    const rowIndex = rows().findIndex((row) => row.id === rowId);
+    const rowIndex = rows().findIndex((row) => row.rowId === rowId);
     const row = rows()[rowIndex + direction];
     if (rowIndex < 0 || !row || !column || !canEditCell(column)) return false;
-    pendingEdit = { rowId: row.id, columnId, selectAll: false };
+    pendingEdit = { rowId: row.rowId, columnId, selectAll: false };
+    revealRow(row.rowId);
     editRequestedCell();
     return true;
   };
@@ -281,7 +363,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
     };
   };
   const selection = createCellSelection({
-    rows: () => rows().map((row) => row.id),
+    rows: () => rows().map((row) => row.rowId),
     columns: () => columns().map((column) => column.id),
     cellAt: (target) => {
       if (!(target instanceof Element) || !gridElement?.contains(target))
@@ -308,6 +390,212 @@ export function DatabaseTable(props: DatabaseTableProps) {
         ? (rows, columns) => props.onClearCells!(rows, columns)
         : undefined,
   });
+  const rowIds = createMemo(() => [...selection.rowIndex().keys()]);
+  // One menu for every row: right-click (or a long press) picks its row and cell.
+  const [contextTarget, setContextTarget] = createSignal<{
+    rowId: string;
+    columnId?: string;
+  }>();
+  const contextRowId = () => contextTarget()?.rowId ?? '';
+  const keptRows = createMemo(() =>
+    [
+      ...new Set([focusedRow(), contextTarget()?.rowId, props.highlightRowId]),
+    ].flatMap((rowId) => {
+      const index =
+        rowId === undefined ? undefined : selection.rowIndex().get(rowId);
+      return index === undefined ? [] : [index];
+    })
+  );
+  // Placeholder rows past the loaded ones, so a fast scroll lands on rows that
+  // fill in rather than on empty space while the next page loads.
+  const pendingRows = () => (props.hasMoreRows ? PENDING_ROW_COUNT : 0);
+  const [rowHeight, setRowHeight] = createSignal(ROW_HEIGHT);
+  // Rows mounted mid-scroll, or out of view, render cell previews. Once
+  // scrolling settles, the ones in view turn live, nearest the middle first and
+  // within a per-frame budget, so a pause between flicks doesn't stall the next
+  // one. Rows out of view stay previews: they look the same, and repainting
+  // them would discard the tiles the compositor shows on the next flick.
+  const [scrolling, setScrolling] = createSignal(false);
+  const previewRows = new Map<
+    string,
+    { index: () => number; upgrade: () => void }
+  >();
+  let upgradeFrame: number | undefined;
+  const inView = (index: number) => {
+    const range = virtualizer.range;
+    return !range || (index >= range.startIndex && index <= range.endIndex);
+  };
+  const upgradePreviews = () => {
+    upgradeFrame = undefined;
+    if (scrolling()) return;
+    const range = virtualizer.range;
+    const middle = range ? (range.startIndex + range.endIndex) / 2 : 0;
+    const visible = [...previewRows.values()]
+      .filter((row) => inView(row.index()))
+      .sort(
+        (a, b) => Math.abs(a.index() - middle) - Math.abs(b.index() - middle)
+      );
+    const deadline = performance.now() + UPGRADE_BUDGET_MS;
+    for (const row of visible) {
+      if (performance.now() > deadline) {
+        upgradeFrame = requestAnimationFrame(upgradePreviews);
+        return;
+      }
+      row.upgrade();
+    }
+  };
+  // A repainted row discards its tiles, so upgrading as a flick starts would
+  // leave the compositor nothing to show for a frame.
+  const scheduleUpgrades = debounce(() => {
+    if (!scrolling() && upgradeFrame === undefined)
+      upgradeFrame = requestAnimationFrame(upgradePreviews);
+  }, UPGRADE_DELAY_MS);
+  const changeScrolling = (isScrolling: boolean) => {
+    setScrolling(isScrolling);
+    if (isScrolling) scheduleUpgrades.clear();
+    else scheduleUpgrades();
+  };
+  /** Rows in view while idle, and rows a focus or edit is waiting for. */
+  const mountsLive = (rowId: string, index: number) =>
+    (!scrolling() && inView(index)) ||
+    pendingFocus?.rowId === rowId ||
+    pendingEdit?.rowId === rowId;
+  onCleanup(() => {
+    if (upgradeFrame !== undefined) cancelAnimationFrame(upgradeFrame);
+  });
+  let rowHeightMeasured = false;
+  const virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
+    get count() {
+      return rowIds().length + pendingRows();
+    },
+    get getItemKey() {
+      const ids = rowIds();
+      return (index: number) => ids[index] ?? index;
+    },
+    getScrollElement: () => scrollContainer,
+    get scrollMargin() {
+      return headerSize.height ?? 40;
+    },
+    // Unmeasured rows take the first measured row's height, so rows mount
+    // where they stay instead of shifting every row below them as they load.
+    get estimateSize() {
+      const height = rowHeight();
+      return () => height;
+    },
+    // Only the ResizeObserver measures: a synchronous read per new row forces
+    // a layout on every scroll frame. A grid without layout (a hidden pane)
+    // measures 0; keep the estimate so every row doesn't mount at once.
+    measureElement: (element, entry, instance) => {
+      const size = entry
+        ? measureElement(element, entry, instance)
+        : instance.itemSizeCache.get(
+            instance.options.getItemKey(instance.indexFromElement(element))
+          );
+      if (entry && size && !rowHeightMeasured) {
+        rowHeightMeasured = true;
+        // Rows mounted before this were cached at the old estimate; correcting
+        // them one by one would move every row below each, many times over.
+        if (size !== rowHeight()) {
+          setRowHeight(size);
+          queueMicrotask(() => instance.measure());
+        }
+      }
+      return size || rowHeight();
+    },
+    // The compositor scrolls while the main thread mounts rows, so mount well
+    // ahead in the scroll direction and a good way behind.
+    overscan: 0,
+    onChange: (instance) => changeScrolling(instance.isScrolling),
+    get rangeExtractor() {
+      const kept = keptRows();
+      return (range: Range) => {
+        const backward = virtualizer.scrollDirection === 'backward';
+        const window = defaultRangeExtractor({
+          ...range,
+          startIndex: Math.max(
+            0,
+            range.startIndex - (backward ? ROWS_AHEAD : ROWS_BEHIND)
+          ),
+          endIndex: Math.min(
+            range.count - 1,
+            range.endIndex + (backward ? ROWS_BEHIND : ROWS_AHEAD)
+          ),
+        });
+        return [...new Set([...window, ...kept])].sort((a, b) => a - b);
+      };
+    },
+  });
+  // The adapter reconciles items by index; copies let rows key by record.
+  const virtualItems = () =>
+    virtualizer.getVirtualItems().map((item) => ({ ...item }));
+  // Empty row lines around the mounted rows, anchored on one of them, so a
+  // frame that outruns mounting shows grid rows instead of bare panel. Steps
+  // keep it from repainting every frame; one as tall as the table made
+  // Firefox drop a quarter of its scroll frames.
+  const rowLines = createMemo(
+    () => {
+      const items = virtualizer.getVirtualItems();
+      const first = items[0];
+      const last = items.at(-1);
+      if (!first || !last) return undefined;
+      const height = rowHeight();
+      const start = Math.max(
+        0,
+        Math.floor(first.index / ROW_LINES_STEP - 1) * ROW_LINES_STEP
+      );
+      const end = Math.min(
+        virtualizer.options.count,
+        Math.ceil(last.index / ROW_LINES_STEP + 1) * ROW_LINES_STEP
+      );
+      return {
+        top:
+          first.start -
+          virtualizer.options.scrollMargin -
+          (first.index - start) * height,
+        height: (end - start) * height,
+        rowHeight: height,
+      };
+    },
+    undefined,
+    {
+      equals: (a, b) =>
+        a?.top === b?.top &&
+        a?.height === b?.height &&
+        a?.rowHeight === b?.rowHeight,
+    }
+  );
+  createEffect(() => {
+    // Reruns as the mounted rows change; the range is the rows in view.
+    const lastMounted = virtualizer.getVirtualItems().at(-1);
+    const lastInView = virtualizer.range?.endIndex;
+    if (
+      props.hasMoreRows &&
+      lastMounted &&
+      lastInView !== undefined &&
+      lastInView >= rowIds().length - PREFETCH_ROW_COUNT &&
+      !props.isUnsavedRow?.(focusedRow() ?? '')
+    )
+      untrack(() => props.onLoadMore?.());
+  });
+  props.controlsRef?.({
+    editCell: (rowId, columnId) => {
+      pendingEdit = { rowId, columnId };
+      revealRow(rowId);
+      editRequestedCell();
+    },
+    renameColumn: (columnId) => {
+      requestedHeader = columnId;
+      renameRequestedHeader();
+    },
+  });
+  createEffect(
+    on(
+      () => props.highlightRowId,
+      (rowId) => {
+        if (rowId) revealRow(rowId);
+      }
+    )
+  );
   const remoteRanges = createMemo(() =>
     (props.remoteUsers ?? []).flatMap((user) => {
       if (!user.rowId || !user.columnId) return [];
@@ -380,7 +668,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
       if (!row || !column || !canEditCell(column)) return;
       event.preventDefault();
       event.stopPropagation();
-      fireAndForget(props.onClearCells([row.id], [column.id]), 'database');
+      fireAndForget(props.onClearCells([row.rowId], [column.id]), 'database');
       return;
     }
     if (
@@ -415,32 +703,33 @@ export function DatabaseTable(props: DatabaseTableProps) {
     );
     event.preventDefault();
     event.stopPropagation();
-    if (!next) return;
     const row = rows()[rowIndex];
     const column = columns()[columnIndex - 1];
-    const nextControl = row && column ? control(row.id, column.id) : undefined;
-    // Stepping down onto the new-record row starts typing there, like a spreadsheet.
-    if (
-      nextControl &&
+    if (!row || columnIndex < 0 || columnIndex > columns().length) return;
+    const editDraft =
       delta[0] === 1 &&
       props.canEdit &&
       column &&
       canEditCell(column) &&
-      props.isUnsavedRow?.(row.id)
-    )
-      nextControl.edit();
+      props.isUnsavedRow?.(row.rowId);
+    if (!next) {
+      if (editDraft) pendingEdit = { rowId: row.rowId, columnId: column.id };
+      else pendingFocus = { rowId: row.rowId, column: columnIndex };
+      revealRow(row.rowId);
+      editRequestedCell();
+      queueMicrotask(focusRequestedCell);
+      return;
+    }
+    const nextControl =
+      row && column ? control(row.rowId, column.id) : undefined;
+    // Stepping down onto the new-record row starts typing there, like a spreadsheet.
+    if (nextControl && editDraft) nextControl.edit();
     else if (nextControl) nextControl.focus();
     else
       (
         next.querySelector<HTMLElement>('button, input, [tabindex]') ?? next
       ).focus();
   }
-  // One menu for every row: right-click (or a long press) picks its row and cell.
-  const [contextTarget, setContextTarget] = createSignal<{
-    rowId: string;
-    columnId?: string;
-  }>();
-  const contextRowId = () => contextTarget()?.rowId ?? '';
   const rowButtons = new Map<string, HTMLButtonElement>();
   let afterClose: (() => void) | undefined;
   const deferAction = (action: () => void) => {
@@ -511,9 +800,10 @@ export function DatabaseTable(props: DatabaseTableProps) {
           tabIndex={-1}
           aria-multiselectable="true"
           aria-label={props.name}
-          aria-rowcount={rows().length + 2}
+          aria-rowcount={props.hasMoreRows ? -1 : rows().length + 2}
           aria-colcount={columns().length + 1 + Number(hasAddColumn())}
           data-grid
+          data-grid-saved-rows={summaryRows().length}
           class="relative flex min-h-full min-w-fit flex-col"
           onKeyDown={moveFocus}
           onFocusIn={(event) => {
@@ -522,7 +812,10 @@ export function DatabaseTable(props: DatabaseTableProps) {
                 ? event.target.closest<HTMLElement>('[data-grid-row-id]')
                     ?.dataset.gridRowId
                 : undefined;
-            if (rowId) props.onRowFocus?.(rowId);
+            if (rowId) {
+              setFocusedRow(rowId);
+              props.onRowFocus?.(rowId);
+            }
             if (!selection.range()) announceCell(cellAt(event.target));
           }}
           onFocusOut={(event) => {
@@ -547,6 +840,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
           }}
         >
           <div
+            ref={setHeader}
             role="row"
             aria-rowindex={1}
             class="sticky top-0 z-1 grid min-h-10 border-b border-edge-muted bg-panel"
@@ -568,10 +862,11 @@ export function DatabaseTable(props: DatabaseTableProps) {
                       const row = rows()[0];
                       if (!row || !canEditCell(column())) return;
                       pendingEdit = {
-                        rowId: row.id,
+                        rowId: row.rowId,
                         columnId: column().id,
                         selectAll: false,
                       };
+                      revealRow(row.rowId);
                       editRequestedCell();
                     }}
                     registerRename={(rename) => {
@@ -642,165 +937,281 @@ export function DatabaseTable(props: DatabaseTableProps) {
                     captureContext(event.target);
                 }}
               >
-                {/* Preserve editor identity when TanStack refreshes its row models. */}
-                <Key each={rows()} by="id">
-                  {(tableRow, index) => {
-                    const row = () => tableRow().original;
-                    const highlighted = () =>
-                      props.highlightRowId === row().rowId;
-                    return (
+                {/* Keep unchanged records and their editors mounted across reads. */}
+                {/* A fast scroll can outrun mounting rows; the compositor then
+                    shows the column lines and the row lines below. */}
+                <div
+                  class="relative grid shrink-0 bg-panel"
+                  style={{
+                    height: `${virtualizer.getTotalSize()}px`,
+                    'grid-template-columns': template(),
+                  }}
+                >
+                  <div
+                    aria-hidden="true"
+                    class="border-r border-edge-muted/40"
+                  />
+                  <Show when={rowLines()}>
+                    {(lines) => (
                       <div
-                        ref={(element: HTMLElement) => {
-                          createEffect(
-                            on(highlighted, (isHighlighted) => {
-                              if (!isHighlighted) return;
-                              element.scrollIntoView({ block: 'nearest' });
-                              const first = columns()[0];
-                              if (first)
-                                control(row().rowId, first.id)?.focus();
-                            })
-                          );
+                        aria-hidden="true"
+                        class="pointer-events-none absolute inset-x-0 top-0"
+                        style={{
+                          transform: `translateY(${Math.max(0, lines().top)}px)`,
+                          height: `${lines().height}px`,
+                          'background-image':
+                            'linear-gradient(to bottom, transparent calc(100% - 1px), color-mix(in srgb, var(--color-edge-muted) 60%, transparent) 0)',
+                          'background-size': `100% ${lines().rowHeight}px`,
                         }}
-                        role="row"
-                        data-grid-row-id={row().rowId}
-                        data-highlighted={highlighted() ? '' : undefined}
-                        aria-rowindex={index() + 2}
-                        // Off-screen rows skip style, layout and paint; they stay
-                        // in the DOM, the accessibility tree and find-in-page.
-                        class="group grid min-h-10 border-b border-edge-muted/60 [contain-intrinsic-size:auto_41px] [content-visibility:auto] hover:bg-hover/50"
-                        classList={{ 'bg-accent/15': highlighted() }}
-                        style={{ 'grid-template-columns': template() }}
-                      >
-                        <div
-                          role="gridcell"
-                          aria-colindex={1}
-                          tabindex={-1}
-                          // Opaque so cells scrolled beneath it stay hidden; the
-                          // overlay repeats the row's hover and highlight tint.
-                          class="sticky left-0 z-1 flex items-center justify-center border-r border-edge-muted/40 bg-panel outline-none before:pointer-events-none before:absolute before:inset-0 group-hover:before:bg-hover/50 group-data-highlighted:before:bg-accent/15 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ink/50"
-                          data-grid-cell
-                          data-grid-row={index()}
-                          data-grid-column={0}
-                        >
-                          <Show
-                            when={!props.isUnsavedRow?.(row().rowId)}
-                            fallback={
-                              <span class="text-[10px] tabular-nums text-ink-placeholder">
-                                {index() + 1}
-                              </span>
-                            }
+                      />
+                    )}
+                  </Show>
+                  <For each={columns()}>
+                    {() => (
+                      <div
+                        aria-hidden="true"
+                        class="border-r border-edge-muted/40"
+                      />
+                    )}
+                  </For>
+                  <Key each={virtualItems()} by={(item) => item.key}>
+                    {(item) => {
+                      const rowId = item().key;
+                      // Items are fresh copies on every scroll update; memos keep
+                      // a row's bindings from rerunning unless its place changed.
+                      const index = createMemo(() => item().index);
+                      const offset = createMemo(
+                        () => item().start - virtualizer.options.scrollMargin
+                      );
+                      const position = () => ({
+                        transform: `translateY(${offset()}px)`,
+                      });
+                      if (typeof rowId !== 'string')
+                        return (
+                          <div
+                            aria-hidden="true"
+                            data-grid-pending-row
+                            class="absolute inset-x-0 top-0 grid border-b border-edge-muted/60"
+                            style={{
+                              ...position(),
+                              height: `${rowHeight()}px`,
+                              'grid-template-columns': template(),
+                            }}
                           >
-                            <button
-                              ref={(button) => {
-                                rowButtons.set(row().rowId, button);
-                                onCleanup(() => {
-                                  if (rowButtons.get(row().rowId) === button)
-                                    rowButtons.delete(row().rowId);
-                                });
-                              }}
-                              type="button"
-                              class="relative grid size-7 place-items-center rounded text-[10px] tabular-nums text-ink-placeholder outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ink/50"
-                              aria-label={`Open ${props.getRowTitle(row())}`}
-                              title="Open record"
-                              onClick={() => props.onOpen(row().rowId)}
-                            >
-                              <span class="group-hover:opacity-0 group-focus-within:opacity-0">
-                                {index() + 1}
-                              </span>
-                              <ArrowSquareOutIcon class="absolute size-3.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100" />
-                            </button>
-                          </Show>
-                        </div>
-                        <Key each={tableRow().getVisibleCells()} by="id">
-                          {(cell, columnIndex) => {
-                            const column = () => cell().column.columnDef.meta!;
-                            const presence = () =>
-                              presenceAt(row().rowId, column().id);
-                            return (
-                              <div
-                                role="gridcell"
-                                aria-selected={selection.contains(
-                                  index(),
-                                  columnIndex()
-                                )}
-                                aria-colindex={columnIndex() + 2}
-                                tabindex={-1}
-                                class="relative grid min-w-0 border-r border-edge-muted/40 px-0.5 py-0.5 outline-none focus-within:ring-1 focus-within:ring-inset focus-within:ring-ink/30 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ink/30"
-                                classList={{
-                                  'bg-accent/15 ring-1 ring-inset ring-accent/50':
-                                    selection.contains(index(), columnIndex()),
-                                }}
-                                data-grid-cell
-                                data-grid-row={index()}
-                                data-grid-column={columnIndex() + 1}
-                                data-remote-users={
-                                  presence().length
-                                    ? presence()
-                                        .map(({ user }) => user.userId)
-                                        .join(' ')
-                                    : undefined
-                                }
-                                style={presenceOutline(
-                                  presence()[0]?.user,
-                                  presence()[0]
-                                    ? {
-                                        top:
-                                          index() === presence()[0].bounds.top,
-                                        bottom:
-                                          index() ===
-                                          presence()[0].bounds.bottom,
-                                        left:
-                                          columnIndex() ===
-                                          presence()[0].bounds.left,
-                                        right:
-                                          columnIndex() ===
-                                          presence()[0].bounds.right,
-                                      }
-                                    : undefined
-                                )}
-                              >
-                                {props.renderCell(row, column, {
-                                  onReady: (editor) =>
-                                    register(row().rowId, column().id, editor),
-                                  onNavigate: (direction) =>
-                                    navigate(
-                                      row().rowId,
-                                      column().id,
-                                      direction
-                                    ),
-                                  onNavigateRow: (direction) =>
-                                    navigateRow(
-                                      row().rowId,
-                                      column().id,
-                                      direction
-                                    ),
-                                })}
-                                <Show when={presence().length}>
-                                  <span class="pointer-events-none absolute top-0 left-0 z-1 flex gap-px">
-                                    <For
-                                      each={presence().filter(
-                                        ({ bounds }) =>
-                                          bounds.top === index() &&
-                                          bounds.left === columnIndex()
-                                      )}
-                                    >
-                                      {({ user }) => (
-                                        <PresenceTag user={user} below />
-                                      )}
-                                    </For>
-                                  </span>
-                                </Show>
-                              </div>
+                            <div class="sticky left-0 z-1 border-r border-edge-muted/40 bg-panel" />
+                            <For each={columns()}>
+                              {() => (
+                                <div class="flex items-center border-r border-edge-muted/40 px-2">
+                                  <span class="h-2 w-1/2 rounded-full bg-hover" />
+                                </div>
+                              )}
+                            </For>
+                          </div>
+                        );
+                      const initial = rows()[index()];
+                      const row = createMemo(
+                        () =>
+                          rows()[selection.rowIndex().get(rowId)!] ?? initial
+                      );
+                      const highlighted = () =>
+                        props.highlightRowId === row().rowId;
+                      const [live, setLive] = createSignal(
+                        !props.renderCellPreview || mountsLive(rowId, index())
+                      );
+                      if (!live()) {
+                        previewRows.set(rowId, {
+                          index,
+                          upgrade: () => {
+                            previewRows.delete(rowId);
+                            setLive(true);
+                          },
+                        });
+                        onCleanup(() => previewRows.delete(rowId));
+                        scheduleUpgrades();
+                      }
+                      return (
+                        <div
+                          ref={(element: HTMLDivElement) => {
+                            // Observed once `data-index` is set; sizes are cached by record.
+                            queueMicrotask(() =>
+                              virtualizer.measureElement(element)
+                            );
+                            createEffect(
+                              on(highlighted, (isHighlighted) => {
+                                if (!isHighlighted) return;
+                                element.scrollIntoView({ block: 'nearest' });
+                                const first = columns()[0];
+                                if (first)
+                                  control(row().rowId, first.id)?.focus();
+                              })
                             );
                           }}
-                        </Key>
-                        <Show when={hasAddColumn()}>
-                          <div role="gridcell" />
-                        </Show>
-                      </div>
-                    );
-                  }}
-                </Key>
+                          role="row"
+                          data-index={index()}
+                          data-grid-row-id={row().rowId}
+                          data-highlighted={highlighted() ? '' : undefined}
+                          aria-rowindex={index() + 2}
+                          class="group absolute inset-x-0 top-0 grid min-h-10 border-b border-edge-muted/60 hover:bg-hover/50"
+                          classList={{ 'bg-accent/15': highlighted() }}
+                          style={{
+                            ...position(),
+                            // A preview keeps the live row's height, so rows
+                            // below don't move when it turns live.
+                            height: live() ? undefined : `${rowHeight()}px`,
+                            'grid-template-columns': template(),
+                          }}
+                          // A touch may start a swipe; turning the row live then
+                          // would repaint it as the scroll begins. Taps click.
+                          onPointerDown={(event) => {
+                            if (event.pointerType !== 'touch')
+                              previewRows.get(rowId)?.upgrade();
+                          }}
+                          onClick={() => previewRows.get(rowId)?.upgrade()}
+                        >
+                          <div
+                            role="gridcell"
+                            aria-colindex={1}
+                            tabindex={-1}
+                            // Opaque so cells scrolled beneath it stay hidden; the
+                            // overlay repeats the row's hover and highlight tint.
+                            class="sticky left-0 z-1 flex items-center justify-center border-r border-edge-muted/40 bg-panel outline-none before:pointer-events-none before:absolute before:inset-0 group-hover:before:bg-hover/50 group-data-highlighted:before:bg-accent/15 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ink/50"
+                            data-grid-cell
+                            data-grid-row={index()}
+                            data-grid-column={0}
+                          >
+                            <Show
+                              when={!props.isUnsavedRow?.(row().rowId)}
+                              fallback={
+                                <span class="text-[10px] tabular-nums text-ink-placeholder">
+                                  {index() + 1}
+                                </span>
+                              }
+                            >
+                              <button
+                                ref={(button) => {
+                                  rowButtons.set(rowId, button);
+                                  queueMicrotask(focusRequestedCell);
+                                  onCleanup(() => {
+                                    if (rowButtons.get(rowId) === button)
+                                      rowButtons.delete(rowId);
+                                  });
+                                }}
+                                type="button"
+                                class="relative grid size-7 place-items-center rounded text-[10px] tabular-nums text-ink-placeholder outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ink/50"
+                                aria-label={`Open ${props.getRowTitle(row())}`}
+                                title="Open record"
+                                onClick={() => props.onOpen(row().rowId)}
+                              >
+                                <span class="group-hover:opacity-0 group-focus-within:opacity-0">
+                                  {index() + 1}
+                                </span>
+                                <ArrowSquareOutIcon class="absolute size-3.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100" />
+                              </button>
+                            </Show>
+                          </div>
+                          <Key each={columns()} by="id">
+                            {(column, columnIndex) => {
+                              const columnId = column().id;
+                              const presence = () =>
+                                presenceAt(row().rowId, column().id);
+                              return (
+                                <div
+                                  role="gridcell"
+                                  aria-selected={selection.contains(
+                                    index(),
+                                    columnIndex()
+                                  )}
+                                  aria-colindex={columnIndex() + 2}
+                                  tabindex={-1}
+                                  class="relative grid min-w-0 border-r border-edge-muted/40 px-0.5 py-0.5 outline-none focus-within:ring-1 focus-within:ring-inset focus-within:ring-ink/30 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ink/30"
+                                  classList={{
+                                    'bg-accent/15 ring-1 ring-inset ring-accent/50':
+                                      selection.contains(
+                                        index(),
+                                        columnIndex()
+                                      ),
+                                  }}
+                                  data-grid-cell
+                                  data-grid-row={index()}
+                                  data-grid-column={columnIndex() + 1}
+                                  data-remote-users={
+                                    presence().length
+                                      ? presence()
+                                          .map(({ user }) => user.userId)
+                                          .join(' ')
+                                      : undefined
+                                  }
+                                  style={presenceOutline(
+                                    presence()[0]?.user,
+                                    presence()[0]
+                                      ? {
+                                          top:
+                                            index() ===
+                                            presence()[0].bounds.top,
+                                          bottom:
+                                            index() ===
+                                            presence()[0].bounds.bottom,
+                                          left:
+                                            columnIndex() ===
+                                            presence()[0].bounds.left,
+                                          right:
+                                            columnIndex() ===
+                                            presence()[0].bounds.right,
+                                        }
+                                      : undefined
+                                  )}
+                                >
+                                  <Show
+                                    when={live()}
+                                    fallback={props.renderCellPreview?.(
+                                      row,
+                                      column
+                                    )}
+                                  >
+                                    {props.renderCell(row, column, {
+                                      onReady: (editor) =>
+                                        register(rowId, columnId, editor),
+                                      onNavigate: (direction) =>
+                                        navigate(
+                                          row().rowId,
+                                          column().id,
+                                          direction
+                                        ),
+                                      onNavigateRow: (direction) =>
+                                        navigateRow(
+                                          row().rowId,
+                                          column().id,
+                                          direction
+                                        ),
+                                    })}
+                                  </Show>
+                                  <Show when={presence().length}>
+                                    <span class="pointer-events-none absolute top-0 left-0 z-1 flex gap-px">
+                                      <For
+                                        each={presence().filter(
+                                          ({ bounds }) =>
+                                            bounds.top === index() &&
+                                            bounds.left === columnIndex()
+                                        )}
+                                      >
+                                        {({ user }) => (
+                                          <PresenceTag user={user} below />
+                                        )}
+                                      </For>
+                                    </span>
+                                  </Show>
+                                </div>
+                              );
+                            }}
+                          </Key>
+                          <Show when={hasAddColumn()}>
+                            <div role="gridcell" />
+                          </Show>
+                        </div>
+                      );
+                    }}
+                  </Key>
+                </div>
               </div>
             </ContextMenu.Trigger>
             <ContextMenu.Portal>
@@ -931,6 +1342,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
           <DatabaseTableSummary
             columns={columns()}
             rows={summaryRows()}
+            hasMoreRows={props.hasMoreRows}
             template={template()}
             addColumn={hasAddColumn()}
           />

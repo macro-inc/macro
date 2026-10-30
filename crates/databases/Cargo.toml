@@ -4,6 +4,11 @@ name = "databases"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "backfill_formula_cells"
+path = "src/bin/backfill_formula_cells.rs"
+required-features = ["backfill_binary"]
+
 [features]
 default = []
 # AI tools. A driving adapter like `inbound`, but for the agent loop rather
@@ -15,6 +20,15 @@ ai_tools = [
   "dep:schemars",
   "models_databases/schema",
   "ports",
+]
+# The one-off backfill of formula columns' stored cells.
+backfill_binary = [
+  "dep:clap",
+  "dep:database_env_vars",
+  "dep:macro_entrypoint",
+  "postgres",
+  "tokio/macros",
+  "tokio/rt-multi-thread",
 ]
 # Axum HTTP router: ops, schema ops, and saved queries.
 inbound = [
@@ -33,6 +47,8 @@ gateway = ["dep:anyhow", "dep:connection_gateway_client", "outbound"]
 # Driven adapters share the port contracts.
 outbound = ["ports"]
 ports = ["dep:entity_access", "dep:tokio", "dep:tracing"]
+# Ordered, filtered reads of a database view.
+view_rows = ["ports"]
 # Postgres persistence for databases/tables/columns/rows, and cells through
 # the properties adapter.
 postgres = [
@@ -51,13 +67,16 @@ ai_toolset = { path = "../ai_toolset", optional = true }
 anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
+clap = { workspace = true, optional = true }
 bot_id = { path = "../bot_id" }
 chrono = { workspace = true, features = ["serde"] }
 connection_gateway_client = { path = "../connection_gateway_client", optional = true }
+database_env_vars = { path = "../database_env_vars", optional = true }
 entity_access = { path = "../entity_access", optional = true, default-features = false, features = ["ports"] }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 entity_mutation = { path = "../entity_mutation", optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
+macro_entrypoint = { path = "../macro_entrypoint", optional = true }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }

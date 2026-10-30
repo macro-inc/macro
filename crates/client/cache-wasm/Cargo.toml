@@ -2,8 +2,8 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-# Rebuild with draft link patches and compressed normalized records.
-version = "0.6.52"
+# Rebuild with complete paginated database reads retained in the cache.
+version = "0.6.53"
 
 [features]
 default = []

@@ -49,6 +49,7 @@ mod calendar;
 mod crm_record;
 mod database_activity;
 mod database_row;
+mod database_view_rows;
 mod email_archive;
 mod form_activity;
 mod initiative;

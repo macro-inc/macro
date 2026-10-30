@@ -21,6 +21,7 @@ const WEBHOOKS_DOWN: &str = include_str!(concat!(
 
 fn batch(database_id: DatabaseId, writes: Vec<Write>) -> Writes {
     Writes {
+        derivations: Vec::new(),
         database_id,
         created_by: user(),
         writes,
@@ -72,6 +73,7 @@ async fn core_storage_supports_cells_and_versions_without_an_app_entity(pool: Pg
                 }),
             },
             Write::InsertRows {
+                derivation: None,
                 table_id: table,
                 rows: vec![vec![(definition, PropertyValue::Str("Acme".into()))]],
                 restored: Vec::new(),
@@ -100,6 +102,7 @@ async fn core_storage_supports_cells_and_versions_without_an_app_entity(pool: Pg
     let mut stale = batch(
         database,
         vec![Write::InsertRows {
+            derivation: None,
             table_id: table,
             rows: vec![Vec::new()],
             restored: Vec::new(),
