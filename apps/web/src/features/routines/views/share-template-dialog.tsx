@@ -4,6 +4,7 @@ import {
   ShareDialogFrame,
   ShareDialogTitle,
 } from '@core/component/TopBar/ShareDialogFrame';
+import { isMobile } from '@core/mobile/isMobile';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import type { RoutineTemplate } from '@service-scheduled-action/generated/schemas';
 import { Button, cn } from '@ui';
@@ -24,18 +25,35 @@ export function ShareRoutineDialog(props: {
   onStopSharing(): void;
   /** The standard send form: recipients, optional message, Share. */
   send: JSX.Element;
+  /** The send form's submit, which phones show beside the title. */
+  sendAction?: { canSubmit(): boolean; submit(): void };
 }) {
   const shared = () => Boolean(props.template);
   return (
     <ShareDialogFrame open={props.open} onOpenChange={props.onOpenChange}>
       <ShareCard
         header={
-          <ShareDialogTitle
-            icon={
-              <EntityIcon targetType="routine" size="sm" class="shrink-0" />
-            }
-            name={props.name}
-          />
+          <div class="flex w-full min-w-0 items-center justify-between gap-2">
+            <ShareDialogTitle
+              icon={
+                <EntityIcon targetType="routine" size="sm" class="shrink-0" />
+              }
+              name={props.name}
+            />
+            <Show when={isMobile() && props.sendAction}>
+              {(action) => (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  class="shrink-0"
+                  disabled={!action().canSubmit()}
+                  onClick={() => action().submit()}
+                >
+                  Share
+                </Button>
+              )}
+            </Show>
+          </div>
         }
       >
         {props.send}

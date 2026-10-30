@@ -306,6 +306,10 @@ function ShareRoutine(
   const template = () => (query.isPending ? undefined : (query.data ?? null));
   const unshare = useUnshareTemplateMutation();
   const [publishing, setPublishing] = createSignal(false);
+  const [sendForm, setSendForm] = createSignal<{
+    canSubmit(): boolean;
+    submit(): void;
+  }>();
 
   // Every send and copy publishes the routine's current setup first.
   async function publish(source: 'send' | 'link') {
@@ -359,6 +363,7 @@ function ShareRoutine(
       pending={publishing() || unshare.isPending}
       onCopyLink={() => fireAndForget(copyLink(), 'routines')}
       onStopSharing={() => fireAndForget(stopSharing(), 'routines')}
+      sendAction={sendForm()}
       send={
         <ForwardToChannel
           name={props.name}
@@ -367,6 +372,12 @@ function ShareRoutine(
           prepareChannel={() => publish('send')}
           onSubmit={() => props.onOpenChange(false)}
           onCancel={() => props.onOpenChange(false)}
+          ref={(form) =>
+            setSendForm({
+              canSubmit: form.canSubmit,
+              submit: form.handleSubmit,
+            })
+          }
         />
       }
     />
