@@ -21053,6 +21053,9 @@
           "ghprf": {
             "description": "the filters that should be applied to GitHub pull request records, on top of `fef`"
           },
+          "if": {
+            "description": "Filters applied to initiatives (wire key `if`). Opt-in like agent\nsessions: an omitted filter returns no initiatives, and any literal,\na notification state included, opts them in."
+          },
           "pf": {
             "description": "the filters that should be applied to the project entity"
           },
@@ -34196,7 +34199,7 @@
           },
           "include": {
             "type": "boolean",
-            "description": "Opt this query into initiatives at all. Initiatives are off by\ndefault — see [`crate::ast::initiative::InitiativeLiteral::Include`].\nAsking for specific `initiative_ids` or `owners` also opts in."
+            "description": "Opt this query into initiatives at all. Initiatives are off by\ndefault — see [`crate::ast::initiative::InitiativeLiteral::Include`].\nAsking for specific `initiative_ids`, `owners` or `notification_filters`\nalso opts in."
           },
           "initiative_ids": {
             "type": "array",
@@ -34209,12 +34212,16 @@
             "type": ["string", "null"],
             "description": "Case-insensitive name substring."
           },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by initiative notification state."
+          },
           "owners": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
+            "description": "Filter by initiative owner principal — a user ('macro|user@example.com'), a\nbot ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include\nevery owner."
           }
         }
       },

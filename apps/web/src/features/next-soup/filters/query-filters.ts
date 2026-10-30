@@ -75,6 +75,8 @@ function isCallAttendanceFilteredOut(
   return isAttendedFilteredOut(attendedFilter, itemAttended);
 }
 
+const isSet = (value: unknown) => value !== undefined && value !== null;
+
 // TODO: this only supports the subset of soup filters needed for cache matching.
 export function filterSoupItemByRequestBody(
   item: SoupApiItem,
@@ -179,9 +181,10 @@ export function filterSoupItemByRequestBody(
           filters?.include === true ||
           Boolean(filters?.initiative_ids?.length) ||
           Boolean(filters?.owners?.length) ||
-          (filters?.name !== undefined && filters.name !== null) ||
-          (filters?.due_after !== undefined && filters.due_after !== null) ||
-          (filters?.due_before !== undefined && filters.due_before !== null)
+          isSet(filters?.name) ||
+          isSet(filters?.due_after) ||
+          isSet(filters?.due_before) ||
+          Boolean(filters?.notification_filters?.states?.length)
         );
       }
     })

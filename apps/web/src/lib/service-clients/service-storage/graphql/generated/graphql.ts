@@ -1511,16 +1511,18 @@ export type GraphqlInitiativeExpr =
 /** GraphQL input for selecting initiatives through Soup. */
 export type GraphqlInitiativeLiteral =
   {   /** Match projects due after this RFC 3339 timestamp. */
-  dueAfter: string; dueBefore?: never; id?: never; include?: never; nameContains?: never; owner?: never; }
+  dueAfter: string; dueBefore?: never; id?: never; include?: never; nameContains?: never; notificationState?: never; owner?: never; }
   |  { dueAfter?: never;   /** Match projects due before this RFC 3339 timestamp. */
-  dueBefore: string; id?: never; include?: never; nameContains?: never; owner?: never; }
+  dueBefore: string; id?: never; include?: never; nameContains?: never; notificationState?: never; owner?: never; }
   |  { dueAfter?: never; dueBefore?: never;   /** Match an initiative identifier. */
-  id: string | number; include?: never; nameContains?: never; owner?: never; }
+  id: string | number; include?: never; nameContains?: never; notificationState?: never; owner?: never; }
   |  { dueAfter?: never; dueBefore?: never; id?: never;   /** Opt into initiatives; must be true. Omit the filter to exclude them. */
-  include: boolean; nameContains?: never; owner?: never; }
+  include: boolean; nameContains?: never; notificationState?: never; owner?: never; }
   |  { dueAfter?: never; dueBefore?: never; id?: never; include?: never;   /** Match a case-insensitive substring of the name. */
-  nameContains: string; owner?: never; }
-  |  { dueAfter?: never; dueBefore?: never; id?: never; include?: never; nameContains?: never;   /** Match the owning principal. */
+  nameContains: string; notificationState?: never; owner?: never; }
+  |  { dueAfter?: never; dueBefore?: never; id?: never; include?: never; nameContains?: never;   /** Exact notification state for the requester; also opts in. */
+  notificationState: NotificationState; owner?: never; }
+  |  { dueAfter?: never; dueBefore?: never; id?: never; include?: never; nameContains?: never; notificationState?: never;   /** Match the owning principal. */
   owner: string; };
 
 /** Audience allowed to access an entity through its share link. */
@@ -2359,7 +2361,9 @@ export type WorkFeedItemType =
   | 'DOCUMENT'
   /** Email threads. */
   | 'EMAIL'
-  /** Projects. */
+  /** Task projects (initiatives). */
+  | 'INITIATIVE'
+  /** Projects (folders). */
   | 'PROJECT'
   /** GitHub pull requests. */
   | 'PULL_REQUEST'

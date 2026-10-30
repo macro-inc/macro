@@ -3,6 +3,7 @@ use std::time::{Duration, SystemTime};
 use reqwest::{Method, RequestBuilder, Response, StatusCode};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
+use tracing::Instrument;
 use url::Url;
 
 use super::{IMMUTABLE_ID_PREFERENCE, OutlookApiClientRepository};
@@ -14,6 +15,12 @@ pub(super) struct GraphFailure {
     pub(super) status: Option<StatusCode>,
     pub(super) code: Option<String>,
     pub(super) request_id: Option<String>,
+}
+
+impl std::fmt::Display for GraphFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.error.fmt(f)
+    }
 }
 
 impl From<EmailApiError> for GraphFailure {
@@ -87,6 +94,7 @@ impl OutlookApiClientRepository {
         body: Option<&Value>,
         expected_version: Option<&str>,
     ) -> Result<Response, GraphFailure> {
+        let path = url.path().to_owned();
         let refreshed = self
             .refreshed_token
             .lock()
@@ -114,7 +122,7 @@ impl OutlookApiClientRepository {
             .rejected_token_refresh
             .as_ref()
             .and_then(|_| request.try_clone());
-        match self.gated_graph_request(request).await {
+        match self.graph_attempt(request, &method, &path, false).await {
             Err(GraphFailure {
                 error: EmailApiError::AuthRequired,
                 ..
@@ -137,13 +145,39 @@ impl OutlookApiClientRepository {
                     .map_err(|_| invalid_response())?;
                     authorization.set_sensitive(true);
                     headers.insert(reqwest::header::AUTHORIZATION, authorization);
-                    self.gated_graph_request(retry.headers(headers)).await
+                    self.graph_attempt(retry.headers(headers), &method, &path, true)
+                        .await
                 } else {
                     Err(EmailApiError::AuthRequired.into())
                 }
             }
             result => result,
         }
+    }
+
+    /// One Graph round trip, including its wait for the mailbox gate. A replay
+    /// with a refreshed token is its own attempt, so each keeps its status.
+    #[tracing::instrument(
+        name = "outlook.graph_request",
+        skip_all,
+        fields(
+            otel.kind = "client",
+            http.request.method = %method,
+            url.path = path,
+            link_id = self.mailbox.map(|mailbox| tracing::field::display(mailbox.link_id)),
+            http.response.status_code = tracing::field::Empty,
+            reauthorized = reauthorized,
+        ),
+        err(level = "warn")
+    )]
+    async fn graph_attempt(
+        &self,
+        request: RequestBuilder,
+        method: &Method,
+        path: &str,
+        reauthorized: bool,
+    ) -> Result<Response, GraphFailure> {
+        self.gated_graph_request(request).await
     }
 
     /// Includes anonymous, preauthorized attachment uploads in mailbox accounting.
@@ -159,7 +193,14 @@ impl OutlookApiClientRepository {
     async fn gated_graph_request(&self, request: RequestBuilder) -> Result<Response, GraphFailure> {
         let permit = if let Some(gate) = &self.gate {
             let mailbox = self.mailbox.ok_or_else(invalid_response)?;
-            Some((mailbox, gate.acquire(mailbox).await?))
+            let permit = gate
+                .acquire(mailbox)
+                .instrument(tracing::info_span!(
+                    "outlook.graph_admission",
+                    link_id = %mailbox.link_id
+                ))
+                .await?;
+            Some((mailbox, permit))
         } else {
             None
         };
@@ -185,10 +226,11 @@ impl OutlookApiClientRepository {
         let request = request.map_err(transport_failed)?;
         let method = request.method().clone();
         let response = client.execute(request).await.map_err(transport_failed)?;
-        if response.status().is_success() {
+        let status = response.status();
+        tracing::Span::current().record("http.response.status_code", status.as_u16());
+        if status.is_success() {
             return Ok(response);
         }
-        let status = response.status();
         let path = response.url().path().to_owned();
         let request_id = response
             .headers()

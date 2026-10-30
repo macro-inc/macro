@@ -76,6 +76,10 @@ before the first prompt; settings the runtime already reports do not need
 another control request.
 A model the user picks mid-session is a line between turns. Work from before
 the change stays above it; anything the agent says after appears below it.
+With `enable-first-prompt-on-create` on, the default agent's first prompt rides
+on the create (`prompt` + `promptActionId`) and no `/control` request follows;
+a persona, effort, or speed keeps the control request. Either way the prompt
+shows as one bubble that the logged row confirms in place.
 
 Macro's in-process agent opens each reply with a line from a fast model
 (`gpt-5.4-mini`), usually within half a second of Enter. Small talk

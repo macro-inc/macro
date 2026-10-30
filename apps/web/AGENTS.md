@@ -408,8 +408,15 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - All API/network calls live in service-clients.
 - Open projects through `openProject` (`features/projects/open-project.ts`): it
   retargets an already-open project split to the section or comment in place.
-  Opening the legacy `initiative-view` component route beside an open project
-  mounts a redirect shim that stays on "Loading project".
+  Shared open paths (unified list rows) use its `projectHostedContent`, whose
+  identity is the project itself, so the router focuses the split already
+  showing it. Opening the legacy `initiative-view` component route beside an
+  open project mounts a redirect shim that stays on "Loading project".
+- A hosted detail pane (a project under Tasks, a call, a PR) registers as its
+  host shell, so the split manager's entity reuse cannot see it; the router's
+  claims decide who shows it. `openWithSplit` activates the source split before
+  a replace, so a visit the router yields to the claiming pane leaves that pane
+  active (`tests/claimed-replace.test.ts`).
 - Bound Discussion comment readiness waits to ten seconds; recover from initial layout interruptions until the message is visible, and release the target on user input (including scrollbar pointer-down), timeout, or successful arrival.
 - Keep early DOCX opens loading while exports return processing (409); retry only
   that response, with a bounded wait. See the Word editor walkthrough in
@@ -798,6 +805,7 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 
 - Reuse `CreateMenuItem` for explanatory New menu entries: original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
 - Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus.
+- Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
 
 ### Sidebar tag dragging
 

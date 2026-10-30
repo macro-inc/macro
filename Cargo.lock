@@ -1231,6 +1231,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "unicode-segmentation",
  "utoipa",
  "uuid",
  "workspace-hack",

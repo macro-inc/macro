@@ -144,7 +144,6 @@ import {
   type ThreadManagerSnapshot,
 } from './thread-manager';
 import { createThreadPaginator } from './thread-paginator';
-import { useChannelThreadPanel } from './thread-panel';
 import { UnifiedEditInput } from './UnifiedEditInput';
 import { UnifiedReplyInput } from './UnifiedReplyInput';
 import { UnreadNotificationsOverlay } from './UnreadNotificationsOverlay';
@@ -420,22 +419,8 @@ export function Channel(props: ChannelProps) {
       },
     });
 
-  const threadPanel = useChannelThreadPanel();
-  // A thread stays inline while channel navigation positions one of its
-  // replies, so notification jumps keep landing on the reply itself.
-  const opensInPanel = (threadId: string) =>
-    !!threadPanel?.enabled() &&
-    !(
-      targetMessageController.activeTargetMessageId() === threadId &&
-      targetMessageController.activeTargetMessageReplyId()
-    );
-
   const openReplyInput = (message: MessageData) => {
     const threadId = message.thread_id ?? message.id;
-    if (opensInPanel(threadId)) {
-      threadPanel?.open(threadId, { reply: true });
-      return;
-    }
     const state = threadManager.getOrCreateThreadState(threadId);
     if (isUnifiedInputMode()) {
       unifiedInput.bindReply(message);
@@ -453,10 +438,6 @@ export function Channel(props: ChannelProps) {
     renderedText?: string
   ) => {
     const threadId = message.thread_id ?? message.id;
-    if (opensInPanel(threadId)) {
-      threadPanel?.open(threadId, { reply: true });
-      return;
-    }
     const state = threadManager.getOrCreateThreadState(threadId);
     const beforeSnapshot = state.replyInputState();
     const nextSnapshot: InputSnapshot = {
@@ -548,9 +529,6 @@ export function Channel(props: ChannelProps) {
     cancelLatestNavigation();
     if (replyId) {
       clearSelection();
-      // The reply lands inline; a narrow pane hides the timeline while a
-      // thread panel is open.
-      threadPanel?.close();
       prepareTargetReply(messageId);
     } else {
       selectMessage(messageId);
@@ -978,19 +956,6 @@ export function Channel(props: ChannelProps) {
                                               unreadMessageIds={unread
                                                 .unreadByThread()
                                                 .get(item.id)}
-                                              onOpenThread={
-                                                opensInPanel(item.id)
-                                                  ? (options) =>
-                                                      threadPanel?.open(
-                                                        item.id,
-                                                        options
-                                                      )
-                                                  : undefined
-                                              }
-                                              openInPanel={
-                                                threadPanel?.openThreadId() ===
-                                                item.id
-                                              }
                                               isExpanded={state.isExpanded}
                                               setIsExpanded={
                                                 state.setIsExpanded

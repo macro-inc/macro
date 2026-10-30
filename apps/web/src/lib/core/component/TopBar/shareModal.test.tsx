@@ -25,6 +25,10 @@ vi.mock(
 vi.mock('@app/features/soup/search/context', () => ({
   SearchProvider: (props: { children: unknown }) => props.children,
 }));
+vi.mock('@app/features/notification-sounds/use-notification-sounds', () => ({
+  notificationSoundFor: () => null,
+  useNotificationSounds: () => {},
+}));
 vi.mock('@app/lib/i18n/use-interface-language-sync', () => ({
   useInterfaceLanguageSync: () => {},
 }));

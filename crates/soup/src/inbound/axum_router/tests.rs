@@ -1794,6 +1794,29 @@ async fn it_can_expand_assoc_ast() {
 use item_filters::ast::CrmScope;
 
 #[test]
+fn ast_endpoint_initiative_filter_opts_initiatives_in() {
+    use item_filters::ast::initiative::{InitiativeLiteral, initiatives_requested};
+    let api: ApiEntityFilterAst =
+        serde_json::from_value(json!({ "if": { "l": { "ns": "unseen" } } })).unwrap();
+    let ast = api.into_entity_ast().unwrap();
+    let tree = ast
+        .initiative_filter
+        .as_deref()
+        .expect("initiative filter kept");
+    assert!(initiatives_requested(Some(tree)));
+    assert!(matches!(
+        tree,
+        filter_ast::Expr::Literal(InitiativeLiteral::NotificationState(
+            item_filters::NotificationState::Unseen
+        ))
+    ));
+
+    // Omitted on the wire means no initiatives, as before.
+    let api: ApiEntityFilterAst = serde_json::from_value(json!({})).unwrap();
+    assert!(api.into_entity_ast().unwrap().initiative_filter.is_none());
+}
+
+#[test]
 fn ast_endpoint_email_crm_domains_stamps_scope_and_ands_into_tree() {
     let js = json!({
         "ecd": ["acme.com"],

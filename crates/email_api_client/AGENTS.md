@@ -19,7 +19,9 @@ Outlook (Microsoft Graph) outbound adapters.
 - `src/outbound/gmail.rs`: the Gmail adapter (feature `outbound-gmail`).
 - `src/outbound/outlook.rs`: the Microsoft Graph adapter (feature
   `outbound-outlook`); every Graph call goes through `outlook/transport.rs`,
-  which owns request headers, provider error mapping, and write-failure logs.
+  which owns request headers, provider error mapping, write-failure logs,
+  and one `outlook.graph_request` span per attempt (with an
+  `outlook.graph_admission` child for the per-mailbox gate wait).
 
 ## Scope
 

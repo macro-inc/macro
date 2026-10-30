@@ -3,9 +3,8 @@ import {
   Switch as KobalteSwitch,
   type SwitchRootProps,
 } from '@kobalte/core/switch';
-import type { Component, JSX } from 'solid-js';
+import type { JSX } from 'solid-js';
 import { Show, splitProps } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 import { cn } from '../utils/classname';
 
 export type ToggleSwitchSize = 'xs' | 'sm' | 'md';
@@ -18,32 +17,24 @@ export type ToggleSwitchProps = Omit<
   /** Compact toolbar sizes are xs/sm; use md in settings rows. */
   size?: ToggleSwitchSize;
   controlClass?: string;
-  /** A glyph in the track beside the thumb that says what the switch does. */
-  trackIcon?: Component<{ class?: string }>;
 };
 
 const SWITCH_SIZES = {
   xs: {
     control: 'h-3.5 w-7',
     thumb: '-left-0.5 -top-px size-3.5 data-checked:translate-x-4',
-    trackIcon:
-      'right-0.5 size-2 group-data-checked/switch:right-auto group-data-checked/switch:left-0.5',
     pressed:
       'group-active/switch:w-4 data-checked:group-active/switch:translate-x-3.5',
   },
   sm: {
     control: 'h-4 w-8',
     thumb: '-left-0.5 -top-px size-4 data-checked:translate-x-4.5',
-    trackIcon:
-      'right-1 size-2.5 group-data-checked/switch:right-auto group-data-checked/switch:left-1',
     pressed:
       'group-active/switch:w-5 data-checked:group-active/switch:translate-x-3.5',
   },
   md: {
     control: 'h-5 w-10',
     thumb: '-left-0.5 -top-px size-5 data-checked:translate-x-5.5',
-    trackIcon:
-      'right-1.5 size-3 group-data-checked/switch:right-auto group-data-checked/switch:left-1.5',
     pressed:
       'group-active/switch:w-6 data-checked:group-active/switch:translate-x-4.5',
   },
@@ -72,7 +63,6 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
     'controlClass',
     'label',
     'size',
-    'trackIcon',
   ]);
   const sizing = () => SWITCH_SIZES[local.size ?? 'sm'];
 
@@ -105,18 +95,6 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
           local.controlClass
         )}
       >
-        <Show when={local.trackIcon}>
-          {(icon) => (
-            <Dynamic
-              component={icon()}
-              aria-hidden="true"
-              class={cn(
-                'pointer-events-none absolute top-1/2 -translate-y-1/2 text-ink-muted group-data-checked/switch:text-surface',
-                sizing().trackIcon
-              )}
-            />
-          )}
-        </Show>
         <KobalteSwitch.Thumb
           class={cn(
             'absolute rounded-full border border-border-secondary bg-[white] transition-[width,translate] duration-150 ease-out motion-reduce:transition-none',

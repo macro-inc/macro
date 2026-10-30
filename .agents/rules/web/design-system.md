@@ -15,7 +15,7 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
 
 | Role | Use | Never |
 | --- | --- | --- |
-| Switch a view, section, or one of a few values (`wrap` for separate preset chips in forms) | `Tabs` (desktop pill within a pill; `toggle` adds an on/off view filter, such as Unread, to the same frame) | Buttons, a ButtonGroup, or an island acting as tabs |
+| Switch a view, section, or one of a few values (`wrap` for separate preset chips in forms) | `Tabs` (desktop pill within a pill) | Buttons, a ButtonGroup, or an island acting as tabs |
 | Tabs that own panels or a dynamic collection (tables, form pages, rename, add) | `TabSelector` (`Root`, `List`, `Tab`, `Panel`, `AddMenu`) | `@kobalte/core/tabs` in a feature |
 | Related header actions (filters, view options, sharing, navigation) | `HeaderActionGroup` | A hand-built bordered row |
 | One on/off toggle, or an icon-only layout choice | `Button` with `aria-pressed` | A custom active tint |
