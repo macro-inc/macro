@@ -27,6 +27,10 @@ describe('parseMentionDate', () => {
     );
   });
 
+  it('keeps a year before 100 as written', () => {
+    expect(parseMentionDate('0025-03-01').getFullYear()).toBe(25);
+  });
+
   it('keeps an invalid value invalid', () => {
     expect(Number.isNaN(parseMentionDate('2026-02-31').getTime())).toBe(true);
     expect(Number.isNaN(parseMentionDate('soon').getTime())).toBe(true);

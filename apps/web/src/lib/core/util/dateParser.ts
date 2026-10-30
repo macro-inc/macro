@@ -378,7 +378,9 @@ export function parseMentionDate(value: string): Date {
   const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!day) return new Date(value);
   const [year, month, date] = day.slice(1).map(Number);
-  const local = new Date(year, month - 1, date);
+  // The Date constructor reads years 0-99 as 1900-1999; setFullYear does not.
+  const local = new Date(0, 0, 1);
+  local.setFullYear(year, month - 1, date);
   return local.getMonth() === month - 1 ? local : new Date(Number.NaN);
 }
 
