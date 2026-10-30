@@ -222,9 +222,8 @@ describe('history loading ahead of scrolling', () => {
         [...container.querySelectorAll('[data-index]')].map((row) =>
           Number(row.getAttribute('data-index'))
         );
-      // Rows 38-39 fill the viewport. Safari holds at least six viewports
-      // (2400px, rows 30-37) of measured rows above them; elsewhere the
-      // default overscan of six.
+      // Rows 38-39 fill the viewport. Safari measures well past the default
+      // overscan of six above them (rows 32-37), which is all others mount.
       await waitFor(() => expect(mounted()).toContain(32));
       await new Promise((resolve) => setTimeout(resolve, 50));
       if (safari) expect(Math.min(...mounted())).toBeLessThanOrEqual(30);

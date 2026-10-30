@@ -111,6 +111,9 @@ type ThreadListProps = {
 const NEAR_TOP_THRESHOLD = 800;
 const HISTORY_BUFFER_VIEWPORTS = 3;
 const WEBKIT_HISTORY_BUFFER_VIEWPORTS = 6;
+// How far above the reading position WebKit keeps rows measured: about as far
+// as one long momentum fling travels.
+const WEBKIT_MEASURED_HISTORY_VIEWPORTS = 12;
 const EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE = 64;
 
 const clamp = (value: number, min: number, max: number) =>
@@ -226,9 +229,9 @@ export function ThreadList(props: ThreadListProps) {
 
   // A WebKit gesture cannot move the native top boundary, so rows above that
   // are taller than their estimate grow only the visual adjustment, and a
-  // fling stops at scrollTop 0 with history still above it. Keep the history
-  // buffer mounted and measured before a gesture reaches it, a few
-  // unmeasured rows per pass, so the native extent above is the real one.
+  // fling stops at scrollTop 0 with history still above it. Keep the rows a
+  // fling can reach mounted and measured before it starts, a few unmeasured
+  // rows per pass, so the native extent above them is the real one.
   function withMeasuredHistory(range: Range): number[] {
     const indexes = defaultRangeExtractor(range);
     const instance = measured?.instance;
@@ -241,7 +244,7 @@ export function ThreadList(props: ThreadListProps) {
       visibleStart === undefined
     )
       return indexes;
-    const buffer = viewportSize() * historyBufferViewports;
+    const buffer = viewportSize() * WEBKIT_MEASURED_HISTORY_VIEWPORTS;
     const added: number[] = [];
     let unmeasured = 0;
     let top = instance.measurementsCache[first]?.start ?? visibleStart;

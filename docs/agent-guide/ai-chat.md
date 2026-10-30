@@ -1800,7 +1800,9 @@ at the latest message, including when history arrives after the empty view. Shor
 transcripts start with 16px of top padding, with the user prompt followed by the
 agent response; streaming output grows downward into the available space. Only
 the visible rows and an overscan buffer are mounted: scroll to older turns before
-searching their DOM text.
+searching their DOM text. On iPhone and Safari the buffer above extends twelve
+viewports, so a long fling up a transcript of tall replies keeps its momentum
+instead of stopping at a false top.
 
 Search links add `agent_message_turn=<zero-based turn>&agent_message_author=user|agent`.
 They wait for history to load, then scroll to and highlight the matching folded
