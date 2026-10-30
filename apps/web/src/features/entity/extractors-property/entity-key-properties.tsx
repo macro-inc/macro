@@ -1,5 +1,6 @@
 import { useMaybeBlockId } from '@core/block';
 import { ScopedPortal } from '@core/component/ScopedPortal';
+import UsersIcon from '@icon/system/regular/users.svg';
 import { Property } from '@property';
 import { Modals } from '@property/component/modal';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -223,11 +224,19 @@ function KeyPropertiesRow(props: {
                             />
                           </Match>
                           <Match when={isMultiUserEntity()}>
-                            <Property.UserStack
-                              property={shown()}
-                              maxUsers={props.maxUserStackUsers ?? 2}
-                              avatarClass="@max-2xl/u-list:size-5"
-                            />
+                            <div class="flex items-center gap-1">
+                              <Show when={props.maxUserStackUsers === 0}>
+                                <UsersIcon
+                                  class="size-4 shrink-0"
+                                  data-icon-motion="none"
+                                />
+                              </Show>
+                              <Property.UserStack
+                                property={shown()}
+                                maxUsers={props.maxUserStackUsers ?? 2}
+                                avatarClass="@max-2xl/u-list:size-5"
+                              />
+                            </div>
                           </Match>
                           <Match when={isUserEntity()}>
                             <Property.Icon

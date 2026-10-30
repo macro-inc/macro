@@ -14,3 +14,5 @@ Task list status editing uses `extractors-property/task-status-control.tsx` in
 the leading icon slot. It shares the property editor and mutation path across
 wide task rows and narrow entity rows, including optimistic status and rollback.
 Narrow rows omit the duplicate trailing Status property.
+Narrow rows show the people icon beside the count for multiple assignees when
+avatars are collapsed.
