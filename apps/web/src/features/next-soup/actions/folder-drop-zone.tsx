@@ -3,6 +3,7 @@ import {
   indexFolders,
 } from '@app/features/entity/bulk-edit/folder-destinations';
 import { createMoveEntitiesToFolder } from '@app/features/entity/bulk-edit/move-entities-to-folder';
+import { toastMovedToFolder } from '@app/features/entity/bulk-edit/moved-to-folder-toast';
 import { t } from '@app/lib/i18n';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
@@ -77,11 +78,7 @@ export function createFolderDropTargets(
     try {
       await moveEntities(entities, { id: folderId, name });
       clearSelection();
-      toast.success(
-        entities.length > 1
-          ? t('entityActions.toastMovedCount', { count: entities.length })
-          : t('entityActions.toastMovedToFolder')
-      );
+      toastMovedToFolder(entities.length, folderId);
     } catch {
       toast.failure(t('entityActions.toastMoveToFolderFailed'));
     }

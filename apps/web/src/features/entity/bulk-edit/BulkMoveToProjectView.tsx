@@ -45,9 +45,11 @@ const groupLabel = (group: FolderGroup) =>
     .with('shared', () => t('entityActions.movePickerSharedWithYou'))
     .exhaustive();
 
+export type MovedFolder = { id: string; name: string };
+
 export const BulkMoveToProjectView = (props: {
   entities: EntityData[];
-  onFinish: () => void;
+  onMoved: (folder: MovedFolder) => void;
   onCancel: () => void;
   onError?: (error: unknown) => void;
 }) => {
@@ -90,7 +92,7 @@ export const BulkMoveToProjectView = (props: {
         ),
         folder
       );
-      props.onFinish();
+      props.onMoved(folder);
     } catch (error) {
       console.error('Failed to move entities to folder:', error);
       props.onError?.(error);

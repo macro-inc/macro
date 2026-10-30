@@ -5,6 +5,7 @@ export default {
   markNotDone: 'Mark Not Done',
   markRead: 'Mark Read',
   markUnread: 'Mark Unread',
+  open: 'Open',
   openInNewSplit: 'Open in new split',
   openInCurrentSplit: 'Open in current split',
   openFullscreen: 'Open fullscreen',

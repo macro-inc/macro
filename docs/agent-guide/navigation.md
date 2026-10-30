@@ -1548,6 +1548,8 @@ On desktop, a split showing a folder (Drive's folder route or a folder split) ac
 
 Folders in Drive's sidebar take the same drops, outlined while hovered, including rows from the list beside them in the same split. Held at the sidebar's edge, a drag scrolls a long folder tree. The drag card sits beside the pointer so a narrow target stays visible. Drive's root row and folder rows in a list are not drop targets.
 
+Every move, from the picker or a drop, ends in a **Moved to folder** or **Moved N items** toast with **Open** and, on desktop with room for another split, **Open in new split**. Either action dismisses the toast and shows the folder on Drive's route; if a split already shows that folder, it focuses that split instead of opening a second copy. Touch devices have no splits, so they show only **Open**.
+
 ### Native update-required dialog
 
 When newer frontend JS requires a newer native app, the mobile shell offers

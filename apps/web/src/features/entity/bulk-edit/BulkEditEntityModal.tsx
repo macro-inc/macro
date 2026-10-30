@@ -9,7 +9,10 @@ import {
   Show,
 } from 'solid-js';
 import { BulkDeleteView, type PartialDeleteHandler } from './BulkDeleteView';
-import { BulkMoveToProjectView } from './BulkMoveToProjectView';
+import {
+  BulkMoveToProjectView,
+  type MovedFolder,
+} from './BulkMoveToProjectView';
 import { BulkRenameEntitiesView } from './BulkRenameEntitiesView';
 
 const BulkEditEntityModalContent = (props: {
@@ -18,6 +21,7 @@ const BulkEditEntityModalContent = (props: {
   view: 'rename' | 'moveToProject' | 'delete' | null;
   entities: EntityData[];
   onFinish?: () => void;
+  onMoved?: (folder: MovedFolder) => void;
   onCancel?: () => void;
   onError?: (error: unknown) => void;
   onPartialDelete?: PartialDeleteHandler;
@@ -25,6 +29,11 @@ const BulkEditEntityModalContent = (props: {
   const handleFinish = () => {
     props.setIsOpen(false);
     props.onFinish?.();
+  };
+  const handleMoved = (folder: MovedFolder) => {
+    const { onMoved } = props;
+    handleFinish();
+    onMoved?.(folder);
   };
   const handleCancel = () => {
     props.setIsOpen(false);
@@ -72,7 +81,7 @@ const BulkEditEntityModalContent = (props: {
       >
         <BulkMoveToProjectView
           entities={props.entities}
-          onFinish={handleFinish}
+          onMoved={handleMoved}
           onCancel={handleCancel}
           onError={handleError}
         />
@@ -107,6 +116,7 @@ const [globalModalProps, setGlobalModalProps] = createSignal<{
   view: 'rename' | 'moveToProject' | 'delete';
   entities: EntityData[];
   onFinish?: () => void;
+  onMoved?: (folder: MovedFolder) => void;
   onCancel?: () => void;
   onError?: (error: unknown) => void;
   onPartialDelete?: PartialDeleteHandler;
@@ -119,6 +129,7 @@ export const openBulkEditModal = (props: {
   view: 'rename' | 'moveToProject' | 'delete';
   entities: EntityData[];
   onFinish?: () => void;
+  onMoved?: (folder: MovedFolder) => void;
   onCancel?: () => void;
   onError?: (error: unknown) => void;
   onPartialDelete?: PartialDeleteHandler;
@@ -159,6 +170,7 @@ export const GlobalBulkEditEntityModal = () => {
           view={props().view}
           entities={props().entities}
           onFinish={handleFinish}
+          onMoved={props().onMoved}
           onCancel={handleCancel}
           onError={handleError}
           onPartialDelete={props().onPartialDelete}
