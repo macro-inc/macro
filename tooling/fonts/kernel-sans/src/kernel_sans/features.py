@@ -8,6 +8,8 @@ registering a glyph with the right suffix:
     one.tf           -> tnum (tabular figures; the defaults are proportional)
     parenleft.case   -> case (case-sensitive forms)
     f_i              -> liga (ligature of f and i)
+
+plus calt, which raises the colon between figures when colon.case exists.
 """
 
 import re
@@ -28,9 +30,10 @@ def _sub_feature(tag, pairs, name=None):
 
 STYLISTIC_SET_NAMES = {
     "ss01": "Single-storey a",
-    "ss02": "Alternate figures",
-    "ss03": "Alternate symbols",
+    "ss02": "Distinct I, l and 1",
 }
+
+FIGURES = "zero one two three four five six seven eight nine".split()
 
 
 def feature_code(drawn, p):
@@ -48,6 +51,15 @@ def feature_code(drawn, p):
                 liga.append((" ".join(parts), n))
     if liga:
         out.append("feature liga {\n" + "\n".join(f"  sub {a} by {b};" for a, b in liga) + "\n} liga;")
+
+    # A colon between figures (09:30) rises to the figures' centre.
+    if "colon.case" in names:
+        figs = [f for f in FIGURES if f in names] + [f + ".tf" for f in FIGURES if f + ".tf" in names]
+        out.append(
+            "feature calt {\n"
+            f"  sub [{' '.join(figs)}] colon' [{' '.join(figs)}] by colon.case;\n"
+            "} calt;"
+        )
 
     sets = {}
     for n in sorted(names):

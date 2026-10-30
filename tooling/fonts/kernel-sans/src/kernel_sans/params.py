@@ -36,7 +36,7 @@ WEIGHTS = {
 
 # Lowercase stem per weight class. Everything else derives from the stem, so the
 # outlines stay linear in it and a variable font can interpolate the statics.
-STEMS = {300: 56, 400: 82, 500: 98, 600: 114, 700: 132, 800: 152}
+STEMS = {300: 64, 400: 82, 500: 98, 600: 115, 700: 133, 800: 152}
 REGULAR_STEM = STEMS[400]
 
 
@@ -87,15 +87,16 @@ class Params:
 def params(wght):
     s = stem_for(wght)
     grow = s - REGULAR_STEM
-    # Horizontals get relatively thinner as weight rises, as in Inter.
-    hair = s * (0.88 - 0.06 * max(0.0, grow) / 70)
+    # Horizontals get relatively thinner as weight rises (0.74 of the stem at
+    # ExtraBold, as in Inter), which keeps heavy counters open.
+    hair = s * (0.88 - 0.14 * max(0.0, grow) / 70)
     cs = s * 1.07
     return Params(
         wght=wght,
         stem=s,
         hair=hair,
         cstem=cs,
-        chair=cs * (0.9 - 0.06 * max(0.0, grow) / 70),
+        chair=cs * (0.9 - 0.12 * max(0.0, grow) / 70),
         fstem=s * 1.04,
         fhair=s * 0.92,
         cut=round(0.36 * s, 1),
@@ -103,10 +104,12 @@ def params(wght):
         trap=max(0.0, (s - 48) * 0.36),
         sq=3.0,
         sq_in=2.7,
-        sb=64 + 0.12 * grow,
-        sbr=50 + 0.1 * grow,
-        csb=82 + 0.1 * grow,
-        csbr=60 + 0.08 * grow,
+        # Spacing tightens as weight rises, like Inter.
+        sb=70 - 0.2 * grow,
+        sbr=53 - 0.15 * grow,
+        csb=86 - 0.3 * grow,
+        csbr=60 - 0.2 * grow,
         grow=grow,
-        dot=s * 1.12,
+        # Tracks Inter's dot area across weights.
+        dot=0.8 * s + 36,
     )

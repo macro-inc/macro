@@ -8,7 +8,8 @@ punctuation). The pair is kerned by a fraction of the difference, limited so
 that no part of the two outlines comes closer than a minimum gap.
 
 Members of a class share the value measured on the first member, so list the
-plain letter first. Figures are tabular and never kerned.
+plain letter first. Only the default (proportional) figures are kerned; the
+tabular .tf figures keep their fixed advance.
 """
 
 from . import params as P
@@ -18,7 +19,8 @@ from .geom import band
 LEFT = {
     "L_A": "A Agrave Aacute Acircumflex Atilde Adieresis Aring",
     "L_T": "T",
-    "L_V": "V W",
+    "L_V": "V",
+    "L_W": "W",
     "L_Y": "Y Yacute Ydieresis",
     "L_F": "F",
     "L_P": "P Thorn",
@@ -39,17 +41,20 @@ LEFT = {
     "p_ql": "quoteleft quotedblleft",
     "p_qs": "quotesingle quotedbl",
     "p_dash": "hyphen endash emdash",
+    "f_7": "seven",
 }
 
 # Right-glyph classes, grouped by the shape of their LEFT side.
 RIGHT = {
     "R_A": "A Agrave Aacute Acircumflex Atilde Adieresis Aring AE",
     "R_T": "T",
-    "R_V": "V W",
+    "R_V": "V",
+    "R_W": "W",
     "R_Y": "Y Yacute Ydieresis",
     "R_O": "O C G Q Ccedilla Ograve Oacute Ocircumflex Otilde Odieresis OE",
     "R_J": "J",
-    "r_o": "o a c d e g q agrave aacute acircumflex atilde adieresis aring ccedilla egrave eacute ecircumflex edieresis ograve oacute ocircumflex otilde odieresis ae oe",
+    "r_o": "o c d e g q ccedilla egrave eacute ecircumflex edieresis ograve oacute ocircumflex otilde odieresis oe",
+    "r_a": "a agrave aacute acircumflex atilde adieresis aring ae",
     "r_v": "v w y yacute ydieresis",
     "r_u": "n m p r u ntilde ugrave uacute ucircumflex udieresis",
     "r_s": "s scaron",
@@ -61,21 +66,33 @@ RIGHT = {
     "p_ql": "quoteleft quotedblleft",
     "p_qs": "quotesingle quotedbl",
     "p_dash": "hyphen endash emdash",
+    "f_1": "one",
+    "f_4": "four",
 }
 
 # Classes whose sides are already balanced by sidebearings. A pair made only
 # of these and punctuation is never kerned.
-REGULAR = {"L_O", "L_C", "l_o", "l_e", "R_O", "r_o", "r_u", "r_s", "r_z"}
+REGULAR = {"L_O", "L_C", "l_o", "l_e", "R_O", "r_o", "r_a", "r_u", "r_s", "r_z"}
 PUNCT = {"p_dot", "p_qr", "p_ql", "p_qs", "p_dash"}
 
 STEP = 10  # sampling interval in font units
-FACTOR = 0.6  # fraction of the white-area difference that is corrected
+FACTOR = 0.5  # fraction of the white-area difference that is corrected
+FLOOR = 0.75  # closest approach allowed, as a fraction of the reference pair's
+COLLIDE = 0.5  # closest approach over the glyphs' full height (dots, arms)
 MIN_KERN = 10  # smaller corrections are dropped
-LIMITS = (-150, 30)
+LIMITS = (-150, 15)  # punctuation pairs are never kerned apart
 
 # Pair-specific multipliers on the measured value, for pairs the measure
 # over- or under-corrects. (left class, right class) -> multiplier.
-TWEAKS = {}
+TWEAKS = {
+    # Diagonal lowercase is already spaced tight; don't kern it again
+    # against straight-sided lowercase.
+    ("l_v", "r_u"): 0,
+    ("l_k", "r_u"): 0,
+    # A next to a period or comma reads fine unkerned.
+    ("L_A", "p_dot"): 0,
+    ("p_dot", "R_A"): 0,
+}
 
 
 def _split(spec):
@@ -145,6 +162,21 @@ def _white(prof, left, right, zone, clamp):
     return (total / n if n else None), min_gap
 
 
+def _closest(prof, left, right, lo, hi):
+    """Closest horizontal approach of the two outlines between lo and hi."""
+    rows_l, _ = prof.get(left)
+    rows_r, _ = prof.get(right)
+    best = None
+    y = (int(lo // STEP) + 1) * STEP
+    while y < hi:
+        gl = rows_l.get(y, (None, None))[1]
+        gr = rows_r.get(y, (None, None))[0]
+        if gl is not None and gr is not None:
+            best = gl + gr if best is None else min(best, gl + gr)
+        y += STEP
+    return best
+
+
 def measure(drawn, left, right):
     """Kerning value for the glyph pair, or 0."""
     prof = _Profiles(drawn) if not isinstance(drawn, _Profiles) else drawn
@@ -169,9 +201,13 @@ def measure(drawn, left, right):
     white, min_gap = _white(prof, left, right, zone, clamp)
     ref_white = min(ref_white, clamp)
     k = FACTOR * (ref_white - white)
+    ref_gap = ref_min if ref_min is not None else ref_white
     if min_gap is not None:
-        floor = 0.45 * (ref_min if ref_min is not None else ref_white)
-        k = max(k, floor - min_gap)
+        k = max(k, FLOOR * ref_gap - min_gap)
+    # Never let any part of the glyphs (the dot of j, the arm of T) collide.
+    full = _closest(prof, left, right, max(bl[1], br[1]), min(bl[3], br[3]))
+    if full is not None:
+        k = max(k, COLLIDE * ref_gap - full)
     return k
 
 
@@ -191,7 +227,8 @@ def pair_values(drawn, p):
             if rrep is None:
                 continue
             k = measure(prof, lrep, rrep) * TWEAKS.get((lc, rc), 1.0)
-            k = max(LIMITS[0], min(LIMITS[1], k))
+            hi = 0 if (lc in PUNCT or rc in PUNCT) else LIMITS[1]
+            k = max(LIMITS[0], min(hi, k))
             k = int(round(k / 5.0) * 5)
             if abs(k) >= MIN_KERN:
                 values[(lc, rc)] = k

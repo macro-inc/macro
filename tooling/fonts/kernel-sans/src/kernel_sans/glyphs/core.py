@@ -24,12 +24,12 @@ def notdef(p):
 
 @glyph("space", 0x0020)
 def space(p):
-    return G(width=round(p.w(250, 0.25)))
+    return G(width=round(p.w(250, -0.25)))
 
 
 @glyph("uni00A0", 0x00A0)
 def nbspace(p):
-    return G(width=round(p.w(250, 0.25)))
+    return G(width=round(p.w(250, -0.25)))
 
 
 @glyph("n", 0x006E)
@@ -47,12 +47,12 @@ def o(p):
 
 @glyph("c", 0x0063)
 def c(p):
-    w = p.w(440, 0.9)
+    w = p.w(460, 0.9)
     shape = open_bowl(
         p, 0, w, -P.OS, P.XH + P.OS, p.stem * 1.02, p.hair * 1.04, p.hair * 1.04,
         cut_top=P.XH * 0.69, cut_bottom=P.XH * 0.31,
     )
-    return G(shape, l=p.sbr, r=p.sbr * 0.7)
+    return G(shape, l=p.sbr, r=p.sbr * 0.85)
 
 
 @glyph("H", 0x0048)

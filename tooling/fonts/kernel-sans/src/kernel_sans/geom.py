@@ -365,8 +365,39 @@ def stem_trap(x, y, depth, side="right", up=True):
     return notch(tip, a, b)
 
 
+def crotch_trap(v, d1, d2, depth, mouth=0.6):
+    """Ink trap to SUBTRACT at the inner vertex of two straight edges, as in
+    v w y A V W M N K k and the figures.
+
+    v is the vertex where the two edges meet (the tip of the white wedge);
+    d1 and d2 are the directions of the two edges going away from v along
+    the white wedge. The trap continues the wedge `depth` into the black and
+    opens `mouth * depth` wide where it crosses the edges, so its tip angle
+    stays at least about 30 degrees. Use depth = p.trap for vertices (stem
+    shoulders use stem_trap with 1.3 * p.trap)."""
+    if depth < 1:
+        return Shape()
+    u1 = _unit(d1)
+    u2 = _unit(d2)
+    bis = _unit((u1[0] + u2[0], u1[1] + u2[1]))
+    half = math.acos(max(-1.0, min(1.0, u1[0] * u2[0] + u1[1] * u2[1]))) / 2
+    m = min(2.5 * depth, (mouth * depth / 2) / max(math.sin(half), 0.05))
+    tip = (v[0] - bis[0] * depth, v[1] - bis[1] * depth)
+    a = (v[0] + u1[0] * m, v[1] + u1[1] * m)
+    b = (v[0] + u2[0] * m, v[1] + u2[1] * m)
+    return poly([a, tip, b])
+
+
+def _unit(d):
+    if isinstance(d, (int, float)):
+        a = math.radians(d)
+        return (math.cos(a), math.sin(a))
+    n = math.hypot(d[0], d[1])
+    return (d[0] / n, d[1] / n)
+
+
 def dot(cx, cy, side, cut=None):
     """Square dot centred at (cx, cy) with the house NW + SE chamfers."""
-    c = side * 0.3 if cut is None else cut
+    c = side * 0.22 if cut is None else cut
     h = side / 2
     return rect(cx - h, cy - h, cx + h, cy + h, nw=c, se=c)

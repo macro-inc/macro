@@ -11,7 +11,9 @@ wins; note the exception in a comment.
 - Cap height 720, x-height 540, ascender 760, descender −200, UPM 1000.
 - Round lowercase overshoots `P.OS` (10) at baseline and x-height; round
   capitals and figures overshoot `P.COS` (12). Arch tops overshoot `0.8 * OS`.
-- Lining figures at cap height, tabular (one shared advance).
+- Lining figures at cap height. The default figures are proportional (their
+  own sidebearings); `.tf` figures share one tabular advance and come in
+  through `tnum`.
 - Hyphens, dashes and math operators centre on `P.AXIS` (300); their `.case`
   forms, used with capitals and figures, on `P.CASE_AXIS` (360).
 - Marks: lowercase accents sit between about x-height + 70 and 790; `.case`
@@ -49,18 +51,29 @@ wins; note the exception in a comment.
      so do the ends of diagonals (they are already angled).
 3. **Ink traps** at acute crotches where a curve or diagonal joins a stem or
    another stroke: n h m r u (shoulder), b d p q a g (bowl joins), k K (arm
-   and leg), and the inner vertices of v w V W M N A. Depth `p.trap` (about 3
-   at Light, 12 at Regular, 37 at ExtraBold); use `geom.stem_trap` along a
-   stem edge or `geom.notch` / `geom.trap` elsewhere. Traps must open into the
-   white cleanly and never leave slivers.
+   and leg), and the inner vertices of v w y V W M N A and the figures.
+   - Where a curve leaves a stem (shoulders, bowls): `geom.stem_trap`, depth
+     `1.3 * p.trap`.
+   - At the inner vertex of two straight edges: `geom.crotch_trap`, depth
+     `p.trap`, opening at least half its depth wide. Never a long slit or a
+     needle cut.
+   `p.trap` is about 6 at Light, 12 at Regular and 37 at ExtraBold. Traps
+   must open into the white cleanly and never leave slivers.
 4. **Square dots.** Dots of i, j, and punctuation are squares of side `p.dot`
-   with `nw` + `se` chamfers (`geom.dot`). The i dot's top sits at the
+   (0.8 × stem + 36) with `nw` + `se` chamfers of 0.22 × side (`geom.dot`).
+   Accent dots use the same side or very nearly. The i dot's top sits at the
    ascender (760); comma, quote and semicolon tails grow from the same square.
 
 ## Spacing
 
 - Lowercase: straight side `p.sb`, round side `p.sbr`, diagonal side about
-  `0.35 * p.sbr`. Capitals: `p.csb`, `p.csbr`, about `0.3 * p.csbr`.
+  `0.35 * p.sbr`. Capitals: `p.csb`, `p.csbr`, about `0.3 * p.csbr`. The
+  sidebearings shrink as weight rises (like Inter); keep using them rather
+  than constants so that holds. Open sides (E F L T Z, c, r, f) still need a
+  real sidebearing: about 0.75 of the straight one.
+- Kerning is measured, not typed (`kerning.py`); spacing should look right
+  before kerning, with kerning only fixing diagonal, overhanging and
+  punctuation pairs.
 - Check every glyph between n's and o's (lowercase) or H's and O's (capitals):
   `nnxnnoxoo`, `HHXHHOXOO`. Even colour beats exact numbers.
 
