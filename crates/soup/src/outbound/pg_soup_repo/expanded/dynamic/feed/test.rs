@@ -668,9 +668,9 @@ async fn non_utc_sessions_read_the_item_tables(
     assert_source_items_match_grants(&pool).await?;
 
     let filter = EntityFilterAst {
-        document_filter: tree(Expr::val(DocumentLiteral::UpdatedAt(DateLiteral::LessThan(
-            Utc.with_ymd_and_hms(2019, 1, 1, 0, 0, 0).unwrap(),
-        )))),
+        document_filter: tree(Expr::val(DocumentLiteral::UpdatedAt(
+            DateLiteral::LessThan(Utc.with_ymd_and_hms(2019, 1, 1, 0, 0, 0).unwrap()),
+        ))),
         chat_filter: tree(Expr::val(ChatLiteral::Importance(false))),
         project_filter: tree(Expr::val(ProjectLiteral::ProjectId(Uuid::nil()))),
         ..Default::default()
