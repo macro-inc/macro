@@ -1,82 +1,104 @@
-//! Bounded ranking over borrowed catalog/optimistic entries. Only the final
-//! results are cloned; the heap retains at most limit + 1 references.
+//! Incremental ranking of streamed storage rows and optimistic projections.
+//! Only winners are cloned; the heap owns at most limit + 1 documents.
 
 use super::{
-    SearchCursor, SearchDocument, SearchPage, SearchRequest, compare_recent, normalize_search_text,
+    SearchCursor, SearchDocument, SearchPage, SearchQuery, SearchRequest, compare_recent,
     score_normalized_query,
 };
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
-struct Scored<'a> {
-    document: &'a SearchDocument,
+struct Scored {
+    document: SearchDocument,
     score: f64,
 }
 
-impl Ord for Scored<'_> {
+impl Ord for Scored {
     fn cmp(&self, other: &Self) -> Ordering {
-        // Exactly the original ascending sort comparator: better results are
-        // smaller, so BinaryHeap keeps the worst retained result at its root.
-        other
-            .score
-            .total_cmp(&self.score)
-            .then_with(|| compare_recent(self.document, other.document))
+        compare(&self.document, self.score, &other.document, other.score)
     }
 }
-impl PartialOrd for Scored<'_> {
+impl PartialOrd for Scored {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
-impl PartialEq for Scored<'_> {
+impl PartialEq for Scored {
     fn eq(&self, other: &Self) -> bool {
         self.cmp(other).is_eq()
     }
 }
-impl Eq for Scored<'_> {}
+impl Eq for Scored {}
 
-pub(crate) fn rank_documents<'a>(
-    request: &SearchRequest,
-    documents: impl IntoIterator<Item = &'a SearchDocument>,
-) -> SearchPage {
-    let query = normalize_search_text(request.query.trim());
-    let capacity = request.limit + 1;
-    let mut best = BinaryHeap::with_capacity(capacity);
-    for document in documents {
-        let score = if query.is_empty() {
-            Some(0.0)
-        } else {
-            score_normalized_query(document, &query, request.now_ms)
-        };
-        let Some(score) = score else {
-            continue;
-        };
-        let candidate = Scored { document, score };
-        if best.len() < capacity {
-            best.push(candidate);
-        } else if let Some(mut worst) = best.peek_mut()
-            && candidate < *worst
-        {
-            *worst = candidate;
+fn compare(
+    left: &SearchDocument,
+    left_score: f64,
+    right: &SearchDocument,
+    right_score: f64,
+) -> Ordering {
+    // Better results are smaller, so the heap keeps its worst result at the root.
+    right_score
+        .total_cmp(&left_score)
+        .then_with(|| compare_recent(left, right))
+}
+
+pub(crate) struct SearchRanker<'a> {
+    request: &'a SearchRequest,
+    query: &'a SearchQuery,
+    best: BinaryHeap<Scored>,
+}
+
+impl<'a> SearchRanker<'a> {
+    pub(crate) fn new(request: &'a SearchRequest, query: &'a SearchQuery) -> Self {
+        Self {
+            request,
+            query,
+            best: BinaryHeap::with_capacity(request.limit + 1),
         }
     }
-    let has_more = best.len() > request.limit;
-    let documents: Vec<_> = best
-        .into_sorted_vec()
-        .into_iter()
-        .take(request.limit)
-        .map(|hit| hit.document.clone())
-        .collect();
-    let next_cursor = (query.is_empty() && has_more).then(|| {
-        let last = documents.last().expect("validated nonzero search limit");
-        SearchCursor {
-            timestamp_ms: last.timestamp_ms,
-            record_key: last.record_key.clone(),
+
+    pub(crate) fn push(&mut self, document: &SearchDocument) {
+        let score = if self.query.0.is_empty() {
+            Some(0.0)
+        } else {
+            score_normalized_query(document, &self.query.0, self.request.now_ms)
+        };
+        let Some(score) = score else { return };
+        if self.best.len() < self.request.limit + 1 {
+            self.best.push(Scored {
+                document: document.clone(),
+                score,
+            });
+        } else if let Some(mut worst) = self.best.peek_mut()
+            && compare(document, score, &worst.document, worst.score).is_lt()
+        {
+            *worst = Scored {
+                document: document.clone(),
+                score,
+            };
         }
-    });
-    SearchPage {
-        documents,
-        next_cursor,
+    }
+
+    pub(crate) fn finish(self) -> SearchPage {
+        let has_more = self.best.len() > self.request.limit;
+        let documents: Vec<_> = self
+            .best
+            .into_sorted_vec()
+            .into_iter()
+            .take(self.request.limit)
+            .map(|hit| hit.document)
+            .collect();
+        let next_cursor = documents
+            .last()
+            .filter(|_| self.query.0.is_empty() && has_more)
+            .map(|last| SearchCursor {
+                timestamp_ms: last.timestamp_ms,
+                record_key: last.record_key.clone(),
+            });
+        SearchPage {
+            documents,
+            next_cursor,
+        }
     }
 }
 

@@ -10,7 +10,8 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 
 - `src/storage.rs`: `TursoStorage` — implements `cache_core::store::Storage`
   with the frozen compound-key schema and strict-head mutation leasing.
-- `src/driver.rs`: Turso connection/transaction handling.
+- `src/driver.rs`: Turso connection/transaction handling, including checked row-at-a-time query visitation.
+- `src/storage/search.rs`: bound subsequence SQL prefilter; stream every match to core ranking, never collect or limit the text results first.
 - `src/key.rs`: the compound key schema (frozen — see Gotchas).
 - `src/error.rs`: `TursoStorageError` / `PhysicalResetReason`.
 - `tests/storage_conformance.rs`, `tests/shared_conformance.rs`: the shared
@@ -36,6 +37,8 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 ## Checks
 
 - `cargo test -p cache-turso` (`SQLX_OFFLINE` unset).
+- `cargo test -p cache-turso --test search -- --ignored --nocapture`: explicit 100k-row search measurement.
+- The `web` wasm test target checks streamed search over real OPFS; use the [browser runner](../turso-opfs/README.md#repeatable-verification).
 
 ## Gotchas
 

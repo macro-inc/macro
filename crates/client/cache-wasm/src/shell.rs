@@ -1442,7 +1442,7 @@ impl CacheEngine {
     }
 
     /// Searches the compact materialized projection. Empty queries use the
-    /// indexed recent path; text queries rank the compact catalog without
+    /// indexed recent path; text queries rank streamed compact matches without
     /// scanning normalized record blobs.
     pub fn search(&self, request: JsValue) -> js_sys::Promise {
         let state = self.state.clone();

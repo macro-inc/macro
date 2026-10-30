@@ -12,12 +12,10 @@ use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use thiserror::Error;
 
-mod catalog;
 mod changes;
 mod ranking;
-pub(crate) use catalog::SearchCatalogs;
 pub(crate) use changes::{collect_search_changes, snapshot_search_fields};
-pub(crate) use ranking::rank_documents;
+pub(crate) use ranking::SearchRanker;
 
 /// Current compact projection profile used by Quick Access, Cmd-K and entity
 /// mention pickers. Profile names are persisted and therefore versioned.
@@ -126,7 +124,7 @@ pub enum SearchError {
     /// Bucket names cross storage boundaries and must remain compact.
     #[error("invalid search bucket")]
     InvalidBucket,
-    /// Query text is bounded before loading/ranking the catalog.
+    /// Query text is bounded before filtering and streaming storage matches.
     #[error("search query is too long")]
     QueryTooLong,
 }
@@ -301,6 +299,30 @@ fn search_value_text(value: &CacheValue) -> Vec<&str> {
             .flat_map(|(_, value)| search_value_text(value))
             .collect(),
         _ => Vec::new(),
+    }
+}
+
+/// Normalized text-search input shared by storage filtering and ranking.
+/// Storage may return a superset of matches; the ranker always checks each row.
+pub struct SearchQuery(String);
+
+impl SearchQuery {
+    /// Applies the same Unicode lowercase and whitespace normalization as the projection.
+    pub fn new(query: &str) -> Self {
+        Self(normalize_search_text(query))
+    }
+
+    /// Whitespace/comma-separated tokens, each matching an ordered subsequence.
+    pub fn tokens(&self) -> impl Iterator<Item = &str> {
+        self.0
+            .split(|c: char| c.is_whitespace() || c == ',')
+            .filter(|token| !token.is_empty())
+    }
+
+    /// Whether every token matches, independent of freshness and ranking.
+    pub fn matches(&self, text: &str) -> bool {
+        self.tokens()
+            .all(|token| subsequence_score(text, token).is_some())
     }
 }
 

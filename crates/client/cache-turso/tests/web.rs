@@ -13,6 +13,31 @@ use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_dedicated_worker);
 
+#[path = "common/search.rs"]
+mod search_streaming;
+
+#[wasm_bindgen_test(async)]
+async fn streaming_sql_search_matches_reference_ranking_over_opfs() {
+    let owner = OpfsOwner::acquire("cache-turso-streamed-search.db")
+        .await
+        .unwrap()
+        .recovery_wipe()
+        .await
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("fresh search storage must open")
+    };
+    let storage =
+        TursoStorage::from_opfs_session(session.connect().unwrap(), "search-scope").unwrap();
+    let storage = search_streaming::assert_search_contract(storage).await;
+    healthy_close(storage.try_close().unwrap())
+        .preserve()
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
+}
+
 fn key(value: &str) -> EntityKey<'static> {
     EntityKey(value.to_owned().into())
 }

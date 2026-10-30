@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn text_catalog_loads_use_the_bucket_index_without_touching_unrelated_rows() {
+fn text_search_filters_in_sql_and_uses_the_bucket_index() {
     block_on(async {
         let mut storage = TursoStorage::open_in_memory("search-bucket-cost").unwrap();
         storage
@@ -10,7 +10,7 @@ fn text_catalog_loads_use_the_bucket_index_without_touching_unrelated_rows() {
                     .map(|n| {
                         (
                             key(&format!("GraphqlSoupDocument:{n}")),
-                            quick_access_document("needle", n),
+                            quick_access_document(if n == 0 { "needle" } else { "other" }, n),
                         )
                     })
                     .collect(),
@@ -35,26 +35,25 @@ fn text_catalog_loads_use_the_bucket_index_without_touching_unrelated_rows() {
                 )
                 .await
                 .unwrap();
-            let mut statement = driver::prepare(&storage.connection(), SEARCH_LOAD).unwrap();
-            let rows = driver::query_prepared(
-                &mut statement,
-                vec![
-                    text(SearchProfile::QuickAccessV1.as_str()),
-                    text("document"),
-                ],
-            )
-            .unwrap();
-            assert_eq!(rows.len(), 3);
+            let query = SearchQuery::new("ndl");
+            let (sql, parameters) =
+                search::statement(SearchProfile::QuickAccessV1, "document", &query);
+            let mut statement = driver::prepare(&storage.connection(), &sql).unwrap();
+            let rows = driver::query_prepared(&mut statement, parameters).unwrap();
+            assert_eq!(rows.len(), 1);
             assert!(
                 statement.metrics().vm_steps < 500,
                 "{} VM steps with {unrelated_count} unrelated rows",
                 statement.metrics().vm_steps
             );
-            let documents = storage
-                .load_search_documents(SearchProfile::QuickAccessV1, "document")
+            let mut documents = Vec::new();
+            storage
+                .visit_search_documents(SearchProfile::QuickAccessV1, "document", &query, |row| {
+                    documents.push(row)
+                })
                 .await
                 .unwrap();
-            assert_eq!(documents.len(), 3);
+            assert_eq!(documents.len(), 1);
             assert!(
                 documents
                     .iter()

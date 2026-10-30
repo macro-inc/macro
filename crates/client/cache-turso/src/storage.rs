@@ -21,7 +21,7 @@ use cache_core::queue::{
 };
 use cache_core::search::{
     QUICK_ACCESS_PROJECTION_VERSION, QUICK_ACCESS_TYPENAMES, SearchCursor, SearchDocument,
-    SearchProfile, project_search_documents,
+    SearchProfile, SearchQuery, project_search_documents,
 };
 use cache_core::store::{QueueDiagnostics, QueueDiagnosticsAvailability, Storage};
 use cache_core::value::{EntityKey, Record};
@@ -1035,25 +1035,19 @@ impl Storage for TursoStorage {
         self.latch_result(result)
     }
 
-    async fn load_search_documents(
+    async fn visit_search_documents(
         &self,
         profile: SearchProfile,
         bucket: &str,
-    ) -> Result<Vec<SearchDocument>, Self::Error> {
+        query: &SearchQuery,
+        mut visit: impl FnMut(SearchDocument) + maybe_send::MaybeSend,
+    ) -> Result<(), Self::Error> {
         self.require_healthy()?;
-        let result = {
-            let connection = self.connection();
-            driver::query(
-                &connection,
-                SEARCH_LOAD,
-                vec![text(profile.as_str()), text(bucket)],
-            )
-            .and_then(|rows| {
-                rows.into_iter()
-                    .map(|row| parse_search_document(&row, profile))
-                    .collect()
-            })
-        };
+        let (sql, values) = search::statement(profile, bucket, query);
+        let result = driver::query_each(&self.connection(), &sql, values, |row| {
+            visit(parse_search_document(&row, profile)?);
+            Ok(())
+        });
         self.latch_result(result)
     }
 
@@ -5201,6 +5195,7 @@ mod integrity;
 mod mutation_retry;
 mod page_retention;
 mod record_batch;
+mod search;
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod browser_test;

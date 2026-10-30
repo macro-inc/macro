@@ -76,7 +76,13 @@ fn bounded_heap_matches_full_sort_for_text_browse_unicode_ties_and_dm_boost() {
                     .take(limit)
                     .map(|(document, _)| document.clone())
                     .collect();
-                let actual = rank_documents(&request, &corpus);
+                let normalized = SearchQuery::new(query);
+                let mut ranker = SearchRanker::new(&request, &normalized);
+                for document in &corpus {
+                    ranker.push(document);
+                    assert!(ranker.best.len() <= limit + 1);
+                }
+                let actual = ranker.finish();
                 assert_eq!(
                     actual.documents, expected,
                     "query={query:?}, limit={limit}, backwards={backwards}"

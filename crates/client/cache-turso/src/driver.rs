@@ -62,6 +62,20 @@ pub(crate) fn query(
     query_prepared(&mut statement, values)
 }
 
+/// Visits each row before stepping again, retaining no result collection.
+/// Uses the same checked statement cleanup and telemetry as collected queries.
+pub(crate) fn query_each(
+    connection: &Arc<Connection>,
+    sql: &str,
+    values: Values,
+    visit: impl FnMut(Values) -> Result<(), TursoStorageError>,
+) -> Result<(), TursoStorageError> {
+    let mut statement = prepare(connection, sql)?;
+    visit_prepared(&mut statement, values, visit)
+        .map(|_| ())
+        .map_err(|failure| failure.error)
+}
+
 pub(crate) fn execute_prepared(
     statement: &mut Statement,
     values: Values,
@@ -88,7 +102,20 @@ pub(crate) fn query_prepared(
 }
 
 fn run_prepared(statement: &mut Statement, values: Values) -> Result<(Rows, i64), RunFailure> {
-    // Time binding, stepping/I/O, row collection, and cleanup, not worker queue
+    let mut rows = Vec::new();
+    let changed = visit_prepared(statement, values, |row| {
+        rows.push(row);
+        Ok(())
+    })?;
+    Ok((rows, changed))
+}
+
+fn visit_prepared(
+    statement: &mut Statement,
+    values: Values,
+    mut visit: impl FnMut(Values) -> Result<(), TursoStorageError>,
+) -> Result<i64, RunFailure> {
+    // Time binding, stepping/I/O, row processing, and cleanup, not worker queue
     // wait or statement preparation. Reused statements are timed per execution.
     let timer = crate::query_telemetry::QueryTimer::start();
     let execution = (|| {
@@ -102,7 +129,6 @@ fn run_prepared(statement: &mut Statement, values: Values) -> Result<(Rows, i64)
                 .map_err(TursoStorageError::turso)?;
         }
 
-        let mut rows = Vec::new();
         loop {
             // The pinned Turso revision completes this rollback without
             // producing rollback-owned File work. Native fault tests use this
@@ -124,7 +150,7 @@ fn run_prepared(statement: &mut Statement, values: Values) -> Result<(Rows, i64)
                     let row = statement
                         .row()
                         .ok_or_else(|| TursoStorageError::reset(PhysicalResetReason::Corruption))?;
-                    rows.push(row.get_values().cloned().collect());
+                    visit(row.get_values().cloned().collect())?;
                 }
                 StepResult::IO => {
                     #[cfg(all(test, not(target_arch = "wasm32")))]
@@ -138,7 +164,7 @@ fn run_prepared(statement: &mut Statement, values: Values) -> Result<(Rows, i64)
                 }
             }
         }
-        Ok((rows, statement.n_change()))
+        Ok(statement.n_change())
     })();
 
     // Turso has no separate public finalize call. A checked reset releases the

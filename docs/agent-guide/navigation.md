@@ -1515,10 +1515,11 @@ outside its recent page. Cached metadata wins for duplicate channels while newer
 viewed timestamps from either source are retained. Other uncached items should
 appear after hydration without retyping. Cmd+K's
 local search explicitly excludes email hits before limiting entity results;
-email mentions keep their separate search-service path. Text search loads only
-its requested cache buckets, so a document-only category must not read the email
-catalog. Switching categories still discovers previously unopened buckets;
-renames, subtype moves, DM priority, and stable tie ordering remain unchanged.
+email mentions keep their separate search-service path. Text search filters in
+Turso and streams matches from only the requested buckets into a bounded ranker;
+a document-only category must not read the email bucket. Searches do not retain
+a full bucket in memory. Switching categories, renames, subtype moves, DM priority,
+and stable tie ordering remain unchanged.
 
 With CRM enabled, normal `@` menus include companies and contacts under
 **Contacts & Companies** in documents, channels, discussions, and composers.

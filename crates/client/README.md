@@ -243,20 +243,30 @@ sent as network revalidations. Callers should supply an explicit targeted query
 for recovery when the parent/field is missing; the exchange can then enqueue
 entity-only optimism and retain that recovery query for eventual commit/replay.
 
-## Text search catalogs
+## Streaming text search
 
-Text search loads compact rows lazily per `(profile, bucket)` through the existing
-`search_documents_browse_idx`. Searching documents does not load cached emails;
-changing categories loads only newly requested buckets, including caching empty
-buckets. Empty bucket selection still means every bucket in the profile.
+Text search binds normalized subsequence patterns to Turso queries scoped by
+`(profile, bucket)` through `search_documents_browse_idx`. Every query token must
+match: `abc` becomes `%a%b%c%`, with literal SQL wildcards and escapes quoted in
+the bound value. Rows containing NUL pass the SQL prefilter because SQLite LIKE
+stops at NUL; Rust verifies them without truncation. Searching documents does not
+read cached email buckets. Empty bucket selection still means every profile bucket.
 
-Ranking borrows catalog and optimistic entries, normalizes the query once, and
-retains at most `limit + 1` references in a heap. Only the final returned rows are
-cloned. Fuzzy/freshness scoring, DM priority, recency/key tie breaks and browse
-cursors are unchanged. Write-through updates remove old bucket membership before
-updating already-loaded buckets; unopened buckets stay lazy. Optimistic shadows
-replace durable hits without mutating the catalogs, so rollback restores them.
+The driver visits one compact row at a time instead of collecting results. One
+Rust ranker retains at most `limit + 1` owned documents across all requested
+buckets; there is no retained text-search catalog. Do not limit SQL matches before
+ranking. Fuzzy/freshness scoring, DM priority and recency/key tie breaks remain
+unchanged. Optimistic shadows suppress their durable counterparts before ranking,
+including deleted and nonmatching replacements. Empty-query browsing retains its
+indexed recent path and cursors. Leading-wildcard matching still scans the selected
+buckets: this bounds application search memory, not search work or database page
+cache memory. The existing SQL telemetry includes streamed processing and cleanup.
 No storage schema, projection version, or database migration changes are needed.
+
+`cargo test -p cache-turso --test search` checks matching/ranking parity, including
+Unicode, escapes, NUL, and late high-ranking matches. Run the ignored 100k-row
+measurement with `cargo test -p cache-turso --test search -- --ignored --nocapture`.
+The `web` test target exercises the same parity contract over real browser OPFS.
 
 ## Browser OPFS writes
 

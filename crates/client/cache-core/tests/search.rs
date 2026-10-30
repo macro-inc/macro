@@ -77,7 +77,7 @@ fn request(query: &str, limit: usize) -> SearchRequest {
 }
 
 #[test]
-fn text_search_loads_compact_catalog_once_and_never_scans_records() {
+fn text_search_queries_storage_each_time_without_scanning_records() {
     block_on(async {
         let storage = InMemoryStorage::new();
         let diagnostics = storage.clone();
@@ -102,10 +102,10 @@ fn text_search_loads_compact_catalog_once_and_never_scans_records() {
             "GraphqlSoupDocument:doc-1"
         );
         assert_eq!(second.documents.len(), 1);
-        assert_eq!(diagnostics.search_catalog_load_count(), 1);
+        assert_eq!(diagnostics.search_query_count(), 2);
         assert_eq!(diagnostics.record_get_count(), gets_before_search);
 
-        // A write-through update patches the loaded catalog incrementally.
+        // A write-through update is visible to the next storage search.
         engine
             .write_query(
                 None,
@@ -134,7 +134,7 @@ fn text_search_loads_compact_catalog_once_and_never_scans_records() {
                 .len(),
             1
         );
-        assert_eq!(diagnostics.search_catalog_load_count(), 1);
+        assert_eq!(diagnostics.search_query_count(), 4);
 
         engine
             .delete_keys(&[EntityKey::entity("GraphqlSoupDocument", &["doc-1"])])
@@ -255,7 +255,7 @@ fn unnamed_notes_are_browsable_without_matching_ui_fallback_text() {
 }
 
 #[test]
-fn optimistic_records_explicitly_overlay_the_durable_search_catalog() {
+fn optimistic_records_explicitly_overlay_the_durable_search_projection() {
     block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());
         engine
@@ -414,7 +414,7 @@ fn empty_query_is_bounded_and_uses_recent_projection_path() {
         assert_eq!(page.documents.len(), 25);
         assert_eq!(page.documents[0].timestamp_ms, 999);
         assert!(page.next_cursor.is_some());
-        assert_eq!(diagnostics.search_catalog_load_count(), 0);
+        assert_eq!(diagnostics.search_query_count(), 0);
         assert_eq!(diagnostics.record_get_count(), 0);
     });
 }
