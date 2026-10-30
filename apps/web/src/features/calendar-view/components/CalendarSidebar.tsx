@@ -245,13 +245,14 @@ export function TeamOooUpcomingList() {
             <Button
               variant="ghost"
               size="xs"
-              class="self-start"
+              class="self-start scroll-mb-(--sidebar-content-inset)"
               aria-expanded={expanded()}
               onClick={(event) => {
                 const toggle = event.currentTarget;
                 setExpanded((value) => !value);
                 // The section is last in the sidebar, so the longer list
-                // pushes this focused control below the fold.
+                // pushes this focused control below the fold. Its margin
+                // keeps the sidebar's bottom inset below it.
                 toggle.scrollIntoView({ block: 'nearest' });
               }}
             >
