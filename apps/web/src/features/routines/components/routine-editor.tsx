@@ -9,15 +9,16 @@ import { createSignal, For, type JSX, type ParentProps, Show } from 'solid-js';
 import type { ScheduleDraft } from '../core/draft';
 
 /**
- * The raised card a page section sits on: the composer surface settings use
- * (menu fill, large radius, glass edge), framed on touch as settings are.
+ * The raised card a page section or step sits on: the composer surface
+ * settings use (menu fill, glass edge) with a tighter radius, framed on touch
+ * as settings are.
  */
-function RoutineSurface(props: ParentProps<{ class?: string }>) {
+export function RoutineSurface(props: ParentProps<{ class?: string }>) {
   return (
     <ComposerSurface
       as="div"
       class={cn(
-        'relative min-w-0 touch:rounded-3xl touch:border touch:border-edge-muted touch:bg-composer touch:text-composer-ink',
+        'relative min-w-0 rounded-xl touch:rounded-xl touch:border touch:border-edge-muted touch:bg-composer touch:text-composer-ink',
         props.class
       )}
     >
@@ -276,16 +277,15 @@ export function RoutineEditor(props: {
                     </RoutineSurface>
                   </RoutineSection>
                   <RoutineSection label="Steps" aside={props.stepsAside}>
-                    <RoutineSurface class="p-3 @max-[600px]/routine:p-2">
-                      <fieldset
-                        disabled={props.disabled}
-                        inert={props.disabled}
-                        class="min-w-0"
-                        aria-label="Routine steps"
-                      >
-                        {props.steps}
-                      </fieldset>
-                    </RoutineSurface>
+                    {/* Each step is its own card. */}
+                    <fieldset
+                      disabled={props.disabled}
+                      inert={props.disabled}
+                      class="min-w-0"
+                      aria-label="Routine steps"
+                    >
+                      {props.steps}
+                    </fieldset>
                   </RoutineSection>
                   <Show when={props.connections}>
                     {(connections) => (

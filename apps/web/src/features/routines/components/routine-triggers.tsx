@@ -542,7 +542,7 @@ function EventToken(
         triggerLabel={`Change ${eventTriggerLabel(props.trigger)} trigger`}
         triggerTitle={eventTriggerLabel(props.trigger)}
         triggerVariant="secondary"
-        triggerSize="lg"
+        triggerSize="md"
         triggerClass="min-w-0 max-w-full"
         ref={(element) => {
           button = element;
@@ -591,7 +591,7 @@ function ScopeToken(
         aria-label={`${scopeFieldLabel(props.trigger)} for ${eventTriggerLabel(props.trigger)}`}
         class={badgeTriggerClasses({
           variant: 'ghost',
-          size: 'lg',
+          size: 'md',
           class: 'min-w-0 max-w-full',
         })}
       >
@@ -632,7 +632,7 @@ function GithubToken(
         label: `${scopeFieldLabel(props.trigger)} for ${eventTriggerLabel(props.trigger)}`,
         class: badgeTriggerClasses({
           variant: 'ghost',
-          size: 'lg',
+          size: 'md',
           class: 'min-w-0 max-w-full',
         }),
         content: (
@@ -826,7 +826,7 @@ function TriggerSentence(
                 title: `${describeTrigger(value())} · ${value().timezone.replace(/_/g, ' ')}`,
                 class: badgeTriggerClasses({
                   variant: 'secondary',
-                  size: 'lg',
+                  size: 'md',
                   class: 'min-w-0 max-w-full',
                 }),
                 content: (
@@ -853,15 +853,15 @@ function TriggerSentence(
                     {/* Email always watches the owner's inbox: said, not picked. */}
                     <Match when={eventScopeKind(value()) === 'THREAD'}>
                       <span class="flex min-w-0 max-w-full items-center gap-2">
-                        <span class="text-base text-ink-muted">in</span>
-                        <span class="truncate px-1 text-base font-medium text-ink">
+                        <span class="text-sm text-ink-muted">in</span>
+                        <span class="truncate px-1 text-sm font-medium text-ink">
                           {props.renderEventLabel(value)}
                         </span>
                       </span>
                     </Match>
                     <Match when={eventScopeKind(value()) === 'GITHUB'}>
                       <span class="flex min-w-0 max-w-full items-center gap-2">
-                        <span class="text-base text-ink-muted">in</span>
+                        <span class="text-sm text-ink-muted">in</span>
                         <GithubToken {...props} trigger={value()} />
                       </span>
                     </Match>
@@ -870,7 +870,7 @@ function TriggerSentence(
               >
                 {/* "in" wraps with its scope, never alone at a line's end. */}
                 <span class="flex min-w-0 max-w-full items-center gap-2">
-                  <span class="text-base text-ink-muted">in</span>
+                  <span class="text-sm text-ink-muted">in</span>
                   <ScopeToken {...props} trigger={value()} />
                 </span>
               </Show>

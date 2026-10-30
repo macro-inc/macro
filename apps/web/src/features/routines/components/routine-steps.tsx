@@ -57,6 +57,7 @@ import { copyStep, wrapInIf } from '../core/step-edits';
 import { stepHeadline } from '../core/step-headline';
 import { AddStep } from './routine-add-step';
 import { DecisionBody, DecisionBranches } from './routine-decision-step';
+import { RoutineSurface } from './routine-editor';
 import {
   menuMount,
   type RoutineToolSlots,
@@ -209,7 +210,7 @@ export function StepList(props: {
   };
   const shown = () => props.steps.slice(from()).map((step) => step.id);
   return (
-    <div class="grid min-w-0 gap-0.5">
+    <div class="grid min-w-0 gap-2">
       <For each={shown()}>
         {(id) => {
           const index = () => props.steps.findIndex((step) => step.id === id);
@@ -260,7 +261,7 @@ function StepNode(props: StepCardProps) {
       ? props.step
       : undefined;
   return (
-    <div class="grid min-w-0 gap-0.5">
+    <div class="grid min-w-0 gap-2">
       <StepCard {...props} />
       <Show when={decision()}>
         {(step) => (
@@ -447,63 +448,59 @@ function StepCard(props: StepCardProps) {
       .filter(Boolean)
       .join(' · ');
   return (
-    <section
-      aria-label={headline().title}
-      // A row on the steps surface: the open one is raised, others light on hover.
-      class={cn(
-        '@container/step group/step min-w-0 rounded-2xl transition-colors',
-        open()
-          ? 'bg-hover ring-1 ring-inset ring-edge-divider'
-          : 'hover:bg-hover focus-within:bg-hover'
-      )}
-      onKeyDown={(event) => {
-        if (!event.altKey) return;
-        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
-        event.preventDefault();
-        props.onMove(event.key === 'ArrowUp' ? -1 : 1);
-      }}
-    >
-      <div class="flex min-w-0 items-center gap-1 pr-1.5">
-        <button
-          type="button"
-          aria-expanded={open()}
-          class="flex min-h-12 min-w-0 flex-1 items-center gap-2.5 rounded-2xl py-1.5 pl-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-edge-muted"
-          onClick={() => setOpen(!open())}
-        >
-          <span class="w-4.5 shrink-0 text-right text-xs tabular-nums text-ink-extra-muted">
-            {steps.number(props.step.id)}
-          </span>
-          <StepIcon step={props.step} />
-          <span class="shrink-0 text-sm font-medium">{headline().title}</span>
-          <span class="min-w-0 flex-1 truncate text-sm text-ink-muted">
-            {open() ? '' : summary()}
-          </span>
-          <Show when={headline().mode}>
-            {(mode) => (
-              <Badge
-                variant="secondary"
-                size="xs"
-                class="@max-[24rem]/step:hidden"
-              >
-                {mode()}
-              </Badge>
-            )}
-          </Show>
-          <RunStatus path={props.path} />
-        </button>
-        <StepMenu {...props} open={open()} />
-      </div>
-      <Show when={open()}>
-        <div class="grid min-w-0 gap-3 pb-3.5 pl-[3.25rem] pr-3 pt-1 @max-[30rem]/step:pl-3">
-          <StepBody
-            step={props.step}
-            path={props.path}
-            scope={props.scope}
-            onChange={props.onChange}
-          />
+    <RoutineSurface>
+      <section
+        aria-label={headline().title}
+        class="@container/step group/step min-w-0"
+        onKeyDown={(event) => {
+          if (!event.altKey) return;
+          if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+          event.preventDefault();
+          props.onMove(event.key === 'ArrowUp' ? -1 : 1);
+        }}
+      >
+        <div class="flex min-w-0 items-center gap-1 pr-1.5">
+          <button
+            type="button"
+            aria-expanded={open()}
+            class="flex min-h-12 min-w-0 flex-1 items-center gap-2.5 rounded-xl py-1.5 pl-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-edge-muted"
+            onClick={() => setOpen(!open())}
+          >
+            <span class="w-4.5 shrink-0 text-right text-xs tabular-nums text-ink-extra-muted">
+              {steps.number(props.step.id)}
+            </span>
+            <StepIcon step={props.step} />
+            <span class="shrink-0 text-sm font-medium">{headline().title}</span>
+            <span class="min-w-0 flex-1 truncate text-sm text-ink-muted">
+              {open() ? '' : summary()}
+            </span>
+            <Show when={headline().mode}>
+              {(mode) => (
+                <Badge
+                  variant="secondary"
+                  size="xs"
+                  class="@max-[24rem]/step:hidden"
+                >
+                  {mode()}
+                </Badge>
+              )}
+            </Show>
+            <RunStatus path={props.path} />
+          </button>
+          <StepMenu {...props} open={open()} />
         </div>
-      </Show>
-    </section>
+        <Show when={open()}>
+          <div class="grid min-w-0 gap-3 pb-3.5 pl-[3.5rem] pr-3 pt-1 @max-[30rem]/step:pl-3">
+            <StepBody
+              step={props.step}
+              path={props.path}
+              scope={props.scope}
+              onChange={props.onChange}
+            />
+          </div>
+        </Show>
+      </section>
+    </RoutineSurface>
   );
 }
 

@@ -92,6 +92,8 @@ function lastRunTime(records: readonly HistoryRecord[]): string | undefined {
  */
 function ConnectionRows(props: {
   apps: RoutineApp[];
+  /** Whether the routine has an Ask AI step to give apps to. */
+  agent: boolean;
   connected: Accessor<ReadonlySet<string> | undefined>;
   onChange(apps: RoutineApp[]): void;
   Picker: RoutineDetailSlots['Apps'];
@@ -107,9 +109,19 @@ function ConnectionRows(props: {
     <Show
       when={props.apps.length}
       fallback={
-        <RoutineSettingRow label="No connections added">
-          {add()}
-        </RoutineSettingRow>
+        <Show
+          when={props.agent}
+          fallback={
+            <RoutineSettingRow
+              label="No connections added"
+              description="Add an Ask AI step to give it apps."
+            />
+          }
+        >
+          <RoutineSettingRow label="No connections added">
+            {add()}
+          </RoutineSettingRow>
+        </Show>
       }
     >
       <For each={props.apps}>
@@ -222,12 +234,10 @@ export function RoutineDetailView(props: {
       return 'Update the schedule before turning it on';
     return 'Fix the routine before turning it on';
   };
-  /** A routine with an Ask AI step, or apps already, shows its connections. */
-  const connectionsDraft = () => {
+  /** Apps go to the routine's Ask AI step. */
+  const hasAgent = () => {
     const draft = state();
-    return draft && (firstAgent(draftSteps(draft)) || draft.apps.length)
-      ? draft
-      : undefined;
+    return !!draft && !!firstAgent(draftSteps(draft));
   };
   /** Manual runs have no triggering item for steps to read. */
   const needsEvent = () => {
@@ -422,9 +432,10 @@ export function RoutineDetailView(props: {
             </>
           }
           connections={
-            connectionsDraft() && (
+            state() && (
               <ConnectionRows
-                apps={connectionsDraft()?.apps ?? []}
+                apps={state()?.apps ?? []}
+                agent={hasAgent()}
                 connected={connectedApps}
                 onChange={(apps) =>
                   setState((current) => ({ ...current, apps }))
