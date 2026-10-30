@@ -36,7 +36,7 @@ impl<T> Patch<T> {
 }
 
 /// A patch paired with the entity used to resolve its recipients.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct SoupRealtimePatch {
     /// Patch delivered to each recipient.
     pub patch: Patch<Entity<'static>>,
@@ -67,6 +67,17 @@ impl SoupRealtimePatch {
     pub fn with_audience(mut self, audience: Vec<MacroUserIdStr<'static>>) -> Self {
         self.audience = audience;
         self
+    }
+}
+
+/// Spans and logs record patches; the audience is user ids, so only its size is shown.
+impl std::fmt::Debug for SoupRealtimePatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SoupRealtimePatch")
+            .field("patch", &self.patch)
+            .field("access_source", &self.access_source)
+            .field("audience_count", &self.audience.len())
+            .finish()
     }
 }
 

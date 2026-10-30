@@ -508,15 +508,9 @@ where
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<(), InitiativeError> {
         let id = initiative_id_from_receipt(&receipt)?;
-        // The delete removes the access that realtime consumers resolve recipients from.
-        let audience = self
-            .resources
-            .audience(id)
-            .await
-            .inspect_err(|error| {
-                tracing::warn!(?error, %id, "unable to read initiative audience before delete");
-            })
-            .unwrap_or_default();
+        // The delete removes the access that realtime consumers resolve recipients from,
+        // so read it first; failing here leaves the initiative intact for a retry.
+        let audience = self.resources.audience(id).await?;
         self.repo.delete(id).await.map_err(Into::into)?;
         self.publish(
             id,

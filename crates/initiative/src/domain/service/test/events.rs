@@ -109,6 +109,23 @@ async fn deletion_announces_the_audience_read_before_access_is_removed() {
 }
 
 #[tokio::test]
+async fn audience_failure_keeps_the_initiative_and_publishes_nothing() {
+    let mut repo = MockInitiativeRepo::new();
+    repo.expect_delete().never();
+    let events = Arc::new(Events::default());
+    let result = InitiativeServiceImpl::new(
+        repo,
+        MockInitiativeDescriptionSurfaces::new(),
+        Arc::new(reads::FakeResources::failing_audience()),
+    )
+    .with_event_publisher(events.clone())
+    .delete(owner_receipt())
+    .await;
+    assert!(result.is_err());
+    assert!(events.0.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn committed_deletion_purges_activity_even_when_description_cleanup_fails() {
     let mut repo = MockInitiativeRepo::new();
     repo.expect_delete()

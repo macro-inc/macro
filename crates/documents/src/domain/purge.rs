@@ -124,15 +124,9 @@ where
         document_id: String,
         target: PurgeTarget,
     ) -> Result<(), DocumentError> {
-        // A failed read only narrows who hears about the purge; it never blocks it.
-        let audience = self
-            .audience
-            .users(&document_id)
-            .await
-            .inspect_err(|error| {
-                tracing::warn!(?error, %document_id, "unable to read document audience before purge");
-            })
-            .unwrap_or_default();
+        // Read before anything is removed: without it no client hears about the purge,
+        // and failing here leaves the document for a retry like every step below.
+        let audience = self.audience.users(&document_id).await?;
         self.queue
             .enqueue(document_id.clone(), target.owner.clone())
             .await?;

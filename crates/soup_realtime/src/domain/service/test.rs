@@ -407,6 +407,18 @@ async fn audience_users_receive_the_patch_alongside_current_accessors() {
     assert_eq!(recipients, HashSet::from([user("one"), user("former")]));
 }
 
+#[test]
+fn patch_debug_output_counts_the_audience_without_naming_it() {
+    let patch = SoupRealtimePatch::for_entity(Patch::Deleted(document(DOCUMENT_ID)))
+        .with_audience(vec![user("former")]);
+
+    let rendered = format!("{patch:?}");
+
+    assert!(rendered.contains(DOCUMENT_ID));
+    assert!(rendered.contains("audience_count: 1"));
+    assert!(!rendered.contains("former@example.com"));
+}
+
 #[tokio::test]
 async fn access_failure_is_returned_and_prevents_publication() {
     let harness = harness(vec![user("one")], true, HashSet::new());

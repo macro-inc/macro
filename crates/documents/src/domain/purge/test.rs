@@ -239,22 +239,16 @@ async fn purge_event_carries_the_audience_read_before_the_rows_are_deleted() {
 }
 
 #[tokio::test]
-async fn audience_failure_still_purges_with_an_empty_audience() {
+async fn audience_failure_stops_before_anything_is_removed() {
     let state = Arc::new(State {
         fail_audience: AtomicBool::new(true),
         ..State::default()
     });
     let id = Uuid::now_v7();
-    purger(&state).purge(id).await.unwrap();
-    assert_eq!(
-        state.steps(),
-        steps(id, &["find", "audience", "queue", "broker", "rows"])
-    );
-    assert_eq!(
-        *state.published_audiences.lock().unwrap(),
-        vec![serde_json::Value::Null]
-    );
-    assert!(!state.exists());
+    assert!(purger(&state).purge(id).await.is_err());
+    assert_eq!(state.steps(), steps(id, &["find", "audience"]));
+    assert!(state.published_audiences.lock().unwrap().is_empty());
+    assert!(state.exists());
 }
 
 #[tokio::test]

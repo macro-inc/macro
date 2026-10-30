@@ -50,7 +50,12 @@ impl MacroEventBroker for FailingEventBroker {
 async fn publishes_document_purged_event_to_documents_topic() {
     let event_broker = RecordingEventBroker::default();
 
-    publish_document_purged_event(&event_broker, "document-one").unwrap();
+    publish_document_purged_event(
+        &event_broker,
+        "document-one",
+        vec![MacroUserIdStr::parse_from_str("macro|viewer@example.com").unwrap()],
+    )
+    .unwrap();
 
     let published = event_broker.published.lock().unwrap();
     assert_eq!(published.len(), 1);
@@ -63,13 +68,13 @@ async fn publishes_document_purged_event_to_documents_topic() {
     assert_eq!(event.envelope["event_type"], json!("document.purged"));
     assert_eq!(
         event.envelope["metadata"],
-        json!({ "document_id": "document-one" })
+        json!({ "document_id": "document-one", "audience": ["macro|viewer@example.com"] })
     );
 }
 
 #[test]
 fn returns_immediate_broker_failures() {
-    let error = publish_document_purged_event(&FailingEventBroker, "document-one")
+    let error = publish_document_purged_event(&FailingEventBroker, "document-one", Vec::new())
         .expect_err("immediate broker failure should be returned");
 
     assert!(matches!(
