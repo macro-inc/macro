@@ -20,6 +20,7 @@ import {
 import { createSignal, getOwner, Match, Show, Switch } from 'solid-js';
 import { render } from 'solid-js/web';
 import { macroLightTheme } from '../../../../features/theme/themes/macro-light';
+import { ConfirmDrawer } from '../ConfirmDrawer';
 import { MobileDrawer } from '../MobileDrawer';
 
 for (const [token, value] of Object.entries(macroLightTheme.colorTokens)) {
@@ -267,6 +268,46 @@ function UncontrolledScenario() {
   );
 }
 
+/** Shaped like the Android share sheet: closing it asks to discard first. */
+function DiscardScenario() {
+  const [open, setOpen] = createSignal(true);
+  const [confirmDiscard, setConfirmDiscard] = createSignal(false);
+  return (
+    <>
+      <MobileDrawer
+        side="bottom"
+        open={open()}
+        onOpenChange={(next) => {
+          if (!next) setConfirmDiscard(true);
+        }}
+      >
+        <MobileDrawer.Portal>
+          <MobileDrawer.Overlay />
+          <MobileDrawer.Content aria-label="Share to Macro" targetHeight={80}>
+            <MobileDrawer.Handle />
+            <div class="h-40 px-6">
+              <Button onClick={() => press('Send')}>Send</Button>
+            </div>
+          </MobileDrawer.Content>
+        </MobileDrawer.Portal>
+      </MobileDrawer>
+      <ConfirmDrawer
+        open={confirmDiscard()}
+        onOpenChange={setConfirmDiscard}
+        title="Discard this share?"
+        body="Your message and shared attachments will be removed."
+        cancelLabel="Keep editing"
+        confirmLabel="Discard"
+        tone="danger"
+        onConfirm={() => {
+          setConfirmDiscard(false);
+          setOpen(false);
+        }}
+      />
+    </>
+  );
+}
+
 function Fixture() {
   const scenario = new URLSearchParams(location.search).get('scenario');
   return (
@@ -280,6 +321,9 @@ function Fixture() {
       <Switch fallback={<EventScenario />}>
         <Match when={scenario === 'settings'}>
           <SettingsScenario />
+        </Match>
+        <Match when={scenario === 'discard'}>
+          <DiscardScenario />
         </Match>
         <Match when={scenario === 'composer'}>
           <DirtyComposerScenario />

@@ -39,7 +39,13 @@ struct SetCallDrawerChannelTitleArgs: Decodable {
 class CallKitPlugin: Plugin, @unchecked Sendable {
     private var mediaSession: NativeLiveKitCallSession?
     private var callCoordinator: IncomingCallCoordinator!
-    private let videoOverlay = CallVideoOverlayController()
+    /// Created in `load(webview:)`, never in an initializer: Tauri constructs
+    /// plugins before `UIApplicationMain`. UIKit registers a gesture recognizer
+    /// with the running application when it's added to a view, so recognizers
+    /// created earlier keep a nil delayed-touch dispatcher, and UIKit aborts
+    /// (`insertObject:atIndex:` nil in `_delayTouchesForEvent:inPhase:`) the
+    /// first time one of them delays a touch, e.g. on touching the participant row.
+    private var videoOverlay: CallVideoOverlayController!
     private var pendingParticipantDisplayNamesByIdentity: [String: String] = [:]
 
     // Singleton channels avoid leaking listeners across webview reloads/HMR.
@@ -58,6 +64,9 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
 
     override public func load(webview: WKWebView) {
         callKitLog("Tauri CallKitPlugin loading")
+        if videoOverlay == nil {
+            videoOverlay = CallVideoOverlayController()
+        }
         callCoordinator = IncomingCallCoordinator(
             mediaSession: { [weak self] in
                 guard let self else {

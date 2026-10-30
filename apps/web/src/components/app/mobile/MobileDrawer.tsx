@@ -1,6 +1,6 @@
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { isEditableInput } from '@core/util/isEditableInput';
-import Drawer from '@corvu/drawer';
+import Drawer, { type Size } from '@corvu/drawer';
 import { Layer } from '@ui/components/Layer';
 import { cn } from '@ui/utils/classname';
 import {
@@ -289,12 +289,16 @@ export const MobileDrawer = Object.assign(
     ]);
     let uncontrolledOpen = props.initialOpen ?? false;
     let disposed = false;
-    const [snapPoint, setSnapPoint] =
-      createSignal<ComponentProps<typeof Drawer>['activeSnapPoint']>(0);
     onCleanup(() => {
       disposed = true;
     });
     const closed = () => disposed || !(props.open ?? uncontrolledOpen);
+    // A drag past the break point moves Corvu to its closed snap point before
+    // it asks to close. An owner that keeps the drawer open (to confirm a
+    // discard) would leave it parked off-screen behind its scrim, so return
+    // it to the open snap point. It starts closed, as Corvu's own state does,
+    // so opening slides it in.
+    const [activeSnapPoint, setActiveSnapPoint] = createSignal<Size>(0);
     return (
       <Drawer
         breakPoints={[0.8]}
@@ -302,15 +306,13 @@ export const MobileDrawer = Object.assign(
         noOutsidePointerEvents={false}
         restoreFocus={false}
         {...rest}
-        activeSnapPoint={snapPoint()}
-        onActiveSnapPointChange={setSnapPoint}
+        activeSnapPoint={activeSnapPoint()}
+        onActiveSnapPointChange={setActiveSnapPoint}
         onOpenChange={(open) => {
           uncontrolledOpen = open;
           local.onOpenChange?.(open);
-          // Corvu moves a dragged sheet to its closed snap point before asking
-          // to close. An owner that keeps it open (a discard prompt, a pending
-          // action) would leave it off screen behind a live scrim.
-          if (!open && !closed()) setSnapPoint(props.defaultSnapPoint ?? 1);
+          if (!open && !closed())
+            setActiveSnapPoint(props.defaultSnapPoint ?? 1);
         }}
         onOutsidePointer={(event) => {
           if (!dismissesDrawer(event)) event.preventDefault();

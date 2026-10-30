@@ -113,6 +113,9 @@ pub struct DiscussionContext {
     pub prompt_message_id: Uuid,
     /// Who posted it.
     pub sender: ContextPerson,
+    /// Set when `sender` is an agent handing the discussion on for a person.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_request: Option<AgentRequest>,
     /// What the message answers.
     pub reply_target: ReplyTarget,
     /// The message's own discussion, from its root through the message.
@@ -194,6 +197,16 @@ impl TriggerContext {
             }
         }
     }
+}
+
+/// An agent's message asking another agent for something on a person's behalf.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentRequest {
+    /// The person the asking agent acts for, who owns the work it starts.
+    pub on_behalf_of: ContextPerson,
+    /// Agent-to-agent handoffs since a person last wrote in the discussion,
+    /// this one included.
+    pub hops: usize,
 }
 
 /// Where a discussion lives. Each carries its name, so the agent is never

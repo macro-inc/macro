@@ -12,28 +12,52 @@ async function settled(sheet: Locator) {
   await expect(sheet).not.toHaveAttribute('data-transitioning');
 }
 
-/** Drags a sheet by its handle to the bottom of the screen. Playwright has no touch drag. */
-async function swipeDown(page: Page, sheet: Locator) {
+const pressed = (page: Page) => page.getByRole('status', { name: 'Pressed' });
+
+/** A finger dragging the sheet down by its top edge, past the break point. */
+async function dragDown(page: Page, sheet: Locator) {
   const box = await sheet.boundingBox();
-  const viewport = page.viewportSize();
-  if (!box || !viewport) throw new Error('The sheet is not rendered');
+  if (!box) throw new Error('The sheet is not rendered');
   const x = box.x + box.width / 2;
-  const from = box.y + 10;
-  const to = viewport.height - 4;
-  const session = await page.context().newCDPSession(page);
-  const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', y?: number) =>
-    session.send('Input.dispatchTouchEvent', {
-      type,
-      touchPoints: y === undefined ? [] : [{ x, y }],
+  const y = box.y + 12;
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x, y }],
+  });
+  for (let step = 1; step <= 10; step += 1)
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x, y: y + (box.height * step) / 10 }],
     });
-  await touch('touchStart', from);
-  for (let step = 1; step <= 12; step++)
-    await touch('touchMove', from + ((to - from) * step) / 12);
-  await touch('touchEnd');
-  await session.detach();
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
+    touchPoints: [],
+  });
 }
 
-const pressed = (page: Page) => page.getByRole('status', { name: 'Pressed' });
+test('a sheet its owner keeps open returns into view after a drag down', async ({
+  page,
+}) => {
+  await page.goto('/?scenario=discard');
+  const share = page.getByRole('dialog', { name: 'Share to Macro' });
+  await settled(share);
+
+  await dragDown(page, share);
+
+  const confirm = page.getByRole('dialog', { name: 'Discard this share?' });
+  await settled(confirm);
+  await settled(share);
+  await tap(page, confirm.getByRole('button', { name: 'Keep editing' }));
+  await expect(confirm).toHaveCount(0);
+  await tap(page, share.getByRole('button', { name: 'Send' }));
+  await expect(pressed(page)).toHaveText('Send');
+
+  await dragDown(page, share);
+  await settled(confirm);
+  await tap(page, confirm.getByRole('button', { name: 'Discard' }));
+  await expect(share).toHaveCount(0);
+});
 
 test('a pointerdown dismissal does not dismiss the parent on pointerup', async ({
   page,
@@ -178,7 +202,7 @@ test('a tap on the backdrop of event details closes it without pressing the page
   await expect(pressed(page)).toHaveText('Page control');
 });
 
-test('Keep editing after swiping a sheet down brings it back with its edits', async ({
+test('Keep editing after a drag on the composer keeps its edits, and Discard closes it', async ({
   page,
 }) => {
   await page.goto('/?scenario=composer');
@@ -190,7 +214,7 @@ test('Keep editing after swiping a sheet down brings it back with its edits', as
     name: 'You still have remaining changes',
   });
 
-  await swipeDown(page, composer);
+  await dragDown(page, composer);
   await settled(prompt);
   await settled(composer);
   await tap(page, prompt.getByRole('button', { name: 'Keep editing' }));
@@ -201,25 +225,8 @@ test('Keep editing after swiping a sheet down brings it back with its edits', as
   await tap(page, composer.getByRole('button', { name: 'Create event' }));
   await expect(pressed(page)).toHaveText('Create event');
   await expect(prompt).toHaveCount(0);
-});
 
-test('a sheet asks each time it is swiped down, and Discard closes it', async ({
-  page,
-}) => {
-  await page.goto('/?scenario=composer');
-  const composer = page.getByRole('dialog', { name: 'New event' });
-  await settled(composer);
-  const prompt = page.getByRole('dialog', {
-    name: 'You still have remaining changes',
-  });
-
-  await swipeDown(page, composer);
-  await settled(prompt);
-  await tap(page, prompt.getByRole('button', { name: 'Keep editing' }));
-  await expect(prompt).toHaveCount(0);
-  await settled(composer);
-
-  await swipeDown(page, composer);
+  await dragDown(page, composer);
   await settled(prompt);
   await tap(page, prompt.getByRole('button', { name: 'Discard' }));
 
@@ -235,7 +242,7 @@ test('a swipe does not hide a confirmation that is still pending', async ({
   const confirmation = page.getByRole('dialog', { name: 'Delete event' });
   await settled(confirmation);
 
-  await swipeDown(page, confirmation);
+  await dragDown(page, confirmation);
 
   await settled(confirmation);
   await expect(pressed(page)).toHaveText('');
@@ -251,7 +258,7 @@ test('a swipe over event details closes only the sheet on top', async ({
   const rsvp = page.getByRole('dialog', { name: 'RSVP to recurring event' });
   await settled(rsvp);
 
-  await swipeDown(page, rsvp);
+  await dragDown(page, rsvp);
 
   await expect(rsvp).toHaveCount(0);
   await settled(details);
@@ -264,16 +271,16 @@ test('a swiped-away sheet opens again on screen', async ({ page }) => {
   await tap(page, details.getByRole('button', { name: 'RSVP' }));
   const rsvp = page.getByRole('dialog', { name: 'RSVP to recurring event' });
   await settled(rsvp);
-  await swipeDown(page, rsvp);
+  await dragDown(page, rsvp);
   await expect(rsvp).toHaveCount(0);
 
   await tap(page, details.getByRole('button', { name: 'RSVP' }));
   await settled(rsvp);
 
-  await swipeDown(page, rsvp);
+  await dragDown(page, rsvp);
   await expect(rsvp).toHaveCount(0);
   await settled(details);
-  await swipeDown(page, details);
+  await dragDown(page, details);
   await expect(details).toHaveCount(0);
 });
 
@@ -286,7 +293,7 @@ test('a sheet opened by its trigger slides up, and swipes away', async ({
 
   await expect(filters).toHaveAttribute('data-opening');
   await settled(filters);
-  await swipeDown(page, filters);
+  await dragDown(page, filters);
 
   await expect(filters).toHaveCount(0);
 });
