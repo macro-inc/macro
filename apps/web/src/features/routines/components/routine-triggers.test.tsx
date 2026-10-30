@@ -1,12 +1,21 @@
-import { fireEvent, render, screen, within } from '@solidjs/testing-library';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RoutineTriggerDraft } from '../core/routine-triggers';
 import { RoutineTriggers } from './routine-triggers';
+
+const phone = vi.hoisted(() => ({ value: false }));
 
 vi.mock('@core/component/DatePicker/DatePickerUI', () => ({
   DatePickerUI: () => null,
 }));
+vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => phone.value }));
 
 const email: RoutineTriggerDraft = {
   id: 'email',
@@ -39,45 +48,95 @@ function renderRows(initial: RoutineTriggerDraft[]) {
   return { triggers, onChange };
 }
 
+/** Kobalte menus open from the keyboard in jsdom. */
+function press(element: HTMLElement, key: string) {
+  element.focus();
+  fireEvent.keyDown(element, { key });
+}
+
+function openAddTrigger() {
+  press(screen.getByRole('button', { name: 'Add trigger' }), 'Enter');
+  return screen.getByRole('textbox', { name: 'Search triggers' });
+}
+
+function item(name: RegExp | string) {
+  return screen.getByRole('menuitem', { name, hidden: true });
+}
+
+beforeEach(() => {
+  phone.value = false;
+});
+
 describe('routine triggers on the routine page', () => {
-  it('shows each AI check on its own row and edits it in place', () => {
+  it('reads each trigger as a sentence with its AI check hanging below', () => {
     const { triggers } = renderRows([email]);
-    expect(screen.getByText('Only if')).toBeTruthy();
     expect(
-      screen.getByRole('button', { name: 'Edit New email received trigger' })
-        .textContent
-    ).toContain('Your inbox');
-    // The token no longer repeats the condition; its row shows it.
+      screen.getByRole('button', { name: 'Change New email received trigger' })
+    ).toBeTruthy();
+    expect(screen.getByText('in')).toBeTruthy();
+    expect(screen.getByText('Is this about money?')).toBeTruthy();
     fireEvent.click(
       screen.getByRole('button', {
         name: 'Edit condition: Is this about money?',
       })
     );
-    const panel = screen.getByRole('dialog', { name: 'Edit trigger' });
+    const panel = screen.getByRole('dialog', { name: 'Edit condition' });
     fireEvent.input(within(panel).getByRole('textbox'), {
       target: { value: 'Is this an invoice?' },
     });
     fireEvent.click(within(panel).getByRole('button', { name: 'Done' }));
     expect(triggers()).toMatchObject([{ condition: 'Is this an invoice?' }]);
-    expect(
-      screen.getByRole('button', {
-        name: 'Edit condition: Is this an invoice?',
-      })
-    ).toBeTruthy();
+    // × takes the check away; + Filter adds one back.
+    fireEvent.click(screen.getByRole('button', { name: 'Remove condition' }));
+    expect(triggers()[0]).toMatchObject({ condition: undefined });
+    fireEvent.click(screen.getByRole('button', { name: 'Add filter' }));
+    const filter = screen.getByRole('dialog', { name: 'Add filter' });
+    fireEvent.input(within(filter).getByRole('textbox'), {
+      target: { value: 'Is it urgent?' },
+    });
+    fireEvent.click(within(filter).getByRole('button', { name: 'Done' }));
+    expect(triggers()).toMatchObject([{ condition: 'Is it urgent?' }]);
   });
 
-  it('turns a typed schedule into the top choice and keeps the full list', () => {
+  it('adds a trigger from its type’s submenu', () => {
     const { triggers } = renderRows([]);
-    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
-    fireEvent.input(screen.getByRole('textbox', { name: 'Search triggers' }), {
-      target: { value: 'every weekday at 9am' },
-    });
-    const choices = screen
-      .getAllByRole('button')
-      .filter((button) => button.hasAttribute('data-trigger-option'));
-    expect(choices[0]?.textContent).toContain('Every weekday, 9:00 AM');
-    expect(screen.getByRole('button', { name: 'Task created' })).toBeTruthy();
-    fireEvent.click(choices[0]!);
+    openAddTrigger();
+    press(item('Tasks'), 'ArrowRight');
+    press(item(/^Task created/), 'Enter');
+    const panel = screen.getByRole('dialog', { name: 'Add trigger' });
+    expect(within(panel).getByText('Task created')).toBeTruthy();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Add trigger' }));
+    expect(triggers()).toMatchObject([
+      { kind: 'event', events: ['task.created'] },
+    ]);
+  });
+
+  it('switches a trigger’s event from its token, keeping its AI check', () => {
+    const { triggers } = renderRows([email]);
+    press(
+      screen.getByRole('button', { name: 'Change New email received trigger' }),
+      'Enter'
+    );
+    press(item('Tasks'), 'ArrowRight');
+    press(item(/^Task created/), 'Enter');
+    expect(triggers()).toMatchObject([
+      {
+        id: 'email',
+        events: ['task.created'],
+        condition: 'Is this about money?',
+      },
+    ]);
+  });
+
+  it('searches every submenu, and a typed schedule becomes the top row', () => {
+    const { triggers } = renderRows([]);
+    const search = openAddTrigger();
+    fireEvent.input(search, { target: { value: 'status' } });
+    expect(item(/^Status changed/).textContent).toContain('Tasks');
+    fireEvent.input(search, { target: { value: 'every weekday at 9am' } });
+    const [first] = screen.getAllByRole('menuitem', { hidden: true });
+    expect(first?.textContent).toContain('Weekdays at 9:00 AM');
+    fireEvent.keyDown(search, { key: 'Enter' });
     const panel = screen.getByRole('dialog', { name: 'Add trigger' });
     expect(
       within(panel).getByRole<HTMLInputElement>('textbox', { name: 'Run time' })
@@ -89,10 +148,9 @@ describe('routine triggers on the routine page', () => {
     ]);
   });
 
-  it('leaves Enter to an input method that is composing', () => {
+  it('leaves Enter to an input method that is composing', async () => {
     renderRows([]);
-    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
-    const search = screen.getByRole('textbox', { name: 'Search triggers' });
+    const search = openAddTrigger();
     fireEvent.input(search, { target: { value: 'task' } });
     fireEvent.keyDown(search, { key: 'Enter', isComposing: true });
     // Still searching: confirming a candidate picked nothing.
@@ -101,8 +159,27 @@ describe('routine triggers on the routine page', () => {
     );
     // A plain Enter picks the first match and leaves the search.
     fireEvent.keyDown(search, { key: 'Enter' });
+    expect(screen.getByRole('dialog', { name: 'Add trigger' })).toBeTruthy();
+    // The menu closed (jsdom keeps its exit animation's content around).
+    const [menuButton] = screen.getAllByRole('button', {
+      name: 'Add trigger',
+      hidden: true,
+    });
+    await waitFor(() =>
+      expect(menuButton?.getAttribute('aria-expanded')).toBe('false')
+    );
+  });
+
+  it('opens a type in place on a phone, with a row back', () => {
+    phone.value = true;
+    renderRows([]);
+    openAddTrigger();
+    press(item('Tasks'), 'Enter');
+    expect(item(/^Status changed/)).toBeTruthy();
     expect(
-      screen.queryByRole('textbox', { name: 'Search triggers' })
+      screen.queryByRole('menuitem', { name: 'Email', hidden: true })
     ).toBeNull();
+    press(item('Tasks'), 'Enter');
+    expect(item('Email')).toBeTruthy();
   });
 });

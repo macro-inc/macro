@@ -3,46 +3,46 @@ import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
-import ClockClockwiseIcon from '@icon/system/regular/clock-clockwise.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import FileIcon from '@icon/system/regular/file-text.svg';
 import HashIcon from '@icon/system/regular/hash.svg';
-import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import PhoneIcon from '@icon/system/regular/phone.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import { Button, badgeTriggerClasses, cn } from '@ui';
-import { format } from 'date-fns';
+import {
+  Button,
+  ButtonGroup,
+  type ButtonSize,
+  type ButtonVariant,
+  badgeTriggerClasses,
+  cn,
+} from '@ui';
 import {
   type Accessor,
-  createMemo,
   createSignal,
   For,
   type JSX,
   Match,
-  onMount,
   Show,
   Switch,
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
+  describeTrigger,
   type EventTriggerDraft,
   eventScopeKind,
   eventTriggerLabel,
   isGlobalEvent,
-  newScheduleTrigger,
   type RoutineEventGroup,
   type RoutineTriggerDraft,
   routineEvents,
-  type ScheduleTriggerDraft,
   validateTriggers,
 } from '../core/routine-triggers';
-import {
-  parseRecurringSchedule,
-  scheduleTriggerLabel,
-} from '../core/schedule-language';
 import { RoutineScheduleSettings } from './routine-schedule-settings';
+import { menuMount } from './routine-search-menu';
+import { TriggerMenu } from './routine-trigger-menu';
 
 type EventSlots = {
   renderEventLabel: (trigger: Accessor<EventTriggerDraft>) => JSX.Element;
@@ -57,31 +57,6 @@ type EventSlots = {
   ) => JSX.Element;
 };
 
-/** Groups in the order people say them: time first, then what changed. */
-const EVENT_GROUPS: RoutineEventGroup[] = [
-  'Email',
-  'Tasks',
-  'Channels',
-  'Documents',
-  'Calls',
-];
-
-function scheduleSummary(trigger: ScheduleTriggerDraft) {
-  const label = scheduleTriggerLabel(trigger);
-  if (trigger.frequency === 'once') {
-    const date = new Date(trigger.onceAt);
-    return Number.isFinite(date.getTime())
-      ? format(date, 'MMM d, h:mm a')
-      : 'Run once';
-  }
-  if (trigger.frequency === 'hour' || trigger.frequency === 'custom')
-    return label;
-  const date = new Date(`2000-01-01T${trigger.time}`);
-  return Number.isFinite(date.getTime())
-    ? `${label}, ${format(date, 'h:mm a')}`
-    : label;
-}
-
 function triggerGroup(trigger: EventTriggerDraft): RoutineEventGroup {
   return match(eventScopeKind(trigger))
     .returnType<RoutineEventGroup>()
@@ -93,213 +68,41 @@ function triggerGroup(trigger: EventTriggerDraft): RoutineEventGroup {
     .exhaustive();
 }
 
-function EventIcon(props: { group: RoutineEventGroup; class: string }) {
+function TriggerIcon(props: { trigger: RoutineTriggerDraft; class: string }) {
+  const group = () =>
+    props.trigger.kind === 'event' ? triggerGroup(props.trigger) : undefined;
   return (
-    <Switch fallback={<FileIcon class={props.class} />}>
-      <Match when={props.group === 'Channels'}>
+    <Switch fallback={<ClockIcon class={props.class} />}>
+      <Match
+        when={
+          props.trigger.kind === 'schedule' &&
+          props.trigger.frequency === 'once'
+        }
+      >
+        <CalendarIcon class={props.class} />
+      </Match>
+      <Match when={group() === 'Channels'}>
         <HashIcon class={props.class} />
       </Match>
-      <Match when={props.group === 'Tasks'}>
+      <Match when={group() === 'Tasks'}>
         <CheckCircleIcon class={props.class} />
       </Match>
-      <Match when={props.group === 'Email'}>
+      <Match when={group() === 'Email'}>
         <EnvelopeIcon class={props.class} />
       </Match>
-      <Match when={props.group === 'Calls'}>
+      <Match when={group() === 'Calls'}>
         <PhoneIcon class={props.class} />
+      </Match>
+      <Match when={group() === 'Documents'}>
+        <FileIcon class={props.class} />
       </Match>
     </Switch>
   );
 }
 
-function TriggerIcon(props: { trigger: RoutineTriggerDraft; class: string }) {
-  return (
-    <Show
-      when={props.trigger.kind === 'event' && props.trigger}
-      fallback={
-        <Show
-          when={
-            props.trigger.kind === 'schedule' &&
-            props.trigger.frequency === 'once'
-          }
-          fallback={<ClockIcon class={props.class} />}
-        >
-          <CalendarIcon class={props.class} />
-        </Show>
-      }
-    >
-      {(event) => (
-        <EventIcon group={triggerGroup(event())} class={props.class} />
-      )}
-    </Show>
-  );
-}
-
-/** A row of a trigger menu: a highlighted, keyboard-reachable choice. */
-function ChoiceRow(props: {
-  onSelect: () => void;
-  title?: string;
-  children: JSX.Element;
-  selected?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      data-trigger-option
-      title={props.title}
-      class={cn(
-        'flex min-h-8 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-ink outline-none hover:bg-ink/5 focus-visible:bg-ink/5 touch:min-h-11',
-        props.selected && 'bg-ink/5'
-      )}
-      onClick={() => props.onSelect()}
-    >
-      {props.children}
-    </button>
-  );
-}
-
-function GroupLabel(props: { children: JSX.Element }) {
-  return (
-    <p class="flex h-7 items-end px-2 pb-1 text-xs text-ink-extra-muted">
-      {props.children}
-    </p>
-  );
-}
-
-/** Add trigger: search, a typed schedule as the top row, then every trigger. */
-function TriggerChoices(props: {
-  onSelect: (trigger: RoutineTriggerDraft) => void;
-}) {
-  let inputRef: HTMLInputElement | undefined;
-  onMount(() => inputRef?.focus());
-  const [search, setSearch] = createSignal('');
-  const recurring = createMemo(() => {
-    const parts = parseRecurringSchedule(search());
-    return parts
-      ? { ...newScheduleTrigger(parts.frequency), ...parts }
-      : undefined;
-  });
-  // A typed schedule becomes the top row; the full list stays beneath it.
-  const matches = (text: string) =>
-    !!recurring() || text.toLowerCase().includes(search().trim().toLowerCase());
-  const events = () =>
-    routineEvents.filter((event) =>
-      matches(`${event.group} ${event.label} ${event.description}`)
-    );
-  const showSchedule = () =>
-    matches('On a schedule every hourly daily weekly monthly cron repeat');
-  const showOnce = () => matches('Once one-off run once date');
-  const nothing = () =>
-    !recurring() && !events().length && !showSchedule() && !showOnce();
-  return (
-    <div
-      class="flex min-h-0 flex-col"
-      onKeyDown={(e) => {
-        // Keys that pick or confirm an IME candidate aren't the menu's.
-        if (e.isComposing || !['ArrowDown', 'ArrowUp', 'Enter'].includes(e.key))
-          return;
-        const items = [
-          ...e.currentTarget.querySelectorAll<HTMLButtonElement>(
-            '[data-trigger-option]'
-          ),
-        ];
-        const index = items.indexOf(
-          document.activeElement as HTMLButtonElement
-        );
-        if (e.key === 'Enter') {
-          if (e.target instanceof HTMLInputElement) {
-            e.preventDefault();
-            items[0]?.click();
-          }
-          return;
-        }
-        e.preventDefault();
-        items[
-          (index + (e.key === 'ArrowDown' ? 1 : -1) + items.length) %
-            items.length
-        ]?.focus();
-      }}
-    >
-      <div class="flex h-10 shrink-0 items-center gap-2 border-b border-edge-muted px-3">
-        <SearchIcon class="size-4 shrink-0 text-ink-extra-muted" />
-        <input
-          ref={inputRef}
-          aria-label="Search triggers"
-          placeholder="Search, or type “every weekday at 9am”"
-          value={search()}
-          onInput={(e) => setSearch(e.currentTarget.value)}
-          class="w-full bg-transparent text-sm outline-none placeholder:text-ink-placeholder"
-        />
-      </div>
-      <div class="min-h-0 max-h-96 overflow-y-auto p-1.5">
-        <Show when={recurring()}>
-          {(parts) => (
-            <>
-              <ChoiceRow selected onSelect={() => props.onSelect(parts())}>
-                <ClockClockwiseIcon class="size-4 shrink-0 self-start mt-0.5 text-ink-muted" />
-                <span class="flex min-w-0 flex-1 flex-col">
-                  <span class="truncate">{scheduleSummary(parts())}</span>
-                  <span class="truncate text-xs text-ink-muted">
-                    {parts().timezone.replace(/_/g, ' ')}
-                  </span>
-                </span>
-                <kbd class="shrink-0 rounded border border-edge-muted px-1 font-mono text-[11px] text-ink-extra-muted">
-                  ↵
-                </kbd>
-              </ChoiceRow>
-              <div class="mx-1 my-1 h-px bg-edge-muted" />
-            </>
-          )}
-        </Show>
-        <Show when={showSchedule() || showOnce()}>
-          <GroupLabel>Time</GroupLabel>
-          <Show when={showSchedule()}>
-            <ChoiceRow
-              onSelect={() => props.onSelect(newScheduleTrigger('day'))}
-            >
-              <ClockClockwiseIcon class="size-4 shrink-0 text-ink-muted" />
-              On a schedule
-            </ChoiceRow>
-          </Show>
-          <Show when={showOnce()}>
-            <ChoiceRow
-              onSelect={() => props.onSelect(newScheduleTrigger('once'))}
-            >
-              <CalendarIcon class="size-4 shrink-0 text-ink-muted" />
-              Once
-            </ChoiceRow>
-          </Show>
-        </Show>
-        <For each={EVENT_GROUPS}>
-          {(group) => (
-            <Show when={events().some((event) => event.group === group)}>
-              <GroupLabel>{group}</GroupLabel>
-              <For each={events().filter((event) => event.group === group)}>
-                {(event) => (
-                  <ChoiceRow
-                    title={event.description}
-                    onSelect={() =>
-                      props.onSelect({
-                        id: crypto.randomUUID(),
-                        kind: 'event',
-                        events: [event.value],
-                        ids: isGlobalEvent([event.value]) ? undefined : [],
-                      })
-                    }
-                  >
-                    {event.label}
-                  </ChoiceRow>
-                )}
-              </For>
-            </Show>
-          )}
-        </For>
-        <Show when={nothing()}>
-          <p class="px-2 py-3 text-sm text-ink-muted">No matching triggers</p>
-        </Show>
-      </div>
-    </div>
-  );
+/** Whether an event trigger watches particular items, read as "in …". */
+function hasScope(trigger: EventTriggerDraft) {
+  return !isGlobalEvent(trigger.events) || trigger.ids !== undefined;
 }
 
 function scopeFieldLabel(trigger: EventTriggerDraft) {
@@ -312,7 +115,7 @@ function scopeFieldLabel(trigger: EventTriggerDraft) {
     .exhaustive();
 }
 
-/** What an event trigger watches: its scope as a token that opens a picker in place. */
+/** A new event trigger's settings: what it watches, then its AI check. */
 function EventSettings(
   props: EventSlots & {
     trigger: EventTriggerDraft;
@@ -321,8 +124,6 @@ function EventSettings(
 ) {
   const [choosing, setChoosing] = createSignal(false);
   const trigger = () => props.trigger;
-  const hasScope = () =>
-    !isGlobalEvent(props.trigger.events) || props.trigger.ids !== undefined;
   return (
     <div class="grid gap-3">
       <p class="text-xs leading-4 text-ink-muted">
@@ -333,7 +134,7 @@ function EventSettings(
           )
           .join(' ')}
       </p>
-      <Show when={hasScope()}>
+      <Show when={hasScope(props.trigger)}>
         <div class="grid gap-1.5">
           <span class="text-xs font-medium text-ink-muted">
             {scopeFieldLabel(props.trigger)}
@@ -374,40 +175,30 @@ function EventSettings(
   );
 }
 
-/**
- * One trigger's popover: choose a trigger (for a new one), then configure it.
- * `anchor` renders the element that opens it.
- */
-function TriggerPopover(
+/** The panel's contents, created fresh each time it opens. */
+function PanelBody(
   props: EventSlots & {
-    trigger?: RoutineTriggerDraft;
+    trigger: RoutineTriggerDraft;
+    isNew: boolean;
     onSave: (trigger: RoutineTriggerDraft) => void;
+    onClose: () => void;
     onRemove?: () => void;
-    anchorLabel: string;
-    anchorTitle?: string;
-    anchorClass: string;
-    anchor: JSX.Element;
+    onBack?: () => void;
   }
 ) {
-  let triggerRef: HTMLButtonElement | undefined;
-  const [open, setOpen] = createSignal(false);
-  const [pending, setPending] = createSignal<RoutineTriggerDraft>();
+  const [pending, setPending] = createSignal(props.trigger);
   const [error, setError] = createSignal<string | null>(null);
-  const edit = (trigger: RoutineTriggerDraft | undefined) => {
+  const edit = (trigger: RoutineTriggerDraft) => {
     setPending(trigger);
     setError(null);
   };
-  const changeOpen = (value: boolean) => {
-    if (value) edit(props.trigger);
-    setOpen(value);
-  };
   const schedule = () => {
     const value = pending();
-    return value?.kind === 'schedule' ? value : undefined;
+    return value.kind === 'schedule' ? value : undefined;
   };
   const event = () => {
     const value = pending();
-    return value?.kind === 'event' ? value : undefined;
+    return value.kind === 'event' ? value : undefined;
   };
   const title = () => {
     const value = event();
@@ -416,37 +207,137 @@ function TriggerPopover(
   };
   const save = () => {
     const value = pending();
-    if (!value) return;
-    const error = validateTriggers(
+    const message = validateTriggers(
       [value],
-      !props.trigger || value.kind === 'event'
+      props.isNew || value.kind === 'event'
     );
-    if (error) {
-      setError(error);
+    if (message) {
+      setError(message);
       return;
     }
     props.onSave(value);
-    setOpen(false);
   };
   return (
+    <>
+      <div class="flex shrink-0 items-center gap-1.5 px-3.5 pt-3">
+        <Show when={props.onBack}>
+          {(back) => (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              class="-ml-1"
+              aria-label="Back to triggers"
+              onClick={() => back()()}
+            >
+              <CaretLeftIcon class="size-3.5" />
+            </Button>
+          )}
+        </Show>
+        <span class="min-w-0 truncate text-sm font-semibold">{title()}</span>
+      </div>
+      <div class="min-h-0 overflow-y-auto overscroll-contain px-3.5 pb-3.5 pt-3">
+        <Show when={schedule()}>
+          {(value) => (
+            <RoutineScheduleSettings
+              trigger={value()}
+              onChange={(patch) => edit({ ...value(), ...patch })}
+            />
+          )}
+        </Show>
+        <Show when={event()}>
+          {(value) => (
+            <EventSettings
+              trigger={value()}
+              onChange={edit}
+              renderEventLabel={props.renderEventLabel}
+              renderEventScope={props.renderEventScope}
+              renderEventCondition={props.renderEventCondition}
+            />
+          )}
+        </Show>
+        <Show when={error()}>
+          {(message) => (
+            <p role="alert" class="mt-3 text-xs text-failure">
+              {message()}
+            </p>
+          )}
+        </Show>
+      </div>
+      <div class="flex shrink-0 items-center gap-1.5 border-t border-edge-muted px-3.5 py-2.5">
+        <Show when={props.onRemove}>
+          {(remove) => (
+            <Button
+              variant="danger-ghost"
+              size="sm"
+              onClick={() => {
+                props.onClose();
+                remove()();
+              }}
+            >
+              Remove trigger
+            </Button>
+          )}
+        </Show>
+        <span class="flex-1" />
+        <Button variant="ghost" size="sm" onClick={() => props.onClose()}>
+          Cancel
+        </Button>
+        <Button variant="primary" size="sm" onClick={save}>
+          {props.isNew ? 'Add trigger' : 'Done'}
+        </Button>
+      </div>
+    </>
+  );
+}
+
+/**
+ * One trigger's settings panel. With `anchor` it renders the element that
+ * opens it; otherwise it opens beside `anchorRef`, e.g. after a menu choice.
+ */
+function TriggerPanel(
+  props: EventSlots & {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    trigger: RoutineTriggerDraft;
+    isNew: boolean;
+    onSave: (trigger: RoutineTriggerDraft) => void;
+    onRemove?: () => void;
+    onBack?: () => void;
+    anchor?: {
+      label: string;
+      title?: string;
+      class: string;
+      content: JSX.Element;
+    };
+    anchorRef?: Accessor<HTMLElement | undefined>;
+  }
+) {
+  let triggerRef: HTMLButtonElement | undefined;
+  const anchor = () => props.anchorRef?.() ?? triggerRef;
+  return (
     <Popover
-      open={open()}
-      onOpenChange={changeOpen}
+      open={props.open}
+      onOpenChange={props.onOpenChange}
+      anchorRef={props.anchorRef}
       placement="bottom-start"
       gutter={6}
       boundary={() => document.documentElement}
     >
-      <Popover.Trigger
-        ref={triggerRef}
-        aria-label={props.anchorLabel}
-        title={props.anchorTitle}
-        class={props.anchorClass}
-      >
-        {props.anchor}
-      </Popover.Trigger>
+      <Show when={props.anchor}>
+        {(value) => (
+          <Popover.Trigger
+            ref={triggerRef}
+            aria-label={value().label}
+            title={value().title}
+            class={value().class}
+          >
+            {value().content}
+          </Popover.Trigger>
+        )}
+      </Show>
       <Popover.Portal
         // Stay inside the dialog's focus boundary, outside the clipped composer panel.
-        mount={triggerRef?.closest<HTMLElement>('[role="dialog"]') ?? undefined}
+        mount={menuMount(anchor())}
         ref={(element) => {
           element.style.display = 'contents';
         }}
@@ -456,171 +347,472 @@ function TriggerPopover(
           onKeyDown={(e) => e.stopPropagation()}
         >
           <Popover.Title class="sr-only">
-            {props.trigger ? 'Edit trigger' : 'Add trigger'}
+            {props.isNew ? 'Add trigger' : 'Edit trigger'}
           </Popover.Title>
-          <Show when={pending()} fallback={<TriggerChoices onSelect={edit} />}>
-            <div class="flex shrink-0 items-center gap-1.5 px-3.5 pt-3">
-              <Show when={!props.trigger}>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  class="-ml-1"
-                  aria-label="Back to triggers"
-                  onClick={() => edit(undefined)}
-                >
-                  <CaretLeftIcon class="size-3.5" />
-                </Button>
-              </Show>
-              <span class="min-w-0 truncate text-sm font-semibold">
-                {title()}
-              </span>
-            </div>
-            <div class="min-h-0 overflow-y-auto overscroll-contain px-3.5 pb-3.5 pt-3">
-              <Show when={schedule()}>
-                {(value) => (
-                  <RoutineScheduleSettings
-                    trigger={value()}
-                    onChange={(patch) => edit({ ...value(), ...patch })}
-                  />
-                )}
-              </Show>
-              <Show when={event()}>
-                {(value) => (
-                  <EventSettings
-                    trigger={value()}
-                    onChange={edit}
-                    renderEventLabel={props.renderEventLabel}
-                    renderEventScope={props.renderEventScope}
-                    renderEventCondition={props.renderEventCondition}
-                  />
-                )}
-              </Show>
-              <Show when={error()}>
-                {(message) => (
-                  <p role="alert" class="mt-3 text-xs text-failure">
-                    {message()}
-                  </p>
-                )}
-              </Show>
-            </div>
-            <div class="flex shrink-0 items-center gap-1.5 border-t border-edge-muted px-3.5 py-2.5">
-              <Show when={props.onRemove}>
-                <Button
-                  variant="danger-ghost"
-                  size="sm"
-                  onClick={() => {
-                    setOpen(false);
-                    props.onRemove?.();
-                  }}
-                >
-                  Remove trigger
-                </Button>
-              </Show>
-              <span class="flex-1" />
-              <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
-                Cancel
-              </Button>
-              <Button variant="primary" size="sm" onClick={save}>
-                {props.trigger ? 'Done' : 'Add trigger'}
-              </Button>
-            </div>
-          </Show>
+          <PanelBody
+            trigger={props.trigger}
+            isNew={props.isNew}
+            renderEventLabel={props.renderEventLabel}
+            renderEventScope={props.renderEventScope}
+            renderEventCondition={props.renderEventCondition}
+            onSave={(value) => {
+              props.onSave(value);
+              props.onOpenChange(false);
+            }}
+            onClose={() => props.onOpenChange(false)}
+            onRemove={props.onRemove}
+            onBack={props.onBack}
+          />
         </Popover.Content>
       </Popover.Portal>
     </Popover>
   );
 }
 
-/** A trigger token: the secondary badge every chosen value uses. */
-function tokenClasses() {
-  return badgeTriggerClasses({
-    variant: 'secondary',
-    size: 'sm',
-    class: 'min-w-0 max-w-full text-left',
-  });
-}
-
-/** A saved trigger as a token: its icon, name and what it watches. */
-function TriggerToken(
-  props: EventSlots & {
-    trigger: RoutineTriggerDraft;
-    /** Inline layouts fold the condition into the token. */
-    withCondition?: boolean;
-    onSave: (trigger: RoutineTriggerDraft) => void;
-    onRemove: () => void;
-  }
-) {
-  const event = () =>
-    props.trigger.kind === 'event' ? props.trigger : undefined;
-  const label = () =>
-    props.trigger.kind === 'schedule'
-      ? scheduleSummary(props.trigger)
-      : eventTriggerLabel(props.trigger);
-  return (
-    <TriggerPopover
-      {...props}
-      anchorLabel={`Edit ${label()} trigger`}
-      anchorTitle={
-        props.trigger.kind === 'schedule'
-          ? `${label()} · ${props.trigger.timezone.replace(/_/g, ' ')}`
-          : [label(), event()?.condition?.trim()].filter(Boolean).join(' · if ')
-      }
-      anchorClass={tokenClasses()}
-      anchor={
-        <>
-          <TriggerIcon trigger={props.trigger} class="size-3.5 shrink-0" />
-          <span class="min-w-0 truncate">
-            {label()}
-            <Show when={event()}>
-              {(value) => (
-                <span class="text-ink-muted">
-                  {' · '}
-                  {props.renderEventLabel(value)}
-                </span>
-              )}
-            </Show>
-            <Show when={props.withCondition && event()?.condition?.trim()}>
-              {(condition) => (
-                <span class="text-ink-muted"> · if {condition()}</span>
-              )}
-            </Show>
-          </span>
-        </>
-      }
-    />
-  );
-}
-
+/** "+ Add trigger": the nested menu, then the chosen trigger's panel. */
 function AddTrigger(
   props: EventSlots & {
     onAdd: (trigger: RoutineTriggerDraft) => void;
     label: string;
+    variant: ButtonVariant;
+    size: ButtonSize;
   }
 ) {
+  let button: HTMLButtonElement | undefined;
+  const [menuOpen, setMenuOpen] = createSignal(false);
+  const [pending, setPending] = createSignal<RoutineTriggerDraft>();
   return (
-    <TriggerPopover
+    <>
+      <TriggerMenu
+        open={menuOpen()}
+        onOpenChange={setMenuOpen}
+        onSelect={setPending}
+        triggerLabel="Add trigger"
+        triggerVariant={props.variant}
+        triggerSize={props.size}
+        ref={(element) => {
+          button = element;
+        }}
+      >
+        <PlusIcon class="size-3.5 shrink-0" />
+        {props.label}
+      </TriggerMenu>
+      <Show when={pending()} keyed>
+        {(trigger) => (
+          <TriggerPanel
+            open
+            onOpenChange={(open) => {
+              if (!open) setPending(undefined);
+            }}
+            trigger={trigger}
+            isNew
+            anchorRef={() => button}
+            renderEventLabel={props.renderEventLabel}
+            renderEventScope={props.renderEventScope}
+            renderEventCondition={props.renderEventCondition}
+            onSave={props.onAdd}
+            onBack={() => {
+              setPending(undefined);
+              setMenuOpen(true);
+            }}
+          />
+        )}
+      </Show>
+    </>
+  );
+}
+
+/** A saved trigger as one token that opens its panel, as in the composer. */
+function InlineToken(
+  props: EventSlots & {
+    trigger: RoutineTriggerDraft;
+    onSave: (trigger: RoutineTriggerDraft) => void;
+    onRemove: () => void;
+  }
+) {
+  const [open, setOpen] = createSignal(false);
+  const event = () =>
+    props.trigger.kind === 'event' ? props.trigger : undefined;
+  return (
+    <TriggerPanel
       {...props}
-      onSave={props.onAdd}
-      anchorLabel="Add trigger"
-      anchorClass={badgeTriggerClasses({ variant: 'outline', size: 'sm' })}
-      anchor={
-        <>
-          <PlusIcon class="size-3 shrink-0" />
-          {props.label}
-        </>
-      }
+      open={open()}
+      onOpenChange={setOpen}
+      isNew={false}
+      anchor={{
+        label: `Edit ${describeTrigger(props.trigger)} trigger`,
+        title:
+          props.trigger.kind === 'schedule'
+            ? `${describeTrigger(props.trigger)} · ${props.trigger.timezone.replace(/_/g, ' ')}`
+            : [describeTrigger(props.trigger), event()?.condition?.trim()]
+                .filter(Boolean)
+                .join(' · if '),
+        class: badgeTriggerClasses({
+          variant: 'secondary',
+          size: 'sm',
+          class: 'min-w-0 max-w-full text-left',
+        }),
+        content: (
+          <>
+            <TriggerIcon trigger={props.trigger} class="size-3.5 shrink-0" />
+            <span class="min-w-0 truncate">
+              {describeTrigger(props.trigger)}
+              <Show when={event()}>
+                {(value) => (
+                  <span class="text-ink-muted">
+                    {' · '}
+                    {props.renderEventLabel(value)}
+                  </span>
+                )}
+              </Show>
+              <Show when={event()?.condition?.trim()}>
+                {(condition) => (
+                  <span class="text-ink-muted"> · if {condition()}</span>
+                )}
+              </Show>
+            </span>
+          </>
+        ),
+      }}
     />
   );
 }
 
-/** A row of the When card: a short label, then its tokens. */
-function TriggerRow(props: { label: string; children: JSX.Element }) {
+/** Keep what still applies when an event trigger switches to another event. */
+function switchEvent(
+  current: EventTriggerDraft,
+  next: EventTriggerDraft
+): EventTriggerDraft {
+  const sameItems = eventScopeKind(current) === eventScopeKind(next);
+  return {
+    ...current,
+    events: next.events,
+    ids: sameItems ? current.ids : next.ids,
+  };
+}
+
+/** The sentence's first token: the event, opening the menu to change it. */
+function EventToken(
+  props: EventSlots & {
+    trigger: EventTriggerDraft;
+    onSave: (trigger: RoutineTriggerDraft) => void;
+    onRemove: () => void;
+  }
+) {
+  let button: HTMLButtonElement | undefined;
+  const [menuOpen, setMenuOpen] = createSignal(false);
+  // Switching to a schedule needs its settings first.
+  const [schedule, setSchedule] = createSignal<RoutineTriggerDraft>();
   return (
-    <div class="flex min-w-0 flex-wrap items-center gap-2">
-      <span class="w-16 shrink-0 text-xs text-ink-muted">{props.label}</span>
-      <div class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-        {props.children}
+    <>
+      <TriggerMenu
+        open={menuOpen()}
+        onOpenChange={setMenuOpen}
+        current={props.trigger.events[0]}
+        onSelect={(value) =>
+          value.kind === 'event'
+            ? props.onSave(switchEvent(props.trigger, value))
+            : setSchedule({ ...value, id: props.trigger.id })
+        }
+        onRemove={props.onRemove}
+        triggerLabel={`Change ${eventTriggerLabel(props.trigger)} trigger`}
+        triggerTitle={eventTriggerLabel(props.trigger)}
+        triggerVariant="secondary"
+        triggerSize="lg"
+        triggerClass="min-w-0 max-w-full"
+        ref={(element) => {
+          button = element;
+        }}
+      >
+        <TriggerIcon trigger={props.trigger} class="size-4 shrink-0" />
+        <span class="min-w-0 truncate">{eventTriggerLabel(props.trigger)}</span>
+        <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
+      </TriggerMenu>
+      <Show when={schedule()} keyed>
+        {(value) => (
+          <TriggerPanel
+            open
+            onOpenChange={(open) => {
+              if (!open) setSchedule(undefined);
+            }}
+            trigger={value}
+            isNew={false}
+            anchorRef={() => button}
+            renderEventLabel={props.renderEventLabel}
+            renderEventScope={props.renderEventScope}
+            renderEventCondition={props.renderEventCondition}
+            onSave={props.onSave}
+          />
+        )}
+      </Show>
+    </>
+  );
+}
+
+/** "in Your inbox": what the event watches, picked in place. */
+function ScopeToken(
+  props: EventSlots & {
+    trigger: EventTriggerDraft;
+    onSave: (trigger: RoutineTriggerDraft) => void;
+  }
+) {
+  let triggerRef: HTMLButtonElement | undefined;
+  const trigger = () => props.trigger;
+  return (
+    <Popover placement="bottom-start" gutter={6}>
+      <Popover.Trigger
+        ref={triggerRef}
+        aria-label={`${scopeFieldLabel(props.trigger)} for ${eventTriggerLabel(props.trigger)}`}
+        class={badgeTriggerClasses({
+          variant: 'ghost',
+          size: 'lg',
+          class: 'min-w-0 max-w-full',
+        })}
+      >
+        <span class="min-w-0 truncate">{props.renderEventLabel(trigger)}</span>
+        <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
+      </Popover.Trigger>
+      <Popover.Portal mount={menuMount(triggerRef)}>
+        <Popover.Content class="menu-surface z-modal max-h-80 w-80 max-w-[calc(100vw-1rem)] overflow-y-auto">
+          <Popover.Title class="sr-only">
+            {scopeFieldLabel(props.trigger)}
+          </Popover.Title>
+          {props.renderEventScope(trigger, (ids) =>
+            props.onSave({ ...props.trigger, ids })
+          )}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover>
+  );
+}
+
+/** Edits a trigger's AI check: Cancel keeps it, Done saves it. */
+function ConditionBody(
+  props: EventSlots & {
+    trigger: EventTriggerDraft;
+    onSave: (trigger: RoutineTriggerDraft) => void;
+    onClose: () => void;
+  }
+) {
+  const [condition, setCondition] = createSignal(props.trigger.condition);
+  return (
+    <>
+      <div class="px-3.5 pb-3.5 pt-3">
+        {props.renderEventCondition?.(
+          () => ({ ...props.trigger, condition: condition() }),
+          setCondition
+        )}
       </div>
+      <div class="flex items-center justify-end gap-1.5 border-t border-edge-muted px-3.5 py-2.5">
+        <Button variant="ghost" size="sm" onClick={() => props.onClose()}>
+          Cancel
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() => {
+            const value = condition()?.trim();
+            props.onSave({
+              ...props.trigger,
+              condition: value ? value : undefined,
+            });
+            props.onClose();
+          }}
+        >
+          Done
+        </Button>
+      </div>
+    </>
+  );
+}
+
+/** A filter hanging off its trigger on a connector elbow. */
+function FilterRow(props: { children: JSX.Element }) {
+  return (
+    <div class="flex min-w-0 items-center gap-2.5">
+      <span
+        aria-hidden="true"
+        class="-mt-4 h-4.5 w-3.5 shrink-0 rounded-bl-md border-b border-l border-edge"
+      />
+      {props.children}
+    </div>
+  );
+}
+
+/** "✦ Only if | question | ×", or "+ Filter" to add one. */
+function ConditionFilter(
+  props: EventSlots & {
+    trigger: EventTriggerDraft;
+    onSave: (trigger: RoutineTriggerDraft) => void;
+  }
+) {
+  let anchor: HTMLDivElement | undefined;
+  const [open, setOpen] = createSignal(false);
+  const condition = () => props.trigger.condition?.trim();
+  return (
+    <Popover
+      open={open()}
+      onOpenChange={setOpen}
+      anchorRef={() => anchor}
+      placement="bottom-start"
+      gutter={6}
+    >
+      <FilterRow>
+        <div ref={anchor} class="flex min-w-0 max-w-full">
+          <Show
+            when={condition()}
+            fallback={
+              <Popover.Trigger
+                as={Button}
+                variant="ghost"
+                size="sm"
+                aria-label="Add filter"
+              >
+                <PlusIcon class="size-3.5 shrink-0" />
+                Filter
+              </Popover.Trigger>
+            }
+          >
+            {(question) => (
+              <ButtonGroup class="min-w-0 max-w-full">
+                <Popover.Trigger
+                  as={ButtonGroup.Button}
+                  class="shrink-0 gap-1.5 text-ink-muted"
+                  aria-label={`Edit condition: ${question()}`}
+                  title={question()}
+                >
+                  <SparkleIcon class="size-3.5 shrink-0 text-accent" />
+                  Only if
+                </Popover.Trigger>
+                <ButtonGroup.Divider />
+                <ButtonGroup.Button
+                  class="min-w-0 shrink"
+                  title={question()}
+                  onClick={() => setOpen(true)}
+                >
+                  <span class="min-w-0 truncate">{question()}</span>
+                </ButtonGroup.Button>
+                <ButtonGroup.Divider />
+                <ButtonGroup.Button
+                  size="icon-md"
+                  aria-label="Remove condition"
+                  onClick={() =>
+                    props.onSave({ ...props.trigger, condition: undefined })
+                  }
+                >
+                  <XIcon class="size-3.5" />
+                </ButtonGroup.Button>
+              </ButtonGroup>
+            )}
+          </Show>
+        </div>
+      </FilterRow>
+      <Popover.Portal mount={menuMount(anchor)}>
+        <Popover.Content class="menu-surface z-modal flex w-[22rem] max-w-[calc(100vw-1rem)] flex-col overflow-hidden">
+          <Popover.Title class="sr-only">
+            {condition() ? 'Edit condition' : 'Add filter'}
+          </Popover.Title>
+          <ConditionBody
+            trigger={props.trigger}
+            renderEventLabel={props.renderEventLabel}
+            renderEventScope={props.renderEventScope}
+            renderEventCondition={props.renderEventCondition}
+            onSave={props.onSave}
+            onClose={() => setOpen(false)}
+          />
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover>
+  );
+}
+
+/** One trigger as a sentence of tokens, its filters hanging below. */
+function TriggerSentence(
+  props: EventSlots & {
+    trigger: RoutineTriggerDraft;
+    onSave: (trigger: RoutineTriggerDraft) => void;
+    onRemove: () => void;
+  }
+) {
+  const [open, setOpen] = createSignal(false);
+  const event = () =>
+    props.trigger.kind === 'event' ? props.trigger : undefined;
+  const schedule = () =>
+    props.trigger.kind === 'schedule' ? props.trigger : undefined;
+  /** An event trigger with a check, or one that can take a filter. */
+  const filtered = () => {
+    const value = event();
+    return value && (value.condition?.trim() || props.renderEventCondition)
+      ? value
+      : undefined;
+  };
+  return (
+    <div class="flex min-w-0 flex-col gap-2.5">
+      <div class="flex min-w-0 flex-wrap items-center gap-2">
+        <Show when={schedule()}>
+          {(value) => (
+            <TriggerPanel
+              {...props}
+              trigger={value()}
+              open={open()}
+              onOpenChange={setOpen}
+              isNew={false}
+              anchor={{
+                label: `Edit ${describeTrigger(value())} trigger`,
+                title: `${describeTrigger(value())} · ${value().timezone.replace(/_/g, ' ')}`,
+                class: badgeTriggerClasses({
+                  variant: 'secondary',
+                  size: 'lg',
+                  class: 'min-w-0 max-w-full',
+                }),
+                content: (
+                  <>
+                    <TriggerIcon trigger={value()} class="size-4 shrink-0" />
+                    <span class="min-w-0 truncate">
+                      {describeTrigger(value())}
+                    </span>
+                    <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
+                  </>
+                ),
+              }}
+            />
+          )}
+        </Show>
+        <Show when={event()}>
+          {(value) => (
+            <>
+              <EventToken {...props} trigger={value()} />
+              <Show
+                when={hasScope(value())}
+                fallback={
+                  // Email always watches the owner's inbox: said, not picked.
+                  <Show when={eventScopeKind(value()) === 'THREAD'}>
+                    <span class="flex min-w-0 max-w-full items-center gap-2">
+                      <span class="text-base text-ink-muted">in</span>
+                      <span class="truncate px-1 text-base font-medium text-ink">
+                        {props.renderEventLabel(value)}
+                      </span>
+                    </span>
+                  </Show>
+                }
+              >
+                {/* "in" wraps with its scope, never alone at a line's end. */}
+                <span class="flex min-w-0 max-w-full items-center gap-2">
+                  <span class="text-base text-ink-muted">in</span>
+                  <ScopeToken {...props} trigger={value()} />
+                </span>
+              </Show>
+            </>
+          )}
+        </Show>
+      </div>
+      <Show when={filtered()}>
+        {(value) => (
+          <div class="flex min-w-0 flex-col gap-2 pl-4.5">
+            <ConditionFilter {...props} trigger={value()} />
+          </div>
+        )}
+      </Show>
     </div>
   );
 }
@@ -630,8 +822,9 @@ export function RoutineTriggers(
     triggers: RoutineTriggerDraft[];
     onChange: (triggers: RoutineTriggerDraft[]) => void;
     /**
-     * `rows`: the routine page's When card, with each AI check on its own
-     * "Only if" row. `inline` (default): tokens in a row, as in the composer.
+     * `rows`: the routine page's trigger card, each trigger a sentence of
+     * tokens with its filters below. `inline` (default): tokens in a row,
+     * as in the composer.
      */
     layout?: 'rows' | 'inline';
   }
@@ -647,82 +840,73 @@ export function RoutineTriggers(
     props.onChange(props.triggers.filter((trigger) => trigger.id !== id));
   const add = (trigger: RoutineTriggerDraft) =>
     props.onChange([...props.triggers, trigger]);
-  const tokens = (withCondition: boolean) => (
-    <For each={ids()}>
-      {(id) => (
-        <Show when={find(id)}>
-          {(trigger) => (
-            <TriggerToken
-              trigger={trigger()}
-              withCondition={withCondition}
-              renderEventLabel={props.renderEventLabel}
-              renderEventScope={props.renderEventScope}
-              renderEventCondition={props.renderEventCondition}
-              onSave={(value) => replace(id, value)}
-              onRemove={() => remove(id)}
-            />
-          )}
-        </Show>
-      )}
-    </For>
-  );
-  const addTrigger = (label: string) => (
-    <AddTrigger
-      label={label}
-      renderEventLabel={props.renderEventLabel}
-      renderEventScope={props.renderEventScope}
-      renderEventCondition={props.renderEventCondition}
-      onAdd={add}
-    />
-  );
-  const conditioned = () =>
-    props.triggers.flatMap((trigger) =>
-      trigger.kind === 'event' && trigger.condition?.trim()
-        ? [{ id: trigger.id, condition: trigger.condition.trim() }]
-        : []
-    );
+  const slots = () => ({
+    renderEventLabel: props.renderEventLabel,
+    renderEventScope: props.renderEventScope,
+    renderEventCondition: props.renderEventCondition,
+  });
   return (
     <Show
       when={props.layout === 'rows'}
       fallback={
         <>
-          {tokens(true)}
-          {addTrigger('Add trigger')}
+          <For each={ids()}>
+            {(id) => (
+              <Show when={find(id)}>
+                {(trigger) => (
+                  <InlineToken
+                    {...slots()}
+                    trigger={trigger()}
+                    onSave={(value) => replace(id, value)}
+                    onRemove={() => remove(id)}
+                  />
+                )}
+              </Show>
+            )}
+          </For>
+          <AddTrigger
+            {...slots()}
+            label="Add trigger"
+            variant="outline"
+            size="sm"
+            onAdd={add}
+          />
         </>
       }
     >
-      <div class="flex flex-col gap-2.5">
-        <TriggerRow label="Trigger">
-          {tokens(false)}
-          {addTrigger(props.triggers.length ? 'Trigger' : 'Add trigger')}
-        </TriggerRow>
-        <For each={conditioned()}>
-          {(item) => (
-            <Show when={find(item.id)}>
+      <div class="flex min-w-0 flex-col gap-3.5">
+        <For each={ids()}>
+          {(id, index) => (
+            <Show when={find(id)}>
               {(trigger) => (
-                <TriggerRow label="Only if">
-                  <TriggerPopover
+                <>
+                  <Show when={index() > 0}>
+                    <div class="flex items-center gap-2.5 text-xs text-ink-extra-muted">
+                      <span class="h-px flex-1 bg-edge-divider" />
+                      or
+                      <span class="h-px flex-1 bg-edge-divider" />
+                    </div>
+                  </Show>
+                  <TriggerSentence
+                    {...slots()}
                     trigger={trigger()}
-                    renderEventLabel={props.renderEventLabel}
-                    renderEventScope={props.renderEventScope}
-                    renderEventCondition={props.renderEventCondition}
-                    onSave={(value) => replace(item.id, value)}
-                    onRemove={() => remove(item.id)}
-                    anchorLabel={`Edit condition: ${item.condition}`}
-                    anchorTitle={item.condition}
-                    anchorClass={tokenClasses()}
-                    anchor={
-                      <>
-                        <SparkleIcon class="size-3.5 shrink-0 text-accent" />
-                        <span class="min-w-0 truncate">{item.condition}</span>
-                      </>
-                    }
+                    onSave={(value) => replace(id, value)}
+                    onRemove={() => remove(id)}
                   />
-                </TriggerRow>
+                </>
               )}
             </Show>
           )}
         </For>
+        <div>
+          <AddTrigger
+            {...slots()}
+            label="Add trigger"
+            variant="ghost"
+            size="sm"
+            onAdd={add}
+          />
+        </div>
       </div>
     </Show>
   );

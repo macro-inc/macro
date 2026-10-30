@@ -249,10 +249,29 @@ async function selectTarget(
 function create(): void {
   fireEvent.click(screen.getByRole('button', { name: 'Create routine' }));
 }
+/** Kobalte menus open from the keyboard in jsdom. */
+function press(element: HTMLElement, key: string) {
+  element.focus();
+  fireEvent.keyDown(element, { key });
+}
+/** Add trigger, then a trigger from its type's submenu. */
+function chooseTrigger(type: string, name: string) {
+  press(screen.getAllByRole('button', { name: 'Add trigger' })[0]!, 'Enter');
+  press(
+    screen.getByRole('menuitem', { name: type, hidden: true }),
+    'ArrowRight'
+  );
+  press(
+    screen.getByRole('menuitem', {
+      name: new RegExp(`^${name}`),
+      hidden: true,
+    }),
+    'Enter'
+  );
+}
 async function addScheduled(name = 'Daily') {
   const add = screen.getByRole('button', { name: 'Add trigger' });
-  fireEvent.click(add);
-  fireEvent.click(await screen.findByRole('button', { name: 'On a schedule' }));
+  chooseTrigger('Schedule', 'On a schedule');
   fireEvent.click(await screen.findByRole('radio', { name }));
   fireEvent.click(
     within(screen.getByRole('dialog', { name: 'Add trigger' })).getByRole(
@@ -264,10 +283,7 @@ async function addScheduled(name = 'Daily') {
 }
 async function addDocumentEvent() {
   const add = screen.getByRole('button', { name: 'Add trigger' });
-  fireEvent.click(add);
-  fireEvent.click(
-    await screen.findByRole('button', { name: 'Document created' })
-  );
+  chooseTrigger('Documents', 'Document created');
   fireEvent.click(
     within(screen.getByRole('dialog', { name: 'Add trigger' })).getByRole(
       'button',
@@ -506,10 +522,18 @@ describe('routine composer execution selection', () => {
     host.create.mockImplementation(async (body) => created(body));
     await mount();
     inputPrompt();
-    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
-    for (const name of ['Channels', 'Documents', 'Tasks', 'Email']) {
-      expect(await screen.findByText(name)).toBeTruthy();
+    press(screen.getByRole('button', { name: 'Add trigger' }), 'Enter');
+    for (const name of [
+      'Schedule',
+      'Email',
+      'Tasks',
+      'Channels',
+      'Documents',
+    ]) {
+      expect(screen.getByRole('menuitem', { name, hidden: true })).toBeTruthy();
     }
+    // Searching reaches every submenu's events.
+    const search = screen.getByRole('textbox', { name: 'Search triggers' });
     for (const name of [
       'On a schedule',
       'Once',
@@ -524,24 +548,36 @@ describe('routine composer execution selection', () => {
       'Any property changed',
       'New email received',
     ]) {
-      expect(screen.getByRole('button', { name })).toBeTruthy();
+      fireEvent.input(search, { target: { value: name } });
+      expect(
+        screen.getByRole('menuitem', {
+          name: new RegExp(`^${name}`),
+          hidden: true,
+        })
+      ).toBeTruthy();
     }
     for (const name of [
       'Document details changed',
       'Message edited',
       'Attachment added',
     ]) {
-      expect(screen.queryByRole('button', { name })).toBeNull();
+      fireEvent.input(search, { target: { value: name } });
+      expect(
+        screen.queryByRole('menuitem', {
+          name: new RegExp(`^${name}`),
+          hidden: true,
+        })
+      ).toBeNull();
     }
-    fireEvent.click(screen.getByRole('button', { name: 'Task created' }));
+    fireEvent.input(search, { target: { value: 'Task created' } });
+    fireEvent.keyDown(search, { key: 'Enter' });
     fireEvent.click(
       within(screen.getByRole('dialog', { name: 'Add trigger' })).getByRole(
         'button',
         { name: 'Add trigger' }
       )
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
-    fireEvent.click(screen.getByRole('button', { name: 'New email received' }));
+    chooseTrigger('Email', 'New email received');
     fireEvent.click(
       within(screen.getByRole('dialog', { name: 'Add trigger' })).getByRole(
         'button',
@@ -565,10 +601,7 @@ describe('routine composer execution selection', () => {
     host.create.mockImplementation(async (body) => created(body));
     await mount();
     inputPrompt();
-    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'New email received' })
-    );
+    chooseTrigger('Email', 'New email received');
     const condition = screen.getByRole('textbox', {
       name: 'Only run if AI says yes',
     });
@@ -606,21 +639,21 @@ describe('routine composer execution selection', () => {
     await mount();
     const editor = inputPrompt();
     await addScheduled();
-    fireEvent.click(screen.getByRole('button', { name: /^Edit Every day,/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Edit Every day at/ }));
     fireEvent.input(screen.getByRole('textbox', { name: 'Run time' }), {
       target: { value: '3:30pm' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(
-      screen.getByRole('button', { name: 'Edit Every day, 9:00 AM trigger' })
+      screen.getByRole('button', { name: 'Edit Every day at 9:00 AM trigger' })
     ).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /^Edit Every day,/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Edit Every day at/ }));
     fireEvent.input(screen.getByRole('textbox', { name: 'Run time' }), {
       target: { value: '3:30pm' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(
-      screen.getByRole('button', { name: 'Edit Every day, 3:30 PM trigger' })
+      screen.getByRole('button', { name: 'Edit Every day at 3:30 PM trigger' })
     ).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'Add trigger' })).toHaveLength(
       1
@@ -634,8 +667,7 @@ describe('routine composer execution selection', () => {
     await mount();
     inputPrompt();
     const before = Date.now();
-    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Once' }));
+    chooseTrigger('Schedule', 'Once');
     const date = screen.getByRole('textbox', { name: 'Run once date' });
     fireEvent.input(date, { target: { value: 'in 2 hours' } });
     fireEvent.keyDown(date, { key: 'Enter' });
@@ -665,8 +697,7 @@ describe('routine composer execution selection', () => {
   it('configures one-off dates and the calendar in the same panel', async () => {
     await mount();
     inputPrompt();
-    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Once' }));
+    chooseTrigger('Schedule', 'Once');
     const panel = screen.getByRole('dialog', { name: 'Add trigger' });
     const confirm = () =>
       within(panel).getByRole('button', { name: 'Add trigger' });
@@ -707,7 +738,7 @@ describe('routine composer execution selection', () => {
     inputPrompt();
     await addScheduled('Daily');
     await addDocumentEvent();
-    fireEvent.click(screen.getByRole('button', { name: /^Edit Every day,/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Edit Every day at/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove trigger' }));
     cleanup();
     await mount();
@@ -721,6 +752,25 @@ describe('routine composer execution selection', () => {
 });
 
 describe('routine composer start', () => {
+  it('opens already started from the template a list card chose', async () => {
+    const client = new QueryClient();
+    render(() => (
+      <QueryClientProvider client={client}>
+        <RoutineCreator onCreated={host.created} template="brief" />
+      </QueryClientProvider>
+    ));
+    expect(
+      (
+        await screen.findByRole<HTMLInputElement>('textbox', {
+          name: 'Routine name',
+        })
+      ).value
+    ).toBe('Morning brief');
+    expect(
+      screen.queryByRole('button', { name: /Start from scratch/ })
+    ).toBeNull();
+  });
+
   it('opens the editor from a starting point, ready to review', async () => {
     const client = new QueryClient();
     render(() => (
