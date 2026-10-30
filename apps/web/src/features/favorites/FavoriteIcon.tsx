@@ -11,7 +11,8 @@ import { Show } from 'solid-js';
 /**
  * Icon for a favorite. DM channel favorites show the other participant's
  * avatar, and other channels show their channel picture, matching channel
- * rows elsewhere in the sidebar. Other favorites keep their entity icon.
+ * rows elsewhere in the sidebar, with a hashtag fallback for every non-DM
+ * channel type. Other favorites keep their entity icon.
  *
  * The favorite's identity must be stable for the component's lifetime
  * (favorites lists key rows by entity, so it is).
@@ -43,11 +44,7 @@ export function FavoriteIcon(props: {
             channelId={props.favorite.entityId}
             class={`size-4 ${props.class ?? ''}`}
             fallback={
-              <EntityIcon
-                size="xs"
-                targetType={favoriteIconType(props.favorite)}
-                class={props.class}
-              />
+              <EntityIcon size="xs" targetType="channel" class={props.class} />
             }
           />
         </Show>

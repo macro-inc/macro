@@ -867,7 +867,9 @@ that order. `Team channels` lists team channels; `Channels` lists every other
 non-DM channel (public and private). Each section collapses on its own and
 keeps its own sort; open sections split the column evenly, and the bottom-most
 open one takes any remaining height. Favorites appears when
-the user has channel favorites and only lists channels. Channel favorites open
+the user has channel favorites and only lists channels. Favorites show a custom
+channel picture when set; otherwise all non-DM channels use a hashtag, including
+team channels. DM favorites retain their participant avatars. Channel favorites open
 in the shared channel detail. Shift-clicking a favorite, channel, or DM opens that
 conversation in a new split instead. Shift-click refreshes the notification
 selection and opens at latest. Split opens mark top-level notifications seen,

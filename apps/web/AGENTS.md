@@ -827,3 +827,6 @@ Keep existing tags and apply to the selected rows when the drop row is selected.
 Use the shared scoped drag helpers and overlayIcon for the tag chip.
 The backend-free browser regression is
 `bunx playwright test --config src/features/property/tags/browser-test/playwright.config.ts`.
+
+Keep Favorites channel icons consistent with channel rows: custom pictures first,
+then a hashtag for every non-DM subtype; preserve DM participant avatars.
