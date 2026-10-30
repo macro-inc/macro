@@ -91,9 +91,7 @@ pub async fn assert_search_contract<S: Storage>(mut storage: S) -> S {
             "document",
             &query,
             |document| {
-                assert!(
-                    query.matches(&document.search_text) || document.search_text.contains('\0')
-                );
+                assert!(query.matches(document.search_text) || document.search_text.contains('\0'));
                 visited += 1;
             },
         )

@@ -275,7 +275,9 @@ statement reuse, covering-index scans, and borrowed-row decoding against the sam
 100k rows (release build, alternating order, seven warm samples). Covering indexes
 exist only in its disposable fixture: do not change the frozen on-disk layout
 without a queue-preserving compatibility/rollout design. Statement reuse has not
-shown a material benefit and is not enabled in production.
+shown a material benefit and is not enabled in production. See
+[search performance](search-performance.md) for measured costs, memory boundaries,
+and the covering-index rollout constraint.
 
 ## Browser OPFS writes
 
