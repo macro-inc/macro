@@ -38,6 +38,9 @@ export function MobileEventForm(
         <div class="flex justify-end px-4 pb-1">
           <EventFormParts.Submit />
         </div>
+        {/* Under the action that failed, so it shows however far the form
+            is scrolled. */}
+        <EventFormParts.SaveError class="px-4 pb-2" />
       </Portal>
       <div class="flex min-w-0 flex-col gap-6">
         <div class="flex min-w-0 flex-col gap-3">
@@ -109,7 +112,6 @@ export function MobileEventForm(
         <EventFormParts.GuestPolicyRows />
         <EventFormParts.Notices />
       </div>
-      <EventFormParts.SaveError />
       <EventFormParts.EditScope />
     </EventFormParts.Root>
   );

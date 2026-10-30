@@ -558,11 +558,12 @@ function CustomRecurrence() {
   );
 }
 
-function SaveError() {
+/** Why the last save failed; `class` places it. */
+function SaveError(props: { class?: string }) {
   const form = useEventForm();
   return (
     <Show when={form.props.saveError}>
-      <p role="alert" class="text-sm text-failure">
+      <p role="alert" class={cn('text-sm text-failure', props.class)}>
         {form.props.saveError}
       </p>
     </Show>
