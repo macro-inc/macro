@@ -43,3 +43,60 @@ fn missing_play_status_cannot_report_a_verified_nonproduction_release() {
         "unrecognized status is also unknown"
     );
 }
+
+#[test]
+fn drift_only_checks_play_for_a_verified_previous_version() {
+    for (before_state, changed, version) in [
+        ("available", "true", Some("20")),
+        ("unreachable", "true", None),
+        ("hash-failed", "true", None),
+        ("unchanged", "false", None),
+    ] {
+        let outputs = tempfile::NamedTempFile::new().expect("step outputs");
+        let script = include_str!("../scripts/android_release_drift.sh");
+        let output = std::process::Command::new("bash")
+            .arg("-c")
+            .arg(format!(
+                "{}\n{script}",
+                r#"
+gh_fetch() {
+  [[ "$1" != before || "$BEFORE_STATE" != unreachable ]]
+}
+bun() {
+  case "$2:$3" in
+    hash:before)
+      [[ "$BEFORE_STATE" != hash-failed ]] || return 1
+      if [[ "$BEFORE_STATE" == unchanged ]]; then echo new; else echo old; fi
+      ;;
+    hash:after) echo new ;;
+    version-code:before) echo 20 ;;
+    version-code:after) echo 21 ;;
+    *) return 1 ;;
+  esac
+}
+"#
+            ))
+            .env_remove("BASH_ENV")
+            .env("BEFORE_STATE", before_state)
+            .env("BEFORE_SHA", "before")
+            .env("AFTER_SHA", "after")
+            .env("GITHUB_OUTPUT", outputs.path())
+            .output()
+            .expect("run drift detection");
+        assert!(output.status.success(), "{before_state}: {output:?}");
+        let outputs = std::fs::read_to_string(outputs.path()).expect("read step outputs");
+        assert!(
+            outputs
+                .lines()
+                .any(|line| line == format!("changed={changed}")),
+            "{before_state}: {outputs}"
+        );
+        assert_eq!(
+            outputs
+                .lines()
+                .find_map(|line| line.strip_prefix("version_code=")),
+            version,
+            "{before_state}: a new head's bumped code cannot identify the prior release"
+        );
+    }
+}

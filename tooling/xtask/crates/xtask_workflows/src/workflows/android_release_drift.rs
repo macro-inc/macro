@@ -13,7 +13,8 @@
 //! Unlike App Store review, a Play production release cannot be withdrawn
 //! once submitted: if the stale bundle was already promoted, the comment
 //! says so loudly and the follow-up should ship as soon as possible. The
-//! production status remains unknown when authentication or the lookup fails.
+//! production status remains unknown when the prior native tree cannot be
+//! verified, authentication fails, or the Play lookup fails.
 //! The iOS counterpart is [`super::ios_release_drift`].
 
 use gh_workflow::{
@@ -192,7 +193,7 @@ fn comment() -> Step<Run> {
             elif [[ "$PROMOTED" == "false" ]]; then
               body="🤖 Android native code changed after this PR's Play release started. Google Play reports that version code ${VERSION_CODE} has not been promoted to production. The \`android-update\` label was removed; any bundle on the internal track remains there for testers. Once in-progress release runs have stopped and the PR is ready again, bump (\`${bump}\`), commit, push, and re-add \`android-update\`."
             else
-              body="⚠️ Android native code changed after this PR's Play release started, but Google Play production status could not be verified. The prior bundle may already be in review or live. The \`android-update\` label was removed. Keep the reviewed-SHA authentication restriction and verify production status in Play Console or through a check from an approved revision. Treat the prior release as potentially live until verified."
+              body="⚠️ Android native code changed or could not be compared with this PR's prior release, and Google Play production status could not be verified. The prior bundle may already be in review or live. The \`android-update\` label was removed. Keep the reviewed-SHA authentication restriction and verify production status in Play Console or through a check from an approved revision. Treat the prior release as potentially live until verified."
             fi
             gh pr comment "$PR_NUMBER" --repo "$GH_REPO" --body "$body"
         "#})

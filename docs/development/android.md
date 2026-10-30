@@ -209,10 +209,11 @@ To release:
    the bundle stale: **`Android Release Drift`** cancels an in-progress build,
    removes the label and comments. A Play production release cannot be
    withdrawn once submitted, so if the stale bundle was already promoted the
-   comment says so and the follow-up should ship as soon as possible (after
-   a force-push the old head is gone, so drift checks Play for the new
-   head's version code instead). If authentication or the Play lookup fails,
-   the comment reports production status as unknown. Keep the reviewed-SHA
+   comment says so and the follow-up should ship as soon as possible. If the
+   previous native tree cannot be verified (for example, after a force-push),
+   drift skips the Play lookup and reports production status as unknown; the
+   new head's version code cannot identify the prior release. Authentication
+   or Play lookup failures also report unknown status. Keep the reviewed-SHA
    restriction and verify through an approved check or Play Console before
    treating the prior release as stopped.
 
