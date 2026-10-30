@@ -4064,6 +4064,11 @@
           "reason": {
             "$ref": "#/components/schemas/AutoArchiveReason",
             "description": "What finished the session's work."
+          },
+          "restoredAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When a person restored it, after which the archive no longer stands."
           }
         }
       },

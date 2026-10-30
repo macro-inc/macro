@@ -80,6 +80,7 @@ import {
 } from './agentSettingsState';
 import { CursorConnectPage } from './CursorConnectPage';
 import { AgentSetupStrips } from './components/agent-setup-strips';
+import { AutoArchiveSetting } from './components/auto-archive-setting';
 import { CodingPreferencesSetting } from './components/coding-preferences-setting';
 import { AgentInstructionsEditor } from './components/instructions-editor';
 import { SettingsSelect } from './components/settings-select';
@@ -398,6 +399,7 @@ export function Agents(props: {
           </section>
 
           <CodingPreferencesSetting />
+          <AutoArchiveSetting />
         </SettingsPage>
       </Show>
 

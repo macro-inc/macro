@@ -104,6 +104,7 @@ export * from './answerToolApprovalResponse';
 export * from './appConnectedRequest';
 export * from './appConnectedRequestActionId';
 export * from './autoArchivedBody';
+export * from './autoArchivedBodyRestoredAt';
 export * from './autoArchiveOverridesBody';
 export * from './autoArchiveOverridesBodyOnPullRequestMerged';
 export * from './autoArchiveOverridesBodyOnRuntimeClosed';

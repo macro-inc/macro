@@ -10,6 +10,7 @@ import {
 } from '@app/features/block-agent/component/AgentSplitHeader';
 import { AgentTaskChip } from '@app/features/block-agent/component/AgentTaskChip';
 import { ArchivedSessionFooter } from '@app/features/block-agent/component/ArchivedSessionFooter';
+import { useAutoArchiveFileOperations } from '@app/features/block-agent/component/auto-archive-file-operations';
 import { AgentSidePanelSections } from '@app/features/block-agent/component/sidepanel/AgentSidePanelSections';
 import { Transcript } from '@app/features/block-agent/component/Transcript';
 import { useAgentSession } from '@app/features/block-agent/context/AgentSessionContext';
@@ -127,6 +128,11 @@ function SessionContent(props: {
     if (!id || !current) return;
     await changeSessionArchiveState(id, !current.isArchived);
   };
+  const autoArchive = useAutoArchiveFileOperations({
+    sessionId,
+    enabled: () =>
+      permissions() === Permissions.OWNER && session()?.isArchived === false,
+  });
   return (
     <>
       <AgentSessionReadMarker
@@ -178,7 +184,8 @@ function SessionContent(props: {
                         ops={agentSessionFileOperations(
                           session(),
                           permissions(),
-                          setArchived
+                          setArchived,
+                          autoArchive()
                         )}
                         tools={[
                           {

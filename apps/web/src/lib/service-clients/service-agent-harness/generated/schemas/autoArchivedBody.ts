@@ -4,6 +4,8 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { AutoArchivedBodyRestoredAt } from './autoArchivedBodyRestoredAt';
 import type { AutoArchiveReason } from './autoArchiveReason';
 
 /**
@@ -14,4 +16,6 @@ export interface AutoArchivedBody {
   archivedAt: string;
   /** What finished the session's work. */
   reason: AutoArchiveReason;
+  /** When a person restored it, after which the archive no longer stands. */
+  restoredAt?: AutoArchivedBodyRestoredAt;
 }
