@@ -23,6 +23,8 @@ roles are in [`docs/building.md`](docs/building.md).
 | `submissions/` | One record per vendor OAuth app submission; process in [`docs/submissions.md`](docs/submissions.md). |
 | `crates/` | Rust crates, all named `connect_*`. `connect_client` is the public client. |
 | `services/` | Deployable services; `connect_api` first. |
+| `infra/` | Standalone Pulumi project for Connect's ECS, ALB, database, KMS key, and runtime secret. |
+| `docker-compose.yml` | Local Connect API and PostgreSQL 17. |
 | `packages/` | TypeScript packages; `@macro-connect/sdk` is the public web SDK. |
 | `docs/` | Plan, decisions, catalog spec, probing, submissions, research, and deployment runbooks. |
 | `tasks/` | One spec per builder task, with its Result; process in [`docs/building.md`](docs/building.md). |
@@ -39,7 +41,7 @@ Build Macro Connect as if it were its own repository.
 - Macro depends only on `connect_client` (Rust) and `@macro-connect/sdk`
   (web), as any customer would. Macro never reads Connect's database,
   Doppler project, or internals.
-- Connect has its own database, Doppler project, deploy stack, and secrets.
+- Connect has its own database, Pulumi project, deploy stack, and runtime secret.
 - Enforced by ast-grep rules `connect-*` in `rules/ast-grep/` and, once built
   (day 1 in the plan), a Cargo dependency check. A failing boundary check
   means the design is wrong, not the rule.
@@ -54,8 +56,10 @@ Build Macro Connect as if it were its own repository.
   legal attestations and terms acceptance, identity checks, payments, 2FA and
   CAPTCHAs, deploys, production access. Prepare everything around them so the
   human's part is one sitting.
-- Vendor client secrets go into Doppler project `connect-api` (runtime) with
-  `doppler secrets set`; never print, log, or commit them.
+- Vendor client secrets for live `own_app` entries go into encrypted Connect
+  Pulumi config and then its own Secrets Manager runtime secret. Doppler
+  project `connect` holds operations credentials only; never print, log, or
+  commit any secret.
 - Vendor correspondence goes out from `connect@macro.com` only, and is logged
   in the vendor's submission record.
 - Record every decision the human makes in `docs/decisions.md`, dated, with the

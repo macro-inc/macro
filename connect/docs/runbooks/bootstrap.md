@@ -1,59 +1,74 @@
-# Connect dev bootstrap
+# Standalone Connect bootstrap
 
-The shared gateway forwards `/connect` without rewriting the path. `connect_api`
-serves its routes under `/connect`, including `/connect/health`; its
-`CONNECT_PUBLIC_URL` is `https://dev-gateway.macro.com/connect`.
+Connect runs at `https://connect-dev.macro.com` on its own ALB and ECS cluster.
+The service serves `/health`, `/v1/catalog`, and all other routes at the host
+root. It applies its own SQLx migrations at startup. Nothing in Macro's
+gateway, deploy pipeline, or shared security groups is changed.
 
-The `connect-api` Pulumi stack creates a private PostgreSQL 17 instance with a
-`connect` database and an RDS-managed `connect_api` password. Pulumi writes its
-secret database URL, the grant KMS key id, and the gateway URL to Doppler
-`connect-api/dev`. Doppler syncs that config to the ECS `APP_SECRETS_JSON`
-secret. No database login or Doppler value needs to be created by hand.
+## Local
 
-After the reviewed change is on the branch used by the workflows, run these in
-order, waiting for each workflow to succeed before starting the next. The human
-must add the encrypted stack config to the deploy ref before step 3:
+From the repository root, start PostgreSQL 17 and the API, then create a
+customer with a localhost redirect origin:
 
-1. Dispatch the shared `doppler-projects` stack. This creates `connect-api`
-   with its `dev` config and AWS sync. It targets the **global**
-   `doppler-projects/prod` Pulumi stack because Doppler projects are global;
-   this does not deploy the Connect API to production.
+```sh
+docker compose -f connect/docker-compose.yml up -d --build && docker compose -f connect/docker-compose.yml run --rm api create-customer local --redirect-origin http://localhost:3000
+```
 
-   ```sh
-   gh workflow run deploy-pulumi-stack.yml --ref <reviewed-ref> -f environment=prod -f pulumi-service-name=doppler-projects
-   ```
+The CLI prints the customer key once. Store it locally; do not put it in a
+repository file. Check `curl http://localhost:8080/health` and
+`curl http://localhost:8080/v1/catalog`. The Compose wrapping key and database
+password are fixed development values; do not use this stack for real grants.
+Stop it with `docker compose -f connect/docker-compose.yml down`.
+If port 8080 is in use, set `CONNECT_PORT` for both Compose commands and use
+that port in the health and catalog URLs.
 
-2. Create a Doppler service token with write access to the `connect-api` project
-   and its `dev` config. From `infra/stacks/connect-api`, have the human store
-   it in the dev stack's encrypted config; this populates
-   `Pulumi.dev.yaml`'s `doppler:dopplerToken` key. The equivalent production
-   step later uses a token scoped to `connect-api/prd` and populates
-   `Pulumi.prod.yaml`. Add the encrypted `Pulumi.dev.yaml` update to the
-   reviewed deploy ref. Do not print or commit the plaintext token.
+## Dev AWS stack
 
-   ```sh
-   pulumi config set --stack dev --secret doppler:dopplerToken
-   ```
+Prerequisites: `PULUMI_ACCESS_TOKEN`, AWS credentials for the target account,
+Docker, Bun, and Pulumi. The AWS identity must be allowed to read the existing
+VPC and manage the standalone resources and DNS in Route 53 zone
+`Z0766278GIHB3CVV9CIL`. The human supplies the existing VPC id and public
+and private subnet ids; Connect creates its own security groups.
 
-3. Dispatch the Connect infrastructure in dev. This creates RDS and KMS,
-   writes the three Doppler values, and installs the gateway rule and ECS
-   service in one Pulumi pass.
+From `connect/infra`, install dependencies and select `dev`:
 
-   ```sh
-   gh workflow run deploy-pulumi-stack.yml --ref <reviewed-ref> -f environment=dev -f pulumi-service-name=connect-api
-   ```
+```sh
+bun install --frozen-lockfile
+pulumi stack select dev --create
+pulumi config set vpcId <existing-vpc-id>
+pulumi config set --path 'publicSubnetIds[0]' <public-subnet-id-1>
+pulumi config set --path 'publicSubnetIds[1]' <public-subnet-id-2>
+pulumi config set --path 'privateSubnetIds[0]' <private-subnet-id-1>
+pulumi config set --path 'privateSubnetIds[1]' <private-subnet-id-2>
+```
 
-4. The planner removes `bootstrap_pending` from
-   `.github/services-config.json` in a reviewed change after the first
-   infrastructure deploy. Once that change is on the deploy ref, dispatch the
-   service workflow to build and deploy the Connect binary:
+Add more subnet ids if needed. For each live `own_app` entry, the human sets
+its credentials in encrypted config; no own-app credentials are required for
+the current live catalog:
 
-   ```sh
-   gh workflow run deploy-service-generic.yml --ref <reviewed-ref-with-gate-removed> -f environment=dev -f service=connect-api
-   ```
+```sh
+pulumi config set --secret --path 'ownAppCredentials.<app-id>.clientId' <client-id>
+pulumi config set --secret --path 'ownAppCredentials.<app-id>.clientSecret' <client-secret>
+```
 
-5. Request `https://dev-gateway.macro.com/connect/health` and expect HTTP 200.
-   The service applies its SQLx migrations on startup.
+The human reviews and approves each of these commands separately:
 
-`bootstrap_pending` remains set in this task. Do not run the service workflow
-before the planner removes it: the workflow intentionally rejects that state.
+```sh
+pulumi preview --stack dev
+pulumi up --stack dev
+```
+
+Pulumi builds the API image from the repository root, creates the database
+with an RDS-managed password, and writes `APP_SECRETS_JSON` to its own Secrets
+Manager secret for ECS injection. Connect reads no runtime Doppler project.
+After the deploy succeeds, check:
+
+```sh
+curl --fail https://connect-dev.macro.com/health
+curl --fail https://connect-dev.macro.com/v1/catalog
+```
+
+The `prod` stack uses PostgreSQL 17 on `db.t4g.small`, 14-day backups, RDS
+deletion protection, and Pulumi protection. Its public hostname is deliberately
+unset until the product owner chooses it; set `publicHost` before previewing
+production.

@@ -41,7 +41,7 @@ Dated entries: what was submitted, what the vendor said, what we answered.
 approved`, or `rejected`, `blocked`, `deferred` (the human postponed it), or
 `excluded` (out of scope). `needs-human` and `blocked` carry the
 reason in `next_action`. An approved record lists where the client ID and
-secret live in Doppler (names only).
+secret live in encrypted Connect Pulumi config (names only).
 
 ## How agents keep approval fast
 

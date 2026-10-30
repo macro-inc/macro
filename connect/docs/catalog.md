@@ -39,8 +39,10 @@ Field rules:
 - `scopes`: Linear needs `["read", "write"]`: with no scope requested it
   records the approval as empty but grants write, and the flow fails after the
   user approves.
-- `own_app` apps name their Doppler secrets `<ID>_CLIENT_ID` and
-  `<ID>_CLIENT_SECRET` in project `connect-api`. They may list the scopes
+- `own_app` apps use encrypted Connect Pulumi `ownAppCredentials` config,
+  keyed by app id with `clientId` and `clientSecret`. The standalone stack
+  injects `<ID>_CLIENT_ID` and `<ID>_CLIENT_SECRET` through its own Secrets
+  Manager runtime secret only when the app is live. They may list the scopes
   granted by their registered app; Slack lists its user scopes explicitly.
 - Two apps may share an `mcp_url` (Jira and Confluence share Atlassian's
   server); each keeps its own entry so migration maps each Pipedream app.
