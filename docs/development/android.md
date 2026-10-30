@@ -131,8 +131,9 @@ its fingerprint to production associations before testing Play-installed links.
 ### Releasing to Google Play from a pull request
 
 Android releases are driven from pull requests, like iOS (see
-`apps/web/docs/ios-releases.md`); they are not tied to the production
-deployment cycle. Three generated workflows plus the `Android Native Check`
+`apps/web/docs/ios-releases.md`). Unlike iOS, whose approved version is held
+until the prod deploy, they are not tied to the production deployment cycle.
+Three generated workflows plus the `Android Native Check`
 job of the web app PR checks enforce it:
 
 **`Android Native Check`** runs on every PR against `main`. Its native tree

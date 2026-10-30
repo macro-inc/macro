@@ -134,6 +134,28 @@ previous agent's model and extra arguments. Storage and focus preferences remain
 Session metadata stays in the instance directory even with custom worktree storage.
 Choose a repository in Macro's composer; local sessions always start from `main`.
 
+### Herdr versions
+
+macrod drives both herdrs and picks by where it runs (`src/herdr/cli.rs`):
+
+- **herdr 0.9** (`HERDR_ENV=1`): the `herdr` CLI. Herdr creates worktrees, opens
+  tabs, starts agents, and reports their status and session IDs.
+- **herdr-core and the herdr app** (`HC_TERMINAL_ID`): the `hc` CLI, which must
+  be on `PATH`. Each session is a core terminal labelled with the app's
+  `herdr.space` and `herdr.tab`, so the app shows it as a tab in macrod's space.
+  A managed worktree gets its own space. macrod starts the shell and then types
+  `exec <agent> …` into it, so the agent gets the operator's login environment.
+  git creates the worktrees. Tab names and focus go through `herdr-app do`, and
+  macrod skips them when the app is not running.
+
+herdr-core does not guess status; it shows what a program reports through
+OSC 7501. Claude Code reports it. Codex does not, so under herdr-core a Codex
+session loses three things: busy detection before a prompt, remote permission
+answers (approve in Herdr), and cancelling a turn Macro did not start.
+Transcripts still end its turns. Without a reported session ID, macrod finds
+Codex's transcript by working directory and start time. Viewer windows
+(`macrod herdr-pane`) report their own state through OSC 7501.
+
 ## Replies to chat-agent mentions
 
 Trigger prompts use the source channel/document message UUID as the control

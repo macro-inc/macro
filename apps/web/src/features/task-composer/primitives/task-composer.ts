@@ -28,11 +28,7 @@ import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { buildSimpleEntityUrl } from '@core/util/url';
-import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
-import SplitIcon from '@icon/system/regular/square-half.svg';
 import { Telemetry } from '@macro-inc/observability';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { PropertyApiValues } from '@property/types';
@@ -52,6 +48,7 @@ import {
 import { reconcile, unwrap } from 'solid-js/store';
 import { tabbable } from 'tabbable';
 import type { ComposeTaskProps, ComposeTaskSuccess } from '../core/types';
+import { showTaskCreatedToast } from './taskCreatedToast';
 
 type ComposerTagLayoutMode = 'bottom' | 'title';
 
@@ -339,46 +336,6 @@ export function createTaskComposer(
     return true;
   };
 
-  const showTaskCreatedToast = async (
-    documentId: string,
-    optimisticSnapshot: Uint8Array | undefined
-  ) => {
-    // Auto-copy link to clipboard
-    const url = buildSimpleEntityUrl({ type: 'task', id: documentId });
-    let linkCopied = false;
-    try {
-      await navigator.clipboard.writeText(url);
-      linkCopied = true;
-    } catch {
-      toast.failure('Failed to copy link to clipboard');
-    }
-
-    const task = { id: documentId, optimisticSnapshot };
-    const openTask = (newSplit: boolean) => {
-      if (toastId !== undefined) toast.dismiss(toastId);
-      host.openTask(task, { newSplit, referredFrom: null });
-    };
-    const toastId = toast.success('Task created', {
-      subtext: linkCopied ? 'Link copied' : undefined,
-      actions: [
-        {
-          label: 'Open',
-          icon: ArrowSquareOutIcon,
-          onClick: () => openTask(false),
-        },
-        ...(!isTouchDevice()
-          ? [
-              {
-                label: 'Open (New Split)',
-                icon: SplitIcon,
-                onClick: () => openTask(true),
-              },
-            ]
-          : []),
-      ],
-    });
-  };
-
   const recoverDraft = (id: string) => {
     if (currentUserId() !== draftOwner) return;
     host.openComposer({
@@ -511,10 +468,7 @@ export function createTaskComposer(
     } else if (props.onSuccess) {
       props.onSuccess({ documentId, title: taskTitle, content: taskContent });
     } else {
-      fireAndForget(
-        showTaskCreatedToast(documentId, initialSnapshot),
-        'compose-task'
-      );
+      showTaskCreatedToast(documentId, initialSnapshot, host.openTask);
     }
     linkCreatedTask({ documentId, title: taskTitle, content: taskContent });
     props.onCreateTask?.(taskTitle, taskContent);

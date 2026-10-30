@@ -67,7 +67,7 @@ jobs:
         # natively, and the team bumps that version when a cache change must ship, so
         # the bump — not every edit under crates/client — is the native signal. The
         # release stamps uploaded builds with the hash, the merge gate compares the
-        # live build's stamp against the merge result's, and the drift / head guards
+        # approved build's stamp against the merge result's, and the drift / head guards
         # compare commits with it. Must match nativeTreeHash() in
         # apps/web/scripts/ios-app-store.mjs and the iOS Native Check's change
         # detection (web_app_check_main/ios_native_check.rs).
@@ -220,7 +220,7 @@ jobs:
         # every other check on the head commit passing. Pending checks are waited on
         # (the label often lands right after a push); anything failing stops the
         # release before the long build. Our own checks are excluded: the native
-        # check is expected to be red until the release is live.
+        # check is expected to be red until Apple approves the release.
         pr_json=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json isDraft,headRefOid)
         if [[ "$(jq -r '.isDraft' <<<"$pr_json")" == "true" ]]; then
           echo "PR #${PR_NUMBER} is a draft; mark it ready for review before adding ios-update." >&2
@@ -454,7 +454,7 @@ jobs:
         # natively, and the team bumps that version when a cache change must ship, so
         # the bump — not every edit under crates/client — is the native signal. The
         # release stamps uploaded builds with the hash, the merge gate compares the
-        # live build's stamp against the merge result's, and the drift / head guards
+        # approved build's stamp against the merge result's, and the drift / head guards
         # compare commits with it. Must match nativeTreeHash() in
         # apps/web/scripts/ios-app-store.mjs and the iOS Native Check's change
         # detection (web_app_check_main/ios_native_check.rs).
@@ -668,11 +668,12 @@ jobs:
           const SUCCESS_BODY = [
             `📱 iOS ${version} (build ${build}) was uploaded to TestFlight and submitted for App Review.`,
             '',
-            'When Apple approves it, the version releases to the App Store automatically,',
-            'the **iOS Release Watch** workflow re-runs the **iOS Native Check** on this PR',
-            'within half an hour of that, and the PR becomes mergeable. To merge it the',
-            'moment that happens, click **Enable auto-merge** on this PR now (squash).',
-            'After merge, the next prod deploy applies the iOS native build floor committed in `min-native-build.json`, prompting older installs to update.',
+            'When Apple approves it, the **iOS Release Watch** workflow re-runs the',
+            '**iOS Native Check** on this PR within half an hour, and the PR becomes',
+            'mergeable. To merge it the moment that happens, click **Enable auto-merge**',
+            'on this PR now (squash). Apple holds the approved version until the next',
+            'prod deploy releases it on the App Store and applies the iOS native build floor',
+            'committed in `min-native-build.json`, prompting older installs to update.',
             '',
             `[Workflow run](${runUrl})`,
           ].join('\n');

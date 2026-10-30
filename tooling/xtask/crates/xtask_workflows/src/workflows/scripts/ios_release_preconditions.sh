@@ -4,7 +4,7 @@ set -euo pipefail
 # every other check on the head commit passing. Pending checks are waited on
 # (the label often lands right after a push); anything failing stops the
 # release before the long build. Our own checks are excluded: the native
-# check is expected to be red until the release is live.
+# check is expected to be red until Apple approves the release.
 pr_json=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json isDraft,headRefOid)
 if [[ "$(jq -r '.isDraft' <<<"$pr_json")" == "true" ]]; then
   echo "PR #${PR_NUMBER} is a draft; mark it ready for review before adding ios-update." >&2
