@@ -504,7 +504,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Use one name-first dialog for channels and conversations, with at most three inline suggestions; reveal channel privacy and invite controls only for channel creation, and retain typed names on blur.
   Resume unfinished channel setup after failures without recreating the channel; keep drafts locked after creation and guard each later write against account/team changes.
   Indent all section content by 8px, including Favorites, custom sections, DMs, and empty states; keep unsectioned search results unindented.
-  Reuse shared collapsible section headers and their hidden-caret behavior, with a leading Rows icon and a neutral Shared badge next to the name before the caret; apply focus backgrounds across the full header row and omit trailing header padding.
+  Reuse shared collapsible section headers and their hidden-caret behavior, with a leading folder icon (star for Favorites, chat bubble for DMs) and a neutral Shared badge next to the name before the caret; apply focus backgrounds across the full header row and omit trailing header padding.
   Name the team-channel section after the current team, falling back to Team channels while its name is unavailable.
   Keep loaded channel rows visible while section changes refetch by-ID lookups.
   Show lock icons for private conversations and visible per-section options; keep empty sections usable as drop targets without an all-sections management menu.

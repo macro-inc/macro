@@ -6,6 +6,8 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type ChannelEntity, Entity } from '@entity';
+import ChatIcon from '@icon/system/regular/chat-circle.svg';
+import StarIcon from '@icon/system/regular/star.svg';
 import { queryReadyGate } from '@queries/gate';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import {
@@ -351,11 +353,20 @@ function SectionHeading(props: { group: 'favorites' | ChannelsGroup }) {
     const group = channelGroup();
     return group ? rail.channelActivity.unreadCount(group) : 0;
   };
+  const icon = () => {
+    if (props.group === 'favorites') {
+      return <StarIcon aria-hidden="true" class="size-3.5 shrink-0" />;
+    }
+    if (props.group === 'direct_messages') {
+      return <ChatIcon aria-hidden="true" class="size-3.5 shrink-0" />;
+    }
+  };
   return (
     <ChannelSectionHeading
       id={domIdForRow(rail.railId, key())}
       title={title()}
       label={title()}
+      icon={icon()}
       open={open()}
       focused={rail.list.focus.key() === key()}
       unreadCount={unreadCount()}

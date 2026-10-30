@@ -7,8 +7,8 @@ import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CaretUpIcon from '@icon/system/regular/caret-up.svg';
+import FolderIcon from '@icon/system/regular/folder-simple.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import RowsIcon from '@icon/system/regular/rows.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { Button, cn, Scroll, Tooltip } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
@@ -38,6 +38,7 @@ export function ChannelSectionHeading(props: {
   focused: boolean;
   unreadCount: number;
   onToggle: () => void;
+  icon?: JSX.Element;
   badge?: JSX.Element;
   children?: JSX.Element;
 }) {
@@ -57,7 +58,9 @@ export function ChannelSectionHeading(props: {
           title={props.title}
           class={cn('flex-1', props.focused && 'text-ink')}
         >
-          <RowsIcon aria-hidden="true" class="size-3.5 shrink-0" />
+          {props.icon ?? (
+            <FolderIcon aria-hidden="true" class="size-3.5 shrink-0" />
+          )}
           <span class="min-w-0 truncate">{props.label}</span>
           {props.badge}
           <WorkspaceSection.Indicator />
