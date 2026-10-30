@@ -60,7 +60,11 @@ export function TaskListHeader() {
     <div
       role="row"
       class="task-grid-row grid h-10 w-full shrink-0 items-center gap-2 px-3 text-xs font-medium text-ink-extra-muted"
-      style={taskGridTemplate({ indicator: true, project: showTaskProject() })}
+      style={taskGridTemplate({
+        indicator: true,
+        project: showTaskProject(),
+        status: false,
+      })}
     >
       <span role="columnheader" style={{ 'grid-area': 'indicator' }} />
       <span
@@ -70,7 +74,6 @@ export function TaskListHeader() {
       >
         Task
       </span>
-      <SortableHeader label="Status" area="status" />
       <SortableHeader label="Priority" area="priority" />
       <SortableHeader label="Assignees" area="assignees" />
       <Show when={showTaskProject()}>

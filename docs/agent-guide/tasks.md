@@ -93,6 +93,10 @@ Long assignee and project names truncate within their columns; hover the cell
 to read the full value.
 The project pill beneath a task title shows the project icon and name without
 a `Project:` prefix.
+Task rows and group headers keep a gutter from the surrounding list container.
+Click or tap the leading status icon to change status without opening the task.
+The status picker replaces the desktop Status column and the trailing mobile
+status pill; Priority, Assignees, and Project stay in their existing positions.
 
 Click a task row or favorite to replace the list with the editable task document. Its top
 bar shows the originating task tab as a text-only return breadcrumb,
@@ -1044,14 +1048,15 @@ above.
 
 ## Task status icons
 
-Task rows show a circular status icon: empty for Not started, partially filled
-for In progress or In review, checked for Completed, and crossed for Canceled.
-Task @mention pills and @mention menu rows use the same live status and update
-when a task changes. Pills show status only in their leading icon; the trailing
-badges carry priority and the first assignee.
+Task rows show the custom circular status icon: empty for Not started, partially
+filled for In progress or In review, checked for Completed, and crossed for
+Canceled. Status group headers, property pills, filters, and pickers use the same
+`TaskStatusIcon` renderer. Task @mention pills and @mention menu rows use the
+same live status and update when a task changes. Pills show status only in their
+leading icon; the trailing badges carry priority and the first assignee.
 Lightweight previews fall back to the task completion flag until status
 properties arrive; missing or unknown status without completion stays empty.
-The navigation and creation icons remain generic task icons.
+Navigation and creation keep the custom generic checked-square task icon.
 
 The backend-free browser fixture exercises the real row icon, document
 mention, and mention menu row, including completing and reopening without a reload:

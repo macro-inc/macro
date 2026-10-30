@@ -2,11 +2,13 @@ import { useMaybeBlockId } from '@core/block';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { Property } from '@property';
 import { Modals } from '@property/component/modal';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
   usePropertiesContext,
 } from '@property/context/PropertiesContext';
+import { PropertyEmptyIcon } from '@property/extractors/PropertyEmpty';
 import type { PropertyApiValues, Property as PropertyT } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
@@ -82,6 +84,8 @@ interface EntityKeyPropertiesProps {
   showCaret?: boolean;
   /** Append a task's Project, set or not (Projects enabled). */
   includeProject?: boolean;
+  /** The task's leading icon already owns status editing. */
+  hideStatus?: boolean;
 }
 
 /**
@@ -103,7 +107,11 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
         return [];
       }
     });
-    const key = getSortedKeyProperties(properties);
+    const key = getSortedKeyProperties(properties).filter(
+      (property) =>
+        !props.hideStatus ||
+        property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.STATUS
+    );
     return props.includeProject && entityType() === EntityType.TASK
       ? withTaskProject(key, properties)
       : key;
@@ -193,7 +201,7 @@ function KeyPropertiesRow(props: {
                           '@max-2xl/u-list:border-0 @max-2xl/u-list:glass-none @max-2xl/u-list:gap-0 @max-2xl/u-list:px-1 @max-2xl/u-list:justify-center',
                           {
                             'hover:bg-hover': ctx.canEdit,
-                            'text-ink-extra-muted/50': isEmpty(),
+                            'text-ink-extra-muted': isEmpty(),
                           }
                         )}
                       >
@@ -206,6 +214,14 @@ function KeyPropertiesRow(props: {
                             />
                           }
                         >
+                          <Match when={isEmpty()}>
+                            <PropertyEmptyIcon
+                              propertyDefinitionId={
+                                shown().propertyDefinitionId
+                              }
+                              class="size-3.5 @max-2xl/u-list:size-4"
+                            />
+                          </Match>
                           <Match when={isMultiUserEntity()}>
                             <Property.UserStack
                               property={shown()}
@@ -224,13 +240,11 @@ function KeyPropertiesRow(props: {
                           property={shown()}
                           class="@max-2xl/u-list:hidden"
                           fallback={
-                            <>
-                              <Property.Empty
-                                label="None"
-                                class="@max-2xl/u-list:hidden"
-                              />
-                              <Property.Empty class="hidden @max-2xl/u-list:inline-flex" />
-                            </>
+                            <Property.Empty
+                              label="None"
+                              hideIcon
+                              class="@max-2xl/u-list:hidden"
+                            />
                           }
                         />
                         <Show when={props.showCaret ?? true}>

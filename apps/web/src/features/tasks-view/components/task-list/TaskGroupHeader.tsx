@@ -5,15 +5,21 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { getPropertyOptionLabel } from '@entity';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
-import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
 import ProjectIcon from '@icon/system/regular/stack.svg';
-import { PROPERTY_OPTION_IDS } from '@property';
+import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
 import { PropertyValueIcon } from '@property/component/propertyValue';
+import { PropertyEmptyIcon } from '@property/extractors/PropertyEmpty';
 import { usePropertyEntityDisplay } from '@property/hooks/usePropertyEntityDisplay';
 import { usePropertyUserDisplay } from '@property/hooks/usePropertyUserDisplay';
 import { ComposerSurface, cn, Layer } from '@ui';
 import { createMemo, Match, Show, Switch } from 'solid-js';
 import type { TaskGroupBy } from '../../types';
+
+const EMPTY_GROUP_PROPERTY_IDS: Partial<Record<TaskGroupBy, string>> = {
+  priority: SYSTEM_PROPERTY_IDS.PRIORITY,
+  project: SYSTEM_PROPERTY_IDS.PROJECT,
+  assignee: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+};
 
 export const STATUS_GROUP_HEADER_TINTS: Record<string, string> = {
   [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED]:
@@ -101,7 +107,7 @@ export function TaskGroupHeader(props: {
             <button
               type="button"
               tabIndex={-1}
-              class="flex w-full items-center gap-2.5 rounded-[inherit] px-2 py-1.5 text-left text-xs font-semibold tracking-tight"
+              class="flex w-full items-center gap-2.5 rounded-[inherit] px-3 py-2 text-left text-xs font-semibold tracking-tight touch:min-h-11"
               aria-expanded={props.expanded}
               onMouseMove={props.onFocus}
               onClick={props.onToggle}
@@ -118,7 +124,12 @@ export function TaskGroupHeader(props: {
               </Layer>
               <Switch>
                 <Match when={!props.row.groupId}>
-                  <CircleDashedIcon class="size-3.5 text-ink-extra-muted" />
+                  <PropertyEmptyIcon
+                    propertyDefinitionId={
+                      EMPTY_GROUP_PROPERTY_IDS[props.groupBy]
+                    }
+                    class="size-3.5 text-ink-extra-muted"
+                  />
                 </Match>
                 <Match
                   when={

@@ -1,8 +1,4 @@
-import StatusCanceled from '@icon/square-task-cancelled-circle.svg';
-import StatusCreated from '@icon/square-task-created-circle.svg';
-import StatusDone from '@icon/square-task-done-circle.svg';
-import StatusInProgress from '@icon/square-task-in-progress-circle.svg';
-import StatusInReview from '@icon/square-task-in-review-circle.svg';
+import { TaskStatusIcon } from '@core/component/TaskStatusIcon';
 import PriorityHigh from '@icon/wide-priority-high.svg';
 import PriorityLow from '@icon/wide-priority-low.svg';
 import PriorityMedium from '@icon/wide-priority-medium.svg';
@@ -35,6 +31,9 @@ const STAGE_DOT_TINTS: Record<string, string> = {
 
 const knownPropertyIds = new Set<string>(
   Object.values(PROPERTY_OPTION_IDS).flatMap((group) => Object.values(group))
+);
+const taskStatusIds = new Set<string>(
+  Object.values(PROPERTY_OPTION_IDS.STATUS)
 );
 
 /**
@@ -75,23 +74,10 @@ export const PropertyValueIcon: Component<PropertyValueIconProps> = (props) => {
       </Match>
 
       {/* Status */}
-      <Match when={props.optionId === PROPERTY_OPTION_IDS.STATUS.NOT_STARTED}>
-        <StatusCreated class={twMerge('size-3', props.class, 'text-task')} />
-      </Match>
-      <Match when={props.optionId === PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS}>
-        <StatusInProgress
-          class={twMerge('size-3', props.class, 'text-warning')}
-        />
-      </Match>
-      <Match when={props.optionId === PROPERTY_OPTION_IDS.STATUS.IN_REVIEW}>
-        <StatusInReview class={twMerge('size-3', props.class, 'text-note')} />
-      </Match>
-      <Match when={props.optionId === PROPERTY_OPTION_IDS.STATUS.COMPLETED}>
-        <StatusDone class={twMerge('size-3', props.class, 'text-accent')} />
-      </Match>
-      <Match when={props.optionId === PROPERTY_OPTION_IDS.STATUS.CANCELED}>
-        <StatusCanceled
-          class={twMerge('size-3', props.class, 'text-ink-muted')}
+      <Match when={taskStatusIds.has(props.optionId)}>
+        <TaskStatusIcon
+          statusId={props.optionId}
+          class={twMerge('size-3', props.class)}
         />
       </Match>
 

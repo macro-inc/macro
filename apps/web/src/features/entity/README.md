@@ -9,3 +9,8 @@ app-local entry point.
 existing inline metadata area. Names and icons use the shared property preview
 cache; the row does not search for related entities. Narrow rows compact these
 pills to icons, with full names available in tooltips and the overflow menu.
+
+Task list status editing uses `extractors-property/task-status-control.tsx` in
+the leading icon slot. It shares the property editor and mutation path across
+wide task rows and narrow entity rows, including optimistic status and rollback.
+Narrow rows omit the duplicate trailing Status property.

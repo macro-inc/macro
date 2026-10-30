@@ -1,6 +1,7 @@
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { Entity } from '../../entity';
+import { TaskStatusControl } from '../../extractors-property/task-status-control';
 import {
   isChannelEntity,
   isChannelMessageEntity,
@@ -53,19 +54,26 @@ export function NarrowLayout(props: LayoutProps) {
         placement="title"
         class="ph-no-capture flex items-center gap-2 truncate font-semibold"
       >
-        <div class="size-4 shrink-0">
-          <Show
-            when={props.icon}
-            fallback={
-              <Entity.Icon
-                entity={props.entity}
-                streamState={props.streamState}
-              />
-            }
-          >
-            {props.icon}
-          </Show>
-        </div>
+        <Show
+          when={isTaskEntity(props.entity) ? props.entity : undefined}
+          fallback={
+            <div class="size-4 shrink-0">
+              <Show
+                when={props.icon}
+                fallback={
+                  <Entity.Icon
+                    entity={props.entity}
+                    streamState={props.streamState}
+                  />
+                }
+              >
+                {props.icon}
+              </Show>
+            </div>
+          }
+        >
+          {(task) => <TaskStatusControl entity={task()} />}
+        </Show>
         {props.titleLeading}
         <Show
           when={isChannelMessageEntity(props.entity) && props.entity}
@@ -135,6 +143,7 @@ export function NarrowLayout(props: LayoutProps) {
                     maxUserStackUsers={0}
                     showCaret={false}
                     includeProject={props.showProject}
+                    hideStatus
                   />
                 }
               >

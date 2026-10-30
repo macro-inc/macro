@@ -59,11 +59,15 @@ export type TaskGridColumn =
 export function taskGridTemplate(options: {
   indicator: boolean;
   project: boolean;
+  /** Projects keep their status column; task rows edit status in the icon. */
+  status?: boolean;
 }) {
   const columns = [
     ...(options.indicator ? [{ id: 'indicator', width: '1rem' }] : []),
     { id: 'content', width: 'minmax(0, 100%)' },
-    ...TASK_GRID_COLUMNS,
+    ...TASK_GRID_COLUMNS.filter(
+      (column) => options.status !== false || column.id !== 'status'
+    ),
     ...(options.project ? [TASK_PROJECT_COLUMN] : []),
     { id: 'createdBy', width: CREATED_BY_COLUMN_WIDTH },
     { id: 'timestamp', width: 'var(--task-col-timestamp, 5rem)' },
@@ -75,4 +79,5 @@ export function taskGridTemplate(options: {
 }
 
 /** Column span for full-width rows such as group headers. */
-export const taskGridColumnCount = (project: boolean) => (project ? 8 : 7);
+export const taskGridColumnCount = (project: boolean, status = true) =>
+  (project ? 7 : 6) + Number(status);

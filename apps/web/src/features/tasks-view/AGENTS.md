@@ -17,6 +17,9 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Group task lists by the Project property, matching the Project column and Board. The server labels project groups with the initiative name the viewer can read, and the cache's local grouping projection carries that label; a header resolves the name through the authorized project identity query only while its group is still labeled by its key. Projects sort by name with No Project last in every layout.
 - Keep project navigation in a separate Projects section above Saved views, with assigned-to-me, all-accessible, and created-by-me views; replace individual-project shortcuts and use one mobile Projects picker.
 - Preserve project scope through detail navigation, history, pagination, and editable-filter clearing; keep project views out of task queries and saved-task-view capture.
+- Keep list rows and group headers inset from the surrounding container on desktop and touch; group disclosures keep a 44px touch target.
+- Edit status through the leading `TaskStatusControl` icon on desktop and mobile; keep the separate Status column and trailing mobile status pill removed.
+- Reuse `PropertyEmptyIcon` for absent values in rows and group headers: a dash for priority, a dashed stack for Project, and a dashed person for Assignees.
 
 - Save filters, selected layout, grouping, and ordered sort directions; keep text search and scroll state local, and capture implicit person conditions as normal OR-valued facets.
 - Preserve stable tag/property bindings when labels disappear; skip unsupported or malformed conditions without discarding supported filters.
@@ -52,6 +55,7 @@ Run from `apps/web`:
 - `bun run test src/features/tasks-view`
 - `bun run type-check`
 - Project grouping browser regression: `bunx playwright test --config src/features/tasks-view/browser-test/playwright.config.ts project-grouping.browser.e2e.ts`.
+- Leading status editor browser regression: `bunx playwright test --config src/features/tasks-view/browser-test/playwright.config.ts task-status-control.browser.e2e.ts`.
 
 ## Related
 

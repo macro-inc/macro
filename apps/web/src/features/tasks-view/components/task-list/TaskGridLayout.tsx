@@ -14,6 +14,7 @@ import {
 import type { LayoutProps } from '@entity/composed/list-entity/shared';
 import { soupPropertyToProperty } from '@entity/extractors-property';
 import { EntityReferenceProperties } from '@entity/extractors-property/entity-reference-properties';
+import { TaskStatusControl } from '@entity/extractors-property/task-status-control';
 import { ListPropertyValue } from '@property/component/ListPropertyValue';
 import { Modals } from '@property/component/modal';
 import {
@@ -122,6 +123,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
         style={taskGridTemplate({
           indicator: !props.hideCheckbox,
           project: props.showProject === true,
+          status: false,
         })}
       >
         <Show when={!props.hideCheckbox}>
@@ -149,12 +151,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
           placement="content"
           class="ph-no-capture font-medium truncate items-center gap-2 flex min-w-0"
         >
-          <div class="size-4 shrink-0">
-            <Entity.Icon
-              entity={props.entity}
-              streamState={props.streamState}
-            />
-          </div>
+          <TaskStatusControl entity={props.entity} />
           <span class="truncate min-w-0">
             <Entity.Title entity={props.entity} />
           </span>
@@ -194,7 +191,9 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
           />
         </Entity.Slot>
 
-        <For each={TASK_GRID_COLUMNS}>
+        <For
+          each={TASK_GRID_COLUMNS.filter((column) => column.id !== 'status')}
+        >
           {(col) => (
             <Entity.Slot
               placement={col.id}

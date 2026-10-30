@@ -219,7 +219,7 @@ export function TaskList(props: TaskListProps) {
   );
 
   const visibleRows = source.items;
-  const columnCount = () => taskGridColumnCount(showTaskProject());
+  const columnCount = () => taskGridColumnCount(showTaskProject(), false);
   const [assigningProjectTasks, setAssigningProjectTasks] =
     createSignal<string[]>();
   const tasksById = createMemo(() => {
@@ -455,7 +455,7 @@ export function TaskList(props: TaskListProps) {
         aria-multiselectable="true"
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
-        class="@container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
+        class="@container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden px-2 pb-2 pt-1 sm:px-3 outline-none"
       >
         <ListLayoutProvider ref={grid}>
           <ResponsiveTaskListHeader />
