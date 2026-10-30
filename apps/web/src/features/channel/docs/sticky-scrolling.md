@@ -57,7 +57,8 @@ written, `writeScroll` synchronously commits the current total to the sizer;
 otherwise a growing last row can clamp the scroll against the old DOM extent.
 Viewport and inset changes explicitly scroll to the end only if previously pinned.
 The offset observer distinguishes instant programmatic scrolls from user scrolling,
-so our own corrections do not prolong gesture compensation.
+including scroll events dispatched while our own `scrollTo` runs, so our own
+corrections neither start nor prolong gesture compensation.
 
 Safari wheel scrolling and iOS touch scrolling use a separate logical offset while a gesture is
 active. Size and prepend corrections counter-shift the rows instead of writing
