@@ -15,7 +15,7 @@ import { useUserId } from '@core/context/user';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { getOwner, onMount, Show } from 'solid-js';
 import type { ScheduleDraft } from './core/draft';
-import { getErrorMessage } from './core/routine-draft';
+import { draftInstructions, getErrorMessage } from './core/routine-draft';
 import {
   createAgentHistoryMetadata,
   createChatHistoryMetadata,
@@ -95,7 +95,8 @@ export function RoutineDetail(props: {
       {
         routineId: routine.id,
         name: routine.name,
-        prompt: routine.draft?.prompt ?? '',
+        // Mentions in every agent can fill in as whoever activates it.
+        prompt: routine.draft ? draftInstructions(routine.draft) : '',
         timezone: scheduleTimezone(routine.draft),
         ownerId: routine.ownerId,
       },

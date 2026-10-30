@@ -12,6 +12,7 @@ import { match } from 'ts-pattern';
 import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from './draft';
 import {
   agentStep,
+  agentSteps,
   firstAgent,
   newStepId,
   type StepDraft,
@@ -125,6 +126,15 @@ export function withNewDraftSteps(
 export function draftPrompt(draft: ScheduleDraft): string {
   return draft.steps
     ? (firstAgent(draft.steps)?.instructions ?? '')
+    : draft.prompt;
+}
+
+/** Every agent's instructions, for finding what they mention. */
+export function draftInstructions(draft: ScheduleDraft): string {
+  return draft.steps
+    ? agentSteps(draft.steps)
+        .map((step) => step.instructions)
+        .join('\n\n')
     : draft.prompt;
 }
 

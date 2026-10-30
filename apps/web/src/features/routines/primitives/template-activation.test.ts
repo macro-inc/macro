@@ -112,4 +112,45 @@ describe('createTemplateActivation', () => {
       dispose();
     });
   });
+
+  it('fills the author in as the activator in every agent, branches included', () => {
+    createRoot((dispose) => {
+      const author =
+        '<m-user-mention>{"userId":"macro|eric@macro.com","email":"eric@macro.com"}</m-user-mention>';
+      const agent = (instructions: string) => ({
+        type: 'agent',
+        model: 'model',
+        instructions,
+      });
+      const activation = createTemplateActivation({
+        template: () => ({
+          ...TEMPLATE,
+          task: {
+            steps: [
+              {
+                type: 'if',
+                condition: 'Is it urgent?',
+                then: [agent(`Page ${author}`)],
+                else: [agent(`Tell ${author} tomorrow`)],
+              },
+            ],
+          },
+          variables: [
+            {
+              kind: 'user',
+              id: 'macro|eric@macro.com',
+              label: 'eric@macro.com',
+              fill: 'activator',
+            },
+          ],
+        }),
+        activator: () => ACTIVATOR,
+        access: () => new Map(),
+      });
+      const text = JSON.stringify(activation.request()?.task);
+      expect(text).not.toContain('eric@macro.com');
+      expect(text.match(/jun@macro\.com/g)).toHaveLength(4);
+      dispose();
+    });
+  });
 });

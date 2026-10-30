@@ -6,6 +6,7 @@ import type {
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { DEFAULT_RUN_VISIBILITY } from '../core/draft';
 import {
+  agentSteps,
   firstAgent,
   stepsFromTask,
   stepsToWire,
@@ -32,26 +33,37 @@ export type TemplateReference = {
  * The instructions a template's routine runs, from its task: a routine with
  * steps keeps them on its agent step.
  */
-export function templatePrompt(template: RoutineTemplate): string {
+export function templatePrompt(template: Pick<RoutineTemplate, 'task'>): string {
   const steps = stepsFromTask(template.task);
   if (steps) return firstAgent(steps)?.instructions ?? '';
   const prompt = template.task.user_prompt;
   return typeof prompt === 'string' ? prompt : '';
 }
 
-/** The template's task with its instructions filled in for the activator. */
-function filledTask(task: RoutineTemplate['task'], prompt: string) {
+/**
+ * The template's task with every agent's instructions filled in for the
+ * activator, including agents in branches.
+ */
+function filledTask(
+  task: RoutineTemplate['task'],
+  fill: (instructions: string) => string
+) {
   const steps = stepsFromTask(task);
-  if (!steps) return { ...task, user_prompt: prompt };
-  const agent = firstAgent(steps);
-  if (!agent) return task;
+  if (!steps) return { ...task, user_prompt: fill(templatePrompt({ task })) };
+  const agents = agentSteps(steps);
+  if (!agents.length) return task;
   return {
     ...task,
     steps: stepsToWire(
-      updateStep(steps, agent.id, (step) => ({
-        ...step,
-        instructions: prompt,
-      }))
+      agents.reduce(
+        (filled, agent) =>
+          updateStep(filled, agent.id, (step) =>
+            step.kind === 'agent'
+              ? { ...step, instructions: fill(step.instructions) }
+              : step
+          ),
+        steps
+      )
     ),
   };
 }
@@ -87,15 +99,18 @@ export function createTemplateActivation(args: {
         needsDecision(reference.state) && !choices().has(reference.key)
     );
 
-  const prompt = () => {
-    const activator = args.activator();
-    if (!activator) return templatePrompt(args.template());
-    return fillTemplatePrompt({
-      prompt: templatePrompt(args.template()),
+  const fill = (activator: Activator) => (prompt: string) =>
+    fillTemplatePrompt({
+      prompt,
       variables: args.template().variables,
       activator,
       choices: choices(),
     });
+
+  const prompt = () => {
+    const activator = args.activator();
+    const instructions = templatePrompt(args.template());
+    return activator ? fill(activator)(instructions) : instructions;
   };
 
   /** The routine to create, once every reference that needs one has a decision. */
@@ -111,7 +126,7 @@ export function createTemplateActivation(args: {
         activator,
       }),
       kind: 'Agent',
-      task: filledTask(template.task, prompt()),
+      task: filledTask(template.task, fill(activator)),
       enabled: true,
       run_visibility: DEFAULT_RUN_VISIBILITY,
     };

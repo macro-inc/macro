@@ -389,6 +389,13 @@ export function updateStep(
   });
 }
 
+/** Every agent step, branches included, in program order. */
+export function agentSteps(steps: StepDraft[]): AgentStepDraft[] {
+  return flattenSteps(steps).filter(
+    (step): step is AgentStepDraft => step.kind === 'agent'
+  );
+}
+
 /** The first agent a run can reach, for list labels and "Copy prompt". */
 export function firstAgent(steps: StepDraft[]): AgentStepDraft | undefined {
   return flattenSteps(steps).find(
