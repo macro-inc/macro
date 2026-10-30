@@ -34,6 +34,7 @@ import {
   untrack,
 } from 'solid-js';
 import { createGraphqlGroupedSoupQueries } from './graphql/create-graphql-grouped-soup-queries';
+import { mergeGroupInitialPage } from './merge-group-initial-page';
 
 type InitialGroupPage = {
   cachedMail?: boolean;
@@ -250,7 +251,10 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
     return next;
   });
 
-  const resetRestToInitialPage = (initialGroupedPage = args.initialPage()) => {
+  const resetRestToInitialPage = (
+    initialGroupedPage = args.initialPage(),
+    keepLoadedPages = false
+  ) => {
     const field = args.groupByField();
     if (!field || !initialGroupedPage) return;
 
@@ -266,10 +270,10 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
 
         queryClient.setQueryData<InfiniteData<GroupQueryPage, string | null>>(
           queryKey,
-          {
-            pages: [initialPage],
-            pageParams: [null],
-          }
+          (existing) =>
+            keepLoadedPages
+              ? mergeGroupInitialPage(existing, initialPage)
+              : { pages: [initialPage], pageParams: [null] }
         );
       }
 
@@ -277,11 +281,14 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
     });
   };
 
+  // A refetched parent page carries each group's first page again; the pages
+  // a Load More already fetched stay, so the list never collapses under the
+  // reader. Only an explicit refresh starts every group over.
   createEffect(
     on(
       () => args.initialPage(),
       (initialGroupedPage) => {
-        if (!usesGraphql()) resetRestToInitialPage(initialGroupedPage);
+        if (!usesGraphql()) resetRestToInitialPage(initialGroupedPage, true);
       },
       { defer: true }
     )

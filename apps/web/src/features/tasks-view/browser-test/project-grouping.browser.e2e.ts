@@ -50,6 +50,27 @@ for (const mobile of [false, true]) {
       await page.getByRole('button', { name: 'Restore Project One' }).click();
       await expect(first).toContainText('Task One');
       await expect(unassigned).not.toContainText('Task One');
+
+      // Headers that come back (a virtualized list remounts them on every
+      // scroll) read the project name they already resolved: no request, no
+      // Loading label.
+      const counters = () =>
+        page.evaluate(() => {
+          const w = window as Window & {
+            __identityRequests: number;
+            __loadingFlips: number;
+          };
+          return { requests: w.__identityRequests, flips: w.__loadingFlips };
+        });
+      const before = await counters();
+      await page.getByRole('button', { name: 'Remount headers' }).click();
+      await expect(first.getByRole('button')).toContainText('Project One');
+      await expect(second.getByRole('button')).toContainText('Project Two');
+      const after = await counters();
+      expect(after.flips).toBe(before.flips);
+      // This client has no document cache, so a remount may refresh each
+      // project once in the background; the normalized cache serves it.
+      expect(after.requests).toBeLessThanOrEqual(before.requests + 2);
     });
   });
 }

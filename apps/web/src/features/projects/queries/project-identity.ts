@@ -15,7 +15,7 @@ import {
   mapInitiativeIdentity,
 } from '@service-storage/initiative';
 import { type Client, type DocumentInput, stringifyDocument } from '@urql/core';
-import { type Accessor, createMemo } from 'solid-js';
+import { type Accessor, createComputed, createMemo, on } from 'solid-js';
 import type { ProjectIdentity } from '../core/project';
 import { toProjectDetail } from './project-model';
 import { projectProperties } from './project-properties';
@@ -69,6 +69,22 @@ export async function seedProjectDetail(
   }
 }
 
+type AuthorizedRead<Result> = { viewerId: string; value: Result };
+
+// A virtualized list mounts the same project's header and cells again on
+// every scroll; the last answer for a viewer and project is served on mount
+// so those remounts neither request again nor show a loading state.
+const lastKnownReads = new Map<string, Map<string, AuthorizedRead<unknown>>>();
+
+function lastKnownReadsFor(documentKey: string) {
+  let reads = lastKnownReads.get(documentKey);
+  if (!reads) {
+    reads = new Map();
+    lastKnownReads.set(documentKey, reads);
+  }
+  return reads;
+}
+
 function createAuthorizedProjectQuery<
   QueryData extends { user: { id: string } },
   Result,
@@ -78,18 +94,19 @@ function createAuthorizedProjectQuery<
   client: () => Client,
   userId: Accessor<string | undefined>,
   projectId: Accessor<string>,
-  enabled: Accessor<boolean>
+  enabled: Accessor<boolean>,
+  requestPolicy: 'cache-first' | 'cache-and-network' = 'cache-and-network'
 ) {
   const active = () => enabled() && Boolean(userId() && projectId());
-  const authorization = createQueryAuthorization(() =>
-    JSON.stringify([userId(), projectId()])
-  );
+  const readKey = () => JSON.stringify([userId(), projectId()]);
+  const reads = lastKnownReadsFor(stringifyDocument(document));
+  const authorization = createQueryAuthorization(readKey);
   const query = createLiveQuery(
     document,
     () => (active() ? { initiativeId: projectId() } : undefined),
     () => ({
       client: client(),
-      requestPolicy: 'cache-and-network',
+      requestPolicy,
       keepPreviousData: false,
       onResult: authorization.onResult,
       select: (data) => ({ viewerId: data.user.id, value: select(data) }),
@@ -98,16 +115,22 @@ function createAuthorizedProjectQuery<
   registerProjectRevalidation(client, active, () =>
     query.refetch({ requestPolicy: 'cache-and-network' })
   );
-  const data = createMemo(() => {
+  const current = createMemo(() => {
     const result = query.data;
-    if (
-      !active() ||
-      authorization.error() ||
-      !result ||
-      result.viewerId !== userId()
-    )
-      return undefined;
-    return result.value;
+    return result && result.viewerId === userId() ? result : undefined;
+  });
+  createComputed(
+    on(current, (result) => {
+      if (result) reads.set(readKey(), result);
+    })
+  );
+  const remembered = () => {
+    const read = reads.get(readKey()) as AuthorizedRead<Result> | undefined;
+    return read?.viewerId === userId() ? read : undefined;
+  };
+  const data = createMemo(() => {
+    if (!active() || authorization.error()) return undefined;
+    return (current() ?? remembered())?.value;
   });
   return {
     get data() {
@@ -120,12 +143,12 @@ function createAuthorizedProjectQuery<
       return (
         active() &&
         !authorization.error() &&
-        query.isSuccess &&
-        query.data?.viewerId === userId()
+        ((query.isSuccess && current() !== undefined) ||
+          remembered() !== undefined)
       );
     },
     get isPending() {
-      return !active() || query.isPending;
+      return !active() || (query.isPending && remembered() === undefined);
     },
     get isError() {
       return active() && Boolean(authorization.error() || query.isError);
@@ -171,7 +194,8 @@ export function createProjectIdentityQuery(
     client,
     userId,
     projectId,
-    enabled
+    enabled,
+    'cache-first'
   );
 }
 
