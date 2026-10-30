@@ -30,9 +30,10 @@ html.render body { display: block; min-height: 0; }
 .t1 { line-height: 1; white-space: nowrap; }
 .slab { font-family: display; font-weight: 320; letter-spacing: -0.035em; line-height: 1; color: var(--ink); white-space: nowrap; }
 .w { display: inline-block; }
-/* a module: 300×300 design units, scaled to the grid. Its lip (the front edge) is a 6-unit solid band under the face. */
+/* a module: 300×300 design units, scaled to the grid. Every block wears the Macro app's email composer card: no border
+   or lip, a hairline ring on the face (ring()) and a soft shadow under it (shadow()). */
 .mod { position: absolute; left: 0; top: 0; width: 300px; height: 300px; transform-origin: 150px 150px; }
-.sh { position: absolute; left: 0; top: 0; width: 300px; height: 306px; border-radius: 22px; }
+.sh { position: absolute; left: 0; top: 0; width: 300px; height: 300px; border-radius: 22px; }
 .fc { position: absolute; left: 0; top: 0; width: 300px; height: 300px; border-radius: 22px; overflow: hidden; }
 .ico { position: absolute; left: 30px; top: 30px; }
 .lbl { position: absolute; left: 30px; top: 240px; font-size: 24px; font-weight: 600; letter-spacing: .11em; text-transform: uppercase; line-height: 28px; white-space: nowrap; }
@@ -45,15 +46,15 @@ html.render body { display: block; min-height: 0; }
 .back { transform: rotateY(180deg); }
 /* a tool tile: 120 px, scaled */
 .lt { position: absolute; left: 0; top: 0; width: 120px; height: 120px; transform-origin: 60px 60px; }
-.lt .sh { width: 120px; height: 124px; border-radius: 28px; }
+.lt .sh { width: 120px; height: 120px; border-radius: 28px; }
 .lt .fc { width: 120px; height: 120px; border-radius: 28px; display: flex; align-items: center; justify-content: center; }
 /* price slabs: 800 wide, scaled */
 .sl { position: absolute; left: 0; top: 0; width: 800px; height: 118px; transform-origin: 400px 59px; }
-.sl .sh { width: 800px; height: 130px; border-radius: 22px; }
+.sl .sh { width: 800px; height: 118px; border-radius: 22px; }
 .sl .fc { width: 800px; height: 118px; border-radius: 22px; }
-.sock { background: #e9e8e2; box-shadow: inset 0 2px 5px #1a191724, inset 0 -1px 0 #ffffffb0, 0 1px 0 #ffffffc0; opacity: 0; }
+.sock { background: #e9e8e2; box-shadow: inset 0 0 0 1px rgba(11,11,11,.04), inset 0 1px 3px rgba(11,11,11,.05); opacity: 0; }
 .key { position: absolute; left: 50%; top: 0; transform: translateX(-50%); }
-.keyf { display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(#2c2c2a, #1a1a19 50%); color: #fff; font-weight: 600; white-space: nowrap; }
+.keyf { display: inline-flex; align-items: center; justify-content: center; background: #1d1d1c; color: #fff; font-weight: 600; white-space: nowrap; }
 .prow { display: inline-flex; align-items: center; gap: 9px; white-space: nowrap; color: var(--body); }
 .cap { font-size: 14px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--lab); }
 </style>
@@ -120,11 +121,11 @@ function logoSvg(key, size, uid) {
 
 // ---------- palette: porcelain and graphite, with deep primaries ----------
 const PAL = {
-  red:    { face: "#d2432e", hi: "#da5541", lip: "#97301f", fg: "#fff7f2", off: "#00000038" },
-  yellow: { face: "#e8b13a", hi: "#eebe58", lip: "#a57915", fg: "#1a1917", off: "#0000002e" },
-  blue:   { face: "#2a4abd", hi: "#3757c6", lip: "#1a3184", fg: "#f4f6ff", off: "#00000040" },
-  white:  { face: "#fbfaf6", hi: "#ffffff", lip: "#d2cfc5", fg: "#1a1917", off: "#1a19171f" },
-  ink:    { face: "#1d1d1c", hi: "#2a2a28", lip: "#050505", fg: "#f2f1ec", off: "#ffffff1f" },
+  red:    { face: "#d2432e", hi: "#da5541", fg: "#fff7f2", off: "#00000038" },
+  yellow: { face: "#e8b13a", hi: "#eebe58", fg: "#1a1917", off: "#0000002e" },
+  blue:   { face: "#2a4abd", hi: "#3757c6", fg: "#f4f6ff", off: "#00000040" },
+  white:  { face: "#fbfaf6", hi: "#ffffff", fg: "#1a1917", off: "#1a19171f" },
+  ink:    { face: "#1d1d1c", hi: "#2a2a28", fg: "#f2f1ec", off: "#ffffff1f" },
 };
 // twelve modules around the core, clockwise from the top left of the 4×4 grid, with the tools each one replaces
 const MODS = {
@@ -211,11 +212,15 @@ const LT = add(world, `<div class="layer" id="LT"></div>`), LB = add(world, `<di
 const LH = add(scr, `<div class="layer" id="LH"></div>`), LX = add(scr, `<div class="layer" id="LX"></div>`), LL = add(scr, `<div class="layer" id="LL"></div>`);
 const E = {};
 
+// The blocks wear the Macro app's email composer card (apps/web ComposerSurface, `composer-shadow` in light mode): no
+// border or lip, a 1px hairline ring, a soft contact shadow and a wide, faint halo, all in the app's --color-drop-shadow,
+// oklch(0.15 0 0 / 0.04). Sizes are canvas px; k is the scale of the element that draws them.
+const DS = "11,11,11";
+const ring = (k) => `0 0 0 ${px(1 / k)} rgba(${DS},.04)`;
 const faceBg = (p) => `linear-gradient(172deg, ${p.hi}, ${p.face} 38%)`;
-const faceSh = (p, col) => `0 6px 0 ${p.lip}, inset 0 1.5px 0 ${col === "ink" ? "#ffffff14" : "#ffffff55"}, inset 0 0 0 1px ${col === "white" ? "#1a191712" : "#0000000d"}`;
 function modFace(k) {
   const m = MODS[k], p = PAL[m.col];
-  return `<div class="fc" id="m_${k}_fc" style="background:${faceBg(p)};box-shadow:${faceSh(p, m.col)}">
+  return `<div class="fc" id="m_${k}_fc" style="background:${faceBg(p)};box-shadow:${ring(SC)}">
     <div class="ico">${pxb(m.icon, 46, p.fg)}</div>
     <div class="led" style="background:${p.off};box-shadow:inset 0 1px 1.5px #0000002e"></div><div class="ledon" id="m_${k}_led"></div>
     <div class="lbl" style="color:${p.fg}">${m.name}</div></div>`;
@@ -223,14 +228,13 @@ function modFace(k) {
 // the core's face: the mark, and a row of twelve LEDs (one per module) that light as the system locks
 function coreFace(id, s = 300) {
   const u = s / 300;
-  return `<div class="fc" style="width:${s}px;height:${s}px;border-radius:${22 * u}px;background:${faceBg(PAL.ink)};box-shadow:${faceSh(PAL.ink, "ink")}">
+  return `<div class="fc" style="width:${s}px;height:${s}px;border-radius:${22 * u}px;background:${faceBg(PAL.ink)};box-shadow:${ring(CORE / s)}">
     <div class="a" style="left:${s / 2 - 62 * u}px;top:${s / 2 - 62 * u}px">${markSvg(124 * u, "#f2f1ec")}</div>
     ${RING.map((_, i) => `<div class="a" style="left:${s / 2 + (i - 5.5) * 11 * u - 3 * u}px;top:${s / 2 + 58 * u}px;width:${6 * u}px;height:${6 * u}px;border-radius:50%;background:#ffffff1f"></div>
       <div class="a"${id ? ` id="${id}${i}"` : ""} style="left:${s / 2 + (i - 5.5) * 11 * u - 3 * u}px;top:${s / 2 + 58 * u}px;width:${6 * u}px;height:${6 * u}px;border-radius:50%;background:#45e08c;box-shadow:0 0 ${8 * u}px ${2 * u}px #45e08c88;opacity:0"></div>`).join("")}</div>`;
 }
-function toolTile(id, key, o = {}) {
-  const bg = o.bg || "linear-gradient(172deg, #ffffff, #f9f8f4 45%)", r = o.r ?? 28, lip = o.lip ?? 4;
-  return `<div class="lt" id="${id}"><div class="sh" id="${id}_sh" style="border-radius:${r}px"></div><div class="fc" style="border-radius:${r}px;background:${bg};box-shadow:0 ${lip}px 0 ${o.lipc || "#d6d3ca"}, inset 0 1.5px 0 #ffffff, inset 0 0 0 1px #1a191714">${key ? logoSvg(key, 56, id) : ""}</div></div>`;
+function toolTile(id, key) {
+  return `<div class="lt" id="${id}"><div class="sh" id="${id}_sh"></div><div class="fc" style="background:linear-gradient(172deg, #ffffff, #f9f8f4 45%);box-shadow:${ring(CS / 226)}">${logoSvg(key, 56, id)}</div></div>`;
 }
 
 function init() {
@@ -261,13 +265,15 @@ function init() {
   if (PRICE) {
     const sk = LY.sk;
     S.slabs = S.prices.map(([key, plan, usd], i) => add(LB, `<div class="sl" id="sl${i}"><div class="sh" id="sl${i}_sh"></div>
-      <div class="fc" id="sl${i}_fc" style="background:linear-gradient(172deg,#ffffff,#f9f8f4 45%);box-shadow:0 12px 0 #d2cfc5, inset 0 1.5px 0 #fff, inset 0 0 0 1px #1a191714">
+      <div class="fc" id="sl${i}_fc" style="background:linear-gradient(172deg,#ffffff,#f9f8f4 45%);box-shadow:${ring(sk)}">
         <div class="a flex" style="left:22px;top:21px;width:76px;height:76px;justify-content:center;border-radius:20px;background:#f3f2ed;box-shadow:inset 0 0 0 1px #1a19170f">${logoSvg(key, 42, "s" + i)}</div>
         <div class="a t1" style="left:120px;top:30px;font-size:30px;font-weight:600;letter-spacing:-.01em">${window.LOGOS27[key].name}</div>
         <div class="a t1" style="left:120px;top:70px;font-size:20px;color:var(--lab)">${plan}</div>
         <div class="a t1 slab" style="right:34px;top:32px;font-size:54px;font-variant-numeric:tabular-nums">$${usd}</div></div></div>`));
-    S.mslab = add(LB, `<div class="sl" id="slM"><div class="sh" id="slM_sh"></div>
-      <div class="fc" id="slM_fc" style="background:${faceBg(PAL.ink)};box-shadow:0 12px 0 #050505, inset 0 1.5px 0 #ffffff14">
+    // the Macro slab's shadow is drawn at its size on screen, so it doesn't stretch as the slab morphs into the core
+    add(LB, `<div class="a" id="slM_sh" style="left:0;top:0;z-index:39"></div>`);
+    S.mslab = add(LB, `<div class="sl" id="slM">
+      <div class="fc" id="slM_fc" style="background:${faceBg(PAL.ink)};box-shadow:${ring(sk)}">
         <div class="a flex" id="slM_in" style="left:0;top:0;width:800px;height:118px">
           <div class="a flex" style="left:22px;top:21px;width:76px;height:76px;justify-content:center;border-radius:20px;background:#ffffff12">${markSvg(48, "#f2f1ec")}</div>
           <div class="a t1" style="left:120px;top:30px;font-size:30px;font-weight:600;color:#f2f1ec">Macro</div>
@@ -281,12 +287,12 @@ function init() {
   if (SWAP) {
     const R = rng(77);
     const mess = () => ({ s: 0.8 + 0.26 * R(), r: (R() - 0.5) * 12, dx: (R() - 0.5) * 30, dy: (R() - 0.5) * 30, rad: [10, 16, 28, 44, 64, 80][Math.floor(R() * 6)],
-      bg: ["#ffffff", "#f2f1ec", "#e8e7e1", "#fdfdfd", "#ecebe7"][Math.floor(R() * 5)], lip: [2, 4, 8, 12, 16][Math.floor(R() * 5)] });
-    const front = (key, o, uid) => !key ? "" : `<div class="face" style="transform:scale(1)"><div class="fc" style="border-radius:${o.rad}px;background:${o.bg};box-shadow:0 ${o.lip}px 0 #c9c6bc, inset 0 1.5px 0 #ffffff, inset 0 0 0 1px #1a191714;display:flex;align-items:center;justify-content:center">${logoSvg(key, 132, uid)}</div></div>`;
+      bg: ["#ffffff", "#f2f1ec", "#e8e7e1", "#fdfdfd", "#ecebe7"][Math.floor(R() * 5)], h: [0, 0.1, 0.2, 0.3, 0.45][Math.floor(R() * 5)] });
+    const front = (key, o, uid) => !key ? "" : `<div class="face" style="transform:scale(1)"><div class="fc" style="border-radius:${o.rad}px;background:${o.bg};box-shadow:${ring(SC)};display:flex;align-items:center;justify-content:center">${logoSvg(key, 132, uid)}</div></div>`;
     S.ring = RING.map((k, i) => {
       const key = S.face[k], o = mess();
       const el = add(LB, `<div class="flip" id="f_${k}">${front(key, o, "f" + i)}<div class="face back">${modFace(k)}<div class="gl" id="m_${k}_gl"></div></div></div>`);
-      const sh = add(LT, `<div class="sh" id="f_${k}_sh" style="transform-origin:150px 153px"></div>`);
+      const sh = add(LT, `<div class="sh" id="f_${k}_sh" style="transform-origin:150px 150px"></div>`);
       return { k, key, o, el, sh, land: B(S.flip(i)) };
     });
     // the middle four: their backs are the four quarters of the core
@@ -294,7 +300,7 @@ function init() {
       const o = mess(), qx = i % 2, qy = Math.floor(i / 2), q = CORE / 2 / SC;
       const el = add(LB, `<div class="flip" id="q${i}">${front(key, o, "q" + i)}<div class="face back" style="overflow:hidden;border-radius:${qx ? 0 : 22}px ${qx ? 22 : 0}px ${qx && qy ? 22 : 0}px ${!qx && qy ? 22 : 0}px">
         <div style="position:absolute;left:${-qx * 300}px;top:${-qy * 300}px;width:600px;height:600px">${coreFace("q" + i + "l", 600)}</div></div></div>`);
-      const sh = add(LT, `<div class="sh" id="q${i}_sh" style="transform-origin:150px 153px"></div>`);
+      const sh = add(LT, `<div class="sh" id="q${i}_sh" style="transform-origin:150px 150px"></div>`);
       return { key, o, el, sh, qx, qy, q };
     });
     add(LB, `<div class="mod" id="m_core"><div class="sh" id="m_core_sh"></div>${coreFace("cl")}<div class="gl" id="m_core_gl"></div></div>`);
@@ -314,7 +320,7 @@ function init() {
   add(LX, slabC("xh1", ["with", "a", "single", "system."], EL.hb[1], EL.hfs));
   add(LX, `<div class="a" id="xsub" style="left:40px;width:1000px;top:${EL.sub}px;text-align:center;font-size:${EL.sfs}px;line-height:${EL.slh}px;color:var(--body)">Email, chat, docs, tasks, CRM and agents<br>in one workspace, for <span style="color:var(--ink);font-weight:600">$40 a seat</span>.</div>`);
   const kh = EL.ch - 8;
-  add(LX, `<div class="a" id="xcta" style="left:0;width:1080px;top:${EL.cta}px;height:${EL.ch}px"><div class="key" id="xkey"><div class="keyf" id="xkf" style="height:${kh}px;padding:0 ${Math.round(kh * 0.52)}px;gap:14px;border-radius:${Math.round(kh * 0.24)}px;font-size:${EL.cfs}px;box-shadow:0 7px 0 #050505, inset 0 1px 0 #ffffff1c, 0 20px 30px -16px #1a191780">Get started at macro.com<span id="xarr" style="display:inline-flex">${pxb("arrow-right", Math.round(EL.cfs * 1.05), "#fff")}</span></div></div></div>`);
+  add(LX, `<div class="a" id="xcta" style="left:0;width:1080px;top:${EL.cta}px;height:${EL.ch}px"><div class="key" id="xkey"><div class="keyf" id="xkf" style="height:${kh}px;padding:0 ${Math.round(kh * 0.52)}px;gap:14px;border-radius:${Math.round(kh * 0.24)}px;font-size:${EL.cfs}px;box-shadow:${keySh(0)}">Get started at macro.com<span id="xarr" style="display:inline-flex">${pxb("arrow-right", Math.round(EL.cfs * 1.05), "#fff")}</span></div></div></div>`);
   add(LX, `<div class="a t1" id="xdemo" style="left:0;width:1080px;top:${EL.demo}px;text-align:center;font-size:${EL.dfs}px;color:var(--lab)">or <span style="color:var(--body);text-decoration:underline;text-underline-offset:4px;text-decoration-color:#1a191740">book a demo</span></div>`);
   const PROOF = [`${pxb("trend-up", 20, "var(--body)")}Backed by a16z`, `${pxb("shield-check", 20, "var(--body)")}SOC 2 Type II · ISO 27001`, `${ic("icon-github", 19, "var(--body)")}Fully open source`];
   add(LX, `<div class="a flex" id="xproof" style="left:0;width:1080px;top:${EL.proof - 14}px;height:28px;justify-content:center;gap:24px;font-size:${EL.pfs}px">${PROOF.map((p, i) => `${i ? `<span id="xs${i}" style="width:1px;height:20px;background:#1a191726"></span>` : ""}<span class="prow" id="xp${i}">${p}</span>`).join("")}</div>`);
@@ -335,13 +341,20 @@ function rise(n, t, tin, tout, dy = 26, blur = 7, resp = 0.42, damp = 0.86) {
   const p = spr(t - tin, resp, damp), q = tout == null ? 0 : sm((t - tout) / 0.22);
   fx(n, clamp(spr(t - tin, 0.26, 1) * 1.3) * (1 - q), (1 - clamp(p)) * blur + q * blur, `translate3d(0,${px((1 - p) * dy - q * dy * 0.6)},0)`);
 }
-// the shadow at a height (0 = resting on the table, 1 = held up): a tight contact shadow and a soft ambient one
-const shadow = (lift, o = 1) => `0 ${px(2 + 26 * lift)} ${px(4 + 44 * lift)} ${px(-1 - 6 * lift)} rgba(26,24,20,${((0.22 - 0.08 * lift) * o).toFixed(3)}), 0 ${px(1 + 1.5 * (1 - lift))} ${px(1.5)} 0 rgba(26,24,20,${(0.16 * (1 - lift) * o).toFixed(3)}), 0 ${px(14 + 30 * lift)} ${px(40 + 40 * lift)} ${px(-18)} rgba(26,24,20,${(0.1 * o).toFixed(3)})`;
+// the shadow at a height (0 = resting on the table, 1 = held up) for an element at scale k: the composer's contact shadow
+// (0 2 8) and halo (0 4 80, spread 8), which grow and soften as the block lifts, and a deeper drop only a lifted block casts
+const shadow = (lift, k) => {
+  const u = (v) => px(v / k), a = (v) => `rgba(${DS},${v.toFixed(4)})`;
+  return `0 ${u(2 + 10 * lift)} ${u(8 + 22 * lift)} 0 ${a(0.04 + 0.03 * lift)}, 0 ${u(4 + 18 * lift)} ${u(80 + 40 * lift)} ${u(8 - 4 * lift)} ${a(0.024 + 0.016 * lift)}, `
+    + `0 ${u(26 * lift)} ${u(52 * lift)} ${u(-14 * lift)} ${a(0.14 * lift)}`;
+};
+// the end card's button: resting a little above the card, flat on the card while it's pressed
+const keySh = (press) => `${ring(1)}, ${shadow(0.35 * (1 - press), 1)}`;
 function place(el, sh, x, y, r, s, lift, scale = SC) {
   const sc = scale * s * (1 + 0.06 * lift);
   el.style.transform = `translate3d(${px(x - 150)},${px(y - 150)},0) rotate(${r.toFixed(3)}deg) scale(${sc.toFixed(5)})`;
   el.style.zIndex = lift > 0.02 ? String(10 + Math.round(lift * 50)) : "1";
-  if (sh) sh.style.boxShadow = shadow(lift);
+  if (sh) sh.style.boxShadow = shadow(lift, scale * s);
 }
 // once the core is in, each module seats itself a hair deeper toward it, a few ms after the last: a ripple of clicks
 const seatT = (i) => B(LOCK) + 0.03 + i * 0.022;
@@ -425,12 +438,12 @@ function toolsFx(t) {
     if (!show(el, o)) continue;
     el.style.transform = `translate3d(${px(x - 60)},${px(y - 60)},0) rotate(${r.toFixed(3)}deg) scale(${(s * (1 + 0.05 * lift)).toFixed(5)})`;
     el.style.zIndex = lift > 0.02 ? "20" : "1";
-    sh.style.boxShadow = shadow(lift);
+    sh.style.boxShadow = shadow(lift, CS / 226);
   }
 }
 
 // ----- price: the slabs, the press, the morph into the core -----
-const SLW = 800, SLH = 118, SLL = 12, SLS = (SLH + SLL) * LY.sk;      // slab, its lip; one slab's height in the stack
+const SLW = 800, SLH = 118, SLL = 12, SLS = (SLH + SLL) * LY.sk;      // slab, the gap above it; one slab's pitch in the stack
 function priceFx(t) {
   const sk = LY.sk, base = LY.stack + 2 * SLS;                        // the table under the stack
   const p0 = B(S.press[0]), p1 = B(S.press[1]), pp = t < p0 ? 0 : t > p1 ? 1 : mj((t - p0) / (p1 - p0));
@@ -448,8 +461,9 @@ function priceFx(t) {
     show(el, 1);
     el.style.transform = `translate3d(${px(GX - 400)},${px(y - 59)},0) scale(${(sk * (1 + 0.04 * lift)).toFixed(5)},${(sk * Math.max(0.02, sy) * (1 + 0.04 * lift)).toFixed(5)})`;
     el.style.zIndex = String(2 + i + (lift > 0 ? 20 : 0));
-    E[`sl${i}_sh`].style.boxShadow = shadow(lift * 0.9);
-    E[`sl${i}_fc`].style.opacity = String(1 - sm((pp - 0.6) / 0.35));
+    const fo = String(1 - sm((pp - 0.6) / 0.35));
+    E[`sl${i}_sh`].style.boxShadow = shadow(lift * 0.9, sk);
+    E[`sl${i}_sh`].style.opacity = fo; E[`sl${i}_fc`].style.opacity = fo;
     if (t >= land) sum += S.prices[i][2];
   });
   // the total counts up as they land, then down to Macro's price as the press goes
@@ -463,7 +477,7 @@ function priceFx(t) {
   fx(E.note, 0.9 * (1 - sm((t - B(S.press[0])) / 0.3)), 0, `translate3d(0,${px(tb + 66 * sk)},0)`);
   // the Macro slab: lowers into view, hovers, presses, rests; then becomes the core at the grid's center
   const el = E.slM, mIn = B(S.mIn), mH = B(S.mHov), m0 = B(S.morph[0]), m1 = B(S.morph[1]);
-  if (t < mIn || t > m1 + 0.03) { show(el, 0); return; }
+  if (t < mIn || t > m1 + 0.03) { show(el, 0); show(E.slM_sh, 0); return; }
   const restTop = base - hgt, yRest = restTop - (SLH * sk) / 2 - SLL * sk;
   let y, lift = 0;
   if (t < mH) { const u = mj((t - mIn) / (mH - mIn)); y = lerp(yRest - 900, yRest - 70, u); lift = 1; }
@@ -476,7 +490,9 @@ function priceFx(t) {
   show(el, 1);
   el.style.transform = `translate3d(${px(GX - 400)},${px(cy - 59)},0) scale(${(w / SLW * (1 + 0.04 * lift)).toFixed(5)},${(h / SLH * (1 + 0.04 * lift)).toFixed(5)})`;
   el.style.zIndex = "40";
-  E.slM_sh.style.boxShadow = shadow(lift * 0.9);
+  const sl = 1 + 0.04 * lift, sw = w * sl, shh = h * sl;
+  if (show(E.slM_sh, 1 - sm((q - 0.8) / 0.2))) Object.assign(E.slM_sh.style, { width: px(sw), height: px(shh), borderRadius: px(lerp(22, (22 * CORE) / 300, q) * sl),
+    transform: `translate3d(${px(GX - sw / 2)},${px(cy - shh / 2)},0)`, boxShadow: shadow(lift * 0.9, 1) });
   E.slM_in.style.opacity = String(1 - sm(q * 2.5));
   E.slM_fc.style.borderRadius = `${lerp(22, (22 * CORE) / 300, q) * (SLW / w)}px / ${lerp(22, (22 * CORE) / 300, q) * (SLH / h)}px`;
 }
@@ -484,15 +500,15 @@ function priceFx(t) {
 // ----- swap: each tool flips into its module -----
 function flipPose(t, land, messy, exact, dur = 0.46) {
   const t0 = land - dur;
-  if (t <= t0) return { ...messy, th: 0, lift: 0 };
+  if (t <= t0) return { ...messy, th: 0 };
   if (t >= land) { const u = t - land; return { ...exact, th: 180, lift: 0, s: exact.s * (1 - 0.01 * Math.exp(-u / 0.05) * Math.cos(u * 45)) }; }
   const u = (t - t0) / dur, p = mj(u);
-  return { x: lerp(messy.x, exact.x, p), y: lerp(messy.y, exact.y, p), r: lerp(messy.r, 0, p), s: lerp(messy.s, exact.s, p), th: 180 * p, lift: Math.sin(Math.PI * u) * 0.7 };
+  return { x: lerp(messy.x, exact.x, p), y: lerp(messy.y, exact.y, p), r: lerp(messy.r, 0, p), s: lerp(messy.s, exact.s, p), th: 180 * p, lift: lerp(messy.lift, 0, p) + Math.sin(Math.PI * u) * 0.7 };
 }
 function swapFx(t) {
   S.ring.forEach((F, i) => {
     const [gx, gy] = gridPos(F.k, t), [c0x, c0y] = cellXY(MODS[F.k].cell, G0), [nx, ny] = nudge(F.k, t);
-    const messy = { x: c0x + F.o.dx + nx, y: c0y + F.o.dy + ny, r: F.o.r, s: F.o.s };
+    const messy = { x: c0x + F.o.dx + nx, y: c0y + F.o.dy + ny, r: F.o.r, s: F.o.s, lift: F.o.h };
     let P;
     if (F.key) P = flipPose(t, F.land, messy, { x: gx, y: gy, r: 0, s: 1 });
     else { const d = drop(t, F.land - 0.5, F.land - 0.24, F.land, [gx, gy - 40], [gx, gy]); P = { ...d, th: 180 }; if (t < F.land - 0.5) { show(F.el, 0); show(F.sh, 0); return; } }
@@ -503,7 +519,7 @@ function swapFx(t) {
     const cosw = Math.max(0.06, Math.abs(Math.cos((P.th * Math.PI) / 180)));
     F.sh.style.transform = `translate3d(${px(P.x - 150)},${px(P.y - 150)},0) rotate(${P.r.toFixed(3)}deg) scale(${(sc * cosw).toFixed(5)},${sc.toFixed(5)})`;
     F.sh.style.borderRadius = P.th < 90 ? `${F.o.rad}px` : "22px";
-    F.sh.style.boxShadow = shadow(P.lift);
+    F.sh.style.boxShadow = shadow(P.lift, SC);
     E[`m_${F.k}_gl`].style.opacity = sweep(i, t).toFixed(3);
     E[`m_${F.k}_led`].style.opacity = t >= ledT(i) ? clamp((t - ledT(i)) / 0.05).toFixed(3) : "0";
   });
@@ -513,7 +529,7 @@ function swapFx(t) {
     const [c0x, c0y] = [GX + (Qd.qx - 0.5) * (CS + G0), GY + (Qd.qy - 0.5) * (CS + G0)];
     const exact = { x: GX + (Qd.qx - 0.5) * q2, y: GY + (Qd.qy - 0.5) * q2, r: 0, s: q2 / CS };
     const jit = t > B(14.6) && t < land - 0.5 ? 1.4 * Math.sin(t * 47 + i * 2) : 0;
-    const P = flipPose(t, land, { x: c0x + Qd.o.dx + jit, y: c0y + Qd.o.dy, r: Qd.o.r, s: Qd.o.s }, exact, 0.52);
+    const P = flipPose(t, land, { x: c0x + Qd.o.dx + jit, y: c0y + Qd.o.dy, r: Qd.o.r, s: Qd.o.s, lift: Qd.o.h }, exact, 0.52);
     if (t >= land + 0.02) { show(Qd.el, 0); show(Qd.sh, 0); return; }
     show(Qd.el, 1); show(Qd.sh, 1);
     const sc = SC * P.s * (1 + 0.06 * P.lift);
@@ -522,7 +538,7 @@ function swapFx(t) {
     const cosw = Math.max(0.06, Math.abs(Math.cos((P.th * Math.PI) / 180)));
     Qd.sh.style.transform = `translate3d(${px(P.x - 150)},${px(P.y - 150)},0) rotate(${P.r.toFixed(3)}deg) scale(${(sc * cosw).toFixed(5)},${sc.toFixed(5)})`;
     Qd.sh.style.borderRadius = `${Qd.o.rad}px`;
-    Qd.sh.style.boxShadow = shadow(P.lift);
+    Qd.sh.style.boxShadow = shadow(P.lift, SC);
   });
   const el = E.m_core;
   if (show(el, t >= land + 0.01 ? 1 : 0)) {
@@ -555,8 +571,8 @@ function endFx(t) {
   if (t < ka) show(E.xkey, 0);
   else {
     const p = spr(t - ka, 0.34, 0.8), press = t < pd - 0.03 ? 0 : t < pu ? sm((t - pd + 0.03) / 0.05) : 1 - spr(t - pu, 0.18, 0.7);
-    fx(E.xkey, clamp((t - ka) / 0.1), 0, `translateX(-50%) translate3d(0,${px((1 - p) * -22 + press * 5)},0) scale(${(1.04 - 0.04 * clamp(p)).toFixed(4)})`);
-    E.xkf.style.boxShadow = `0 ${px(7 - press * 5)} 0 #050505, inset 0 1px 0 #ffffff1c, 0 ${px(20 - press * 10)} ${px(30 - press * 12)} -16px #1a191780`;
+    fx(E.xkey, clamp((t - ka) / 0.1), 0, `translateX(-50%) translate3d(0,${px((1 - p) * -22)},0) scale(${((1.04 - 0.04 * clamp(p)) * (1 - 0.035 * press)).toFixed(4)})`);
+    E.xkf.style.boxShadow = keySh(press);
   }
   E.xarr.style.transform = `translateX(${px(5 * Math.max(0, Math.sin((t - pu - 0.2) * 3.4)) * clamp((t - pu - 0.2) / 0.3))})`;
   rise(E.xdemo, t, e + 1.25, null, 10, 5);
