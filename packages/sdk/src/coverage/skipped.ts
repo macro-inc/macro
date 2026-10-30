@@ -401,8 +401,11 @@ export const storageExcluded = [
   'whatsappCancelPairing',
   'whatsappConnect',
   'whatsappDisconnect',
+  // Phone-number lookups need the owner's own session: WhatsApp bans bulk checks.
+  'whatsappLookup',
   'whatsappPairing',
   'whatsappPasskey',
+  'whatsappStartLookup',
 ] as const satisfies readonly (keyof StorageSdk)[];
 
 export const storageBacklog =

@@ -59045,12 +59045,18 @@ export const whatsappChatsResponse = zod
               .datetime({})
               .nullish()
               .describe(
-                'Newest activity WhatsApp reported (message or history sync); `null`\nwhen unknown. The list is sorted by it, newest first, unknown last.'
+                'Newest activity WhatsApp reported (message or history sync); `null`\nwhen unknown, as for saved contacts never messaged. The list is\nsorted by it, newest first, unknown last.'
               ),
             name: zod
               .string()
               .describe(
                 'Group: the subject, or member names for an unnamed group. Direct: the\ncontact or WhatsApp name, else `+<phone>`. Always non-empty.'
+              ),
+            phoneNumber: zod
+              .string()
+              .nullish()
+              .describe(
+                "The other person's phone number (`+<digits>`) of a direct chat, when\nWhatsApp told us it."
               ),
             pinned: zod.boolean().describe('Pinned in WhatsApp.'),
             shared: zod
@@ -59137,6 +59143,68 @@ export const whatsappDisconnectResponse = zod
       ),
   })
   .describe('Result of disconnecting an account.');
+
+/**
+ * @summary Ask whether a phone number has a WhatsApp account, to start a direct chat
+with it; poll the lookup until it is no longer `pending`. Found numbers
+join the chat list, so `POST /external-chats` adds them.
+ */
+export const whatsappStartLookupBody = zod
+  .object({
+    phoneNumber: zod
+      .string()
+      .describe(
+        'E.164: `+`, the country code and the number, without spacing.'
+      ),
+  })
+  .describe('A phone number to start a direct chat with.');
+
+export const whatsappStartLookupResponse = zod
+  .object({
+    chatJid: zod
+      .string()
+      .nullish()
+      .describe(
+        "Found: the direct chat's JID, now addable from the chat list."
+      ),
+    id: zod.uuid().describe('Poll `GET \/whatsapp\/lookups\/{id}` with it.'),
+    phoneNumber: zod
+      .string()
+      .describe('The number asked about, E.164 (`+<digits>`).'),
+    state: zod
+      .enum(['pending', 'found', 'not_on_whatsapp', 'failed'])
+      .describe('Where a phone-number lookup is.'),
+  })
+  .describe(
+    'The owner asking whether a phone number has a WhatsApp account, to start\na direct chat with it.'
+  );
+
+/**
+ * @summary Poll the caller's phone-number lookup.
+ */
+export const whatsappLookupParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const whatsappLookupResponse = zod
+  .object({
+    chatJid: zod
+      .string()
+      .nullish()
+      .describe(
+        "Found: the direct chat's JID, now addable from the chat list."
+      ),
+    id: zod.uuid().describe('Poll `GET \/whatsapp\/lookups\/{id}` with it.'),
+    phoneNumber: zod
+      .string()
+      .describe('The number asked about, E.164 (`+<digits>`).'),
+    state: zod
+      .enum(['pending', 'found', 'not_on_whatsapp', 'failed'])
+      .describe('Where a phone-number lookup is.'),
+  })
+  .describe(
+    'The owner asking whether a phone number has a WhatsApp account, to start\na direct chat with it.'
+  );
 
 /**
  * @summary Poll the caller's pairing transaction, including its current QR code.
