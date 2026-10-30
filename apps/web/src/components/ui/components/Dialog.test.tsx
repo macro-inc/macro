@@ -6,7 +6,15 @@ import {
   waitFor,
 } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 import { Button } from './Button';
 import { Dialog, type DialogProps } from './Dialog';
 
@@ -195,6 +203,52 @@ describe('responsive dialog', () => {
     );
     expect(onOpenAutoFocus).toHaveBeenCalledOnce();
     expect(onCloseAutoFocus).toHaveBeenCalledOnce();
+  });
+
+  it('lets go of the page when closed before its opening animation starts', async () => {
+    mobile.value = false;
+    // Out of the previous test's handoff window, so this dialog animates.
+    const now = performance.now() + 1_000;
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(now);
+    onTestFinished(() => clock.mockRestore());
+    const motion = document.createElement('style');
+    motion.textContent =
+      '.dialog-content-open-animation, .dialog-overlay-open-animation { animation-name: dialog-open; }';
+    document.head.append(motion);
+    onTestFinished(() => motion.remove());
+    // A browser's computed style is live and follows class changes; jsdom's
+    // is a snapshot, which would hide a class dropped while closing.
+    const computed = window.getComputedStyle.bind(window);
+    const live = vi
+      .spyOn(window, 'getComputedStyle')
+      .mockImplementation((element, pseudo) => {
+        const style = computed(element, pseudo);
+        return new Proxy(style, {
+          get: (target, key) => {
+            if (key === 'animationName') return computed(element).animationName;
+            const value = Reflect.get(target, key);
+            return typeof value === 'function' ? value.bind(target) : value;
+          },
+        });
+      });
+    onTestFinished(() => live.mockRestore());
+
+    const { open, trigger } = setup({ animate: true });
+    const dialog = await screen.findByRole('dialog');
+    const overlay = document.querySelector('.scrim-glass');
+    expect(dialog.classList).toContain('dialog-content-open-animation');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(open()).toBe(false);
+    // The opening animations still run their course, then end.
+    for (const element of [dialog, overlay]) {
+      const end = new Event('animationend');
+      Object.defineProperty(end, 'animationName', { value: 'dialog-open' });
+      element?.dispatchEvent(end);
+    }
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.querySelector('.scrim-glass')).toBeNull();
+    expect(document.body.style.pointerEvents).not.toBe('none');
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
   });
 
   it('honors a prevented Escape before dismissing on a later Escape', async () => {

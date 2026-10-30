@@ -49,6 +49,8 @@ function Modal() {
         showCalls: true,
         showReviews: true,
         showActivity: true,
+        // Off, so Drive, Email and Chat lead the rows the sort tests drag.
+        showBoard: false,
         showExternal: true,
         get prefs() {
           return prefs();

@@ -126,10 +126,13 @@ function DesktopDialog(props: DialogProps) {
       return;
     }
 
+    // The opening animation stays until the next open. Dropping it here reads
+    // as an exit animation to Kobalte's presence when the dialog closes before
+    // that animation starts, and it then keeps the scrim and the page's
+    // pointer lock mounted, waiting for an end that never comes.
     if (countedOpen) {
       openDialogCount = Math.max(0, openDialogCount - 1);
       countedOpen = false;
-      setAnimateOnOpen(false);
 
       if (openDialogCount === 0) {
         lastAllDialogsClosedAt = performance.now();

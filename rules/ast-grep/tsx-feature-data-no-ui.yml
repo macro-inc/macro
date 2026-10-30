@@ -53,6 +53,8 @@ files:
   - apps/web/src/features/usage/primitives/**
   - apps/web/src/features/crm/queries/**
   - apps/web/src/features/crm/primitives/**
+  - apps/web/src/features/board/queries/**
+  - apps/web/src/features/board/primitives/**
   - apps/web/src/features/slack-import/queries/**
   - apps/web/src/features/slack-import/primitives/**
   - apps/web/src/features/channels-view/queries/channel-detail-source*

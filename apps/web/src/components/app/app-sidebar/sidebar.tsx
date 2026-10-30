@@ -5,6 +5,7 @@ import {
   type ListView,
 } from '@app/constants/list-views';
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
+import { useBoardFlag } from '@app/features/board/use-board-flag';
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
@@ -42,6 +43,7 @@ import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import BellIcon from '@icon/system/regular/bell.svg';
+import BoardIcon from '@icon/system/regular/company-board.svg';
 import HomeIcon from '@icon/system/regular/house.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
@@ -251,6 +253,7 @@ export const GoToHotkeys = () => {
 
   const calendarUiEnabled = useCalendarUiFlag();
   const activityFeedEnabled = useActivityFeedFlag();
+  const boardEnabled = useBoardFlag();
   const recentViewEnabled = useRecentViewFlag();
   const reviews = useFeatureFlag(enableTasksReviews);
   const external = useFeatureFlag(enableWhatsappLinked);
@@ -259,6 +262,7 @@ export const GoToHotkeys = () => {
     buildSidebarLinks(
       calendarUiEnabled(),
       activityFeedEnabled(),
+      boardEnabled(),
       recentViewEnabled(),
       reviews().enabled,
       external().enabled,
@@ -430,6 +434,17 @@ const ACTIVITY_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.activity,
 };
 
+const BOARD_LINK: SidebarItem = {
+  id: 'board',
+  get label() {
+    return t('nav.board');
+  },
+  href: '/board',
+  icon: BoardIcon,
+  hotkey: 'b',
+  hotkeyToken: TOKENS.sidebar.goTo.board,
+};
+
 const RECENT_LINK: SidebarItem = {
   id: 'recent',
   get label() {
@@ -468,13 +483,14 @@ const EXTERNAL_LINK: SidebarItem = {
 
 /**
  * Assemble the ordered sidebar link list: the static links plus the
- * flag-gated Recent, Activity, Calendar, Calls, Reviews, CRM, and External
- * entries in their correct positions. Callers subscribe to the flags and pass
+ * flag-gated Recent, Activity, Board, Calendar, Calls, Reviews, CRM, and
+ * External entries in their correct positions. Callers subscribe to the flags and pass
  * them in, so a flag that resolves after mount still rebuilds the list.
  */
 const buildSidebarLinks = (
   showCalendar: boolean,
   showActivity: boolean,
+  showBoard: boolean,
   showRecent: boolean,
   showReviews: boolean,
   showExternal: boolean,
@@ -489,13 +505,17 @@ const buildSidebarLinks = (
     links = [...links.slice(0, idx + 1), link, ...links.slice(idx + 1)];
   };
 
-  // Home leads; Recent and Activity follow it in that order.
+  // Home leads; Recent, Activity and Board follow it in that order.
   let anchorId = 'home';
   if (showRecent) {
     insertAfter(anchorId, RECENT_LINK);
     anchorId = 'recent';
   }
-  if (showActivity) insertAfter(anchorId, ACTIVITY_LINK);
+  if (showActivity) {
+    insertAfter(anchorId, ACTIVITY_LINK);
+    anchorId = 'activity';
+  }
+  if (showBoard) insertAfter(anchorId, BOARD_LINK);
 
   if (ENABLE_CALLS) {
     const idx = links.findIndex((l) => l.id === 'channels');

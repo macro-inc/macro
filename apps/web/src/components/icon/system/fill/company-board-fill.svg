@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-macro-icon="company-board-fill">
+  <path d="M7.98 5.24c3.36 0 5.92 1.98 5.92 4.67s-2.56 4.67-5.92 4.67c-.77 0-1.5-.1-2.18-.29-.8.7-1.7 1.15-2.82 1.34.42-.77.64-1.54.67-2.27-1.02-.83-1.6-2.05-1.6-3.46C2.06 7.22 4.62 5.24 7.98 5.24Z" fill="currentColor"/>
+  <circle cx="19" cy="5" r="2" fill="currentColor"/>
+  <circle cx="18" cy="17.5" r="2.5" fill="currentColor"/>
+</svg>

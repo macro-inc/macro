@@ -131,6 +131,7 @@ export const TOKENS = {
       home: 'sidebar.goTo.home',
       recent: 'sidebar.goTo.recent',
       activity: 'sidebar.goTo.activity',
+      board: 'sidebar.goTo.board',
       calendar: 'sidebar.goTo.calendar',
       search: 'sidebar.goTo.search',
       agents: 'sidebar.goTo.agents',

@@ -33,6 +33,7 @@ files:
   - apps/web/src/features/scheduling/components/**
   - apps/web/src/features/usage/components/**
   - apps/web/src/features/crm/components/**
+  - apps/web/src/features/board/components/**
   - apps/web/src/features/slack-import/components/**
   - apps/web/src/features/channels-view/components/ChannelDetailView*
   - apps/web/src/features/channel/components/channel-invite*

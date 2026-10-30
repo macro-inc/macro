@@ -54,7 +54,7 @@ the same drawing to avoid introducing competing silhouettes. Existing brand
 logos and the legacy animated showcase retain their own assets and licensing.
 Interface controls, including editor tools, file types, task states, priorities,
 and settings, use this family. Board views use the shared Kanban drawing: three connected columns with
-staggered bottoms and open counters, following the familiar Phosphor silhouette. Gantt layouts use `chart-gantt`, with staggered horizontal task bars;
+staggered bottoms and open counters, following the familiar Phosphor silhouette. The company Board rail item is distinct from those views: `company-board` draws the shared chat bubble beside two rounds of nearby activity. Gantt layouts use `chart-gantt`, with staggered horizontal task bars;
 it is also listed in the regular icon gallery. Brand marks retain their existing assets.
 Icons introduced on main after the source PR retain their existing assets when
 this family has no matching drawing.

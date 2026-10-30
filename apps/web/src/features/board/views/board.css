@@ -1,0 +1,16 @@
+/* Nodes are positioned with `transform`, so entrance motion uses the
+   individual `scale` property, which composes with it. The animation ends
+   at the node's own opacity and holds nothing afterwards, so settled
+   nodes keep their fade. */
+@keyframes board-node-in {
+  from {
+    opacity: 0;
+    scale: 0.9;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-board-node] {
+    animation: board-node-in 320ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  }
+}

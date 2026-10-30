@@ -101,6 +101,11 @@ files:
   - apps/web/src/features/crm/components/**
   - apps/web/src/features/crm/views/**
   - apps/web/src/features/crm/context/**
+  - apps/web/src/features/board/queries/**
+  - apps/web/src/features/board/primitives/**
+  - apps/web/src/features/board/components/**
+  - apps/web/src/features/board/views/**
+  - apps/web/src/features/board/context/**
   - apps/web/src/features/slack-import/queries/**
   - apps/web/src/features/slack-import/primitives/**
   - apps/web/src/features/slack-import/components/**

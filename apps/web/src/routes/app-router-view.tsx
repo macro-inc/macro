@@ -41,6 +41,7 @@ import { BasePathComponent } from './BasePath';
 import {
   ActivityRouteView,
   AgentsRouteView,
+  BoardRouteView,
   CalendarRouteView,
   CallDetailRouteView,
   CallsCallDetail,
@@ -90,6 +91,7 @@ import {
   appRoute,
   authRoute,
   baseRoute,
+  boardRoute,
   bookingLinksRoute,
   bookingReceiptRoute,
   calendarSplitRoute,
@@ -347,6 +349,7 @@ export function AppRouterView() {
         </Route>
         <Route definition={recentRoute} component={RecentRouteView} />
         <Route definition={activityRoute} component={ActivityRouteView} />
+        <Route definition={boardRoute} component={BoardRouteView} />
         <Route
           definition={agentsViewRoute}
           component={AgentsRouteView}

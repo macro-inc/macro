@@ -6,6 +6,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import BuildingsFillIcon from '@icon/system/fill/buildings-fill.svg';
 import CalendarBlankFillIcon from '@icon/system/fill/calendar-blank-fill.svg';
 import ChatsCircleFillIcon from '@icon/system/fill/chats-circle-fill.svg';
+import BoardFillIcon from '@icon/system/fill/company-board-fill.svg';
 import EnvelopeFillIcon from '@icon/system/fill/envelope-fill.svg';
 import FolderSimpleFillIcon from '@icon/system/fill/folder-simple-fill.svg';
 import GitPullRequestFillIcon from '@icon/system/fill/git-pull-request-fill.svg';
@@ -18,6 +19,7 @@ import BuildingsIcon from '@icon/system/regular/buildings.svg';
 import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
 import CalendarCheckIcon from '@icon/system/regular/calendar-check.svg';
 import ChatsCircleIcon from '@icon/system/regular/chats-circle.svg';
+import BoardIcon from '@icon/system/regular/company-board.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import FolderSimpleIcon from '@icon/system/regular/folder-simple.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
@@ -71,6 +73,17 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
     iconActive: HouseFillIcon,
     hotkey: 'h',
     hotkeyToken: TOKENS.sidebar.goTo.home,
+  },
+  {
+    id: 'board',
+    get label() {
+      return t('nav.board');
+    },
+    href: '/board',
+    icon: BoardIcon,
+    iconActive: BoardFillIcon,
+    hotkey: 'b',
+    hotkeyToken: TOKENS.sidebar.goTo.board,
   },
   {
     id: 'documents',
@@ -210,6 +223,7 @@ export type NavItemGates = {
   showCalls: boolean;
   showReviews: boolean;
   showActivity: boolean;
+  showBoard: boolean;
   showExternal: boolean;
   /** User preferences for which items are shown and in what order. */
   prefs: SidebarPrefs;
@@ -226,6 +240,7 @@ export const isNavItemAvailable = (
   if (item.id === 'calls') return gates.showCalls;
   if (item.id === 'reviews') return gates.showReviews;
   if (item.id === 'activity') return gates.showActivity;
+  if (item.id === 'board') return gates.showBoard;
   if (item.id === 'external') return gates.showExternal;
   return true;
 };
