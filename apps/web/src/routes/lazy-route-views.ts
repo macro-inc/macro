@@ -95,10 +95,6 @@ export const ReviewsRouteView = lazyNamed(
   () => import('@app/features/reviews-view/route-views'),
   'ReviewsRouteView'
 );
-export const RoutineCreateRouteView = lazyNamed(
-  () => import('@app/features/routines/route-views'),
-  'RoutineCreateRouteView'
-);
 export const SettingsRouteView = lazyNamed(
   () => import('@app/features/settings/route-views'),
   'SettingsRouteView'

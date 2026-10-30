@@ -11,18 +11,12 @@ import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import DotsIcon from '@icon/system/regular/dots-three.svg';
 import ShareIcon from '@icon/system/regular/share-network.svg';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import UserIcon from '@icon/system/regular/user.svg';
-import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dropdown, ToggleSwitch } from '@ui';
-import {
-  type Accessor,
-  createSignal,
-  For,
-  Match,
-  Show,
-  Switch,
-} from 'solid-js';
+import { type Accessor, createSignal, Match, Show, Switch } from 'solid-js';
+import { ConnectionRows } from '../components/routine-connections';
 import { RoutineEditor, RoutineSettingRow } from '../components/routine-editor';
 import { RoutineRunButton } from '../components/routine-run-button';
 import {
@@ -31,7 +25,7 @@ import {
 } from '../components/routine-step-editor';
 import type { RoutineDetailSlots } from '../context/routine-slots';
 import type { RoutineDetailSource } from '../context/routine-sources';
-import { DEFAULT_RUN_VISIBILITY, type RoutineApp } from '../core/draft';
+import { DEFAULT_RUN_VISIBILITY } from '../core/draft';
 import type { HistoryRecord, HistoryResource } from '../core/history';
 import {
   createEmptyDraft,
@@ -86,82 +80,6 @@ function lastRunTime(records: readonly HistoryRecord[]): string | undefined {
     : formatRelativeDate(latest);
 }
 
-/**
- * The routine's required apps, one row each, and the button that adds them.
- * Only an Ask AI step uses them.
- */
-function ConnectionRows(props: {
-  apps: RoutineApp[];
-  /** Whether the routine has an Ask AI step to give apps to. */
-  agent: boolean;
-  connected: Accessor<ReadonlySet<string> | undefined>;
-  onChange(apps: RoutineApp[]): void;
-  Picker: RoutineDetailSlots['Apps'];
-}) {
-  const add = () => (
-    <props.Picker
-      apps={props.apps}
-      onChange={props.onChange}
-      variant="button"
-    />
-  );
-  return (
-    <Show
-      when={props.apps.length}
-      fallback={
-        <Show
-          when={props.agent}
-          fallback={
-            <RoutineSettingRow
-              label="No connections added"
-              description="Add an Ask AI step to give it apps."
-            />
-          }
-        >
-          <RoutineSettingRow label="No connections added">
-            {add()}
-          </RoutineSettingRow>
-        </Show>
-      }
-    >
-      <For each={props.apps}>
-        {(app) => (
-          <RoutineSettingRow
-            label={app.server_name}
-            description={
-              props.connected() === undefined ? undefined : props
-                  .connected()
-                  ?.has(app.app_slug) ? (
-                <span class="text-success">Connected</span>
-              ) : (
-                <span class="text-failure">
-                  Not connected. Connect it before the routine runs.
-                </span>
-              )
-            }
-          >
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`Remove ${app.server_name}`}
-              onClick={() =>
-                props.onChange(
-                  props.apps.filter((other) => other.app_slug !== app.app_slug)
-                )
-              }
-            >
-              <XIcon class="size-4" />
-            </Button>
-          </RoutineSettingRow>
-        )}
-      </For>
-      <div class="flex justify-end border-t border-edge-divider px-6 py-3">
-        {add()}
-      </div>
-    </Show>
-  );
-}
-
 /** Whether the routine's edits have reached the server. */
 function SaveState(props: { saving: boolean; failed: boolean }) {
   return (
@@ -192,6 +110,8 @@ export function RoutineDetailView(props: {
   onDelete(): void;
   onCopyPrompt(prompt: string): Promise<void>;
   onShare?(): void;
+  /** Opens an agent conversation about this routine. */
+  onCompose?(): void;
   onOpenTemplate?(templateId: string): void;
   onOpenRun(resource: HistoryResource, newSplit: boolean): void;
 }) {
@@ -483,16 +403,30 @@ export function RoutineDetailView(props: {
           stepsAside={
             <Show when={state()}>
               {(draft) => (
-                <RoutineStepsSummary
-                  steps={draftSteps(draft())}
-                  triggers={draft().triggers ?? []}
-                  lastRun={latestStepRun(
-                    props.source.history(),
-                    routine().revision
-                  )}
-                  showRun={showRun()}
-                  onShowRun={setShowRun}
-                />
+                <>
+                  <RoutineStepsSummary
+                    steps={draftSteps(draft())}
+                    triggers={draft().triggers ?? []}
+                    lastRun={latestStepRun(
+                      props.source.history(),
+                      routine().revision
+                    )}
+                    showRun={showRun()}
+                    onShowRun={setShowRun}
+                  />
+                  <Show when={isOwned() && props.onCompose}>
+                    {(compose) => (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => compose()()}
+                      >
+                        <SparkleIcon class="size-3.5" />
+                        Compose with agent
+                      </Button>
+                    )}
+                  </Show>
+                </>
               )}
             </Show>
           }

@@ -2094,6 +2094,19 @@ paid-model preference: the composer should show Gemini and send that model.
 In a live session, confirm the model options contain only Gemini. Backend tests
 also exercise direct ACP model-change requests, downgrade, and resume.
 
+## Composing routines from a conversation
+
+The built-in **Compose Routines** skill walks an agent through creating or
+changing a routine with `CreateRoutine`, `ReadRoutine` and `UpdateRoutine`: read
+the existing routine first, pick schedule or activity triggers, prefer plain
+tool steps, route with `if`/`choose` decisions (one classifier call), keep to
+one agent step per run, resolve every id before writing, and send the complete
+configuration, since an update replaces name, triggers, steps and required apps.
+GitHub triggers are set on the routine's page, not through these tools.
+**Compose with agent** on a routine's page (beside the Steps heading) opens a
+new conversation in a split with the skill and the routine already mentioned,
+waiting for what to change.
+
 ## Booking links
 
 Ask the AI to find or reuse an existing booking link before creating another.

@@ -45,6 +45,39 @@ function TemplateChain(props: { template: RoutineTemplate }) {
   );
 }
 
+/** A template as a raised card: what it is for, and what starts it and what it does. */
+export function RoutineTemplateCard(props: {
+  template: RoutineTemplate;
+  onUse(): void;
+}) {
+  return (
+    <ComposerSurface
+      as="div"
+      class="min-w-0 rounded-xl touch:rounded-xl touch:border touch:border-edge-muted touch:bg-composer"
+    >
+      <button
+        type="button"
+        aria-label={`Start a routine from ${props.template.title}`}
+        class="flex size-full min-w-0 flex-col items-start gap-1.5 rounded-xl px-4 py-3.5 text-left outline-none not-touch:hover:bg-hover focus-visible:ring-2 focus-visible:ring-edge-focus"
+        onClick={() => props.onUse()}
+      >
+        <Dynamic
+          component={templateLook(props.template.key).icon}
+          class={cn('size-4 shrink-0', templateLook(props.template.key).tint)}
+          aria-hidden="true"
+        />
+        <span class="text-sm font-medium text-ink">{props.template.title}</span>
+        <span class="line-clamp-2 text-xs leading-4 text-ink-muted">
+          {props.template.description}
+        </span>
+        <span class="mt-1 min-w-0 max-w-full">
+          <TemplateChain template={props.template} />
+        </span>
+      </button>
+    </ComposerSurface>
+  );
+}
+
 /**
  * Macro's routine templates above the list, as raised cards. Choosing one
  * opens New routine already started from it, ready to review.
@@ -74,32 +107,10 @@ export function RoutineTemplateStrip(props: {
       <div class="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-2.5 @max-[760px]/routines:-mx-3 @max-[760px]/routines:auto-cols-[15rem] @max-[760px]/routines:grid-flow-col @max-[760px]/routines:grid-cols-none @max-[760px]/routines:overflow-x-auto @max-[760px]/routines:px-3 @max-[760px]/routines:pb-1">
         <For each={props.templates}>
           {(template) => (
-            <ComposerSurface
-              as="div"
-              class="min-w-0 rounded-[20px] touch:rounded-[20px] touch:border touch:border-edge-muted touch:bg-composer"
-            >
-              <button
-                type="button"
-                aria-label={`Start a routine from ${template.title}`}
-                class="flex size-full min-w-0 flex-col items-start gap-1.5 rounded-[20px] px-4 py-3.5 text-left outline-none not-touch:hover:bg-hover focus-visible:ring-2 focus-visible:ring-edge-focus"
-                onClick={() => props.onUse(template)}
-              >
-                <Dynamic
-                  component={templateLook(template.key).icon}
-                  class={cn('size-4 shrink-0', templateLook(template.key).tint)}
-                  aria-hidden="true"
-                />
-                <span class="text-sm font-medium text-ink">
-                  {template.title}
-                </span>
-                <span class="line-clamp-2 text-xs leading-4 text-ink-muted">
-                  {template.description}
-                </span>
-                <span class="mt-1 min-w-0 max-w-full">
-                  <TemplateChain template={template} />
-                </span>
-              </button>
-            </ComposerSurface>
+            <RoutineTemplateCard
+              template={template}
+              onUse={() => props.onUse(template)}
+            />
           )}
         </For>
       </div>

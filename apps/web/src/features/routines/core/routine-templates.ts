@@ -1,6 +1,6 @@
 import { match } from 'ts-pattern';
 import type { ScheduleDraft } from './draft';
-import { withNewDraftSteps } from './routine-draft';
+import { createEmptyDraft, withNewDraftSteps } from './routine-draft';
 import { agentStep, type StepDraft } from './routine-steps';
 import type { RoutineTarget } from './routine-target';
 import {
@@ -114,14 +114,6 @@ export function featuredTemplates(decisions: boolean): RoutineTemplate[] {
   ].slice(0, FEATURED.length);
 }
 
-/** The template a creator was opened on, by key; anything else starts blank. */
-export function findTemplate(
-  key: string | undefined,
-  decisions: boolean
-): RoutineTemplate | undefined {
-  return availableTemplates(decisions).find((template) => template.key === key);
-}
-
 export type TemplateContext = {
   /** Decision steps and trigger conditions are available. */
   decisions: boolean;
@@ -227,4 +219,26 @@ export function templateDraft(
     },
     plan.steps
   );
+}
+
+/**
+ * A new routine's first draft: blank, or started from a template, with
+ * agent steps run by the plan's default model.
+ */
+export function newRoutineDraft(
+  template: RoutineTemplate | undefined,
+  context: { decisions: boolean; defaultModel: string }
+): ScheduleDraft {
+  const blank: ScheduleDraft = {
+    ...createEmptyDraft(context.defaultModel),
+    triggers: [],
+    steps: [],
+    enabled: true,
+  };
+  return template
+    ? templateDraft(template, blank, {
+        decisions: context.decisions,
+        target: { kind: 'model', model: context.defaultModel },
+      })
+    : blank;
 }

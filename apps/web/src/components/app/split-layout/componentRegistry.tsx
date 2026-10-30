@@ -434,12 +434,11 @@ registerComponent('email-compose', (params) => {
 });
 registerComponent('routine-compose', (params) => (
   <RoutineCreator
-    onCreated={
-      typeof params.onCreated === 'function'
-        ? (params.onCreated as (id: string) => void)
+    onStart={
+      typeof params.onStart === 'function'
+        ? (params.onStart as () => void)
         : undefined
     }
-    template={typeof params.template === 'string' ? params.template : undefined}
   />
 ));
 registerComponent('document-compose', (params) => {

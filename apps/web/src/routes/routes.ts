@@ -474,7 +474,7 @@ export const routineCreateRoute = defineRoute({
   id: ROUTINE_CREATE_ROUTE_ID,
   path: 'routines/new',
   aliases: ['routine/new', 'automation/new'],
-  claim: () => ({ namespace: 'component', id: 'routine-compose' }),
+  claim: () => ({ namespace: 'component', id: 'routines' }),
 });
 
 export const routineDetailRoute = defineRoute({

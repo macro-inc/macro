@@ -210,7 +210,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/documents`, `/app/files` | Legacy Files views; redirect to `/app/drive` |
 | `/app/chat/<uuid>` | A standalone AI chat |
 | `/app/routines` | Routines list in the Agents workspace |
-| `/app/routines/new` | Opens the routine creation modal |
+| `/app/routines/new` | A new routine's page, saved only by **Create routine** |
 | `/app/routines/<uuid>` | Routine settings, triggers, and run history in the Agents workspace |
 | `/app/agent/<uuid>` | An agent session (opened from `@macro` under the agents rollout, or `@coder` / `@cursor`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
@@ -1066,24 +1066,26 @@ that start after it changes. A run that finishes normally sends no
 notification; a failed or cut-short run, a question the agent asks, a held tool
 approval, and people the routine's prompt mentions still notify.
 
-**Create → Routine** (U) and **Create Routine** open the same popover host as task
-and project creation, on a start screen: a **Describe your routine** box with
-**Draft it** (AI fills in the name, triggers and steps from a sentence such as
-"When an invoice arrives, label it Finance and make a task to pay it", using
-the workspace's label, tag, channel, folder, people and agent names), then
-**Templates**: cards by Macro (**Sort my inbox**, **Triage new tasks**,
-**Morning brief**, **Chase stuck tasks**, and **Share updates** only where AI
-decisions are enabled), bordered cards in two columns, each with its trigger
-beside a lightning icon and **Activate for me**, and **Start from scratch** in
-the footer (no trigger and no steps). Every path opens the editor: the name, for a drafted
-routine a one-line quote of the description with **Change** (back to the start
-screen, description kept), **When** (**Add trigger** adds a trigger chip, with
-another **Add trigger** always at the end, then the **Runs hidden** and apps
-chips) and **Then** (the steps). **Start enabled** controls whether the saved
-routine starts listening immediately. **Create routine** opens its details
-inside the Agents pane, retaining the sidebar. Unsaved drafts are retained for
-three minutes and reopen straight in the editor. A routine whose only step is
-**Ask AI** saves in the original single-agent form.
+**Create → Routine** (U), **New** in the list and **Create Routine** open **New
+routine** in the same popover host as task and project creation. It never edits
+a routine itself: a **Describe your routine** box with **Draft it** (AI fills in
+the name, triggers and steps from a sentence such as "When an invoice arrives,
+label it Finance and make a task to pay it", using the workspace's label, tag,
+channel, folder, people and agent names), **Templates** (Macro's cards: **Sort
+my inbox**, **Triage new tasks**, **Morning brief**, **Chase stuck tasks**, and
+**Share updates** only where AI decisions are enabled; each shows its icon,
+what it does and its trigger → first step), and **Start fresh** beside the
+close button. Each choice closes it and opens the new routine's page at
+`/app/routines/new`, as do the list's template cards directly. That page is
+laid out like a saved routine's (**Routines → New routine**, no tabs or details
+panel): an editable name and description (a drafted routine starts with the
+sentence it came from, a template with its description), **Enabled**, then
+**Trigger**, **Steps**, **Connections** and **Runs & notifications**, ending
+with **Cancel** (discards the draft and returns to the list) and **Create
+routine**, which saves it and opens its page in the same pane. Nothing is
+written before **Create routine**. The unsent draft is kept for three minutes
+after the last edit, so reloading `/app/routines/new` resumes it. A routine
+whose only step is **Ask AI** saves in the original single-agent form.
 
 **Steps.** A routine runs its steps in order and stops at the first failed step.
 **+ Step** (under the last step, and inside each branch, where it reads **Add
@@ -1225,7 +1227,8 @@ template's description), then a line with the **Enabled** switch (disabled
 with a hover reason while a run is going or the routine can't run), **Owned by**
 and **Last run**. Below are labelled sections, each on a raised surface:
 **Trigger** (with **Next run** at its right) holds the trigger sentences above;
-**Steps** (with **Show last run** and the AI calls per run at its right) holds
+**Steps** (with **Show last run**, the AI calls per run and **Compose with
+agent** at its right) holds
 the steps (a single **Ask AI** step for routines without other steps; it holds
 the **Who** model or agent token and the instructions); **Connections**, shown
 when the routine has an **Ask AI** step or apps, lists its apps or **No

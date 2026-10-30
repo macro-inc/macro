@@ -18,11 +18,14 @@ import { getDefaultTimezone } from './core/routine-draft';
 import { loadRoutineComposerDraft } from './draft-storage';
 import { onceFromCron } from './queries/routine-trigger-mapping';
 import { RoutineCreator } from './routine-creator';
+import { RoutineNew } from './routine-new';
 
 const host = vi.hoisted(() => ({
   create: vi.fn<(body: CreateScheduledAction) => Promise<ScheduledAction>>(),
   openWithSplit: vi.fn(),
   created: vi.fn(),
+  cancelled: vi.fn(),
+  started: vi.fn(),
   success: vi.fn(),
   alert: vi.fn(),
   editorMount: vi.fn(),
@@ -38,7 +41,21 @@ vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit: host.openWithSplit }),
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
-  useSplitPanelOrThrow: () => ({ handle: { close: vi.fn() } }),
+  useSplitPanel: () => undefined,
+  useSplitPanelOrThrow: () => ({
+    handle: { close: vi.fn(), setDisplayName: vi.fn() },
+    setTitleFileMenuRef: vi.fn(),
+  }),
+  returnSplitToRecentListView: vi.fn(),
+}));
+vi.mock('@components/app/split-layout/components/HeaderIsland', () => ({
+  HeaderIsland: (props: { children: JSX.Element }) => props.children,
+}));
+vi.mock('@components/app/split-layout/components/SplitHeader', () => ({
+  SplitHeaderLeft: (props: { children: JSX.Element }) => props.children,
+}));
+vi.mock('@components/app/split-layout/components/SplitLabel', () => ({
+  SplitTitleFileMenu: (props: { children: JSX.Element }) => props.children,
 }));
 vi.mock('@queries/agent-repositories/repositories', () => ({
   useAgentRepositoriesQuery: () => ({
@@ -169,14 +186,11 @@ vi.mock('@queries/agents/models', () => ({
   }),
 }));
 
-vi.stubGlobal(
-  'ResizeObserver',
-  class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  }
-);
+class NoResize {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
 
 let styles: HTMLStyleElement;
 beforeEach(() => {
@@ -188,6 +202,8 @@ beforeEach(() => {
   styles.textContent = '* { animation-name: none; transition-duration: 0s; }';
   document.head.append(styles);
   vi.stubGlobal('scrollTo', vi.fn());
+  // The page measures its pane; every test unstubs globals afterwards.
+  vi.stubGlobal('ResizeObserver', NoResize);
 });
 afterEach(() => {
   cleanup();
@@ -202,21 +218,11 @@ async function mount(): Promise<void> {
   });
   render(() => (
     <QueryClientProvider client={client}>
-      <RoutineCreator onCreated={host.created} />
+      <RoutineNew onCreated={host.created} onCancel={host.cancelled} />
     </QueryClientProvider>
   ));
-  // A new routine starts on the start screen; an unsent draft resumes editing.
-  await waitFor(() =>
-    expect(
-      screen.queryByRole('button', { name: /Start from scratch/ }) ??
-        screen.queryByRole('textbox', { name: 'Routine name' })
-    ).toBeTruthy()
-  );
-  const blank = screen.queryByRole('button', {
-    name: /Start from scratch/,
-  });
-  if (blank) {
-    fireEvent.click(blank);
+  // A blank page starts without steps; an unsent draft resumes as it was.
+  if (!screen.queryByRole('textbox', { name: 'Instructions' })) {
     fireEvent.click(await screen.findByRole('button', { name: 'Add step' }));
     fireEvent.click(await screen.findByRole('option', { name: /^Ask AI/ }));
   }
@@ -373,14 +379,12 @@ describe('routine composer execution selection', () => {
     await mount();
     inputPrompt('Summarize updates');
     await addScheduled();
-    const visibility = screen.getByRole('button', { name: 'Runs hidden' });
-    visibility.focus();
-    fireEvent.keyDown(visibility, { key: 'Enter' });
-    const show = await screen.findByRole('menuitemradio', { name: /^Shown/ });
-    fireEvent.keyDown(show, { key: 'Enter' });
-    expect(
-      await screen.findByRole('button', { name: 'Runs shown' })
-    ).toBeTruthy();
+    const visibility = screen.getByRole<HTMLInputElement>('switch', {
+      name: 'Show runs in Home and Agents',
+    });
+    expect(visibility.checked).toBe(false);
+    fireEvent.click(visibility);
+    expect(visibility.checked).toBe(true);
     create();
     await waitFor(() => expect(host.create).toHaveBeenCalledOnce());
     expect(host.create.mock.calls[0][0]).toMatchObject({
@@ -640,8 +644,11 @@ describe('routine composer execution selection', () => {
         { name: 'Add trigger' }
       )
     );
+    // The page's trigger reads as a sentence, its condition hanging below.
     expect(
-      screen.getByTitle('New email received · if Is this email an invoice?')
+      screen.getByRole('button', {
+        name: 'Edit condition: Is this email an invoice?',
+      })
     ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Create routine/i }));
     await waitFor(() => expect(host.create).toHaveBeenCalledTimes(1));
@@ -678,9 +685,12 @@ describe('routine composer execution selection', () => {
     fireEvent.input(values[1], { target: { value: 'CI' } });
     fireEvent.click(within(panel).getByRole('button', { name: 'Add trigger' }));
     expect(
-      screen.getByRole('button', { name: 'Edit Workflow failed trigger' })
+      screen.getByRole('button', { name: 'Change Workflow failed trigger' })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Repositories for Workflow failed' })
         .textContent
-    ).toContain('Workflow failed · macro-inc/macro');
+    ).toContain('macro-inc/macro');
     fireEvent.click(screen.getByRole('button', { name: /Create routine/i }));
     await waitFor(() => expect(host.create).toHaveBeenCalledTimes(1));
     expect(host.create.mock.calls[0][0]).toMatchObject({
@@ -740,7 +750,12 @@ describe('routine composer execution selection', () => {
     fireEvent.input(screen.getByRole('textbox', { name: 'Run time' }), {
       target: { value: '3:30pm' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Edit trigger' })).getByRole(
+        'button',
+        { name: 'Cancel' }
+      )
+    );
     expect(
       screen.getByRole('button', { name: 'Edit Every day at 9:00 AM trigger' })
     ).toBeTruthy();
@@ -840,7 +855,7 @@ describe('routine composer execution selection', () => {
     cleanup();
     await mount();
     expect(
-      screen.getByRole('button', { name: 'Edit Document created trigger' })
+      screen.getByRole('button', { name: 'Change Document created trigger' })
     ).toBeTruthy();
     expect(loadRoutineComposerDraft()?.triggers).toMatchObject([
       { kind: 'event', events: ['document.created'] },
@@ -848,51 +863,59 @@ describe('routine composer execution selection', () => {
   });
 });
 
-describe('routine composer start', () => {
-  it('opens already started from the template a list card chose', async () => {
+describe('new routine', () => {
+  function openNewRoutine() {
     const client = new QueryClient();
     render(() => (
       <QueryClientProvider client={client}>
-        <RoutineCreator onCreated={host.created} template="brief" />
+        <RoutineCreator onStart={host.started} />
       </QueryClientProvider>
     ));
-    expect(
-      (
-        await screen.findByRole<HTMLInputElement>('textbox', {
-          name: 'Routine name',
-        })
-      ).value
-    ).toBe('Morning brief');
-    expect(
-      screen.queryByRole('button', { name: /Start from scratch/ })
-    ).toBeNull();
-  });
+  }
 
-  it('opens the editor from a starting point, ready to review', async () => {
-    const client = new QueryClient();
-    render(() => (
-      <QueryClientProvider client={client}>
-        <RoutineCreator onCreated={host.created} />
-      </QueryClientProvider>
-    ));
-    const brief = await screen.findByRole('article', {
-      name: 'Routine template: Morning brief',
-    });
+  it('starts a template on the new routine’s page, unsaved', async () => {
+    openNewRoutine();
     expect(screen.queryByRole('button', { name: 'Create routine' })).toBeNull();
     fireEvent.click(
-      within(brief).getByRole('button', { name: 'Activate for me' })
+      await screen.findByRole('button', {
+        name: 'Start a routine from Morning brief',
+      })
     );
+    expect(host.started).toHaveBeenCalledOnce();
+    expect(host.create).not.toHaveBeenCalled();
+    cleanup();
+    await mount();
     expect(
-      (
-        await screen.findByRole<HTMLInputElement>('textbox', {
-          name: 'Routine name',
-        })
-      ).value
+      screen.getByRole<HTMLInputElement>('textbox', { name: 'Routine name' })
+        .value
     ).toBe('Morning brief');
     expect(
       screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Instructions' })
         .value
     ).toMatch(/Summarize my day/);
-    expect(screen.getByRole('button', { name: 'Create routine' })).toBeTruthy();
+    expect(
+      screen.getByRole<HTMLTextAreaElement>('textbox', {
+        name: 'Routine description',
+      }).value
+    ).toBe('Weekdays at 9, sum up my day');
+  });
+
+  it('starts fresh on a blank page', async () => {
+    openNewRoutine();
+    fireEvent.click(await screen.findByRole('button', { name: 'Start fresh' }));
+    expect(host.started).toHaveBeenCalledOnce();
+    expect(loadRoutineComposerDraft()).toMatchObject({
+      name: '',
+      triggers: [],
+      steps: [],
+    });
+  });
+
+  it('discards the draft on Cancel', async () => {
+    await mount();
+    inputPrompt();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(host.cancelled).toHaveBeenCalledOnce();
+    expect(loadRoutineComposerDraft()).toBeNull();
   });
 });

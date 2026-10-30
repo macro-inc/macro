@@ -114,9 +114,15 @@ export function RoutineEditor(props: {
   connections?: JSX.Element;
   /** The Runs & notifications surface's rows. */
   settings?: JSX.Element;
-  nextRun: string;
-  history: JSX.Element;
+  /** The Trigger heading's aside; absent before the routine exists. */
+  nextRun?: string;
+  /** The Runs tab's content; absent while the routine is being created. */
+  history?: JSX.Element;
   showHistory?: boolean;
+  /** A new routine not yet saved: no tabs, details or menu; `footer` saves it. */
+  creating?: boolean;
+  /** Below the sections, e.g. a new routine's Cancel and Create. */
+  footer?: JSX.Element;
   /** Runs loaded for the Runs tab's count. */
   runCount?: number;
   /** The routine menu, shown right after its name. */
@@ -132,6 +138,8 @@ export function RoutineEditor(props: {
           { value: 'settings', label: 'Overview', count: undefined },
           { value: 'history', label: 'Runs', count: props.runCount },
         ];
+  const breadcrumbName = () =>
+    props.draft.name.trim() || (props.creating ? 'New routine' : 'Untitled');
   const [pane, setPane] = createSignal<HTMLElement>();
   const paneSize = createElementSize(pane);
   // A pane too narrow for the details column gets the floating card instead
@@ -165,10 +173,10 @@ export function RoutineEditor(props: {
                 class="gap-1.5"
                 isActive={item.isActive()}
                 onClick={item.onSelect}
-                tooltip={props.draft.name}
+                tooltip={breadcrumbName()}
               >
                 <ClockIcon class="size-3 shrink-0" />
-                <span class="truncate">{props.draft.name}</span>
+                <span class="truncate">{breadcrumbName()}</span>
               </ViewBreadcrumbs.Button>
               <Show when={props.actions}>
                 <div class="shrink-0">{props.actions}</div>
@@ -191,32 +199,34 @@ export function RoutineEditor(props: {
               aria-label="Routine location"
               class="min-w-0 @max-[600px]/routine:flex-1"
             />
-            <div class="shrink-0 @max-[600px]/routine:order-last @max-[600px]/routine:w-full">
-              <TabSelector class="w-fit">
-                <TabSelector.List aria-label="Routine details">
-                  <For each={tabs()}>
-                    {(tab) => (
-                      <TabSelector.Tab value={tab.value}>
-                        {tab.label}
-                        <Show when={tab.count}>
-                          {(count) => (
-                            <span
-                              aria-hidden="true"
-                              class="ml-1.5 tabular-nums text-ink-extra-muted"
-                            >
-                              {count()}
-                            </span>
-                          )}
-                        </Show>
-                      </TabSelector.Tab>
-                    )}
-                  </For>
-                </TabSelector.List>
-              </TabSelector>
-            </div>
+            <Show when={!props.creating}>
+              <div class="shrink-0 @max-[600px]/routine:order-last @max-[600px]/routine:w-full">
+                <TabSelector class="w-fit">
+                  <TabSelector.List aria-label="Routine details">
+                    <For each={tabs()}>
+                      {(tab) => (
+                        <TabSelector.Tab value={tab.value}>
+                          {tab.label}
+                          <Show when={tab.count}>
+                            {(count) => (
+                              <span
+                                aria-hidden="true"
+                                class="ml-1.5 tabular-nums text-ink-extra-muted"
+                              >
+                                {count()}
+                              </span>
+                            )}
+                          </Show>
+                        </TabSelector.Tab>
+                      )}
+                    </For>
+                  </TabSelector.List>
+                </TabSelector>
+              </div>
+            </Show>
             <div class="ml-auto flex shrink-0 items-center gap-2">
               {props.headerActions}
-              <Show when={props.tab === 'settings'}>
+              <Show when={props.tab === 'settings' && !props.creating}>
                 <SidePanel.Toggle size="sm" />
               </Show>
             </div>
@@ -282,7 +292,7 @@ export function RoutineEditor(props: {
                   </header>
                   <RoutineSection
                     label="Trigger"
-                    aside={`Next run: ${props.nextRun}`}
+                    aside={props.nextRun && `Next run: ${props.nextRun}`}
                   >
                     <RoutineSurface class="px-6 py-5 @max-[600px]/routine:px-4">
                       <fieldset
@@ -334,6 +344,11 @@ export function RoutineEditor(props: {
                   </Show>
                   <Show when={props.feedback}>
                     <div class="grid gap-2 empty:hidden">{props.feedback}</div>
+                  </Show>
+                  <Show when={props.footer}>
+                    <div class="flex items-center justify-end gap-2">
+                      {props.footer}
+                    </div>
                   </Show>
                 </div>
               </DocumentScroller>

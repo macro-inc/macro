@@ -61,6 +61,12 @@ export function createRoutineComposer(
     save.clear();
     if (dirty) storage.save(draft());
   });
+  /** Drop the draft, e.g. on Cancel, so it isn't offered again. */
+  function discard() {
+    save.clear();
+    dirty = false;
+    storage.clear();
+  }
   async function create() {
     if (source.pending()) return;
     setAttempted(true);
@@ -79,8 +85,6 @@ export function createRoutineComposer(
   }
   return {
     draft,
-    /** Whether an unsent draft was restored, so editing resumes at once. */
-    restored: Boolean(restored),
     change,
     replace,
     version,
@@ -88,5 +92,6 @@ export function createRoutineComposer(
     formError,
     submitError,
     create,
+    discard,
   };
 }

@@ -34,6 +34,7 @@ vi.mock('@app/lib/split-router', () => ({
 
 const mocks = vi.hoisted(() => ({
   readSchedules: (): ScheduledAction[] => [],
+  openChat: vi.fn(async (_input: string) => {}),
   status: (): string => 'success',
   history: (): HistoryRecord[] => [],
   metadataStatus: (): string => 'success',
@@ -166,6 +167,14 @@ vi.mock('@app/lib/analytics/posthog', () => ({
   }),
 }));
 vi.mock('./routine-ai-composer', () => ({ RoutineAiComposer: () => null }));
+vi.mock('@queries/storage/system-skills', () => ({
+  useSystemSkillsQuery: () => ({
+    skills: () => [{ id: 'compose-skill-id', name: 'Compose Routines' }],
+  }),
+}));
+vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
+  openChatWithInput: mocks.openChat,
+}));
 vi.mock('./routine-step-pickers', () => ({
   routineToolSlots: {
     LabelPicker: () => null,
@@ -940,6 +949,15 @@ describe('routine editor triggers', () => {
         description: 'Sum up my day before standup.',
       }),
     });
+  });
+
+  it('composes with an agent: the routine and its skill in a new conversation', () => {
+    render(() => <Routine />);
+    fireEvent.click(screen.getByRole('button', { name: 'Compose with agent' }));
+    expect(mocks.openChat).toHaveBeenCalledOnce();
+    const input = mocks.openChat.mock.calls[0]?.[0] ?? '';
+    expect(input).toContain('compose-skill-id');
+    expect(input).toContain('routine-id');
   });
 
   it('cancels pending saves when the editor unmounts', async () => {
