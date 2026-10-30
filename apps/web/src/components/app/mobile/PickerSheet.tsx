@@ -1,4 +1,5 @@
 import { triggerFocusInput } from '@core/directive/focusInput';
+import { isEditableInput } from '@core/util/isEditableInput';
 import { Button } from '@ui';
 import {
   type Accessor,
@@ -7,12 +8,37 @@ import {
   createSignal,
   type JSX,
   on,
+  onCleanup,
   Show,
   useContext,
 } from 'solid-js';
 import { MobileDrawer } from './MobileDrawer';
 
 const PICKER_SEARCH = 'input[type="text"]:not(:disabled)';
+
+/** A text field with its caret, to hand focus back to. */
+type TypingFocus = { field: HTMLElement; caret?: Range };
+
+function captureTypingFocus(): TypingFocus | undefined {
+  const field = document.activeElement;
+  if (!(field instanceof HTMLElement) || !isEditableInput(field)) return;
+  // A text input keeps its own caret; an editor's lives in the document.
+  const selection = getSelection();
+  const caret =
+    field.isContentEditable && selection?.rangeCount
+      ? selection.getRangeAt(0).cloneRange()
+      : undefined;
+  return { field, caret };
+}
+
+function restoreTypingFocus(focus: TypingFocus) {
+  if (!focus.field.isConnected) return;
+  focus.field.focus({ preventScroll: true });
+  if (!focus.caret?.startContainer.isConnected) return;
+  const selection = getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(focus.caret);
+}
 
 const PickerSheetContext = createContext<{
   onCancel: () => void;
@@ -50,18 +76,30 @@ function Root(props: {
   // Opening runs inside the opener's tap, so the keyboard can move straight
   // to a stand-in input and on to the picker's search once it mounts. Without
   // it the keyboard drops as the composer's field blurs and rises again,
-  // resizing both sheets twice.
+  // resizing both sheets twice. Closing hands it back to the field the opener
+  // left focused, with its caret, in the closing tap for the same reason.
+  let returnFocus: TypingFocus | undefined;
+  const handBackFocus = () => {
+    const focus = returnFocus;
+    returnFocus = undefined;
+    if (focus) restoreTypingFocus(focus);
+  };
   createComputed(
     on(
       () => props.open,
       (open) => {
-        if (!open) return;
+        if (!open) {
+          handBackFocus();
+          return;
+        }
+        returnFocus = captureTypingFocus();
         setSettled(false);
         triggerFocusInput(search);
       },
       { defer: true }
     )
   );
+  onCleanup(handBackFocus);
   return (
     <PickerSheetContext.Provider
       value={{ onCancel: () => props.onCancel(), settled }}
@@ -158,7 +196,9 @@ function Body(props: { children: JSX.Element }) {
  * page): Cancel, a title, and Done across the top, and a body the picker
  * fills. Picks stay a draft until Done. Keep the picker's search field focused
  * when a row is tapped, by cancelling `pointerdown` and `mousedown` on the
- * rows, so the phone keyboard stays up.
+ * rows, so the phone keyboard stays up. Closing returns focus to the field
+ * that had it when the sheet opened, so the opener must not take focus on
+ * tap either.
  *
  * ```tsx
  * <PickerSheet.Root open={open()} onCancel={close}>
