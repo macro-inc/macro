@@ -1345,7 +1345,11 @@ impl CalendarRepository for PgCalendarRepository {
         super::pg_team::list_team_out_of_office(&self.pool, requester_id, range, limit).await
     }
 
-    #[tracing::instrument(skip(self, requester_id, items), err)]
+    #[tracing::instrument(
+        skip(self, requester_id, items),
+        fields(channel_shared_count = tracing::field::Empty),
+        err
+    )]
     async fn mention_previews(
         &self,
         requester_id: &str,
@@ -1567,6 +1571,12 @@ impl CalendarRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
 
+        tracing::Span::current().record(
+            "channel_shared_count",
+            rows.iter()
+                .filter(|row| row.is_channel_shared == Some(true))
+                .count(),
+        );
         rows.into_iter().map(mention_preview_from_row).collect()
     }
 

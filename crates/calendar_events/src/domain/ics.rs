@@ -136,14 +136,18 @@ pub fn content_without_macro_call(
     let Some(url) = first_macro_call_url(location.as_deref(), description.as_deref()) else {
         return (description, location);
     };
-    let description = description
+    let holds_link = first_macro_call_url(None, description.as_deref()).is_some();
+    let text = description
         .as_deref()
         .and_then(plain_text)
         .unwrap_or_default();
-    let (description, location) =
-        strip_macro_call(&description, location.as_deref().unwrap_or_default(), &url);
+    let (text, location) = strip_macro_call(&text, location.as_deref().unwrap_or_default(), &url);
     (
-        (!description.is_empty()).then_some(description),
+        if holds_link {
+            (!text.is_empty()).then_some(text)
+        } else {
+            description
+        },
         (!location.is_empty()).then_some(location),
     )
 }
