@@ -54,7 +54,7 @@ export function AccessRequestActivityRow(props: {
             <div class="flex flex-wrap items-center gap-2">
               <Button
                 size="sm"
-                variant="outline"
+                variant="primary"
                 disabled={props.busy}
                 onClick={props.onApprove}
               >

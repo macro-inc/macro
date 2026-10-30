@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
@@ -78,7 +79,7 @@ export function useRequestChannelAccessMutation() {
         storageServiceClient.requestChannelAccess({ channel_id: channelId })
       ),
     onError() {
-      toast.failure('Could not send your request to join');
+      toast.failure(t('entityActions.toastChannelAccessRequestFailed'));
     },
     onSettled(_data, _error, { channelId }) {
       return refreshMyChannelAccessRequest(channelId);
@@ -96,7 +97,7 @@ export function useCancelChannelAccessRequestMutation() {
         })
       ),
     onError() {
-      toast.failure('Could not withdraw your request');
+      toast.failure(t('entityActions.toastChannelAccessWithdrawalFailed'));
     },
     onSettled(_data, _error, { channelId }) {
       return refreshMyChannelAccessRequest(channelId);
@@ -134,7 +135,7 @@ export function useResolveChannelAccessRequestMutation() {
         return invalidateChannelParticipants(channelId);
     },
     onError(_error, { channelId, requestId }) {
-      toast.failure('Could not answer this request');
+      toast.failure(t('entityActions.toastChannelAccessResolveFailed'));
       // Someone else may have answered first; show their answer.
       return queryClient.invalidateQueries({
         queryKey: channelKeys.accessRequest(channelId, requestId).queryKey,

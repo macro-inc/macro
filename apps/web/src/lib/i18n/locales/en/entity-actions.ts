@@ -77,6 +77,9 @@ export default {
   undo: 'Undo',
 
   // Toasts.
+  toastChannelAccessRequestFailed: 'Could not send your request to join',
+  toastChannelAccessWithdrawalFailed: 'Could not withdraw your request',
+  toastChannelAccessResolveFailed: 'Could not answer this request',
   toastCopied: 'Copied',
   toastCopiedCount: {
     one: 'Copied {{count}} item',
