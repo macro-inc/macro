@@ -128,6 +128,7 @@ export type ChannelRailActivationMetadata = {
 export type ChannelsRailContext = {
   railId: string;
   list: ListController<ChannelRailRow, ChannelRailActivationMetadata>;
+  sectionsEnabled: Accessor<boolean>;
   tab: Accessor<ChannelsTab>;
   selectTab: (tab: ChannelsTab) => void;
   sources: ChannelsSources;
@@ -164,6 +165,9 @@ export type ChannelsRailContext = {
     channelIds: string[],
     scope?: 'personal' | 'team'
   ) => Promise<void>;
+  /** Legacy menu actions retained while the section rollout is off. */
+  createSmartTag: () => Promise<void>;
+  editSmartTag: (label: ChannelLabel) => Promise<void>;
   canShareSections: Accessor<boolean>;
   renameLabel: (label: ChannelLabel) => Promise<void>;
   /** Delete after the user confirms; applies to the whole team. */

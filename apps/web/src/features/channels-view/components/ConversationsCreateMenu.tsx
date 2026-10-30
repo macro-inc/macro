@@ -1,6 +1,12 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
+import { runCreateAction } from '@app/features/command/Launcher';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
+import { openNewChannelModal } from '@channel/CreateChannelModal';
+import { enableChatSidebarSections } from '@core/constant/featureFlags';
+import ChatIcon from '@icon/system/regular/chat-circle.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Dropdown } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -14,50 +20,82 @@ export function ConversationsCreateMenu(props: {
   onCreateSection?: () => void;
   sectionDisabledReason?: string;
 }) {
+  const sections = useFeatureFlag(enableChatSidebarSections);
+  const label = () =>
+    t(
+      sections().enabled
+        ? 'channelSections.newConversation'
+        : 'channelSections.createChannelOrDirectMessage'
+    );
   return (
-    <Dropdown placement="bottom-start">
-      <Show
-        when={props.presentation}
-        fallback={
-          <Dropdown.Trigger
-            as={ViewSidebar.Control}
-            aria-label={t('channelSections.newConversation')}
-            tooltip={t('channelSections.newConversation')}
-          >
-            <PlusIcon class="size-3.5" />
-          </Dropdown.Trigger>
+    <Show when={!sections().loading}>
+      <Dropdown
+        placement={
+          sections().enabled || props.presentation === 'sidebar'
+            ? 'bottom-start'
+            : 'bottom-end'
         }
       >
-        <Dropdown.Trigger
-          as={ViewCreateButton}
-          ref={tourTarget(CHANNELS_TOUR.create)}
-          presentation={props.presentation}
-          menu
-          aria-label={t('channelSections.newConversation')}
-        />
-      </Show>
-      <Dropdown.Content
-        class="min-w-48"
-        onCloseAutoFocus={(event) => {
-          if (document.querySelector('[role="dialog"]')) event.preventDefault();
-        }}
-      >
-        <Dropdown.Group>
-          <Dropdown.Item onSelect={openNewConversationDialog}>
-            {t('channelSections.newConversation')}
-          </Dropdown.Item>
-        </Dropdown.Group>
-        <Show when={props.onCreateSection}>
-          <Dropdown.Group>
-            <Dropdown.Item
-              disabledReason={props.sectionDisabledReason}
-              onSelect={() => props.onCreateSection?.()}
+        <Show
+          when={props.presentation}
+          fallback={
+            <Dropdown.Trigger
+              as={ViewSidebar.Control}
+              aria-label={label()}
+              tooltip={label()}
             >
-              {t('channelSections.newSection')}
-            </Dropdown.Item>
-          </Dropdown.Group>
+              <PlusIcon class="size-3.5" />
+            </Dropdown.Trigger>
+          }
+        >
+          <Dropdown.Trigger
+            as={ViewCreateButton}
+            ref={tourTarget(CHANNELS_TOUR.create)}
+            presentation={props.presentation}
+            menu
+            aria-label={label()}
+          />
         </Show>
-      </Dropdown.Content>
-    </Dropdown>
+        <Dropdown.Content
+          class="min-w-48"
+          onCloseAutoFocus={(event) => {
+            if (document.querySelector('[role="dialog"]'))
+              event.preventDefault();
+          }}
+        >
+          <Dropdown.Group>
+            <Show
+              when={sections().enabled}
+              fallback={
+                <>
+                  <Dropdown.Item onSelect={openNewChannelModal}>
+                    <HashIcon class="size-3.5 shrink-0 text-ink-muted" />
+                    {t('channelSections.newChannel')}
+                  </Dropdown.Item>
+                  <Dropdown.Item onSelect={() => runCreateAction('channel')}>
+                    <ChatIcon class="size-3.5 shrink-0 text-ink-muted" />
+                    {t('channelSections.newDirectMessage')}
+                  </Dropdown.Item>
+                </>
+              }
+            >
+              <Dropdown.Item onSelect={openNewConversationDialog}>
+                {t('channelSections.newConversation')}
+              </Dropdown.Item>
+            </Show>
+          </Dropdown.Group>
+          <Show when={sections().enabled && props.onCreateSection}>
+            <Dropdown.Group>
+              <Dropdown.Item
+                disabledReason={props.sectionDisabledReason}
+                onSelect={() => props.onCreateSection?.()}
+              >
+                {t('channelSections.newSection')}
+              </Dropdown.Item>
+            </Dropdown.Group>
+          </Show>
+        </Dropdown.Content>
+      </Dropdown>
+    </Show>
   );
 }

@@ -6,6 +6,10 @@ import {
   buildChannelSectionRows,
   getChannelRailPaginationScope,
 } from './build-channel-rail-rows';
+import {
+  buildLegacyChannelRailRows,
+  buildLegacyChannelSectionRows,
+} from './build-legacy-channel-rail-rows';
 
 function channel(
   id: string,
@@ -611,5 +615,115 @@ describe('section preferences', () => {
     expect(getChannelRailPaginationScope(heading, rows, expanded)).toBe(
       'team_channels'
     );
+  });
+});
+
+describe('legacy Chat rollout row ordering', () => {
+  const open = {
+    favorites: true,
+    team_channels: true,
+    channels: true,
+    direct_messages: true,
+  };
+
+  it('keeps labels inside Team channels with independent virtualizer indexes', () => {
+    const teamChannel = channel('team');
+    const privateChannel = channel('private', 'Private', 'private');
+    const direct = channel('direct', 'Direct', 'direct_message');
+    const sectionRows = buildLegacyChannelSectionRows({
+      labels: [label('work', 'Work', ['team'])],
+      channels: [teamChannel],
+      channelsById: new Map([[teamChannel.id, teamChannel]]),
+      isLabelOpen: () => true,
+    });
+    const rows = buildLegacyChannelRailRows(
+      'browse',
+      open,
+      {
+        favorites: [],
+        team_channels: [teamChannel],
+        channels: [privateChannel],
+        direct_messages: [direct],
+        recents: [],
+        threads: [],
+      },
+      sectionRows
+    );
+    expect(rows.map((row) => row.id)).toEqual([
+      'section:team_channels',
+      'label:work',
+      'channel:team:label:work',
+      'section:channels',
+      'channel:private',
+      'section:direct_messages',
+      'channel:direct',
+    ]);
+    expect(
+      rows
+        .filter((row) => row.kind === 'conversation')
+        .map((row) => row.localIndex)
+    ).toEqual([1, 0, 0]);
+
+    const collapsed = buildLegacyChannelRailRows(
+      'browse',
+      { ...open, team_channels: false },
+      {
+        favorites: [],
+        team_channels: [teamChannel],
+        channels: [privateChannel],
+        direct_messages: [direct],
+        recents: [],
+        threads: [],
+      },
+      sectionRows
+    );
+    expect(collapsed.map((row) => row.id)).toEqual([
+      'section:team_channels',
+      'section:channels',
+      'channel:private',
+      'section:direct_messages',
+      'channel:direct',
+    ]);
+  });
+
+  it('keeps non-team channels out of legacy labels and in the ordinary channel list', () => {
+    const teamChannel = channel('team');
+    const privateChannel = channel('private', 'Private', 'private');
+    const privateLabel = {
+      ...label('personal', 'Personal', ['team', 'private']),
+      teamId: undefined,
+    };
+    const sectionRows = buildLegacyChannelSectionRows({
+      labels: [privateLabel],
+      channels: [teamChannel, privateChannel],
+      channelsById: new Map([
+        [teamChannel.id, teamChannel],
+        [privateChannel.id, privateChannel],
+      ]),
+      isLabelOpen: () => true,
+    });
+    expect(
+      sectionRows
+        .filter((row) => row.kind === 'conversation')
+        .map((row) => row.channel.id)
+    ).toEqual(['team']);
+    const rows = buildLegacyChannelRailRows(
+      'browse',
+      open,
+      {
+        favorites: [],
+        team_channels: [teamChannel],
+        channels: [privateChannel],
+        direct_messages: [],
+        recents: [],
+        threads: [],
+      },
+      sectionRows
+    );
+    expect(rows.find((row) => row.id === 'channel:private')).toMatchObject({
+      group: 'channels',
+      scope: 'channels',
+      localIndex: 0,
+    });
   });
 });

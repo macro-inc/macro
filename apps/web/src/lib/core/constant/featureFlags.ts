@@ -776,6 +776,14 @@ export const enableTagTeamSharing = defineFlag({
   default: onInDev,
 });
 
+// Redesigned Chat sections and unified conversation creation. On in development;
+// deployed environments defer to PostHog. Override with VITE_ENABLE_CHAT_SIDEBAR_SECTIONS.
+export const enableChatSidebarSections = defineFlag({
+  key: 'enable-chat-sidebar-sections',
+  env: 'ENABLE_CHAT_SIDEBAR_SECTIONS',
+  default: onInDev,
+});
+
 // Manual and smart channel labels, including their queries and drag/drop UI.
 // Off until PostHog enables them; override with VITE_ENABLE_CHANNEL_TAGS.
 export const enableChannelTags = defineFlag({

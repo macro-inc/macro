@@ -13,7 +13,10 @@ import {
 import { channelDetailRoute, channelsSplitRoute } from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { enableChannelThreadsPreview } from '@core/constant/featureFlags';
+import {
+  enableChannelThreadsPreview,
+  enableChatSidebarSections,
+} from '@core/constant/featureFlags';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -47,6 +50,9 @@ export type ChannelsViewContext = {
   state: Store<ChannelsViewState>;
   /** The mobile list opens channels in the split; only desktop renders detail. */
   mobileLayout: () => boolean;
+  /** Whether the redesigned desktop sections are enabled. */
+  sectionsEnabled: Accessor<boolean>;
+  sectionsLoading: Accessor<boolean>;
   selectedChannel: Accessor<ChannelPreviewSelection | undefined>;
   /** Whether the Threads tab is available to this user. */
   threadsEnabled: Accessor<boolean>;
@@ -114,6 +120,8 @@ export const [ChannelsViewProvider, useChannelsView] =
       const navigate = useNavigate();
       const params = useRouteParams(channelDetailRoute);
       const [search, setSearch] = createSearchParams(channelsSearch);
+      const sectionsFlag = useFeatureFlag(enableChatSidebarSections);
+      const sectionsEnabled = () => sectionsFlag().enabled;
       const threadsFlag = useFeatureFlag(enableChannelThreadsPreview);
       const threadsEnabled = () => threadsFlag().enabled;
       const selectPreview = createPreviewSelectionGuard();
@@ -224,8 +232,15 @@ export const [ChannelsViewProvider, useChannelsView] =
         state,
         mobileLayout,
         selectedChannel,
+        sectionsEnabled,
+        sectionsLoading: () => sectionsFlag().loading,
         threadsEnabled,
-        tab: () => 'browse',
+        tab: () => {
+          if (sectionsEnabled()) return 'browse';
+          return state.tab === 'threads' && !threadsEnabled()
+            ? 'browse'
+            : state.tab;
+        },
         threadsChannelId: () => state.threadsChannelId,
         setThreadsChannelId: (channelId) => {
           if (state.threadsChannelId === channelId) return;

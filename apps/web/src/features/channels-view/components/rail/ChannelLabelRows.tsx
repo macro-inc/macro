@@ -27,6 +27,7 @@ import {
 } from './ChannelsRailContext';
 import { ChannelSectionHeading } from './ChannelsRailSection';
 import { useChannelRailLabelState } from './hooks/useChannelRailState';
+import { ChannelLabelMenuItems as LegacyChannelLabelMenuItems } from './legacy/ChannelLabelRows';
 
 /** A custom section with the same heading and controls as built-in sections. */
 export function ChannelLabelRow(props: { label: ChannelLabel }) {
@@ -153,7 +154,7 @@ function ChannelLabelActions(props: { label: ChannelLabel }) {
 }
 
 /** Moving a personal assignment never changes a shared assignment. */
-export function ChannelLabelMenuItems(props: { channel: ChannelEntity }) {
+function SectionMenuItems(props: { channel: ChannelEntity }) {
   const rail = useChannelsRail();
   const labels = () =>
     rail
@@ -248,6 +249,18 @@ export function ChannelLabelMenuItems(props: { channel: ChannelEntity }) {
           </For>
         </ContextMenuContent>
       </ContextMenu.Sub>
+    </Show>
+  );
+}
+
+export function ChannelLabelMenuItems(props: { channel: ChannelEntity }) {
+  const rail = useChannelsRail();
+  return (
+    <Show
+      when={rail.sectionsEnabled()}
+      fallback={<LegacyChannelLabelMenuItems channel={props.channel} />}
+    >
+      <SectionMenuItems channel={props.channel} />
     </Show>
   );
 }

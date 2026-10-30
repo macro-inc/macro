@@ -1,0 +1,346 @@
+import { ViewSidebar } from '@app/components/view-shell';
+import { t } from '@app/lib/i18n';
+import { openNewChannelModal } from '@channel/CreateChannelModal';
+import {
+  ContextMenuContent,
+  MenuItem,
+  MenuSeparator,
+  SubTrigger,
+} from '@core/component/ContextMenu';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
+import type { ChannelEntity } from '@entity';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import ChecksIcon from '@icon/system/regular/checks.svg';
+import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
+import FilterIcon from '@icon/system/regular/funnel-simple.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import PencilSimpleIcon from '@icon/system/regular/pencil-simple.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import TagIcon from '@icon/system/regular/tag.svg';
+import TagSimpleIcon from '@icon/system/regular/tag-simple.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
+import { ContextMenu } from '@kobalte/core/context-menu';
+import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
+import { createDroppable } from '@thisbeyond/solid-dnd';
+import { cn, Dropdown } from '@ui';
+import { type Component, For, type JSX, Show } from 'solid-js';
+import { canLabelChannel as canLabelConversation } from '../../../core/channel-label-eligibility';
+import { isPrimaryMouseDown } from '../ChannelRailItems';
+import {
+  type ChannelLabelDropData,
+  rowKeyForLabel,
+  useChannelsRail,
+} from '../ChannelsRailContext';
+import { useChannelRailLabelState } from '../hooks/useChannelRailState';
+
+type MenuIcon = Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+
+const canLabelChannel = (channel: ChannelEntity) =>
+  channel.channelType === 'team' && canLabelConversation(channel);
+
+/** A dropdown row in the house style: muted icon, muted label. */
+function MenuRow(props: {
+  icon: MenuIcon;
+  label: string;
+  disabled?: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <Dropdown.Item disabled={props.disabled} onSelect={props.onSelect}>
+      <span class="flex size-3.5 shrink-0 items-center justify-center text-ink-muted">
+        <props.icon class="size-3.5" />
+      </span>
+      <span class="flex-1 truncate text-ink-muted">{props.label}</span>
+    </Dropdown.Item>
+  );
+}
+
+/** Count pill used by section headings, reused so labels read the same way. */
+function UnreadPill(props: { count: number }) {
+  return (
+    <Show when={props.count > 0}>
+      <span class="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-accent px-1 text-xs font-medium leading-none tabular-nums text-accent-contrast">
+        {props.count}
+      </span>
+    </Show>
+  );
+}
+
+/**
+ * A label heading inside the Channels section: the name, how many of
+ * its channels are unread, a `···` menu, and the disclosure caret. Clicking
+ * the row toggles it, like a section heading; the state is per user. Edits
+ * explain their scope in a dialog, so the menu stays plain.
+ */
+export function ChannelLabelRow(props: { label: ChannelLabel }) {
+  const rail = useChannelsRail();
+  const state = useChannelRailLabelState(() => props.label);
+  const droppable = createDroppable(
+    `${rail.railId}:channel-label:label:${props.label.id}`,
+    {
+      dragType: 'channel-label-target',
+      dndScope: rail.railId,
+      target: {
+        kind: props.label.rule ? 'smart-tag' : 'label',
+        labelId: props.label.id,
+      },
+      isDropTargetDisabled: () => !rail.labelsAvailable(),
+    } satisfies ChannelLabelDropData
+  );
+
+  const isDropTarget = () => {
+    const target = rail.activeDropTarget();
+    return target?.kind === 'label' && target.labelId === props.label.id;
+  };
+
+  return (
+    <div
+      ref={droppable.ref}
+      class={cn(
+        'group/channel-label relative min-w-0 rounded-lg pb-0.5',
+        isDropTarget() && 'bg-selected'
+      )}
+    >
+      <ViewSidebar.Item
+        as="div"
+        id={state().domId}
+        role="treeitem"
+        tabIndex={-1}
+        title={
+          props.label.rule
+            ? t('channelLabels.nameContains', {
+                text: props.label.rule.contains,
+              })
+            : props.label.name
+        }
+        aria-expanded={state().open}
+        class={cn(
+          'pr-15 font-medium',
+          !isTouchDevice() && state().focused && 'bg-hover text-ink'
+        )}
+        onMouseDown={(event) => {
+          if (!isPrimaryMouseDown(event)) return;
+          event.preventDefault();
+          rail.activateRow(rowKeyForLabel(props.label.id), event);
+        }}
+      >
+        <span class="min-w-0 flex-1 truncate">{props.label.name}</span>
+        <UnreadPill count={state().unreadCount} />
+      </ViewSidebar.Item>
+      <span class="absolute right-(--sidebar-action-inset) top-1/2 flex -translate-y-1/2 items-center gap-0.5">
+        <Dropdown placement="bottom-end">
+          <Dropdown.Trigger
+            aria-label={`Options for ${props.label.name}`}
+            tooltip={`Options for ${props.label.name}`}
+            as={ViewSidebar.Control}
+            variant="ghost"
+            size="icon-sm"
+            class="opacity-0 transition-opacity group-hover/channel-label:opacity-100 focus-visible:opacity-100 data-expanded:opacity-100 touch:opacity-100"
+            onMouseDown={(event: MouseEvent) => event.stopPropagation()}
+          >
+            <DotsThreeIcon class="size-3.5" />
+          </Dropdown.Trigger>
+          <Dropdown.Content
+            class="min-w-44"
+            onCloseAutoFocus={(event) => {
+              if (document.querySelector('[role="dialog"]'))
+                event.preventDefault();
+            }}
+          >
+            <Dropdown.Group>
+              <MenuRow
+                icon={PencilSimpleIcon}
+                label={
+                  props.label.rule
+                    ? t('channelLabels.editSmartLabel')
+                    : t('entityActions.rename')
+                }
+                onSelect={() =>
+                  fireAndForget(
+                    props.label.rule
+                      ? rail.editSmartTag(props.label)
+                      : rail.renameLabel(props.label),
+                    'channels-view'
+                  )
+                }
+              />
+              <MenuRow
+                icon={ChecksIcon}
+                label={t('channelLabels.markAllAsRead')}
+                disabled={state().unreadCount === 0}
+                onSelect={() => rail.markLabelRead(props.label)}
+              />
+            </Dropdown.Group>
+            <Dropdown.Separator class="my-1 h-px border-0 bg-edge-divider" />
+            <Dropdown.Group>
+              <MenuRow
+                icon={TrashIcon}
+                label={
+                  props.label.rule
+                    ? t('channelLabels.deleteSmartLabel')
+                    : t('channelLabels.deleteLabel')
+                }
+                onSelect={() =>
+                  fireAndForget(rail.deleteLabel(props.label), 'channels-view')
+                }
+              />
+            </Dropdown.Group>
+          </Dropdown.Content>
+        </Dropdown>
+        <ViewSidebar.Control
+          aria-label={`${state().open ? 'Collapse' : 'Expand'} ${props.label.name}`}
+          aria-expanded={state().open}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={() => rail.toggleLabel(props.label.id)}
+        >
+          <CaretDownIcon
+            class={cn(
+              'size-3 transition-transform -rotate-90',
+              state().open && 'rotate-0'
+            )}
+          />
+        </ViewSidebar.Control>
+      </span>
+    </div>
+  );
+}
+
+/** The Channels section's create action: a channel, or a label. */
+export function ChannelsCreateMenu() {
+  const rail = useChannelsRail();
+
+  return (
+    <Show
+      when={rail.channelTagsEnabled() && rail.labelsAvailable()}
+      fallback={
+        <ViewSidebar.Control
+          aria-label="Create channel"
+          onClick={openNewChannelModal}
+        >
+          <PlusIcon class="size-3.5" />
+        </ViewSidebar.Control>
+      }
+    >
+      <Dropdown placement="bottom-end">
+        <Dropdown.Trigger
+          aria-label="Create channel or label"
+          tooltip="Create channel or label"
+          as={ViewSidebar.Control}
+          variant="ghost"
+          size="icon-sm"
+        >
+          <PlusIcon class="size-3.5" />
+        </Dropdown.Trigger>
+        <Dropdown.Content
+          class="min-w-44"
+          onCloseAutoFocus={(event) => {
+            if (document.querySelector('[role="dialog"]'))
+              event.preventDefault();
+          }}
+        >
+          <Dropdown.Group>
+            <MenuRow
+              icon={HashIcon}
+              label={t('channelLabels.newChannel')}
+              onSelect={openNewChannelModal}
+            />
+            <MenuRow
+              icon={TagIcon}
+              label={t('channelLabels.newLabel')}
+              onSelect={() =>
+                fireAndForget(rail.createLabel([]), 'channels-view')
+              }
+            />
+            <MenuRow
+              icon={FilterIcon}
+              label={t('channelLabels.newSmartLabel')}
+              onSelect={() =>
+                fireAndForget(rail.createSmartTag(), 'channels-view')
+              }
+            />
+          </Dropdown.Group>
+        </Dropdown.Content>
+      </Dropdown>
+    </Show>
+  );
+}
+
+/**
+ * "Move to label" for a channel's context menu. Includes empty labels.
+ */
+export function ChannelLabelMenuItems(props: { channel: ChannelEntity }) {
+  const rail = useChannelsRail();
+  const currentLabel = () =>
+    rail
+      .labels()
+      .find(
+        (label) => !label.rule && label.channelIds.includes(props.channel.id)
+      );
+
+  return (
+    <Show
+      when={
+        rail.channelTagsEnabled() &&
+        canLabelChannel(props.channel) &&
+        rail.labelsAvailable()
+      }
+    >
+      <Show when={currentLabel()}>
+        {(label) => (
+          <MenuItem
+            icon={TagSimpleIcon}
+            text={t('channelLabels.ungroupFrom', { label: label().name })}
+            onClick={() => rail.setChannelLabel(props.channel.id, undefined)}
+          />
+        )}
+      </Show>
+      <ContextMenu.Sub>
+        <SubTrigger
+          icon={TagIcon}
+          text={
+            currentLabel()
+              ? t('channelLabels.moveToLabel')
+              : t('channelLabels.addToLabel')
+          }
+        />
+        <ContextMenuContent
+          submenu
+          class="min-w-56 max-w-[22rem] text-xs text-ink-muted"
+        >
+          {/* Kobalte radio items only work inside a RadioGroup. */}
+          <ContextMenu.RadioGroup
+            value={currentLabel()?.id ?? ''}
+            onChange={(labelId) =>
+              rail.setChannelLabel(props.channel.id, labelId)
+            }
+          >
+            <For each={rail.labels().filter((label) => !label.rule)}>
+              {(label) => (
+                <MenuItem
+                  selectorType="radio"
+                  value={label.id}
+                  groupValue={currentLabel()?.id ?? ''}
+                  text={label.name}
+                />
+              )}
+            </For>
+          </ContextMenu.RadioGroup>
+          <Show when={rail.labels().some((label) => !label.rule)}>
+            <MenuSeparator />
+          </Show>
+          <MenuItem
+            icon={PlusIcon}
+            text={t('channelLabels.newLabelEllipsis')}
+            onClick={() =>
+              fireAndForget(
+                rail.createLabel([props.channel.id]),
+                'channels-view'
+              )
+            }
+          />
+        </ContextMenuContent>
+      </ContextMenu.Sub>
+    </Show>
+  );
+}

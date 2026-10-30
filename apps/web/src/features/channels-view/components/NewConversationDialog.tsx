@@ -1,10 +1,15 @@
 import { useAgentDmRecipients } from '@app/features/agent-dms/agent-dm-recipients';
 import { selectConversationRecipients } from '@app/features/agent-dms/core/personas';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { UserIcon } from '@core/component/UserIcon';
-import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
+import {
+  ENABLE_AGENT_DMS,
+  enableChatSidebarSections,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -121,6 +126,7 @@ function OptionIcon(props: { option: ConversationOption }) {
 }
 
 function NewConversationDialog(props: ManagedDialogProps) {
+  const sections = useFeatureFlag(enableChatSidebarSections);
   const { openWithSplit } = useSplitLayout();
   const userId = useUserId();
   const ownerId = userId();
@@ -219,7 +225,15 @@ function NewConversationDialog(props: ManagedDialogProps) {
     );
   });
   const canSubmit = () => {
-    if (!userId() || userId() !== ownerId || pending()) return false;
+    if (
+      !active ||
+      !props.open ||
+      !sections().enabled ||
+      !userId() ||
+      userId() !== ownerId ||
+      pending()
+    )
+      return false;
     if (setupProgress().channelId) {
       return (
         setupInput !== undefined &&
@@ -250,6 +264,16 @@ function NewConversationDialog(props: ManagedDialogProps) {
     active = false;
   });
   createEffect(
+    on(
+      () => sections().enabled,
+      (enabled) => {
+        if (enabled) return;
+        active = false;
+        props.onOpenChange(false);
+      }
+    )
+  );
+  createEffect(
     on(userId, (id) => {
       if (id === ownerId) return;
       active = false;
@@ -258,7 +282,7 @@ function NewConversationDialog(props: ManagedDialogProps) {
   );
 
   const open = (id: string) => {
-    if (!active || userId() !== ownerId) return;
+    if (!active || !sections().enabled || userId() !== ownerId) return;
     props.onOpenChange(false);
     openWithSplit(
       { type: 'channel', id },
@@ -281,7 +305,8 @@ function NewConversationDialog(props: ManagedDialogProps) {
     event.preventDefault();
     const actor = userId();
     if (!actor || !canSubmit()) return;
-    const isCurrent = () => active && props.open && userId() === actor;
+    const isCurrent = () =>
+      active && sections().enabled && props.open && userId() === actor;
     setPending(true);
     setError('');
     try {
@@ -638,5 +663,6 @@ function NewConversationDialog(props: ManagedDialogProps) {
 }
 
 export function openNewConversationDialog() {
+  if (!isFeatureEnabled(enableChatSidebarSections)) return;
   openDialog(NewConversationDialog, {});
 }

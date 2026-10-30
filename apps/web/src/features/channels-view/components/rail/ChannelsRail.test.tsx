@@ -169,6 +169,7 @@ vi.mock('../../channels-view-context', () => ({
       sectionPreferences: {},
     },
     tab: () => mocks.tab,
+    sectionsEnabled: () => true,
     threadsEnabled: () => false,
     selectedChannel: () => mocks.selected,
     setSelectedChannel: mocks.select,
@@ -185,6 +186,11 @@ vi.mock('../../queries', () => ({
   resolveReferencedChannels: (previous: ChannelEntity[]) => previous,
 }));
 vi.mock('./SectionDialog', () => ({ promptSection: vi.fn() }));
+vi.mock('./legacy/ChannelLabelNameDialog', () => ({
+  promptLabelName: vi.fn(),
+}));
+vi.mock('./legacy/SmartTagDialog', () => ({ promptSmartTag: vi.fn() }));
+vi.mock('./LegacyChannelsRail', () => ({ LegacyChannelsRail: () => null }));
 vi.mock('./hooks/useChannelCalls', () => ({ useChannelCalls: () => ({}) }));
 vi.mock('./hooks/useChannelRailActivity', () => ({
   useChannelRailActivity: () => ({ unreadChannelIds: () => new Set<string>() }),

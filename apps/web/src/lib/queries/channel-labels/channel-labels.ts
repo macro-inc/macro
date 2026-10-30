@@ -34,11 +34,18 @@ function channelLabelsQueryOptions(
 }
 
 /** Shared labels for team members; account-private labels otherwise. */
-export function useChannelLabelsQuery(scope?: ChannelLabelScopeSelection) {
+export function useChannelLabelsQuery(
+  scope?: ChannelLabelScopeSelection,
+  enabled: Accessor<boolean> = () => true
+) {
   const channelTagsFlag = useFeatureFlag(enableChannelTags);
   const userId = useUserId();
   return useQuery(() =>
-    channelLabelsQueryOptions(channelTagsFlag().enabled, scope, userId())
+    channelLabelsQueryOptions(
+      channelTagsFlag().enabled && enabled(),
+      scope,
+      userId()
+    )
   );
 }
 

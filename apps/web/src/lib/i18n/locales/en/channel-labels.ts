@@ -2,6 +2,11 @@ export default {
   // The channels rail groups channels under labels; smart labels group by rule.
   newChannel: 'New channel',
   newLabel: 'New label',
+  createLabel: 'Create label',
+  renameLabel: 'Rename label',
+  rename: 'Rename',
+  sharedScope: 'Labels are shared with everyone on your team.',
+  personalScope: 'Labels are private to your account.',
   newLabelEllipsis: 'New label…',
   newSmartLabel: 'New smart label',
   editSmartLabel: 'Edit smart label',

@@ -1,7 +1,9 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
+import { enableChatSidebarSections } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -56,6 +58,7 @@ export function openNewChannelModalWithName(initialName: string) {
 }
 
 export function CreateChannelModal() {
+  const sections = useFeatureFlag(enableChatSidebarSections);
   const { replaceOrInsertSplit } = useSplitLayout();
   const userId = useUserId();
   const [step, setStep] = createSignal<ChannelCreationStep>('name');
@@ -92,12 +95,14 @@ export function CreateChannelModal() {
   let nameInput: HTMLInputElement | undefined;
   let visibilityOptions: HTMLDivElement | undefined;
   const matchingChannels = createMemo(() =>
-    channels().filter(
-      (channel) =>
-        channel.channel_type !== 'direct_message' &&
-        channel.name?.trim().toLocaleLowerCase() ===
-          channelName().toLocaleLowerCase()
-    )
+    sections().enabled
+      ? channels().filter(
+          (channel) =>
+            channel.channel_type !== 'direct_message' &&
+            channel.name?.trim().toLocaleLowerCase() ===
+              channelName().toLocaleLowerCase()
+        )
+      : []
   );
   createEffect(
     on(newChannelModalOpen, (open) => {

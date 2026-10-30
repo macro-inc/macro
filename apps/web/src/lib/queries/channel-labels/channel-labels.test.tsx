@@ -139,6 +139,36 @@ describe('channel tag query rollout', () => {
     );
   });
 
+  it('gates the extra personal query without disabling the original label rollout', async () => {
+    mocks.enabled = () => true;
+    const [sectionsEnabled, setSectionsEnabled] = createSignal(false);
+    let personal!: ReturnType<typeof useChannelLabelsQuery>;
+    const Probe = () => {
+      useChannelLabelsQuery();
+      personal = useChannelLabelsQuery('personal', sectionsEnabled);
+      return null;
+    };
+    render(() => (
+      <QueryClientProvider client={client}>
+        <Probe />
+      </QueryClientProvider>
+    ));
+    await waitFor(() =>
+      expect(mocks.list).toHaveBeenCalledExactlyOnceWith(undefined)
+    );
+    expect(personal.isEnabled).toBe(false);
+    setSectionsEnabled(true);
+    await waitFor(() => expect(mocks.list).toHaveBeenCalledWith('personal'));
+    setSectionsEnabled(false);
+    await waitFor(() => expect(personal.isEnabled).toBe(false));
+    await client.invalidateQueries({
+      queryKey: channelLabelKeys.list('personal', 'viewer').queryKey,
+    });
+    expect(
+      mocks.list.mock.calls.filter(([scope]) => scope === 'personal')
+    ).toHaveLength(1);
+  });
+
   it('only previews smart tags while enabled', async () => {
     const [enabled, setEnabled] = createSignal(false);
     const [pattern, setPattern] = createSignal('support');

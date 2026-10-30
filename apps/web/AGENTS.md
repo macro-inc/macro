@@ -497,7 +497,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   [dragging rows into a folder](../../docs/agent-guide/navigation.md#dragging-rows-into-a-folder).
 - Keep channel rail and title menus on `CHANNEL_ACTION_VIEW_CONTEXT`, including
   the shared desktop `Open in new split` action and its mobile/capacity guards.
-- Keep desktop Chat on one scrolling section list with a collapsible DM panel at
+- Gate the Chat redesign with `enable-chat-sidebar-sections`; wait for its result, restore the tabbed rail and separate creation flows when off, and keep mobile unchanged.
+  With the flag on, keep desktop Chat on one scrolling section list with a collapsible DM panel at
   the bottom; personal and team-shared section assignments remain independent.
   Mobile retains the recent feed. Use the unified New conversation picker and
   require explicit confirmation before creating a duplicate visible channel name.

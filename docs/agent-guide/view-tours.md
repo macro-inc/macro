@@ -38,9 +38,10 @@ and highlights.
   agent and model picker (both use a Create → Agent entry when the composer is hidden), then the
   Your agents list and the Cursor / Bring your own agent strips (beacon on
   Agents), then Create for automations.
-- **Channels:** personal/shared sections and sticky DMs, then the unified New
-  conversation picker, threads, @mentions, and calls. Conversation features wait
-  on the channel list until a conversation is open. No Slack action.
+- **Channels:** the channel and DM sidebar, then New, threads, @mentions, and
+  calls. The same tour works with the tabbed sidebar or the sectioned redesign
+  (`enable-chat-sidebar-sections`). Conversation features wait on the channel
+  list until a conversation is open. No Slack action.
 - **Email:** Signal/Noise tabs beside the Inbox title (beacon on Inbox when
   another mailbox is open), tags, then keyboard shortcuts.
 - **Customers:** Companies and People records, relationship details, then the

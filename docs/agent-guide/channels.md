@@ -74,8 +74,10 @@ vanishes when the first timeline entry appears. Agent DMs keep their own UI.
 
 ## Create a channel
 
-Chat's **New → New conversation** uses the single name-first dialog described
-[below](#new-conversation). The global Create menu retains this three-step flow:
+With `enable-chat-sidebar-sections` on, Chat's **New → New conversation** uses
+the single name-first dialog described [below](#new-conversation). With it off,
+Chat offers separate **New channel** and **New direct message** actions. Both
+**New channel** and the global Create menu retain this three-step flow:
 
 1. `Create` → `Channel G`. Dialog `Create a channel` opens on step 1 of 3 with the `Name` textbox focused.
 2. Fill the name and click `Next`. Step 2 of 3 shows `Visibility`, with `Team — anyone on your team` selected by default. Team channels are always discoverable to teammates.
@@ -887,8 +889,24 @@ with the same full sidebar contents. With no conversation selected, the
 slide-over opens on its own and closes once a conversation is picked; the
 backdrop or `Escape` still dismisses it. There is no separate skinny sidebar mode.
 
-On desktop, Chat has one conversation sidebar, without All, Recent, or Threads
-view tabs. Favorites and the team's channels appear first, followed by custom
+### Sidebar redesign rollout
+
+`enable-chat-sidebar-sections` gates the desktop layout and unified creation
+flow. It defaults on in development; deployed builds defer to PostHog. Set
+`VITE_ENABLE_CHAT_SIDEBAR_SECTIONS=true` or `false` to override it locally.
+Wait for the flag to resolve before mounting a desktop layout or loading its
+lists. An unavailable or disabled remote flag restores **All**, **Recent**, and
+**Threads** (the latter still requires `enable-channel-threads-preview`), the
+original independently scrolling groups, and separate creation actions. A saved
+Recent or Threads tab survives switching the redesign on and off. Personal-section
+queries and new section preferences do not affect the flag-off layout. Existing
+labels remain governed by `enable-channel-tags`. Mobile retains its recent feed
+regardless of the redesign flag, including while it is loading.
+
+### Sectioned sidebar (flag on)
+
+With the flag on, desktop Chat has one conversation sidebar, without All, Recent,
+or Threads view tabs. Favorites and the team's channels appear first, followed by custom
 sections. The team heading is **[Team name] channels**, with **Team channels**
 as the fallback while the name is unavailable.
 Other joined public and private channels remain in Channels until assigned to a

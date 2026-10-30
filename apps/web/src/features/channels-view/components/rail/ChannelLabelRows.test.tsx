@@ -12,6 +12,7 @@ import { ChannelLabelMenuItems } from './ChannelLabelRows';
 
 const rail = vi.hoisted(() => ({
   channelTagsEnabled: (): boolean => false,
+  sectionsEnabled: () => true,
   labelsAvailable: (): boolean => true,
   canShareSections: () => true,
   labels: () => [
@@ -74,6 +75,7 @@ vi.mock('@kobalte/core/context-menu', () => ({
 let setEnabled: Setter<boolean>;
 beforeEach(() => {
   [rail.channelTagsEnabled, setEnabled] = createSignal(false);
+  rail.sectionsEnabled = () => true;
   vi.clearAllMocks();
   vi.stubGlobal('scrollTo', vi.fn());
 });
@@ -83,6 +85,32 @@ afterEach(() => {
 });
 
 describe('channel tag flag in rail menus', () => {
+  it('restores the original label assignment action when the redesign is disabled', () => {
+    const [sectionsEnabled, setSectionsEnabled] = createSignal(false);
+    rail.sectionsEnabled = sectionsEnabled;
+    setEnabled(true);
+    render(() => (
+      <ChannelLabelMenuItems
+        channel={{
+          id: 'channel',
+          name: 'Channel',
+          ownerId: 'viewer',
+          type: 'channel',
+          channelType: 'team',
+        }}
+      />
+    ));
+    fireEvent.click(screen.getByText('Ungroup from “Cached label”'));
+    expect(rail.setChannelLabel).toHaveBeenLastCalledWith('channel', undefined);
+    setSectionsEnabled(true);
+    fireEvent.click(screen.getByText('Remove from “Cached label”'));
+    expect(rail.setChannelLabel).toHaveBeenLastCalledWith(
+      'channel',
+      undefined,
+      'label'
+    );
+  });
+
   it('hides cached label actions when the flag changes without remounting', () => {
     const channel = {
       id: 'channel',
