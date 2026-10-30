@@ -210,6 +210,9 @@ where
         step: &ToolStep,
         context: &mut Value,
     ) -> Result<()> {
+        if let Some(missing) = template::unresolved(&step.arguments, context).first() {
+            bail!("This step needs {missing}, which this run doesn't have.");
+        }
         let arguments = template::render(&step.arguments, context);
         let outcome = self
             .tools

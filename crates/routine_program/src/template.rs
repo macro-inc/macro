@@ -87,6 +87,39 @@ pub fn render(arguments: &Map<String, Value>, context: &Value) -> Map<String, Va
         .collect()
 }
 
+/// Arguments that are exactly one placeholder (an id, a thread) but read
+/// nothing in `context`, as written. Such a step can't run: rendering would
+/// pass null, which a tool may read as "none" (a reply becomes a new post).
+pub fn unresolved(arguments: &Map<String, Value>, context: &Value) -> Vec<String> {
+    let mut missing = Vec::new();
+    collect_unresolved(&Value::Object(arguments.clone()), context, &mut missing);
+    missing
+}
+
+fn collect_unresolved(value: &Value, context: &Value, missing: &mut Vec<String>) {
+    match value {
+        Value::String(text) => {
+            if let Ok(parts) = parse(text)
+                && let [Part::Placeholder(reference)] = parts.as_slice()
+                && matches!(lookup(reference, context), None | Some(Value::Null))
+            {
+                missing.push(text.clone());
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                collect_unresolved(item, context, missing);
+            }
+        }
+        Value::Object(map) => {
+            for item in map.values() {
+                collect_unresolved(item, context, missing);
+            }
+        }
+        _ => {}
+    }
+}
+
 fn render_value(value: &Value, context: &Value) -> Value {
     match value {
         Value::String(text) => render_text(text, context),

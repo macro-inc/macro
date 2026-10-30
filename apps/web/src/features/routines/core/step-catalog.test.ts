@@ -180,6 +180,19 @@ describe('steps on the triggering item', () => {
       )
     ).toMatch(/every trigger/);
   });
+
+  it('replies only where a message started the run', () => {
+    const reply = createActionStep(
+      stepActions.find((action) => action.key === 'reply_in_thread')!,
+      triggerScope('channel')
+    );
+    expect(
+      validateStepSubjects([reply], [event(['channel.message_posted'])])
+    ).toBeNull();
+    expect(validateStepSubjects([reply], [event(['channel.created'])])).toMatch(
+      /needs triggers for messages/
+    );
+  });
 });
 
 describe('AI picks', () => {

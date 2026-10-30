@@ -88,3 +88,20 @@ fn malformed_placeholders_are_errors() {
             .is_empty()
     );
 }
+
+#[test]
+fn whole_value_placeholders_that_read_nothing_are_reported() {
+    let context = json!({ "trigger": { "entity_id": "c", "message": null }, "steps": {} });
+    let reply = arguments(json!({
+        "channel_id": "{{trigger.entity_id}}",
+        "thread_id": "{{trigger.message.thread_id}}",
+        "content": "Thanks {{trigger.message.sender}}",
+    }));
+    // The reply has no thread to go to; text that reads nothing is fine.
+    assert_eq!(
+        unresolved(&reply, &context),
+        ["{{trigger.message.thread_id}}"]
+    );
+    let post = arguments(json!({ "channel_id": "{{trigger.entity_id}}", "content": "Hi" }));
+    assert!(unresolved(&post, &context).is_empty());
+}

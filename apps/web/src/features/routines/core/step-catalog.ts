@@ -593,6 +593,12 @@ export function describeToolStep(step: ToolStepDraft): string {
 }
 
 /** What a tool step must have before it can be saved. */
+/** Channel events that carry a message, which a reply can answer. */
+const MESSAGE_EVENTS: ReadonlySet<string> = new Set([
+  'channel.message_posted',
+  'channel.mentioned',
+]);
+
 const SUBJECT_NOUNS: Record<StepSubject, string> = {
   email: 'an email',
   task: 'a task',
@@ -619,6 +625,16 @@ export function validateStepSubjects(
     const action = stepActions.find(
       (action) => action.key === stepActionKey(step)
     );
+    // A reply needs a message to reply to: a channel's creation has none.
+    if (
+      action?.key === 'reply_in_thread' &&
+      triggers.some(
+        (trigger) =>
+          trigger.kind === 'event' &&
+          trigger.events.some((event) => !MESSAGE_EVENTS.has(event))
+      )
+    )
+      return '“Reply in thread” needs triggers for messages: Message sent in channel or @ mentioned in channel.';
     const subjects = action?.subjects;
     // Actions without subjects act on any item.
     if (!subjects || (subject && subjects.includes(subject))) continue;
