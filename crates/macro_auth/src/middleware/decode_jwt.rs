@@ -1,7 +1,12 @@
 #[cfg(test)]
 mod agent_test;
+#[cfg(test)]
+mod fusionauth_access_token_test;
 
-use std::sync::OnceLock;
+use std::{
+    sync::OnceLock,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 use anyhow::Context;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
@@ -164,6 +169,42 @@ pub fn decode_macro_access_token_allow_expired(
         .into_owned();
 
     Ok(macro_user_id)
+}
+
+#[derive(serde::Deserialize)]
+struct FusionAuthAccessToken {
+    iat: u64,
+}
+
+/// Checks that a token was issued by FusionAuth for this application (signature, audience and
+/// issuer) without checking expiry or the Macro claims, and returns when it was issued.
+/// FusionAuth still issues an access token when the JWT populate lambda fails, just without
+/// those claims.
+pub fn validate_fusionauth_access_token_allow_expired(
+    access_token: &str,
+    args: &JwtValidationArgs,
+) -> Result<SystemTime, MacroAuthError> {
+    let mut validation = Validation::new(Algorithm::HS256);
+    validation.set_audience(&[args.audience.as_ref()]);
+    validation.set_issuer(&[args.issuer.as_ref()]);
+    validation.set_required_spec_claims(&["exp", "aud", "iss"]);
+    validation.validate_exp = false;
+
+    let token = decode::<FusionAuthAccessToken>(
+        access_token,
+        &DecodingKey::from_secret(args.jwt_secret.as_ref().as_bytes()),
+        &validation,
+    )
+    .map_err(|e| MacroAuthError::JwtValidationFailed {
+        details: e.to_string(),
+    })?
+    .claims;
+
+    UNIX_EPOCH
+        .checked_add(Duration::from_secs(token.iat))
+        .ok_or_else(|| MacroAuthError::JwtValidationFailed {
+            details: "iat is out of range".to_string(),
+        })
 }
 
 fn validate_macro_access_token_inner(

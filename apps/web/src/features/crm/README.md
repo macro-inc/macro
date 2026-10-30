@@ -103,6 +103,8 @@ any filter button. Email filters use the shared filter drawer. Each section's
 creation action replaces the default floating action above the navigation dock
 through `FloatRegion`; keyboard focus, higher-priority composers, and inactive
 panes suppress it. Preserve record context, disabled states, and feature gates.
+Keep the disabled New email action mounted when company email sync is off so
+the unrelated app-wide action does not replace it.
 Desktop creation controls remain in the toolbar.
 
 Activity rows render stored Companies and Contacts reference properties as inline

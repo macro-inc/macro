@@ -21,9 +21,12 @@ During iterative visual tweaks, use focused browser verification; defer full typ
 
 Any user-visible change should be exercised in a browser before you call it fixed — type-check, biome, and vitest all pass on code that still has the interaction bug.
 
-Desktop sidebar view titles staying whole at a typical rail width have a
-backend-free regression:
+Desktop sidebar and list-header titles, saved-view icon alignment, unclipped
+switcher triggers, and scrolling list controls have a backend-free regression:
 `bunx playwright test --config src/components/view-shell/browser-test/playwright.config.ts sidebar-title.browser.e2e.ts`.
+
+Search facet chip sizing, text alignment, and filter interactions have a backend-free
+regression: `bunx playwright test --config src/features/universal-input/browser-test/playwright.config.ts global-search.browser.e2e.ts --project chromium`.
 
 Agent image attachments preserve external and inline image URLs; only configured
 static-file endpoints receive thumbnail sizing. The backend-free regression is
@@ -146,6 +149,12 @@ It checks draft blank lines across remounts, that a sent message renders its
 lines with the spacing the draft showed, and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
 It also pastes a Macro link and Markdown into a code block, which must keep both as literal text.
 
+Shared GraphQL query metadata has a backend-free desktop and iPhone WebKit regression:
+`bunx playwright test --config src/lib/urql-solid/browser-test/playwright.config.ts`.
+Publish data and metadata atomically. Reconcile result data only; replace
+operation metadata so shared documents,
+cached query text, and operation names remain consistent across query changes.
+
 Block formatting passes a forward copy of the selection to Lexical's
 `$setBlocksType` so backward selections include their first paragraph and keep
 the editor's actual selection direction. The Markdown core browser suite's
@@ -230,6 +239,15 @@ on desktop and mobile. Tool results render through
 `lib/core/component/AI/component/tool/Canvas.tsx`; edits arrive through live sync.
 The shared plain-text Lexical codec is `packages/lexical-core/canvas-text.ts`.
 
+## Message notification reads
+
+Gate automatic message notification reads on the actual message element
+intersecting the visible scroll area, excluding floating chrome and background
+tabs. Share visibility observers per thread list, including standalone threads;
+never treat virtualized overscan or a visible thread parent as seeing its replies.
+The backend-free desktop/phone/tablet regression is
+`bunx playwright test --config src/features/notifications/browser-test/playwright.config.ts`.
+
 ## Development Patterns
 
 Route database row rename and delete through `renameDatabase` and
@@ -240,7 +258,13 @@ by default; keep saved per-capture choices and explicit toggles authoritative.
 Use `/app/debug/diff-view-ui` to exercise the 40/41-line boundary.
 
 Project grouping in Soup and its live cache projection uses the system Project
-property (initiative membership), with an empty key labeled No Project.
+property (initiative membership), with an empty key labeled No Project. The
+server labels each project group with the initiative name the viewer can read;
+headers resolve a name themselves only while a group is still labeled by its
+key, and projects sort by name with No Project last. Data a grouped list shows
+about its groups (labels, order, membership) is computed on the server and
+mirrored by the cache's local grouping projection; never add a side cache in
+feature code to cover a remount.
 
 Keep persistent list hotkeys free of mounted-view closures, and clear
 virtualizer accessors when their view unmounts.
@@ -377,7 +401,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep desktop New actions on `ViewCreateButton`: full width below the inner
   sidebar title and compact in list controls; retain each view's creation
   workflow and mobile controls. Use `ListHeader` for the single-row Email, Drive,
-  and Tasks headers: title, filters, view options, New, expandable Search. Put sidebar search in
+  Tasks, and Projects headers: title, filters, view options, New, expandable Search.
+  Render project collection titles with `ViewSidebar.Title caret={false}`; keep
+  individual project names and touch pickers unchanged. Put sidebar search in
   `ViewSidebar.Header` so its icon precedes collapse and its field opens above New.
 - Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, `sm`/`icon-sm` semantic islands (28px controls) with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for Tabs, New, and Search. Drive and Tasks list-header filter, layout, sort, and grouping islands use `md`/`icon-md` (32px) to match New and Search. Preserve touch layouts. Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
 - Keep desktop model and effort controls separate: the model selector opens the catalog and the speedometer opens the runtime's advertised slider stops; retain the mobile effort sheet.
@@ -397,8 +423,15 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - All API/network calls live in service-clients.
 - Open projects through `openProject` (`features/projects/open-project.ts`): it
   retargets an already-open project split to the section or comment in place.
-  Opening the legacy `initiative-view` component route beside an open project
-  mounts a redirect shim that stays on "Loading project".
+  Shared open paths (unified list rows) use its `projectHostedContent`, whose
+  identity is the project itself, so the router focuses the split already
+  showing it. Opening the legacy `initiative-view` component route beside an
+  open project mounts a redirect shim that stays on "Loading project".
+- A hosted detail pane (a project under Tasks, a call, a PR) registers as its
+  host shell, so the split manager's entity reuse cannot see it; the router's
+  claims decide who shows it. `openWithSplit` activates the source split before
+  a replace, so a visit the router yields to the claiming pane leaves that pane
+  active (`tests/claimed-replace.test.ts`).
 - Bound Discussion comment readiness waits to ten seconds; recover from initial layout interruptions until the message is visible, and release the target on user input (including scrollbar pointer-down), timeout, or successful arrival.
 - Keep early DOCX opens loading while exports return processing (409); retry only
   that response, with a bounded wait. See the Word editor walkthrough in
@@ -451,8 +484,6 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Preserve loaded block content on initial access confirmation when its loader
   supplies no permissions; reload only on a later confirmed permission change.
   Apply shared access in place only after a successful permissionless load.
-  Request state can report an owner as edit, so compare a loaded level with
-  the confirmed one through `matchesConfirmedAccess`.
 - Grouped Soup's `graphql/create-grouped-soup-live-query.ts` owns initial and
   continuation pages plus their local predicate projection. Group readers only
   delegate paging; pass the parent's live `groupedPaging` accessor from every
@@ -787,6 +818,7 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 
 - Reuse `CreateMenuItem` for explanatory New menu entries: original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
 - Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus.
+- Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
 
 ### Sidebar tag dragging
 
@@ -795,3 +827,7 @@ Keep existing tags and apply to the selected rows when the drop row is selected.
 Use the shared scoped drag helpers and overlayIcon for the tag chip.
 The backend-free browser regression is
 `bunx playwright test --config src/features/property/tags/browser-test/playwright.config.ts`.
+
+Use `features/channel/channel-icon.tsx` for conversation identity in rows,
+favorites, and headers: channel pictures or hashtags, human/self-DM avatars,
+and bot personas share one renderer; keep surface sizing in the caller.

@@ -73,7 +73,6 @@ function createEntityEditorDraft() {
       };
       try {
         await ctx.onSave?.(property, apiValues);
-        ctx.onRefresh?.();
       } catch {
         // mutation onError owns toast
       }

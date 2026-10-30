@@ -4,7 +4,7 @@ import { usePropertiesContext } from '@property/context/PropertiesContext';
 import type { Property as PropertyType } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
 import { Layer } from '@ui';
-import { Match, Show, Switch } from 'solid-js';
+import { type Accessor, Match, Show, Switch } from 'solid-js';
 
 /** Shared property cell for unified task and native project lists. */
 export function ListPropertyValue(props: {
@@ -12,14 +12,6 @@ export function ListPropertyValue(props: {
   entityId: string;
 }) {
   const context = usePropertiesContext();
-  const isUserEntity = () =>
-    props.property.valueType === 'ENTITY' &&
-    props.property.specificEntityType === 'USER';
-  const userCount = () => {
-    if (!isUserEntity()) return 0;
-    return getEntityValues(props.property).length;
-  };
-  const isEmpty = () => !hasValue(props.property);
   const isInlineType = () =>
     props.property.valueType === 'STRING' ||
     props.property.valueType === 'NUMBER' ||
@@ -33,19 +25,20 @@ export function ListPropertyValue(props: {
         property={props.property}
         canEdit={context.canEdit}
         onSave={context.saveHandler.saveProperty}
-        onRefresh={context.onRefresh}
       >
-        <Property.Tooltip property={props.property}>
-          <Layer depth={2}>
-            <div
-              role="presentation"
-              class="list-property-cell w-full max-w-full min-w-0 overflow-hidden rounded-full text-left hover:bg-surface/50 @max-[840px]/u-list:hidden"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <Property.InlineEditor />
-            </div>
-          </Layer>
-        </Property.Tooltip>
+        {(property) => (
+          <Property.Tooltip property={property()}>
+            <Layer depth={2}>
+              <div
+                role="presentation"
+                class="list-property-cell w-full max-w-full min-w-0 overflow-hidden rounded-full text-left hover:bg-surface/50 @max-[840px]/u-list:hidden"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <Property.InlineEditor />
+              </div>
+            </Layer>
+          </Property.Tooltip>
+        )}
       </Property.Root>
     );
   }
@@ -56,9 +49,31 @@ export function ListPropertyValue(props: {
       property={props.property}
       canEdit={context.canEdit}
       onSave={context.saveHandler.saveProperty}
-      onRefresh={context.onRefresh}
     >
-      <Property.Tooltip property={props.property}>
+      {(property) => (
+        <ListPropertyCell property={property} entityId={props.entityId} />
+      )}
+    </Property.Root>
+  );
+}
+
+function ListPropertyCell(props: {
+  property: Accessor<PropertyType>;
+  entityId: string;
+}) {
+  const context = usePropertiesContext();
+  const isUserEntity = () =>
+    props.property().valueType === 'ENTITY' &&
+    props.property().specificEntityType === 'USER';
+  const userCount = () => {
+    if (!isUserEntity()) return 0;
+    return getEntityValues(props.property()).length;
+  };
+  const isEmpty = () => !hasValue(props.property());
+
+  return (
+    <>
+      <Property.Tooltip property={props.property()}>
         <Layer depth={2}>
           <Property.EditTrigger class="list-property-cell inline-flex w-full max-w-full min-w-0 items-center gap-1 overflow-hidden rounded-full px-2 py-1.5 text-left leading-tight hover:bg-surface/50 @max-[840px]/u-list:px-1">
             <Show
@@ -67,7 +82,7 @@ export function ListPropertyValue(props: {
                 <>
                   <CircleDashedEmpty class="size-3 shrink-0 opacity-50 @max-[840px]/u-list:size-4" />
                   <span class="min-w-0 flex-1 truncate opacity-50 @max-[840px]/u-list:hidden">
-                    {props.property.displayName}
+                    {props.property().displayName}
                   </span>
                 </>
               }
@@ -75,7 +90,7 @@ export function ListPropertyValue(props: {
               <Switch
                 fallback={
                   <Property.Icon
-                    property={props.property}
+                    property={props.property()}
                     class="size-3 shrink-0 @max-[840px]/u-list:size-4"
                   />
                 }
@@ -83,13 +98,13 @@ export function ListPropertyValue(props: {
                 <Match when={userCount() > 1}>
                   <div class="@max-[840px]/u-list:hidden">
                     <Property.UserStack
-                      property={props.property}
+                      property={props.property()}
                       maxUsers={2}
                     />
                   </div>
                   <div class="hidden @max-[840px]/u-list:flex">
                     <Property.UserStack
-                      property={props.property}
+                      property={props.property()}
                       maxUsers={1}
                       avatarClass="@max-[840px]/u-list:size-5"
                     />
@@ -97,15 +112,15 @@ export function ListPropertyValue(props: {
                 </Match>
                 <Match when={isUserEntity()}>
                   <Property.Icon
-                    property={props.property}
+                    property={props.property()}
                     class="@max-[840px]/u-list:size-5"
                   />
                 </Match>
               </Switch>
               <Property.Text
-                property={props.property}
+                property={props.property()}
                 resolveSingleEntity={
-                  props.property.specificEntityType === 'INITIATIVE'
+                  props.property().specificEntityType === 'INITIATIVE'
                 }
                 class="min-w-0 max-w-full flex-1 @max-[840px]/u-list:hidden"
               />
@@ -120,6 +135,6 @@ export function ListPropertyValue(props: {
           blockId: props.entityId,
         }}
       />
-    </Property.Root>
+    </>
   );
 }

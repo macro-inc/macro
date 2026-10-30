@@ -39,11 +39,11 @@ export function CompanyEmailsSection(props: { company?: CrmCompanyEntity }) {
       title="Emails"
       search={search()}
       onSearchChange={setSearch}
-      createAction={
-        props.company?.emailSync === false
-          ? undefined
-          : { label: 'New email', onClick: () => crm.openEmailComposer() }
-      }
+      createAction={{
+        label: 'New email',
+        disabled: props.company?.emailSync === false,
+        onClick: () => crm.openEmailComposer(),
+      }}
       actions={
         <RecordSectionFilters
           activeCount={

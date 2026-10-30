@@ -450,7 +450,7 @@ type ArchiveThreadParams = {
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
   linkId?: string;
   /** Suppress the success toast, e.g. for a send-triggered archive where the
-   *  "Email sent" toast (with its undo-send action) is already up and this
+   *  send toast (with its undo-send action) is already up and this
    *  toast's own Undo would reverse only the archive, not the send. */
   silent?: boolean;
   /** Receives the undo handle once the archive is pushed onto the undo

@@ -828,10 +828,25 @@ impl<
             .ok();
     }
 
-    /// Update task statuses for all resolved task doc IDs.
-    #[tracing::instrument(skip(self, doc_ids))]
-    async fn update_task_statuses(&self, doc_ids: &[String], status: &str) {
-        tracing::trace!(doc_count = doc_ids.len(), status, "updating task statuses");
+    /// Update task statuses for all resolved task doc IDs, crediting the Macro
+    /// user linked to the webhook sender (for a merge, the person who merged).
+    #[tracing::instrument(skip(self, event, doc_ids))]
+    async fn update_task_statuses(
+        &self,
+        event: &ValidatedGithubWebhookEvent,
+        doc_ids: &[String],
+        status: &str,
+    ) {
+        if doc_ids.is_empty() {
+            return;
+        }
+        let credited_user = self.notification_sender(event).await.sender_id;
+        tracing::trace!(
+            doc_count = doc_ids.len(),
+            status,
+            linked_user = credited_user.is_some(),
+            "updating task statuses"
+        );
 
         for doc_id in doc_ids {
             tracing::trace!(doc_id, status, "updating task status");
@@ -844,7 +859,7 @@ impl<
             );
 
             self.document_service
-                .update_task_status(entity_access, status)
+                .update_task_status(entity_access, credited_user.clone(), status)
                 .await
                 .inspect_err(|e| {
                     tracing::error!(

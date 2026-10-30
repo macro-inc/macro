@@ -31,6 +31,9 @@ describe('homeWorkFeedScope', () => {
     expect(homeWorkFeedScope(['documents'], everything)?.types).toEqual([
       'document',
     ]);
+    expect(
+      homeWorkFeedScope(['folders', 'initiatives'], everything)?.types
+    ).toEqual(['project', 'initiative']);
   });
 
   it('leaves documents out when only the Documents filter is off', () => {
@@ -39,7 +42,8 @@ describe('homeWorkFeedScope', () => {
       'email',
       'channels',
       'agents',
-      'projects',
+      'folders',
+      'initiatives',
       'github',
       'calendar',
     ];

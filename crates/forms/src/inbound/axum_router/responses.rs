@@ -8,6 +8,7 @@ use macro_authorization::MacroAuthorizationService;
 use models_forms::{
     FormErrorResponse, FormTally, MyResponse, ResponseSummary, Submission, SubmissionOutcome,
 };
+use tracing::Level;
 
 use super::access::FormReceipt;
 use super::{FormsApiError, FormsRouterState};
@@ -44,7 +45,7 @@ where
     params(("id" = Uuid, Path, description = "Form id")),
     responses((status = 200, body = MyResponse), (status = 401, body = FormErrorResponse), (status = 403, body = FormErrorResponse),
         (status = 404, body = FormErrorResponse), (status = 500, body = FormErrorResponse)))]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(err(level = Level::INFO), skip_all)]
 pub async fn get_my_form_response_handler<Service, EntityAccess, Authorization>(
     access: FormReceipt<ViewAccessLevel, EntityAccess, Authorization>,
     State(state): State<FormsRouterState<Service, EntityAccess, Authorization>>,

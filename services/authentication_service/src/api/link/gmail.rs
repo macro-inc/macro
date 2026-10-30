@@ -11,6 +11,7 @@ use macro_middleware::tracking::ClientIp;
 use model::response::ErrorResponse;
 use roles_and_permissions::domain::model::PermissionId;
 use serde_utils::urlencode::UrlEncoded;
+use tracing::Level;
 use url::Url;
 
 use crate::{
@@ -93,6 +94,7 @@ impl IntoResponse for InitGmailLinkError {
             InitGmailLinkError::TooManyInProgressLinks => StatusCode::TOO_MANY_REQUESTS,
             InitGmailLinkError::PaymentRequired => StatusCode::PAYMENT_REQUIRED,
             InitGmailLinkError::InternalError(_) | InitGmailLinkError::IdentityProviderNotFound => {
+                tracing::error!(error = ?self, "gmail link initiation failed");
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         };
@@ -136,7 +138,7 @@ pub(crate) struct InitGmailLinkQueryParams {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, ip_context, db_permissions), fields(client_ip=%ip_context, user_id=%db_permissions.authorization.authorization.user.user_context.user_id, fusion_user_id=%db_permissions.authorization.authorization.user.user_context.fusion_user_id), err)]
+#[tracing::instrument(skip(ctx, ip_context, db_permissions), fields(client_ip=%ip_context, user_id=%db_permissions.authorization.authorization.user.user_context.user_id, fusion_user_id=%db_permissions.authorization.authorization.user.user_context.fusion_user_id), err(level = Level::INFO))]
 pub async fn init_gmail_link_handler(
     State(ctx): State<ApiContext>,
     query: Query<InitGmailLinkQueryParams>,
