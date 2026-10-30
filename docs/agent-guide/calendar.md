@@ -782,8 +782,11 @@ overlay the grid as read-only chips titled `<name>: <event title>`. The sidebar'
 `Team out of office` section (shown only when the user belongs to a team with other members)
 is a collapsible list of the next 90 days of teammate absences. The checkbox in its header
 shows or hides the overlay (the list itself always shows); clicking a row navigates the grid
-to that date. Coverage depends on each teammate having connected their own calendar and using
-Google's out-of-office event type.
+to that date. The list shows ten rows and a `+N more` button that expands it to every row,
+scrolling inside a bounded height, with `Show less` to collapse it again. The choice survives
+the poll and count changes; when ten or fewer rows remain, the button hides. Reopening the
+narrow-pane overlay sidebar starts collapsed, as its section toggles do. Coverage depends on
+each teammate having connected their own calendar and using Google's out-of-office event type.
 
 The grid's pages and the list read the overlay from shared fixed 91-day windows,
 each fetched once and refreshed by one 30-second poll while the tab is focused, so
