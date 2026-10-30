@@ -52,6 +52,8 @@ type EntityInputProps = {
     entityInfo?: { id: string; entity_type: EntityType }[]
   ) => void;
   onClose?: () => void;
+  /** Escape in the search; `onClose` when absent, as a popover saves on close. */
+  onCancel?: () => void;
   pinnedOptions?: PinnedOption[];
 };
 
@@ -473,9 +475,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
               if (e.key === 'Escape') {
                 e.preventDefault();
                 e.stopPropagation();
-                if (props.onClose) {
-                  props.onClose();
-                }
+                (props.onCancel ?? props.onClose)?.();
               }
             }}
             placeholder={props.config.placeholder}

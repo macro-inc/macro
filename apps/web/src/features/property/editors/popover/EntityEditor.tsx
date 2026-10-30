@@ -99,6 +99,8 @@ function EntityEditorSelector(
     draft: EntityEditorDraft;
     /** Fill a sized container, such as a sheet, rather than a popover's height. */
     fillHeight?: boolean;
+    /** Escape in the search; saves the draft when absent, as a popover does. */
+    onCancel?: () => void;
   }
 ) {
   const property = props.draft.property;
@@ -148,6 +150,7 @@ function EntityEditorSelector(
             );
           }}
           onClose={props.draft.closeAndSave}
+          onCancel={props.onCancel}
         />
       </Suspense>
       <Show
@@ -192,6 +195,7 @@ export function EntitySheetEditor(props: EntityEditorProps) {
 }
 
 function EntitySheetBody(props: EntityEditorProps) {
+  const ctx = useProperty();
   const draft = createEntityEditorDraft();
   return (
     <>
@@ -204,6 +208,7 @@ function EntitySheetBody(props: EntityEditorProps) {
           selfFilter={props.selfFilter}
           draft={draft}
           fillHeight
+          onCancel={ctx.closeEditor}
         />
       </PickerSheet.Body>
     </>
