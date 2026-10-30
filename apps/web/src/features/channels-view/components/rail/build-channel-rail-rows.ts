@@ -2,8 +2,11 @@ import type { ChannelEntity } from '@entity';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { canLabelChannel } from '../../core/channel-label-eligibility';
+import { sortChannels } from '../../core/channel-sort';
 import type { ChannelsSourceScope } from '../../queries';
 import type {
+  ChannelSectionKey,
+  ChannelSectionPreferences,
   ChannelsQueryScope,
   ChannelsRailSection,
   ChannelsTab,
@@ -69,6 +72,71 @@ export function buildChannelSectionRows(options: {
   return rows;
 }
 
+type SectionOptions = {
+  preferences: Partial<Record<ChannelSectionKey, ChannelSectionPreferences>>;
+  channelById: (id: string) => ChannelEntity | undefined;
+  unreadChannelIds: ReadonlySet<string>;
+};
+
+/** Filter after assigning membership so hidden channels never leak into another section. */
+function applySectionPreferences(
+  rows: ChannelRailRow[],
+  options: SectionOptions
+): ChannelRailRow[] {
+  const result: ChannelRailRow[] = [];
+  let section: ChannelSectionKey | undefined;
+  let entries: ChannelRailRow[] = [];
+  const channel = (row: ChannelRailRow) => {
+    if (row.kind === 'conversation') return row.channel;
+    if (row.kind === 'favorite')
+      return options.channelById(row.favorite.entityId);
+    return undefined;
+  };
+  const flush = () => {
+    const preference = section ? options.preferences[section] : undefined;
+    const sort =
+      preference?.sort ?? (section === 'favorites' ? 'name' : undefined);
+    const visible = entries.filter((row) => {
+      if (row.kind !== 'conversation' && row.kind !== 'favorite') return true;
+      return (
+        !preference?.unreadOnly ||
+        options.unreadChannelIds.has(channel(row)?.id ?? '')
+      );
+    });
+    if (sort) {
+      const channels = visible.flatMap((row) => channel(row) ?? []);
+      const ordered =
+        sort === 'name'
+          ? channels.sort(compareChannelName)
+          : sortChannels(channels, sort);
+      const positions = new Map(ordered.map((item, index) => [item.id, index]));
+      visible.sort(
+        (left, right) =>
+          (positions.get(channel(left)?.id ?? '') ?? positions.size) -
+          (positions.get(channel(right)?.id ?? '') ?? positions.size)
+      );
+    }
+    result.push(...visible);
+    entries = [];
+  };
+  for (const row of rows) {
+    if (row.kind === 'section' || row.kind === 'label') {
+      flush();
+      section = row.kind === 'label' ? `label:${row.label.id}` : row.group;
+      result.push(row);
+    } else entries.push(row);
+  }
+  flush();
+  let directMessageIndex = 0;
+  result.forEach((row, index) => {
+    if (row.kind === 'label') row.localIndex = index;
+    if (row.kind === 'conversation') {
+      row.localIndex =
+        row.group === 'direct_messages' ? directMessageIndex++ : index;
+    }
+  });
+  return result;
+}
 /**
  * Keyboard-navigable rows in visual order. Collapsed sections contribute
  * only their heading; restored list modes keep their flat row ordering.
@@ -77,7 +145,8 @@ export function buildChannelRailRows(
   tab: ChannelsTab,
   expandedGroups: Record<ChannelsRailSection, boolean>,
   items: ChannelRailItemsByScope,
-  channelSectionRows: readonly ChannelSectionRow[]
+  channelSectionRows: readonly ChannelSectionRow[],
+  sectionOptions?: SectionOptions
 ): ChannelRailRow[] {
   if (tab === 'threads') {
     return [
@@ -202,7 +271,7 @@ export function buildChannelRailRows(
     );
   }
 
-  return rows;
+  return sectionOptions ? applySectionPreferences(rows, sectionOptions) : rows;
 }
 
 /** Page at the rendered section boundary, not a source tail hidden by a label. */

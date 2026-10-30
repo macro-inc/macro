@@ -166,6 +166,7 @@ vi.mock('../../channels-view-context', () => ({
       tab: 'browse',
       expandedGroups: { channels: true, direct_messages: true },
       collapsedLabels: [],
+      sectionPreferences: {},
     },
     tab: () => mocks.tab,
     threadsEnabled: () => false,
@@ -183,11 +184,10 @@ vi.mock('../../queries', () => ({
   // What the real helper answers for the disabled lookup above.
   resolveReferencedChannels: (previous: ChannelEntity[]) => previous,
 }));
-vi.mock('./ChannelLabelNameDialog', () => ({ promptLabelName: vi.fn() }));
-vi.mock('./SmartTagDialog', () => ({ promptSmartTag: vi.fn() }));
+vi.mock('./SectionDialog', () => ({ promptSection: vi.fn() }));
 vi.mock('./hooks/useChannelCalls', () => ({ useChannelCalls: () => ({}) }));
 vi.mock('./hooks/useChannelRailActivity', () => ({
-  useChannelRailActivity: () => ({}),
+  useChannelRailActivity: () => ({ unreadChannelIds: () => new Set<string>() }),
 }));
 vi.mock('./ExpandedChannelsRail', async () => {
   const { useChannelsRail } = await import('./ChannelsRailContext');

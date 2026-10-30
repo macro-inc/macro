@@ -6,7 +6,6 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type ChannelEntity, Entity } from '@entity';
-import CheckIcon from '@icon/system/regular/check.svg';
 import SortIcon from '@icon/system/regular/sort-ascending.svg';
 import { queryReadyGate } from '@queries/gate';
 import { useCurrentTeamQuery } from '@queries/team/teams';
@@ -21,7 +20,6 @@ import {
   type Accessor,
   createMemo,
   createSignal,
-  For,
   Match,
   Show,
   Switch,
@@ -30,11 +28,7 @@ import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { canLabelChannel } from '../../core/channel-label-eligibility';
 import { ChannelsLiveCallsSidebar } from '../../live-calls-sidebar';
 import { CHANNELS_TOUR } from '../../tour';
-import type {
-  ChannelListSort,
-  ChannelsGroup,
-  ChannelsSortGroup,
-} from '../../types';
+import type { ChannelsGroup, ChannelsRailSection } from '../../types';
 import { formatDetailedTimestamp } from '../../utils';
 import { ConversationsCreateMenu } from '../ConversationsCreateMenu';
 import { ChannelFavoriteRow } from './ChannelFavoriteRows';
@@ -50,6 +44,7 @@ import {
   IncomingCallActions,
   isPrimaryMouseDown,
 } from './ChannelRailItems';
+import { ChannelSectionMenuItems } from './ChannelSectionMenu';
 import {
   type ChannelLabelDragData,
   type ChannelLabelDropData,
@@ -84,30 +79,15 @@ type ChannelRailSearch = {
   retry: () => Promise<void>;
 };
 
-const CHANNEL_SORT_OPTIONS: {
-  value: ChannelListSort;
-  label: string;
-}[] = [
-  { value: 'viewed_at', label: 'Last viewed' },
-  { value: 'updated_at', label: 'Last updated' },
-  { value: 'created_at', label: 'Date created' },
-];
-
-function ChannelSortDropdown(props: {
-  group: ChannelsSortGroup;
+function ChannelSectionDropdown(props: {
+  group: ChannelsRailSection;
   label: string;
 }) {
-  const rail = useChannelsRail();
-  const setSort = (value: string) => {
-    const option = CHANNEL_SORT_OPTIONS.find((item) => item.value === value);
-    if (option) rail.setSortBy(props.group, option.value);
-  };
-
   return (
     <Dropdown placement="bottom-end">
       <Dropdown.Trigger
-        aria-label={`Sort ${props.label.toLowerCase()}`}
-        tooltip={`Sort ${props.label.toLowerCase()}`}
+        aria-label={t('channelSections.optionsFor', { name: props.label })}
+        tooltip={t('channelSections.optionsFor', { name: props.label })}
         as={ViewSidebar.Control}
         variant="ghost"
         size="icon-sm"
@@ -115,23 +95,7 @@ function ChannelSortDropdown(props: {
         <SortIcon class="size-3.5" />
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-40">
-        <Dropdown.Group>
-          <Dropdown.RadioGroup
-            value={rail.sortBy(props.group)}
-            onChange={setSort}
-          >
-            <For each={CHANNEL_SORT_OPTIONS}>
-              {(option) => (
-                <Dropdown.RadioItem closeOnSelect value={option.value}>
-                  <span class="flex-1">{option.label}</span>
-                  <Dropdown.ItemIndicator>
-                    <CheckIcon class="size-3.5 text-accent" />
-                  </Dropdown.ItemIndicator>
-                </Dropdown.RadioItem>
-              )}
-            </For>
-          </Dropdown.RadioGroup>
-        </Dropdown.Group>
+        <ChannelSectionMenuItems section={props.group} />
       </Dropdown.Content>
     </Dropdown>
   );
@@ -360,7 +324,19 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
       </ViewSidebar.Header>
       <ViewSidebar.Primary class="flex items-center gap-2">
         <div class="min-w-0 flex-1">
-          <ConversationsCreateMenu presentation="sidebar" />
+          <ConversationsCreateMenu
+            presentation="sidebar"
+            onCreateSection={
+              rail.channelTagsEnabled()
+                ? () => fireAndForget(rail.createLabel([]), 'channels-view')
+                : undefined
+            }
+            sectionDisabledReason={
+              !rail.labelsAvailable()
+                ? rail.labelsUnavailableReason()
+                : undefined
+            }
+          />
         </div>
         <ChannelsSectionsMenu />
       </ViewSidebar.Primary>
@@ -413,9 +389,7 @@ function SectionHeading(props: { group: 'favorites' | ChannelsGroup }) {
       unreadCount={unreadCount()}
       onToggle={() => rail.toggleGroup(props.group)}
     >
-      <Show when={channelGroup()}>
-        {(group) => <ChannelSortDropdown group={group()} label={title()} />}
-      </Show>
+      <ChannelSectionDropdown group={props.group} label={title()} />
     </ChannelSectionHeading>
   );
 }
@@ -455,7 +429,9 @@ function SectionStatus(props: { group: ChannelsGroup }) {
         </Match>
         <Match when={!hasConversations()}>
           <p class="py-2 text-xs text-ink-extra-muted">
-            {t('channelSections.empty')}
+            {rail.sectionPreferences(props.group).unreadOnly
+              ? t('channelSections.noUnreadConversations')
+              : t('channelSections.empty')}
           </p>
         </Match>
       </Switch>
@@ -475,11 +451,13 @@ function BrowseRow(props: { row: ChannelRailRow }) {
               when={
                 row().group === 'favorites' &&
                 rail.isGroupOpen('favorites') &&
-                rail.favorites().length === 0
+                !rail.list.items.all().some((row) => row.kind === 'favorite')
               }
             >
               <p class="px-2 py-2 text-xs text-ink-extra-muted">
-                {t('channelSections.emptyFavorites')}
+                {rail.sectionPreferences('favorites').unreadOnly
+                  ? t('channelSections.noUnreadConversations')
+                  : t('channelSections.emptyFavorites')}
               </p>
             </Show>
           </>

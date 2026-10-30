@@ -11,6 +11,12 @@ export type ChannelsSortGroup = ChannelsGroup | 'threads';
 /** Collapsible sections of the All tab. */
 export type ChannelsRailSection = 'favorites' | ChannelsGroup;
 
+export type ChannelSectionKey = ChannelsRailSection | `label:${string}`;
+export type ChannelSectionPreferences = {
+  sort?: ChannelListSort | 'name';
+  unreadOnly?: boolean;
+};
+
 export type ChannelsQueryScope = ChannelsGroup | 'recents';
 
 export type ChannelsViewState = {
@@ -28,6 +34,9 @@ export type ChannelsViewState = {
    */
   threadsChannelId: string | undefined;
   sortBy: Record<ChannelsSortGroup, ChannelListSort>;
+  sectionPreferences: Partial<
+    Record<ChannelSectionKey, ChannelSectionPreferences>
+  >;
   asideWidth: number;
 };
 

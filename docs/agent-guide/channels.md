@@ -894,8 +894,9 @@ Team channels disclosure. Empty sections remain visible with a short hint; empty
 Favorites explains how to add a favorite. Private conversations use a lock icon in
 the sidebar and mobile feed, including favorited private conversations.
 All section headers share the same compact styling, and channel rows align across
-sections. Team-shared sections show a neutral Shared badge to the right of the
-name. Personal sections have no scope icon or badge.
+sections. Team-shared sections show a neutral Shared badge after the disclosure
+caret. Personal sections have no scope icon or badge. Header focus backgrounds
+hug the heading rather than filling the sidebar width.
 
 The upper sidebar uses one virtualized scroll area instead of dividing available
 height between sections. Direct messages have a separate collapsible panel fixed
@@ -917,23 +918,28 @@ Turning the flag off hides section controls and stops label reads without
 deleting saved labels. The New conversation action remains independent of the
 label service and its feature flag.
 
-Use **Manage sections** beside New to create a Personal section or Shared
-section, edit an existing section, or expand/collapse all sections. Personal
+Use **New → New section** to create a section. One dialog combines the name,
+personal or shared visibility, and manual or smart grouping. **Manage sections**
+beside New edits existing sections and expands/collapses all sections. Personal
 sections are private to the account, including for team
 members, and accept joined team, public, or private channels. Shared sections
 retain the team's existing label permissions and accept only channels from that
 team. Neither kind accepts DMs. A personal assignment never changes a shared
 assignment. Names are unique within each scope, case-insensitively.
 
-Each heading has a visible options menu to rename or delete the section, edit
-its smart rule, expand/collapse it, and mark its visible channels read. The same
-actions are available in **Manage sections**. Shared edits apply to the team;
-personal edits affect only the account.
+Each heading has an options menu with independent sorting and **Unread only**.
+Custom sections also offer editing, Mark all as read, and a destructive Delete
+action. Use the heading's caret to expand/collapse it; this is not repeated in
+its menu. The same custom-section actions appear in **Manage sections**. Sorting
+and unread filters are personal, even for a team-shared section. Date ordering
+follows each paginated source; Favorites and custom sections also offer A–Z.
+Filtered-out channels retain their membership and do not reappear ungrouped.
+Shared name and rule edits apply to the team; personal edits affect only the account.
 Deleting a section does not delete its conversations or change channel access.
 Use a channel's Add to section menu to change the personal or shared assignment.
 The two scopes remain separate in that menu.
 
-Use Smart section for private matching or Shared smart section for team matching.
+Choose smart grouping in the section dialog for automatic name matching.
 Smart sections match channel names literally and without regard to capitalization. They preserve ordinary section permissions and are not manual
 drop targets. Channels can appear in multiple matching smart sections.
 
@@ -944,8 +950,10 @@ Verify personal and shared creation, same-name sections in different scopes,
 private-channel assignment, and rejecting private-channel assignment to a shared
 section. Check collapse and reload, stale requests after an account change,
 empty sections, assignment failures, and one channel in both scopes. Check the
-Manage sections menu, keyboard access, rename-dialog focus, expand/collapse all,
-and deletion without deleting the channels. Scroll a
+New menu, the unified dialog, Manage sections, keyboard access, edit-dialog
+focus, expand/collapse all, destructive deletion, and per-section unread and
+sort preferences after reload. Confirm unread filtering does not change section
+membership or another section's rows. Scroll a
 long sidebar with many sections and confirm that the DM heading remains
 available at the bottom. Keyboard navigation and section shortcuts must follow
 the same order as the rendered rows.
@@ -954,8 +962,9 @@ lookups refetch, including with a slow or paused connection.
 
 ### New conversation
 
-New opens one people-and-conversation picker. Choosing an existing channel
-opens it. Choosing people starts or reuses a direct message or private group
+**New** opens a dropdown for conversations, named channels, and sections.
+Choose **New conversation** for the people-and-conversation picker. Choosing an
+existing channel opens it. Choosing people starts or reuses a direct message or private group
 through the existing get-or-create endpoints. Existing one-to-one DMs are shown
 as Open conversation instead of Start conversation. External email recipients
 retain the existing invitation behavior.

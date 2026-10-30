@@ -10,6 +10,8 @@ import type { VirtualizerHandle } from 'virtua/solid';
 import type { ChannelsSourceScope, ChannelsSources } from '../../queries';
 import type {
   ChannelListSort,
+  ChannelSectionKey,
+  ChannelSectionPreferences,
   ChannelsGroup,
   ChannelsRailSection,
   ChannelsSortGroup,
@@ -157,12 +159,7 @@ export type ChannelsRailContext = {
   channelSectionRows: Accessor<readonly ChannelSectionRow[]>;
   /** Number of channels in the label with unread activity. */
   labelUnreadCount: (label: ChannelLabel) => number;
-  /**
-   * Create a label holding `channelIds`, after asking for a name in a dialog
-   * that states the team-wide effect. Resolves once the request settles.
-   */
-  createSmartTag: (scope?: 'personal' | 'team') => Promise<void>;
-  editSmartTag: (label: ChannelLabel) => Promise<void>;
+  /** Create a manual or smart section with optional initial channel members. */
   createLabel: (
     channelIds: string[],
     scope?: 'personal' | 'team'
@@ -183,6 +180,11 @@ export type ChannelsRailContext = {
   markLabelRead: (label: ChannelLabel) => void;
   sortBy: (group: ChannelsSortGroup) => ChannelListSort;
   setSortBy: (group: ChannelsSortGroup, sort: ChannelListSort) => void;
+  sectionPreferences: (section: ChannelSectionKey) => ChannelSectionPreferences;
+  setSectionPreferences: (
+    section: ChannelSectionKey,
+    preferences: ChannelSectionPreferences
+  ) => void;
   registerRootRef: (element: HTMLDivElement) => void;
   activateRow: (rowId: ChannelRailRow['id'], event?: MouseEvent) => void;
   /** Warm a channel row's messages on the press that may open it. */

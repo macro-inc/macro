@@ -12,7 +12,7 @@ import { QueryClientProvider } from '@tanstack/solid-query';
 import { type Ok, ok } from 'neverthrow';
 import type { ComponentProps, ParentProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { promptSmartTag } from './SmartTagDialog';
+import { promptSection } from './SectionDialog';
 
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'viewer' }));
 
@@ -38,6 +38,8 @@ vi.mock('@ui', async () => ({
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
   Layer: (props: ParentProps) => props.children,
   Surface: (props: ParentProps) => <div>{props.children}</div>,
+  RadioGroup: (await import('@app/components/ui/components/RadioGroup'))
+    .RadioGroup,
   Input: (props: ComponentProps<'input'>) => <input {...props} />,
   Button: (props: ComponentProps<'button'>) => (
     <button type={props.type} disabled={props.disabled} onClick={props.onClick}>
@@ -81,9 +83,10 @@ describe('smart label dialog', () => {
       )
     );
     const onConfirm = vi.fn(async () => {});
-    const result = promptSmartTag({ scopeDescription: 'Private', onConfirm });
+    const result = promptSection({ canShare: true, onConfirm });
     expect(fetchPreview).not.toHaveBeenCalled();
-    input('Label name', 'Support');
+    fireEvent.click(screen.getByRole('radio', { name: 'Smart section' }));
+    input('Section name', 'Support');
     input('Name contains', 'support');
     await screen.findByText('+7 more channels matched');
     expect(screen.getAllByRole('listitem')).toHaveLength(5);
@@ -100,6 +103,43 @@ describe('smart label dialog', () => {
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
+  it('preserves shared scope when creation starts from a shared channel menu', async () => {
+    const onConfirm = vi.fn(async () => {});
+    const result = promptSection({ scope: 'team', canShare: true, onConfirm });
+    input('Section name', 'Shared group');
+    fireEvent.submit(
+      screen.getByRole('textbox', { name: 'Section name' }).closest('form')!
+    );
+    await result;
+    expect(onConfirm).toHaveBeenCalledWith({
+      name: 'Shared group',
+      scope: 'team',
+    });
+  });
+  it('refreshes smart matches in the selected visibility', async () => {
+    fetchPreview.mockResolvedValue(ok({ channels: [], totalCount: 0 }));
+    const result = promptSection({ canShare: true, onConfirm: async () => {} });
+    fireEvent.click(screen.getByRole('radio', { name: 'Smart section' }));
+    input('Name contains', 'support');
+    await waitFor(() =>
+      expect(fetchPreview).toHaveBeenCalledWith(
+        { attribute: 'name', contains: 'support' },
+        expect.anything(),
+        'personal'
+      )
+    );
+    fireEvent.click(screen.getByRole('radio', { name: 'Shared' }));
+    await waitFor(() =>
+      expect(fetchPreview).toHaveBeenCalledWith(
+        { attribute: 'name', contains: 'support' },
+        expect.anything(),
+        'team'
+      )
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await result;
+  });
+
   it('ignores an old preview response after the user changes the pattern', async () => {
     let resolveFirst!: (value: Ok<SmartTagPreview, unknown>) => void;
     fetchPreview
@@ -112,10 +152,11 @@ describe('smart label dialog', () => {
       .mockResolvedValueOnce(
         ok({ channels: [{ id: 'b', name: 'Latest match' }], totalCount: 1 })
       );
-    const result = promptSmartTag({
-      scopeDescription: 'Private',
+    const result = promptSection({
+      canShare: true,
       onConfirm: async () => {},
     });
+    fireEvent.click(screen.getByRole('radio', { name: 'Smart section' }));
     input('Name contains', 'first');
     await waitFor(() => expect(fetchPreview).toHaveBeenCalledTimes(1));
     input('Name contains', 'second');
@@ -141,8 +182,9 @@ describe('smart label dialog', () => {
             finish = resolve;
           })
       );
-    const result = promptSmartTag({
-      scopeDescription: 'Shared',
+    const result = promptSection({
+      canShare: true,
+      scope: 'team',
       initial: {
         name: 'Support',
         rule: { attribute: 'name', contains: 'old' },
@@ -150,11 +192,14 @@ describe('smart label dialog', () => {
       onConfirm,
     });
     input('Name contains', ' new ');
-    fireEvent.click(screen.getByRole('button', { name: 'Save smart label' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save section' }));
     await screen.findByRole('alert');
     expect(
-      (screen.getByRole('textbox', { name: 'Label name' }) as HTMLInputElement)
-        .value
+      (
+        screen.getByRole('textbox', {
+          name: 'Section name',
+        }) as HTMLInputElement
+      ).value
     ).toBe('Support');
     expect(
       (
@@ -163,11 +208,12 @@ describe('smart label dialog', () => {
         }) as HTMLInputElement
       ).value
     ).toBe(' new ');
-    fireEvent.click(screen.getByRole('button', { name: 'Save smart label' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save section' }));
     expect(screen.getByRole('dialog')).toBeTruthy();
-    expect(onConfirm).toHaveBeenLastCalledWith('Support', {
-      attribute: 'name',
-      contains: 'new',
+    expect(onConfirm).toHaveBeenLastCalledWith({
+      name: 'Support',
+      scope: 'team',
+      rule: { attribute: 'name', contains: 'new' },
     });
     finish();
     await result;

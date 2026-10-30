@@ -21,10 +21,17 @@ const rail = vi.hoisted(() => ({
     { id: 'label', name: 'Cached label', channelIds: ['channel'] },
   ],
   createLabel: vi.fn(),
-  createSmartTag: vi.fn(),
   setChannelLabel: vi.fn(),
   isLabelOpen: () => true,
   labelUnreadCount: () => 0,
+  sectionPreferences: () => ({ sort: 'name' }),
+  setSectionPreferences: vi.fn(),
+  isGroupOpen: () => true,
+  toggleGroup: vi.fn(),
+  toggleLabel: vi.fn(),
+  renameLabel: vi.fn(),
+  deleteLabel: vi.fn(),
+  markLabelRead: vi.fn(),
 }));
 
 vi.mock('./ChannelsRailContext', () => ({ useChannelsRail: () => rail }));
@@ -81,7 +88,7 @@ afterEach(() => {
 });
 
 describe('channel tag flag in rail menus', () => {
-  it('offers personal and shared sections only after labels load', async () => {
+  it('offers management only after labels load', async () => {
     setEnabled(true);
     setLabelsAvailable(false);
     render(() => <ChannelsSectionsMenu />);
@@ -93,14 +100,12 @@ describe('channel tag flag in rail menus', () => {
     fireEvent.keyDown(screen.getByRole('button', { name: 'Manage sections' }), {
       key: 'ArrowDown',
     });
-    const personal = await screen.findByRole('menuitem', {
-      name: 'Personal section',
-    });
     expect(
-      screen.getByRole('menuitem', { name: 'Shared section' })
+      await screen.findByRole('menuitem', { name: /Cached label/ })
     ).toBeTruthy();
-    fireEvent.keyDown(personal, { key: 'Enter' });
-    expect(rail.createLabel).toHaveBeenCalledWith([], 'personal');
+    expect(
+      screen.queryByRole('menuitem', { name: 'Personal section' })
+    ).toBeNull();
 
     setLabelsAvailable(false);
     expect(
@@ -115,14 +120,14 @@ describe('channel tag flag in rail menus', () => {
       key: 'ArrowDown',
     });
     expect(
-      await screen.findByRole('menuitem', { name: 'Smart section' })
+      await screen.findByRole('menuitem', { name: /Cached label/ })
     ).toBeTruthy();
     setEnabled(false);
     expect(screen.queryByRole('menu')).toBeNull();
     expect(
       screen.queryByRole('button', { name: 'Manage sections' })
     ).toBeNull();
-    expect(rail.createSmartTag).not.toHaveBeenCalled();
+    expect(rail.createLabel).not.toHaveBeenCalled();
   });
 
   it('hides cached label actions when the flag changes without remounting', () => {

@@ -30,6 +30,8 @@ import {
 import { createChannelsViewPersistence } from './persistence';
 import type {
   ChannelListSort,
+  ChannelSectionKey,
+  ChannelSectionPreferences,
   ChannelsRailSection,
   ChannelsSortGroup,
   ChannelsTab,
@@ -63,6 +65,10 @@ export type ChannelsViewContext = {
   /** Per-user collapse state of a team channel label. */
   setLabelOpen: (labelId: string, open: boolean) => void;
   setSortBy: (group: ChannelsSortGroup, sort: ChannelListSort) => void;
+  setSectionPreferences: (
+    section: ChannelSectionKey,
+    preferences: ChannelSectionPreferences
+  ) => void;
   setAsideWidth: (width: number) => void;
 };
 
@@ -88,6 +94,7 @@ function createInitialState(
         CHANNELS_DEFAULT_SORT_BY.direct_messages,
       threads: initial.sortBy?.threads ?? CHANNELS_DEFAULT_SORT_BY.threads,
     },
+    sectionPreferences: { ...initial.sectionPreferences },
     asideWidth: clampChannelsRailWidth(
       initial.asideWidth ?? CHANNELS_DEFAULT_RAIL_WIDTH
     ),
@@ -240,6 +247,11 @@ export const [ChannelsViewProvider, useChannelsView] =
                 : [...collapsed, labelId]
           ),
         setSortBy: (group, sort) => setState('sortBy', group, sort),
+        setSectionPreferences: (section, preferences) =>
+          setState('sectionPreferences', (current) => ({
+            ...current,
+            [section]: { ...current[section], ...preferences },
+          })),
         setAsideWidth: (width) =>
           setState('asideWidth', clampChannelsRailWidth(width)),
       };

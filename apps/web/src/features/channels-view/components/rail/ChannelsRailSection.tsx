@@ -50,24 +50,24 @@ export function ChannelSectionHeading(props: {
         title={props.title}
         aria-expanded={props.open}
         class={cn(
-          'flex min-w-0 flex-1 items-center gap-1 rounded-lg px-2 py-1 text-left text-xs font-medium text-ink-muted',
+          'flex min-w-0 items-center gap-1 rounded-lg px-2 py-1 text-left text-xs font-medium text-ink-muted',
           props.focused && 'bg-hover text-ink'
         )}
         onClick={props.onToggle}
       >
         <span class="truncate">{props.label}</span>
-        {props.badge}
         <CaretDownIcon
           class={cn(
             'size-3 shrink-0 transition-transform',
             !props.open && '-rotate-90'
           )}
         />
+        {props.badge}
         <Show when={props.unreadCount > 0}>
           <span class="text-xs text-accent">{props.unreadCount}</span>
         </Show>
       </button>
-      {props.children}
+      <div class="ml-auto flex shrink-0 items-center">{props.children}</div>
     </div>
   );
 }
