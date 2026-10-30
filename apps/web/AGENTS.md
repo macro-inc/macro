@@ -579,6 +579,10 @@ older work. Older native builds and pushes retain authenticated notification
 lookup. The local bridge and native release requirement are documented in
 [`docs/ios-releases.md`](docs/ios-releases.md).
 
+Cold channel push launches retain Home behind the target channel so the mobile
+header Back control and swipe-back have a destination. Keep this launch layout
+in `notificationLaunchPath`; warm taps retain their current pane stack.
+
 Bound the pre-router bridge handoff to 1.5 seconds and release the native cover
 on failure or timeout without consuming the pending tap. Late responses must
 use normal account-checked navigation, never reset the mounted router's hash.
