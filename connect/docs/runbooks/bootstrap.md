@@ -72,3 +72,18 @@ The `prod` stack uses PostgreSQL 17 on `db.t4g.small`, 14-day backups, RDS
 deletion protection, and Pulumi protection. Its public hostname is deliberately
 unset until the product owner chooses it; set `publicHost` before previewing
 production.
+
+## Verify
+
+Run the live integration checks against dev with a customer key whose redirect
+origins include `http://localhost:3000`:
+
+```sh
+CONNECT_IT_CUSTOMER_KEY=<customer-key> nix develop --command connect/tooling/integration.sh dev
+```
+
+The runner follows each live app's authorization URL and checks that the vendor
+accepts the request up to the consent or sign-in page. It does not complete
+consent. For the local Compose stack, run
+`nix develop --command connect/tooling/integration.sh local`; the script creates
+a temporary customer and stops its own Compose project afterward.

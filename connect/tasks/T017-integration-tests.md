@@ -72,3 +72,57 @@ deploying; anything outside `connect/` except workspace membership and
 generated Cargo artifacts.
 
 ## Result
+
+### Changed
+
+- `connect/crates/connect_client/`: ported the public client, shared wire types, tests, and agent guide from T009. Its methods use host-root API routes and inject W3C trace context.
+- `connect/crates/connect_platform/src/http.rs`, `src/http/test.rs`, `src/lib.rs`, and `AGENTS.md`: exported and verified outbound trace header injection.
+- `connect/services/connect_api/Cargo.toml`, `src/main.rs`, `src/mcp.rs`, `src/domain.rs`, `src/domain/oauth.rs`, and `AGENTS.md`: use the shared customer-facing wire types at the HTTP boundary; domain models and policy remain in the service.
+- `connect/tests/connect_integration/`: added the opt-in binary, its package manifest, agent guide, and `CLAUDE.md` symlink. `connect/tooling/integration.sh` runs local Compose or dev; `connect/docs/runbooks/bootstrap.md` documents verification.
+- `Cargo.toml`, `Cargo.lock`, and `.github/workspace-dep-closures.json`: registered the crates and regenerated dependency artifacts.
+
+### Checks
+
+- `CONNECT_PORT=18080 connect/tooling/integration.sh local` inside `nix develop`: **passed**, exit 0. Port 8080 was occupied; the script used the documented port override. Output:
+
+  ```text
+  PASS health: ok
+  PASS catalog: ok
+  PASS auth: ok
+  PASS connections_empty: ok
+  PASS client_metadata: ok
+  PASS session_rules: ok
+  PASS authorize_linear: ok
+  PASS authorize_notion: ok
+  PASS authorize_posthog: ok
+  PASS authorize_sentry: ok
+  PASS gateway_unconnected: ok
+  ```
+
+- `cargo nextest run --all-features -p connect_client -p connect_api -p connect_platform -p connect_registry`: **passed**, 37/37 tests. This includes T009's client and API test requirement.
+- `cargo clippy -p connect_client -p connect_api -p connect_platform -p connect_registry -p connect_integration --all-features --all-targets -- -D warnings`: **passed**, exit 0.
+- `cargo x deps --check`: **passed**, exit 0 after artifact regeneration.
+- `just check`: **passed**, exit 0; its PII scanner tests passed 12/12.
+- `cargo test -p connect_integration`: **passed**, exit 0 with zero tests, confirming the live runner is opt-in.
+- Audit: `cargo fmt --all -- --check`, `bash -n connect/tooling/integration.sh`, and `git diff --check` **passed**. The hexagonal boundary was checked: authorization and OAuth policy remain in the domain service; HTTP handlers map domain results into shared wire types.
+- Dev `--follow-vendor` run and Tempo trace inspection were **not run**: no dev customer key or Tempo trace was available. The local run verified all four vendor redirect URLs without following them.
+
+All Rust and repository checks ran inside `nix develop` with `CARGO_TARGET_DIR="$CONNECT_CARGO_TARGET_DIR"` and `DATABASE_URL="$CONNECT_DATABASE_URL"` exported. Nix warned that it could not install a pre-commit hook in the read-only `.git`; the checks still ran and passed.
+
+### Open questions
+
+None.
+
+### Proposed commits
+
+1. `feat(connect-client): expose typed customer API`
+
+   Why: Customer calls need one typed client and a shared HTTP contract.
+
+   What: Port the client and wire types, map API handlers to them, and propagate trace context.
+
+2. `test(connect): verify live OAuth handshakes`
+
+   Why: Live Connect behavior needs a repeatable check without completing vendor consent.
+
+   What: Add the integration binary, local and dev scripts, verification guide, and this result.
