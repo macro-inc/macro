@@ -14,7 +14,7 @@ rule:
     - any:
         - regex: ^['"]@macro-inc/
         - regex: ^['"]@(app|core|ui|design|theme|icon|queries|entity|property|filesystem|notifications|channel|animate|graphql-cache|phosphor|phosphor-fill|ai-ops|components|block-[a-z]+|service-[a-z-]+)(/|['"])
-        - regex: ^['"](\.\./)+(apps|packages|crates|services)/
+        - regex: ^['"](\.\./)+(apps|packages|crates|services|infra)/
     - any:
         - inside:
             kind: import_statement

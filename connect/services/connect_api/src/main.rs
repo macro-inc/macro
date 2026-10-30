@@ -67,7 +67,7 @@ fn parse_public_url(text: &str) -> Result<url::Url, connect_platform::ConfigErro
     if validate_origin(&url.origin().ascii_serialization()).is_err()
         || !url.username().is_empty()
         || url.password().is_some()
-        || !matches!(url.path(), "/" | "/connect")
+        || url.path() != "/"
         || url.query().is_some()
         || url.fragment().is_some()
     {
@@ -458,10 +458,7 @@ fn router(state: AppState) -> Router {
         .route("/openapi.json", get(openapi))
         .merge(protected)
         .with_state(state);
-    Router::new()
-        .merge(routes.clone())
-        .nest("/connect", routes)
-        .layer(http_trace_layer())
+    routes.layer(http_trace_layer())
 }
 
 #[tokio::main]

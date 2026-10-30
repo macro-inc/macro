@@ -5,11 +5,12 @@ Newest first. Each entry: date, decision, reason, who decided.
 ## 2026-10-30
 
 - **First pass: an entirely independent backend, not wired to Macro.** Connect
-  hosts itself (own Pulumi project in `connect/infra`, own ECS cluster, ALB,
-  RDS, KMS, Secrets Manager; `connect-dev.macro.com`) and is proven with
-  integration tests before Macro integrates. The first PR touches none of
-  Macro's deployed services, gateway, deploy pipeline, or local stack; this
-  supersedes "v1 runs on Macro's platform" below. (Eric)
+  hosts itself (own Pulumi project in `connect/infra`: ECS cluster, ALB, RDS,
+  KMS key, Secrets Manager runtime secret; `connect-dev.macro.com` at the host
+  root) and is proven with integration tests before Macro integrates. The first
+  PR touches none of Macro's deployed services, gateway, deploy pipeline, or
+  local stack. Doppler `connect` holds operations credentials only. This
+  replaces running on Macro's platform. (Eric)
 - **Connect's RDS runs PostgreSQL 17** on `db.t4g.micro` (dev) and
   `db.t4g.small` (prod). Reason: AWS documents those classes for 17, and
   Connect needs nothing from 18. (Claude, answering the T013 builder)
@@ -17,11 +18,6 @@ Newest first. Each entry: date, decision, reason, who decided.
   pass a real connect, refresh, and tool call; an app is `live` only after it
   passes conformance, the rest stay `pending`. Infra is provisioned with
   Pulumi, including Connect's own small RDS instance. (Eric)
-- **Superseded by independent hosting (above): v1 runs on Macro's platform:** Macro's deploy pipeline and gateway
-  (`/connect`), with a separate small Connect RDS instance. Runtime config lives in
-  Doppler `connect-api`; `connect` keeps operations secrets. Connect's code
-  still depends on no Macro crate. Reason: a separate platform is weeks of
-  work with no product value in week one. (Claude)
 - **Connect uses runtime-checked SQLx queries,** each exercised by a
   `#[tokio::test]` with Connect's migrations on `template0`, instead of Macro's
   workspace query cache. Reason: Connect has its own database; one
@@ -34,9 +30,10 @@ Newest first. Each entry: date, decision, reason, who decided.
   GPT-6-Sol on the Fast tier (Codex CLI) builds, one task spec per worktree.
   Process in [`building.md`](building.md). (Eric)
 - **v1 reuses Macro's existing GitHub and Slack OAuth apps;** Macro Connect
-  registers its own later. Their client secrets are copied once into Doppler
-  `connect`; Connect never reads Macro's projects at runtime. Reason: those
-  apps work today; owning them is not on the week-one path. (Eric)
+  registers its own later. Their client secrets go into encrypted Connect
+  Pulumi config when those apps become live. Connect never reads Macro's
+  projects at runtime. Reason: those apps work today; owning them is not on
+  the week-one path. (Eric)
 - **Microsoft is excluded** from v1. Reason: its MCP servers need Agent 365
   and Copilot licences per user. (Eric)
 - **The 451 connections with no first-party MCP are removed at cutover.**

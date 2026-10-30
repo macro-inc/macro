@@ -53,7 +53,7 @@ the Pipedream integration (`pipedream_mcp`) is replaced by an adapter over
 | Part | Where | Does |
 | --- | --- | --- |
 | Registry | `connect/registry/apps/<id>/` | One directory per app: `app.toml` (name, description, MCP URL, access, client registration, scopes, Pipedream slugs it replaces) and `icon.svg`. Source of truth for the catalog. |
-| Connect API | `connect/services/connect_api` | Catalog, connect flow (authorize, callback), connection list and delete, token export. Its own Postgres database. |
+| Connect API | `connect/services/connect_api` | Catalog, connect flow (authorize, callback), connection list and delete, token export. Its own Postgres database and Secrets Manager runtime secret. |
 | Hosting | `connect/infra` | Its own Pulumi project: ECS cluster, ALB and certificate (`connect-dev.macro.com`), RDS, KMS key, Secrets Manager. Touches nothing of Macro's but one DNS record. |
 | MCP gateway | in `connect_api` | Per-connection MCP endpoint: injects the vendor token, refreshes it, forwards to the vendor's server. Customers call this, as Macro called Pipedream's remote MCP. |
 | OAuth client | `connect/crates/` | Client registration in order: CIMD, DCR, then Macro Connect's own OAuth app. Ported from Macro's `mcp_client`, which already does all three. |
@@ -83,7 +83,7 @@ slice.
 
 | Day | Engineering | Vendors and operations |
 | --- | --- | --- |
-| 1 | Boundary checks (ast-grep, Cargo dependency check). Registry format; generate entries from [`research/vendor-auth.csv`](research/vendor-auth.csv). `connect_api` skeleton, database, Doppler project. | File every submission: [`../submissions/`](../submissions/). Create `connect@macro.com`, the Macro Connect landing, privacy, and terms pages. |
+| 1 | Boundary checks (ast-grep, Cargo dependency check). Registry format; generate entries from [`research/vendor-auth.csv`](research/vendor-auth.csv). `connect_api` skeleton and database. | File every submission: [`../submissions/`](../submissions/). Create `connect@macro.com`, the Macro Connect landing, privacy, and terms pages. |
 | 2 | Catalog endpoint. Connect flow with CIMD, DCR, and own-app registration. Encrypted token store. | Test accounts for the top 20 apps. |
 | 3 | MCP gateway with token refresh. Conformance test per app: connect, refresh, list tools, one read-only call. | Prober and conformance runs scheduled nightly. |
 | 4 | `connect_client` and `@macro-connect/sdk`. Macro adapter replacing `pipedream_mcp`; Macro web catalog and connect flow on the SDK. | Answer reviewer mail same day. |

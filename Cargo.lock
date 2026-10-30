@@ -4880,7 +4880,6 @@ dependencies = [
  "clap",
  "connect_platform",
  "connect_registry",
- "doppler-config",
  "futures",
  "http-body-util",
  "opentelemetry",

@@ -83,3 +83,59 @@ Running `pulumi` against AWS; any change to Macro's infra, gateway, deploy
 workflows, or services; integration tests (T017).
 
 ## Result
+
+### Changed
+
+- `connect/infra/{Pulumi.yaml,Pulumi.dev.yaml,Pulumi.prod.yaml,index.ts,package.json,bun.lock,tsconfig.json,biome.json,AGENTS.md,CLAUDE.md}`: standalone `macro-connect` Pulumi project with its own ECR image, ECS cluster and service, IAM roles, log group, public ALB, DNS-validated certificate, alias record, private PostgreSQL 17 RDS, grant KMS key, and Secrets Manager runtime JSON. It reads the existing VPC id and subnet ids from stack config but creates its own security groups. Secret version changes create a new task definition and service rollout. Prod RDS has the T013 instance class, backups, deletion protection, and Pulumi protection. The TS boundary rule now bans relative imports from Macro's `infra/`.
+- `connect/services/connect_api/{Dockerfile,Cargo.toml,src/main.rs,src/test.rs,src/oauth_test.rs,AGENTS.md}`: multi-stage container build, host-root routes and public URL, and updated route tests. Deleted `src/doppler_config.rs` and `src/doppler_config_test.rs`; removed that binary and its dependency. The `/connect` alias was removed because it required only a small router change. `Cargo.lock` was regenerated for the removed dependency.
+- `connect/docker-compose.yml`: PostgreSQL 17 and the API with a local wrapping key, configurable host port, and localhost public URL.
+- `connect/AGENTS.md` and `connect/docs/{runbooks/bootstrap.md,catalog.md,decisions.md,plan.md,submissions.md}`: standalone deploy and local bootstrap instructions, updated runtime credential source, and the superseding hosting decision. `connect/STATUS.md` was not changed.
+- `rules/ast-grep/{ts-connect-self-contained.yml,tsx-connect-self-contained.yml}`: reject relative imports from Macro's `infra/`.
+
+### Checks
+
+All Rust, Bun, Docker, and repository tooling below ran inside `nix develop --command` with `CARGO_TARGET_DIR="$CONNECT_CARGO_TARGET_DIR"` and `DATABASE_URL="$CONNECT_DATABASE_URL"` exported. `SQLX_OFFLINE` was unset for tests. No AWS Pulumi preview, deploy, production access, or secret read was run.
+
+| Check | Exact outcome |
+| --- | --- |
+| `cd connect/infra && bun install --frozen-lockfile` | Passed; 262 installs checked across 252 packages, no changes. |
+| `cd connect/infra && bunx tsc --noEmit` | Passed, exit 0. |
+| `cd connect/infra && bunx biome check .` | Passed; 4 files checked, no fixes. |
+| `docker build -t connect-api-t016 -f connect/services/connect_api/Dockerfile .` | Passed; release image built, exit 0. |
+| `docker compose -f connect/docker-compose.yml up -d --build` | Initial run built the image but could not bind host port 8080 because it was in use. After making the host port configurable, `CONNECT_PORT=18080 docker compose -f connect/docker-compose.yml up -d` passed. `docker compose ... down` passed without removing the database volume. |
+| Local HTTP and customer CLI | `/health` returned HTTP 200; `/v1/catalog` returned HTTP 200 with app ids `linear`, `notion`, `posthog`, `sentry`. `create-customer local --redirect-origin http://localhost:3000` exited 0 with its key output discarded. |
+| `docker compose -f connect/docker-compose.yml config -q` | Passed with `CONNECT_PORT=18080`, exit 0. |
+| `cargo nextest run --all-features -p connect_api -p connect_platform -p connect_registry` | Passed; 34 tests, 0 skipped. |
+| `cargo clippy -p connect_api -p connect_platform -p connect_registry --all-features --all-targets -- -D warnings` | Passed, exit 0. |
+| `cargo x deps --check` | Passed, exit 0. |
+| `cargo fmt --all -- --check` | Passed, exit 0. |
+| `just check` | Passed; format, ast-grep, PII scan, and scanner tests (`OK`). |
+| `git diff --check` | Passed, exit 0. |
+| `git diff origin/main --stat -- . ':!connect'` | Ran. It shows 182 files changed because this branch already differs broadly from current `origin/main`; this task adds only `Cargo.lock`'s required `doppler-config` removal and the two ast-grep rule edits outside `connect/` (verified with `git diff --name-only HEAD -- . ':!connect'`). The literal clean-stat criterion cannot be met without changing the pre-existing branch history. |
+| Audit skill | Passed static review of resource isolation, secret rollout, host-root routing, symlink, and scoped changes. |
+
+The hexagonal boundary was checked: the router change is transport composition; customer authorization and business policy remain in the existing domain service, and database/KMS work remains in outbound adapters.
+
+### Open question
+
+- Which public hostname should the production stack use? `Pulumi.prod.yaml` leaves `publicHost` unset, and production preview fails until that product decision is supplied.
+
+### Proposed commits
+
+1. `feat(connect-infra): provision an independent backend`
+
+   Why: Integration tests need a separately deployable backend without shared application infrastructure.
+
+   What: Add standalone Pulumi resources, encrypted runtime config, and the TypeScript boundary rule update.
+
+2. `feat(connect-api): serve root routes and run locally with Compose`
+
+   Why: The independent host and local stack need the same API paths and runtime configuration.
+
+   What: Remove the gateway alias and Doppler validator, add the Dockerfile and Compose stack, and update route tests and Cargo artifacts.
+
+3. `docs(connect): document standalone bootstrap`
+
+   Why: The previous runbook described a shared deployment path that is no longer used.
+
+   What: Replace bootstrap steps and update the catalog, decision, plan, submission, and agent guides.
