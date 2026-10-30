@@ -74,7 +74,7 @@ use the regular stack glyph, while empty projects retain its dashed counterpart.
 Task statuses use independent `task-status-not-started`, `task-status-in-progress`,
 `task-status-in-review`, `task-status-completed`, and `task-status-canceled` theme
 tokens for icons and group-header tints. Their defaults are muted gray, blended
-amber, violet, green, and muted gray respectively. In Progress mixes amber with
+amber, violet, accent, and muted gray respectively. In Progress mixes amber with
 `content-0` in sRGB: 80% amber in dark mode and 50% in light mode, improving contrast
 without rotating amber toward a tinted foreground's hue. Authored overrides stay
 unchanged.

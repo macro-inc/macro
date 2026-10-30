@@ -117,7 +117,7 @@ export function getDefaultSemanticColorTokens(
       'srgb'
     ),
     'task-status-in-review': tokenReference('violet'),
-    'task-status-completed': tokenReference('green'),
+    'task-status-completed': tokenReference('accent'),
     'task-status-canceled': tokenReference('content-1'),
     chrome: tokenReference('surface-4'),
   };

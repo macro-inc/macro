@@ -427,7 +427,7 @@ body.tauri-ios {
   --color-task-status-not-started: var(--color-content-1);
   --color-task-status-in-progress: color-mix(in srgb, var(--color-amber) 80%, var(--color-content-0));
   --color-task-status-in-review: var(--color-violet);
-  --color-task-status-completed: var(--color-green);
+  --color-task-status-completed: var(--color-accent);
   --color-task-status-canceled: var(--color-content-1);
   --color-chrome: color-mix(in oklch, var(--color-surface-3) 98%, var(--color-content-0));
 
@@ -657,7 +657,7 @@ body.tauri-ios {
   --color-task-status-not-started: var(--color-content-1);
   --color-task-status-in-progress: color-mix(in srgb, var(--color-amber) 80%, var(--color-content-0));
   --color-task-status-in-review: var(--color-violet);
-  --color-task-status-completed: var(--color-green);
+  --color-task-status-completed: var(--color-accent);
   --color-task-status-canceled: var(--color-content-1);
   /* Neutral borders. Focus, status, and glass edges stay independent. */
   --border-primary: oklch(1 0 0 / 16%);
