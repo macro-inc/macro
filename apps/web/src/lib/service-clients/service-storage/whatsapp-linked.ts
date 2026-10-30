@@ -6,6 +6,8 @@ import type { WhatsAppAccountView } from './generated/schemas/whatsAppAccountVie
 import type { WhatsAppChats } from './generated/schemas/whatsAppChats';
 import type { WhatsAppDisconnect } from './generated/schemas/whatsAppDisconnect';
 import type { WhatsAppDisconnectRequest } from './generated/schemas/whatsAppDisconnectRequest';
+import type { WhatsAppLookup } from './generated/schemas/whatsAppLookup';
+import type { WhatsAppLookupRequest } from './generated/schemas/whatsAppLookupRequest';
 import type { WhatsAppPairing } from './generated/schemas/whatsAppPairing';
 import type { WhatsAppPairState } from './generated/schemas/whatsAppPairState';
 import type { WhatsappPasskeyBody } from './generated/schemas/whatsappPasskeyBody';
@@ -45,4 +47,15 @@ export const whatsappLinkedClient = {
     post<Record<string, never>>(`${pairing(id)}/passkey`, response),
   /** Every WhatsApp chat, newest activity first; asks DSS for a group refresh. */
   chats: () => fetchWithToken<WhatsAppChats>(`${root}/chats`),
+  /** Asks whether a number (E.164) has a WhatsApp account, to start a chat. */
+  startLookup: (phoneNumber: string) =>
+    post<WhatsAppLookup>(`${root}/lookups`, {
+      phoneNumber,
+    } satisfies WhatsAppLookupRequest),
+  /** A lookup's progress; poll it until it isn't `pending`. */
+  lookup: (id: string) =>
+    fetchWithToken<WhatsAppLookup, WhatsAppErrorCode>(
+      `${root}/lookups/${encodeURIComponent(id)}`,
+      { cache: 'no-store', errorResponseHandler: whatsappErrorResponse }
+    ),
 };

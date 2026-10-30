@@ -1,4 +1,5 @@
 import { throwOnErr } from '@core/util/result';
+import { sleep } from '@core/util/sleep';
 import { externalChatsClient } from '@service-storage/external-chats';
 import type { ExternalChatKind } from '@service-storage/generated/schemas/externalChatKind';
 import type { WhatsappPasskeyBody } from '@service-storage/generated/schemas/whatsappPasskeyBody';
@@ -12,6 +13,9 @@ import { whatsappOperation } from './operation';
 
 /** How often an open pairing dialog asks for a rotated QR or a result. */
 export const PAIRING_POLL_MS = 1500;
+
+/** How often a phone-number lookup is read until WhatsApp answers. */
+export const LOOKUP_POLL_MS = 1000;
 
 function accountOptions(userId: string) {
   return queryOptions({
@@ -113,6 +117,28 @@ export function useSubmitWhatsappPasskeyMutation() {
       whatsappOperation('submit_passkey', () =>
         throwOnErr(() => client.passkey(input.pairingId, input.response))
       ),
+  }));
+}
+
+/**
+ * Asks WhatsApp whether a number has an account and waits for the answer
+ * (DSS fails a lookup WhatsApp leaves unanswered). A found number joins the
+ * chat list.
+ */
+export function useLookUpWhatsappNumberMutation() {
+  return useMutation(() => ({
+    mutationFn: (phoneNumber: string) =>
+      whatsappOperation('lookup', async () => {
+        let lookup = await throwOnErr(() => client.startLookup(phoneNumber));
+        while (lookup.state === 'pending') {
+          await sleep(LOOKUP_POLL_MS);
+          const id = lookup.id;
+          lookup = await throwOnErr(() => client.lookup(id));
+        }
+        return lookup;
+      }),
+    onSuccess: (lookup) =>
+      lookup.state === 'found' ? invalidateChats() : undefined,
   }));
 }
 
