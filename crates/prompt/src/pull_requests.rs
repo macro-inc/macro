@@ -9,7 +9,7 @@ use crate::types::StaticPrompt;
 pub const READY_PULL_REQUEST: &str = "When you open a pull request, open it ready for review, not as a draft, and get CI passing before you hand it off. A draft, or a pull request whose checks are failing or still running, is not finished. If it was created as a draft, mark it ready for review.";
 
 /// Back-link from a pull request to the session that opened it.
-pub const SESSION_BACKLINK: &str = "macro_internal.set_pull_request returns this session's session_url; link it in the pull request description (for example, \"Opened from Macro agent session <session_url>\") so reviewers can see how the change was made. Edit the description to add it if the pull request already exists.";
+pub const SESSION_BACKLINK: &str = "macro_internal.set_pull_request returns this session's session_url; link it in the pull request description (for example, \"Macro agent session: <session_url>\") so reviewers can see how the change was made. Edit the description to add it if the pull request already exists.";
 
 /// The pull-request section of the instructions for external MCP clients,
 /// which may be coding agents. In-app hosts have no repository to work in.
