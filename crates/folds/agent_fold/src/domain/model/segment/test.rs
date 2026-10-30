@@ -255,57 +255,6 @@ fn a_step_still_running_when_the_turn_ended_is_interrupted() {
 }
 
 #[test]
-fn generated_images_ride_on_their_activity_segment() {
-    let parts = [
-        text("Drawing it."),
-        MessagePart::ToolUse {
-            id: ToolUseId("image".to_owned()),
-            name: ToolName::Mcp {
-                server: "macro".to_owned(),
-                tool: "GenerateImage".to_owned(),
-            },
-            status: ToolStatus::Completed,
-            detail: ToolDetail::Macro {
-                input: serde_json::json!({ "prompt": "a lighthouse" }),
-                output: Some(serde_json::json!({
-                    "staticFileId": "0198f2c4-5b6a-7c8d-9e0f-1a2b3c4d5e6f",
-                    "url": "https://static.example/file/0198f2c4-5b6a-7c8d-9e0f-1a2b3c4d5e6f",
-                    "mimeType": "image/png",
-                    "sizeBytes": 2048,
-                    "width": 1024,
-                    "height": 768,
-                })),
-                error: None,
-            },
-        },
-        MessagePart::ToolUse {
-            id: ToolUseId("failed".to_owned()),
-            name: ToolName::native("GenerateImage"),
-            status: ToolStatus::Failed,
-            detail: ToolDetail::Macro {
-                input: serde_json::json!({ "prompt": "another" }),
-                output: None,
-                error: Some("the image model request failed".to_owned()),
-            },
-        },
-        text("Here it is."),
-    ];
-
-    let projected = project(&parts, true);
-
-    assert_eq!(projected[0].images, Vec::new());
-    assert_eq!(
-        projected[1].images,
-        vec![GeneratedImage {
-            static_file_id: "0198f2c4-5b6a-7c8d-9e0f-1a2b3c4d5e6f".to_owned(),
-            width: Some(1024),
-            height: Some(768),
-        }]
-    );
-    assert_eq!(projected[2].images, Vec::new());
-}
-
-#[test]
 fn only_sealed_prose_carries_its_text_to_the_server() {
     let parts = [
         text("Narration."),
@@ -442,4 +391,27 @@ fn session_activity_retains_command_and_tool_input_details_for_authorized_live_v
     let live = segments(&parts, true);
     assert_eq!(live[0].rows[0].detail.as_deref(), Some(command));
     assert_eq!(live[0].rows[1].detail.as_deref(), Some(query));
+}
+
+/// Replies saved before images moved into reply markers carry an `images`
+/// list on their segments; reading one back ignores it.
+#[test]
+fn a_saved_segment_with_the_retired_images_field_still_reads() {
+    let saved = serde_json::json!({
+        "segment": {
+            "index": 1,
+            "kind": "activity",
+            "start": 1,
+            "end": 2,
+            "sealed": true,
+            "rows": [],
+        },
+        "text": null,
+        "images": [{ "staticFileId": "0198f2c4-5b6a-7c8d-9e0f-1a2b3c4d5e6f", "width": 1024, "height": 768 }],
+    });
+
+    let segment: ProjectedSegment = serde_json::from_value(saved).expect("old rows still read");
+
+    assert_eq!(segment.segment.kind, SegmentKind::Activity);
+    assert_eq!(segment.text, None);
 }

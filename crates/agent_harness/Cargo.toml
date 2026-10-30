@@ -92,6 +92,7 @@ tracing-opentelemetry = { workspace = true }
 url = { workspace = true }
 utoipa = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+static_file_service_client = { path = "../static_file_service_client" }
 
 [dev-dependencies]
 entity_registry = { path = "../entity_registry/entity_registry" }

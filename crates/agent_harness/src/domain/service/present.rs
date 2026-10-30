@@ -15,7 +15,7 @@ use agent_fold::domain::model::{ProjectedSegment, TurnId, TurnPhase};
 
 use super::*;
 use crate::domain::model::{AgentTypingUpdate, ReplyPresentation, VoiceStyle};
-use crate::domain::presenter::{closed, generated_images, plan_messages, shape, turn_segments};
+use crate::domain::presenter::{closed, plan_messages, shape, turn_segments};
 use crate::domain::queue::InFlightTurn;
 
 /// Where a running turn speaks, when it speaks anywhere: the origin it
@@ -72,7 +72,6 @@ impl Voice {
             pending: false,
             outcome: None,
             notify: false,
-            images: Vec::new(),
         }
     }
 }
@@ -245,7 +244,6 @@ where
         if segments.is_empty() {
             segments = saved;
         }
-        let images = generated_images(&segments);
         let planned = plan_messages(&closed(segments));
         let mut flight = flight.clone();
         let expected = flight.clone();
@@ -279,7 +277,6 @@ where
                 voice.presentation(session_id, flight.turn, flight.presented[0], Vec::new());
             presentation.outcome = Some(outcome);
             presentation.notify = true;
-            presentation.images = images;
             return self.present_reply(presentation).await;
         }
         let last = planned.len() - 1;
@@ -295,7 +292,6 @@ where
             if closing {
                 presentation.outcome = Some(outcome.clone());
                 presentation.notify = true;
-                presentation.images = images.clone();
             }
             presented &= self.present_reply(presentation).await;
         }

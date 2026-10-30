@@ -18,9 +18,7 @@ mod test;
 use std::sync::Arc;
 
 use agent_egress::domain::approval::MACRO_SERVER_SLUG;
-use agent_fold::domain::model::{
-    ActivityStatus, GeneratedImage, ProjectedSegment, SegmentKind, TurnId, TurnPhase,
-};
+use agent_fold::domain::model::{ActivityStatus, ProjectedSegment, SegmentKind, TurnId, TurnPhase};
 use agent_session::domain::model::AgentSessionId;
 use bot_id::BotId;
 use channels::domain::media_upload::ChannelMediaKind;
@@ -29,6 +27,9 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use lexical_client::LexicalClient;
+use lexical_client::attachment_marker::{
+    AttachmentKind, AttachmentMarker, take_attachment_markers,
+};
 use lexical_client::parse_markdown::{
     AgentActivityRow, AgentActivityStatus, AgentAnnouncementChip, AgentAnnouncementReplyTarget,
     AgentChatReply, AgentChatReplyBody, AgentConnectionChip, AgentConnectionPrompt,
@@ -50,8 +51,7 @@ use crate::domain::model::{
     AgentTypingUpdate, AnnouncedMessage, DeclinedMention, HeldToolCall, ReplyOutcome,
     ReplyPresentation, ResolvedReply, SessionAnnouncement, SessionBlocker,
 };
-use crate::domain::ports::SessionAnnouncer;
-use crate::domain::presenter::generated_images;
+use crate::domain::ports::{ReplyFiles, SessionAnnouncer};
 
 const EMPTY_RESPONSE_FALLBACK: &str = "I wasn't able to come up with a response.";
 const CANCELLED_FALLBACK: &str = "I stopped before finishing that.";
@@ -187,35 +187,52 @@ fn typing_phase(phase: TurnPhase) -> AgentTypingPhase {
     }
 }
 
-/// A reply's generated images as image attachments, sized so the message
-/// reserves their space before they load. Past the message's attachment
-/// limit the rest stay in the session.
-fn image_attachments(images: &[GeneratedImage]) -> Vec<NewAttachment> {
-    images
-        .iter()
-        // The message service refuses a whole message over one bad reference.
-        .filter(|image| macro_uuid::Uuid::parse_str(&image.static_file_id).is_ok())
-        .take(MAX_ATTACHMENTS)
-        .map(|image| NewAttachment {
-            entity_type: ChannelMediaKind::Image.attachment_entity_type().to_owned(),
-            entity_id: image.static_file_id.clone(),
-            width: image.width.and_then(pixels),
-            height: image.height.and_then(pixels),
-        })
-        .collect()
+/// Take the attachment markers out of a reply's passages and answer, so
+/// the message reads without them and carries the files they name.
+fn take_markers(
+    segments: &mut [ProjectedSegment],
+    outcome: Option<&mut ReplyOutcome>,
+) -> Vec<AttachmentMarker> {
+    let mut markers = Vec::new();
+    let texts = segments
+        .iter_mut()
+        .filter_map(|segment| segment.text.as_mut())
+        .chain(outcome.and_then(|outcome| match outcome {
+            ReplyOutcome::Answered(text) => Some(text),
+            _ => None,
+        }));
+    for text in texts {
+        let (kept, taken) = take_attachment_markers(text);
+        *text = kept;
+        markers.extend(taken);
+    }
+    markers
+}
+
+/// The channel attachment for a file of `content_type`, when channels show
+/// that kind of file.
+fn media_kind(content_type: &str) -> Option<AttachmentKind> {
+    let essence = content_type.split(';').next()?.trim();
+    if essence.starts_with("image/") {
+        Some(AttachmentKind::Image)
+    } else if essence.starts_with("video/") {
+        Some(AttachmentKind::Video)
+    } else {
+        None
+    }
 }
 
 fn pixels(size: u32) -> Option<i32> {
     i32::try_from(size).ok().filter(|size| *size > 0)
 }
 
-/// Attach a reply's images, leaving the message's attachments alone when
-/// the turn generated none.
-fn attachment_change(images: &[GeneratedImage]) -> AttachmentChange {
-    if images.is_empty() {
+/// Replace a message's attachments with a reply's files, or leave them alone
+/// when the reply names none.
+fn attachment_change(attachments: Vec<NewAttachment>) -> AttachmentChange {
+    if attachments.is_empty() {
         AttachmentChange::Preserve
     } else {
-        AttachmentChange::Replace(image_attachments(images))
+        AttachmentChange::Replace(attachments)
     }
 }
 
@@ -327,28 +344,83 @@ fn announcement_reply_target(announcement: &SessionAnnouncement) -> AgentAnnounc
 }
 
 /// Posts as the session bot with the invoking user's current parent capability.
-pub struct MessageAnnouncer<Access> {
+pub struct MessageAnnouncer<Access, Files> {
     messages: Arc<dyn MessageCommands>,
     access: Arc<Access>,
     lexical: LexicalClient,
+    files: Files,
 }
 
-impl<Access> MessageAnnouncer<Access> {
-    /// Compose the common message service, authorization service, and Markdown composer.
+impl<Access, Files> MessageAnnouncer<Access, Files> {
+    /// Compose the common message service, authorization service, Markdown
+    /// composer, and the static files a reply's attachment markers name.
     pub fn new(
         messages: Arc<dyn MessageCommands>,
         access: Arc<Access>,
         lexical: LexicalClient,
+        files: Files,
     ) -> Self {
         Self {
             messages,
             access,
             lexical,
+            files,
         }
     }
 }
 
-impl<Access: EntityAccessService> MessageAnnouncer<Access> {
+impl<Access: EntityAccessService, Files: ReplyFiles> MessageAnnouncer<Access, Files> {
+    /// The attachments a reply's markers ask for, in order: each file once,
+    /// only static images and videos of the kind the marker says,
+    /// sized so the message reserves their space, up to the message limit.
+    /// A marker naming anything else attaches nothing rather than failing
+    /// the reply.
+    async fn attachments(&self, markers: Vec<AttachmentMarker>) -> Vec<NewAttachment> {
+        let mut attachments: Vec<NewAttachment> = Vec::new();
+        for marker in markers {
+            if attachments.len() == MAX_ATTACHMENTS {
+                tracing::warn!("a reply named more files than a message carries");
+                break;
+            }
+            let entity_id = marker.static_file_id.to_string();
+            if attachments
+                .iter()
+                .any(|attachment| attachment.entity_id == entity_id)
+            {
+                continue;
+            }
+            let content_type = match self.files.content_type(marker.static_file_id).await {
+                Ok(Some(content_type)) => content_type,
+                Ok(None) => {
+                    tracing::warn!(static_file_id = %marker.static_file_id, "a reply named a file that does not exist");
+                    continue;
+                }
+                Err(error) => {
+                    tracing::warn!(?error, static_file_id = %marker.static_file_id, "could not look up a file a reply named");
+                    continue;
+                }
+            };
+            let entity_type = match media_kind(&content_type) {
+                Some(kind) if kind == marker.kind => match kind {
+                    AttachmentKind::Image => ChannelMediaKind::Image,
+                    AttachmentKind::Video => ChannelMediaKind::Video,
+                },
+                _ => {
+                    tracing::warn!(static_file_id = %marker.static_file_id, %content_type, "a reply named a file that is not the media it said");
+                    continue;
+                }
+            }
+            .attachment_entity_type();
+            attachments.push(NewAttachment {
+                entity_type: entity_type.to_owned(),
+                entity_id,
+                width: marker.width.and_then(pixels),
+                height: marker.height.and_then(pixels),
+            });
+        }
+        attachments
+    }
+
     /// The bot's capability to write into `parent`, minted on the invoking
     /// user's current one: an author who may no longer write there gets
     /// nothing posted or patched in their name.
@@ -370,7 +442,7 @@ impl<Access: EntityAccessService> MessageAnnouncer<Access> {
     }
 }
 
-impl<Access> MessageAnnouncer<Access> {
+impl<Access, Files> MessageAnnouncer<Access, Files> {
     /// A chat agent's reply saying `body`, composed by Lexical.
     async fn compose_reply(
         &self,
@@ -384,7 +456,9 @@ impl<Access> MessageAnnouncer<Access> {
     }
 }
 
-impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> {
+impl<Access: EntityAccessService, Files: ReplyFiles> SessionAnnouncer
+    for MessageAnnouncer<Access, Files>
+{
     async fn announce(&self, announcement: SessionAnnouncement) -> Result<AnnouncedMessage> {
         let access = self
             .bot_write(
@@ -456,10 +530,11 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
         })
     }
 
-    async fn resolve(&self, resolution: ResolvedReply) -> Result<()> {
+    async fn resolve(&self, mut resolution: ResolvedReply) -> Result<()> {
         if resolution.is_coding {
             return Ok(());
         }
+        let markers = take_markers(&mut resolution.segments, Some(&mut resolution.outcome));
         let access = self
             .bot_write(
                 resolution.bot_id,
@@ -483,7 +558,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
             body,
             AgentChatReplyBody::Markdown { .. } | AgentChatReplyBody::Segments { .. }
         );
-        let attachments = attachment_change(&generated_images(&resolution.segments));
+        let attachments = attachment_change(self.attachments(markers).await);
         let patch = |content| MessagePatch {
             notification_policy,
             content: Some(content),
@@ -581,7 +656,9 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
         Ok(())
     }
 
-    async fn present(&self, presentation: ReplyPresentation) -> Result<()> {
+    async fn present(&self, mut presentation: ReplyPresentation) -> Result<()> {
+        let markers = take_markers(&mut presentation.segments, presentation.outcome.as_mut());
+        let attachments = self.attachments(markers).await;
         let access = self
             .bot_write(
                 presentation.bot_id,
@@ -609,7 +686,6 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
             .await
             .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
         let message_id = presentation.message_id;
-        let attachments = image_attachments(&presentation.images);
         // Posted under its allocated id; a message already there under it is
         // the same reply shown before, and is returned instead.
         let shown = self
@@ -660,7 +736,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                     } else {
                         PatchMessageNotificationPolicy::Default
                     },
-                    attachments: attachment_change(&presentation.images),
+                    attachments: attachment_change(attachments),
                     ..Default::default()
                 },
             )

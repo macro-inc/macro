@@ -13,7 +13,6 @@ fn prose(index: u32, text: Option<&str>) -> ProjectedSegment {
             rows: Vec::new(),
         },
         text: text.map(str::to_owned),
-        images: Vec::new(),
     }
 }
 
@@ -35,7 +34,6 @@ fn activity(index: u32, sealed: bool, rows: usize) -> ProjectedSegment {
                 .collect(),
         },
         text: None,
-        images: Vec::new(),
     }
 }
 
@@ -50,7 +48,6 @@ fn interaction(index: u32) -> ProjectedSegment {
             rows: Vec::new(),
         },
         text: None,
-        images: Vec::new(),
     }
 }
 

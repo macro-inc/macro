@@ -6,9 +6,7 @@
 //! plan as the reply grows; the announcer chooses the words around the
 //! segments and composes their nodes.
 
-use agent_fold::domain::model::{
-    ActivityRow, ActivityStatus, GeneratedImage, ProjectedSegment, SegmentKind,
-};
+use agent_fold::domain::model::{ActivityRow, ActivityStatus, ProjectedSegment, SegmentKind};
 
 #[cfg(test)]
 mod test;
@@ -118,20 +116,4 @@ pub fn closed(mut segments: Vec<ProjectedSegment>) -> Vec<ProjectedSegment> {
         }
     }
     segments
-}
-
-/// The images a reply's tool calls generated, each once, in the order the
-/// turn made them.
-#[must_use]
-pub fn generated_images(segments: &[ProjectedSegment]) -> Vec<GeneratedImage> {
-    let mut images: Vec<GeneratedImage> = Vec::new();
-    for image in segments.iter().flat_map(|segment| &segment.images) {
-        if !images
-            .iter()
-            .any(|seen| seen.static_file_id == image.static_file_id)
-        {
-            images.push(image.clone());
-        }
-    }
-    images
 }

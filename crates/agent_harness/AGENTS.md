@@ -97,6 +97,12 @@ wakes; interrupted quiet batches return to the next real prompt.
   Background channel messages are not attached. `trigger_router` fills each
   context attachment's `url` from `StaticFileLinks`, and `<m-agent-context>`
   lists them per message; ACP `resource_link`s are what vision models fetch.
+- A reply's `<m-attachment>` markers (`lexical_client::attachment_marker`) become
+  the posted message's attachments in `outbound/channel_announcer.rs`: taken
+  out of the text outside code, checked against static file metadata
+  (`ReplyFiles`: the file exists and is the image or video the marker says), deduped and
+  capped at the message limit. Every runtime gets this, since it reads the
+  reply text.
 
 ## Related
 

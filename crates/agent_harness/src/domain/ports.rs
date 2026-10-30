@@ -305,6 +305,15 @@ pub trait SessionAnnouncer: Send + Sync + 'static {
     ) -> impl Future<Output = Result<()>> + Send;
 }
 
+/// The static files a reply may attach, looked up before it is posted.
+pub trait ReplyFiles: Send + Sync + 'static {
+    /// The media type of a static file; `None` when no such file exists.
+    fn content_type(
+        &self,
+        static_file_id: macro_uuid::Uuid,
+    ) -> impl Future<Output = Result<Option<String>>> + Send;
+}
+
 /// Told when a tool call in a session's turn starts or stops waiting for the
 /// owner's approval, so the thread that prompted the turn can be told.
 ///
