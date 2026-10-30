@@ -16,6 +16,7 @@ import { ChannelMessage } from '@channel/Message/ChannelMessage';
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import type { MessageData } from '@core/messages/types';
 import {
+  type AgentChatReply,
   type AgentChatReplyBody,
   type AgentReplySegment,
   composeAgentChatReply,
@@ -34,7 +35,7 @@ import type {
 import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME } from '@theme/constants';
 import { clearThemePreview, previewTheme } from '@theme/utils/themeUtils';
 import { Button, Tabs } from '@ui';
-import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
+import { createSignal, For, Index, type JSX, onCleanup, Show } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { LiveTail } from '../components/live-tail';
 import { TypingRow } from '../components/typing-row';
@@ -55,8 +56,6 @@ type Scenario = {
   stop?: StopReason;
   /** The closing line the harness writes for a turn without an answer. */
   footer?: string;
-  /** A thread reply leads with the session link. */
-  link?: boolean;
 };
 
 /**
@@ -321,7 +320,7 @@ const SCENARIOS: Scenario[] = [
   {
     id: 'thinking',
     title: 'Before the first step',
-    note: 'The channel shows the Thinking spinner; the session shows its working line.',
+    note: 'A thread reply shows the Thinking spinner; a DM posts nothing yet, only the typing row.',
     parts: [],
     inFlight: true,
   },
@@ -374,14 +373,6 @@ const SCENARIOS: Scenario[] = [
     note: 'A sealed run as "Used N tools"; mentions in the accent color.',
     parts: [SEARCH_DOCS, READ_DOC, text(ANSWER)],
     inFlight: false,
-  },
-  {
-    id: 'thread-reply',
-    title: 'Answered in a thread',
-    note: 'A thread reply leads with the session link on the sender line.',
-    parts: [SEARCH_SKILLS, READ_DOC, text(ANSWER)],
-    inFlight: false,
-    link: true,
   },
   {
     id: 'single',
@@ -716,60 +707,103 @@ function foldedReply(scenario: Scenario): FoldedMessage {
 }
 
 /**
- * The reply as the server posts it (agent_harness `segments_body`): stored
- * rows never carry details, which only a reader of the live session sees.
+ * A passage or a run of steps as a posted message stores it. Stored rows
+ * never carry details, which only a reader of the live session sees.
  */
-function replyBody(scenario: Scenario, reader: boolean): AgentChatReplyBody {
-  if (scenario.parts.length === 0) {
-    return scenario.inFlight
-      ? { kind: 'pending' }
-      : { kind: 'markdown', markdown: scenario.footer ?? '' };
+function storedSegment(
+  scenario: Scenario,
+  segment: Segment,
+  reader: boolean
+): AgentReplySegment | undefined {
+  const parts = scenario.parts.slice(segment.start, segment.end);
+  if (segment.kind === 'prose') {
+    // An unfinished passage is not posted; it streams in the typing row.
+    if (!segment.sealed) return undefined;
+    const markdown = parts
+      .flatMap((part) => (part.kind === 'text' ? [part.text] : []))
+      .join('\n\n');
+    return { kind: 'prose', markdown };
   }
-  const segments = segmentsOf(scenario.parts, scenario.inFlight).flatMap(
-    (segment): AgentReplySegment[] => {
-      const parts = scenario.parts.slice(segment.start, segment.end);
-      if (segment.kind === 'prose') {
-        // The passage still being written streams in the typing row.
-        if (!segment.sealed) return [];
-        const markdown = parts
-          .flatMap((part) => (part.kind === 'text' ? [part.text] : []))
-          .join('\n\n');
-        return [{ kind: 'prose', markdown }];
-      }
-      return [
-        {
-          kind: 'activity',
-          turn: 1,
-          segment: segment.index,
-          sealed: segment.sealed,
-          rows: segment.rows.map((row) => ({
-            id: row.id,
-            label: row.label,
-            status: row.status,
-            ...(reader && !segment.sealed && row.detail
-              ? { detail: row.detail }
-              : {}),
-          })),
-        },
-      ];
-    }
-  );
+  if (segment.kind !== 'activity') return undefined;
   return {
-    kind: 'segments',
-    segments,
-    pending: scenario.inFlight,
-    footer: scenario.footer,
+    kind: 'activity',
+    turn: 1,
+    segment: segment.index,
+    sealed: segment.sealed,
+    rows: segment.rows.map((row) => ({
+      id: row.id,
+      label: row.label,
+      status: row.status,
+      ...(reader && !segment.sealed && row.detail
+        ? { detail: row.detail }
+        : {}),
+    })),
   };
 }
 
-function channelMessage(scenario: Scenario, reader: boolean): MessageData {
+/**
+ * The messages a reply posts (agent_harness `present.rs`). A thread reply is
+ * one message that leads with the session link and shows the spinner while
+ * the turn runs. A DM posts a message per finished passage with the steps
+ * after it attached, and nothing until there is something to show.
+ */
+function replyMessages(
+  scenario: Scenario,
+  conversation: Conversation,
+  reader: boolean
+): AgentChatReply[] {
+  const stored = segmentsOf(scenario.parts, scenario.inFlight).flatMap(
+    (segment) => storedSegment(scenario, segment, reader) ?? []
+  );
+  if (conversation === 'thread') {
+    const body: AgentChatReplyBody =
+      stored.length > 0
+        ? {
+            kind: 'segments',
+            segments: stored,
+            pending: scenario.inFlight,
+            footer: scenario.footer,
+          }
+        : scenario.inFlight
+          ? { kind: 'pending' }
+          : { kind: 'markdown', markdown: scenario.footer ?? '' };
+    return [{ sessionId: SESSION, link: true, body }];
+  }
+  const messages: AgentReplySegment[][] = [];
+  for (const segment of stored) {
+    const last = messages.at(-1);
+    if (segment.kind === 'prose' || !last) messages.push([segment]);
+    else last.push(segment);
+  }
+  if (messages.length === 0) {
+    return scenario.footer && !scenario.inFlight
+      ? [
+          {
+            sessionId: SESSION,
+            link: false,
+            body: { kind: 'markdown', markdown: scenario.footer },
+          },
+        ]
+      : [];
+  }
+  return messages.map((segments, index) => ({
+    sessionId: SESSION,
+    link: false,
+    body: {
+      kind: 'segments',
+      segments,
+      footer:
+        !scenario.inFlight && index === messages.length - 1
+          ? scenario.footer
+          : undefined,
+    },
+  }));
+}
+
+function channelMessage(reply: AgentChatReply, id: string): MessageData {
   return {
-    id: `playground-${scenario.id}`,
-    content: composeAgentChatReply({
-      sessionId: SESSION,
-      link: scenario.link ?? false,
-      body: replyBody(scenario, reader),
-    }),
+    id,
+    content: composeAgentChatReply(reply),
     sender_id: `bot|${MACRO_AGENT_BOT_ID}`,
     sender: {
       id: MACRO_AGENT_BOT_ID,
@@ -787,6 +821,7 @@ function channelMessage(scenario: Scenario, reader: boolean): MessageData {
 type Theme = 'app' | 'light' | 'dark';
 type Viewer = 'reader' | 'member';
 type Width = 'wide' | 'phone';
+type Conversation = 'thread' | 'dm';
 
 function Choice<T extends string>(props: {
   label: string;
@@ -819,15 +854,35 @@ function Surface(props: { label: string; children: JSX.Element }) {
   );
 }
 
-/** The channel: the reply's message, and the typing row while it runs. */
-function ChannelColumn(props: { scenario: Scenario; reader: boolean }) {
+/** The conversation: the reply's messages, and the typing row while it runs. */
+function ChannelColumn(props: {
+  scenario: Scenario;
+  conversation: Conversation;
+  reader: boolean;
+}) {
   const reply = () => foldedReply(props.scenario);
+  const messages = () =>
+    replyMessages(props.scenario, props.conversation, props.reader).map(
+      (message, index) =>
+        channelMessage(message, `playground-${props.scenario.id}-${index}`)
+    );
   return (
     <>
-      <ChannelMessage
-        message={channelMessage(props.scenario, props.reader)}
-        hideTriggeredBy
-      />
+      {/* By position, as the server reuses a reply's n-th message. */}
+      <Index each={messages()}>
+        {(message, index) => (
+          <ChannelMessage
+            message={message()}
+            listMeta={{
+              index,
+              isNewMessage: false,
+              isFirstNewMessage: false,
+              isGroupedWithPrevious: index > 0,
+            }}
+            hideTriggeredBy
+          />
+        )}
+      </Index>
       <Show when={props.scenario.inFlight}>
         <TypingRow
           avatar={
@@ -863,6 +918,7 @@ function SessionColumn(props: { scenario: Scenario }) {
 
 function ScenarioRow(props: {
   scenario: Scenario;
+  conversation: Conversation;
   reader: boolean;
   phone: boolean;
   controls?: JSX.Element;
@@ -885,8 +941,12 @@ function ScenarioRow(props: {
           'grid-cols-1 xl:grid-cols-2': !props.phone,
         }}
       >
-        <Surface label="Channel">
-          <ChannelColumn scenario={props.scenario} reader={props.reader} />
+        <Surface label={props.conversation === 'thread' ? 'Thread' : 'DM'}>
+          <ChannelColumn
+            scenario={props.scenario}
+            conversation={props.conversation}
+            reader={props.reader}
+          />
         </Surface>
         <Surface label="Agent session">
           <SessionColumn scenario={props.scenario} />
@@ -896,7 +956,11 @@ function ScenarioRow(props: {
   );
 }
 
-function ReplayRow(props: { reader: boolean; phone: boolean }) {
+function ReplayRow(props: {
+  conversation: Conversation;
+  reader: boolean;
+  phone: boolean;
+}) {
   const [frame, setFrame] = createSignal(0);
   const [playing, setPlaying] = createSignal(true);
   const timer = setInterval(() => {
@@ -912,6 +976,7 @@ function ReplayRow(props: { reader: boolean; phone: boolean }) {
   return (
     <ScenarioRow
       scenario={scenario()}
+      conversation={props.conversation}
       reader={props.reader}
       phone={props.phone}
       controls={
@@ -963,6 +1028,7 @@ export default function ProgressPlayground() {
   const [theme, setTheme] = createSignal<Theme>('app');
   const [viewer, setViewer] = createSignal<Viewer>('reader');
   const [width, setWidth] = createSignal<Width>('wide');
+  const [conversation, setConversation] = createSignal<Conversation>('thread');
   const phone = () => width() === 'phone';
   let scenarios: HTMLDivElement | undefined;
 
@@ -989,11 +1055,20 @@ export default function ProgressPlayground() {
           onChange={applyPreview}
         />
         <Choice
+          label="Conversation"
+          value={conversation()}
+          options={[
+            { value: 'thread', label: 'Thread' },
+            { value: 'dm', label: 'DM' },
+          ]}
+          onChange={setConversation}
+        />
+        <Choice
           label="Viewer"
           value={viewer()}
           options={[
             { value: 'reader', label: 'Can open session' },
-            { value: 'member', label: 'Thread member' },
+            { value: 'member', label: "Can't open session" },
           ]}
           onChange={setViewer}
         />
@@ -1036,11 +1111,16 @@ export default function ProgressPlayground() {
         </nav>
       </div>
       <div ref={scenarios} class="px-6 pb-16">
-        <ReplayRow reader={viewer() === 'reader'} phone={phone()} />
+        <ReplayRow
+          conversation={conversation()}
+          reader={viewer() === 'reader'}
+          phone={phone()}
+        />
         <For each={SCENARIOS}>
           {(scenario) => (
             <ScenarioRow
               scenario={scenario}
+              conversation={conversation()}
               reader={viewer() === 'reader'}
               phone={phone()}
             />
