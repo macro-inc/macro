@@ -29,6 +29,7 @@ import {
   splitContentFromLocation,
   upgradeLegacyPath,
 } from '@components/app/split-layout/split-router/legacy-route';
+import { useIsAuthenticated } from '@core/auth';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { lazyNamed } from '@core/util/lazyNamed';
@@ -180,6 +181,7 @@ function debugView(componentId: string) {
 }
 
 export function AppRouterView() {
+  const isAuthenticated = useIsAuthenticated();
   const debugRouteElements = debugRoutes.map(({ componentId, route }) => (
     <Route definition={route} component={debugView(componentId)} />
   ));
@@ -202,6 +204,7 @@ export function AppRouterView() {
           route: paneRoute({ id: 'view-home', params: {} }),
         }),
         stacked: isNativeMobilePlatform,
+        singlePane: () => isAuthenticated() === false,
       })}
       middleware={createAppSplitRouterMiddleware({ isTouchDevice })}
       globalSearch={['referral_code']}

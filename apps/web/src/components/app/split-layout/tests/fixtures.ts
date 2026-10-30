@@ -48,7 +48,8 @@ const routes: SplitRoutes = {
  */
 export function createRoutedSplitLayout(
   orchestrator: BlockOrchestrator,
-  url: string
+  url: string,
+  options: { singlePane?: () => boolean } = {}
 ): SplitManager {
   let manager: SplitManager | undefined;
   const router = createSplitRouter({
@@ -60,6 +61,7 @@ export function createRoutedSplitLayout(
       toContent: splitContentFromLocation,
       defaultLocation: () => homeLocation,
       stacked: () => false,
+      singlePane: options.singlePane ?? (() => false),
     }),
   });
   manager = createSplitLayout(orchestrator, {

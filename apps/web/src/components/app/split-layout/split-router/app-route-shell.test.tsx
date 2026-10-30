@@ -7,6 +7,7 @@ const [authenticated, setAuthenticated] = createSignal<boolean | undefined>();
 const navigate = vi.fn();
 const mountView = vi.fn();
 const mountPending = vi.fn();
+const mountVisitor = vi.fn();
 
 vi.mock('@core/auth', () => ({ useIsAuthenticated: () => authenticated }));
 vi.mock('@solidjs/router', () => ({ useNavigate: () => navigate }));
@@ -19,7 +20,7 @@ vi.mock('@app/lib/split-router', () => ({
 }));
 vi.mock('../layoutUtils', () => ({ useSplitPanelOrThrow: () => ({}) }));
 
-import { withAuth } from './app-route-shell';
+import { withAuth, withVisitor } from './app-route-shell';
 
 const Gated = withAuth(
   () => {
@@ -76,6 +77,31 @@ it('waits for identity before mounting the view or the sign-in actions', () => {
   setAuthenticated(false);
   fireEvent.click(screen.getByRole('button', { name: 'Login' }));
   expect(navigate).toHaveBeenCalledWith('/login?referral_code=r1');
+  setAuthenticated(true);
+  expect(mountView).toHaveBeenCalledOnce();
+});
+
+it('gives a caller with no account the visitor view, never the account view', () => {
+  const View = withVisitor(
+    () => {
+      mountView();
+      return <div />;
+    },
+    () => {
+      mountVisitor();
+      return <div />;
+    },
+    () => {
+      mountPending();
+      return <div />;
+    }
+  );
+  render(() => <View />);
+
+  expect(mountPending).toHaveBeenCalledOnce();
+  setAuthenticated(false);
+  expect(mountVisitor).toHaveBeenCalledOnce();
+  expect(mountView).not.toHaveBeenCalled();
   setAuthenticated(true);
   expect(mountView).toHaveBeenCalledOnce();
 });

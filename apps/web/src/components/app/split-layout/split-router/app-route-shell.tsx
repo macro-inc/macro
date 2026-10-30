@@ -1,5 +1,7 @@
+import { ViewShell } from '@app/components/view-shell';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { isRecord, type PaneId, useSplitRouter } from '@app/lib/split-router';
+import { SplitPanel } from '@components/app/split-panel';
 import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { LoginButton } from '@core/component/TopBar/LoginButton';
@@ -10,7 +12,9 @@ import {
   type JSX,
   Match,
   onMount,
+  type ParentProps,
   Show,
+  Suspense,
   Switch,
 } from 'solid-js';
 import type { SplitContent } from '../layoutManager';
@@ -24,7 +28,7 @@ export function usePageViewTracking(pageTitle: string) {
   });
 }
 
-function SignedOutRoute() {
+export function SignedOutRoute() {
   return (
     <EmptyStatePanel
       centered
@@ -60,6 +64,47 @@ export function withAuth<P extends object>(
       </Switch>
     );
   };
+}
+
+/**
+ * `View` for an account; `Visitor` for a caller with no account, who reads
+ * only what a link opens and never mounts the view's account-only lists.
+ */
+export function withVisitor<P extends object>(
+  View: Component<P>,
+  Visitor: Component,
+  Pending?: Component
+): Component<P> {
+  const Authenticated = withAuth(View, Pending);
+  return (props) => {
+    const authenticated = useIsAuthenticated();
+    return (
+      <Show
+        when={authenticated() === false}
+        fallback={<Authenticated {...props} />}
+      >
+        <Visitor />
+      </Show>
+    );
+  };
+}
+
+/**
+ * The frame a visitor reads one item in: a single panel holding the route's
+ * nested detail, with no list or sidebar beside it.
+ */
+export function VisitorDetail(props: ParentProps) {
+  return (
+    <SplitPanel.Root>
+      <SplitPanel.Body>
+        <ViewShell.Root>
+          <ViewShell.Main>
+            <Suspense fallback={<LoadingBlock />}>{props.children}</Suspense>
+          </ViewShell.Main>
+        </ViewShell.Root>
+      </SplitPanel.Body>
+    </SplitPanel.Root>
+  );
 }
 
 export function RedirectSplit(props: {
