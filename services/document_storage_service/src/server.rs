@@ -1642,6 +1642,7 @@ pub async fn run() -> anyhow::Result<()> {
             ),
         )
         .with_favorites(favorites_service.clone())
+        .with_project_access(entity_access_service.clone())
         .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(
             readonly_db.clone(),
         )),

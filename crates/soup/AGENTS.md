@@ -77,6 +77,13 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   grant public and team links that listings leave out. Keep viewer columns
   (view history, task importance) nullable there; the viewer may have no
   account.
+- A project contains its tasks. When a request's property filter requires
+  one project and the caller can view it (`domain/service/project_scope.rs`,
+  checked through entity access), Soup sets the server-only
+  `EntityFilterAst::viewable_project`, and the expanded document listing
+  admits that project's tasks without a grant on each
+  (`project_tasks_semi_join`). Clients can't set the field; inbound adapters
+  leave it `None`. Realtime patches still reach only a task's own grantees.
 - Queries over a known id list (`*/by_ids.rs`, hydration) and the initiative
   listing (`initiative_access_clause`) check access per row with `EXISTS` on
   `entity_access`, matching sources with `= ANY(ARRAY(SELECT ...))` so they are

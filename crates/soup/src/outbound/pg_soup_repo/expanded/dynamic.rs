@@ -1322,7 +1322,29 @@ fn document_top_clause(sort_method: SimpleSortMethod, needs_sub_type_join: bool)
     )
 }
 
-fn document_top_where_clause(sort_method: SimpleSortMethod) -> String {
+/// Tasks of a project Soup has confirmed the viewer can view, listed without
+/// a grant on each task. The project id is a literal so a generic plan can
+/// prove the partial predicate of `idx_ep_project_value_gin`; it is a parsed
+/// `Uuid`, safe to interpolate.
+fn project_tasks_semi_join(id_sql: &str, project: Uuid) -> String {
+    format!(
+        r#"{id_sql} IN (
+                    SELECT ep.entity_id
+                    FROM entity_properties ep
+                    WHERE ep.property_definition_id = '{definition}'
+                      AND ep.entity_type = 'TASK'
+                      AND ep.values -> 'value' @> jsonb_build_array(jsonb_build_object(
+                          'entity_id', '{project}', 'entity_type', 'INITIATIVE'
+                      ))
+                )"#,
+        definition = SystemPropertyKey::PROJECT_UUID,
+    )
+}
+
+fn document_top_where_clause(
+    sort_method: SimpleSortMethod,
+    viewable_project: Option<Uuid>,
+) -> String {
     let user_history_join = if top_needs_user_history(sort_method) {
         r#"                LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
 "#
@@ -1333,7 +1355,14 @@ fn document_top_where_clause(sort_method: SimpleSortMethod) -> String {
         r#"{user_history_join}                WHERE d."deletedAt" IS NULL
                 AND {}
 "#,
-        access_semi_join("d.id", "document")
+        match viewable_project {
+            None => access_semi_join("d.id", "document"),
+            Some(project) => format!(
+                "({} OR {})",
+                access_semi_join("d.id", "document"),
+                project_tasks_semi_join("d.id", project)
+            ),
+        }
     )
 }
 
@@ -1523,7 +1552,10 @@ fn build_query<'a>(
         if needs_task_property_joins {
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
-        builder.push(document_top_where_clause(sort_method));
+        builder.push(document_top_where_clause(
+            sort_method,
+            filter_ast.viewable_project,
+        ));
         builder.push(build_document_filter(document_filter, Some(document_ids)));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -2192,7 +2224,10 @@ fn build_grouped_query<'a>(
         if document_filter_needs_task_property_joins(filter_ast.document_filter.as_deref()) {
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
-        builder.push(document_top_where_clause(sort_method));
+        builder.push(document_top_where_clause(
+            sort_method,
+            filter_ast.viewable_project,
+        ));
         builder.push(build_document_filter(
             filter_ast.document_filter.as_deref(),
             Some(document_ids),

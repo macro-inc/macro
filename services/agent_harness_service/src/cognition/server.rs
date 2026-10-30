@@ -278,7 +278,8 @@ pub async fn build(
             crm::domain::service::NoOpCrmService,
             github_pull_request_service,
         )
-        .with_favorites(favorites_service.clone()),
+        .with_favorites(favorites_service.clone())
+        .with_project_access(entity_access_service.clone()),
     );
 
     tracing::info!("initialized soup service");

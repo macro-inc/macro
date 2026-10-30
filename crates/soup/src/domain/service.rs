@@ -69,6 +69,7 @@ use uuid::Uuid;
 mod agent_metadata;
 mod crm_association;
 mod favorites;
+mod project_scope;
 mod viewable;
 
 #[cfg(test)]
@@ -223,6 +224,7 @@ pub struct SoupImpl<T, U, V, C, K, Crm, F> {
     /// Optional captured branch facts supplied by the owning changes domain.
     agent_branches: Option<Arc<dyn agent_changes::domain::ports::SessionBranchReader>>,
     favorites: Option<Arc<dyn favorites::FavoriteReader>>,
+    projects: Option<Arc<dyn project_scope::ProjectViewer>>,
 }
 
 impl<T, U, V, C, K, Crm, F> SoupImpl<T, U, V, C, K, Crm, F>
@@ -257,6 +259,7 @@ where
             github_pull_request_service,
             agent_branches: None,
             favorites: None,
+            projects: None,
         }
     }
 
@@ -276,6 +279,31 @@ where
     ) -> Self {
         self.favorites = Some(Arc::new(favorites::Reader(service)));
         self
+    }
+
+    /// Attach entity access so a request for one project's tasks lists all
+    /// of them to anyone who can view the project.
+    pub fn with_project_access<S: entity_access::domain::ports::EntityAccessService>(
+        mut self,
+        service: Arc<S>,
+    ) -> Self {
+        self.projects = Some(Arc::new(project_scope::Reader(service)));
+        self
+    }
+
+    /// The project `ast` requires, when the caller can view it.
+    async fn viewable_project(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        ast: Option<&EntityFilterAst>,
+    ) -> Result<Option<Uuid>, SoupErr> {
+        let (Some(projects), Some(project)) = (
+            &self.projects,
+            ast.and_then(project_scope::required_project),
+        ) else {
+            return Ok(None);
+        };
+        Ok(projects.can_view(user, project).await?.then_some(project))
     }
 
     async fn favorite_entities(
@@ -1669,6 +1697,11 @@ where
                 .cursor
                 .map(|ast| ast.map(|ast| favorites::apply(ast, entities)));
         }
+        if let Some(project) = self.viewable_project(&req.user, req.entity_ast()).await? {
+            req.cursor = req
+                .cursor
+                .map(|ast| ast.map(|ast| project_scope::apply(ast, project)));
+        }
         // CRM associations resolve to complete entity sets, so they only
         // compose with the timestamp-sorted sources that take those sets.
         let crm_record = req.entity_ast().and_then(|ast| ast.crm_association);
@@ -2047,6 +2080,14 @@ where
             req.cursor = req
                 .cursor
                 .map_filter(|ast| favorites::apply(ast, &entities));
+        }
+        if let Some(project) = self
+            .viewable_project(&user_id, Some(req.cursor.filter()))
+            .await?
+        {
+            req.cursor = req
+                .cursor
+                .map_filter(|ast| project_scope::apply(ast, project));
         }
         // Grouped queries carry no team receipt, so associations resolve
         // under the viewer's own CRM teams.
