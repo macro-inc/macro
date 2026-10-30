@@ -1442,6 +1442,31 @@ fn project_top_where_clause() -> String {
     )
 }
 
+/// The most `source_items` rows the per-source scans of one page may read. Each of the user's
+/// sources contributes up to a page, so a user with many sources reads more rows that way than the
+/// item tables, which read each visible item once; past this the query reads the item tables.
+const SOURCE_SCAN_ROWS: i64 = 5_000;
+
+/// How many sources `user_source_ids` lists for the user.
+async fn source_count(
+    connection: &mut sqlx::PgConnection,
+    user_id: &str,
+) -> Result<i64, sqlx::Error> {
+    let span = tracing::info_span!("soup.source_items.sources", sources = tracing::field::Empty);
+    let sources = sqlx::query_scalar!(
+        r#"SELECT 1
+                + (SELECT count(*) FROM comms_channel_participants
+                   WHERE user_id = $1 AND left_at IS NULL)
+                + (SELECT count(*) FROM team_user WHERE user_id = $1) AS "sources!""#,
+        user_id
+    )
+    .fetch_one(connection)
+    .instrument(span.clone())
+    .await?;
+    span.record("sources", sources);
+    Ok(sources)
+}
+
 /// Where `build_query` finds documents, chats and projects.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ItemSource {
@@ -2083,6 +2108,23 @@ async fn expanded_dynamic_cursor_soup_hydrated(
     let assignees_property_id = SystemPropertyKey::ASSIGNEES_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
+    let mut connection = db
+        .acquire()
+        .instrument(tracing::info_span!(
+            "soup.pool.acquire",
+            pool_size = db.size(),
+            pool_idle = db.num_idle()
+        ))
+        .await?;
+    let item_source = if item_source == ItemSource::SourceItems
+        && Feed::serves(*cursor.sort_method())
+        && source_count(&mut connection, user_id.as_ref()).await? * query_limit > SOURCE_SCAN_ROWS
+    {
+        ItemSource::ItemTables
+    } else {
+        item_source
+    };
+
     // Document id arrays follow the eight fixed binds.
     let mut document_ids = DocumentIdArrays::starting_at(9);
     let mut builder = build_query(
@@ -2106,14 +2148,6 @@ async fn expanded_dynamic_cursor_soup_hydrated(
     for ids in document_ids.into_binds() {
         query = query.bind(ids);
     }
-    let mut connection = db
-        .acquire()
-        .instrument(tracing::info_span!(
-            "soup.pool.acquire",
-            pool_size = db.size(),
-            pool_idle = db.num_idle()
-        ))
-        .await?;
     let query_span = tracing::info_span!("soup.sql.fetch_decode", rows = tracing::field::Empty);
     let items = query
         // Unnamed statement: the SQL text varies per filter shape and per

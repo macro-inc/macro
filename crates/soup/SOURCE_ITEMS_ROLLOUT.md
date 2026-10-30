@@ -109,7 +109,9 @@ driver for the viewer's own documents, id and project lookups, notifications)
 or cannot be selective (a negated literal, or a disjunction with such a side).
 Otherwise, for example a filter on another user's documents, a property value,
 a creation date or a name, that arm reads its item table in the same query, as
-it would with the projection disabled.
+it would with the projection disabled. A user with many sources reads up to a
+page from each, so when sources × page size exceeds 5,000 rows the whole query
+reads the item tables, which read each visible item once.
 
 Soup's query tests run every case on both paths and require identical pages,
 and assert the projection is exact after every fixture. `crates/source_items`

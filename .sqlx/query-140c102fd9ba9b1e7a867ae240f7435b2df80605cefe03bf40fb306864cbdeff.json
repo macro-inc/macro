@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT 1\n                + (SELECT count(*) FROM comms_channel_participants\n                   WHERE user_id = $1 AND left_at IS NULL)\n                + (SELECT count(*) FROM team_user WHERE user_id = $1) AS \"sources!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sources!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "140c102fd9ba9b1e7a867ae240f7435b2df80605cefe03bf40fb306864cbdeff"
+}
