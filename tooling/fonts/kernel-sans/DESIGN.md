@@ -12,6 +12,13 @@ wins; note the exception in a comment.
 - Round lowercase overshoots `P.OS` (10) at baseline and x-height; round
   capitals and figures overshoot `P.COS` (12). Arch tops overshoot `0.8 * OS`.
 - Lining figures at cap height, tabular (one shared advance).
+- Hyphens, dashes and math operators centre on `P.AXIS` (300); their `.case`
+  forms, used with capitals and figures, on `P.CASE_AXIS` (360).
+- Marks: lowercase accents sit between about x-height + 70 and 790; `.case`
+  accents for capitals between about cap height + 50 and 930.
+- A glyph whose visual top centre is not its bounding-box centre (y, a, f, r,
+  J, ...) sets `G(anchors={"top": x})` (and `"bottom"` where cedilla or
+  ogonek would attach) so accented composites line up.
 - Strokes: lowercase verticals `p.stem`, round sides `p.stem * 1.03`,
   horizontals `p.hair`; capitals `p.cstem` / `p.chair`; figures `p.fstem` /
   `p.fhair`. Diagonals are drawn by perpendicular thickness about
@@ -38,7 +45,8 @@ wins; note the exception in a comment.
    - Curve terminals are cut horizontally (vertically when the stroke ends
      travelling horizontally, as in the hooks of f, t, j, r) and their outer
      corner is chamfered (`parts.open_bowl` does this; see `c`).
-   - Free ends of arms and bars (E, F, T, Z, t and f bars) stay square.
+   - Free ends of arms and bars (E, F, T, Z, t and f bars) stay square, and
+     so do the ends of diagonals (they are already angled).
 3. **Ink traps** at acute crotches where a curve or diagonal joins a stem or
    another stroke: n h m r u (shoulder), b d p q a g (bowl joins), k K (arm
    and leg), and the inner vertices of v w V W M N A. Depth `p.trap` (0 at

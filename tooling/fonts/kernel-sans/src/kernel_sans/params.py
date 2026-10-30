@@ -13,6 +13,8 @@ ASC = 760  # ascender of b d f h k l
 DESC = -200  # descender of g j p q y
 OS = 10  # overshoot of round lowercase at baseline and x-height
 COS = 12  # overshoot of round capitals at baseline and cap height
+AXIS = 300  # centre height of hyphens, dashes and math operators
+CASE_AXIS = 360  # the same for .case forms used with capitals and figures
 
 # Line metrics: 1.2 line height, like Inter.
 HHEA_ASC = 960
