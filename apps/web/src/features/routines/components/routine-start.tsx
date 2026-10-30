@@ -21,6 +21,7 @@ export function RoutineStart(props: {
           <For each={props.templates}>
             {(template) => (
               <RoutineTemplateCard
+                on="dialog"
                 template={template}
                 onUse={() => props.onTemplate(template)}
               />

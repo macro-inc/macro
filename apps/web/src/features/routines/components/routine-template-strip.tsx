@@ -5,7 +5,7 @@ import EnvelopeIcon from '@icon/system/regular/envelope-simple.svg';
 import FlagIcon from '@icon/system/regular/flag.svg';
 import PaperPlaneIcon from '@icon/system/regular/paper-plane-tilt.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
-import { Button, ComposerSurface, cn } from '@ui';
+import { Button, Card, ComposerSurface, cn } from '@ui';
 import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
@@ -45,36 +45,59 @@ function TemplateChain(props: { template: RoutineTemplate }) {
   );
 }
 
-/** A template as a raised card: what it is for, and what starts it and what it does. */
-export function RoutineTemplateCard(props: {
+/** What a template card shows: what it is for, and what starts it and what it does. */
+function TemplateCardButton(props: {
   template: RoutineTemplate;
   onUse(): void;
 }) {
   return (
-    <ComposerSurface
-      as="div"
-      class="min-w-0 rounded-xl touch:rounded-xl touch:border touch:border-edge-muted touch:bg-composer"
+    <button
+      type="button"
+      aria-label={`Start a routine from ${props.template.title}`}
+      class="flex size-full min-w-0 flex-col items-start gap-1.5 rounded-xl px-4 py-3.5 text-left outline-none not-touch:hover:bg-hover focus-visible:ring-2 focus-visible:ring-edge-focus"
+      onClick={() => props.onUse()}
     >
-      <button
-        type="button"
-        aria-label={`Start a routine from ${props.template.title}`}
-        class="flex size-full min-w-0 flex-col items-start gap-1.5 rounded-xl px-4 py-3.5 text-left outline-none not-touch:hover:bg-hover focus-visible:ring-2 focus-visible:ring-edge-focus"
-        onClick={() => props.onUse()}
+      <Dynamic
+        component={templateLook(props.template.key).icon}
+        class={cn('size-4 shrink-0', templateLook(props.template.key).tint)}
+        aria-hidden="true"
+      />
+      <span class="text-sm font-medium text-ink">{props.template.title}</span>
+      <span class="line-clamp-2 text-xs leading-4 text-ink-muted">
+        {props.template.description}
+      </span>
+      <span class="mt-1 min-w-0 max-w-full">
+        <TemplateChain template={props.template} />
+      </span>
+    </button>
+  );
+}
+
+/**
+ * A template as a raised card. On a page it sits on the composer surface the
+ * routine page uses; in a dialog it is one surface above the dialog's.
+ */
+export function RoutineTemplateCard(props: {
+  template: RoutineTemplate;
+  onUse(): void;
+  on: 'page' | 'dialog';
+}) {
+  return (
+    <Show
+      when={props.on === 'page'}
+      fallback={
+        <Card variant="filled" depth={3} class="min-w-0">
+          <TemplateCardButton template={props.template} onUse={props.onUse} />
+        </Card>
+      }
+    >
+      <ComposerSurface
+        as="div"
+        class="min-w-0 rounded-xl touch:rounded-xl touch:border touch:border-edge-muted touch:bg-composer"
       >
-        <Dynamic
-          component={templateLook(props.template.key).icon}
-          class={cn('size-4 shrink-0', templateLook(props.template.key).tint)}
-          aria-hidden="true"
-        />
-        <span class="text-sm font-medium text-ink">{props.template.title}</span>
-        <span class="line-clamp-2 text-xs leading-4 text-ink-muted">
-          {props.template.description}
-        </span>
-        <span class="mt-1 min-w-0 max-w-full">
-          <TemplateChain template={props.template} />
-        </span>
-      </button>
-    </ComposerSurface>
+        <TemplateCardButton template={props.template} onUse={props.onUse} />
+      </ComposerSurface>
+    </Show>
   );
 }
 
@@ -108,6 +131,7 @@ export function RoutineTemplateStrip(props: {
         <For each={props.templates}>
           {(template) => (
             <RoutineTemplateCard
+              on="page"
               template={template}
               onUse={() => props.onUse(template)}
             />

@@ -1,6 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
-import { Button, TextField } from '@ui';
+import { Button, Card, TextField } from '@ui';
 import { createSignal, Show } from 'solid-js';
 
 /** Describe a routine in words and let AI draft its triggers and steps. */
@@ -29,8 +29,9 @@ export function RoutineDescribe(props: {
   };
   return (
     <section aria-label="Describe your routine" class="grid gap-2">
-      {/* One box: the field draws the frame, the button sits inside it. */}
-      <div class="relative">
+      {/* One box on the surface above the dialog's, as the template cards
+          are; the field fills it and the button sits inside it. */}
+      <Card variant="filled" depth={3} class="relative">
         <TextField
           value={description()}
           onChange={setDescription}
@@ -43,7 +44,7 @@ export function RoutineDescribe(props: {
             autoResize
             rows={2}
             autofocus
-            class="min-h-28 px-3.5 pb-12 pt-3 text-[15px] leading-[22px]"
+            class="min-h-28 border-transparent bg-transparent px-3.5 pb-12 pt-3 text-[15px] leading-[22px] not-touch:shadow-none"
             placeholder="Describe what should happen, and when. “When an invoice arrives, label it Finance and make a task to pay it.”"
             onKeyDown={(event: KeyboardEvent) => {
               // Enter that confirms an IME candidate isn't a request yet.
@@ -62,7 +63,7 @@ export function RoutineDescribe(props: {
         <div class="absolute bottom-2.5 right-2.5">
           <Button
             size="md"
-            variant="accent"
+            variant="primary"
             disabled={props.disabled || pending() || !description().trim()}
             onClick={() => fireAndForget(submit(), 'routines')}
           >
@@ -70,7 +71,7 @@ export function RoutineDescribe(props: {
             {pending() ? 'Drafting…' : 'Draft it'}
           </Button>
         </div>
-      </div>
+      </Card>
       <Show when={error()}>
         {(message) => (
           <span role="alert" class="px-1 text-xs text-failure">
