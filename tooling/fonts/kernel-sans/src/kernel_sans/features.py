@@ -74,10 +74,10 @@ def feature_code(drawn, p):
         )
 
     # A colon between figures (09:30) rises to the figures' centre.
-    if "colon.case" in names:
-        figs = [f for f in FIGURES if f in names] + [
-            f + ".tf" for f in FIGURES if f + ".tf" in names
-        ]
+    figs = [f for f in FIGURES if f in names] + [
+        f + ".tf" for f in FIGURES if f + ".tf" in names
+    ]
+    if "colon.case" in names and figs:
         out.append(
             "feature calt {\n"
             f"  sub [{' '.join(figs)}] colon' [{' '.join(figs)}] by colon.case;\n"

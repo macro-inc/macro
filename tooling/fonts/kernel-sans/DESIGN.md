@@ -27,7 +27,9 @@ wins; note the exception in a comment.
   `0.95 * stem`; thinner diagonals of N, M, W, w about `0.9 * stem`.
 - Forms: double-storey a, single-storey g, straight-tailed y, k whose arm meets
   the stem, R with a straight leg from the bowl, G with a bar and no spur,
-  M with vertical sides, J sitting on the baseline, 1 without a base.
+  M with vertical sides, J sitting on the baseline, 1 without a base (the
+  tabular `one.tf` alone gets a base, as Inter's does, so its colour matches
+  the other tabular figures).
 - Widths are written at Regular and widened with weight through
   `p.w(regular_width, k)`: k ≈ 1 for straight two-stem letters, ≈ 0.6 for
   rounds (o e c s, O C G Q D, 0 6 8 9), ≈ 0.5 for one stem. Heavier weights
@@ -58,12 +60,15 @@ wins; note the exception in a comment.
    and leg), and the inner vertices of v w y V W M N A and the figures.
    - Where a curve leaves a stem (shoulders, bowls): `geom.stem_trap`, depth
      `1.3 * p.trap`.
-   - Where a straight stroke leaves a stem (M N Æ K k, the flag of 1, the
-     diagonal of 4): `geom.stem_trap` along the stem edge, like n.
+   - Where a straight stroke leaves a stem (M N Æ K k ™, the flag of 1, the
+     diagonal of 4): `geom.stem_trap` along the stem edge, like n, at depth
+     `p.trap`. At these narrow crotches a deeper trap punches a hole
+     through the join; M and N also drop its anchor `0.6 * depth` into the
+     wedge.
    - At the inner vertex of two diagonals (v w y A V W Y, the figures):
      `geom.crotch_trap`, depth `p.trap`, which ends in a flat floor and
      blunts the vertex. Never a long slit or a needle cut, and no trap at
-     crotches wider than about 70 degrees.
+     crotches wider than about 70 degrees (R's leg, K's leg, @).
    `p.trap` is about 6 at Light, 12 at Regular and 41 at ExtraBold. Traps
    must open into the white cleanly and never leave slivers.
 4. **Square dots.** Dots of i, j, and punctuation are squares of side `p.dot`
@@ -76,7 +81,8 @@ wins; note the exception in a comment.
 - Lowercase: straight side `p.sb`, round side `p.sbr`, diagonal side about
   `0.5 * p.sbr`. Capitals: `p.csb`, `p.csbr`, about `0.3 * p.csbr`. The
   sidebearings shrink as weight rises (like Inter); keep using them rather
-  than constants so that holds. Open sides (E F L T Z, c, r, f) still need a
+  than constants so that holds. Dot punctuation (. , : ; !) uses `p.psb`,
+  which stops shrinking above Regular. Open sides (E F L T Z, c, r, f) still need a
   real sidebearing: about 0.75 of the straight one.
 - Kerning is measured, not typed (`kerning.py`); spacing should look right
   before kerning, with kerning only fixing diagonal, overhanging and

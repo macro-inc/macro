@@ -95,7 +95,7 @@ def O(p):
 @glyph("period", 0x002E)
 def period(p):
     side = p.dot
-    return G(dot(side / 2, side / 2, side), l=p.sb * 0.95, r=p.sb * 0.95)
+    return G(dot(side / 2, side / 2, side), l=p.psb, r=p.psb)
 
 
 __all__ = ["Shape"]

@@ -52,17 +52,10 @@ SQ2 = math.sqrt(2)
 # Shared helpers
 
 
-def _psb(p):
-    """Sidebearing of . , : ; ! : the letters' straight one at Light and
-    Regular; above Regular it stops shrinking (about 71 at ExtraBold), so
-    n. and e.g. don't clamp at heavy weights."""
-    return p.sb * 0.95 + 0.25 * max(0.0, p.grow)
-
-
 def _period(p):
     """(dot side, period sidebearing, period advance)."""
     s = p.dot
-    sb = _psb(p)
+    sb = p.psb
     return s, sb, s + 2 * sb
 
 
@@ -265,7 +258,7 @@ def exclam(p):
     w = p.stem * 1.05
     cx = s / 2
     stem = rect(cx - w / 2, s + _gap(p), cx + w / 2, P.CAP, nw=0.36 * w)
-    sb = _psb(p)
+    sb = p.psb
     return G(stem + dot(cx, s / 2, s), l=sb, r=sb)
 
 

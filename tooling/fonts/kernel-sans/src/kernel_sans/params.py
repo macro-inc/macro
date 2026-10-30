@@ -74,6 +74,7 @@ class Params:
     sbr: float  # lowercase sidebearing next to a round side
     csb: float  # capital sidebearing next to a straight stem
     csbr: float  # capital sidebearing next to a round side
+    psb: float  # sidebearing of dot punctuation (. , : ; !)
     grow: float  # stem - regular stem; add a fraction of it to body widths
     dot: float  # side of square dots (i j . : ! ?)
 
@@ -93,6 +94,8 @@ def params(wght):
     # ExtraBold, as in Inter), which keeps heavy counters open.
     hair = s * (0.88 - 0.14 * max(0.0, grow) / 70)
     cs = s * 1.07
+    # Spacing tightens as weight rises, like Inter.
+    sb = 70 - 0.2 * grow
     return Params(
         wght=wght,
         stem=s,
@@ -107,11 +110,13 @@ def params(wght):
         sq=3.0,
         # Counters squarer than outers keep round strokes even at the corners.
         sq_in=3.4,
-        # Spacing tightens as weight rises, like Inter.
-        sb=70 - 0.2 * grow,
+        sb=sb,
         sbr=53 - 0.15 * grow,
         csb=76 - 0.3 * grow,
         csbr=60 - 0.2 * grow,
+        # The straight sidebearing at Light and Regular; above Regular it
+        # stops shrinking, so n. and e.g. stay open at heavy weights.
+        psb=sb * 0.95 + 0.25 * max(0.0, grow),
         grow=grow,
         # Tracks Inter's dot area across weights.
         dot=0.8 * s + 44,
