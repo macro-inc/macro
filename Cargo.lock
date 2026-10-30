@@ -648,6 +648,7 @@ dependencies = [
  "rmcp",
  "roles_and_permissions",
  "rootcause",
+ "routine_program",
  "scheduled_action",
  "schemars 1.2.1",
  "search_service_client",

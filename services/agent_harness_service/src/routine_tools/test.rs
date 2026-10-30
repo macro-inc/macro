@@ -47,3 +47,11 @@ fn tool_refusals_and_bad_arguments_become_bounded_messages() {
         }
     );
 }
+
+#[test]
+fn every_tool_a_routine_may_call_is_in_the_catalog() {
+    let tools = tools_for(AiHost::Mcp).toolset;
+    for tool in routine_program::RoutineTool::ALL {
+        assert!(tools.tools.contains_key(tool.name()), "{tool}");
+    }
+}

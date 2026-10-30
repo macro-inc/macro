@@ -14,7 +14,7 @@ export const routineTools = [
   'SetSenderPolicy',
   'SetEntityProperty',
   'CreateDocument',
-  'CommentOnDocument',
+  'Comment',
   'SendChannelMessage',
   'MoveToProject',
 ] as const;

@@ -214,6 +214,7 @@ harnesses = { path = "../../crates/harnesses", default-features = false, feature
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }
 mcp_select = { path = "../../crates/mcp_select" }
+routine_program = { path = "../../crates/routine_program" }
 schemars = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
 

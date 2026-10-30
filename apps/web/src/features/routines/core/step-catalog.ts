@@ -321,8 +321,8 @@ export const stepActions: StepAction[] = [
     subjects: ['task', 'document'],
     create: ({ item }) => ({
       kind: 'tool',
-      tool: 'CommentOnDocument',
-      arguments: { documentId: item.ref, content: '' },
+      tool: 'Comment',
+      arguments: { entityType: 'document', entityId: item.ref, content: '' },
     }),
   },
   {
@@ -442,7 +442,7 @@ export function stepTarget(step: ToolStepDraft): string | undefined {
   const args = step.arguments;
   return match(step.tool)
     .with('SetEntityProperty', () => text(args.entity_id))
-    .with('CommentOnDocument', () => text(args.documentId))
+    .with('Comment', () => text(args.entityId))
     .with('MoveToProject', () => text(args.entityId))
     .with('UpdateThreadLabels', () => text(args.thread_id))
     .otherwise(() => undefined);
@@ -466,7 +466,7 @@ export function retarget(step: ToolStepDraft, item: StepItem): ToolStepDraft {
       entity_id: item.ref,
       entity_type: propertyEntityType(item.subject),
     }))
-    .with('CommentOnDocument', () => ({ ...args, documentId: item.ref }))
+    .with('Comment', () => ({ ...args, entityId: item.ref }))
     .with('MoveToProject', () => ({
       ...args,
       entityId: item.ref,
@@ -506,7 +506,7 @@ export function stepActionKey(step: ToolStepDraft): StepActionKey {
       args.isTask ? 'create_task' : 'create_document'
     )
     .with('MoveToProject', () => 'move')
-    .with('CommentOnDocument', () => 'comment')
+    .with('Comment', () => 'comment')
     .with('SendChannelMessage', () =>
       text(args.channel_id) === TRIGGER_ID ? 'reply_in_thread' : 'send_message'
     )

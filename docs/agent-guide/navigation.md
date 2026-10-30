@@ -1316,7 +1316,7 @@ MCP and Macro agent tools expose **CreateRoutine**, **ListRoutines**,
 `timezone`, or `event` with `events`, optional item `ids` and an optional yes/no
 `condition`), `steps`, a JSON array encoded as a string, and `requiredApps`.
 Step types are `tool` (one of UpdateThreadLabels, SetSenderPolicy,
-SetEntityProperty, CreateDocument, CommentOnDocument, SendChannelMessage or
+SetEntityProperty, CreateDocument, Comment, SendChannelMessage or
 MoveToProject, with the tool's own `arguments`), `if`, `choose` and `agent`
 (`model`, or `agent.bot_id` from **ListAgents**, plus `instructions`). Arguments
 can embed `{{trigger.…}}` and `{{steps.<id>.…}}` placeholders.

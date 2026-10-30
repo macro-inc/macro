@@ -33,7 +33,7 @@ fn triage() -> RoutineProgram {
             "otherwise": [{ "type": "agent", "model": "m", "instructions": "Triage" }]
         },
         { "type": "if", "condition": "Is it from a customer?", "then": [], "else": [
-            { "type": "tool", "tool": "CommentOnDocument", "arguments": {} }
+            { "type": "tool", "tool": "Comment", "arguments": {} }
         ] }
     ] }))
 }
@@ -79,7 +79,7 @@ fn the_best_fitting_option_runs_and_nested_answers_are_consumed_in_order() {
             "1.options.0.0:If { answer: true, probability: 0.8 }",
             "1.options.0.0.then.0:SendChannelMessage",
             "2:If { answer: false, probability: 0.1 }",
-            "2.else.0:CommentOnDocument",
+            "2.else.0:Comment",
         ]
     );
 }

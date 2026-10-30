@@ -80,8 +80,9 @@ pub enum RoutineTool {
     /// Create a document or task. Arguments: `documentName`, `fileContent`,
     /// `fileExtension` (`md`), `isTask`, optional `projectId`. Output: `documentId`.
     CreateDocument,
-    /// Comment on a document or task. Arguments: `documentId`, `content`.
-    CommentOnDocument,
+    /// Comment on a document or task. Arguments: `entityType` (`document`),
+    /// `entityId`, `content`.
+    Comment,
     /// Post a message in a channel, or reply in a thread.
     /// Arguments: `channel_id`, `content`, optional `thread_id`.
     SendChannelMessage,
@@ -96,7 +97,7 @@ impl RoutineTool {
         Self::SetSenderPolicy,
         Self::SetEntityProperty,
         Self::CreateDocument,
-        Self::CommentOnDocument,
+        Self::Comment,
         Self::SendChannelMessage,
         Self::MoveToProject,
     ];
@@ -108,7 +109,7 @@ impl RoutineTool {
             Self::SetSenderPolicy => "SetSenderPolicy",
             Self::SetEntityProperty => "SetEntityProperty",
             Self::CreateDocument => "CreateDocument",
-            Self::CommentOnDocument => "CommentOnDocument",
+            Self::Comment => "Comment",
             Self::SendChannelMessage => "SendChannelMessage",
             Self::MoveToProject => "MoveToProject",
         }
