@@ -1031,33 +1031,94 @@ On the legacy Agents screen, use the **Routines** button above the list. On touc
 `/app/routines` opens the routines list directly, and the hidden Agents sidebar's
 entry moves to **Settings → Routines** (on phones **More views → Settings →
 Routines**): tapping a routine closes the settings sheet and opens it, and
-**Create Routine** opens the composer. Routines use
-full-width entity rows with **Created by**, **Status**, **Runs with**, and **Enabled**
-columns. The search field sits below the top bar, as in Projects; search by name,
-creator, or model/agent, or press **Cmd/Ctrl+F** to focus it. **Create Routine** sits
-to the right of search. Click a row to open its settings in the same pane. Toggle
-the **Enabled** checkbox property directly in the list to pause or resume it.
-When the list is narrower than 760px (a phone, or the Settings sheet) it drops the
-column headers and **Created by**, and each row fits one line: name, status, the
-model or agent icon, and the **Enabled** checkbox, with no sideways scroll. Search
-fields hide their keyboard hint on touch devices.
-Open the routine and use its **Run History** tab to see past runs. Each run is its
-own agent session. The routine's **Runs hidden** / **Runs shown** chip decides
-where its runs appear. **Hide runs** (the default) keeps them off Home and out of
-the Agents sidebar until **Show hidden routine runs** is pressed. **Show runs**
-lists them on Home and in Agents like the owner's own sessions. The setting
-applies to runs that start after it changes. A run that finishes normally sends
-no notification; a failed or cut-short run, a question the agent asks, a held tool
+**Create Routine** opens the composer.
+
+The list's top bar has **Routines** with **All** / **On** tabs (each with a
+count) on the left and **New** and search on the right; **Cmd/Ctrl+F** focuses
+search, which matches name, When and Then. Rows are grouped under **When
+something happens** and **On a schedule**. Each row has the enabled checkbox
+(pause or resume without opening it), the name, **When** (each trigger in a
+line, such as **When: New email received** or **Weekdays at 9:00 AM**),
+**Then** (the first step and how many follow, such as **Label with AI · 2
+more**, or **Ask AI · model or agent** for a single-agent routine) and **Last
+run**: a green or red dot, the time (today) or day, and what it did or why it
+failed (**Failed: No label named "Receipts" in this thread's inbox.**). Last run
+comes with the list and only for routines you own. Click a row to open it in the
+same pane. Below 760px wide (a phone, or the Settings sheet) rows drop When and
+Then and fit one line.
+
+Open the routine and use its **Runs** tab to see past runs. The routine's
+**Runs** property (**Runs hidden** / **Runs shown**) decides where its runs
+appear. **Hide runs** (the default) keeps them off Home and out of the Agents
+sidebar until **Show hidden routine runs** is pressed. **Show runs** lists them
+on Home and in Agents like the owner's own sessions. The setting applies to runs
+that start after it changes. A run that finishes normally sends no
+notification; a failed or cut-short run, a question the agent asks, a held tool
 approval, and people the routine's prompt mentions still notify.
 
 **Create → Routine** (U) and **Create Routine** open the same popover host as task
-and project creation. Enter a name and instructions, then choose a model or agent
-with the first property chip below the prompt. **Add trigger** follows it; each
-saved trigger becomes a chip, with another **Add trigger** always at the end.
-The last chip, **Runs hidden**, opens **Hide runs** / **Show runs**.
-**Start enabled** controls whether the saved routine starts listening immediately. **Create routine** opens
-its details inside the Agents pane, retaining the sidebar. Creation has no history
-tab or templates. Unsaved drafts are retained for three minutes.
+and project creation, on a start screen: a **Describe your routine** box with
+**Draft it** (AI fills in the name, triggers and steps from a sentence such as
+"When an invoice arrives, label it Finance and make a task to pay it", using
+the workspace's label, tag, channel, folder, people and agent names), then
+**Templates**: cards by Macro (**Sort my inbox**, **Triage new tasks**,
+**Morning brief**, **Chase stuck tasks**, **Share updates**), each with its
+trigger beside a lightning icon and **Use template**, and **Start from scratch**
+(no trigger and no steps). Every path opens the editor: the name, for a drafted
+routine a one-line quote of the description with **Change** (back to the start
+screen, description kept), **When** (**Add trigger** adds a trigger chip, with
+another **Add trigger** always at the end, then the **Runs hidden** and apps
+chips) and **Then** (the steps). **Start enabled** controls whether the saved
+routine starts listening immediately. **Create routine** opens its details
+inside the Agents pane, retaining the sidebar. Unsaved drafts are retained for
+three minutes and reopen straight in the editor. A routine whose only step is
+**Ask AI** saves in the original single-agent form.
+
+**Steps.** A routine runs its steps in order and stops at the first failed step.
+**Add step** (under the last step, and **+** inside each branch) lists plain
+actions first, then AI steps:
+
+- **Email** (email triggers): **Add label** / **Remove label** (a label name,
+  suggested from the inbox and matched in each thread's own inbox), **Archive**,
+  **Mark as read**, **Star**, **Mark important**, **Mark sender as noise**
+  (noise, signal or blocked).
+- **Item** acts on the triggering item or on a task/document an earlier step in
+  the same branch created, so it also works on schedules after **Create task**:
+  **Add tag**, **Move to folder** (emails, tasks, documents), and for tasks
+  **Set status**, **Set priority**, **Assign**, plus **Comment** for tasks and
+  documents. When several items fit, or the step acts on a created one, an
+  **On** menu picks which. Without any item the menu explains what's needed.
+- **Create → Create task** / **Create document**: title and description or
+  content; later steps can act on it.
+- **Messages**: **Send message** to a chosen channel, or **Reply in thread** for
+  channel triggers.
+- **Let AI decide** (when `enable-routine-conditions` is on; with a schedule
+  trigger it only shows "Needs an activity trigger"): **Label with AI** (email),
+  **Tag with AI**, and for tasks **Set priority with AI** (Urgent/High/Medium/Low
+  prefilled with descriptions) and **Assign with AI**; **If yes or no** asks a
+  yes/no question; **Choose between options** takes labelled options. All
+  questions are answered in one classifier call before any step runs.
+- **AI → Ask AI**: hand the run to a model or agent with instructions. It sees the
+  triggering event and what earlier steps did. A run reaches at most one agent;
+  agents in different branches are fine. A routine's required apps go to it.
+
+Steps are cards that collapse to one line (title plus a summary, such as a
+comment's text or a choice's options); click the header to open or close one.
+New steps, steps missing input and a routine's only step start open. Branches
+indent under their decision: **If** shows **Yes** / **No**, a choice shows each
+option (label plus **When it fits**) and **Nothing fits**, and the "with AI"
+presets list values instead (label, tag, priority or person, its **When it
+fits**, **Another label**). Choices other than single-value presets have **Best
+match / All that apply**. On a routine's page, **Last run … · shown on the
+steps** (**Hide** / **Show**) marks each step with what the latest run did: a
+check, **Failed**, **Didn’t run**, or a decision's answer such as **Chose High ·
+79%**. Text fields in steps have an **Insert a field** ({ }) menu with the
+triggering item's fields (email subject, sender, body; message text; item name)
+and earlier steps' outputs; they appear as `{{trigger.email.subject}}`-style
+placeholders. Each step has a **Step actions** (⋯) menu with **Move up**,
+**Move down** and **Remove step**. Steps that decide about or act on the
+triggering item need activity triggers only; combining them with schedules shows
+an error, and **Run now** is disabled for such routines (hover explains why).
 
 **Add trigger → Scheduled** offers Hourly, Daily, Weekly, Monthly, and Custom
 (cron) in a single anchored panel. Choose the frequency and type a time, or type
@@ -1096,36 +1157,80 @@ shows the question after **· if**. Saving a condition fails with "trigger
 conditions are not enabled" while the scheduled-action service has no
 `TYPESAFE_API_KEY`.
 
+The event menu groups Macro activity triggers by surface:
+
+- **Channels:** **Channel created**, **Message sent in channel**, and **@ mentioned in channel**.
+- **Documents:** **Document created** and **Document deleted**. Tasks are separate.
+- **Tasks:** **Task created**, **Status changed**, **Priority changed**, and **Any property changed**.
+- **Email:** **New email received** in the routine owner's inbox, excluding spam, trash, drafts, and historical imports.
+- **Calls:** **Call started**, for calls the routine owner starts (receives the call and who has joined so far); and **Call ended**, for channel calls and meetings the owner joined (receives participants and transcript, cut short for long calls).
+
+For messages, mentions, deletion, and task changes, choose specific accessible
+channels/documents/tasks or any accessible item in the same panel. Creation
+triggers cover newly created accessible items; email covers the owner's inbox;
+**Call started** shows **Calls you start** and **Call ended** shows **Calls you
+join** — neither has an item picker. Calls the owner did not start never trigger
+**Call started**; calls they did not join never trigger **Call ended**. Mentions match only @ mentions of the routine owner. **Any property changed**
+also includes status and priority; overlapping selectors start only one run for
+the same event. These are Macro events, not incoming HTTP webhooks. Bot-authored
+or delegated changes do not retrigger routines. Saved legacy selectors remain
+editable but are no longer offered in the new-trigger menu.
+
+When `enable-routine-conditions` is on, every activity trigger panel has an
+**Only run if** box for an optional yes/no question about each event, such as
+**Is this email an invoice or a receipt?** Before a run starts, the event's
+content (the email, channel message, document, task, or call, read as the routine
+owner) is checked against it, and events answered no are skipped. The chip
+shows the question after **· if**. Saving a condition fails with "trigger
+conditions are not enabled" while the scheduled-action service has no
+`TYPESAFE_API_KEY`.
+
 A routine can combine up to sixteen trigger groups: each schedule is a group,
 and up to thirty-two activity filters share one event group;
 matching any trigger runs it. Open a trigger chip and choose **Remove trigger**
-to remove it. The routine's top bar uses the task breadcrumb layout:
-**Routines → routine name**, followed by the three-dot menu for duplication and
-deletion. Tabs immediately beside that menu switch between **Overview** and
-**Run History**. Overview follows the project home layout: an editable title,
-a model property chip, an apps chip, and the **Runs hidden** / **Runs shown**
-chip, and a plain prompt editor. A trigger card sits below the
-model: trigger chips at the top left, **Run now** at the top right, and the
-**Enabled** / **Disabled** status with **Next run** along the bottom.
-The **Run options** dropdown contains
-**Enable routine** / **Disable routine** and **Copy prompt**, which copies the
-current instructions, including unsaved edits. **Run History** uses full-width
-Soup rows for past agent sessions, with each run's
-outcome, duration, and time. Runs a trigger's condition skipped show
-**Condition not met** (hover for how likely the answer was yes) or **Condition
-couldn’t be checked**, marked **Skipped**; consecutive skips collapse into one
-**N events skipped by the condition** row that expands on click. Click a row or press Enter to open its session;
-Shift opens it in another split. **Back to routines** returns to the list in the
-same pane.
+to remove it.
 
-The apps chip (**Add apps** in the composer and Overview) opens **Required
-apps**: search the Pipedream catalog and pick the apps every run needs, on top
-of the agent's own. Each picked app shows **Connected** or a **Connect** button
-for the routine owner. Until every listed app is connected the composer shows
-**Connect every app this routine requires.** and Overview does not save; the
-server rejects the save too, and a run whose app was disconnected later fails
-before a session opens. Agents whose runtime opens its own sessions (macrod,
-other external runtimes) cannot take routine apps.
+A routine's top bar uses the task breadcrumb layout: **Routines → routine name**
+with its three-dot menu (**Duplicate**, **Share as template**, **Delete**)
+right after the name, then the **Overview** / **Runs** tabs, and the details
+toggle at the right. Overview is the routine as a page: an editable title,
+**When** (with **Next run** at its right) as a card of trigger chips with
+**Run now** at the top right, and **Then**, the steps (a single **Ask AI** card
+for routines without other steps; its card holds the model or agent picker and
+the instructions). The details panel, like a task's or document's, starts with
+Owner, Created and Next run, then a **Properties** section: **Status**
+(**Enabled** / **Disabled** switch), **Runs** (**Runs hidden** / **Runs
+shown**) and, when the routine has an **Ask AI** step or apps, **Apps**. A
+routine activated from a template adds a **Template** section with **Created
+from template ↗**. In a narrow pane the panel opens over the page from the
+toggle. The **Run options** dropdown contains **Enable routine** / **Disable
+routine** and **Copy prompt**, which copies the instructions of the first
+**Ask AI** step, including unsaved edits.
+
+**Runs** lists past runs with outcome, duration and time. Runs a trigger's
+condition skipped show **Condition not met** (hover for how likely the answer
+was yes) or **Condition couldn’t be checked**, marked **Skipped**; consecutive
+skips collapse into one **N events skipped by the condition** row that expands
+on click. Runs of routines with steps show what each step did on a line under
+the row (for example **Chose “Invoice” → Add label “Finance” → Create task**),
+with failed steps and their reason in red; runs that never reached an agent read
+**Ran steps**. Clicking **Ran steps** or a run's step line opens **Run details**
+beside the list (in place of it below 720px): each AI decision with how sure it
+was, each action with a check or a cross and its reason, **Open conversation**
+when the run had an agent session, and **Close run details**. A run that only
+ran its agent opens its session when clicked or on Enter; Shift opens it in
+another split. **Back to routines** returns to the list in the same pane.
+
+The apps chip (**Add apps** in the composer, **Apps** in the details panel)
+opens **Required apps**: search the Pipedream catalog and pick the apps the
+routine's **Ask AI** step needs, on top of the agent's own. Each picked app
+shows **Connected** or a **Connect** button for the routine owner. Until every
+listed app is connected the composer shows **Connect every app this routine
+requires.** and Overview does not save; the server rejects the save too, and a
+run whose app was disconnected later fails before a session opens. A routine
+with apps needs an **Ask AI** step ("Apps are for an Ask AI step. Add one, or
+remove the apps."). Agents whose runtime opens its own sessions (macrod, other
+external runtimes) cannot take routine apps.
 
 **Disable routine** pauses immediately, including with invalid
 unsaved edits. Resuming waits for valid settings to save. Settings autosave in
@@ -1176,15 +1281,18 @@ running.
 Opening a shared routine someone else owns shows the template laid out like a
 routine's Overview: **Activate for me** at the right of the top bar, then the
 name, description, **Template by author**, activation count, triggers (marked
-"Doesn't run until you activate it"), read-only instructions, and
-**References**: dashed chips fill in as the viewer, amber ones they can't open. **Activate for me** opens **Activate for me: name**: the routine
-as it will run on the left, and on the right **Your call · N left** for each
-reference they can't open or must choose (**Keep it** / **Leave out**),
-**Filled in as you**, and **Works for you as is**. **Activate** stays disabled
-until every reference is decided, then creates the viewer's own enabled
-routine and opens it. A left-out reference becomes plain text. That routine
-behaves like any other, with a **Created from template ↗** chip beside its
-model chip that opens the template.
+"Doesn't run until you activate it"), its steps read-only (each step in a line,
+branches indented) or, for a single-agent routine, its read-only instructions,
+and **References**: dashed chips fill in as the viewer, amber ones they can't
+open. **Activate for me** opens **Activate for me: name**: the routine as it
+will run on the left, and on the right **Your call · N left** for each reference
+they can't open or must choose (**Keep it** / **Leave out**), **Filled in as
+you**, and **Works for you as is**. **Activate** stays disabled until every
+reference is decided, then creates the viewer's own enabled routine and opens
+it. A left-out reference becomes plain text. References come from the
+instructions (a routine with steps: its **Ask AI** step's); its actions and
+required apps carry over as they are. That routine behaves like any other, with
+a **Template** section in its details panel that links back.
 
 A channel message that mentions a shared routine shows a template card under
 its text: name, author, description, triggers, activation count, **View
@@ -1192,7 +1300,7 @@ template**, and **Activate for me** (hidden for the author). Mentions of
 routines that aren't shared show no card. On phones both dialogs open as
 bottom sheets.
 
-**Run History** shows outcome, duration, and firing time. History loads fifty
+**Runs** shows outcome, duration, and firing time. History loads fifty
 rows at a time; **Load more runs** reveals older records. Accessible run rows
 open the agent session created by that run. Selecting a model uses the same
 Macro agent-session runtime as the new AI chat composer, with that model;
@@ -1202,11 +1310,18 @@ remain non-clickable. Macro event routines also support editing, history, and
 activation.
 
 MCP and Macro agent tools expose **CreateRoutine**, **ListRoutines**,
-**ReadRoutine**, and **UpdateRoutine**. Select `target.type: "agent"` with the
-`bot.botId` from **ListAgents** as `agentId`, or `target.type: "model"` with a runtime
-model ID. `schedule.type: "once"` accepts a future RFC3339 `at` timestamp;
-`"cron"` accepts a six-field `expression` and IANA `timezone`. Routine ownership
-comes from the authenticated caller, never a model-supplied user ID.
+**ReadRoutine**, and **UpdateRoutine**. A configuration is a `name`, `triggers`
+(`once` with a future RFC3339 `at`, `cron` with a six-field `expression` and IANA
+`timezone`, or `event` with `events`, optional item `ids` and an optional yes/no
+`condition`), `steps`, a JSON array encoded as a string, and `requiredApps`.
+Step types are `tool` (one of UpdateThreadLabels, SetSenderPolicy,
+SetEntityProperty, CreateDocument, CommentOnDocument, SendChannelMessage or
+MoveToProject, with the tool's own `arguments`), `if`, `choose` and `agent`
+(`model`, or `agent.bot_id` from **ListAgents**, plus `instructions`). Arguments
+can embed `{{trigger.…}}` and `{{steps.<id>.…}}` placeholders.
+**UpdateThreadLabels** also accepts a label by name (`label: "INBOX"`) instead
+of `label_id`. Routine ownership comes from the authenticated caller, never a
+model-supplied user ID.
 
 ## Command menu (Ctrl+K)
 
