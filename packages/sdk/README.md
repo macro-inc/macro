@@ -339,6 +339,28 @@ await channel.send(msg`Hey ${user}, take a look at ${doc}. cc ${here}`);
 
 These will render as @mentions in the Macro UI.
 
+### Generating images
+
+`macro.images.generate()` makes an image with Google's Nano Banana model, charged
+to the acting user's AI allowance, and stores it as a static file. Attach it to a
+message with `images`; its width and height let the message reserve space before
+the image loads. Pass up to three image documents or earlier images as
+`referenceImages` to edit or combine them. `examples/generate-image.ts` runs this
+end to end.
+
+```ts
+const image = await macro.images.generate({
+  prompt: 'A watercolor lighthouse at dusk',
+  aspectRatio: 'widescreen',
+});
+await channel.send('Fresh off the press', { images: [image] });
+
+const night = await macro.images.generate({
+  prompt: 'The lighthouse in image 1, at night under stars',
+  referenceImages: [image],
+});
+```
+
 ### Posting to a channel webhook
 
 The web UI can hand you a webhook URL and token for a channel. That token is a
