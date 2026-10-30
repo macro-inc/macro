@@ -150,6 +150,7 @@ fn response_omits_an_absent_note() {
         width: Some(1536),
         height: Some(1024),
         markdown: None,
+        attachment: None,
         note: None,
     })
     .unwrap();
@@ -186,4 +187,10 @@ fn response_forwards_markup_from_the_service() {
     );
     assert_eq!(response.width, Some(1536));
     assert_eq!(response.height, Some(1024));
+    assert_eq!(
+        response.attachment.as_deref(),
+        Some(
+            "<m-attachment>{\"staticFileId\":\"00000000-0000-0000-0000-00000000007b\",\"kind\":\"image\",\"width\":1536,\"height\":1024}</m-attachment>"
+        )
+    );
 }

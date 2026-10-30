@@ -10052,7 +10052,7 @@ export interface ToolTotal {
   sum: number;
 }
 /**
- * Generate or edit an image with Google's Nano Banana image model and save the result in static file service. Use for pictures, illustrations, diagram concepts, logo ideas, mockups, or edits based on reference photos. When the user supplies photos or asks to modify an existing image, pass them in referenceImages; describing a photo in the prompt alone does not send it to the image model. Describe the subject, style, composition, lighting, and any text to render; only the prompt is required. Refer to reference images by their order (image 1, image 2, image 3) when explaining how to use them. Returns the static file ID and image URL. The tool displays the image inline in chat. When your reply is posted to a channel or thread, every image generated in the turn is attached to it automatically; never write image markdown in a channel message. To send it with SendChannelMessage, pass staticFileId as an attachment of kind image with the returned width and height. Only Macro markdown documents take the returned markdown, copied verbatim on its own line. Do not cite it as a document. Generation takes several seconds.
+ * Generate or edit an image with Google's Nano Banana image model and save the result in static file service. Use for pictures, illustrations, diagram concepts, logo ideas, mockups, or edits based on reference photos. When the user supplies photos or asks to modify an existing image, pass them in referenceImages; describing a photo in the prompt alone does not send it to the image model. Describe the subject, style, composition, lighting, and any text to render; only the prompt is required. Refer to reference images by their order (image 1, image 2, image 3) when explaining how to use them. Returns the static file ID and image URL. The tool displays the image inline in chat. To show the image in a reply that is posted to a channel or thread, paste the returned attachment marker verbatim on its own line: the image is attached to the posted message at its size, and the marker is removed from the text. Never write image markdown in a channel message. To send it with SendChannelMessage instead, pass staticFileId as an attachment of kind image with the returned width and height. Only Macro markdown documents take the returned markdown, copied verbatim on its own line. Do not cite it as a document. Generation takes several seconds.
  */
 export interface GenerateImage {
   /**
@@ -10107,6 +10107,12 @@ export interface GenerateImageResponse {
    * Image markup with dimensions for Macro markdown documents, never channel messages.
    */
   markdown?: string | null;
+  /**
+   * Marker to paste on its own line in a channel or thread reply; the
+   * image is attached to the posted message. Absent only in historical
+   * tool results.
+   */
+  attachment?: string | null;
   /**
    * Commentary the model produced alongside the image, when any.
    */
