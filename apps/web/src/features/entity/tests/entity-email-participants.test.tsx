@@ -21,7 +21,7 @@ vi.mock('@queries/email/link', () => ({
   useEmailLinksQuery: () => ({
     isPending: false,
     data: {
-      links: [{ id: 'outlook', email_address: 'teo@tenant.example.com' }],
+      links: [{ id: 'outlook', email_address: 'owner@tenant.example.com' }],
     },
   }),
 }));
@@ -120,7 +120,7 @@ describe('EntityEmailParticipants', () => {
     const { container } = render(() => (
       <EntityEmailParticipants
         entity={emailEntity(
-          [{ email: 'teo@tenant.example.com', name: 'Teo Nys' }],
+          [{ email: 'owner@tenant.example.com', name: 'Riley Park' }],
           'outlook'
         )}
       />
@@ -134,7 +134,7 @@ describe('EntityEmailParticipants', () => {
       <EntityEmailParticipants
         entity={emailEntity(
           [
-            { email: 'Teo@Tenant.example.com', name: 'Teo Nys' },
+            { email: 'Owner@Tenant.example.com', name: 'Riley Park' },
             { email: 'wolf@macro.com' },
           ],
           'outlook'

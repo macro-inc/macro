@@ -32,7 +32,7 @@ vi.mock('../client', () => ({
 
 const outlook = {
   id: 'outlook',
-  email_address: 'teo@tenant.example.com',
+  email_address: 'owner@tenant.example.com',
 } as unknown as EmailLink;
 
 function Viewer(props: { linkId: () => string | undefined }) {
@@ -65,9 +65,7 @@ describe('useInboxEmail', () => {
   it("is the owning inbox's address once inboxes load", async () => {
     getLinksMock.mockResolvedValue(ok({ links: [outlook] }));
     const { viewer } = mount('outlook');
-    await vi.waitFor(() =>
-      expect(viewer()).toBe('teo@tenant.example.com')
-    );
+    await vi.waitFor(() => expect(viewer()).toBe('owner@tenant.example.com'));
   });
 
   it('is unknown while inboxes are still loading', async () => {
@@ -77,9 +75,7 @@ describe('useInboxEmail', () => {
     await vi.waitFor(() => expect(getLinksMock).toHaveBeenCalledOnce());
     expect(viewer()).toBe('unknown');
     request.resolve(ok({ links: [outlook] }));
-    await vi.waitFor(() =>
-      expect(viewer()).toBe('teo@tenant.example.com')
-    );
+    await vi.waitFor(() => expect(viewer()).toBe('owner@tenant.example.com'));
   });
 
   it('is unknown, not the Macro login, while offline with no cached inboxes', async () => {
@@ -89,9 +85,7 @@ describe('useInboxEmail', () => {
     expect(viewer()).toBe('unknown');
     expect(getLinksMock).not.toHaveBeenCalled();
     onlineManager.setOnline(true);
-    await vi.waitFor(() =>
-      expect(viewer()).toBe('teo@tenant.example.com')
-    );
+    await vi.waitFor(() => expect(viewer()).toBe('owner@tenant.example.com'));
   });
 
   it('is unknown, not the Macro login, when the inbox list fails to load', async () => {
@@ -111,9 +105,7 @@ describe('useInboxEmail', () => {
   it('keeps the address when a later inbox refresh fails', async () => {
     getLinksMock.mockResolvedValueOnce(ok({ links: [outlook] }));
     const { viewer } = mount('outlook');
-    await vi.waitFor(() =>
-      expect(viewer()).toBe('teo@tenant.example.com')
-    );
+    await vi.waitFor(() => expect(viewer()).toBe('owner@tenant.example.com'));
     getLinksMock.mockResolvedValue(
       err([{ code: 'HTTP_ERROR' as const, message: 'unavailable' }])
     );
@@ -121,7 +113,7 @@ describe('useInboxEmail', () => {
     expect(client.getQueryState(emailKeys.links.queryKey)?.status).toBe(
       'error'
     );
-    expect(viewer()).toBe('teo@tenant.example.com');
+    expect(viewer()).toBe('owner@tenant.example.com');
   });
 
   it("is unknown until the mail's inbox is known, then follows it", async () => {
@@ -135,7 +127,7 @@ describe('useInboxEmail', () => {
     );
     expect(viewer()).toBe('unknown');
     setId('outlook');
-    expect(viewer()).toBe('teo@tenant.example.com');
+    expect(viewer()).toBe('owner@tenant.example.com');
   });
 
   it("is unknown for an inbox that is not one of the user's", async () => {
