@@ -71,6 +71,9 @@ pub mod sharing;
 /// Routes associating pull requests with sessions.
 pub mod pull_requests;
 
+/// Auto-archive defaults and per-session choices.
+pub mod auto_archive;
+
 mod owned_purge;
 
 /// Shared state for the agent session router: the agent session service plus

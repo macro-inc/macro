@@ -21,9 +21,14 @@ use agent_harness::inbound::tool_approvals::{
     ToolApprovalStatusDto,
 };
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
+use agent_session::domain::auto_archive::AutoArchiveReason;
 use agent_session::domain::model::{SandboxSize, SessionBot};
 use agent_session::domain::pull_request_links::{
     PullRequestLinkSource, PullRequestLinkedSession, PullRequestSessions, SessionPullRequestLink,
+};
+use agent_session::inbound::axum_router::auto_archive::{
+    AutoArchiveOverridesBody, AutoArchivePreferencesBody, AutoArchivedBody,
+    SessionAutoArchiveResponse,
 };
 use agent_session::inbound::axum_router::pull_requests::{
     PullRequestSessionsResponse, PullRequestUrl, PullRequestUrls, PullRequestsSessionsResponse,
@@ -94,6 +99,10 @@ impl Modify for SecurityAddon {
         axum_router::put_agent_sandbox_size_handler,
         axum_router::get_agent_coding_preferences_handler,
         axum_router::put_agent_coding_preferences_handler,
+        axum_router::auto_archive::get_auto_archive_preferences,
+        axum_router::auto_archive::put_auto_archive_preferences,
+        axum_router::auto_archive::get_session_auto_archive,
+        axum_router::auto_archive::put_session_auto_archive,
         model_load::load_agent_models_handler,
         capability_discovery::discover_agent_capabilities_handler,
         agent_harness::inbound::conversations::list_agent_conversations,
@@ -148,6 +157,11 @@ impl Modify for SecurityAddon {
         SandboxSize,
         SandboxSizeBody,
         CodingPreferencesBody,
+        AutoArchivePreferencesBody,
+        AutoArchiveOverridesBody,
+        AutoArchivedBody,
+        AutoArchiveReason,
+        SessionAutoArchiveResponse,
         LoadAgentModelsRequest,
         LoadAgentModelsResponse,
         AgentModelDto,
