@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            m.id,\n            m.provider_id,\n            m.global_id,\n            m.thread_id,\n            m.provider_thread_id,\n            m.replying_to_id,\n            m.link_id,\n            m.provider_history_id,\n            m.internal_date_ts,\n            m.snippet,\n            m.size_estimate,\n            m.subject,\n            m.from_name,\n            m.from_contact_id,\n            m.sent_at,\n            m.has_attachments,\n            m.is_read,\n            m.is_starred,\n            m.is_sent,\n            m.is_draft,\n            m.body_text,\n            m.body_html_sanitized,\n            m.body_macro,\n            m.headers_jsonb,\n            m.created_at,\n            m.updated_at\n        FROM email_messages m\n        JOIN email_scheduled_messages sm ON m.id = sm.message_id\n        WHERE m.link_id = $1\n          AND m.is_draft = true\n          AND m.is_sent = false\n          AND sm.sent = false\n        ORDER BY m.created_at DESC\n        LIMIT $2 OFFSET $3\n        ",
+  "query": "\n        SELECT\n            m.id,\n            m.provider_id,\n            m.global_id,\n            m.thread_id,\n            m.provider_thread_id,\n            m.replying_to_id,\n            m.link_id,\n            m.provider_history_id,\n            m.internal_date_ts,\n            m.snippet,\n            m.size_estimate,\n            m.subject,\n            m.from_name,\n            m.from_contact_id,\n            m.sent_at,\n            m.has_attachments,\n            m.is_read,\n            m.is_starred,\n            m.is_sent,\n            m.is_draft,\n            m.body_text,\n            m.body_html_sanitized,\n            m.body_macro,\n            m.headers_jsonb,\n            m.created_at,\n            m.updated_at\n        FROM email_messages m\n        JOIN email_scheduled_messages sm ON m.id = sm.message_id\n        WHERE m.link_id = $1\n          AND m.is_draft = true\n          AND m.is_sent = false\n          AND sm.sent = false\n          AND (sm.source = $4::text\n               OR ($4::text IS NULL AND (sm.source IS NULL OR sm.delivery_status = 'failed')))\n        ORDER BY m.created_at DESC\n        LIMIT $2 OFFSET $3\n        ",
   "describe": {
     "columns": [
       {
@@ -138,7 +138,8 @@
       "Left": [
         "Uuid",
         "Int8",
-        "Int8"
+        "Int8",
+        "Text"
       ]
     },
     "nullable": [
@@ -170,5 +171,5 @@
       false
     ]
   },
-  "hash": "1020a69d697f000faf264ca2a1ffd8ee703bea41fd4d39556e3f910d54b699e0"
+  "hash": "601868c3c92272747625f5fdddab508b3b5e64090b9c319d08ace026facfc9e6"
 }

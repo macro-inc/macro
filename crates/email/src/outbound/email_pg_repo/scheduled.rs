@@ -67,7 +67,7 @@ async fn change_schedule(
                 || (row.delivery_status != "failed"
                     && ((row.processing
                         && (row.delivery_claim_id.is_none()
-                            || matches!(change, ScheduleChange::Set(_))))
+                            || matches!(change, ScheduleChange::Set { .. })))
                         || row.delivery_started_at.is_some()
                         || row.delivery_status == "unconfirmed"))
         })
@@ -75,7 +75,7 @@ async fn change_schedule(
         return Err(EmailErr::MessageDeliveryConflict(message_id));
     }
     match change {
-        ScheduleChange::Set(send_time) => {
+        ScheduleChange::Set { send_time, source } => {
             super::draft::require_completed_uploads(&mut tx, message_id).await?;
             if !message.is_draft {
                 return Err(EmailErr::MessageDeliveryConflict(message_id));
@@ -95,14 +95,18 @@ async fn change_schedule(
                     html, text, message_id, link_id,
                 ).execute(&mut *tx).await.map_err(anyhow::Error::from)?;
             }
+            // An omitted source keeps the one the schedule already has, so a
+            // time change from the composer cannot expose a sequence step.
+            let source: Option<&'static str> = source.map(Into::into);
             let updated = sqlx::query!(
                 r#"INSERT INTO email_scheduled_messages
-                    (link_id, message_id, send_time, sent, processing, actor_id, created_at, updated_at)
-                   VALUES ($1, $2, $3, false, false, $4, NOW(), NOW())
+                    (link_id, message_id, send_time, sent, processing, actor_id, source, created_at, updated_at)
+                   VALUES ($1, $2, $3, false, false, $4, $5, NOW(), NOW())
                    ON CONFLICT (link_id, message_id) DO UPDATE SET
-                    send_time = EXCLUDED.send_time, actor_id = EXCLUDED.actor_id, updated_at = NOW()
+                    send_time = EXCLUDED.send_time, actor_id = EXCLUDED.actor_id,
+                    source = COALESCE(EXCLUDED.source, email_scheduled_messages.source), updated_at = NOW()
                    WHERE NOT email_scheduled_messages.sent AND NOT email_scheduled_messages.processing"#,
-                link_id, message_id, send_time, actor.as_ref(),
+                link_id, message_id, send_time, actor.as_ref(), source,
             ).execute(&mut *tx).await.map_err(anyhow::Error::from)?;
             if updated.rows_affected() != 1 {
                 return Err(EmailErr::MessageDeliveryConflict(message_id));
@@ -139,11 +143,16 @@ async fn change_schedule(
             ).execute(&mut *tx).await.map_err(anyhow::Error::from)?;
         }
     }
-    if outlook.is_some() && matches!(change, ScheduleChange::Set(_)) {
+    if outlook.is_some() && matches!(change, ScheduleChange::Set { .. }) {
         super::draft::snapshot_outlook_draft(&mut tx, message_id, link_id, actor.as_ref())
             .await
             .map_err(anyhow::Error::from)?;
     }
+    // A pending sequence step is not part of the thread's mail state; scheduling
+    // or cancelling one changes whether its thread shows in Inbox and All Mail.
+    super::thread::update_thread_metadata(&mut tx, message.thread_id, link_id)
+        .await
+        .map_err(anyhow::Error::from)?;
     tx.commit().await.map_err(anyhow::Error::from)?;
     Ok(Some(message.thread_id))
 }

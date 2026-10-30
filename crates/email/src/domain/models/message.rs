@@ -20,6 +20,21 @@ pub enum ScheduledSendStatus {
     Unconfirmed,
 }
 
+/// What created a scheduled send, when it was not the user's own composer.
+///
+/// A pending send from a source stays out of the user's mail lists (Drafts,
+/// Scheduled, Inbox) until it is sent or its delivery fails.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, strum::IntoStaticStr,
+)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum ScheduledSendSource {
+    /// A step of an email sequence.
+    Sequence,
+}
+
 /// Persisted schedule and its delivery state, independent of the client journal.
 #[derive(Debug, Clone)]
 pub struct ScheduledSend {

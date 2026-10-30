@@ -53,6 +53,7 @@ async fn admit(pool: &PgPool) -> anyhow::Result<SendAttemptId> {
             db_id: Some(message.db_id),
             provider_id: message.provider_id.clone(),
             replying_to_id: None,
+            reuse_reply_draft: true,
             provider_thread_id: message.provider_thread_id.clone(),
             thread_db_id: Some(message.thread_db_id),
             subject: message.subject.clone(),

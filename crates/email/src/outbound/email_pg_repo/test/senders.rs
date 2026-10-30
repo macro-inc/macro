@@ -38,6 +38,7 @@ fn draft() -> CreateDraftInput {
         db_id: Some(macro_uuid::generate_uuid_v7()),
         provider_id: None,
         replying_to_id: None,
+        reuse_reply_draft: true,
         provider_thread_id: None,
         thread_db_id: Some(macro_uuid::generate_uuid_v7()),
         subject: "Alias delivery".to_owned(),

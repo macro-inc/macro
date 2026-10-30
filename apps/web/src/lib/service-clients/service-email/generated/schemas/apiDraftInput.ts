@@ -47,6 +47,10 @@ default policy. Ignored for drafts. */
   provider_thread_id?: ApiDraftInputProviderThreadId;
   /** ID of the message this draft is replying to. */
   replying_to_id?: ApiDraftInputReplyingToId;
+  /** Without `db_id`, continue an existing unsent draft replying to
+`replying_to_id` in this inbox. `false` always creates a new draft, as
+a sequence step does, leaving the user's own reply draft untouched. */
+  reuse_reply_draft?: boolean;
   /** Subject line. */
   subject: string;
   /** Thread DB ID. */

@@ -199,6 +199,12 @@ export type ApiDraftInput = {
      */
     replying_to_id?: string | null;
     /**
+     * Without `db_id`, continue an existing unsent draft replying to
+     * `replying_to_id` in this inbox. `false` always creates a new draft, as
+     * a sequence step does, leaving the user's own reply draft untouched.
+     */
+    reuse_reply_draft?: boolean;
+    /**
      * Subject line.
      */
     subject: string;
@@ -1744,6 +1750,14 @@ export type ResyncResponse = {
 };
 
 /**
+ * What created a scheduled send, when it was not the user's own composer.
+ *
+ * A pending send from a source stays out of the user's mail lists (Drafts,
+ * Scheduled, Inbox) until it is sent or its delivery fails.
+ */
+export type ScheduledSendSource = 'sequence';
+
+/**
  * The user-visible delivery state of an unsent scheduled message.
  */
 export type ScheduledSendStatus = 'pending' | 'sending' | 'failed' | 'unconfirmed';
@@ -1994,6 +2008,7 @@ export type UpsertScheduledRequest = {
      * The time to send the message (ISO 8601 format).
      */
     send_time: string;
+    source?: null | ScheduledSendSource;
 };
 
 export type UpsertScheduledResponse = {
@@ -2364,6 +2379,12 @@ export type GetScheduledMessagesData = {
          * The maximum number of scheduled messages to return.
          */
         limit?: number;
+        /**
+         * List only the sends this source created, in every delivery state.
+         * Without it, the user's own scheduled sends are listed: pending sequence
+         * steps are hidden, like in Drafts, and failed ones are included.
+         */
+        source?: null | ScheduledSendSource;
     };
     url: '/email/drafts/scheduled';
 };

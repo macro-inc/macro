@@ -1023,6 +1023,7 @@ pub(crate) fn draft_input_from_graphql(
             .replying_to_id
             .map(|id| parse_id(id, "replyingToId"))
             .transpose()?,
+        reuse_reply_draft: true,
         provider_thread_id: input.provider_thread_id,
         thread_db_id: input
             .thread_db_id

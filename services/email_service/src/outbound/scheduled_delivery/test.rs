@@ -1,4 +1,4 @@
-use email::domain::scheduled_delivery::{PreparationError, SubmissionError};
+use email::domain::scheduled_delivery::{PreparationError, ReplyOrderError, SubmissionError};
 use email_api_client::domain::models::{EmailApiError, RateLimitOrigin, SentIds};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use models_email::service::message::MessageToSend;
@@ -33,6 +33,18 @@ fn transient_failure_can_retry_only_before_submission() {
     assert!(matches!(
         classify_submission_error(error),
         SubmissionError::Uncertain(_)
+    ));
+}
+
+#[test]
+fn reply_order_defers_or_fails_before_any_provider_work() {
+    assert!(matches!(
+        classify_preparation_error(ReplyOrderError::ParentPending.into()),
+        PreparationError::Deferred(_)
+    ));
+    assert!(matches!(
+        classify_preparation_error(ReplyOrderError::ParentUnsent.into()),
+        PreparationError::Failed(_)
     ));
 }
 

@@ -33,6 +33,7 @@ impl SendMessageRequest {
             db_id: msg.db_id,
             provider_id: msg.provider_id,
             replying_to_id: msg.replying_to_id,
+            reuse_reply_draft: msg.reuse_reply_draft,
             provider_thread_id: msg.provider_thread_id,
             thread_db_id: msg.thread_db_id,
             subject: msg.subject,
