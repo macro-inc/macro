@@ -10,10 +10,11 @@ use super::LegacyDocumentPurgeRepository;
 use crate::domain::{
     models::DocumentError,
     purge::{
-        DocumentPurgeQueue, DocumentPurgeRepository, DocumentPurgeService, DocumentPurger,
-        DocxPartReferences,
+        DocumentAudience, DocumentPurgeQueue, DocumentPurgeRepository, DocumentPurgeService,
+        DocumentPurger, DocxPartReferences,
     },
 };
+use macro_user_id::user_id::MacroUserIdStr;
 
 const DOCX: &str = "93000000-0000-0000-0000-000000000011";
 
@@ -48,6 +49,15 @@ impl DocxPartReferences for Arc<RecordingPartReferences> {
     }
 }
 
+/// The audience is the entity access service's to resolve; these tests cover the rows.
+struct NoAudience;
+
+impl DocumentAudience for NoAudience {
+    async fn users(&self, _: &str) -> Result<Vec<MacroUserIdStr<'static>>, DocumentError> {
+        Ok(Vec::new())
+    }
+}
+
 struct Fixture {
     queue: Arc<CapturingQueue>,
     part_references: Arc<RecordingPartReferences>,
@@ -55,6 +65,7 @@ struct Fixture {
         LegacyDocumentPurgeRepository,
         Arc<CapturingQueue>,
         Arc<RecordingPartReferences>,
+        NoAudience,
         NoopMacroEventBroker,
     >,
 }
@@ -72,6 +83,7 @@ fn fixture(pool: &PgPool) -> Fixture {
         LegacyDocumentPurgeRepository::new(pool.clone()),
         queue.clone(),
         part_references.clone(),
+        NoAudience,
         NoopMacroEventBroker,
     );
     Fixture {

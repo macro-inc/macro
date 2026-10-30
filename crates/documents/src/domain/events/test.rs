@@ -155,6 +155,7 @@ fn purged_serializes_to_the_exact_envelope() {
         Uuid::from_u128(3),
         DocumentTopicEvent::Purged(DocumentPurgedMetadata {
             document_id: DOCUMENT_ID.to_string(),
+            audience: Vec::new(),
         }),
     );
 
@@ -248,6 +249,7 @@ fn search_event_constructors_use_the_document_key_and_schema_v1() {
 
     let purged_metadata = DocumentPurgedMetadata {
         document_id: DOCUMENT_ID.to_string(),
+        audience: Vec::new(),
     };
     let purged = DocumentMacroEvent::purged(DOCUMENT_ID, purged_metadata.clone());
     assert_eq!(purged.key(), DOCUMENT_ID);

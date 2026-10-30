@@ -50,7 +50,8 @@ use documents_hex::domain::purge::DocumentPurger;
 use documents_hex::domain::service::DocumentServiceImpl;
 use documents_hex::inbound::axum_router::DocumentRouterState;
 use documents_hex::outbound::document_purge::{
-    LegacyDocumentPurgeRepository, RedisDocxPartReferences, SqsDocumentPurgeQueue,
+    EntityAccessDocumentAudience, LegacyDocumentPurgeRepository, RedisDocxPartReferences,
+    SqsDocumentPurgeQueue,
 };
 use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
 use documents_hex::outbound::s3_upload_url::S3UploadUrlAdapter;
@@ -387,6 +388,7 @@ pub(crate) type DssDocumentPurger = DocumentPurger<
     LegacyDocumentPurgeRepository,
     SqsDocumentPurgeQueue,
     RedisDocxPartReferences,
+    EntityAccessDocumentAudience<EntityAccessService>,
     DssEventBroker,
 >;
 

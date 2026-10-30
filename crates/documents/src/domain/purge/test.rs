@@ -10,12 +10,14 @@ use tokio::task::JoinHandle;
 use uuid::Uuid;
 
 use super::{
-    DocumentPurgeQueue, DocumentPurgeRepository, DocumentPurgeService, DocumentPurger,
-    DocxPartReferences, PurgeTarget, PurgedRows,
+    DocumentAudience, DocumentPurgeQueue, DocumentPurgeRepository, DocumentPurgeService,
+    DocumentPurger, DocxPartReferences, PurgeTarget, PurgedRows,
 };
 use crate::domain::models::DocumentError;
+use macro_user_id::user_id::MacroUserIdStr;
 
 const OWNER: &str = "macro|owner@example.com";
+const VIEWER: &str = "macro|viewer@example.com";
 
 #[derive(Clone, Copy, Default)]
 enum BrokerFailure {
@@ -30,6 +32,9 @@ struct State {
     steps: Mutex<Vec<(&'static str, String)>>,
     document: Mutex<Option<PurgeTarget>>,
     part_shas: Vec<String>,
+    fail_audience: AtomicBool,
+    /// The audience each published purge event carried.
+    published_audiences: Mutex<Vec<serde_json::Value>>,
     fail_rows: AtomicBool,
     fail_queue: AtomicBool,
     fail_release: AtomicBool,
@@ -45,6 +50,8 @@ impl Default for State {
                 file_type: Some("pdf".to_owned()),
             })),
             part_shas: Vec::new(),
+            fail_audience: AtomicBool::default(),
+            published_audiences: Mutex::default(),
             fail_rows: AtomicBool::default(),
             fail_queue: AtomicBool::default(),
             fail_release: AtomicBool::default(),
@@ -116,6 +123,24 @@ impl DocumentPurgeRepository for Arc<State> {
     }
 }
 
+impl DocumentAudience for Arc<State> {
+    async fn users(
+        &self,
+        document_id: &str,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, DocumentError> {
+        self.record("audience", document_id);
+        if self.fail_audience.load(Ordering::SeqCst) {
+            return Err(DocumentError::Internal(anyhow::anyhow!(
+                "access lookup failed"
+            )));
+        }
+        Ok([OWNER, VIEWER]
+            .into_iter()
+            .map(|user| MacroUserIdStr::parse_from_str(user).unwrap())
+            .collect())
+    }
+}
+
 impl DocumentPurgeQueue for Arc<State> {
     async fn enqueue(&self, document_id: String, owner: Owner) -> Result<(), DocumentError> {
         self.record("queue", &document_id);
@@ -153,6 +178,11 @@ impl MacroEventBroker for Broker {
         let payload = serde_json::to_value(event.event())?;
         assert_eq!(payload["event_type"], "document.purged");
         assert_eq!(payload["metadata"]["document_id"], event.key());
+        self.0
+            .published_audiences
+            .lock()
+            .unwrap()
+            .push(payload["metadata"]["audience"].clone());
         match self.0.broker_failure {
             BrokerFailure::BeforeSpawn => {
                 Err(EventBrokerError::Publish("broker unavailable".into()))
@@ -170,8 +200,11 @@ impl MacroEventBroker for Broker {
     }
 }
 
-fn purger(state: &Arc<State>) -> DocumentPurger<Arc<State>, Arc<State>, Arc<State>, Broker> {
+fn purger(
+    state: &Arc<State>,
+) -> DocumentPurger<Arc<State>, Arc<State>, Arc<State>, Arc<State>, Broker> {
     DocumentPurger::new(
+        state.clone(),
         state.clone(),
         state.clone(),
         state.clone(),
@@ -190,7 +223,36 @@ async fn purge_enqueues_and_publishes_before_deleting_the_rows() {
     purger(&state).purge(id).await.unwrap();
     assert_eq!(
         state.steps(),
-        steps(id, &["find", "queue", "broker", "rows"])
+        steps(id, &["find", "audience", "queue", "broker", "rows"])
+    );
+    assert!(!state.exists());
+}
+
+#[tokio::test]
+async fn purge_event_carries_the_audience_read_before_the_rows_are_deleted() {
+    let state = Arc::new(State::default());
+    purger(&state).purge(Uuid::now_v7()).await.unwrap();
+    assert_eq!(
+        *state.published_audiences.lock().unwrap(),
+        vec![serde_json::json!([OWNER, VIEWER])]
+    );
+}
+
+#[tokio::test]
+async fn audience_failure_still_purges_with_an_empty_audience() {
+    let state = Arc::new(State {
+        fail_audience: AtomicBool::new(true),
+        ..State::default()
+    });
+    let id = Uuid::now_v7();
+    purger(&state).purge(id).await.unwrap();
+    assert_eq!(
+        state.steps(),
+        steps(id, &["find", "audience", "queue", "broker", "rows"])
+    );
+    assert_eq!(
+        *state.published_audiences.lock().unwrap(),
+        vec![serde_json::Value::Null]
     );
     assert!(!state.exists());
 }
@@ -203,7 +265,7 @@ async fn queue_failure_stops_before_the_event_and_the_rows() {
     });
     let id = Uuid::now_v7();
     assert!(purger(&state).purge(id).await.is_err());
-    assert_eq!(state.steps(), steps(id, &["find", "queue"]));
+    assert_eq!(state.steps(), steps(id, &["find", "audience", "queue"]));
     assert!(state.exists());
 }
 
@@ -215,7 +277,10 @@ async fn broker_start_failure_keeps_the_rows() {
     });
     let id = Uuid::now_v7();
     assert!(purger(&state).purge(id).await.is_err());
-    assert_eq!(state.steps(), steps(id, &["find", "queue", "broker"]));
+    assert_eq!(
+        state.steps(),
+        steps(id, &["find", "audience", "queue", "broker"])
+    );
     assert!(state.exists());
 }
 
@@ -227,7 +292,10 @@ async fn broker_delivery_failure_is_awaited_and_keeps_the_rows() {
     });
     let id = Uuid::now_v7();
     assert!(purger(&state).purge(id).await.is_err());
-    assert_eq!(state.steps(), steps(id, &["find", "queue", "broker"]));
+    assert_eq!(
+        state.steps(),
+        steps(id, &["find", "audience", "queue", "broker"])
+    );
     assert!(state.exists());
 }
 
@@ -239,7 +307,10 @@ async fn cancelled_broker_delivery_keeps_the_rows() {
     });
     let id = Uuid::now_v7();
     assert!(purger(&state).purge(id).await.is_err());
-    assert_eq!(state.steps(), steps(id, &["find", "queue", "broker"]));
+    assert_eq!(
+        state.steps(),
+        steps(id, &["find", "audience", "queue", "broker"])
+    );
     assert!(state.exists());
 }
 
@@ -261,7 +332,8 @@ async fn row_failure_leaves_the_document_for_a_retry() {
         steps(
             id,
             &[
-                "find", "queue", "broker", "rows", "find", "queue", "broker", "rows"
+                "find", "audience", "queue", "broker", "rows", "find", "audience", "queue",
+                "broker", "rows"
             ]
         )
     );
@@ -273,7 +345,7 @@ async fn docx_parts_are_released_after_the_rows_are_gone() {
     let state = Arc::new(State::docx(&["b", "a", "b"]));
     let id = Uuid::now_v7();
     purger(&state).purge(id).await.unwrap();
-    let mut expected = steps(id, &["find", "queue", "broker", "rows"]);
+    let mut expected = steps(id, &["find", "audience", "queue", "broker", "rows"]);
     expected.push(("release", "b,a,b".to_owned()));
     assert_eq!(state.steps(), expected);
 }
@@ -293,7 +365,8 @@ async fn docx_parts_are_released_once_across_a_failed_attempt_and_its_retry() {
     let mut expected = steps(
         id,
         &[
-            "find", "queue", "broker", "rows", "find", "queue", "broker", "rows",
+            "find", "audience", "queue", "broker", "rows", "find", "audience", "queue", "broker",
+            "rows",
         ],
     );
     expected.push(("release", "a".to_owned()));
@@ -354,7 +427,7 @@ async fn purge_owned_of_the_expected_owner_purges() {
     );
     assert_eq!(
         state.steps(),
-        steps(id, &["find", "queue", "broker", "rows"])
+        steps(id, &["find", "audience", "queue", "broker", "rows"])
     );
     assert!(!state.exists());
 }

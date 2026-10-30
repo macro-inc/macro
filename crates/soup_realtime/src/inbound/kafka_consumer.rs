@@ -153,6 +153,15 @@ fn patches_from_document_event(event: &DocumentTopicEvent) -> Vec<SoupRealtimePa
         {
             push_unique_update(&mut updates, EntityType::Document, &metadata.document_id);
         }
+        // The purge removed the access recipients resolve from, so it carries the
+        // users who had it. A purge without them follows a soft delete that was
+        // already announced.
+        DocumentTopicEvent::Purged(metadata) if !metadata.audience.is_empty() => {
+            updates.push(
+                delete(EntityType::Document, &metadata.document_id)
+                    .with_audience(metadata.audience.clone()),
+            );
+        }
         DocumentTopicEvent::Interaction(_)
         | DocumentTopicEvent::ContentUploaded(_)
         | DocumentTopicEvent::SyncContentUpdated(_)

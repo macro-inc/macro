@@ -221,12 +221,26 @@ fn search_only_document_events_do_not_emit_patches() {
         }),
         DocumentTopicEvent::Purged(DocumentPurgedMetadata {
             document_id: DOCUMENT_ID.to_string(),
+            audience: Vec::new(),
         }),
     ];
 
     for event in events {
         assert!(patches_from_document_event(&event).is_empty());
     }
+}
+
+#[test]
+fn document_purge_deletes_the_document_for_the_audience_read_before_it() {
+    let event = DocumentTopicEvent::Purged(DocumentPurgedMetadata {
+        document_id: DOCUMENT_ID.to_string(),
+        audience: vec![user()],
+    });
+
+    assert_eq!(
+        patches_from_document_event(&event),
+        vec![delete(EntityType::Document, DOCUMENT_ID).with_audience(vec![user()])]
+    );
 }
 
 #[test]

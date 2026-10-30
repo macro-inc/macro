@@ -189,6 +189,13 @@ impl DocumentSyncContentUpdatedMetadata {
 pub struct DocumentPurgedMetadata {
     /// The id of the hard-deleted document.
     pub document_id: String,
+    /// Users who had access before the purge removed it, so realtime
+    /// consumers can still reach them. Empty when the purge did not read it.
+    /// Internal routing data: webhooks never deliver purges, so the published
+    /// schema leaves it out.
+    #[cfg_attr(feature = "schema", schema(ignore))]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub audience: Vec<MacroUserIdStr<'static>>,
 }
 
 /// Why a document interaction was reported.

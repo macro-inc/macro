@@ -11,8 +11,13 @@ pub(crate) fn publish_document_purged_event<B: MacroEventBroker>(
     document_id: &str,
 ) -> Result<(), EventBrokerError> {
     let document_id = document_id.to_owned();
-    let event =
-        DocumentMacroEvent::purged(document_id.clone(), DocumentPurgedMetadata { document_id });
+    let event = DocumentMacroEvent::purged(
+        document_id.clone(),
+        DocumentPurgedMetadata {
+            document_id,
+            audience: Vec::new(),
+        },
+    );
 
     drop(event_broker.send_event(&event)?);
     Ok(())
