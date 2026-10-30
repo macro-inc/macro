@@ -88,6 +88,7 @@ export function EmailComposeToolbar(props: {
               }
               variant="ghost"
               tooltip="Insert image"
+              aria-label="Insert image"
               size="icon-md"
               disabled={ctx.disabled()}
             >
