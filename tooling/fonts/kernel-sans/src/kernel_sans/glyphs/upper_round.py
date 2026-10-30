@@ -18,7 +18,17 @@ import math
 import pathops
 
 from .. import params as P
-from ..geom import Shape, band, chamfer, crotch_trap, diag, poly, rect, right_of, superness
+from ..geom import (
+    Shape,
+    band,
+    chamfer,
+    crotch_trap,
+    diag,
+    poly,
+    rect,
+    right_of,
+    superness,
+)
 from . import G, glyph, ref
 from .parts import open_bowl, outer_x
 
@@ -84,7 +94,10 @@ def _half_sq(cx, y0, xe, y1, n, x_flat):
     region from y0 to y1."""
     box = (min(xe, 2 * cx - xe), y0, max(xe, 2 * cx - xe), y1)
     e = "r" if xe > cx else "l"
-    return _path((x_flat, y0), [(cx, y0), _quad(box, n, "b", e), _quad(box, n, e, "t"), (x_flat, y1)])
+    return _path(
+        (x_flat, y0),
+        [(cx, y0), _quad(box, n, "b", e), _quad(box, n, e, "t"), (x_flat, y1)],
+    )
 
 
 def _handles(p0, t0, p3, t3, k0, k3):
@@ -98,7 +111,10 @@ def _handles(p0, t0, p3, t3, k0, k3):
     dx, dy = x3 - x0, y3 - y0
     a = (dx * t3[1] - t3[0] * dy) / det
     kx, ky = x0 + a * t0[0], y0 + a * t0[1]
-    return (x0 + k0 * (kx - x0), y0 + k0 * (ky - y0)), (x3 + k3 * (kx - x3), y3 + k3 * (ky - y3))
+    return (x0 + k0 * (kx - x0), y0 + k0 * (ky - y0)), (
+        x3 + k3 * (kx - x3),
+        y3 + k3 * (ky - y3),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -132,12 +148,23 @@ class _Bowl:
 
 def _bez(q, t):
     m = 1 - t
-    return tuple(m**3 * q[0][i] + 3 * m * m * t * q[1][i] + 3 * m * t * t * q[2][i] + t**3 * q[3][i] for i in (0, 1))
+    return tuple(
+        m**3 * q[0][i]
+        + 3 * m * m * t * q[1][i]
+        + 3 * m * t * t * q[2][i]
+        + t**3 * q[3][i]
+        for i in (0, 1)
+    )
 
 
 def _bez_d(q, t):
     m = 1 - t
-    return tuple(3 * m * m * (q[1][i] - q[0][i]) + 6 * m * t * (q[2][i] - q[1][i]) + 3 * t * t * (q[3][i] - q[2][i]) for i in (0, 1))
+    return tuple(
+        3 * m * m * (q[1][i] - q[0][i])
+        + 6 * m * t * (q[2][i] - q[1][i])
+        + 3 * t * t * (q[3][i] - q[2][i])
+        for i in (0, 1)
+    )
 
 
 def _mid_stroke(p):
@@ -197,7 +224,9 @@ def Thorn(p):
     # open at ExtraBold.
     y0 = P.CAP * (0.218 - 0.00024 * p.grow)
     y1 = P.CAP * (0.794 + 0.0004 * p.grow)
-    bowl = _Bowl(p, s, y0, y1, p.w(469, 0.85), p.chair, p.chair, s * 1.02, 0.635, x_out=s - 2)
+    bowl = _Bowl(
+        p, s, y0, y1, p.w(469, 0.85), p.chair, p.chair, s * 1.02, 0.635, x_out=s - 2
+    )
     shape = (rect(0, 0, s, P.CAP, nw=p.ccut) + bowl.outer) - bowl.counter
     return G(shape, l=p.csb, r=p.csbr * 1.15)
 
@@ -214,7 +243,9 @@ def R(p):
     # its top runs up into the counter and is trimmed by it.
     wl = p.cstem * 0.97
     x_br = w + p.w(26, 0.1)  # right edge of the foot
-    xa = bowl.cx - 8 - 0.9 * max(0.0, p.grow)  # left edge at the stroke's underside, on its flat part
+    xa = (
+        bowl.cx - 8 - 0.9 * max(0.0, p.grow)
+    )  # left edge at the stroke's underside, on its flat part
     hw = wl
     for _ in range(12):
         hw = wl * math.hypot(xa - (x_br - hw), yb) / yb
@@ -258,8 +289,19 @@ def R(p):
 def C(p):
     w = p.w(610, 1.0)
     shape = open_bowl(
-        p, 0, w, -P.COS, P.CAP + P.COS, p.cstem * 1.03, p.chair * 1.04, p.chair * 1.04,
-        cut_top=P.CAP * 0.686, cut_bottom=P.CAP * 0.314, n=_n(p), n_in=_ni(p), chamfer_leg=p.ccut,
+        p,
+        0,
+        w,
+        -P.COS,
+        P.CAP + P.COS,
+        p.cstem * 1.03,
+        p.chair * 1.04,
+        p.chair * 1.04,
+        cut_top=P.CAP * 0.686,
+        cut_bottom=P.CAP * 0.314,
+        n=_n(p),
+        n_in=_ni(p),
+        chamfer_leg=p.ccut,
     )
     return G(shape, l=p.csbr, r=p.csbr * 0.88)
 
@@ -280,8 +322,24 @@ def G_(p):
     # the bar (top at cy) to ys and then turns into the bottom.
     mo, mi = (0, y0, w, y1), (ws, y0 + wb, w - ws, y1 - wt)
     lo, li = (0, y0, w, 2 * ys - y0), (ws, y0 + wb, w - ws, 2 * ys - y0 - wb)
-    outer = _path((w, cy), [_quad(mo, n, "r", "t"), _quad(mo, n, "t", "l"), _quad(mo, n, "l", "b"), _quad(lo, n, "b", "r")])
-    inner = _path((w - ws, cy), [_quad(mi, ni, "r", "t"), _quad(mi, ni, "t", "l"), _quad(mi, ni, "l", "b"), _quad(li, ni, "b", "r")])
+    outer = _path(
+        (w, cy),
+        [
+            _quad(mo, n, "r", "t"),
+            _quad(mo, n, "t", "l"),
+            _quad(mo, n, "l", "b"),
+            _quad(lo, n, "b", "r"),
+        ],
+    )
+    inner = _path(
+        (w - ws, cy),
+        [
+            _quad(mi, ni, "r", "t"),
+            _quad(mi, ni, "t", "l"),
+            _quad(mi, ni, "l", "b"),
+            _quad(li, ni, "b", "r"),
+        ],
+    )
     shape = (outer - inner) - (right_of(cx) & band(cy, ct))
     shape = shape + rect(w * 0.55, cy - bar_w, w - 1, cy)
     shape = shape - chamfer(outer_x(0, w, y0, y1, n, ct, "right"), ct, p.ccut, "se")
@@ -307,10 +365,17 @@ def J(p):
     shape = _path(
         (w, P.CAP - c),
         [
-            (w, yc), _quad(ob, n, "r", "b"), _quad(ob, n, "b", "l"),
-            (0, yt - c), (c, yt), (ws, yt),
-            (ws, yc), _quad(ib, ni, "l", "b"), _quad(ib, ni, "b", "r"),
-            (w - s, P.CAP), (w - c, P.CAP),
+            (w, yc),
+            _quad(ob, n, "r", "b"),
+            _quad(ob, n, "b", "l"),
+            (0, yt - c),
+            (c, yt),
+            (ws, yt),
+            (ws, yc),
+            _quad(ib, ni, "l", "b"),
+            _quad(ib, ni, "b", "r"),
+            (w - s, P.CAP),
+            (w - c, P.CAP),
         ],
     )
     return G(shape, l=p.csbr * 0.8, r=p.csb, anchors={"top": w - s / 2})
@@ -329,10 +394,17 @@ def U(p):
     shape = _path(
         (0, P.CAP - c),
         [
-            (0, yc), _quad(ob, n, "l", "b"), _quad(ob, n, "b", "r"),
-            (w, P.CAP - c), (w - c, P.CAP), (w - s, P.CAP),
-            (w - s, yc), _quad(ib, ni, "r", "b"), _quad(ib, ni, "b", "l"),
-            (s, P.CAP), (c, P.CAP),
+            (0, yc),
+            _quad(ob, n, "l", "b"),
+            _quad(ob, n, "b", "r"),
+            (w, P.CAP - c),
+            (w - c, P.CAP),
+            (w - s, P.CAP),
+            (w - s, yc),
+            _quad(ib, ni, "r", "b"),
+            _quad(ib, ni, "b", "l"),
+            (s, P.CAP),
+            (c, P.CAP),
         ],
     )
     return G(shape, l=p.csb, r=p.csb)
@@ -370,8 +442,14 @@ def S(p):
     nrm = (math.sin(th), math.cos(th))
     mb = (xc - nrm[0] * t / 2, yc - nrm[1] * t / 2)
     mt = (xc + nrm[0] * t / 2, yc + nrm[1] * t / 2)
-    mb0, mb1 = (mb[0] - d[0] * seg / 2, mb[1] - d[1] * seg / 2), (mb[0] + d[0] * seg / 2, mb[1] + d[1] * seg / 2)
-    mt0, mt1 = (mt[0] - d[0] * seg / 2, mt[1] - d[1] * seg / 2), (mt[0] + d[0] * seg / 2, mt[1] + d[1] * seg / 2)
+    mb0, mb1 = (
+        (mb[0] - d[0] * seg / 2, mb[1] - d[1] * seg / 2),
+        (mb[0] + d[0] * seg / 2, mb[1] + d[1] * seg / 2),
+    )
+    mt0, mt1 = (
+        (mt[0] - d[0] * seg / 2, mt[1] - d[1] * seg / 2),
+        (mt[0] + d[0] * seg / 2, mt[1] + d[1] * seg / 2),
+    )
     down, up = (0.0, -1.0), (0.0, 1.0)
     neg_d = (-d[0], -d[1])
     b0, b3 = _ext(uo, "l"), _ext(li, "r")
@@ -379,17 +457,27 @@ def S(p):
     b1a, b2a = _handles(b0, down, mb0, d, 0.72, 0.66)  # outer left into the spine
     b1b, b2b = _handles(mb1, d, b3, down, 0.56, 0.9)  # spine into the lower counter
     t1a, t2a = _handles(t3, up, mt1, neg_d, 0.92, 0.45)  # outer right up into the spine
-    t1b, t2b = _handles(mt0, neg_d, t0, up, 0.45, 0.92)  # spine up into the upper counter
+    t1b, t2b = _handles(
+        mt0, neg_d, t0, up, 0.45, 0.92
+    )  # spine up into the upper counter
     shape = _path(
         _ext(uo, "r"),
         [
-            _quad(uo, n, "r", "t"), _quad(uo, n, "t", "l"),
-            (b1a, b2a, mb0), mb1, (b1b, b2b, b3),
-            _quad(li, ni, "r", "b"), _quad(li, ni, "b", "l"),
+            _quad(uo, n, "r", "t"),
+            _quad(uo, n, "t", "l"),
+            (b1a, b2a, mb0),
+            mb1,
+            (b1b, b2b, b3),
+            _quad(li, ni, "r", "b"),
+            _quad(li, ni, "b", "l"),
             _ext(lo, "l"),
-            _quad(lo, n, "l", "b"), _quad(lo, n, "b", "r"),
-            (t1a, t2a, mt1), mt0, (t1b, t2b, t0),
-            _quad(ui, ni, "l", "t"), _quad(ui, ni, "t", "r"),
+            _quad(lo, n, "l", "b"),
+            _quad(lo, n, "b", "r"),
+            (t1a, t2a, mt1),
+            mt0,
+            (t1b, t2b, t0),
+            _quad(ui, ni, "l", "t"),
+            _quad(ui, ni, "t", "r"),
         ],
     )
     shape = shape - chamfer(xur, ycu, p.ccut, "se") - chamfer(0, ycl, p.ccut, "nw")

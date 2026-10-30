@@ -37,10 +37,10 @@ from .parts import open_bowl, outer_x
 PROOF_TEXT = [
     "H.H,H:H;H!H?H n.n,n:n;n!n?n",
     "\u201cQuoted\u201d \u2018text\u2019 \u2014 (parens) [brackets] {braces}",
-    "hello@macro.com  R&D  A\u2192B \u2190 \u2191 \u2193 \u2197 \u2198 \u2194 \u00a9 \u00ae \u2122 \u00a7 \u00b6",
+    "name@example.com  R&D  A\u2192B \u2190 \u2191 \u2193 \u2197 \u2198 \u2194 \u00a9 \u00ae \u2122 \u00a7 \u00b6",
     "(HELLO) [WORLD] \u00abNEXT\u00bb \u2013 \u2014 \u2039n\u203a n\u2013n n\u2014n n-n H-H",
     "(HOH) [HOH] {HOH} n/o\\n n|n \u00a6 n_n n*n \u2020 \u2021 \u2022 n\u00b7n n\u2026",
-    "\u00bfnon? \u00a1non! \u201enon\u201c \u201anon\u2018 'n' \"n\" n@o.co H&O",
+    "\u00bfnon? \u00a1non! \u201enon\u201c \u201anon\u2018 'n' \"n\" n@o H@O H&O",
     "09:30 17:45 H:H n:n KERNEL\u2122 \u00a9 2026 \u00a7 4 H\u2192O",
 ]
 
@@ -84,15 +84,17 @@ def _comma(p, x0, y0):
     tail = s * 0.6 + 92  # length of the tail below the square
     tw = s * 0.34  # width of the flat tail end
     tl = x0 - s * 0.06  # left corner of the tail end
-    return poly([
-        (x0, y0 + s - c),
-        (x0 + c, y0 + s),
-        (x0 + s, y0 + s),
-        (x0 + s, y0),
-        (tl + tw, y0 - tail),
-        (tl, y0 - tail),
-        (x0, y0),
-    ])
+    return poly(
+        [
+            (x0, y0 + s - c),
+            (x0 + c, y0 + s),
+            (x0 + s, y0 + s),
+            (x0 + s, y0),
+            (tl + tw, y0 - tail),
+            (tl, y0 - tail),
+            (x0, y0),
+        ]
+    )
 
 
 def _lr(shape):
@@ -101,7 +103,13 @@ def _lr(shape):
     nearest centre in path order; for repeated parts that move apart as the
     glyph widens (the dots of …, the marks of " and ”) a right-to-left order
     pairs the wrong copies and the variable font garbles them in between."""
-    contours = sorted(shape.path.contours, key=lambda c: ((c.bounds[0] + c.bounds[2]) / 2, (c.bounds[1] + c.bounds[3]) / 2))
+    contours = sorted(
+        shape.path.contours,
+        key=lambda c: (
+            (c.bounds[0] + c.bounds[2]) / 2,
+            (c.bounds[1] + c.bounds[3]) / 2,
+        ),
+    )
     out = pathops.Path()
     for c in contours:
         out.addPath(c)
@@ -127,7 +135,9 @@ def _chevron(tip_x, yc, h, dx, w, flat):
     hh = h / 2
     k = 4.0
     xiv = tip_x + w * math.hypot(dx, hh) / hh  # inner vertex
-    outer = poly([(tip_x, yc), (tip_x + k * dx, yc + k * hh), (tip_x + k * dx, yc - k * hh)])
+    outer = poly(
+        [(tip_x, yc), (tip_x + k * dx, yc + k * hh), (tip_x + k * dx, yc - k * hh)]
+    )
     inner = poly([(xiv, yc), (xiv + k * dx, yc + k * hh), (xiv + k * dx, yc - k * hh)])
     shape = (outer - inner) & band(yc - hh, yc + hh)
     return shape - left_of(tip_x + flat)
@@ -286,13 +296,30 @@ def _question(p):
     # Right side down into the bottom of the S (bottom-right quadrant). The
     # pieces meet exactly where their tangents agree.
     qa = _ring_part(
-        2 * xa - W, ya, W, top, 2 * xa - (W - ws), ya + wt, W - ws, top - wt, n, n_in,
+        2 * xa - W,
+        ya,
+        W,
+        top,
+        2 * xa - (W - ws),
+        ya + wt,
+        W - ws,
+        top - wt,
+        n,
+        n_in,
         below(cy) & right_of(xa),
     )
     # From the bottom of the S down into the stem (top-left quadrant).
     qb = _ring_part(
-        xs0, 2 * yb_c - top_b, 2 * xa - xs0, top_b,
-        xs1, 2 * yb_c - ya, 2 * xa - xs1, ya, n, n_in,
+        xs0,
+        2 * yb_c - top_b,
+        2 * xa - xs0,
+        top_b,
+        xs1,
+        2 * yb_c - ya,
+        2 * xa - xs1,
+        ya,
+        n,
+        n_in,
         left_of(xa) & above(yb_c),
     )
     stem = rect(xs0, y_sb, xs1, yb_c)
@@ -375,13 +402,15 @@ def _tick(p, x0):
     wb = w * 0.78
     cx = x0 + w / 2
     c = 0.36 * w
-    sh = poly([
-        (cx - wb / 2, P.CAP - h),
-        (cx + wb / 2, P.CAP - h),
-        (cx + w / 2, P.CAP),
-        (cx - w / 2 + c, P.CAP),
-        (cx - w / 2 + c * 0.1, P.CAP - c * 0.9),
-    ])
+    sh = poly(
+        [
+            (cx - wb / 2, P.CAP - h),
+            (cx + wb / 2, P.CAP - h),
+            (cx + w / 2, P.CAP),
+            (cx - w / 2 + c, P.CAP),
+            (cx - w / 2 + c * 0.1, P.CAP - c * 0.9),
+        ]
+    )
     return sh
 
 
@@ -424,9 +453,24 @@ def _guil_sb(p):
     return p.sb * 0.75, p.sb * 0.6
 
 
-for _sfx, _yc, _codes in (("", P.AXIS, (0x2039, 0x203A, 0x00AB, 0x00BB)), (".case", P.CASE_AXIS, ())):
-    _pair("guilsinglleft" + _sfx, "guilsinglright" + _sfx, _codes[:2], lambda p, yc=_yc: _guil(p, yc), _guil_sb)
-    _pair("guillemotleft" + _sfx, "guillemotright" + _sfx, _codes[2:], lambda p, yc=_yc: _guil(p, yc, True), _guil_sb)
+for _sfx, _yc, _codes in (
+    ("", P.AXIS, (0x2039, 0x203A, 0x00AB, 0x00BB)),
+    (".case", P.CASE_AXIS, ()),
+):
+    _pair(
+        "guilsinglleft" + _sfx,
+        "guilsinglright" + _sfx,
+        _codes[:2],
+        lambda p, yc=_yc: _guil(p, yc),
+        _guil_sb,
+    )
+    _pair(
+        "guillemotleft" + _sfx,
+        "guillemotright" + _sfx,
+        _codes[2:],
+        lambda p, yc=_yc: _guil(p, yc, True),
+        _guil_sb,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -504,7 +548,9 @@ def _paren_sb(p):
 
 
 _pair("parenleft", "parenright", (0x0028, 0x0029), _paren, _paren_sb)
-_pair("parenleft.case", "parenright.case", (), lambda p: _paren(p, CASE_SHIFT), _paren_sb)
+_pair(
+    "parenleft.case", "parenright.case", (), lambda p: _paren(p, CASE_SHIFT), _paren_sb
+)
 
 
 def _bracket(p, dy=0):
@@ -512,7 +558,11 @@ def _bracket(p, dy=0):
     wt = p.hair * 1.0
     arm = p.w(200, 0.5)
     y0, y1 = BR_LO + dy, BR_HI + dy
-    return rect(0, y0, ws, y1) + rect(ws - 1, y1 - wt, arm, y1) + rect(ws - 1, y0, arm, y0 + wt)
+    return (
+        rect(0, y0, ws, y1)
+        + rect(ws - 1, y1 - wt, arm, y1)
+        + rect(ws - 1, y0, arm, y0 + wt)
+    )
 
 
 def _bracket_sb(p):
@@ -520,7 +570,13 @@ def _bracket_sb(p):
 
 
 _pair("bracketleft", "bracketright", (0x005B, 0x005D), _bracket, _bracket_sb)
-_pair("bracketleft.case", "bracketright.case", (), lambda p: _bracket(p, CASE_SHIFT), _bracket_sb)
+_pair(
+    "bracketleft.case",
+    "bracketright.case",
+    (),
+    lambda p: _bracket(p, CASE_SHIFT),
+    _bracket_sb,
+)
 
 
 def _brace(p, dy=0):
@@ -568,7 +624,9 @@ def _brace_sb(p):
 
 
 _pair("braceleft", "braceright", (0x007B, 0x007D), _brace, _brace_sb)
-_pair("braceleft.case", "braceright.case", (), lambda p: _brace(p, CASE_SHIFT), _brace_sb)
+_pair(
+    "braceleft.case", "braceright.case", (), lambda p: _brace(p, CASE_SHIFT), _brace_sb
+)
 
 
 # ---------------------------------------------------------------------------
@@ -697,13 +755,24 @@ def at(p):
     # Ring, open at the lower right.
     x_cut = W * 0.73
     ringsh = ring(0, y0, W, y1, ws, wt, n=n, n_in=n_in) - (right_of(x_cut) & below(cy))
-    ringsh = ringsh - chamfer(x_cut, _sq_y(0, y0, W, y1, n, x_cut, "bottom"), p.cut, "se")
+    ringsh = ringsh - chamfer(
+        x_cut, _sq_y(0, y0, W, y1, n, x_cut, "bottom"), p.cut, "se"
+    )
     # The right side continues straight down, then hooks into the stem's foot.
     yh = oy0 + hook_w * 0.62
     side = rect(W - ws, yh, W, cy)
     hook = _ring_part(
-        2 * xr - W, oy0, W, 2 * yh - oy0, 2 * xr - (W - ws), oy0 + wt, W - ws, 2 * yh - oy0 - wt,
-        n, n_in, below(yh) & right_of(xr - 1),
+        2 * xr - W,
+        oy0,
+        W,
+        2 * yh - oy0,
+        2 * xr - (W - ws),
+        oy0 + wt,
+        W - ws,
+        2 * yh - oy0 - wt,
+        n,
+        n_in,
+        below(yh) & right_of(xr - 1),
     )
     # The a: bowl and stem. The counter runs a fixed fraction of its radius
     # past the stem's edge, so it meets the stem at the same angle at every
@@ -713,7 +782,9 @@ def at(p):
     k = 0.42
     ix1 = (xs - k * xi0 / 2) / (1 - k / 2)
     iy0, iy1 = oy0 + hair_a, oy1 - hair_a
-    bowl = _ring_part(xa0, oy0, ix1 + wsb, oy1, xi0, iy0, ix1, iy1, n, n_in, left_of(xs + 1))
+    bowl = _ring_part(
+        xa0, oy0, ix1 + wsb, oy1, xi0, iy0, ix1, iy1, n, n_in, left_of(xs + 1)
+    )
     stem = rect(xs, oy0, xr, oy1, ne=p.cut)
     sh = ringsh + side + hook + bowl + stem
     # Bowl-join traps as in a: geom.stem_trap's notch at 0.65 * p.trap (a
@@ -748,7 +819,17 @@ def _tangent_point(x0, y0, x1, y1, n, slope):
 # leg's foot drifts left as weight grows to keep the tail's counter open.
 # At ExtraBold (verticals damped by `damp`) the lower counter is about 128
 # and the loop's about 123 wide, as in Inter.
-AMP = {"lx": 500, "lxk": 1.5, "uw": 272, "uwk": 1.75, "m": -1.3, "foot": 60, "footk": -0.7, "ytail": 0.44, "damp": 0.85}
+AMP = {
+    "lx": 500,
+    "lxk": 1.5,
+    "uw": 272,
+    "uwk": 1.75,
+    "m": -1.3,
+    "foot": 60,
+    "footk": -0.7,
+    "ytail": 0.44,
+    "damp": 0.85,
+}
 
 
 @glyph("ampersand", 0x0026)
@@ -830,7 +911,12 @@ def paragraph(p):
     xr = xl + 2 * st + p.w(70, 0.3)
     yb = P.CAP * 0.38
     bowl = squircle(0, yb, 2 * xl, P.CAP, p.sq) & left_of(xl + 1)
-    sh = bowl + rect(xl, 0, xl + st, P.CAP) + rect(xr - st, 0, xr, P.CAP) + rect(xl, P.CAP - th, xr, P.CAP)
+    sh = (
+        bowl
+        + rect(xl, 0, xl + st, P.CAP)
+        + rect(xr - st, 0, xr, P.CAP)
+        + rect(xl, P.CAP - th, xr, P.CAP)
+    )
     return G(sh, l=p.sbr * 0.9, r=p.sb * 1.0)
 
 
@@ -858,8 +944,16 @@ def copyright(p):
     cs = _damp(p.stem * 0.92, reg.stem * 0.92, 0.5)
     chr_ = _damp(p.hair * 0.92, reg.hair * 0.92, 0.5)
     c = open_bowl(
-        p, cx0, cx0 + cw, cy0, cy0 + ch, cs, chr_, chr_,
-        cut_top=cy0 + ch * 0.66, cut_bottom=cy0 + ch * 0.34,
+        p,
+        cx0,
+        cx0 + cw,
+        cy0,
+        cy0 + ch,
+        cs,
+        chr_,
+        chr_,
+        cut_top=cy0 + ch * 0.66,
+        cut_bottom=cy0 + ch * 0.34,
     )
     return G(sh + c, l=p.csbr * 0.9, r=p.csbr * 0.9)
 
@@ -873,7 +967,19 @@ def _small_r(p, x0, y0, h, w, st, th):
     xc = x0 + st
     wr = st * 1.04  # bowl's right side
     stem = rect(x0, y0, xc, yt)
-    bowl = _ring_part(2 * xc - x1, yb, x1, yt, 2 * xc - (x1 - wr), yb + th, x1 - wr, yt - th, n, n_in, right_of(xc - 1))
+    bowl = _ring_part(
+        2 * xc - x1,
+        yb,
+        x1,
+        yt,
+        2 * xc - (x1 - wr),
+        yb + th,
+        x1 - wr,
+        yt - th,
+        n,
+        n_in,
+        right_of(xc - 1),
+    )
     dw = st * 0.98
     leg_x = xc + (x1 - xc) * 0.12
     ytop = yb + th * 0.5
@@ -916,7 +1022,11 @@ def _small_m(p, x0, y0, h, w, st):
     yv = y0 + (fv / 2 - hw) * h / (xt - xb)  # inner vertex, on the centre line
     left = [(x0, y0), (x0 + st, y0), (x0 + st, yl), (xb, y0)]
     right = [(2 * cx - x, y) for x, y in reversed(left)]
-    sh = poly(left + right + [(x0 + w, top), (2 * cx - xt - hw, top), (cx, yv), (xt + hw, top), (x0, top)])
+    sh = poly(
+        left
+        + right
+        + [(x0 + w, top), (2 * cx - xt - hw, top), (cx, yv), (xt + hw, top), (x0, top)]
+    )
     d = p.trap * 0.5
     down = (xb - xt, -h)  # along the left diagonal, downwards
     up = (xt - xb, h)
@@ -938,7 +1048,9 @@ def trademark(p):
     top = P.CAP
     y0 = top - h
     tw = h * 0.84 + 0.2 * p.grow
-    T = rect(0, top - th, tw, top) + rect(tw / 2 - st / 2, y0, tw / 2 + st / 2, top - th / 2)
+    T = rect(0, top - th, tw, top) + rect(
+        tw / 2 - st / 2, y0, tw / 2 + st / 2, top - th / 2
+    )
     mx0 = tw + 46 + 0.15 * p.grow
     M = _small_m(p, mx0, y0, h, h * 1.08 + 0.6 * p.grow, st)
     return G(T + M, l=p.csb * 0.55, r=p.csb * 0.55)

@@ -46,9 +46,17 @@ def _glyph(name, *unicodes):
 
     def deco(fn):
         prev = REGISTRY.get(name)
-        taken = [u for u in unicodes for d in REGISTRY.values() if u in d.unicodes and d.name != name]
+        taken = [
+            u
+            for u in unicodes
+            for d in REGISTRY.values()
+            if u in d.unicodes and d.name != name
+        ]
         if (prev is not None and prev.module != _MODULE) or taken:
-            print(f"marks: {name} is already defined in another module; skipped", file=sys.stderr)
+            print(
+                f"marks: {name} is already defined in another module; skipped",
+                file=sys.stderr,
+            )
             return fn
         return glyph(name, *unicodes)(fn)
 
@@ -338,17 +346,20 @@ def _breve_shape(p, case):
     r = h * 0.7  # height of the curved part; above it the sides run straight
     top, cy = b + h, b + r
     rxi, ryi = w / 2 - ws, r - wb
-    shape = _contour((-w / 2, top), [
-        (-w / 2, cy),
-        _quadrant(0, cy, w / 2, r, p.sq, 2),
-        _quadrant(0, cy, w / 2, r, p.sq, 3),
-        (w / 2, top),
-        (rxi, top),
-        (rxi, cy),
-        _rev(_quadrant(0, cy, rxi, ryi, p.sq_in, 3)),
-        _rev(_quadrant(0, cy, rxi, ryi, p.sq_in, 2)),
-        (-rxi, top),
-    ])
+    shape = _contour(
+        (-w / 2, top),
+        [
+            (-w / 2, cy),
+            _quadrant(0, cy, w / 2, r, p.sq, 2),
+            _quadrant(0, cy, w / 2, r, p.sq, 3),
+            (w / 2, top),
+            (rxi, top),
+            (rxi, cy),
+            _rev(_quadrant(0, cy, rxi, ryi, p.sq_in, 3)),
+            _rev(_quadrant(0, cy, rxi, ryi, p.sq_in, 2)),
+            (-rxi, top),
+        ],
+    )
     c = _mark_cut(ws)  # shorter than the straight part of the tip at every weight
     return shape - chamfer(-w / 2, top, c, "nw") - chamfer(w / 2, top, c, "ne")
 
@@ -408,7 +419,14 @@ def _tilde_shape(p, case):
     def rot(seg):
         return [_rot(pt, ym) for pt in seg]
 
-    segs = outer + [inner[0][0]] + inner + [rot(s) for s in outer] + [rot(inner[0])[0]] + [rot(s) for s in inner]
+    segs = (
+        outer
+        + [inner[0][0]]
+        + inner
+        + [rot(s) for s in outer]
+        + [rot(inner[0])[0]]
+        + [rot(s) for s in inner]
+    )
     return _contour(ao, segs)
 
 
@@ -433,19 +451,22 @@ def _cedilla_shape(p):
     c = _mark_cut(ws)
     q0 = _quadrant(0, cy, rx, ry, p.sq, 0)
     q0 = _split(q0, _solve(q0, 0, st / 2))[0]  # up to the stub's right edge
-    return _contour((-st / 2, top), [
-        (-st / 2, yt - wt),
-        (0, yt - wt),
-        _rev(_quadrant(0, cyi, rxi, ryi, p.sq_in, 0)),
-        _rev(_quadrant(0, cyi, rxi, ryi, p.sq_in, 3)),
-        (xt, yb + wb),
-        (xt, yb + c),
-        (xt + c, yb),
-        (0, yb),
-        _quadrant(0, cy, rx, ry, p.sq, 3),
-        q0,
-        (st / 2, top),
-    ])
+    return _contour(
+        (-st / 2, top),
+        [
+            (-st / 2, yt - wt),
+            (0, yt - wt),
+            _rev(_quadrant(0, cyi, rxi, ryi, p.sq_in, 0)),
+            _rev(_quadrant(0, cyi, rxi, ryi, p.sq_in, 3)),
+            (xt, yb + wb),
+            (xt, yb + c),
+            (xt + c, yb),
+            (0, yb),
+            _quadrant(0, cy, rx, ry, p.sq, 3),
+            q0,
+            (st / 2, top),
+        ],
+    )
 
 
 def _ogonek_shape(p):
@@ -464,16 +485,19 @@ def _ogonek_shape(p):
     cyi, ryi, rxi = (top - wt + yb + wb) / 2, (h - wt - wb) / 2, rx - ws
     xt = rx * 0.85
     c = _mark_cut(ws)
-    shape = _contour((0, top), [
-        _quadrant(0, cy, rx, ry, n, 1),
-        _quadrant(0, cy, rx, ry, n, 2),
-        (xt - c, yb),
-        (xt, yb + c),
-        (xt, yb + wb),
-        (0, yb + wb),
-        _rev(_quadrant(0, cyi, rxi, ryi, n_in, 2)),
-        _rev(_quadrant(0, cyi, rxi, ryi, n_in, 1)),
-    ])
+    shape = _contour(
+        (0, top),
+        [
+            _quadrant(0, cy, rx, ry, n, 1),
+            _quadrant(0, cy, rx, ry, n, 2),
+            (xt - c, yb),
+            (xt, yb + c),
+            (xt, yb + wb),
+            (0, yb + wb),
+            _rev(_quadrant(0, cyi, rxi, ryi, n_in, 2)),
+            _rev(_quadrant(0, cyi, rxi, ryi, n_in, 1)),
+        ],
+    )
     return shape - chamfer(0, top, c, "ne")
 
 

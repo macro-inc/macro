@@ -113,7 +113,10 @@ def _handles(p0, t0, p3, t3, k0, k3):
     dx, dy = x3 - x0, y3 - y0
     a = (dx * (-t3[1]) - dy * (-t3[0])) / det
     b = (t0[0] * dy - t0[1] * dx) / det  # corner = p3 + b * t3 (b < 0)
-    return (x0 + k0 * a * t0[0], y0 + k0 * a * t0[1]), (x3 + k3 * b * t3[0], y3 + k3 * b * t3[1])
+    return (x0 + k0 * a * t0[0], y0 + k0 * a * t0[1]), (
+        x3 + k3 * b * t3[0],
+        y3 + k3 * b * t3[1],
+    )
 
 
 def _sq_pts(box, n, per=180):
@@ -136,7 +139,12 @@ def _sq_pts(box, n, per=180):
             t = i / per
             m = 1 - t
             w0, w1, w2, w3 = m * m * m, 3 * m * m * t, 3 * m * t * t, t * t * t
-            pts.append((w0 * a[0] + w1 * b[0] + w2 * c[0] + w3 * d[0], w0 * a[1] + w1 * b[1] + w2 * c[1] + w3 * d[1]))
+            pts.append(
+                (
+                    w0 * a[0] + w1 * b[0] + w2 * c[0] + w3 * d[0],
+                    w0 * a[1] + w1 * b[1] + w2 * c[1] + w3 * d[1],
+                )
+            )
     return pts
 
 
@@ -180,7 +188,11 @@ def _ray_hit_sq(p0, d, box, n):
         if t > 0 and 0 <= u <= 1 and (best is None or t < best[0]):
             if ex < 0:
                 ex, ey = -ex, -ey
-            best = (t, (p0[0] + d[0] * t, p0[1] + d[1] * t), math.degrees(math.atan2(ey, ex)))
+            best = (
+                t,
+                (p0[0] + d[0] * t, p0[1] + d[1] * t),
+                math.degrees(math.atan2(ey, ex)),
+            )
     return (best[1], best[2]) if best else (None, None)
 
 
@@ -364,7 +376,9 @@ def _four(p):
     ox0, oy0 = 0.0, yb + hb
     dx, dy = xs - ox0, P.CAP - oy0
     hw = t * math.hypot(dx, dy) / dy
-    dg = poly([(0, yb), (ox0, oy0), (xs, P.CAP), (xs + hw, P.CAP), (hw - hb * dx / dy, yb)])
+    dg = poly(
+        [(0, yb), (ox0, oy0), (xs, P.CAP), (xs + hw, P.CAP), (hw - hb * dx / dy, yb)]
+    )
     dg = dg & left_of(xs + s * 0.5)
     shape = stem + bar + dg
     # Crotch where the inner edge meets the stem.
@@ -434,8 +448,11 @@ def _six(p):
     a_l = (a_l0[0] + nrm[0] * off - d[0] * (nrm[1] * off) / d[1], P.CAP)
     hw = t / d[1]
     a_r = (a_l[0] + hw, P.CAP)
+
     # Blend: from the bowl's left extreme up into the tail's outer edge.
-    x_at = lambda y: a_l[0] - (P.CAP - y) * d[0] / d[1]
+    def x_at(y):
+        return a_l[0] - (P.CAP - y) * d[0] / d[1]
+
     ym = tp[1] + (P.CAP - tp[1]) * 0.3
     mo = (x_at(ym), ym)
     # The blend leaves the bowl's left extreme leaning out by a few degrees,
@@ -484,7 +501,11 @@ def _eight(p):
     xu0 = (wl - wu) / 2
     ub = (xu0, ym - hm / 2, xu0 + wu, P.CAP + P.COS)
     ui = (xu0 + ws * 0.97, ub[1] + hm, ub[2] - ws * 0.97, ub[3] - h)
-    return (squircle(*lb, n=n) + squircle(*ub, n=n)) - squircle(*li, n=ni) - squircle(*ui, n=ni)
+    return (
+        (squircle(*lb, n=n) + squircle(*ub, n=n))
+        - squircle(*li, n=ni)
+        - squircle(*ui, n=ni)
+    )
 
 
 FIGS = {
@@ -712,7 +733,9 @@ def threesuperior(p):
 
 
 def _vulgar(p, a, b):
-    return _fit(p, _over(p, _small(p, a), _small(p, b, "inf")), width=round(p.w(900, 1.5)))
+    return _fit(
+        p, _over(p, _small(p, a), _small(p, b, "inf")), width=round(p.w(900, 1.5))
+    )
 
 
 @glyph("onequarter", 0x00BC)
@@ -838,8 +861,14 @@ def _s_shape(p, w, y0, y1, ws, wt, wb, cut_t, cut_b):
     nrm = (math.sin(th), math.cos(th))
     mb = (xc - nrm[0] * t / 2, yc - nrm[1] * t / 2)
     mt = (xc + nrm[0] * t / 2, yc + nrm[1] * t / 2)
-    mb0, mb1 = (mb[0] - d[0] * seg / 2, mb[1] - d[1] * seg / 2), (mb[0] + d[0] * seg / 2, mb[1] + d[1] * seg / 2)
-    mt0, mt1 = (mt[0] - d[0] * seg / 2, mt[1] - d[1] * seg / 2), (mt[0] + d[0] * seg / 2, mt[1] + d[1] * seg / 2)
+    mb0, mb1 = (
+        (mb[0] - d[0] * seg / 2, mb[1] - d[1] * seg / 2),
+        (mb[0] + d[0] * seg / 2, mb[1] + d[1] * seg / 2),
+    )
+    mt0, mt1 = (
+        (mt[0] - d[0] * seg / 2, mt[1] - d[1] * seg / 2),
+        (mt[0] + d[0] * seg / 2, mt[1] + d[1] * seg / 2),
+    )
     down = (0.0, -1.0)
     b0, b3 = (xul, ycu), (xlr - ws, ycl)
     t0, t3 = (xul + ws, ycu), (xlr, ycl)
@@ -876,7 +905,9 @@ def dollar(p):
     bt = p.fstem * 0.82
     cx = w * 0.505
     ext = p.w(92, 0.2)
-    bar = rect(cx - bt / 2, P.CAP + P.COS - h * 0.5, cx + bt / 2, P.CAP + ext) + rect(cx - bt / 2, -ext, cx + bt / 2, -P.COS + h * 0.5)
+    bar = rect(cx - bt / 2, P.CAP + P.COS - h * 0.5, cx + bt / 2, P.CAP + ext) + rect(
+        cx - bt / 2, -ext, cx + bt / 2, -P.COS + h * 0.5
+    )
     return _fit(p, s_ + bar)
 
 
@@ -890,12 +921,27 @@ def cent(p):
     box = (0, -P.COS, w, top + P.COS)
     from .parts import open_bowl
 
-    c_ = open_bowl(p, box[0], box[2], box[1], box[3], ws, h, h, cut_top=box[1] + (box[3] - box[1]) * 0.69,
-                   cut_bottom=box[1] + (box[3] - box[1]) * 0.31, n=n, n_in=ni, chamfer_leg=p.ccut)
+    c_ = open_bowl(
+        p,
+        box[0],
+        box[2],
+        box[1],
+        box[3],
+        ws,
+        h,
+        h,
+        cut_top=box[1] + (box[3] - box[1]) * 0.69,
+        cut_bottom=box[1] + (box[3] - box[1]) * 0.31,
+        n=n,
+        n_in=ni,
+        chamfer_leg=p.ccut,
+    )
     bt = p.fstem * 0.82
     cx = w * 0.53
     ext = p.w(96, 0.2)
-    bar = rect(cx - bt / 2, top + P.COS - h * 0.5, cx + bt / 2, top + P.COS + ext) + rect(cx - bt / 2, -P.COS - ext, cx + bt / 2, -P.COS + h * 0.5)
+    bar = rect(
+        cx - bt / 2, top + P.COS - h * 0.5, cx + bt / 2, top + P.COS + ext
+    ) + rect(cx - bt / 2, -P.COS - ext, cx + bt / 2, -P.COS + h * 0.5)
     return _fit(p, c_ + bar, dx=-p.w(10, 0.0))
 
 
@@ -924,7 +970,9 @@ def sterling(p):
     base = rect(0, 0, w, h)
     bar_y = P.CAP * 0.42
     bt = h * (0.9 - 0.08 * g)
-    bar = rect(xs - p.w(70, 0.1), bar_y - bt / 2, xs + s + p.w(146, 0.3), bar_y + bt / 2)
+    bar = rect(
+        xs - p.w(70, 0.1), bar_y - bt / 2, xs + s + p.w(146, 0.3), bar_y + bt / 2
+    )
     return _fit(p, hook + stem + base + bar)
 
 
@@ -936,7 +984,9 @@ def yen(p):
     h = _fh(p) * 0.92
     cx = w / 2
     yj = P.CAP * 0.44  # where the arms meet the stem
-    hw_top = t / 2 / math.cos(math.atan2(cx, P.CAP - yj))  # half-width of the arms' horizontal cut
+    hw_top = (
+        t / 2 / math.cos(math.atan2(cx, P.CAP - yj))
+    )  # half-width of the arms' horizontal cut
     arm_l = diag(cx, yj - 60, hw_top, P.CAP, t) & above(yj - 60)
     arm_r = diag(cx, yj - 60, w - hw_top, P.CAP, t) & above(yj - 60)
     stem = rect(cx - s / 2, 0, cx + s / 2, yj)
@@ -964,8 +1014,21 @@ def Euro(p):
     w = p.w(462, 1.0)
     ws = p.fstem * 1.02
     h = _fh(p)
-    c_ = open_bowl(p, 0, w, -P.COS, P.CAP + P.COS, ws, h, h, cut_top=P.CAP * 0.69, cut_bottom=P.CAP * 0.31,
-                   n=n, n_in=ni, chamfer_leg=p.ccut)
+    c_ = open_bowl(
+        p,
+        0,
+        w,
+        -P.COS,
+        P.CAP + P.COS,
+        ws,
+        h,
+        h,
+        cut_top=P.CAP * 0.69,
+        cut_bottom=P.CAP * 0.31,
+        n=n,
+        n_in=ni,
+        chamfer_leg=p.ccut,
+    )
     c_ = c_.move(p.w(92, 0.3), 0)
     bt = h * 0.8
     off = bt / 2 + p.w(34, 0.25)
@@ -1035,7 +1098,9 @@ def _arm(p):
 def _plus(p, cx, cy, a=None):
     a = _arm(p) if a is None else a
     t = _mt(p)
-    return rect(cx - a, cy - t / 2, cx + a, cy + t / 2) + rect(cx - t / 2, cy - a, cx + t / 2, cy + a)
+    return rect(cx - a, cy - t / 2, cx + a, cy + t / 2) + rect(
+        cx - t / 2, cy - a, cx + t / 2, cy + a
+    )
 
 
 def _minus(p, cx, cy, a=None):
@@ -1059,15 +1124,17 @@ def _chevron(p, cx, cy, half_w, half_h, t=None):
     xo = xt - (t / 2) / math.sin(al)  # where the outer edges meet
     xi = xt + (t / 2) / math.sin(al)  # inner vertex
     f = t * 0.3 / ta  # the flat face is 0.6 t tall
-    return poly([
-        (xo + f, cy + f * ta),
-        (xe, cy + (xe - xo) * ta),
-        (xe, cy + (xe - xi) * ta),
-        (xi, cy),
-        (xe, cy - (xe - xi) * ta),
-        (xe, cy - (xe - xo) * ta),
-        (xo + f, cy - f * ta),
-    ])
+    return poly(
+        [
+            (xo + f, cy + f * ta),
+            (xe, cy + (xe - xo) * ta),
+            (xe, cy + (xe - xi) * ta),
+            (xi, cy),
+            (xe, cy - (xe - xi) * ta),
+            (xe, cy - (xe - xo) * ta),
+            (xo + f, cy - f * ta),
+        ]
+    )
 
 
 def _wave(p, cx, cy, half_w, amp, t=None):
@@ -1103,11 +1170,21 @@ def _wave(p, cx, cy, half_w, amp, t=None):
     i0 = (x0 + he, cy - e0)
     mdm = (-dm[0], -dm[1])
     segs = []
-    for a, ta, b, tb in ((o0, de, o1, rt), (o1, rt, o2, dm), (o2, dm, o3, rt), (o3, rt, o4, de)):
+    for a, ta, b, tb in (
+        (o0, de, o1, rt),
+        (o1, rt, o2, dm),
+        (o2, dm, o3, rt),
+        (o3, rt, o4, de),
+    ):
         h1, h2 = _handles(a, ta, b, tb, k, k)
         segs.append((h1, h2, b))
     segs.append(i4)
-    for a, ta, b, tb in ((i4, mde, i3, lf), (i3, lf, i2, mdm), (i2, mdm, i1, lf), (i1, lf, i0, mde)):
+    for a, ta, b, tb in (
+        (i4, mde, i3, lf),
+        (i3, lf, i2, mdm),
+        (i2, mdm, i1, lf),
+        (i1, lf, i0, mde),
+    ):
         h1, h2 = _handles(a, ta, b, tb, k, k)
         segs.append((h1, h2, b))
     sh = _path(o0, segs)
@@ -1138,7 +1215,9 @@ def multiply(p):
     a = _arm(p) * 0.74
     t = _mt(p)
     cx, cy = _cx(p), P.AXIS
-    sh = stroke((cx - a, cy - a), (cx + a, cy + a), t) + stroke((cx - a, cy + a), (cx + a, cy - a), t)
+    sh = stroke((cx - a, cy - a), (cx + a, cy + a), t) + stroke(
+        (cx - a, cy + a), (cx + a, cy - a), t
+    )
     return _math(p, sh)
 
 
@@ -1210,7 +1289,11 @@ def notequal(p):
     off = _equal_off(p)
     L = off + p.w(150, 0.3)
     run = 2 * L / math.tan(math.radians(62))
-    sh = _minus(p, cx, cy + off) + _minus(p, cx, cy - off) + diag(cx - run / 2, cy - L, cx + run / 2, cy + L, _mt(p))
+    sh = (
+        _minus(p, cx, cy + off)
+        + _minus(p, cx, cy - off)
+        + diag(cx - run / 2, cy - L, cx + run / 2, cy + L, _mt(p))
+    )
     return _math(p, sh)
 
 
@@ -1237,7 +1320,9 @@ def logicalnot(p):
     y = P.AXIS + p.w(40, 0.2)
     drop = p.w(150, 0.3)
     # The tick is the free end of a bar, so it stays square.
-    sh = rect(cx - a, y - t / 2, cx + a, y + t / 2) + rect(cx + a - t * 1.04, y - drop, cx + a, y)
+    sh = rect(cx - a, y - t / 2, cx + a, y + t / 2) + rect(
+        cx + a - t * 1.04, y - drop, cx + a, y
+    )
     return _math(p, sh)
 
 
@@ -1257,8 +1342,20 @@ def asciicircum(p):
 # Case forms: the same operators centred on P.CASE_AXIS, for use with
 # capitals and figures (features.py maps them in `case`).
 CASE_OPERATORS = [
-    "plus", "minus", "multiply", "divide", "equal", "plusminus", "less", "greater",
-    "lessequal", "greaterequal", "notequal", "asciitilde", "approxequal", "logicalnot",
+    "plus",
+    "minus",
+    "multiply",
+    "divide",
+    "equal",
+    "plusminus",
+    "less",
+    "greater",
+    "lessequal",
+    "greaterequal",
+    "notequal",
+    "asciitilde",
+    "approxequal",
+    "logicalnot",
 ]
 
 
@@ -1406,7 +1503,10 @@ def _loop(v_top, v_bot, th, x_end, y_top, y_bot, n, blend=0.45):
 def _mirror_segs(start, segs):
     """The same run of segments mirrored about x = 0 and walked backwards:
     returns (new_start, new_segs)."""
-    m = lambda q: (-q[0], q[1])
+
+    def m(q):
+        return (-q[0], q[1])
+
     pts = [start] + [sg if not isinstance(sg[0], tuple) else sg[2] for sg in segs]
     out = []
     for i in range(len(segs), 0, -1):
@@ -1443,6 +1543,8 @@ def infinity(p):
     outer = _path(vt, left + right)
     # Counters: teardrops pointing at the crossing.
     vi = (-td / (2 * s), cy)
-    counter = _path(vi, _loop(vi, vi, th, -half + ws, cy + hh - h, cy - hh + h, ni)[:-1])
+    counter = _path(
+        vi, _loop(vi, vi, th, -half + ws, cy + hh - h, cy - hh + h, ni)[:-1]
+    )
     sh = outer - counter - counter.flip_x(0.0)
     return G(sh, l=p.csbr * 0.8, r=p.csbr * 0.8)

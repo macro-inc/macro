@@ -23,6 +23,8 @@ HHEA_DESC = -240
 FAMILY = "Kernel Sans"
 PS_FAMILY = "KernelSans"
 VERSION = "1.000"
+# Fixed head timestamps keep rebuilds of unchanged sources byte-identical.
+BUILD_DATE = "Fri Oct 30 00:00:00 2026"
 
 # Static instances: weight class -> style name.
 WEIGHTS = {

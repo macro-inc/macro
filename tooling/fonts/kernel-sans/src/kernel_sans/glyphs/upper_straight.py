@@ -87,7 +87,9 @@ class _Slant:
 
     def shape(self):
         y0, y1 = self.yb, self.yt
-        return poly([(self.xl(y0), y0), (self.xr(y0), y0), (self.xr(y1), y1), (self.xl(y1), y1)])
+        return poly(
+            [(self.xl(y0), y0), (self.xr(y0), y0), (self.xr(y1), y1), (self.xl(y1), y1)]
+        )
 
 
 MOUTH = 0.6  # crotch_trap's default mouth, as a fraction of the depth
@@ -166,7 +168,9 @@ def L(p):
 def E(p):
     s = p.cstem
     w = p.w(470, 0.65)
-    shape = rect(0, 0, s, CAP) + _e_arms(p, s * 0.5, w - p.w(4, 0.05), w - p.w(30, 0.1), w, MID_Y)
+    shape = rect(0, 0, s, CAP) + _e_arms(
+        p, s * 0.5, w - p.w(4, 0.05), w - p.w(30, 0.1), w, MID_Y
+    )
     return G(shape, l=p.csb, r=p.csb * 0.75)
 
 
@@ -176,7 +180,11 @@ def F(p):
     w = p.w(455, 0.6)
     h = p.chair
     mid_y = CAP * 0.49
-    shape = rect(0, 0, s, CAP) + rect(s * 0.5, CAP - h, w, CAP) + rect(s * 0.5, mid_y - h / 2, w - p.w(36, 0.1), mid_y + h / 2)
+    shape = (
+        rect(0, 0, s, CAP)
+        + rect(s * 0.5, CAP - h, w, CAP)
+        + rect(s * 0.5, mid_y - h / 2, w - p.w(36, 0.1), mid_y + h / 2)
+    )
     return G(shape, l=p.csb, r=p.csb * 0.7)
 
 
@@ -201,10 +209,17 @@ def A(p):
     crotch = _meet(*left.right(), *right.left())
     bar_y = CAP * 0.30  # low, grotesque crossbar
     h = p.chair
-    shape = poly([
-        (0, 0), (left.hw, 0), crotch, (w - right.hw, 0), (w, 0),
-        (right.lt + right.hw, CAP), (left.lt, CAP),
-    ])
+    shape = poly(
+        [
+            (0, 0),
+            (left.hw, 0),
+            crotch,
+            (w - right.hw, 0),
+            (w, 0),
+            (right.lt + right.hw, CAP),
+            (left.lt, CAP),
+        ]
+    )
     shape = shape + rect(left.xc(bar_y), bar_y - h / 2, right.xc(bar_y), bar_y + h / 2)
     shape = shape - _vtrap(p, crotch, _down(left.right()), _down(right.left()))
     return G(shape, l=p.csbr * 0.3, r=p.csbr * 0.3)
@@ -219,10 +234,17 @@ def V(p):
     left = _Slant(cx - fb / 2, 0, s * 0.96, "l", "l")  # thick down-stroke
     right = _Slant(cx + fb / 2, w, s * 0.88, "r", "r")  # thin up-stroke
     crotch = _meet(*left.right(), *right.left())
-    shape = poly([
-        (cx - fb / 2, 0), (cx + fb / 2, 0), (w, CAP), (right.lt, CAP), crotch,
-        (left.hw, CAP), (0, CAP),
-    ])
+    shape = poly(
+        [
+            (cx - fb / 2, 0),
+            (cx + fb / 2, 0),
+            (w, CAP),
+            (right.lt, CAP),
+            crotch,
+            (left.hw, CAP),
+            (0, CAP),
+        ]
+    )
     shape = shape - _vtrap(p, crotch, _up(left.right()), _up(right.left()))
     return G(shape, l=p.csbr * 0.3, r=p.csbr * 0.3)
 
@@ -245,10 +267,23 @@ def W(p):
     v1 = _meet(*s1.right(), *s2.left())
     ap = _meet(*s2.right(), *s3.left())
     v2 = _meet(*s3.right(), *s4.left())
-    shape = poly([
-        (0, CAP), (b1l, 0), (b1r, 0), ap, (b2l, 0), (b2r, 0), (w, CAP), (s4.lt, CAP),
-        v2, (ar, CAP), (al, CAP), v1, (s1.hw, CAP),
-    ])
+    shape = poly(
+        [
+            (0, CAP),
+            (b1l, 0),
+            (b1r, 0),
+            ap,
+            (b2l, 0),
+            (b2r, 0),
+            (w, CAP),
+            (s4.lt, CAP),
+            v2,
+            (ar, CAP),
+            (al, CAP),
+            v1,
+            (s1.hw, CAP),
+        ]
+    )
     shape = shape - _vtrap(p, v1, _up(s1.right()), _up(s2.left()))
     shape = shape - _vtrap(p, v2, _up(s3.right()), _up(s4.left()))
     shape = shape - _vtrap(p, ap, _down(s2.right()), _down(s3.left()))
@@ -269,10 +304,23 @@ def M(p):
     yl = ld.y_at("l", sm)
     yr = rd.y_at("r", w - sm)
     v = _meet(*ld.right(), *rd.left())
-    shape = poly([
-        (0, 0), (sm, 0), (sm, yl), (cx - fv / 2, 0), (cx + fv / 2, 0), (w - sm, yr),
-        (w - sm, 0), (w, 0), (w, CAP), (rd.lt, CAP), v, (ld.lt + ld.hw, CAP), (0, CAP),
-    ])
+    shape = poly(
+        [
+            (0, 0),
+            (sm, 0),
+            (sm, yl),
+            (cx - fv / 2, 0),
+            (cx + fv / 2, 0),
+            (w - sm, yr),
+            (w - sm, 0),
+            (w, 0),
+            (w, CAP),
+            (rd.lt, CAP),
+            v,
+            (ld.lt + ld.hw, CAP),
+            (0, CAP),
+        ]
+    )
     shape = shape - _vtrap(p, (sm, yl), (0, -1), _down(ld.left()))
     shape = shape - _vtrap(p, (w - sm, yr), (0, -1), _down(rd.right()))
     shape = shape - _vtrap(p, v, _up(ld.right()), _up(rd.left()))
@@ -290,10 +338,21 @@ def N(p):
     dg = _Slant(w - e, e, td, "r", "l")
     yl = dg.y_at("l", sn)
     yr = dg.y_at("r", w - sn)
-    shape = poly([
-        (0, 0), (sn, 0), (sn, yl), (dg.lb, 0), (w, 0), (w, CAP - c), (w - c, CAP),
-        (w - sn, CAP), (w - sn, yr), (dg.lt + dg.hw, CAP), (0, CAP),
-    ])
+    shape = poly(
+        [
+            (0, 0),
+            (sn, 0),
+            (sn, yl),
+            (dg.lb, 0),
+            (w, 0),
+            (w, CAP - c),
+            (w - c, CAP),
+            (w - sn, CAP),
+            (w - sn, yr),
+            (dg.lt + dg.hw, CAP),
+            (0, CAP),
+        ]
+    )
     shape = shape - _vtrap(p, (sn, yl), (0, -1), _down(dg.left()))
     shape = shape - _vtrap(p, (w - sn, yr), (0, 1), _up(dg.right()))
     return G(shape, l=p.csb, r=p.csb)
@@ -323,10 +382,19 @@ def Y(p):
     pl = (xl, la.y_at("l", xl))  # outer join, left
     pr = (xr, ra.y_at("r", xr))
     crotch = _meet(*la.right(), *ra.left())
-    shape = poly([
-        (xl, 0), (xr, 0), pr, (w, CAP), (ra.lt, CAP), crotch,
-        (la.lt + la.hw, CAP), (0, CAP), pl,
-    ])
+    shape = poly(
+        [
+            (xl, 0),
+            (xr, 0),
+            pr,
+            (w, CAP),
+            (ra.lt, CAP),
+            crotch,
+            (la.lt + la.hw, CAP),
+            (0, CAP),
+            pl,
+        ]
+    )
     shape = shape - _vtrap(p, crotch, _up(la.right()), _up(ra.left()))
     return G(shape, l=p.csbr * 0.3, r=p.csbr * 0.3)
 
@@ -348,10 +416,23 @@ def K(p):
     j = _meet(*arm.right(), *leg.left())
     q = _meet(*arm.right(), *leg.right())
     c = p.ccut
-    shape = poly([
-        (0, 0), (s, 0), p1, j, (leg.lb, 0), (leg.lb + leg.hw, 0), q,
-        (arm.lt + arm.hw, CAP), (arm.lt, CAP), p2, (s, CAP), (c, CAP), (0, CAP - c),
-    ])
+    shape = poly(
+        [
+            (0, 0),
+            (s, 0),
+            p1,
+            j,
+            (leg.lb, 0),
+            (leg.lb + leg.hw, 0),
+            q,
+            (arm.lt + arm.hw, CAP),
+            (arm.lt, CAP),
+            p2,
+            (s, CAP),
+            (c, CAP),
+            (0, CAP - c),
+        ]
+    )
     # Arm against stem: a short notch at the vertex, not a crack into the
     # stem. Arm against leg: nearly square, so a shallower one.
     shape = shape - _vtrap(p, p2, (0, 1), _up(arm.left()))
@@ -366,10 +447,20 @@ def Z(p):
     w = p.w(550, 0.9)
     xt0, xt1 = p.w(12, 0.1), w - p.w(10, 0.1)
     dg = _Slant(0, xt1, s * 0.95, "l", "r", yb=h, yt=CAP - h)
-    shape = poly([
-        (0, 0), (w, 0), (w, h), (dg.lb + dg.hw, h), (xt1, CAP - h), (xt1, CAP),
-        (xt0, CAP), (xt0, CAP - h), (dg.lt, CAP - h), (0, h),
-    ])
+    shape = poly(
+        [
+            (0, 0),
+            (w, 0),
+            (w, h),
+            (dg.lb + dg.hw, h),
+            (xt1, CAP - h),
+            (xt1, CAP),
+            (xt0, CAP),
+            (xt0, CAP - h),
+            (dg.lt, CAP - h),
+            (0, h),
+        ]
+    )
     return G(shape, l=p.csb * 0.65, r=p.csb * 0.65)
 
 

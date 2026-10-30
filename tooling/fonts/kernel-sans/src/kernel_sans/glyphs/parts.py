@@ -6,7 +6,19 @@ use them instead of re-deriving the geometry in each glyph.
 """
 
 from .. import params as P
-from ..geom import above, band, below, chamfer, poly, rect, right_of, left_of, squircle, stem_trap, trap
+from ..geom import (
+    above,
+    band,
+    below,
+    chamfer,
+    poly,
+    rect,
+    right_of,
+    left_of,
+    squircle,
+    stem_trap,
+    trap,
+)
 
 
 def solve_cx(x_extreme, xp, yp, yc, ry, n, side="right"):
@@ -56,7 +68,17 @@ def n_shape(p, x0, counter, top=None, height=None, cut=True, trap_ink=True):
     xl = x0 + s
     xr = xl + counter + s
     yc = h * 0.42
-    a = arch(xl, xr, top, yc, s, p.hair, join_out=h - p.hair * 0.1, join_in=h - p.hair - h * 0.17, p=p)
+    a = arch(
+        xl,
+        xr,
+        top,
+        yc,
+        s,
+        p.hair,
+        join_out=h - p.hair * 0.1,
+        join_in=h - p.hair - h * 0.17,
+        p=p,
+    )
     stem_l = rect(x0, 0, xl, h, nw=p.cut if cut else 0)
     # Share the edge exactly: an overlap at a curve's vertical extreme can
     # make pathops resolve the union differently per weight.
@@ -89,7 +111,22 @@ def outer_x(x0, x1, y0, y1, n, y, side="right"):
     return cx + dx if side == "right" else cx - dx
 
 
-def open_bowl(p, x0, x1, y0, y1, ws, wt, wb, cut_top, cut_bottom, n=None, n_in=None, chamfer_leg=None, side="right"):
+def open_bowl(
+    p,
+    x0,
+    x1,
+    y0,
+    y1,
+    ws,
+    wt,
+    wb,
+    cut_top,
+    cut_bottom,
+    n=None,
+    n_in=None,
+    chamfer_leg=None,
+    side="right",
+):
     """A squircle ring opened on one side with HORIZONTAL terminal cuts, as in
     c, C and the curves of e, s, G, 2, 3, 5, 6, 9.
 
@@ -98,7 +135,9 @@ def open_bowl(p, x0, x1, y0, y1, ws, wt, wb, cut_top, cut_bottom, n=None, n_in=N
     (leg defaults to p.cut). side: which side opens ("right" for c)."""
     n = n or p.sq
     n_in = n_in or p.sq_in
-    shape = squircle(x0, y0, x1, y1, n) - squircle(x0 + ws, y0 + wb, x1 - ws, y1 - wt, n_in)
+    shape = squircle(x0, y0, x1, y1, n) - squircle(
+        x0 + ws, y0 + wb, x1 - ws, y1 - wt, n_in
+    )
     cx = (x0 + x1) / 2
     gap = right_of(cx) if side == "right" else left_of(cx)
     lo = y0 - 10 if cut_bottom is None else cut_bottom
@@ -111,8 +150,27 @@ def open_bowl(p, x0, x1, y0, y1, ws, wt, wb, cut_top, cut_bottom, n=None, n_in=N
             shape = shape - chamfer(xt, cut_top, leg, "se" if side == "right" else "sw")
         if cut_bottom is not None:
             xb = outer_x(x0, x1, y0, y1, n, cut_bottom, side)
-            shape = shape - chamfer(xb, cut_bottom, leg, "ne" if side == "right" else "nw")
+            shape = shape - chamfer(
+                xb, cut_bottom, leg, "ne" if side == "right" else "nw"
+            )
     return shape
 
 
-__all__ = ["solve_cx", "arch", "n_shape", "bowl", "outer_x", "open_bowl", "band", "chamfer", "above", "below", "poly", "rect", "right_of", "left_of", "squircle", "trap"]
+__all__ = [
+    "solve_cx",
+    "arch",
+    "n_shape",
+    "bowl",
+    "outer_x",
+    "open_bowl",
+    "band",
+    "chamfer",
+    "above",
+    "below",
+    "poly",
+    "rect",
+    "right_of",
+    "left_of",
+    "squircle",
+    "trap",
+]

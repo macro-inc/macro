@@ -2,6 +2,7 @@
 
 from fontTools.feaLib.builder import addOpenTypeFeaturesFromString
 from fontTools.fontBuilder import FontBuilder
+from fontTools.misc.timeTools import timestampFromString
 from fontTools.pens.boundsPen import BoundsPen
 from fontTools.pens.cu2quPen import Cu2QuPen
 from fontTools.pens.t2CharStringPen import T2CharStringPen
@@ -89,14 +90,19 @@ def build_font(drawn, p, fmt="otf", features=None):
             # pathops gives counter-clockwise outer contours (PostScript
             # direction); TrueType wants clockwise, so reverse while
             # converting cubics to quadratics.
-            g.shape.path.draw(_RoundPen(Cu2QuPen(pen, max_err=1.0, reverse_direction=True)))
+            g.shape.path.draw(
+                _RoundPen(Cu2QuPen(pen, max_err=1.0, reverse_direction=True))
+            )
             glyphs[name] = pen.glyph()
         fb.setupGlyf(glyphs)
         glyf = fb.font["glyf"]
         for name, g in drawn.items():
             gl = glyf[name]
             gl.recalcBounds(glyf)
-            metrics[name] = (round(g.width), getattr(gl, "xMin", 0) if gl.numberOfContours else 0)
+            metrics[name] = (
+                round(g.width),
+                getattr(gl, "xMin", 0) if gl.numberOfContours else 0,
+            )
     else:
         charstrings = {}
         for name, g in drawn.items():
@@ -111,7 +117,11 @@ def build_font(drawn, p, fmt="otf", features=None):
             names["psName"],
             {"FullName": names["fullName"], "FamilyName": P.FAMILY, "Weight": p.name},
             charstrings,
-            {"BlueValues": [-P.OS, 0, P.XH, P.XH + P.OS, P.CAP, P.CAP + P.COS], "StdHW": round(p.hair), "StdVW": round(p.stem)},
+            {
+                "BlueValues": [-P.OS, 0, P.XH, P.XH + P.OS, P.CAP, P.CAP + P.COS],
+                "StdHW": round(p.hair),
+                "StdVW": round(p.stem),
+            },
         )
 
     fb.setupHorizontalMetrics(metrics)
@@ -137,15 +147,23 @@ def build_font(drawn, p, fmt="otf", features=None):
         ulUnicodeRange1=0b11,  # Basic Latin, Latin-1 Supplement
         ulCodePageRange1=0b1,  # Latin 1
     )
-    fb.setupPost(isFixedPitch=0, underlinePosition=-110, underlineThickness=round(p.hair * 0.8))
+    fb.setupPost(
+        isFixedPitch=0, underlinePosition=-110, underlineThickness=round(p.hair * 0.8)
+    )
     fb.font["head"].macStyle = 0x01 if style == "Bold" else 0
     if features:
         addOpenTypeFeaturesFromString(fb.font, features)
+    pin_timestamps(fb.font)
     return fb.font
+
+
+def pin_timestamps(font):
+    stamp = timestampFromString(P.BUILD_DATE)
+    font["head"].created = font["head"].modified = stamp
+    font.recalcTimestamp = False
 
 
 def to_woff2(font, path):
     font.flavor = "woff2"
     font.save(path)
     font.flavor = None
-

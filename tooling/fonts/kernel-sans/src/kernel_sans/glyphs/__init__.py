@@ -52,7 +52,9 @@ def glyph(name, *unicodes):
         _order[0] += 1
         module = fn.__module__.rsplit(".", 1)[-1]
         if name in REGISTRY and REGISTRY[name].module != module:
-            raise ValueError(f"glyph {name!r} defined in both {REGISTRY[name].module} and {module}")
+            raise ValueError(
+                f"glyph {name!r} defined in both {REGISTRY[name].module} and {module}"
+            )
         REGISTRY[name] = GlyphDef(name, list(unicodes), fn, module, _order[0])
         return fn
 
@@ -157,7 +159,9 @@ class Drawer:
         if isinstance(out, Compose):
             out = self._compose(out)
         if not isinstance(out, G):
-            raise TypeError(f"{name}: glyph function returned {type(out).__name__}, not G")
+            raise TypeError(
+                f"{name}: glyph function returned {type(out).__name__}, not G"
+            )
         self.cache[name] = out
         return out
 
@@ -169,11 +173,22 @@ class Drawer:
             mname, ndx, ndy = (m, 0, 0) if isinstance(m, str) else m
             mark = self.get(mname)
             mb = mark.shape.bounds()
-            side = "top" if ("_top" in mark.anchors or (mb and mb[1] >= 0 and "_bottom" not in mark.anchors)) else "bottom"
+            side = (
+                "top"
+                if (
+                    "_top" in mark.anchors
+                    or (mb and mb[1] >= 0 and "_bottom" not in mark.anchors)
+                )
+                else "bottom"
+            )
             target = anchors[side] if side in anchors else base.anchor(side)
             dx = target - mark.anchor("_" + side) + ndx
             shape = shape + mark.shape.move(dx, ndy)
-        return G(shape, width=c.width if c.width is not None else base.width, anchors=base.anchors)
+        return G(
+            shape,
+            width=c.width if c.width is not None else base.width,
+            anchors=base.anchors,
+        )
 
     def draw_all(self, names=None):
         out = {}
@@ -190,5 +205,13 @@ class Drawer:
 def ordered_names():
     """.notdef first, then encoded glyphs by code point, then the rest in
     registration order."""
-    defs = sorted(REGISTRY.values(), key=lambda d: (d.name != ".notdef", not d.unicodes, d.unicodes[0] if d.unicodes else 0, d.order))
+    defs = sorted(
+        REGISTRY.values(),
+        key=lambda d: (
+            d.name != ".notdef",
+            not d.unicodes,
+            d.unicodes[0] if d.unicodes else 0,
+            d.order,
+        ),
+    )
     return [d.name for d in defs]

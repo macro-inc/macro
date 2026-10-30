@@ -20,8 +20,34 @@ REQUIRED = (
     | set(range(0xA0, 0x100))
     | {0x0131, 0x0152, 0x0153, 0x0160, 0x0161, 0x0178, 0x017D, 0x017E, 0x0192, 0x0237}
     | {0x02C6, 0x02C7, 0x02D8, 0x02D9, 0x02DA, 0x02DB, 0x02DC, 0x02DD}
-    | {0x2013, 0x2014, 0x2018, 0x2019, 0x201A, 0x201C, 0x201D, 0x201E, 0x2020, 0x2021, 0x2022, 0x2026}
-    | {0x2030, 0x2039, 0x203A, 0x2044, 0x20AC, 0x2122, 0x2212, 0x221E, 0x2248, 0x2260, 0x2264, 0x2265}
+    | {
+        0x2013,
+        0x2014,
+        0x2018,
+        0x2019,
+        0x201A,
+        0x201C,
+        0x201D,
+        0x201E,
+        0x2020,
+        0x2021,
+        0x2022,
+        0x2026,
+    }
+    | {
+        0x2030,
+        0x2039,
+        0x203A,
+        0x2044,
+        0x20AC,
+        0x2122,
+        0x2212,
+        0x221E,
+        0x2248,
+        0x2260,
+        0x2264,
+        0x2265,
+    }
     | {0x2190, 0x2191, 0x2192, 0x2193, 0x2194, 0x2197, 0x2198, 0xFB01, 0xFB02}
 )
 BLANK = {"space", "uni00A0"}
@@ -45,7 +71,9 @@ class CoverageTest(unittest.TestCase):
     def test_required_code_points_are_mapped(self):
         mapped = {u for d in glyphs.REGISTRY.values() for u in d.unicodes}
         missing = sorted(REQUIRED - mapped)
-        self.assertFalse(missing, "unmapped: " + " ".join(f"U+{u:04X}" for u in missing))
+        self.assertFalse(
+            missing, "unmapped: " + " ".join(f"U+{u:04X}" for u in missing)
+        )
 
     def test_no_code_point_is_mapped_twice(self):
         seen = {}
@@ -80,7 +108,10 @@ class OutlineTest(unittest.TestCase):
         for name in ("n", "o", "H", "O", "a", "e", "zero"):
             if name in light:
                 with self.subTest(glyph=name):
-                    self.assertGreater(abs(bold[name].shape.path.area), abs(light[name].shape.path.area))
+                    self.assertGreater(
+                        abs(bold[name].shape.path.area),
+                        abs(light[name].shape.path.area),
+                    )
 
     def test_masters_are_interpolation_compatible(self):
         drawn = {w: _Drawn.at(w) for w in MASTERS}
@@ -99,7 +130,10 @@ class FeatureTest(unittest.TestCase):
         tags = {fr.FeatureTag for fr in font["GSUB"].table.FeatureList.FeatureRecord}
         for tag in ("liga", "tnum", "zero", "ss01", "case"):
             self.assertIn(tag, tags)
-        self.assertIn("kern", {fr.FeatureTag for fr in font["GPOS"].table.FeatureList.FeatureRecord})
+        self.assertIn(
+            "kern",
+            {fr.FeatureTag for fr in font["GPOS"].table.FeatureList.FeatureRecord},
+        )
 
     def test_diagonal_pairs_are_kerned_tighter(self):
         from kernel_sans import kerning

@@ -7,7 +7,12 @@ are converted to compatible quadratics.
 
 import os
 
-from fontTools.designspaceLib import AxisDescriptor, DesignSpaceDocument, InstanceDescriptor, SourceDescriptor
+from fontTools.designspaceLib import (
+    AxisDescriptor,
+    DesignSpaceDocument,
+    InstanceDescriptor,
+    SourceDescriptor,
+)
 from fontTools.otlLib.builder import buildStatTable
 from fontTools.pens.cu2quPen import Cu2QuMultiPen
 from fontTools.pens.ttGlyphPen import TTGlyphPen
@@ -16,7 +21,7 @@ from fontTools import varLib
 from . import features
 from . import params as P
 from .compat import IncompatibleGlyph, match_masters
-from .fontbuild import build_font
+from .fontbuild import build_font, pin_timestamps
 from .glyphs import Drawer, ordered_names
 
 MASTERS = (300, 400, 800)  # 400 is the default master
@@ -76,7 +81,9 @@ def build_variable(out_dir):
             glyph_objs[w][name] = pens[w].glyph()
     if incompatible:
         lines = "\n".join(f"  {n}: {why}" for n, why in sorted(incompatible.items()))
-        raise SystemExit(f"variable font: {len(incompatible)} glyphs are not interpolation-compatible:\n{lines}")
+        raise SystemExit(
+            f"variable font: {len(incompatible)} glyphs are not interpolation-compatible:\n{lines}"
+        )
 
     doc = DesignSpaceDocument()
     axis = AxisDescriptor()
@@ -112,12 +119,23 @@ def build_variable(out_dir):
 
     vf, _, _ = varLib.build(doc, exclude=["MVAR"])
     _name_variable(vf)
+    pin_timestamps(vf)
     buildStatTable(
         vf,
-        [{"tag": "wght", "name": "Weight", "values": [
-            {"value": w, "name": s, **({"flags": 0x2, "linkedValue": 700} if w == 400 else {})}
-            for w, s in sorted(P.WEIGHTS.items())
-        ]}],
+        [
+            {
+                "tag": "wght",
+                "name": "Weight",
+                "values": [
+                    {
+                        "value": w,
+                        "name": s,
+                        **({"flags": 0x2, "linkedValue": 700} if w == 400 else {}),
+                    }
+                    for w, s in sorted(P.WEIGHTS.items())
+                ],
+            }
+        ],
     )
     os.makedirs(os.path.join(out_dir, "variable"), exist_ok=True)
     ttf = os.path.join(out_dir, "variable", f"{P.PS_FAMILY}[wght].ttf")
@@ -131,7 +149,13 @@ def build_variable(out_dir):
 def _name_variable(vf):
     name = vf["name"]
     fam = f"{P.FAMILY} Variable"
-    for rec_id, value in ((1, fam), (2, "Regular"), (4, fam), (6, f"{P.PS_FAMILY}-Variable"), (3, f"{P.VERSION};MCRO;{P.PS_FAMILY}-Variable")):
+    for rec_id, value in (
+        (1, fam),
+        (2, "Regular"),
+        (4, fam),
+        (6, f"{P.PS_FAMILY}-Variable"),
+        (3, f"{P.VERSION};MCRO;{P.PS_FAMILY}-Variable"),
+    ):
         name.setName(value, rec_id, 3, 1, 0x409)
     name.removeNames(nameID=16)
     name.removeNames(nameID=17)

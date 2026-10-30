@@ -37,7 +37,9 @@ weight, compiles CFF `.otf`, TrueType `.ttf` and `.woff2`, then matches the
 
 - `python3 -m unittest discover tests` (from this directory; about a minute).
 - `python3 build.py`, then commit the regenerated `fonts/` and `specimen/`
-  with the source change.
+  with the source change. Builds are reproducible: unchanged sources give
+  byte-identical fonts.
+- `python3 build.py --compat` (all glyphs) and `ruff format .`.
 - Requires `pip install fonttools skia-pathops brotli`; proofs also need
   `freetype-py` and Pillow with raqm.
 

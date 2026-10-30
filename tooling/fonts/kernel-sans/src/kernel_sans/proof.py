@@ -14,7 +14,10 @@ LABEL = (90, 90, 100)
 
 
 def _label_font(size=13):
-    for path in ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/TTF/DejaVuSans.ttf"):
+    for path in (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+    ):
         try:
             return ImageFont.truetype(path, size)
         except OSError:
@@ -37,7 +40,9 @@ def glyph_sheet(font_path, names, out_png, title="", cell_h=230, cols=10):
     cols = max(1, min(cols, int(1900 // cell_w)))
     rows = (len(names) + cols - 1) // cols
     head = 34 if title else 6
-    img = Image.new("RGB", (int(cols * cell_w) + 10, head + rows * (cell_h + 22) + 6), BG)
+    img = Image.new(
+        "RGB", (int(cols * cell_w) + 10, head + rows * (cell_h + 22) + 6), BG
+    )
     d = ImageDraw.Draw(img)
     lf = _label_font()
     if title:
@@ -49,7 +54,11 @@ def glyph_sheet(font_path, names, out_png, title="", cell_h=230, cols=10):
         adv = hmtx[name][0] * scale
         x0 = cx + (cell_w - adv) / 2
         for y in (0, P.XH, P.CAP, P.ASC, P.DESC):
-            d.line([(cx + 2, base - y * scale), (cx + cell_w - 2, base - y * scale)], fill=LINE, width=1)
+            d.line(
+                [(cx + 2, base - y * scale), (cx + cell_w - 2, base - y * scale)],
+                fill=LINE,
+                width=1,
+            )
         d.line([(x0, cy + 4), (x0, cy + cell_h - 4)], fill=BOX)
         d.line([(x0 + adv, cy + 4), (x0 + adv, cy + cell_h - 4)], fill=BOX)
         gid = order.index(name)
@@ -60,7 +69,9 @@ def glyph_sheet(font_path, names, out_png, title="", cell_h=230, cols=10):
             ox = round(x0 + face.glyph.bitmap_left)
             oy = round(base - face.glyph.bitmap_top)
             img.paste(Image.new("RGB", gimg.size, INK), (ox, oy), gimg)
-        d.text((cx + 6, cy + cell_h + 2), f"{name}  {hmtx[name][0]}", fill=LABEL, font=lf)
+        d.text(
+            (cx + 6, cy + cell_h + 2), f"{name}  {hmtx[name][0]}", fill=LABEL, font=lf
+        )
     img.save(out_png)
     return out_png
 

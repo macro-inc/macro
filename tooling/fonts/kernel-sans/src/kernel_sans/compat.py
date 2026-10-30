@@ -183,7 +183,10 @@ def _clean(segs):
             d = _sub(p1, p0)
             L = _norm(d)
             if L > EPS:
-                off = max(abs((c[0] - p0[0]) * d[1] - (c[1] - p0[1]) * d[0]) / L for c in (c1, c2))
+                off = max(
+                    abs((c[0] - p0[0]) * d[1] - (c[1] - p0[1]) * d[0]) / L
+                    for c in (c1, c2)
+                )
                 if off < 0.05:
                     s = ("L", p0, p1)
         out.append(s)
@@ -218,7 +221,11 @@ def _clean(segs):
 
 def _corners(segs, angle):
     """Indices i such that the node starting segment i is a corner."""
-    return [i for i in range(len(segs)) if _turn(_t_end(segs[i - 1]), _t_start(segs[i])) > angle]
+    return [
+        i
+        for i in range(len(segs))
+        if _turn(_t_end(segs[i - 1]), _t_start(segs[i])) > angle
+    ]
 
 
 def _runs(segs, angle):
@@ -241,12 +248,19 @@ def _runs(segs, angle):
 def _centre(segs):
     xs = [p[0] for s in segs for p in s[1:]]
     ys = [p[1] for s in segs for p in s[1:]]
-    return ((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2, max(xs) - min(xs), max(ys) - min(ys))
+    return (
+        (min(xs) + max(xs)) / 2,
+        (min(ys) + max(ys)) / 2,
+        max(xs) - min(xs),
+        max(ys) - min(ys),
+    )
 
 
 def _anchor(segs):
     """For a contour without corners: the topmost node, then leftmost."""
-    best = max(range(len(segs)), key=lambda i: (round(segs[i][1][1], 3), -segs[i][1][0]))
+    best = max(
+        range(len(segs)), key=lambda i: (round(segs[i][1][1], 3), -segs[i][1][0])
+    )
     return best
 
 
@@ -261,7 +275,9 @@ def _align(ref, other, angle):
     k = len(oc)
     best = None
     for r in range(k):
-        cost = sum(_dist(ref[rc[i]][1], other[oc[(i + r) % k]][1]) ** 2 for i in range(k))
+        cost = sum(
+            _dist(ref[rc[i]][1], other[oc[(i + r) % k]][1]) ** 2 for i in range(k)
+        )
         if best is None or cost < best[0]:
             best = (cost, oc[r % k])
     return best[1]
@@ -304,7 +320,11 @@ def _assign(cost):
         return list(best[1]) if best else None
     taken, out = set(), []
     for i in range(n):
-        opts = [(cost[i][j], j) for j in range(n) if j not in taken and cost[i][j] is not None]
+        opts = [
+            (cost[i][j], j)
+            for j in range(n)
+            if j not in taken and cost[i][j] is not None
+        ]
         if not opts:
             return None
         c, j = min(opts)
@@ -315,7 +335,9 @@ def _assign(cost):
 
 def _match_contours(ref_contours, other_contours, label, angle):
     if len(ref_contours) != len(other_contours):
-        raise IncompatibleGlyph(f"{len(ref_contours)} contours at the default weight, {len(other_contours)} at {label}")
+        raise IncompatibleGlyph(
+            f"{len(ref_contours)} contours at the default weight, {len(other_contours)} at {label}"
+        )
     fr, fo = _frame(ref_contours), _frame(other_contours)
     sig_o = [(len(_corners(c, angle)), _area(c) > 0) for c in other_contours]
     cost = []
@@ -330,13 +352,19 @@ def _match_contours(ref_contours, other_contours, label, angle):
                 continue
             ox, oy, ow, oh = _centre(oc)
             (qx, qy), (qw, qh) = _rel((ox, oy), fo), (ow / fo[2], oh / fo[3])
-            row.append((qx - rx) ** 2 + (qy - ry) ** 2 + 0.25 * ((qw - rw) ** 2 + (qh - rh) ** 2))
+            row.append(
+                (qx - rx) ** 2
+                + (qy - ry) ** 2
+                + 0.25 * ((qw - rw) ** 2 + (qh - rh) ** 2)
+            )
         cost.append(row)
     perm = _assign(cost)
     if perm is None:
         counts_r = sorted(len(_corners(c, angle)) for c in ref_contours)
         counts_o = sorted(n for n, _ in sig_o)
-        raise IncompatibleGlyph(f"corner counts per contour differ: {counts_r} at the default weight, {counts_o} at {label}")
+        raise IncompatibleGlyph(
+            f"corner counts per contour differ: {counts_r} at the default weight, {counts_o} at {label}"
+        )
     return [other_contours[j] for j in perm]
 
 
@@ -356,7 +384,11 @@ def _split_run(run, fraction):
     acc = 0.0
     for i, L in enumerate(lengths):
         if acc + L >= target or i == len(run) - 1:
-            t = _t_at_length(run[i], max(0.0, target - acc)) if run[i][0] == "C" else max(0.0, min(1.0, (target - acc) / (L or 1)))
+            t = (
+                _t_at_length(run[i], max(0.0, target - acc))
+                if run[i][0] == "C"
+                else max(0.0, min(1.0, (target - acc) / (L or 1)))
+            )
             t = min(max(t, 1e-4), 1 - 1e-4)
             a, b = _split(run[i], t)
             return run[:i] + [a, b] + run[i + 1 :]
@@ -385,7 +417,9 @@ def _equalise(runs_by_master):
         out.append(run)
     n = {len(r) for r in out}
     if len(n) != 1:
-        raise IncompatibleGlyph(f"could not equalise a run: {sorted(len(r) for r in out)} segments")
+        raise IncompatibleGlyph(
+            f"could not equalise a run: {sorted(len(r) for r in out)} segments"
+        )
     for i in range(len(out[0])):
         if any(r[i][0] == "C" for r in out):
             for r in out:
@@ -414,7 +448,10 @@ def _exact(parsed, default):
                         rot = oc[k:] + oc[:k]
                         if tuple(seg[0] for seg in rot) != sig:
                             continue
-                        c = sum(_dist(_rel(a[1], fr), _rel(b[1], fo)) ** 2 for a, b in zip(rc, rot))
+                        c = sum(
+                            _dist(_rel(a[1], fr), _rel(b[1], fo)) ** 2
+                            for a, b in zip(rc, rot)
+                        )
                         if best is None or c < best[0]:
                             best = (c, rot)
                 row.append(best[0] if best else None)

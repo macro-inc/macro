@@ -161,9 +161,15 @@ def rect(x0, y0, x1, y1, nw=0, ne=0, se=0, sw=0):
 def _dedupe(pts):
     out = []
     for pt in pts:
-        if not out or (abs(out[-1][0] - pt[0]) > 1e-6 or abs(out[-1][1] - pt[1]) > 1e-6):
+        if not out or (
+            abs(out[-1][0] - pt[0]) > 1e-6 or abs(out[-1][1] - pt[1]) > 1e-6
+        ):
             out.append(pt)
-    if len(out) > 1 and abs(out[0][0] - out[-1][0]) < 1e-6 and abs(out[0][1] - out[-1][1]) < 1e-6:
+    if (
+        len(out) > 1
+        and abs(out[0][0] - out[-1][0]) < 1e-6
+        and abs(out[0][1] - out[-1][1]) < 1e-6
+    ):
         out.pop()
     return out
 
@@ -271,7 +277,9 @@ def stroke(p0, p1, w):
     (x0, y0), (x1, y1) = p0, p1
     d = math.hypot(x1 - x0, y1 - y0)
     nx, ny = -(y1 - y0) / d * w / 2, (x1 - x0) / d * w / 2
-    return poly([(x0 + nx, y0 + ny), (x1 + nx, y1 + ny), (x1 - nx, y1 - ny), (x0 - nx, y0 - ny)])
+    return poly(
+        [(x0 + nx, y0 + ny), (x1 + nx, y1 + ny), (x1 - nx, y1 - ny), (x0 - nx, y0 - ny)]
+    )
 
 
 def diag(xb, yb, xt, yt, w):
@@ -290,7 +298,14 @@ def diag_edge(x_left_bottom, yb, x_left_top, yt, w):
     """Like diag, but positioned by its LEFT edge instead of its centreline."""
     dx, dy = x_left_top - x_left_bottom, yt - yb
     hw = w * math.hypot(dx, dy) / abs(dy)
-    return poly([(x_left_bottom, yb), (x_left_bottom + hw, yb), (x_left_top + hw, yt), (x_left_top, yt)])
+    return poly(
+        [
+            (x_left_bottom, yb),
+            (x_left_bottom + hw, yb),
+            (x_left_top + hw, yt),
+            (x_left_top, yt),
+        ]
+    )
 
 
 def hwidth(w, dx, dy):
@@ -313,11 +328,13 @@ def chamfer(x, y, leg, corner):
     sx = -1 if corner in ("nw", "sw") else 1
     sy = 1 if corner in ("nw", "ne") else -1
     e = max(4.0, leg * 0.6)
-    return poly([
-        (x + sx * e, y + sy * e),
-        (x - sx * (leg + e), y + sy * e),
-        (x + sx * e, y - sy * (leg + e)),
-    ])
+    return poly(
+        [
+            (x + sx * e, y + sy * e),
+            (x - sx * (leg + e), y + sy * e),
+            (x + sx * e, y - sy * (leg + e)),
+        ]
+    )
 
 
 def trap(x, y, angle, depth, width=None):
@@ -337,7 +354,9 @@ def trap(x, y, angle, depth, width=None):
     bx, by = x - ux * back, y - uy * back
     half = width / 2 * (1 + back / depth)
     tip = (x + ux * depth, y + uy * depth)
-    return poly([(bx + nx * half, by + ny * half), tip, (bx - nx * half, by - ny * half)])
+    return poly(
+        [(bx + nx * half, by + ny * half), tip, (bx - nx * half, by - ny * half)]
+    )
 
 
 def notch(tip, a, b):

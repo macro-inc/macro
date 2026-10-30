@@ -49,8 +49,16 @@ def o(p):
 def c(p):
     w = p.w(460, 0.9)
     shape = open_bowl(
-        p, 0, w, -P.OS, P.XH + P.OS, p.stem * 1.02, p.hair * 1.04, p.hair * 1.04,
-        cut_top=P.XH * 0.69, cut_bottom=P.XH * 0.31,
+        p,
+        0,
+        w,
+        -P.OS,
+        P.XH + P.OS,
+        p.stem * 1.02,
+        p.hair * 1.04,
+        p.hair * 1.04,
+        cut_top=P.XH * 0.69,
+        cut_bottom=P.XH * 0.31,
     )
     return G(shape, l=p.sbr, r=p.sbr * 0.85)
 
@@ -71,7 +79,16 @@ def H(p):
 @glyph("O", 0x004F)
 def O(p):
     w = p.w(650, 1.1)
-    shape = ring(0, -P.COS, w, P.CAP + P.COS, p.cstem * 1.05, p.chair, n=p.sq * 0.92, n_in=p.sq_in * 0.95)
+    shape = ring(
+        0,
+        -P.COS,
+        w,
+        P.CAP + P.COS,
+        p.cstem * 1.05,
+        p.chair,
+        n=p.sq * 0.92,
+        n_in=p.sq_in * 0.95,
+    )
     return G(shape, l=p.csbr, r=p.csbr)
 
 

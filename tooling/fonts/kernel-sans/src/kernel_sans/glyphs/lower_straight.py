@@ -12,7 +12,22 @@ where they should; their inner vertices take `geom.crotch_trap`.
 import math
 
 from .. import params as P
-from ..geom import above, below, chamfer, column, crotch_trap, dot, half_plane, left_of, poly, rect, right_of, squircle, stem_trap, superness
+from ..geom import (
+    above,
+    below,
+    chamfer,
+    column,
+    crotch_trap,
+    dot,
+    half_plane,
+    left_of,
+    poly,
+    rect,
+    right_of,
+    squircle,
+    stem_trap,
+    superness,
+)
 from . import G, glyph
 from .parts import arch, solve_cx
 
@@ -73,7 +88,11 @@ def _arch_through(p, xl, xr, yc, out_pt, join_in):
     xri = xr - p.stem
     cx_i = solve_cx(xri, xl, join_in, yc, ry_i, p.sq_in)
     ibox = (2 * cx_i - xri, yc - ry_i, xri, top - p.hair)
-    ring = (squircle(*obox, n=p.sq) - squircle(*ibox, n=p.sq_in)) & above(yc) & right_of(xl - 1)
+    ring = (
+        (squircle(*obox, n=p.sq) - squircle(*ibox, n=p.sq_in))
+        & above(yc)
+        & right_of(xl - 1)
+    )
     return ring, obox
 
 
@@ -103,7 +122,10 @@ def _sq_tangent(box, n, deg):
     t = (lo + hi) / 2
     pts = [(cx + rx, cy), (cx + rx, cy + k * ry), (cx + k * rx, cy + ry), (cx, cy + ry)]
     c = [(1 - t) ** 3, 3 * (1 - t) ** 2 * t, 3 * (1 - t) * t * t, t**3]
-    return (sum(ci * q[0] for ci, q in zip(c, pts)), sum(ci * q[1] for ci, q in zip(c, pts)))
+    return (
+        sum(ci * q[0] for ci, q in zip(c, pts)),
+        sum(ci * q[1] for ci, q in zip(c, pts)),
+    )
 
 
 def _hook(p, x0, y_end, rise, rx, ext, wb):
@@ -194,7 +216,9 @@ def l_ss02(p):
     # Stylistic set 2 (distinct I, l and 1): l with a short tail turning
     # right at the baseline, drawn like t's foot but shorter.
     s = p.stem
-    hook, yc, _ = _hook(p, 0, -P.OS, p.w(160, 0.2), p.w(124, 0.62), p.w(88, 0.25), p.hair * 1.04)
+    hook, yc, _ = _hook(
+        p, 0, -P.OS, p.w(160, 0.2), p.w(124, 0.62), p.w(88, 0.25), p.hair * 1.04
+    )
     shape = hook + rect(0, yc, s, P.ASC, nw=p.cut)
     return G(shape, l=p.sb, r=p.sbr * 0.3, anchors={"top": s / 2, "bottom": s / 2})
 
@@ -214,7 +238,15 @@ def i(p):
 def _j_body(p):
     """j without its dot, drawn with the stem's left edge at x = 0."""
     s = p.stem
-    hook, yc, _ = _hook(p, 0, P.DESC - P.OS * 0.8, p.w(150, 0.3), p.w(118, 0.55), p.w(96, 0.25), p.hair * 1.02)
+    hook, yc, _ = _hook(
+        p,
+        0,
+        P.DESC - P.OS * 0.8,
+        p.w(150, 0.3),
+        p.w(118, 0.55),
+        p.w(96, 0.25),
+        p.hair * 1.02,
+    )
     body = hook.flip_x(s / 2) + rect(0, yc, s, P.XH, nw=p.cut)
     return body
 
@@ -256,8 +288,12 @@ def m(p):
     a2, obox2 = _arch_through(p, x1, x2, yc, (xv, _sq_y(obox1, p.sq, xv)), crotch)
     valley = squircle(*obox2, n=p.sq) & column(x1 - s * 0.85, x1) & above(yc)
     shape = (
-        rect(0, 0, s, P.XH, nw=p.cut) + a1 + rect(x1 - s, 0, x1, yc + 1)
-        + valley + a2 + rect(x2 - s, 0, x2, yc + 1)
+        rect(0, 0, s, P.XH, nw=p.cut)
+        + a1
+        + rect(x1 - s, 0, x1, yc + 1)
+        + valley
+        + a2
+        + rect(x2 - s, 0, x2, yc + 1)
     )
     shape = shape - _shoulder_trap(p, s, crotch) - _shoulder_trap(p, x1, crotch)
     return G(shape, l=p.sb, r=p.sb * 0.92)
@@ -306,7 +342,9 @@ def r(p):
     flag = flag - chamfer(x_term, _sq_y(obox, p.sq, x_term), p.cut, "ne")
     shape = rect(0, 0, s, P.XH, nw=p.cut) + flag
     shape = shape - _shoulder_trap(p, s, crotch)
-    return G(shape, l=p.sb, r=p.sbr * 0.45, anchors={"top": x_term * 0.47, "bottom": s / 2})
+    return G(
+        shape, l=p.sb, r=p.sbr * 0.45, anchors={"top": x_term * 0.47, "bottom": s / 2}
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -320,7 +358,9 @@ def _t_parts(p):
     el = p.w(70, 0.35)  # bar left of the stem
     x0 = el
     ext = p.w(112, 0.3)
-    hook, yc, x_term = _hook(p, x0, -P.OS, p.w(170, 0.2), p.w(132, 0.62), ext, p.hair * 1.04)
+    hook, yc, x_term = _hook(
+        p, x0, -P.OS, p.w(170, 0.2), p.w(132, 0.62), ext, p.hair * 1.04
+    )
     stem = rect(x0, yc, x0 + s, 650, nw=p.cut)
     bar = rect(0, P.XH - p.hair, x_term, P.XH)
     return hook + stem + bar, x0, x_term
@@ -330,7 +370,12 @@ def _t_parts(p):
 def t(p):
     shape, x0, x_term = _t_parts(p)
     s = p.stem
-    return G(shape, l=p.sbr * 0.36, r=p.sbr * 0.3, anchors={"top": x0 + s / 2, "bottom": (x0 + x_term) / 2})
+    return G(
+        shape,
+        l=p.sbr * 0.36,
+        r=p.sbr * 0.3,
+        anchors={"top": x0 + s / 2, "bottom": (x0 + x_term) / 2},
+    )
 
 
 F_TOP = P.ASC + P.OS * 0.8
@@ -339,7 +384,9 @@ F_TOP = P.ASC + P.OS * 0.8
 def _f_hook(p, x0, ext):
     """The f's top: stem (left edge x0) bending right into a horizontal
     stroke ending `ext` past the stem. Returns (shape above yc, yc, x_term)."""
-    hook, yc, x_term = _hook(p, x0, -F_TOP, p.w(176, 0.15), p.w(128, 0.6), ext, p.hair * 1.02)
+    hook, yc, x_term = _hook(
+        p, x0, -F_TOP, p.w(176, 0.15), p.w(128, 0.6), ext, p.hair * 1.02
+    )
     return hook.flip_y(0), -yc, x_term
 
 
@@ -432,7 +479,9 @@ def k(p):
     y_up = up0[1] + (s - up0[0]) * ad[1] / ad[0]  # upper edge meets the stem
     x_up_top = up0[0] + (P.XH - up0[1]) * ad[0] / ad[1]
     slope = ad[1] / ad[0]
-    arm = poly([(s - 1, y_low - slope), (W, P.XH), (x_up_top, P.XH), (s - 1, y_up - slope)])
+    arm = poly(
+        [(s - 1, y_low - slope), (W, P.XH), (x_up_top, P.XH), (s - 1, y_up - slope)]
+    )
     # Leg: its right edge runs from the foot up into the arm's lower edge at
     # J; the left edge is parallel, so the leg branches off the arm.
     xr_leg = W + p.w(12, 0.2)
@@ -441,10 +490,14 @@ def k(p):
     ld = _unit(J[0] - xr_leg, J[1])  # up and to the left
     hw_l = wl / ld[1]
     run = (J[1] + 160) / ld[1]
-    leg = poly([
-        (xr_leg - hw_l, 0), (xr_leg, 0),
-        (xr_leg + ld[0] * run, ld[1] * run), (xr_leg - hw_l + ld[0] * run, ld[1] * run),
-    ])
+    leg = poly(
+        [
+            (xr_leg - hw_l, 0),
+            (xr_leg, 0),
+            (xr_leg + ld[0] * run, ld[1] * run),
+            (xr_leg - hw_l + ld[0] * run, ld[1] * run),
+        ]
+    )
     # Bury the leg's top in the arm: keep it below the arm's centreline.
     c0 = (s + nrm[0] * wa / 2, y_low + nrm[1] * wa / 2)
     leg = leg - half_plane(c0, (c0[0] + ad[0], c0[1] + ad[1]))

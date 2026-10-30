@@ -16,7 +16,22 @@ import math
 from types import SimpleNamespace
 
 from .. import params as P
-from ..geom import Shape, above, below, chamfer, diag, left_of, poly, rect, right_of, ring, squircle, stem_trap, stroke, superness
+from ..geom import (
+    Shape,
+    above,
+    below,
+    chamfer,
+    diag,
+    left_of,
+    poly,
+    rect,
+    right_of,
+    ring,
+    squircle,
+    stem_trap,
+    stroke,
+    superness,
+)
 from . import G, glyph, ref
 from .parts import outer_x, solve_cx
 
@@ -58,8 +73,18 @@ def _quadrant(box, n, which):
     rx, ry = (x1 - x0) / 2, (y1 - y0) / 2
     k = superness(n)
     if which == "tl":
-        return [(cx, cy + ry), (cx - k * rx, cy + ry), (cx - rx, cy + k * ry), (cx - rx, cy)]
-    return [(cx - rx, cy), (cx - rx, cy - k * ry), (cx - k * rx, cy - ry), (cx, cy - ry)]
+        return [
+            (cx, cy + ry),
+            (cx - k * rx, cy + ry),
+            (cx - rx, cy + k * ry),
+            (cx - rx, cy),
+        ]
+    return [
+        (cx - rx, cy),
+        (cx - rx, cy - k * ry),
+        (cx - k * rx, cy - ry),
+        (cx, cy - ry),
+    ]
 
 
 def _bez(pts, t):
@@ -103,7 +128,9 @@ def _trap(x, depth, up, counter, n_in):
     # ray from the tip.
     b = (x + depth * 0.95, yc + sy * depth * 1.1)
     ytop = quad[0][1] if up else quad[3][1]
-    inside = sy * (ytop - b[1]) > 2 and b[0] > _bez_solve(quad, 1, b[1])[0] + depth * 0.2 + 1
+    inside = (
+        sy * (ytop - b[1]) > 2 and b[0] > _bez_solve(quad, 1, b[1])[0] + depth * 0.2 + 1
+    )
     if not inside:
         q = _bez_solve(quad, 1, yc + sy * depth * 0.6)
         b = (q[0] + (q[0] - tip[0]) * 0.6, q[1] + (q[1] - tip[1]) * 0.6)
@@ -170,8 +197,25 @@ def _b_body(p, stem_y0, stem_y1, nw=0, sw=0):
     xl = s
     xr = _b_width(p)
     out_top, in_top, out_bot, in_bot = _bowl_joins(p)
-    bowl = _bowl_on_stem(p, xl, xr, -P.OS, P.XH + P.OS, p.stem * 1.03, p.hair, p.hair, out_top, in_top, out_bot, in_bot)
-    shape = rect(0, stem_y0, s, stem_y1, nw=nw, sw=sw) + bowl.shape - bowl.traps(p.trap * 1.3)
+    bowl = _bowl_on_stem(
+        p,
+        xl,
+        xr,
+        -P.OS,
+        P.XH + P.OS,
+        p.stem * 1.03,
+        p.hair,
+        p.hair,
+        out_top,
+        in_top,
+        out_bot,
+        in_bot,
+    )
+    shape = (
+        rect(0, stem_y0, s, stem_y1, nw=nw, sw=sw)
+        + bowl.shape
+        - bowl.traps(p.trap * 1.3)
+    )
     return shape, xr
 
 
@@ -222,7 +266,12 @@ def thorn(p):
 @glyph("a.ss01")
 def a_ss01(p):
     shape, xr = _mirror(_b_body(p, 0, P.XH, nw=p.cut))
-    return G(shape, l=p.sbr, r=p.sb, anchors={"top": (xr - p.stem) / 2, "bottom": xr - p.stem / 2})
+    return G(
+        shape,
+        l=p.sbr,
+        r=p.sb,
+        anchors={"top": (xr - p.stem) / 2, "bottom": xr - p.stem / 2},
+    )
 
 
 @glyph("g", 0x0067)
@@ -242,7 +291,9 @@ def g(p):
     y_term = y0_t + wb + 0.45 * (yc_t - y0_t - wb)
     tail = (outer - inner) & (below(yc_t) + left_of(cx_t))
     tail = tail - (left_of(cx_t) & above(y_term))
-    tail = tail - chamfer(_ox(x0_t, y0_t, xr, y1_t, p.sq, y_term, "left"), y_term, p.cut, "nw")
+    tail = tail - chamfer(
+        _ox(x0_t, y0_t, xr, y1_t, p.sq, y_term, "left"), y_term, p.cut, "nw"
+    )
     return G(shape + tail, l=p.sbr, r=p.sb, anchors={"top": (xr - s) / 2})
 
 
@@ -288,9 +339,18 @@ def _a_shape(p, xr, ae_e=None):
     yi0, yi1 = -P.OS + wb, yb1 - wt
     in_top, in_bot = yi1 - c_lo * 0.30, yi0 + c_lo * 0.30
     bw = _bowl_on_stem(
-        p, -xs, 0, -P.OS, yb1, s * 1.03, wt, wb,
-        out_top=yb1 - wt * 0.08, in_top=in_top,
-        out_bot=wb * 0.1, in_bot=in_bot,
+        p,
+        -xs,
+        0,
+        -P.OS,
+        yb1,
+        s * 1.03,
+        wt,
+        wb,
+        out_top=yb1 - wt * 0.08,
+        in_top=in_top,
+        out_bot=wb * 0.1,
+        in_bot=in_bot,
     )
     bowl = bw.shape
     if ae_e is None:
@@ -324,7 +384,12 @@ def a(p):
     xr = p.w(448, 0.9)
     shape, cx_h, _ = _a_shape(p, xr)
     # Accents centre on the hook; an ogonek hangs from the stem.
-    return G(shape, l=p.sbr * 0.95, r=p.sb * 0.95, anchors={"top": cx_h, "bottom": xr - p.stem / 2})
+    return G(
+        shape,
+        l=p.sbr * 0.95,
+        r=p.sb * 0.95,
+        anchors={"top": cx_h, "bottom": xr - p.stem / 2},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -388,7 +453,9 @@ def _s_shape(p, w):
     # Upper ring (a little narrower); its bottom stroke is the spine.
     xu0, xu1 = w * 0.035, w * 0.97
     ub = (xu0, sp0, xu1, P.XH + P.OS)
-    U = squircle(*ub, p.sq) - squircle(xu0 + s, sp0 + wsp, xu1 - s * 0.94, P.XH + P.OS - wt, p.sq_in)
+    U = squircle(*ub, p.sq) - squircle(
+        xu0 + s, sp0 + wsp, xu1 - s * 0.94, P.XH + P.OS - wt, p.sq_in
+    )
     cxu = (xu0 + xu1) / 2
     ct = P.XH * 0.735
     U = U - (right_of(cxu) & below(ct))
@@ -444,7 +511,9 @@ def oslash(p):
     x0, _, x1, _ = o.shape.bounds()
     w = x1 - x0
     over = 44
-    slash = diag(x0 + w * 0.12, -P.OS - over, x1 - w * 0.12, P.XH + P.OS + over, p.hair * 0.85)
+    slash = diag(
+        x0 + w * 0.12, -P.OS - over, x1 - w * 0.12, P.XH + P.OS + over, p.hair * 0.85
+    )
     return G(o.shape + slash, l=p.sbr, r=p.sbr)
 
 
@@ -515,19 +584,27 @@ def germandbls(p):
     ws_l = s * 1.03
 
     def lower_ring(x0, x1):
-        return squircle(x0, -P.OS, x1, yl1, p.sq) - squircle(x0 + ws_l, -P.OS + hw, x1 - ws_l, yl1 - hw, p.sq_in)
+        return squircle(x0, -P.OS, x1, yl1, p.sq) - squircle(
+            x0 + ws_l, -P.OS + hw, x1 - ws_l, yl1 - hw, p.sq_in
+        )
 
     wide = cxl + W * 0.9
     lb_left = (cxl - wide, -P.OS, cxl + wide, yl1)
-    L = (lower_ring(2 * cxl - W, W) & right_of(cxl)) + (lower_ring(cxl - wide, cxl + wide) & left_of(cxl) & right_of(x_end))
+    L = (lower_ring(2 * cxl - W, W) & right_of(cxl)) + (
+        lower_ring(cxl - wide, cxl + wide) & left_of(cxl) & right_of(x_end)
+    )
     L = L - chamfer(x_end, _oy(*lb_left, p.sq, x_end, "bottom"), p.cut, "sw")
     # Upper bowl: a ring whose left side is the stem; its right side ends
     # inside the waist.
     xu1 = W * 0.82
     yu0 = yl1 - hw - 40
-    U = squircle(0, yu0, xu1, top, p.sq) - squircle(s, yu0 + hw, xu1 - s * 0.98, top - hw, p.sq_in)
+    U = squircle(0, yu0, xu1, top, p.sq) - squircle(
+        s, yu0 + hw, xu1 - s * 0.98, top - hw, p.sq_in
+    )
     ycu = (yu0 + top) / 2
     cxu = xu1 / 2
     U = U & (above(ycu) + (right_of(cxu) & above(yl1 - hw / 2)))
-    stem = rect(0, 0, s, ycu)  # shares y = ycu with the arch; an overlap breaks the union
+    stem = rect(
+        0, 0, s, ycu
+    )  # shares y = ycu with the arch; an overlap breaks the union
     return G(stem + U + L, l=p.sb, r=p.sbr)

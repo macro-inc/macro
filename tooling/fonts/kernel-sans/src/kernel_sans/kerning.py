@@ -101,7 +101,11 @@ def _split(spec):
 
 def _is_lower(name):
     base = name.split(".")[0]
-    return base[:1].islower() and base not in ("period", "comma", "ellipsis") and not base.startswith(("quote", "hyphen", "endash", "emdash"))
+    return (
+        base[:1].islower()
+        and base not in ("period", "comma", "ellipsis")
+        and not base.startswith(("quote", "hyphen", "endash", "emdash"))
+    )
 
 
 class _Profiles:
@@ -131,14 +135,18 @@ def _zone(name, b):
     """Vertical zone a glyph is spaced in: its x-height or cap-height band for
     letters, its own extent for punctuation."""
     base = name.split(".")[0]
-    if base in ("period", "comma", "ellipsis") or base.startswith(("quote", "hyphen", "endash", "emdash")):
+    if base in ("period", "comma", "ellipsis") or base.startswith(
+        ("quote", "hyphen", "endash", "emdash")
+    ):
         return (b[1], b[3])
     return (0, P.XH) if _is_lower(name) else (0, P.CAP)
 
 
 def _reference(name):
     base = name.split(".")[0]
-    if base in ("period", "comma", "ellipsis") or base.startswith(("quote", "hyphen", "endash", "emdash")):
+    if base in ("period", "comma", "ellipsis") or base.startswith(
+        ("quote", "hyphen", "endash", "emdash")
+    ):
         return name
     return "n" if _is_lower(name) else "H"
 

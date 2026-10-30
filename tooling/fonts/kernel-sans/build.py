@@ -85,7 +85,14 @@ def zoom(names, weights, out_dir, cell):
             if name in names:
                 print(f"!! {name} @ {wght} failed:\n{err}", file=sys.stderr)
         out = os.path.join(out_dir, f"zoom-{wght}.png")
-        glyph_sheet(paths["ttf"], names, out, title=f"{wght} {P.WEIGHTS.get(wght, '')}", cell_h=cell, cols=max(1, 1800 // int(cell * 0.75)))
+        glyph_sheet(
+            paths["ttf"],
+            names,
+            out,
+            title=f"{wght} {P.WEIGHTS.get(wght, '')}",
+            cell_h=cell,
+            cols=max(1, 1800 // int(cell * 0.75)),
+        )
         print("wrote", out)
 
 
@@ -110,7 +117,12 @@ def proof(only, weights, out_dir):
             names_by_mod[mod] = names
             if names:
                 out = os.path.join(out_dir, f"{mod}-glyphs-{wght}.png")
-                glyph_sheet(paths["ttf"], names, out, title=f"{mod} · {wght} {P.WEIGHTS.get(wght, '')}")
+                glyph_sheet(
+                    paths["ttf"],
+                    names,
+                    out,
+                    title=f"{mod} · {wght} {P.WEIGHTS.get(wght, '')}",
+                )
                 print("wrote", out)
     for mod in mods:
         m = sys.modules.get(f"kernel_sans.glyphs.{mod}")
@@ -131,17 +143,34 @@ def main():
     ap.add_argument("--out", default="")
     ap.add_argument("--formats", default="otf,ttf,woff2")
     ap.add_argument("--no-variable", action="store_true")
-    ap.add_argument("--zoom", default="", help="comma-separated glyph names to render large")
-    ap.add_argument("--compat", action="store_true", help="check variable-font compatibility (with --only)")
-    ap.add_argument("--cell", type=int, default=420, help="cell height in px for --zoom")
-    ap.add_argument("--specimen-embed", default="", help="also write a self-contained specimen to this path")
+    ap.add_argument(
+        "--zoom", default="", help="comma-separated glyph names to render large"
+    )
+    ap.add_argument(
+        "--compat",
+        action="store_true",
+        help="check variable-font compatibility (with --only)",
+    )
+    ap.add_argument(
+        "--cell", type=int, default=420, help="cell height in px for --zoom"
+    )
+    ap.add_argument(
+        "--specimen-embed",
+        default="",
+        help="also write a self-contained specimen to this path",
+    )
     args = ap.parse_args()
     only = [m for m in args.only.split(",") if m]
     if args.compat:
         sys.exit(compat(only))
     if args.zoom:
         weights = [int(w) for w in args.weights.split(",") if w] or [300, 400, 800]
-        zoom(args.zoom.split(","), weights, args.out or os.path.join(HERE, "proofs"), args.cell)
+        zoom(
+            args.zoom.split(","),
+            weights,
+            args.out or os.path.join(HERE, "proofs"),
+            args.cell,
+        )
         return
     if args.proof:
         weights = [int(w) for w in args.weights.split(",") if w] or [300, 400, 800]
@@ -153,7 +182,10 @@ def main():
     formats = [f for f in args.formats.split(",") if f]
     for wght in weights:
         paths, drawn, _ = build_static(wght, out_dir, formats, strict=True)
-        print(f"{wght}: {len(drawn)} glyphs ->", ", ".join(os.path.relpath(v, HERE) for v in paths.values()))
+        print(
+            f"{wght}: {len(drawn)} glyphs ->",
+            ", ".join(os.path.relpath(v, HERE) for v in paths.values()),
+        )
     if not args.no_variable:
         from kernel_sans.variable import build_variable
 
@@ -165,7 +197,10 @@ def main():
             page = build_specimen(out_dir, os.path.join(HERE, "specimen", "index.html"))
             print("specimen ->", os.path.relpath(page, HERE))
             if args.specimen_embed:
-                print("specimen (embedded font) ->", build_specimen(out_dir, args.specimen_embed, embed=True))
+                print(
+                    "specimen (embedded font) ->",
+                    build_specimen(out_dir, args.specimen_embed, embed=True),
+                )
 
 
 if __name__ == "__main__":

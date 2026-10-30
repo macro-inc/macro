@@ -50,11 +50,17 @@ def feature_code(drawn, p):
             if all(part in names for part in parts):
                 liga.append((" ".join(parts), n))
     if liga:
-        out.append("feature liga {\n" + "\n".join(f"  sub {a} by {b};" for a, b in liga) + "\n} liga;")
+        out.append(
+            "feature liga {\n"
+            + "\n".join(f"  sub {a} by {b};" for a, b in liga)
+            + "\n} liga;"
+        )
 
     # A colon between figures (09:30) rises to the figures' centre.
     if "colon.case" in names:
-        figs = [f for f in FIGURES if f in names] + [f + ".tf" for f in FIGURES if f + ".tf" in names]
+        figs = [f for f in FIGURES if f in names] + [
+            f + ".tf" for f in FIGURES if f + ".tf" in names
+        ]
         out.append(
             "feature calt {\n"
             f"  sub [{' '.join(figs)}] colon' [{' '.join(figs)}] by colon.case;\n"
