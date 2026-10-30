@@ -8,7 +8,6 @@ import {
   captureScrollAnchor,
   holdScrollAnchor,
   restoreScrollAnchor,
-  SELF_ANCHORED_SCROLLER,
 } from './scrollAnchor';
 
 const rect = (top: number, bottom: number) =>
@@ -213,13 +212,6 @@ describe('element scroll anchor', () => {
     expect(captureElementScrollAnchor(element)?.scroller).toBe(scroller);
   });
 
-  it('leaves a scroll container that anchors its own content alone', () => {
-    const { scroller, element } = setupScrolledElement(450);
-    scroller.setAttribute(SELF_ANCHORED_SCROLLER, '');
-
-    expect(captureElementScrollAnchor(element)).toBeUndefined();
-  });
-
   it('falls back to a scroll container whose content still fits', () => {
     const { scroller, element } = setupScrolledElement(450);
     Object.defineProperty(scroller, 'scrollHeight', { value: 500 });
@@ -246,6 +238,40 @@ describe('element scroll anchor', () => {
     vi.advanceTimersByTime(1000);
     expect(resize.isObserving()).toBe(false);
     expect(scroller.style.overflowAnchor).toBe('');
+  });
+
+  it('holds still while the anchor is not rendered', () => {
+    vi.useFakeTimers();
+    const resize = stubResizeObserver();
+    const { scroller, element } = setupScrolledElement(450);
+    const { anchor } = captureElementScrollAnchor(element)!;
+    holdScrollAnchor(scroller, anchor);
+
+    // A narrower split hides the label (display: none), which measures as an
+    // empty rect at the viewport origin.
+    vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(rect(0, 0));
+    resize.notify();
+
+    expect(scroller.scrollTop).toBe(1000);
+  });
+
+  it('anchors on the pressed control, not a label inside it', () => {
+    const { scroller, position, element } = setupScrolledElement(450);
+    const button = document.createElement('button');
+    element.replaceWith(button);
+    const label = document.createElement('span');
+    button.append(label);
+    vi.spyOn(button, 'getBoundingClientRect').mockImplementation(() =>
+      rect(position.top, position.top + 28)
+    );
+    vi.spyOn(label, 'getBoundingClientRect').mockReturnValue(rect(0, 0));
+
+    const captured = captureElementScrollAnchor(label);
+    expect(captured?.anchor.top).toBe(450);
+
+    position.top = 700;
+    restoreScrollAnchor(scroller, captured!.anchor);
+    expect(scroller.scrollTop).toBe(1250);
   });
 
   it('lets the user scroll away during the hold', () => {

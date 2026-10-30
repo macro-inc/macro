@@ -1,4 +1,3 @@
-import { captureElementScrollAnchor } from '@core/util/scrollAnchor';
 import { cleanup, render, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -265,16 +264,4 @@ it('coalesces explicit destination changes into a post-render layout notificatio
   f.navigation()?.requestLayoutUpdate();
   await new Promise((resolve) => queueMicrotask(() => resolve(undefined)));
   expect(f.onScroll).not.toHaveBeenCalled();
-});
-
-describe('opening a split from a message', () => {
-  it('leaves the reflow to the virtualizer instead of holding the clicked element', async () => {
-    const f = setup();
-    await waitFor(() => expect(f.navigation()).toBeDefined());
-    const row = f.element.querySelector('[data-index]');
-
-    // Two writers correcting the same reflow scroll the message away.
-    expect(row).not.toBeNull();
-    expect(captureElementScrollAnchor(row!)).toBeUndefined();
-  });
 });

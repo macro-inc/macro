@@ -58,10 +58,6 @@ otherwise a growing last row can clamp the scroll against the old DOM extent.
 Viewport and inset changes explicitly scroll to the end only if previously pinned.
 The offset observer distinguishes instant programmatic scrolls from user scrolling,
 so our own corrections do not prolong gesture compensation.
-The scroller carries `SELF_ANCHORED_SCROLLER`, so opening a split from a message
-(a magic chip's Open session, a link) does not also hold the clicked element
-with `holdScrollAnchor`: its scrollTop writes and the virtualizer's row
-corrections double-count the narrower reflow and scroll the message away.
 
 Safari wheel scrolling and iOS touch scrolling use a separate logical offset while a gesture is
 active. Size and prepend corrections counter-shift the rows instead of writing

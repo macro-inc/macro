@@ -99,25 +99,19 @@ function verticalScrollParent(element: Element): HTMLElement | undefined {
 }
 
 /**
- * Marks a scroll container that keeps its own content anchored through
- * reflows, such as a virtualized list that corrects for remeasured rows.
- * Element anchors leave it alone: two writers correcting the same reflow
- * double-count it and scroll the content away.
- */
-export const SELF_ANCHORED_SCROLLER = 'data-self-anchored-scroller';
-
-/**
  * Anchors on `element` when any of it is on screen in the nearest container
  * that scrolls it vertically.
  */
 export function captureElementScrollAnchor(
-  element: Element | undefined
+  pressed: Element | undefined
 ): { scroller: HTMLElement; anchor: ScrollAnchor } | undefined {
-  if (!element?.isConnected) return undefined;
+  if (!pressed?.isConnected) return undefined;
+  // A label inside a control can collapse when its container narrows (an
+  // "Open session" text that hides below a container width); the control
+  // itself stays.
+  const element = pressed.closest('a, button, [role="button"]') ?? pressed;
   const scroller = verticalScrollParent(element);
-  if (!scroller || scroller.hasAttribute(SELF_ANCHORED_SCROLLER)) {
-    return undefined;
-  }
+  if (!scroller) return undefined;
 
   const view = scroller.getBoundingClientRect();
   const { top, bottom } = element.getBoundingClientRect();
@@ -125,12 +119,18 @@ export function captureElementScrollAnchor(
 
   return {
     scroller,
-    anchor: {
-      top,
-      measure: () =>
-        element.isConnected ? element.getBoundingClientRect().top : undefined,
-    },
+    anchor: { top, measure: () => renderedTop(element) },
   };
+}
+
+/**
+ * An element's viewport top, or undefined when it has no box: a hidden
+ * element measures as an empty rect at the origin, not where it was.
+ */
+function renderedTop(element: Element): number | undefined {
+  if (!element.isConnected) return undefined;
+  const { top, width, height } = element.getBoundingClientRect();
+  return width === 0 && height === 0 ? undefined : top;
 }
 
 const SCROLL_HOLD_MS = 1000;
