@@ -11,9 +11,10 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
-    ClaimedSend, InboundEvent, InboundKind, MediaImport, Message, MessageAnchor, MessageKind,
-    OutboundMedia, SessionScope,
+    ClaimedSend, InboundEvent, InboundKind, LookupAnswer, MediaImport, Message, MessageAnchor,
+    MessageKind, OutboundMedia, SessionScope,
 };
+use whatsapp_linked::domain::jid::PhoneNumber;
 use whatsapp_linked::domain::models::{GroupInfo, Identity, Participant};
 use whatsapp_linked::domain::session::SessionService;
 use whatsapp_linked::outbound::pg::PgWhatsAppRepository;
@@ -28,6 +29,8 @@ use crate::domain::ports::{
 
 const IDENTITY: &str = "15550001111@s.whatsapp.net";
 const GROUP: &str = "120363000000000001@g.us";
+/// The one number the fake WhatsApp has an account for.
+const REGISTERED: &str = "+5550002";
 
 /// Calls the runner made, in order.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,6 +49,8 @@ enum Call {
     RequestHistory(String, String, u32),
     /// Chat, message id.
     RequestMessage(String, String),
+    /// Phone number.
+    LookUp(String),
 }
 
 #[derive(Clone)]
@@ -212,6 +217,22 @@ impl WhatsAppSession for FakeSession {
             .send(Call::Group(group_jid.to_owned()))
             .unwrap();
         Ok(self.whatsapp.group.lock().unwrap().clone())
+    }
+
+    /// [`REGISTERED`] is the customer; every other number is unregistered.
+    async fn look_up(&self, phone: &PhoneNumber) -> Result<LookupAnswer, SessionError> {
+        self.whatsapp
+            .calls
+            .send(Call::LookUp(phone.as_str().to_owned()))
+            .unwrap();
+        Ok(if phone.as_str() == REGISTERED {
+            LookupAnswer::Found {
+                jid: phone.jid(),
+                name: Some("Customer".to_owned()),
+            }
+        } else {
+            LookupAnswer::NotOnWhatsApp
+        })
     }
 
     async fn logout(&self) {
@@ -929,3 +950,5 @@ async fn a_kms_outage_leaves_a_connected_account_and_its_device_alone(pool: PgPo
     );
     assert_eq!(account_state(&pool, account).await, "connected");
 }
+
+mod lookups;
