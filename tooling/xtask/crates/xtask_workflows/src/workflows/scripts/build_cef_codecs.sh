@@ -61,8 +61,9 @@ if [ ! -f "$built" ]; then
 fi
 
 gn_args="$work/code/chromium/src/out/Release_GN_arm64/args.gn"
-for arg in 'proprietary_codecs = true' 'ffmpeg_branding = "Chrome"'; do
-  if ! grep -qF "$arg" "$gn_args"; then
+# args.gn has no spaces around '='; tolerate either form.
+for arg in 'proprietary_codecs *= *true' 'ffmpeg_branding *= *"Chrome"'; do
+  if ! grep -qE "^$arg$" "$gn_args"; then
     echo "Release build is missing '$arg' in $gn_args" >&2
     cat "$gn_args" >&2
     exit 1
