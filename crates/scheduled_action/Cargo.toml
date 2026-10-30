@@ -78,6 +78,7 @@ utoipa-swagger-ui = { workspace = true }
 tower = { workspace = true }
 
 macro_cors = { path = "../macro_cors" }
+macro_tower_layers = { path = "../macro_tower_layers" }
 macro_auth = { path = "../macro_auth" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 

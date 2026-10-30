@@ -109,9 +109,13 @@ impl AgentSessionClient {
             .base_url
             .join(operation.path())
             .map_err(|_| RoutineSessionError::OperationFailed)?;
+        // The harness continues this trace, so a run is one trace end to end.
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
         let response = self
             .client
             .post(url)
+            .headers(headers)
             .header(INTERNAL_API_KEY_HEADER, self.internal_key.clone())
             .timeout(operation.timeout())
             .json(command)

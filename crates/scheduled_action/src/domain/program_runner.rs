@@ -203,6 +203,7 @@ where
             .map_err(|error| anyhow!("Couldn't answer this routine's questions: {error}"))
     }
 
+    #[tracing::instrument(name = "routine.step", skip_all, err, fields(tool = step.tool.name()))]
     async fn tool(
         &self,
         owner: &MacroUserIdStr<'static>,
