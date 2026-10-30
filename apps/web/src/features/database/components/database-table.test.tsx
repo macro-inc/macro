@@ -15,7 +15,7 @@ import type { DatabaseRow } from '../core/table';
 import { GridResizeObserver } from '../tests/grid-resize-observer';
 import { DatabaseTableView as DatabaseTable } from '../views/database-table-view';
 import type { DatabaseTableControls } from './database-table';
-import { GridCell } from './grid-cell';
+import { GridCell, GridCellPreview } from './grid-cell';
 
 // JSDOM has no intersection observer to drive the date selector's focus.
 vi.mock('@property/utils/focus', () => ({
@@ -119,6 +119,13 @@ function setup(
           {...options}
         />
       )}
+      renderCellPreview={(row, column) => (
+        <GridCellPreview
+          column={column()}
+          value={row().cells[column().id] ?? null}
+          canEdit={canEdit}
+        />
+      )}
     />
   ));
   return {
@@ -211,6 +218,34 @@ describe('spreadsheet interactions', () => {
     grid.scrollTop = 760 * 43;
     fireEvent.scroll(grid);
     await waitFor(() => expect(onLoadMore).toHaveBeenCalled());
+  });
+
+  it('shows previews for rows mounted mid-scroll until scrolling settles', async () => {
+    const { setRecords } = setup();
+    setRecords(
+      Array.from({ length: 1000 }, (_, index) => ({
+        rowId: `record-${index}`,
+        cells: { name: `Record ${index}` },
+      }))
+    );
+    const grid = screen.getByRole('grid').parentElement!;
+    grid.scrollTop = 500 * 43;
+    fireEvent.scroll(grid);
+    await new Promise(requestAnimationFrame);
+    const row = document.querySelector('[data-grid-row-id="record-502"]')!;
+    expect(row.textContent).toContain('Record 502');
+    expect(
+      screen.queryByRole('button', { name: 'Name: Record 502. Click to edit' })
+    ).toBeNull();
+    await waitFor(
+      () =>
+        expect(
+          screen.getByRole('button', {
+            name: 'Name: Record 502. Click to edit',
+          })
+        ).toBeTruthy(),
+      { timeout: 3000 }
+    );
   });
 
   it('opens an edit requested synchronously when the table becomes ready', async () => {

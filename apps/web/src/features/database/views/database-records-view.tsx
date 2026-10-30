@@ -31,7 +31,11 @@ import {
   SchemaErrorNotice,
 } from '../components/database-table-notices';
 import { filterConditionCount } from '../components/database-view-filters';
-import { GridCell, type GridCellProps } from '../components/grid-cell';
+import {
+  GridCell,
+  GridCellPreview,
+  type GridCellProps,
+} from '../components/grid-cell';
 import { RecordPanel } from '../components/record-panel';
 import type { DatabaseRowsSource } from '../context/table-source';
 import { toCellTimeRange } from '../core/cell-date-range';
@@ -641,6 +645,13 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
                 focusColumn
               )}
               renderCell={renderCell}
+              renderCellPreview={(row, column) => (
+                <GridCellPreview
+                  column={column()}
+                  value={rowValue(row(), column().id)}
+                  canEdit={props.canEdit}
+                />
+              )}
               controlsRef={tableReady}
               titleColumnId={titleColumn(columns())?.id}
               getRowTitle={(row) => rowTitle(row, columns())}

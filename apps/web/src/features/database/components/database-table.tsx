@@ -1,3 +1,4 @@
+import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
@@ -94,9 +95,21 @@ const EDITOR_FIELDS =
   'input:not([type="checkbox"]), textarea, [contenteditable="true"]';
 /** Portaled editors keep the cell current while they hold focus. */
 const PORTALED_EDITORS = '[role="dialog"], [role="listbox"]';
-const ROW_HEIGHT = 43;
+/** A row's height until one is measured. */
+const ROW_HEIGHT = 47;
 // Half a 500-record page: the next page is requested well before the last row.
 const PREFETCH_ROW_COUNT = 250;
+/** Rows mounted beyond the viewport in the scroll direction, and behind it. */
+const ROWS_AHEAD = 60;
+const ROWS_BEHIND = 4;
+/**
+ * Main-thread time per frame spent turning row previews into live rows. Large
+ * enough to finish the rows in view in a frame or two: each frame of upgrades
+ * repaints the viewport and delays the tiles prepainted around it.
+ */
+const UPGRADE_BUDGET_MS = 50;
+/** Rows turn live only once scrolling has paused this long. */
+const UPGRADE_DELAY_MS = 400;
 const PENDING_ROW_COUNT = 100;
 
 export type DatabaseTableProps = {
@@ -121,6 +134,11 @@ export type DatabaseTableProps = {
     row: Accessor<DatabaseRow>,
     column: Accessor<DatabaseViewColumn>,
     options?: GridCellEditorOptions
+  ) => JSX.Element;
+  /** What a cell shows while the grid scrolls, before `renderCell` mounts. */
+  renderCellPreview?: (
+    row: Accessor<DatabaseRow>,
+    column: Accessor<DatabaseViewColumn>
   ) => JSX.Element;
   getRowTitle: (row: DatabaseRow) => string;
   onOpen: (rowId: string) => void;
@@ -202,6 +220,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
   const focusRequestedCell = () => {
     if (!pendingFocus) return;
     const { rowId, column } = pendingFocus;
+    previewRows.get(rowId)?.upgrade();
     const cell = cellElement(rowId, column);
     if (!cell) return;
     pendingFocus = undefined;
@@ -248,6 +267,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
     controls.get(rowId)?.get(columnId);
   const editRequestedCell = () => {
     if (!pendingEdit || !props.canEdit) return;
+    previewRows.get(pendingEdit.rowId)?.upgrade();
     const editor = control(pendingEdit.rowId, pendingEdit.columnId);
     if (!editor) return;
     const column =
@@ -384,6 +404,61 @@ export function DatabaseTable(props: DatabaseTableProps) {
   // Placeholder rows past the loaded ones, so a fast scroll lands on rows that
   // fill in rather than on empty space while the next page loads.
   const pendingRows = () => (props.hasMoreRows ? PENDING_ROW_COUNT : 0);
+  const [rowHeight, setRowHeight] = createSignal(ROW_HEIGHT);
+  // Rows mounted mid-scroll, or out of view, render cell previews. Once
+  // scrolling settles, the ones in view turn live, nearest the middle first and
+  // within a per-frame budget, so a pause between flicks doesn't stall the next
+  // one. Rows out of view stay previews: they look the same, and repainting
+  // them would discard the tiles the compositor shows on the next flick.
+  const [scrolling, setScrolling] = createSignal(false);
+  const previewRows = new Map<
+    string,
+    { index: () => number; upgrade: () => void }
+  >();
+  let upgradeFrame: number | undefined;
+  const inView = (index: number) => {
+    const range = virtualizer.range;
+    return !range || (index >= range.startIndex && index <= range.endIndex);
+  };
+  const upgradePreviews = () => {
+    upgradeFrame = undefined;
+    if (scrolling()) return;
+    const range = virtualizer.range;
+    const middle = range ? (range.startIndex + range.endIndex) / 2 : 0;
+    const visible = [...previewRows.values()]
+      .filter((row) => inView(row.index()))
+      .sort(
+        (a, b) => Math.abs(a.index() - middle) - Math.abs(b.index() - middle)
+      );
+    const deadline = performance.now() + UPGRADE_BUDGET_MS;
+    for (const row of visible) {
+      if (performance.now() > deadline) {
+        upgradeFrame = requestAnimationFrame(upgradePreviews);
+        return;
+      }
+      row.upgrade();
+    }
+  };
+  // A repainted row discards its tiles, so upgrading as a flick starts would
+  // leave the compositor nothing to show for a frame.
+  const scheduleUpgrades = debounce(() => {
+    if (!scrolling() && upgradeFrame === undefined)
+      upgradeFrame = requestAnimationFrame(upgradePreviews);
+  }, UPGRADE_DELAY_MS);
+  const changeScrolling = (isScrolling: boolean) => {
+    setScrolling(isScrolling);
+    if (isScrolling) scheduleUpgrades.clear();
+    else scheduleUpgrades();
+  };
+  /** Rows in view while idle, and rows a focus or edit is waiting for. */
+  const mountsLive = (rowId: string, index: number) =>
+    (!scrolling() && inView(index)) ||
+    pendingFocus?.rowId === rowId ||
+    pendingEdit?.rowId === rowId;
+  onCleanup(() => {
+    if (upgradeFrame !== undefined) cancelAnimationFrame(upgradeFrame);
+  });
+  let rowHeightMeasured = false;
   const virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
     get count() {
       return rowIds().length + pendingRows();
@@ -396,34 +471,62 @@ export function DatabaseTable(props: DatabaseTableProps) {
     get scrollMargin() {
       return headerSize.height ?? 40;
     },
-    estimateSize: () => ROW_HEIGHT,
+    // Unmeasured rows take the first measured row's height, so rows mount
+    // where they stay instead of shifting every row below them as they load.
+    get estimateSize() {
+      const height = rowHeight();
+      return () => height;
+    },
     // Only the ResizeObserver measures: a synchronous read per new row forces
     // a layout on every scroll frame. A grid without layout (a hidden pane)
     // measures 0; keep the estimate so every row doesn't mount at once.
-    measureElement: (element, entry, instance) =>
-      (entry
+    measureElement: (element, entry, instance) => {
+      const size = entry
         ? measureElement(element, entry, instance)
         : instance.itemSizeCache.get(
             instance.options.getItemKey(instance.indexFromElement(element))
-          )) || ROW_HEIGHT,
-    overscan: 6,
+          );
+      if (entry && size && !rowHeightMeasured) {
+        rowHeightMeasured = true;
+        setRowHeight(size);
+      }
+      return size || rowHeight();
+    },
+    // The compositor scrolls while the main thread mounts rows, so mount well
+    // ahead in the scroll direction and only a few rows behind.
+    overscan: 0,
+    onChange: (instance) => changeScrolling(instance.isScrolling),
     get rangeExtractor() {
       const kept = keptRows();
-      return (range: Range) =>
-        [...new Set([...defaultRangeExtractor(range), ...kept])].sort(
-          (a, b) => a - b
-        );
+      return (range: Range) => {
+        const backward = virtualizer.scrollDirection === 'backward';
+        const window = defaultRangeExtractor({
+          ...range,
+          startIndex: Math.max(
+            0,
+            range.startIndex - (backward ? ROWS_AHEAD : ROWS_BEHIND)
+          ),
+          endIndex: Math.min(
+            range.count - 1,
+            range.endIndex + (backward ? ROWS_BEHIND : ROWS_AHEAD)
+          ),
+        });
+        return [...new Set([...window, ...kept])].sort((a, b) => a - b);
+      };
     },
   });
   // The adapter reconciles items by index; copies let rows key by record.
   const virtualItems = () =>
     virtualizer.getVirtualItems().map((item) => ({ ...item }));
   createEffect(() => {
-    const last = virtualizer.getVirtualItems().at(-1);
+    // Reruns as the mounted rows change; the range is the rows in view.
+    const lastMounted = virtualizer.getVirtualItems().at(-1);
+    const lastInView = virtualizer.range?.endIndex;
     if (
       props.hasMoreRows &&
-      last &&
-      last.index >= rowIds().length - PREFETCH_ROW_COUNT &&
+      lastMounted &&
+      lastInView !== undefined &&
+      lastInView >= rowIds().length - PREFETCH_ROW_COUNT &&
       !props.isUnsavedRow?.(focusedRow() ?? '')
     )
       untrack(() => props.onLoadMore?.());
@@ -814,18 +917,24 @@ export function DatabaseTable(props: DatabaseTableProps) {
                   <Key each={virtualItems()} by={(item) => item.key}>
                     {(item) => {
                       const rowId = item().key;
-                      const index = () => item().index;
+                      // Items are fresh copies on every scroll update; memos keep
+                      // a row's bindings from rerunning unless its place changed.
+                      const index = createMemo(() => item().index);
+                      const offset = createMemo(
+                        () => item().start - virtualizer.options.scrollMargin
+                      );
                       const position = () => ({
-                        transform: `translateY(${item().start - virtualizer.options.scrollMargin}px)`,
+                        transform: `translateY(${offset()}px)`,
                       });
                       if (typeof rowId !== 'string')
                         return (
                           <div
                             aria-hidden="true"
                             data-grid-pending-row
-                            class="absolute inset-x-0 top-0 grid h-[43px] border-b border-edge-muted/60"
+                            class="absolute inset-x-0 top-0 grid border-b border-edge-muted/60"
                             style={{
                               ...position(),
+                              height: `${rowHeight()}px`,
                               'grid-template-columns': template(),
                             }}
                           >
@@ -846,6 +955,20 @@ export function DatabaseTable(props: DatabaseTableProps) {
                       );
                       const highlighted = () =>
                         props.highlightRowId === row().rowId;
+                      const [live, setLive] = createSignal(
+                        !props.renderCellPreview || mountsLive(rowId, index())
+                      );
+                      if (!live()) {
+                        previewRows.set(rowId, {
+                          index,
+                          upgrade: () => {
+                            previewRows.delete(rowId);
+                            setLive(true);
+                          },
+                        });
+                        onCleanup(() => previewRows.delete(rowId));
+                        scheduleUpgrades();
+                      }
                       return (
                         <div
                           ref={(element: HTMLDivElement) => {
@@ -872,8 +995,14 @@ export function DatabaseTable(props: DatabaseTableProps) {
                           classList={{ 'bg-accent/15': highlighted() }}
                           style={{
                             ...position(),
+                            // A preview keeps the live row's height, so rows
+                            // below don't move when it turns live.
+                            height: live() ? undefined : `${rowHeight()}px`,
                             'grid-template-columns': template(),
                           }}
+                          onPointerDown={() =>
+                            previewRows.get(rowId)?.upgrade()
+                          }
                         >
                           <div
                             role="gridcell"
@@ -968,6 +1097,13 @@ export function DatabaseTable(props: DatabaseTableProps) {
                                       : undefined
                                   )}
                                 >
+                                  <Show
+                                    when={live()}
+                                    fallback={props.renderCellPreview?.(
+                                      row,
+                                      column
+                                    )}
+                                  >
                                   {props.renderCell(row, column, {
                                     onReady: (editor) =>
                                       register(rowId, columnId, editor),
@@ -984,6 +1120,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
                                         direction
                                       ),
                                   })}
+                                  </Show>
                                   <Show when={presence().length}>
                                     <span class="pointer-events-none absolute top-0 left-0 z-1 flex gap-px">
                                       <For
