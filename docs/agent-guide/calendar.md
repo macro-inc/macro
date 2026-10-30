@@ -234,7 +234,9 @@ with scrollable content above the keyboard. When the form outgrows the sheet, as
 it does with the custom repeat builder open, the sheet scrolls down to the
 footer: Cancel and `Create event` or `Save`, plus `This event`/`All events` when
 editing a recurring event. Desktop retains the centered dialog.
-Dismissing a changed event still asks before discarding the draft.
+Dismissing a changed event by Cancel, swipe, backdrop tap or Escape still asks
+before discarding the draft; Keep editing returns to the sheet with the edits
+intact, and the prompt stays away until the next attempt to close.
 
 On phones, event details use inset round action buttons and a transparent RSVP
 footer. Answering a recurring invitation opens a rounded glass sheet: choose

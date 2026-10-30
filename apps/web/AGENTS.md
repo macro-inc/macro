@@ -54,8 +54,10 @@ Discussion link scrolling has a backend-free browser regression:
 Phone sheets stacked on each other (Connect email over Settings, Add guests,
 RSVP scope and the delete confirmation over event details) have a backend-free
 browser regression for backdrop taps that must not press what the scrim covers,
-including mixed pointerdown/pointerup dismissal, and for taps inside the top
-sheet that must still press its own controls:
+including mixed pointerdown/pointerup dismissal, for taps inside the top
+sheet that must still press its own controls, and for swipes whose owner keeps
+the sheet open (a discard prompt, a pending confirmation, event details under a
+stacked sheet), which must bring it back on screen:
 `bunx playwright test --config src/components/app/mobile/browser-test/playwright.config.ts`.
 
 Composer typeahead menus choosing the side with room for their full list

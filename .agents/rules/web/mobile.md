@@ -62,6 +62,9 @@ read their code, and follow that pattern rather than inventing a new one.
   that really closed the sheet, so an owner that keeps its sheet open while
   another is stacked on it leaves that sheet's controls pressable. Don't add
   per-sheet delays or click guards for it.
+- An owner refuses a close by keeping `open` true (a discard prompt, a pending
+  action): `MobileDrawer` returns a dragged sheet to its open position. Don't
+  add per-sheet drag handling for it.
 - A sheet opened from another sheet stacks on it under its own scrim, which
   shares the sheets' layer (as Dialog's does), so the sheet beneath dims with
   the page and only the top sheet's handle stands out. Open it under the
