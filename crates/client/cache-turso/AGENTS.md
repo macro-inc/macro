@@ -11,7 +11,7 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 - `src/storage.rs`: `TursoStorage` — implements `cache_core::store::Storage`
   with the frozen compound-key schema and strict-head mutation leasing.
 - `src/driver.rs`: Turso connection/transaction handling, including checked row-at-a-time query visitation.
-- `src/storage/search.rs`: bound subsequence SQL prefilter and checked borrowed-row decoding; reuse the key buffer and let core copy only winners, never collect or limit text results first.
+- `src/storage/search.rs`: bound subsequence SQL prefilter over the covering browse index and checked borrowed-row decoding; reuse the key buffer and let core copy only winners, never collect or limit text results first.
 - `src/key.rs`: the compound key schema (frozen — see Gotchas).
 - `src/error.rs`: `TursoStorageError` / `PhysicalResetReason`.
 - `tests/storage_conformance.rs`, `tests/shared_conformance.rs`: the shared
@@ -45,7 +45,7 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 
 - Email send persistence and cancellation belong to the frontend email journal, not the normalized cache or its mutation queue.
 
-- Quick Access projection version upgrades rebuild derived rows from retained normalized records; preserve the mutation queue and storage generation (covered by `src/storage/test/search_projection.rs`).
+- Quick Access projection version upgrades rebuild derived rows from retained normalized records; preserve the mutation queue and storage generation (covered by `src/storage/test/search_projection.rs`). Storage schema 12 is a separate, intentionally incompatible covering-index cutover: native reset drops queued writes; browser versioning opens a fresh file. See `../README.md#streaming-text-search`.
 
 - `#![forbid(unsafe_code)]` and `#![deny(missing_docs)]` — this crate is held to
   a stricter bar than most because it's the single physical-disk commit point.

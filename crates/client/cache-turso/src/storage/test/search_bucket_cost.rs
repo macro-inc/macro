@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn text_search_filters_in_sql_and_uses_the_bucket_index() {
+fn text_search_filters_in_sql_and_uses_the_covering_bucket_index() {
     block_on(async {
         let mut storage = TursoStorage::open_in_memory("search-bucket-cost").unwrap();
         storage
@@ -38,6 +38,18 @@ fn text_search_filters_in_sql_and_uses_the_bucket_index() {
             let query = SearchQuery::new("ndl");
             let (sql, parameters) =
                 search::statement(SearchProfile::QuickAccessV1, "document", &query);
+            let plan = driver::query(
+                &storage.connection(),
+                &format!("EXPLAIN QUERY PLAN {sql}"),
+                parameters.clone(),
+            )
+            .unwrap();
+            assert!(
+                plan.iter().any(|row| required_text(row, 3)
+                    .unwrap()
+                    .contains("USING COVERING INDEX search_documents_browse_idx")),
+                "{plan:?}"
+            );
             let mut statement = driver::prepare(&storage.connection(), &sql).unwrap();
             let rows = driver::query_prepared(&mut statement, parameters).unwrap();
             assert_eq!(rows.len(), 1);

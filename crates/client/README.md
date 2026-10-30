@@ -75,7 +75,9 @@ projections keep their unframed postcard encoding, so a format upgrade never
 re-encodes them.
 
 Only the immediately prior cache format version is migratable
-(`MIGRATABLE_CACHE_FORMAT_VERSIONS`). Opening one drops records, search
+(`MIGRATABLE_CACHE_FORMAT_VERSIONS`), and only while the storage schema still
+matches. A storage-schema mismatch instead follows physical reset. Opening a
+migratable format drops records, search
 projections, index facts, and calendar ranges — all refetchable — and keeps
 queued mutations, optimistic layers, and their projections, then rewrites the
 namespace in the same transaction. An interrupted migration therefore retries on
@@ -251,6 +253,8 @@ match: `abc` becomes `%a%b%c%`, with literal SQL wildcards and escapes quoted in
 the bound value. Rows containing NUL pass the SQL prefilter because SQLite LIKE
 stops at NUL; Rust verifies them without truncation. Searching documents does not
 read cached email buckets. Empty bucket selection still means every profile bucket.
+The index includes `search_text` and `source_hash` after its existing browse keys,
+so filtering and result reads use an index-only scan without table lookups.
 
 The driver borrows each Turso row directly instead of collecting or copying it.
 The adapter validates every row and reuses one canonical-key buffer; only winning
@@ -262,7 +266,14 @@ including deleted and nonmatching replacements. Empty-query browsing retains its
 indexed recent path and cursors. Leading-wildcard matching still scans the selected
 buckets: this bounds application search memory, not search work or database page
 cache memory. The existing SQL telemetry includes streamed processing and cleanup.
-No storage schema, projection version, or database migration changes are needed.
+Storage schema 12 introduces this covering index through an intentionally
+incompatible cutover, not a migration. Native `open_or_reset` replaces a schema-11
+cache, including its records, queued mutations, and optimistic layers. Browsers
+open a fresh `s4.v4.t12` database; existing cleanup still keeps older files with
+pending mutations, but the new engine does not replay those queues. Backfill
+restarts against the new storage generation. The GraphQL schema epoch, record
+format, search projection version, and wire API are unchanged. Native binaries
+must be rebuilt to gain the new index; an OTA frontend update alone cannot add it.
 
 `cargo test -p cache-turso --test search` checks matching/ranking parity, including
 Unicode, escapes, NUL, and late high-ranking matches. Run the ignored 100k-row
@@ -272,12 +283,11 @@ its ignored `search_100k_rows_over_opfs` measurement runs with
 `-- --include-ignored --nocapture` under the browser runner.
 The ignored native `compare_search_scan_options` test separately compares prepared
 statement reuse, covering-index scans, and borrowed-row decoding against the same
-100k rows (release build, alternating order, seven warm samples). Covering indexes
-exist only in its disposable fixture: do not change the frozen on-disk layout
-without a queue-preserving compatibility/rollout design. Statement reuse has not
-shown a material benefit and is not enabled in production. See
-[search performance](search-performance.md) for measured costs, memory boundaries,
-and the covering-index rollout constraint.
+100k rows (release build, alternating order, seven warm samples). Its disposable
+fixture adds a legacy non-covering index for comparison with the production
+covering index. Statement reuse has not shown a material benefit and is not
+enabled in production. See [search performance](search-performance.md) for
+measured costs, memory boundaries, and the schema-12 reset behavior.
 
 ## Browser OPFS writes
 

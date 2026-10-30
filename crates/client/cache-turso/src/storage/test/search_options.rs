@@ -2,7 +2,7 @@
 use super::*;
 use std::time::{Duration, Instant};
 
-const COVERING_INDEX: &str = "CREATE INDEX search_covering ON search_documents(profile, bucket, timestamp_ms DESC, __typename, id, search_text, source_hash)";
+const BASELINE_INDEX: &str = "CREATE INDEX search_baseline ON search_documents(profile, bucket, timestamp_ms DESC, __typename, id)";
 
 #[test]
 #[ignore = "100k-row SQL optimization comparison; run in release with --ignored --nocapture"]
@@ -32,15 +32,15 @@ fn compare_search_scan_options() {
         }
         let connection = storage.connection();
         let start = Instant::now();
-        driver::execute(&connection, COVERING_INDEX, vec![]).unwrap();
-        eprintln!("covering build: {:?}", start.elapsed());
+        driver::execute(&connection, BASELINE_INDEX, vec![]).unwrap();
+        eprintln!("baseline index build: {:?}", start.elapsed());
         for query in ["contact", "99999", "no-match"] {
-            let (sql, parameters) = search::statement(
+            let (covering, parameters) = search::statement(
                 SearchProfile::QuickAccessV1,
                 "document",
                 &SearchQuery::new(query),
             );
-            let covering = sql.replace("search_documents_browse_idx", "search_covering");
+            let sql = covering.replace("search_documents_browse_idx", "search_baseline");
             let plan = driver::query(
                 &connection,
                 &format!("EXPLAIN QUERY PLAN {covering}"),
