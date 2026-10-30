@@ -21,7 +21,11 @@ import {
 } from './routine-steps';
 import { routineTargetSchema } from './routine-target';
 import { describeTriggers, validateTriggers } from './routine-triggers';
-import { describeToolStep, validateToolStep } from './step-catalog';
+import {
+  describeToolStep,
+  validateStepSubjects,
+  validateToolStep,
+} from './step-catalog';
 
 export {
   DEFAULT_TIME,
@@ -215,6 +219,7 @@ function validateProgramDraft(
     return 'Apps are for an Ask AI step. Add one, or remove the apps.';
   return (
     validateSteps(steps, triggers, validateToolStep) ??
+    validateStepSubjects(steps, triggers) ??
     validateTriggers(triggers, creating)
   );
 }

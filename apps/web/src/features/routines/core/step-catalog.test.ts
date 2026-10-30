@@ -21,6 +21,7 @@ import {
   summarizeStep,
   triggerScope,
   triggerSubject,
+  validateStepSubjects,
   validateToolStep,
 } from './step-catalog';
 
@@ -152,6 +153,32 @@ describe('routine step catalog', () => {
     };
     expect(stepActionKey(step)).toBe('other');
     expect(describeToolStep(step)).toBe('Set Entity Property');
+  });
+});
+
+describe('steps on the triggering item', () => {
+  const event = (events: string[]): RoutineTriggerDraft =>
+    ({ id: events[0], kind: 'event', events }) as RoutineTriggerDraft;
+  const archive = createActionStep(
+    stepActions.find((action) => action.key === 'archive')!,
+    triggerScope('email')
+  );
+
+  it('needs every trigger to be for an item the step can act on', () => {
+    expect(
+      validateStepSubjects([archive], [event(['email.message_received'])])
+    ).toBeNull();
+    // The routine was switched to tasks: archiving one can't work.
+    expect(validateStepSubjects([archive], [event(['task.created'])])).toMatch(
+      /Archive.*an email/
+    );
+    // A task trigger added beside the email one would hand it a task.
+    expect(
+      validateStepSubjects(
+        [archive],
+        [event(['email.message_received']), event(['task.created'])]
+      )
+    ).toMatch(/every trigger/);
   });
 });
 

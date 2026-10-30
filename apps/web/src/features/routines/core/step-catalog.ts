@@ -593,6 +593,43 @@ export function describeToolStep(step: ToolStepDraft): string {
 }
 
 /** What a tool step must have before it can be saved. */
+const SUBJECT_NOUNS: Record<StepSubject, string> = {
+  email: 'an email',
+  task: 'a task',
+  document: 'a document',
+  channel: 'a channel message',
+};
+
+/**
+ * Steps that act on the triggering item need every trigger to be for an item
+ * they can act on: an Archive step can't run on a task, and adding a task
+ * trigger to an email routine would hand it one.
+ */
+export function validateStepSubjects(
+  steps: StepDraft[],
+  triggers: readonly RoutineTriggerDraft[]
+): string | null {
+  const subject = triggerSubject(triggers);
+  for (const step of flattenSteps(steps)) {
+    if (
+      step.kind !== 'tool' ||
+      !Object.values(step.arguments).includes(TRIGGER_ID)
+    )
+      continue;
+    const action = stepActions.find(
+      (action) => action.key === stepActionKey(step)
+    );
+    const subjects = action?.subjects;
+    // Actions without subjects act on any item.
+    if (!subjects || (subject && subjects.includes(subject))) continue;
+    // Schedules are reported elsewhere: they have no triggering item at all.
+    if (triggers.some((trigger) => trigger.kind !== 'event')) continue;
+    const needs = subjects.map((each) => SUBJECT_NOUNS[each]);
+    return `“${stepTitle(step)}” acts on the item that started the run, so every trigger must be for ${needs.join(' or ')}. Change its triggers or the step.`;
+  }
+  return null;
+}
+
 export function validateToolStep(step: ToolStepDraft): string | null {
   const args = step.arguments;
   // A cleared target, e.g. one a shared routine's activator can't open.
