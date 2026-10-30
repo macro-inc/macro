@@ -61,7 +61,7 @@ read their code, and follow that pattern rather than inventing a new one.
   band inside the scroll. A touch popover split exposes that slot as
   `drawerHeader` on its panel context; see `MobileEventForm`. Content that
   grows to fill its sheet (a composer's description) calls `fillDrawer` from
-  that context to open at full height; see `MobileTaskComposer`.
+  that context to open at a fixed height; see `MobileTaskComposer`.
 - Pick people, projects, tags, or other searchable lists from a touch sheet
   with `PickerSheet` (`components/app/mobile`), not a dropdown: a full-height
   sheet stacked over the current one with Cancel, a title, and Done, and no

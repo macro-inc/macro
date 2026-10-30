@@ -222,7 +222,8 @@ function PopoverSplitModal(props: {
             ref={attachPanel}
             aria-label={displayName()}
             maxHeight={92}
-            targetHeight={fillsDrawer() ? 92 : undefined}
+            // Room to write a few paragraphs without covering the page.
+            targetHeight={fillsDrawer() ? 70 : undefined}
           >
             <MobileDrawer.Handle />
             {/* Before the scroll body so it exists when the content mounts;

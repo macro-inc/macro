@@ -10,8 +10,8 @@ import { TaskComposer } from './task-composer-parts';
 export function MobileTaskComposer(props: {
   composer: TaskComposerController;
 }) {
-  // Opens as tall as the other composer sheets, the description taking the
-  // room above the properties.
+  // Opens taller than its content, the description taking the room above the
+  // properties.
   props.composer.fillSheet();
   // The keyboard leaves too little room for the whole composer, so the header
   // pins to the top of the sheet's scroll to keep Create Task in reach. It
