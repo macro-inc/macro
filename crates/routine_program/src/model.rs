@@ -22,6 +22,10 @@ pub struct RoutineProgram {
     /// for it to run.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mcp_servers: Vec<AgentMcpServer>,
+    /// Loaded from a single-agent task saved before programs existed, whose
+    /// instructions had no length or blank limits; validation keeps it so.
+    #[serde(skip)]
+    pub(crate) single_agent_task: bool,
 }
 
 /// One step of a routine.
@@ -318,6 +322,7 @@ impl RoutineProgram {
                 instructions,
             })],
             mcp_servers: legacy.mcp_servers,
+            single_agent_task: true,
         })
     }
 

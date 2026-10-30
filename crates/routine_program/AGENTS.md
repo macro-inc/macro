@@ -52,3 +52,6 @@ no I/O.
 - A program with `mcp_servers` needs an agent step (`AppsWithoutAgent`).
 - `RoutineModelId` rejects blank models while parsing, so a single agent task
   with a blank model fails `from_task` rather than validation.
+- A single agent task keeps the rules it was saved under: `validate()` skips
+  the blank and length limits on its instructions, so stored routines keep
+  running. Adding steps makes it a program, which gets every limit.

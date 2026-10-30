@@ -153,3 +153,27 @@ fn required_apps_need_an_agent_to_hand_them_to() {
         Err(ProgramError::AppsWithoutAgent)
     );
 }
+
+#[test]
+fn old_single_agent_tasks_keep_the_rules_they_were_saved_under() {
+    let long = "x".repeat(limits::MAX_INSTRUCTION_CHARS + 1);
+    let legacy = |user_prompt: &str| {
+        RoutineProgram::from_task(
+            &json!({ "model": "m", "prompt": "", "user_prompt": user_prompt }),
+        )
+        .unwrap()
+    };
+    legacy(&long).validate().unwrap();
+    legacy("").validate().unwrap();
+    assert_eq!(
+        validate(json!([{ "type": "agent", "model": "m", "instructions": long }])),
+        Err(ProgramError::InstructionsTooLong)
+    );
+    // Its target still has to resolve.
+    assert_eq!(
+        RoutineProgram::from_task(&json!({ "prompt": "", "user_prompt": "x" }))
+            .unwrap()
+            .validate(),
+        Err(ProgramError::MissingTarget)
+    );
+}

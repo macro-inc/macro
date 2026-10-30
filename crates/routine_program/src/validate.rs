@@ -123,7 +123,10 @@ impl RoutineProgram {
         if self.steps.is_empty() {
             return Err(ProgramError::Empty);
         }
-        let mut check = Check::default();
+        let mut check = Check {
+            single_agent_task: self.single_agent_task,
+            ..Check::default()
+        };
         check.steps(&self.steps, 0)?;
         if check.count > MAX_STEPS {
             return Err(ProgramError::TooManySteps);
@@ -150,6 +153,7 @@ struct Check {
     count: usize,
     ids: HashSet<StepId>,
     reads_trigger: bool,
+    single_agent_task: bool,
 }
 
 impl Check {
@@ -170,7 +174,7 @@ impl Check {
 
     fn step(&mut self, step: &Step) -> Result<(), ProgramError> {
         match step {
-            Step::Agent(agent) => agent_step(agent),
+            Step::Agent(agent) => agent_step(agent, self.single_agent_task),
             Step::If(_) => Ok(()),
             Step::Choose(choose) => {
                 if !(2..=MAX_OPTIONS).contains(&choose.options.len()) {
@@ -221,11 +225,13 @@ impl Check {
     }
 }
 
-fn agent_step(agent: &AgentStep) -> Result<(), ProgramError> {
-    if agent.instructions.trim().is_empty() {
+/// An old single-agent task keeps the rules it was saved under: its target
+/// must resolve, but its instructions may be blank or long.
+fn agent_step(agent: &AgentStep, single_agent_task: bool) -> Result<(), ProgramError> {
+    if !single_agent_task && agent.instructions.trim().is_empty() {
         return Err(ProgramError::BlankInstructions);
     }
-    if agent.instructions.chars().count() > MAX_INSTRUCTION_CHARS {
+    if !single_agent_task && agent.instructions.chars().count() > MAX_INSTRUCTION_CHARS {
         return Err(ProgramError::InstructionsTooLong);
     }
     match (&agent.agent, &agent.model) {
