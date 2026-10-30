@@ -33,3 +33,41 @@ and `tracing-subscriber` outside named wrapper crates (Macro's are
 Anything else.
 
 ## Result
+
+Changed:
+
+- `connect/crates/connect_platform/src/lib.rs` loads the default AWS SDK config;
+  `connect/services/connect_api/src/main.rs` uses it to construct the KMS client.
+- The two crate `Cargo.toml` files and `Cargo.lock` move the direct `aws-config`
+  dependency from `connect_api` to `connect_platform`.
+- `deny.toml` allows `connect_platform` as the AWS config and tracing subscriber
+  wrapper. `connect/crates/connect_platform/AGENTS.md` documents its AWS role.
+
+Checks:
+
+- `just hakari` — passed; refreshed `Cargo.lock`.
+- `cargo deny check bans` — passed (`bans ok`; existing workspace warnings).
+- `cargo nextest run --all-features -p connect_api -p connect_platform` — passed:
+  28 tests, 0 skipped.
+- `cargo clippy -p connect_api -p connect_platform --all-features --all-targets -- -D warnings`
+  — passed.
+- `cargo x deps --check` — passed.
+- `just check` — passed (format, ast-grep rules, PII scan, and 12 scanner tests).
+- `cargo fmt --all -- --check` and `git diff --check` — passed in the audit.
+- Audit — passed; no remaining findings.
+
+Open questions: None.
+
+Proposed commit:
+
+```text
+fix(connect): load AWS config through platform wrapper
+
+Why:
+Direct AWS configuration in the API violates the dependency wrapper ban.
+
+What:
+Move AWS SDK configuration loading into connect_platform and use it for
+the API's KMS client. Register Connect's platform wrapper in cargo-deny
+and update the dependency artifacts and crate guide.
+```
