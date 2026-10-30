@@ -73,22 +73,25 @@ it.each(['accepted', 'rejected'] as const)(
     ));
     try {
       view.getByText('Delete draft').click();
+      expect(view.getByText('Email list')).toBeTruthy();
+      expect(returnToList).toHaveBeenCalledOnce();
       await waitFor(() =>
         expect(compose.drafts.deleteDraft).toHaveBeenCalledOnce()
       );
-      expect(returnToList).not.toHaveBeenCalled();
-      expect(splitBack).not.toHaveBeenCalled();
       if (outcome === 'accepted') {
         pending.resolve();
-        await waitFor(() => expect(view.getByText('Email list')).toBeTruthy());
-        expect(returnToList).toHaveBeenCalledOnce();
+        await pending.promise;
       } else {
         pending.reject(new Error('Deletion failed'));
-
+        await waitFor(() =>
+          expect(compose.notices.feedback.failure).toHaveBeenCalledWith(
+            'Failed to delete draft'
+          )
+        );
         await expect(pending.promise).rejects.toThrow('Deletion failed');
-        expect(view.getByText('Delete draft')).toBeTruthy();
-        expect(returnToList).not.toHaveBeenCalled();
       }
+      expect(view.getByText('Email list')).toBeTruthy();
+      expect(returnToList).toHaveBeenCalledOnce();
       expect(splitBack).not.toHaveBeenCalled();
       expect(compose.drafts.saveDraft).not.toHaveBeenCalled();
     } finally {

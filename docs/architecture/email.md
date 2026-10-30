@@ -102,7 +102,7 @@ test exercises this ordering.
 | `EmailReplySession` | Thread identity, recipient options, personal-reply classification, a targeted reply request, and host intents for leaving the composer or removing its draft |
 | `EmailDraftStorage` | Save/delete and restore an undone draft, and drop a moved draft's working copy; inputs use domain inbox IDs and completion intent |
 | `EmailAttachmentStorage` | Upload, forward, and remove draft attachments |
-| `EmailDelivery` | Send, undo, schedule, unschedule, and archive operations |
+| `EmailDelivery` | Send, undo, schedule, unschedule, and archive operations, and each queued send's progress |
 | `EmailComposeFeedback` | User notices and error reporting |
 | `EmailComposeAccounts` | Inbox identities, availability, and the primary inbox |
 | `EmailComposePresentation` | View-only device state, signature visibility, upgrade action, and link preparation |
@@ -264,6 +264,7 @@ its failure handling. Adapter tests therefore exercise real TanStack mutations.
 | --- | --- |
 | Draft save/delete or attachment write | Existing shared mutation reports the write failure; callers do not add a second schedule/save notice. |
 | Send | Composer reports the failed send once. A failed reply restores only its original still-mounted editor; a newer editor's work is preserved. |
+| Queued send that fails later | The send notice reports the failure; a reply that marked its thread done returns it to the inbox. |
 | Schedule/unschedule | Schedule workflow reports the failed request and keeps the last confirmed time. |
 | Post-send refresh/navigation/analytics | Report the presentation/cache error; do not report that delivery failed or enable a duplicate send. |
 | Archive after scheduling | Keep the confirmed schedule and identify the archive failure separately. |
@@ -274,7 +275,19 @@ error-reported refresh. A slow refresh must not delay Undo or leave an
 Undo-restored editor disabled. Each send owns its mentions, completion target,
 and undo handle; sending again must preserve the earlier notification's undo
 action. Standalone compose marks completion before its navigation callback, so
-disposal cannot autosave or resend the successful message.
+disposal cannot autosave or resend the successful message. Discard navigates
+first instead. It pauses autosave and cancels the pending edit, leaves, then
+finishes the in-flight save, the local flush, and the deletion in the
+background. A queued write can wait out the mutation queue's request and
+delivery timeouts, and the optimistic delete empties a draft-only thread
+around the composer, so leaving cannot wait on either. A host that fails to
+leave is reported, and the deletion still runs.
+
+The send notice follows each queued send through `EmailDelivery.watchSend`,
+which reads the device outbox. Undo stays on offer until the deadline the server
+returned with the accepted attempt. A reply whose send fails, is cancelled, or is
+restored reverses its mark-done through the same undo handle, including when
+marking done finishes later.
 
 `EmailThreadSource.refresh()` and `fetchOlder()` require `Promise<void>`. Their
 adapters await the underlying query, and callers that need fresh messages await
@@ -579,7 +592,12 @@ but the panel stays silent for routine delivery: it lists a send only while it
 waits on this device, needs attention, or is scheduled. Thread surfaces project
 approved immediate sends from the journal as sent messages
 (`email-thread/primitives/optimistic-send.ts`) until the thread read shows them,
-and read the thread once when delivery is confirmed.
+and read the thread once when delivery is confirmed. Every surface reads one
+document-scoped journal snapshot (`queries/email/queued-sends.ts`). The outbox
+session reads it at sign-in and clears it on account change, the first mounted
+observer starts its watcher and poll, and Send refreshes it before the thread
+opens, so that thread mounts with the send already projected instead of its
+draft.
 
 Deploy schema/migrations and all generation-aware backend writers before
 releasing this frontend, including before applying `ios-update`: that workflow

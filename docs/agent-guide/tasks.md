@@ -771,6 +771,11 @@ editor inserts a project mention. A link to a project discussion stays a link.
 Project properties live in the shared floating information panel and honor
 project access. Editors can rename the project; its owner can delete it.
 Deleting a project leaves its tasks in the workspace.
+Opening a project without access shows `You don't have access to this project`
+with the same Request access row and access level as documents. The owner
+reviews it under Share's `Permission requests`, and once granted the open
+project loads in place. Losing access while the project is open switches to
+that view. A deleted project shows `Project unavailable` with Try again.
 
 Project information panels start closed and float over the content at every
 width, both in the Tasks project view and standalone initiative blocks. Opening

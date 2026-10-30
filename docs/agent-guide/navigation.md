@@ -990,7 +990,8 @@ the person's name and email above Copy email, Copy name, Open contact (CRM teams
 only), DM, and Assign task. An agent's or bot's card offers Settings instead of
 DM when the viewer can configure it: Macro opens Settings → Agents, an agent the
 viewer manages opens straight into its Edit agent form, and a plain bot opens
-its page under Settings → Bots. Touch devices have no hover, so tapping the mention
+its page under Settings → Bots. An agent's avatar beside its channel messages
+opens the same card. Touch devices have no hover, so tapping the mention
 or the picture opens that same card as a bottom sheet; any action there runs and
 dismisses the sheet. Desktop keeps click-to-DM on the picture itself, which touch
 drops in favour of the card's DM action.

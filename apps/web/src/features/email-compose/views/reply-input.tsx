@@ -1,4 +1,5 @@
 import { EmailAttachmentPill } from '@app/features/email-message/components/attachment-pill';
+import { reloadApp } from '@app/observability/reload';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
@@ -171,6 +172,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
   );
   const sync = createDraftSyncStatus({
     drafts: composeContext.drafts,
+    connectivity: composeContext.connectivity,
     draftId: state.savedDraftId,
     localSaveState: state.localSaveState,
     retry: state.retryDraft,
@@ -214,6 +216,8 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
     composeContext.presentation.isTouch() &&
     !state.hasBodyText() &&
     state.replyType() !== 'forward';
+  const quotedContent = () =>
+    state.replyType() === 'forward' ? 'forwarded message' : 'quoted text';
   const signatureHtml = () =>
     composeContext.presentation.signaturesEnabled()
       ? state.signatureHtml()
@@ -238,8 +242,21 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
     setDraftBackMenuOpen(false);
     props.mobileCompose?.onClose();
   };
+  const reloadForRecovery = async () => {
+    try {
+      await state.flushLocal();
+    } catch (error) {
+      composeContext.notices.reportError(error);
+      return;
+    }
+    reloadApp('user_recovery');
+  };
   onMount(() => props.mobileCompose?.registerClose(requestClose));
   const isMobileCompose = () => props.mobileCompose !== undefined;
+  const editorPlaceholder = () =>
+    isMobileCompose()
+      ? 'Use `@` to reference files'
+      : `${state.replyType() === 'forward' ? 'Forward' : 'Reply'} — @mention to share or cc people`;
   const composePortalScope = () =>
     isMobileCompose() ? ('local' as const) : undefined;
   const scrollAreaSignatureHtml = () =>
@@ -488,6 +505,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
       busy={sync.busy()}
       error={sync.error()}
       onRetry={sync.retry}
+      onReload={() => fireAndForget(reloadForRecovery(), 'email-compose')}
       onKeepEditing={sync.keepEditing}
     />
   );
@@ -653,11 +671,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
                 isDragging() && 'blur'
               )}
               disabled={editingDisabled()}
-              placeholder={
-                isMobileCompose()
-                  ? 'Use `@` to reference files'
-                  : 'Reply — @mention to share or cc people'
-              }
+              placeholder={editorPlaceholder()}
               portalScope={isMobileCompose() ? 'local' : 'split'}
               refFn={(el) => props.markdownDomRef?.(el)}
               onConnect={handleEditorConnect}
@@ -700,6 +714,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
             floating over) tall content. */}
           <QuotedTextControls
             replying={!!props.replyingTo()}
+            content={quotedContent()}
             appended={form.replyAppended()}
             collapsed={quoteCollapsed()}
             disabled={editingDisabled()}
@@ -842,6 +857,8 @@ function CloudAttachmentsNotice(props: { message: EmailMessage | undefined }) {
 /** The "⋯" pill that reveals collapsed quoted text, or the toggle that appends it. */
 function QuotedTextControls(props: {
   replying: boolean;
+  /** What the quote holds: "quoted text" or "forwarded message". */
+  content: string;
   appended: boolean;
   collapsed: boolean;
   disabled: boolean;
@@ -854,15 +871,15 @@ function QuotedTextControls(props: {
         <div class="shrink-0 flex items-center pt-1" data-corvu-no-drag="">
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="xs"
             class="text-ink-extra-muted hover:text-ink-muted hover:bg-active"
-            tooltip="Show quoted text"
-            onclick={(e: MouseEvent) => {
+            onClick={(e: MouseEvent) => {
               e.stopPropagation();
               props.onExpand();
             }}
           >
             <DotsThree class="size-3.5 shrink-0 pointer-events-none" />
+            Show {props.content}
           </Button>
         </div>
       </Show>
@@ -879,10 +896,11 @@ function QuotedTextControls(props: {
           onClick={(e) => e.stopPropagation()}
         >
           <Tooltip
-            label={props.appended ? 'Hide quoted text' : 'Show quoted text'}
+            label={`${props.appended ? 'Hide' : 'Show'} ${props.content}`}
           >
             <KToggleButton
               as={Button}
+              aria-label={props.content}
               variant="ghost"
               size="icon-sm"
               class="size-5 rounded bg-transparent p-0 text-ink-extra-muted hover:text-ink-muted"

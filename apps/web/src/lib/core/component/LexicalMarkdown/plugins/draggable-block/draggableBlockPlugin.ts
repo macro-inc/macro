@@ -15,6 +15,7 @@ import {
   COMMAND_PRIORITY_HIGH,
   KEY_DOWN_COMMAND,
   type LexicalEditor,
+  type NodeKey,
   SELECTION_CHANGE_COMMAND,
 } from 'lexical';
 import { createStore, type SetStoreFunction } from 'solid-js/store';
@@ -243,6 +244,10 @@ function registerDraggableBlock(
 ) {
   const { setState } = props;
   let isDraggingBlock = false;
+  // The node being dragged, when the drag started in this editor. A block
+  // dragged in from another editor (an image dropped into a second document)
+  // is left to the editor's other drop handlers, which copy it.
+  let draggedKey: NodeKey | null = null;
   let isKeyboardMode = false;
   let hasNonCollapsedSelection = false;
   let rafId: number | null = null;
@@ -347,8 +352,19 @@ function registerDraggableBlock(
     return false;
   }
 
+  // Listens on `document`: the drag handle is portaled outside the editor.
+  function handleDragStart(event: DragEvent) {
+    const key = event.dataTransfer?.getData(DRAG_DATA_FORMAT);
+    draggedKey =
+      key && editor.read(() => $getNodeByKey(key) !== null) ? key : null;
+    // Media blocks start their drag from the block itself, not the handle,
+    // so the drop line needs the drag state set here too.
+    if (draggedKey) setState({ isDragging: true });
+  }
+
   function handleDragOver(event: DragEvent) {
-    if (!event.dataTransfer?.types.includes(DRAG_DATA_FORMAT)) return;
+    if (!draggedKey || !event.dataTransfer?.types.includes(DRAG_DATA_FORMAT))
+      return;
     isDraggingBlock = true;
 
     event.preventDefault();
@@ -372,9 +388,12 @@ function registerDraggableBlock(
 
   function handleDrop(event: DragEvent) {
     const dragData = event.dataTransfer?.getData(DRAG_DATA_FORMAT);
-    if (!dragData) return;
+    if (!draggedKey || dragData !== draggedKey) return;
 
     isDraggingBlock = false;
+    // Moving the node can detach the drag source, whose dragend then never
+    // reaches this editor.
+    draggedKey = null;
     event.preventDefault();
     event.stopImmediatePropagation();
 
@@ -585,6 +604,7 @@ function registerDraggableBlock(
   }
 
   function handleDragEnd() {
+    draggedKey = null;
     if (isDraggingBlock) {
       isDraggingBlock = false;
       resetState();
@@ -619,6 +639,7 @@ function registerDraggableBlock(
   }
 
   document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('dragstart', handleDragStart);
   window.addEventListener('scroll', onScroll, true);
 
   // Hide drag handle when any key is pressed
@@ -652,6 +673,7 @@ function registerDraggableBlock(
       rafId = null;
     }
     document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('dragstart', handleDragStart);
     window.removeEventListener('scroll', onScroll, true);
     unregisterKeyDown();
     unregisterSelectionChange();

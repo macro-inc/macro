@@ -447,13 +447,15 @@ event without attendees creates the event right away (unlike AI chat, where crea
 for the user to confirm a composer card). For an event with attendees the bot is prompted to
 ask for confirmation in the thread first, since Google sends the invitations the moment the
 event is created — no invitation goes out from the initial request. It cannot draft or send
-email at all. When that reply links something the rest of the channel may not already open
-(a calendar event, document, or similar chip), it ends by asking "Do you want me to share this
-with the members of the channel?" A yes in the thread — "yes", "please", "go ahead" — is
-enough: the bot replies "Okay." and grants current members access. It does not share before
-that yes unless the request already asked it to. A decline is not shared. Private and
-confidential calendar events stay unshared, and a calendar event can only be shared by
-someone who holds it on their own calendar. The bot's prompt carries the current date and time in the mentioning user's
+email at all. A bot or agent reply posted for a person shares, as that person, the linked items
+(chips or attachments) that the replying bot created for them while answering: those with a
+`created` activity row by that bot on the person's behalf since the person's latest message in
+the thread before the reply. Activity arrives asynchronously, so missing rows are re-checked
+after 5 and 30 seconds. Existing items it links, plain URLs, and bot posts with no person
+behind them share nothing. The bot never asks whether to share; it calls `ShareWithChannel` when asked to
+share an existing item. Private and confidential calendar events stay unshared, and a
+calendar event can only be shared by someone who holds it on their own calendar.
+The bot's prompt carries the current date and time in the mentioning user's
 own time zone (their primary calendar's), so it resolves relative times ("tomorrow at 4",
 "EOD") without asking; when no calendar is connected the prompt falls back to UTC and the
 bot asks before scheduling a specific clock time. Within the rollout, `@Macro` — plus
@@ -706,9 +708,21 @@ Its count includes only distinct offscreen unread threads, not notifications.
 Three replies and a mention in one thread count as one; reactions do not count.
 Clicking the chip expands the target thread and reveals an unread message.
 Scrolling an inline indicator into view does not expand the thread or mark its
-hidden replies seen. Notifications are still marked seen when their message mounts,
-including virtualized overscan. Collapsed replies that are not rendered remain
-unread.
+hidden replies seen. Automatic read marking waits until the actual message intersects
+the visible scroll area, excluding floating header/composer insets. Offscreen
+overscan, collapsed replies, hidden panes, and background tabs remain unread.
+Expanded standalone threads and the thread side panel use the same visibility
+rule. New notifications on an already-mounted offscreen reply remain unread until
+that reply comes into view. Explicit notification clicks and mark-read actions
+retain their existing behavior.
+
+Visibility is conservative: moving a partly off-window pane without crossing
+either observer's visibility threshold can leave a now-visible reply unread
+until the next intersection update or an explicit mark-read action.
+
+The backend-free regression uses the real message read marker and channel
+virtualizer on desktop, phone, and tablet:
+`bunx playwright test --config src/features/notifications/browser-test/playwright.config.ts`.
 Check the last channel message with a long collapsed unread thread: at the bottom,
 the inline dot and accent border should be visible without a downward chip. With
 another unread thread above, an upward chip should remain and count only that offscreen thread.

@@ -239,6 +239,15 @@ on desktop and mobile. Tool results render through
 `lib/core/component/AI/component/tool/Canvas.tsx`; edits arrive through live sync.
 The shared plain-text Lexical codec is `packages/lexical-core/canvas-text.ts`.
 
+## Message notification reads
+
+Gate automatic message notification reads on the actual message element
+intersecting the visible scroll area, excluding floating chrome and background
+tabs. Share visibility observers per thread list, including standalone threads;
+never treat virtualized overscan or a visible thread parent as seeing its replies.
+The backend-free desktop/phone/tablet regression is
+`bunx playwright test --config src/features/notifications/browser-test/playwright.config.ts`.
+
 ## Development Patterns
 
 Route database row rename and delete through `renameDatabase` and
@@ -469,8 +478,6 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Preserve loaded block content on initial access confirmation when its loader
   supplies no permissions; reload only on a later confirmed permission change.
   Apply shared access in place only after a successful permissionless load.
-  Request state can report an owner as edit, so compare a loaded level with
-  the confirmed one through `matchesConfirmedAccess`.
 - Grouped Soup's `graphql/create-grouped-soup-live-query.ts` owns initial and
   continuation pages plus their local predicate projection. Group readers only
   delegate paging; pass the parent's live `groupedPaging` accessor from every

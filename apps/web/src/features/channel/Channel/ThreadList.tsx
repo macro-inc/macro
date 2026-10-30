@@ -3,6 +3,7 @@ import {
   createScrollIntentTracker,
   type ScrollDirection,
 } from '@core/util/scroll-intent';
+import { MessageReadVisibilityProvider } from '@notifications/components/MessageReadVisibility';
 import { Key } from '@solid-primitives/keyed';
 import { isIOS, isSafari } from '@solid-primitives/platform';
 import {
@@ -623,7 +624,7 @@ export function ThreadList(props: ThreadListProps) {
   });
 
   return (
-    <>
+    <MessageReadVisibilityProvider root={scrollEl} insets={insets}>
       <div
         ref={scrollRef}
         data-channel-scroll
@@ -685,6 +686,6 @@ export function ThreadList(props: ThreadListProps) {
           scrollIntent.markUserIntent(delta > 0 ? 'down' : 'up');
         }}
       />
-    </>
+    </MessageReadVisibilityProvider>
   );
 }
