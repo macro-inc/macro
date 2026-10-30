@@ -14,6 +14,12 @@ export const channelKeys = createQueryKeys('channel', {
   participants: (channelID: string) => ({
     queryKey: [channelID],
   }),
+  myAccessRequest: (channelID: string) => ({
+    queryKey: [channelID],
+  }),
+  accessRequest: (channelID: string, requestID: string) => ({
+    queryKey: [channelID, requestID],
+  }),
   channelBots: (channelID: string) => ({
     queryKey: [channelID],
   }),

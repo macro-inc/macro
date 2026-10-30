@@ -8,8 +8,8 @@
 mod test;
 
 use ::activity::{
-    Action, Activity, ActivitySource, Actor, CommonAction, DomainActivity, EntityType, Ingest,
-    ParticipantChange, event_time,
+    AccessRequest, Action, Activity, ActivitySource, Actor, CommonAction, DomainActivity,
+    EntityType, Ingest, ParticipantChange, event_time,
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -38,6 +38,11 @@ pub enum ChannelAction {
     ParticipantRemoved {
         /// The removed principal.
         participant: Actor<'static>,
+    },
+    /// Someone outside the channel asked to join it.
+    AccessRequested {
+        /// The attempt, whose current outcome the channel domain serves.
+        request_id: Uuid,
     },
 }
 
@@ -68,6 +73,9 @@ impl DomainActivity for ChannelActivity {
             }
             ChannelAction::ParticipantRemoved { participant } => {
                 Action::ParticipantRemoved(ParticipantChange { participant })
+            }
+            ChannelAction::AccessRequested { request_id } => {
+                Action::AccessRequested(AccessRequest { request_id })
             }
         }
     }
@@ -272,6 +280,17 @@ impl ActivitySource for ChannelTopicEvent {
                 now(),
                 |participant| ChannelAction::ParticipantRemoved { participant },
             ),
+            ChannelTopicEvent::AccessRequested(m) => Ingest::Insert(vec![exclusive(
+                event_id,
+                0,
+                Actor::new_from_user(m.requester_id.clone()),
+                None,
+                m.channel_id,
+                ChannelAction::AccessRequested {
+                    request_id: m.request_id,
+                },
+                now(),
+            )]),
         }
     }
 }

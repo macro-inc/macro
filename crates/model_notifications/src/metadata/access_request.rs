@@ -111,3 +111,46 @@ impl NotificationExtIos for EntityAccessGrantedMetadata {
         alert_apns(self, sender, id, None).ok()
     }
 }
+
+/// A person asked to join a channel the recipient participates in.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelAccessRequestedMetadata {
+    /// The attempt to join, which is also this notification's id.
+    pub request_id: Uuid,
+    /// Channel the requester asked to join.
+    #[serde(flatten)]
+    pub common: CommonChannelMetadata,
+    /// Optional requester profile picture URL.
+    #[serde(default)]
+    pub sender_profile_picture_url: Option<String>,
+}
+impl Notification for ChannelAccessRequestedMetadata {
+    const TYPE_NAME: &'static str = "channel_access_requested";
+}
+impl NotificationTitle for ChannelAccessRequestedMetadata {
+    fn format_title(&self, sender: Option<MacroUserIdStr<'_>>) -> Result<String, Report> {
+        let sender = comment_sender_label(sender, None);
+        Ok(format!(
+            "{sender} asked to join #{}",
+            self.common.channel_name
+        ))
+    }
+    fn format_body(&self, _sender: Option<MacroUserIdStr<'_>>) -> Result<String, Report> {
+        Ok(format!("#{}", self.common.channel_name))
+    }
+}
+impl NotificationExtIos for ChannelAccessRequestedMetadata {
+    type NotifData = PushNotificationData;
+    fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new(Self::TYPE_NAME).append(&self.request_id.to_string())
+    }
+    fn as_apns<'a>(
+        &self,
+        sender: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
+        id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        alert_apns(self, sender, id, self.sender_profile_picture_url.clone()).ok()
+    }
+}

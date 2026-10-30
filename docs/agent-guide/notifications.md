@@ -188,6 +188,7 @@ sounds on, it shows a volume slider and one row per type (Messages, Mentions,
 Thread replies, Email, Meetings & reminders, Tasks, AI & agents, Everything
 else), each with its own on/off switch, sound picker, and play button. Picking
 a sound previews it. Email, AI & agents, and Everything else start off.
+Channel join requests use Everything else, alongside sharing and invitations.
 
 Sounds are synthesized with Web Audio (`features/notification-sounds`); there
 are no audio files. Event types map to rows in `core/categories.ts`; a new

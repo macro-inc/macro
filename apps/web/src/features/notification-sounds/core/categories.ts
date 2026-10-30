@@ -108,6 +108,7 @@ const CATEGORY_BY_EVENT: Record<
   commented_on_document: 'other',
   channel_message_reaction: 'other',
   channel_invite: 'other',
+  channel_access_requested: 'other',
   initiative_discussion: 'other',
   crm_discussion: 'other',
   entity_access_requested: 'other',

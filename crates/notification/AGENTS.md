@@ -82,6 +82,8 @@ through the same service.
   notification. Retries preserve original IDs, recipients, and lifecycle state.
 - Access-request withdrawals suppress delayed ingress and queued push/realtime
   delivery; keep tombstone checks when changing either delivery boundary.
+- Channel join requests count in both top-level and channel-feed notification
+  filters; keep these filters aligned with the web notification classifier.
 - Crates on `macrod`'s dependency path (`teams`, `model_notifications`,
   `invite_email`) take this crate with `default-features = false`, which keeps
   librdkafka out of the self-hosted daemon; keep it that way.

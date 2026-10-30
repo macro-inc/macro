@@ -33,6 +33,38 @@ pipelines by name and record type, and rows by their company/contact reference;
 existing values and sharing choices are preserved. Fixture data is in
 [`seed/crm.json`](seed/crm.json).
 
+### Channel access test data
+
+Seed an isolated set of channel-testing personas into your running instance:
+
+```bash
+just seed-scenario apply --file seed/scenarios/channel-access.json
+just seed-scenario matrix --file seed/scenarios/channel-access.json
+just seed-scenario status --file seed/scenarios/channel-access.json
+```
+
+These commands target the default stack. For a named stack, add `--instance <name>`
+before `apply`, `matrix`, or `status` (for example, `--instance channel-access`).
+Include `--port-base` if you started with one.
+The scenario creates four users with emails ending in `@channel-access.seed.macro.local`:
+Alex (`owner`), Morgan (`member`), Riley (`requester`), and Sam (`outsider`).
+Alex, Morgan, and Riley share a team; Sam does not.
+
+Alex owns the private `request-approve`, `request-deny`, and `request-cancel`
+channels, with Morgan as an existing member. Riley and Sam initially have no
+access. Sign in as Riley or Sam and open `public-lobby`, which all four personas
+can read. Follow Alex's private-channel links there to reach the denied-access
+entry point. These links stay on the current app origin, so they work across
+stack ports and hostnames. The `already-member` channel includes Riley; public
+and team lobbies plus an Alex–Morgan DM provide comparison cases. Messages
+describe each case. No requests or decisions are pre-created; this fixture
+prepares membership prerequisites and does not implement channel requests.
+
+The command prints separate persona login links. For remote access, use the
+stack's HTTPS origin and separate browser profiles for simultaneous accounts.
+Reapplying resets this scenario's channels and messages; use `status` when you
+want to inspect an existing test run.
+
 ### Permission scenarios
 
 A scenario file describes a complete world — users, teams, channels, and
