@@ -34,7 +34,9 @@ use super::cli::{HerdrCli, HerdrError};
 use super::hub::title_from;
 use super::store::{Record, Store, write_private};
 use super::tail::Cursor;
+use agent_client_protocol::schema::v1::SessionId;
 use agent_fold::domain::transcript::{Fold, LogEvent};
+use agent_runtime_protocol::domain::live_sessions::{LIVE_SESSIONS_METHOD, LiveSessionsResponse};
 use claude_fold::ClaudeLog;
 use codex_fold::CodexLog;
 
@@ -443,6 +445,8 @@ impl Adapter {
                 "authMethods": [],
                 "agentInfo": {"name": "macrod-herdr", "version": env!("CARGO_PKG_VERSION")},
             })),
+            LIVE_SESSIONS_METHOD => serde_json::to_value(self.live_sessions().await)
+                .map_err(|error| RpcError::internal(error.to_string())),
             "session/new" => self.new_session(&params),
             "session/load" => self.load_session(&params).await,
             "session/set_config_option" => {
@@ -470,6 +474,42 @@ impl Adapter {
                 code: -32601,
                 message: format!("{method} is not supported"),
             }),
+        }
+    }
+
+    /// Stored sessions whose Herdr agent still runs, oldest first. Read-only:
+    /// the service's following `session/load` attaches them. A closed agent
+    /// (any `agent get` error) is not live, so it is never reopened.
+    async fn live_sessions(&self) -> LiveSessionsResponse {
+        use futures::StreamExt as _;
+        let Some(herdr) = &self.herdr else {
+            return LiveSessionsResponse {
+                session_ids: Vec::new(),
+            };
+        };
+        let mut records: Vec<Record> = futures::stream::iter(
+            self.store
+                .list()
+                .into_iter()
+                .filter(|record| record.kind == self.options.kind),
+        )
+        .map(|record| async move {
+            herdr
+                .agent_info(&agent_name(&record.id))
+                .await
+                .is_ok()
+                .then_some(record)
+        })
+        .buffer_unordered(8)
+        .filter_map(std::future::ready)
+        .collect()
+        .await;
+        records.sort_by(|a, b| a.started.cmp(&b.started).then_with(|| a.id.cmp(&b.id)));
+        LiveSessionsResponse {
+            session_ids: records
+                .into_iter()
+                .map(|record| SessionId::new(record.id))
+                .collect(),
         }
     }
 

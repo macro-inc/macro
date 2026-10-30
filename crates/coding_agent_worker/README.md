@@ -22,6 +22,11 @@ agent resumes its native session on the next prompt. Socket errors do not create
 replacement agents. Changing the configured provider does not convert existing
 sessions into sessions for the other provider.
 
+After macrod restarts or its runtime connection reconnects, the harness service
+asks which sessions still have a running Herdr agent (`_macro/live_sessions`)
+and loads each one. That replays local history Macro missed and resumes
+forwarding without a Macro prompt. Agents closed in Herdr are not reopened.
+
 A background reader forwards local TUI turns even without a Macro prompt.
 Complete JSONL records are read in bounded batches. Partial lines wait for the
 next append; truncation or replacement requires a reload. Turn boundaries are

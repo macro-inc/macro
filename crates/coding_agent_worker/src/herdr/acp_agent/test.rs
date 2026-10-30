@@ -828,3 +828,76 @@ async fn a_prompt_dismisses_the_exit_confirmation_a_second_ctrl_c_left() {
     assert!(stayed < prompted);
     adapter.shutdown.cancel();
 }
+
+#[tokio::test]
+async fn live_sessions_lists_stored_sessions_whose_herdr_agent_still_runs() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let root = tempfile::tempdir().unwrap();
+    let script = root.path().join("herdr");
+    std::fs::write(&script, include_str!("fixtures/live_herdr.sh")).unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let store = Store(root.path().to_owned());
+    for (id, kind, started) in [
+        ("11111111-1111-4111-8111-111111111111", TuiAgent::Claude, 2),
+        ("22222222-2222-4222-8222-222222222222", TuiAgent::Claude, 1),
+        ("33333333-3333-4333-8333-333333333333", TuiAgent::Claude, 0),
+        ("44444444-4444-4444-8444-444444444444", TuiAgent::Codex, 0),
+    ] {
+        store
+            .save(&Record {
+                version: 1,
+                id: id.to_owned(),
+                kind,
+                cwd: root.path().to_owned(),
+                model: "sonnet".into(),
+                native_id: None,
+                transcript: None,
+                started,
+            })
+            .unwrap();
+    }
+    let (mut adapter, mut output) = test_adapter(root.path());
+    Arc::get_mut(&mut adapter).unwrap().herdr = Some(HerdrCli::new(script, None));
+
+    adapter
+        .respond_to_request(
+            json!("macro-live-sessions-1"),
+            agent_runtime_protocol::domain::live_sessions::LIVE_SESSIONS_METHOD,
+            json!({}),
+        )
+        .await;
+
+    assert_eq!(
+        output.try_recv().unwrap(),
+        json!({
+            "jsonrpc": "2.0",
+            "id": "macro-live-sessions-1",
+            "result": {"sessionIds": [
+                "22222222-2222-4222-8222-222222222222",
+                "11111111-1111-4111-8111-111111111111",
+            ]},
+        })
+    );
+    assert!(output.try_recv().is_err());
+    assert!(lock(&adapter.sessions).is_empty());
+}
+
+#[tokio::test]
+async fn live_sessions_is_empty_without_herdr() {
+    let root = tempfile::tempdir().unwrap();
+    save_transcript(root.path(), &uuid::Uuid::now_v7().to_string());
+    let (adapter, mut output) = test_adapter(root.path());
+
+    adapter
+        .respond_to_request(
+            json!(1),
+            agent_runtime_protocol::domain::live_sessions::LIVE_SESSIONS_METHOD,
+            json!({}),
+        )
+        .await;
+
+    assert_eq!(
+        output.try_recv().unwrap(),
+        json!({"jsonrpc": "2.0", "id": 1, "result": {"sessionIds": []}})
+    );
+}

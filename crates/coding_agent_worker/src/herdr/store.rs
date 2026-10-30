@@ -46,6 +46,23 @@ impl Store {
         }
         Ok(record)
     }
+
+    /// Every valid record; unreadable or mismatched files are skipped.
+    pub fn list(&self) -> Vec<Record> {
+        let Ok(entries) = std::fs::read_dir(self.0.join("sessions")) else {
+            return Vec::new();
+        };
+        entries
+            .flatten()
+            .filter_map(|entry| {
+                let path = entry.path();
+                if path.extension()? != "json" {
+                    return None;
+                }
+                self.load(path.file_stem()?.to_str()?).ok()
+            })
+            .collect()
+    }
 }
 
 pub(crate) fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
