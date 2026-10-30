@@ -265,3 +265,55 @@ async fn large_writes_hold_a_bounded_number_of_keys(pool: PgPool) -> Result<(), 
     tx.commit().await?;
     assert_exact(&pool).await
 }
+
+/// Grants on more unseen items than the key limit take the global key, which every item insert
+/// holds shared, so two transactions that each insert an item and then do that wait on each other.
+/// PostgreSQL must detect it, abort one, and leave the other's rows exact.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn escalating_to_the_global_key_twice_aborts_one(pool: PgPool) -> Result<(), sqlx::Error> {
+    async fn escalate(c: &mut PgConnection, prefix: &str) -> Result<(), sqlx::Error> {
+        sqlx::query!(
+            r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+               SELECT ($1 || lpad(n::text, 12, '0'))::uuid, 'document', $2, 'user', 'view'
+               FROM generate_series(1, 3) n"#,
+            prefix,
+            OWNER,
+        )
+        .execute(c)
+        .await?;
+        Ok(())
+    }
+    let mut one = pool.begin().await?;
+    set_key_limit(&mut one, 1).await?;
+    insert_document(&mut one, DOC, "2026-01-01 00:00:00").await?;
+    let mut two = pool.begin().await?;
+    set_key_limit(&mut two, 1).await?;
+    insert_document(&mut two, super::DOC_2, "2026-01-01 00:00:00").await?;
+    let first_pid = backend_pid(&mut one).await?;
+
+    let first = async {
+        escalate(&mut one, "70000000-0000-4000-8000-").await?;
+        one.commit().await
+    };
+    let second = async {
+        wait_until_blocked(&pool, first_pid).await?;
+        escalate(&mut two, "80000000-0000-4000-8000-").await?;
+        two.commit().await
+    };
+    let (first, second) = tokio::join!(first, second);
+    let deadlocked = [&first, &second]
+        .into_iter()
+        .filter(|result| {
+            result
+                .as_ref()
+                .err()
+                .and_then(|e| e.as_database_error())
+                .and_then(|e| e.code())
+                .as_deref()
+                == Some("40P01")
+        })
+        .count();
+    assert_eq!(deadlocked, 1, "{first:?} {second:?}");
+    assert!(first.is_ok() || second.is_ok());
+    assert_exact(&pool).await
+}

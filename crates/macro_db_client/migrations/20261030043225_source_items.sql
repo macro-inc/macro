@@ -22,7 +22,10 @@
 --     on the keys, then looks again. Keys come in three classes, so that no transaction holds more than
 --     about 5,000 of them: one per item for a transaction's first 4,096 items, then 1,024 buckets
 --     for a large insert; a grant change that cannot see more than 4,096 items takes one global
---     key, which every insert holds shared.
+--     key, which every insert holds shared. Two transactions that each insert items and then grant
+--     more than 4,096 items that do not exist wait on each other there; PostgreSQL aborts one.
+--   * Grant changes rewrite only the (item, source) rows they touch; inserts, saves, deletes and
+--     subtype changes rewrite the item's rows.
 SET LOCAL lock_timeout = '5s';
 
 CREATE TABLE source_items (
@@ -121,33 +124,68 @@ BEGIN
     END IF;
 END $$;
 
--- Rewrites the rows of p_ids from entity_access and the item tables. Callers lock the items first
+-- The listing state of whichever of p_ids exist.
+CREATE FUNCTION source_items_state(p_type text, p_ids text[])
+RETURNS TABLE (entity_id text, kind text, sort_ts timestamp(3))
+LANGUAGE sql STABLE AS $$
+    SELECT d.id,
+           CASE WHEN st.sub_type = 'task' THEN 'task' ELSE 'document' END,
+           CASE WHEN d."deletedAt" IS NULL THEN d."updatedAt" END
+    FROM "Document" d
+    LEFT JOIN document_sub_type st ON st.document_id = d.id
+    WHERE p_type = 'document' AND d.id = ANY (p_ids)
+    UNION ALL
+    SELECT c.id, 'chat', CASE WHEN c."deletedAt" IS NULL THEN c."updatedAt" END
+    FROM "Chat" c
+    WHERE p_type = 'chat' AND c.id = ANY (p_ids)
+    UNION ALL
+    SELECT p.id, 'project', CASE WHEN p."deletedAt" IS NULL THEN p."updatedAt" END
+    FROM "Project" p
+    WHERE p_type = 'project' AND p.id = ANY (p_ids)
+$$;
+
+-- Rewrites every row of p_ids from entity_access and the item tables. Callers lock the items first
 -- and call this in a statement of its own.
 CREATE FUNCTION source_items_rebuild(p_type text, p_ids text[]) RETURNS void
 LANGUAGE sql AS $$
-    WITH items AS (
-        SELECT d.id,
-               CASE WHEN st.sub_type = 'task' THEN 'task' ELSE 'document' END AS kind,
-               CASE WHEN d."deletedAt" IS NULL THEN d."updatedAt" END AS sort_ts
-        FROM "Document" d
-        LEFT JOIN document_sub_type st ON st.document_id = d.id
-        WHERE p_type = 'document' AND d.id = ANY (p_ids)
-        UNION ALL
-        SELECT c.id, 'chat', CASE WHEN c."deletedAt" IS NULL THEN c."updatedAt" END
-        FROM "Chat" c
-        WHERE p_type = 'chat' AND c.id = ANY (p_ids)
-        UNION ALL
-        SELECT p.id, 'project', CASE WHEN p."deletedAt" IS NULL THEN p."updatedAt" END
-        FROM "Project" p
-        WHERE p_type = 'project' AND p.id = ANY (p_ids)
-    ), wanted AS (
-        SELECT ea.source_id, i.id AS entity_id, i.kind, i.sort_ts, count(*)::int AS grants
-        FROM items i
-        JOIN entity_access ea ON ea.entity_id::text = i.id AND ea.entity_type = p_type
-        GROUP BY ea.source_id, i.id, i.kind, i.sort_ts
+    WITH wanted AS (
+        SELECT ea.source_id, i.entity_id, i.kind, i.sort_ts, count(*)::int AS grants
+        FROM source_items_state(p_type, p_ids) i
+        JOIN entity_access ea ON ea.entity_id::text = i.entity_id AND ea.entity_type = p_type
+        GROUP BY ea.source_id, i.entity_id, i.kind, i.sort_ts
     ), stale AS (
         DELETE FROM source_items s
         WHERE s.entity_type = p_type AND s.entity_id = ANY (p_ids)
+          AND NOT EXISTS (
+              SELECT 1 FROM wanted w WHERE w.entity_id = s.entity_id AND w.source_id = s.source_id
+          )
+    )
+    INSERT INTO source_items AS s (source_id, entity_type, kind, entity_id, sort_ts, grants)
+    SELECT source_id, p_type, kind, entity_id, sort_ts, grants FROM wanted
+    ON CONFLICT (entity_type, entity_id, source_id) DO UPDATE
+    SET kind = EXCLUDED.kind, sort_ts = EXCLUDED.sort_ts, grants = EXCLUDED.grants
+    WHERE (s.kind, s.sort_ts, s.grants)
+          IS DISTINCT FROM (EXCLUDED.kind, EXCLUDED.sort_ts, EXCLUDED.grants)
+$$;
+
+-- Rewrites only the rows of the (p_ids[i], p_sources[i]) pairs, for grant changes, which leave an
+-- item's other sources alone. Callers lock the items first and call this in a statement of its own.
+CREATE FUNCTION source_items_rebuild_sources(p_type text, p_ids text[], p_sources text[])
+RETURNS void
+LANGUAGE sql AS $$
+    WITH keys AS (
+        SELECT DISTINCT k.entity_id, k.source_id FROM unnest(p_ids, p_sources) AS k(entity_id, source_id)
+    ), wanted AS (
+        SELECT k.source_id, i.entity_id, i.kind, i.sort_ts, count(*)::int AS grants
+        FROM keys k
+        JOIN source_items_state(p_type, p_ids) i ON i.entity_id = k.entity_id
+        JOIN entity_access ea
+          ON ea.entity_id::text = k.entity_id AND ea.entity_type = p_type AND ea.source_id = k.source_id
+        GROUP BY k.source_id, i.entity_id, i.kind, i.sort_ts
+    ), stale AS (
+        DELETE FROM source_items s
+        USING keys k
+        WHERE s.entity_type = p_type AND s.entity_id = k.entity_id AND s.source_id = k.source_id
           AND NOT EXISTS (
               SELECT 1 FROM wanted w WHERE w.entity_id = s.entity_id AND w.source_id = s.source_id
           )
@@ -169,44 +207,67 @@ BEGIN
     PERFORM source_items_rebuild(p_type, p_ids);
 END $$;
 
--- Grant changes, once per statement. Only rows whose (entity, source) changed matter: access-level
--- changes leave the projection alone. Types are processed in a fixed order, items in id order.
+-- One changed (item, source) pair of a grant statement; `added` when the statement gave it a grant.
+CREATE TYPE source_items_grant_change AS (
+    entity_type text,
+    entity_id text,
+    source_id text,
+    added boolean
+);
+
+-- Grant changes, once per statement. Old and new grants are compared as multisets of (item, source)
+-- rather than paired by id, so access-level changes leave the projection alone and a statement that
+-- also rewrites grant ids is still seen. Types are processed in a fixed order, items in id order.
 CREATE FUNCTION source_items_grants_changed() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
-    added text[];
-    removed text[];
-    touched text[];
+    changes source_items_grant_change[];
     entity text;
+    ids text[];
+    sources text[];
 BEGIN
     PERFORM source_items_require_read_committed();
+    IF TG_OP = 'INSERT' THEN
+        changes := ARRAY(
+            SELECT ROW(entity_type, entity_id::text, source_id, true)::source_items_grant_change
+            FROM new_rows
+        );
+    ELSIF TG_OP = 'DELETE' THEN
+        changes := ARRAY(
+            SELECT ROW(entity_type, entity_id::text, source_id, false)::source_items_grant_change
+            FROM old_rows
+        );
+    ELSE
+        changes := ARRAY(
+            SELECT ROW(k.entity_type, k.entity_id::text, k.source_id, true)::source_items_grant_change
+            FROM (
+                SELECT entity_type, entity_id, source_id FROM new_rows
+                EXCEPT ALL
+                SELECT entity_type, entity_id, source_id FROM old_rows
+            ) k
+            UNION ALL
+            SELECT ROW(k.entity_type, k.entity_id::text, k.source_id, false)::source_items_grant_change
+            FROM (
+                SELECT entity_type, entity_id, source_id FROM old_rows
+                EXCEPT ALL
+                SELECT entity_type, entity_id, source_id FROM new_rows
+            ) k
+        );
+    END IF;
     FOREACH entity IN ARRAY ARRAY['chat', 'document', 'project'] LOOP
-        IF TG_OP = 'INSERT' THEN
-            added := ARRAY(SELECT DISTINCT entity_id::text FROM new_rows WHERE entity_type = entity);
-            removed := '{}';
-        ELSIF TG_OP = 'DELETE' THEN
-            added := '{}';
-            removed := ARRAY(SELECT DISTINCT entity_id::text FROM old_rows WHERE entity_type = entity);
-        ELSE
-            added := ARRAY(
-                SELECT DISTINCT n.entity_id::text
-                FROM new_rows n JOIN old_rows o USING (id)
-                WHERE n.entity_type = entity
-                  AND (o.entity_id, o.entity_type, o.source_id)
-                      IS DISTINCT FROM (n.entity_id, n.entity_type, n.source_id)
-            );
-            removed := ARRAY(
-                SELECT DISTINCT o.entity_id::text
-                FROM old_rows o JOIN new_rows n USING (id)
-                WHERE o.entity_type = entity
-                  AND (o.entity_id, o.entity_type, o.source_id)
-                      IS DISTINCT FROM (n.entity_id, n.entity_type, n.source_id)
-            );
-        END IF;
-        CONTINUE WHEN cardinality(added) = 0 AND cardinality(removed) = 0;
-        touched := ARRAY(SELECT unnest(added) UNION SELECT unnest(removed));
-        PERFORM source_items_lock(entity, touched, added);
-        PERFORM source_items_rebuild(entity, touched);
+        SELECT coalesce(array_agg(k.entity_id ORDER BY k.entity_id, k.source_id), '{}'),
+               coalesce(array_agg(k.source_id ORDER BY k.entity_id, k.source_id), '{}')
+        INTO ids, sources
+        FROM (
+            SELECT DISTINCT c.entity_id, c.source_id FROM unnest(changes) c WHERE c.entity_type = entity
+        ) k;
+        CONTINUE WHEN cardinality(ids) = 0;
+        PERFORM source_items_lock(
+            entity,
+            ARRAY(SELECT DISTINCT unnest(ids)),
+            ARRAY(SELECT DISTINCT c.entity_id FROM unnest(changes) c WHERE c.entity_type = entity AND c.added)
+        );
+        PERFORM source_items_rebuild_sources(entity, ids, sources);
     END LOOP;
     RETURN NULL;
 END $$;
@@ -287,6 +348,7 @@ END $$;
 CREATE FUNCTION source_items_truncated() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
+    PERFORM source_items_require_read_committed();
     IF TG_ARGV[0] = 'entity_access' THEN
         DELETE FROM source_items;
     ELSIF TG_ARGV[0] = 'document_sub_type' THEN

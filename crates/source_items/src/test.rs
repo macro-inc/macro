@@ -267,10 +267,23 @@ async fn grant_updates_move_rows(pool: PgPool) -> Result<(), sqlx::Error> {
         rows(&mut conn, DOC_2).await?,
         [row(MEMBER, "document", Some("2026-01-02 00:00:00"), 1)]
     );
-    sqlx::query!("UPDATE entity_access SET entity_type = 'chat'")
+    // A statement that also rewrites the grant's id is still a move.
+    sqlx::query!(
+        "UPDATE entity_access SET id = id + 1000, source_id = $1, entity_id = $2::text::uuid",
+        OWNER,
+        DOC,
+    )
+    .execute(&mut *conn)
+    .await?;
+    assert_eq!(rows(&mut conn, DOC_2).await?, []);
+    assert_eq!(
+        rows(&mut conn, DOC).await?,
+        [row(OWNER, "document", Some("2026-01-01 00:00:00"), 1)]
+    );
+    sqlx::query!("UPDATE entity_access SET id = id + 1000, entity_type = 'chat'")
         .execute(&mut *conn)
         .await?;
-    assert_eq!(rows(&mut conn, DOC_2).await?, []);
+    assert_eq!(rows(&mut conn, DOC).await?, []);
     assert_exact(&pool).await
 }
 
@@ -405,6 +418,56 @@ async fn truncates_clear_rows(pool: PgPool) -> Result<(), sqlx::Error> {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn truncates_in_replica_mode_clear_rows(pool: PgPool) -> Result<(), sqlx::Error> {
+    for truncate in [
+        "TRUNCATE entity_access",
+        "TRUNCATE document_sub_type",
+        r#"TRUNCATE "Document" CASCADE"#,
+        r#"TRUNCATE "Chat" CASCADE"#,
+        r#"TRUNCATE "Project" CASCADE"#,
+    ] {
+        let mut conn = pool.acquire().await?;
+        sqlx::query!(r#"TRUNCATE "Document", "Chat", "Project", entity_access CASCADE"#)
+            .execute(&mut *conn)
+            .await?;
+        insert_document(&mut conn, DOC, "2026-01-01 00:00:00").await?;
+        sqlx::query!(
+            "INSERT INTO document_sub_type (document_id, sub_type) VALUES ($1, 'task')",
+            DOC
+        )
+        .execute(&mut *conn)
+        .await?;
+        sqlx::query!(
+            r#"INSERT INTO "Chat" (id, "userId", name) VALUES ($1, $2, 'Chat')"#,
+            CHAT,
+            OWNER
+        )
+        .execute(&mut *conn)
+        .await?;
+        sqlx::query!(
+            r#"INSERT INTO "Project" (id, name, "userId") VALUES ($1, 'Project', $2)"#,
+            PROJECT,
+            OWNER
+        )
+        .execute(&mut *conn)
+        .await?;
+        grant(&mut conn, "document", DOC, OWNER, "user").await?;
+        grant(&mut conn, "chat", CHAT, OWNER, "user").await?;
+        grant(&mut conn, "project", PROJECT, OWNER, "user").await?;
+
+        let mut tx = pool.begin().await?;
+        sqlx::query!("SET LOCAL session_replication_role = replica")
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query(truncate).execute(&mut *tx).await?;
+        tx.commit().await?;
+        let mismatches = audit::run(&pool).await?;
+        assert!(mismatches.is_empty(), "{truncate}: {mismatches:?}");
+    }
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn rollback_and_other_isolation_levels_change_nothing(
     pool: PgPool,
 ) -> Result<(), sqlx::Error> {
@@ -417,21 +480,72 @@ async fn rollback_and_other_isolation_levels_change_nothing(
     tx.rollback().await?;
     assert_eq!(rows(&mut conn, DOC).await?, []);
 
-    // A snapshot older than the previous lock holder's commit could miss its rows.
+    grant(&mut conn, "document", DOC, OWNER, "user").await?;
+    sqlx::query!(
+        "INSERT INTO document_sub_type (document_id, sub_type) VALUES ($1, 'task')",
+        DOC
+    )
+    .execute(&mut *conn)
+    .await?;
+    // A snapshot older than the previous lock holder's commit could miss its rows, so every write
+    // to an input refuses other isolation levels.
+    let writes = [
+        format!(
+            "INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+             VALUES ('{DOC}', 'document', '{MEMBER}', 'user', 'view')"
+        ),
+        format!("UPDATE entity_access SET source_id = '{MEMBER}'"),
+        "DELETE FROM entity_access".to_owned(),
+        "TRUNCATE entity_access".to_owned(),
+        format!(r#"INSERT INTO "Document" (id, name, owner) VALUES ('{DOC_2}', 'Document', '{OWNER}')"#),
+        r#"UPDATE "Document" SET "updatedAt" = now()"#.to_owned(),
+        r#"DELETE FROM "Document""#.to_owned(),
+        r#"TRUNCATE "Document" CASCADE"#.to_owned(),
+        "UPDATE document_sub_type SET sub_type = 'snippet'".to_owned(),
+        "DELETE FROM document_sub_type".to_owned(),
+        "TRUNCATE document_sub_type".to_owned(),
+    ];
     for isolation in ["REPEATABLE READ", "SERIALIZABLE"] {
-        let mut tx = pool.begin().await?;
-        sqlx::query(&format!("SET TRANSACTION ISOLATION LEVEL {isolation}"))
-            .execute(&mut *tx)
-            .await?;
-        let error = grant(&mut tx, "document", DOC, OWNER, "user")
-            .await
-            .unwrap_err();
-        assert_eq!(
-            error.as_database_error().and_then(|e| e.code()).as_deref(),
-            Some("25000"),
-            "{isolation}: {error}"
-        );
+        for write in &writes {
+            let mut tx = pool.begin().await?;
+            sqlx::query(&format!("SET TRANSACTION ISOLATION LEVEL {isolation}"))
+                .execute(&mut *tx)
+                .await?;
+            let error = sqlx::query(write).execute(&mut *tx).await.unwrap_err();
+            assert_eq!(
+                error.as_database_error().and_then(|e| e.code()).as_deref(),
+                Some("25000"),
+                "{isolation} {write}: {error}"
+            );
+        }
     }
+    assert_exact(&pool).await
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_grant_change_rewrites_only_its_sources_rows(pool: PgPool) -> Result<(), sqlx::Error> {
+    let mut conn = pool.acquire().await?;
+    insert_document(&mut conn, DOC, "2026-01-01 00:00:00").await?;
+    grant(&mut conn, "document", DOC, OWNER, "user").await?;
+    grant(&mut conn, "document", DOC, TEAM, "team").await?;
+
+    let mut tx = pool.begin().await?;
+    grant(&mut tx, "document", DOC, MEMBER, "user").await?;
+    sqlx::query!("DELETE FROM entity_access WHERE source_id = $1", TEAM)
+        .execute(&mut *tx)
+        .await?;
+    // The owner's row was neither rewritten nor locked by this transaction.
+    let touched = sqlx::query_scalar!(
+        r#"SELECT array_agg(source_id ORDER BY source_id) AS "sources!" FROM source_items
+           WHERE entity_id = $1
+             AND (xmin::text = (pg_current_xact_id()::text::bigint % 4294967296)::text
+                  OR xmax::text = (pg_current_xact_id()::text::bigint % 4294967296)::text)"#,
+        DOC
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+    assert_eq!(touched, [MEMBER]);
+    tx.commit().await?;
     assert_exact(&pool).await
 }
 

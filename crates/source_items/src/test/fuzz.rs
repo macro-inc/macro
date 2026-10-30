@@ -162,13 +162,16 @@ async fn write(conn: &mut PgConnection, rng: &mut StdRng) -> Result<&'static str
         }
         12 => {
             let (other_type, other) = item(rng);
+            // Sometimes the grant's id changes in the same statement.
+            let id_shift: i64 = if rng.random_bool(0.3) { 1_000_000 } else { 0 };
             sqlx::query(
-                "UPDATE entity_access SET entity_id = $1::text::uuid, entity_type = $2, source_id = $3
+                "UPDATE entity_access SET id = id + $4, entity_id = $1::text::uuid, entity_type = $2, source_id = $3
                  WHERE id = (SELECT id FROM entity_access ORDER BY random() LIMIT 1)",
             )
             .bind(&other)
             .bind(other_type)
             .bind(source)
+            .bind(id_shift)
             .execute(conn)
             .await?;
             "move a grant"
