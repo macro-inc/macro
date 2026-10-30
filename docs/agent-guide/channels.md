@@ -40,6 +40,11 @@ format toolbar applies it to the same paragraphs in either selection direction.
 Verify a selection from the last paragraph back to the start of the first:
 the first paragraph must receive the format too. A range ending at the start of
 the following paragraph leaves that following paragraph unchanged.
+Typing `> ` creates a quote. Pasting text with paragraph breaks into that quote
+keeps all pasted paragraphs quoted, including HTML and text copied from another
+Macro editor. Inline formatting survives. Verify an empty quote and a selection
+within a quote, then type after the paste and save the message; every pasted
+paragraph must still have the quote styling.
 The backend-free quote check is documented in the Markdown browser-test README
 linked above.
 

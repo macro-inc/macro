@@ -6,6 +6,7 @@ import {
 } from '@app/features/channel/Input/utils/formatting';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { $getRoot, $isTextNode } from 'lexical';
 import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { buildConfig } from '../../../builder/MarkdownConfigBuilder';
@@ -43,6 +44,16 @@ function Fixture() {
         />
         <button onClick={() => setSaved(editor.controls.getMarkdown())}>
           Save message
+        </button>
+        <button
+          onClick={() =>
+            editor.lexical.update(() => {
+              const text = $getRoot().getFirstDescendant();
+              if ($isTextNode(text)) text.select(7, 14);
+            })
+          }
+        >
+          Select replacement text
         </button>
         <section data-testid="saved">
           <StaticMarkdown markdown={saved()} theme={channelTheme} />
