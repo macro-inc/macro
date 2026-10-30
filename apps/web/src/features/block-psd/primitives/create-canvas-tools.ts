@@ -1,4 +1,3 @@
-import { match as matchBranch } from 'ts-pattern';
 /**
  * What the tools do with the pointer on the canvas, as Photoshop does it:
  * the Move tool drags layers (picking the one under the pointer), the
@@ -14,7 +13,10 @@ import { match as matchBranch } from 'ts-pattern';
 
 import type { Point } from '@app/features/block-fig/core/camera';
 import type { IRect, Op, SelectMode, Target } from '@core/psd-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import { createSignal } from 'solid-js';
+import { match as matchBranch } from 'ts-pattern';
 import { brushFor, newStrokeId, type PaintingTool } from '../core/brush';
 import { twoColorGradient } from '../core/gradient';
 import {
@@ -289,7 +291,7 @@ export function createCanvasTools(options: CanvasToolsOptions) {
       }
       if (s.buffer.length > 0 || s.done) flushStroke();
     };
-    void send();
+    fireAndForget(send(), 'psd-editor');
   };
 
   let frame: number | undefined;
@@ -392,14 +394,20 @@ export function createCanvasTools(options: CanvasToolsOptions) {
       g.inFlight = false;
       flushMove();
     };
-    void run();
+    fireAndForget(run(), 'psd-editor');
   };
 
   /** The layers a Move drag takes: the one under the pointer, or the chosen. */
   const pickForMove = async (p: CanvasPointer): Promise<MovePick> => {
     let ids = editor.selected();
     if (view.toolOptions().autoSelect && !p.shift) {
-      const hit = await engine.hitTest(p.at.x, p.at.y);
+      let hit: number | null = null;
+      try {
+        hit = await engine.hitTest(p.at.x, p.at.y);
+      } catch (error) {
+        // The chosen layers, then. A click never awaits the pick.
+        Telemetry.error(error, { surface: 'psd-editor' });
+      }
       if (hit !== null && !ids.includes(hit)) {
         editor.chooseLayers([hit]);
         ids = [hit];
@@ -432,9 +440,12 @@ export function createCanvasTools(options: CanvasToolsOptions) {
     if (rows.length === 0 || rows.some((r) => !movable(r))) return;
     clearTimeout(nudgeTimer);
     nudgeTimer = setTimeout(() => nudgeKey++, 800);
-    void editor.apply(
-      [{ op: 'translate', ids: rows.map((r) => r.id), dx, dy }],
-      gestureKey('nudge', nudgeKey)
+    fireAndForget(
+      editor.apply(
+        [{ op: 'translate', ids: rows.map((r) => r.id), dx, dy }],
+        gestureKey('nudge', nudgeKey)
+      ),
+      'psd-editor'
     );
   };
 
@@ -677,34 +688,35 @@ export function createCanvasTools(options: CanvasToolsOptions) {
         return;
       })
       .with('polygonLasso', () => {
-        {
-          const poly = polygon();
-          if (!poly) {
-            setPolygon({ points: [p.at], mode });
-          } else if (closesPolygon(poly.points, p.at, CLOSE_SLOP / zoom())) {
-            void finishPolygon(true);
-          } else setPolygon({ ...poly, points: [...poly.points, p.at] });
-          refreshOverlay();
-          return;
-        }
+        const poly = polygon();
+        if (!poly) {
+          setPolygon({ points: [p.at], mode });
+        } else if (closesPolygon(poly.points, p.at, CLOSE_SLOP / zoom())) {
+          fireAndForget(finishPolygon(true), 'psd-editor');
+        } else setPolygon({ ...poly, points: [...poly.points, p.at] });
+        refreshOverlay();
+        return;
       })
       .with('wand', () => {
-        void editor.select({
-          type: 'wand',
-          x: Math.floor(p.at.x),
-          y: Math.floor(p.at.y),
-          tolerance: view.toolOptions().tolerance,
-          contiguous: view.toolOptions().contiguous,
-          antialias: view.toolOptions().antialias,
-          sampleAll: view.toolOptions().sampleAll,
-          layer: editor.active() ?? null,
-          mode,
-        });
+        fireAndForget(
+          editor.select({
+            type: 'wand',
+            x: Math.floor(p.at.x),
+            y: Math.floor(p.at.y),
+            tolerance: view.toolOptions().tolerance,
+            contiguous: view.toolOptions().contiguous,
+            antialias: view.toolOptions().antialias,
+            sampleAll: view.toolOptions().sampleAll,
+            layer: editor.active() ?? null,
+            mode,
+          }),
+          'psd-editor'
+        );
         return;
       })
       .with('eyedropper', () => {
         gesture = { kind: 'eyedropper' };
-        void sampleColor(p);
+        fireAndForget(sampleColor(p), 'psd-editor');
         return;
       })
       .with('brush', 'pencil', 'eraser', () => {
@@ -712,10 +724,10 @@ export function createCanvasTools(options: CanvasToolsOptions) {
         return;
       })
       .with('bucket', () => {
-        {
-          const t = fillTarget();
-          if (!t) return;
-          void editor.apply([
+        const t = fillTarget();
+        if (!t) return;
+        fireAndForget(
+          editor.apply([
             {
               op: 'bucket',
               id: t.id,
@@ -729,9 +741,10 @@ export function createCanvasTools(options: CanvasToolsOptions) {
               antialias: view.toolOptions().antialias,
               sampleAll: view.toolOptions().sampleAll,
             },
-          ]);
-          return;
-        }
+          ]),
+          'psd-editor'
+        );
+        return;
       })
       .with('gradient', () => {
         if (!fillTarget()) return;
@@ -741,7 +754,7 @@ export function createCanvasTools(options: CanvasToolsOptions) {
       })
       .with('type', () => {
         options.onTypeStart?.();
-        void typeAt(p);
+        fireAndForget(typeAt(p), 'psd-editor');
         return;
       })
       .with('rectangle', 'ellipse', (tool) => {
@@ -815,7 +828,7 @@ export function createCanvasTools(options: CanvasToolsOptions) {
         g.current = p.at;
         break;
       case 'eyedropper':
-        void sampleColor(p);
+        fireAndForget(sampleColor(p), 'psd-editor');
         return;
       case 'crop-draw': {
         const r = marqueeRect(g.start, p.at, {
@@ -894,14 +907,15 @@ export function createCanvasTools(options: CanvasToolsOptions) {
         return;
       })
       .with({ kind: 'marquee' }, (g) => {
-        {
-          const rect = marqueeFor({ ...g, current: p.at });
-          if (!g.dragged || rect.w < 1 || rect.h < 1) {
-            // A click deselects (unless it adds to or subtracts from it).
-            if (g.mode === 'replace') void editor.select({ type: 'none' });
-            return;
-          }
-          void editor.select({
+        const rect = marqueeFor({ ...g, current: p.at });
+        if (!g.dragged || rect.w < 1 || rect.h < 1) {
+          // A click deselects (unless it adds to or subtracts from it).
+          if (g.mode === 'replace')
+            fireAndForget(editor.select({ type: 'none' }), 'psd-editor');
+          return;
+        }
+        fireAndForget(
+          editor.select({
             type: g.shape,
             ...rect,
             mode: g.mode,
@@ -909,29 +923,34 @@ export function createCanvasTools(options: CanvasToolsOptions) {
             ...(g.shape === 'ellipse'
               ? { antialias: view.toolOptions().antialias }
               : {}),
-          });
-          return;
-        }
+          }),
+          'psd-editor'
+        );
+        return;
       })
       .with({ kind: 'lasso' }, (g) => {
         if (g.points.length >= 3)
-          void editor.select({
-            type: 'polygon',
-            points: toPairs(g.points),
-            mode: g.mode,
-            feather: view.toolOptions().feather,
-            antialias: view.toolOptions().antialias,
-          });
-        else if (g.mode === 'replace') void editor.select({ type: 'none' });
+          fireAndForget(
+            editor.select({
+              type: 'polygon',
+              points: toPairs(g.points),
+              mode: g.mode,
+              feather: view.toolOptions().feather,
+              antialias: view.toolOptions().antialias,
+            }),
+            'psd-editor'
+          );
+        else if (g.mode === 'replace')
+          fireAndForget(editor.select({ type: 'none' }), 'psd-editor');
         return;
       })
       .with({ kind: 'gradient' }, (g) => {
-        {
-          const t = fillTarget();
-          if (!t) return;
-          const to = p.shift ? snapLine(g.from, p.at) : p.at;
-          if (Math.hypot(to.x - g.from.x, to.y - g.from.y) < 1) return;
-          void editor.apply([
+        const t = fillTarget();
+        if (!t) return;
+        const to = p.shift ? snapLine(g.from, p.at) : p.at;
+        if (Math.hypot(to.x - g.from.x, to.y - g.from.y) < 1) return;
+        fireAndForget(
+          editor.apply([
             {
               op: 'gradient',
               id: t.id,
@@ -949,43 +968,41 @@ export function createCanvasTools(options: CanvasToolsOptions) {
               to: [to.x, to.y],
               opacity: 1,
             },
-          ]);
-          return;
-        }
+          ]),
+          'psd-editor'
+        );
+        return;
       })
       .with({ kind: 'shape' }, (g) => {
-        {
-          const rect = shapeRectFor({ ...g, current: p.at });
-          if (rect.w < 2 || rect.h < 2) return;
-          void editor.apply([
+        const rect = shapeRectFor({ ...g, current: p.at });
+        if (rect.w < 2 || rect.h < 2) return;
+        fireAndForget(
+          editor.apply([
             newLayerOp(
               editor.activeRow(),
               shapeLayer(g.shape, rect, view.foreground())
             ),
-          ]);
-          return;
-        }
+          ]),
+          'psd-editor'
+        );
+        return;
       })
       .with({ kind: 'paint' }, () => {
         endStroke();
         return;
       })
       .with({ kind: 'zoom' }, () => {
-        {
-          const out = p.alt;
-          view.zoomStep(out ? -1 : 1, p.screen);
-          return;
-        }
+        const out = p.alt;
+        view.zoomStep(out ? -1 : 1, p.screen);
+        return;
       })
       .with({ kind: 'crop-draw' }, () => {
-        {
-          const c = crop();
-          if (c && (Math.abs(c.w) < 2 || Math.abs(c.h) < 2)) {
-            setCrop(startTransform(canvasRect()));
-            cropFresh = true;
-          }
-          return;
+        const c = crop();
+        if (c && (Math.abs(c.w) < 2 || Math.abs(c.h) < 2)) {
+          setCrop(startTransform(canvasRect()));
+          cropFresh = true;
         }
+        return;
       })
       .otherwise(() => {
         return;
@@ -1001,18 +1018,19 @@ export function createCanvasTools(options: CanvasToolsOptions) {
 
   const doubleClick = (p: CanvasPointer) => {
     if (polygon()) {
-      void finishPolygon(true);
+      fireAndForget(finishPolygon(true), 'psd-editor');
       return;
     }
     if (transform()) {
-      void finishTransform(true);
+      fireAndForget(finishTransform(true), 'psd-editor');
       return;
     }
     if (view.tool() === 'crop' && crop()) {
-      void finishCrop(true);
+      fireAndForget(finishCrop(true), 'psd-editor');
       return;
     }
-    if (view.tool() === 'move' && editable()) void editTextAt(p);
+    if (view.tool() === 'move' && editable())
+      fireAndForget(editTextAt(p), 'psd-editor');
   };
 
   /** Double-click with the Move tool on text edits it. */
@@ -1061,15 +1079,15 @@ export function createCanvasTools(options: CanvasToolsOptions) {
   /** Enter: commits Free Transform, the crop, or a polygon. */
   const commit = (): boolean => {
     if (transform()) {
-      void finishTransform(true);
+      fireAndForget(finishTransform(true), 'psd-editor');
       return true;
     }
     if (crop() && view.tool() === 'crop') {
-      void finishCrop(true);
+      fireAndForget(finishCrop(true), 'psd-editor');
       return true;
     }
     if (polygon()) {
-      void finishPolygon(true);
+      fireAndForget(finishPolygon(true), 'psd-editor');
       return true;
     }
     return false;
@@ -1078,15 +1096,15 @@ export function createCanvasTools(options: CanvasToolsOptions) {
   /** Escape: cancels them. */
   const cancel = (): boolean => {
     if (transform()) {
-      void finishTransform(false);
+      fireAndForget(finishTransform(false), 'psd-editor');
       return true;
     }
     if (crop()) {
-      void finishCrop(false);
+      fireAndForget(finishCrop(false), 'psd-editor');
       return true;
     }
     if (polygon()) {
-      void finishPolygon(false);
+      fireAndForget(finishPolygon(false), 'psd-editor');
       return true;
     }
     return false;
@@ -1094,9 +1112,11 @@ export function createCanvasTools(options: CanvasToolsOptions) {
 
   /** The tool changed: boxes that belong to the previous one end. */
   const toolChanged = (tool: Tool) => {
-    if (tool !== 'crop' && crop()) void finishCrop(false);
+    if (tool !== 'crop' && crop())
+      fireAndForget(finishCrop(false), 'psd-editor');
     if (tool === 'crop' && editable()) startCrop();
-    if (tool !== 'polygonLasso' && polygon()) void finishPolygon(false);
+    if (tool !== 'polygonLasso' && polygon())
+      fireAndForget(finishPolygon(false), 'psd-editor');
     refreshOverlay();
   };
 

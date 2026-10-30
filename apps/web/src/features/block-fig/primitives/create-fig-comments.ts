@@ -8,6 +8,7 @@
 
 import type { FigEngine } from '@core/fig-engine/client';
 import type { Rect } from '@core/fig-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffect, createMemo, createSignal, on } from 'solid-js';
 import type { FigCommentStore } from '../context/fig-comments';
 import type { Point } from '../core/camera';
@@ -88,23 +89,16 @@ export function createFigComments(options: {
         setBounds(new Map());
         return;
       }
-
-      const settleGeometry = async () => {
+      const loadBounds = async () => {
         try {
-          const settleGeometryValue = await engine.geometry(page, ids);
-          const list = settleGeometryValue;
-
+          const list = await engine.geometry(page, ids);
           if (r === request)
             setBounds(new Map(list.map((g) => [g.id, g.bounds])));
-
-          return;
         } catch {
           if (r === request) setBounds(new Map());
-
-          return;
         }
       };
-      settleGeometry();
+      fireAndForget(loadBounds(), 'fig-comments');
     })
   );
 
@@ -212,7 +206,7 @@ export function createFigComments(options: {
         setActive(true);
         viewer.setTool('move');
         const thread = store.threads().find((t) => t.id === link.threadId);
-        if (thread) void reveal(thread);
+        if (thread) fireAndForget(reveal(thread), 'fig-comments');
         else viewer.setDesignOpen(true);
       }
     )

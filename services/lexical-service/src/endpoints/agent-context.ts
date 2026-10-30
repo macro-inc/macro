@@ -91,11 +91,18 @@ const triggerPerson = z.object({
   email: z.string().optional(),
 });
 
+const triggerAttachment = z.object({
+  entity_type: z.string().min(1),
+  entity_id: z.string().min(1),
+  url: z.string().optional(),
+});
+
 const triggerMessage = z.object({
   id: z.string().min(1),
   author: triggerPerson,
   content: z.string(),
   posted_at: z.string().min(1),
+  attachments: z.array(triggerAttachment).optional(),
 });
 
 const triggerThread = z.object({
@@ -214,6 +221,37 @@ const emailSnapshot = z.object({
   body: z.string(),
 });
 
+const callStartedSnapshot = z.object({
+  id: z.string().min(1),
+  title: z.string().optional(),
+  channel_id: z.string().min(1).optional(),
+  channel_name: z.string().optional(),
+  started_at: z.string().min(1),
+  started_by: triggerPerson,
+  participants: z.array(triggerPerson),
+});
+
+const callSnapshot = z.object({
+  id: z.string().min(1),
+  title: z.string().optional(),
+  channel_id: z.string().min(1).optional(),
+  channel_name: z.string().optional(),
+  started_at: z.string().min(1),
+  ended_at: z.string().min(1),
+  participants: z.array(triggerPerson),
+  summary: z.string().optional(),
+  transcript: z
+    .array(
+      z.object({
+        speaker: z.string(),
+        text: z.string(),
+        at: z.string().min(1),
+      })
+    )
+    .optional(),
+  transcript_omitted: z.boolean(),
+});
+
 const routineEvent = z.discriminatedUnion('event', [
   z.object({
     event: z.literal('document_created'),
@@ -256,6 +294,8 @@ const routineEvent = z.discriminatedUnion('event', [
     entity_type: z.string().min(1),
     entity_id: z.string().min(1),
   }),
+  z.object({ event: z.literal('call_started'), call: callStartedSnapshot }),
+  z.object({ event: z.literal('call_ended'), call: callSnapshot }),
 ]);
 
 const routineFiring = z.discriminatedUnion('type', [
@@ -291,6 +331,7 @@ const routineTrigger = z.discriminatedUnion('type', [
 
 const triggerContextSchema = z.discriminatedUnion('kind', [
   discussionContext.extend({ kind: z.literal('mentioned') }),
+  discussionContext.extend({ kind: z.literal('conversation') }),
   z.object({
     kind: z.literal('follow_up'),
     addressed_by: z.enum(['mention', 'explicit_reply', 'inferred']),

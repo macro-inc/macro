@@ -1,4 +1,5 @@
 import type { MutationInspection } from '../protocol';
+
 /**
  * Tauri CacheHost: talks to the native cache engine living in the Tauri
  * host process (graphql_cache_plugin) over invoke commands. The host
@@ -8,6 +9,8 @@ import type { MutationInspection } from '../protocol';
  * worker-host.ts.
  */
 
+import { unlistenWhenReady } from '@app/lib/tauri/unlisten';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { invoke } from '@tauri-apps/api/core';
 import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type {
@@ -161,36 +164,24 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
             reject(new Error(`graphql cache ipc timeout: ${command}`));
           }, requestTimeoutMs)
         : undefined;
-
-      const settleInvoke = async () => {
-        let settleInvokeValue;
+      const settle = async () => {
         try {
-          settleInvokeValue = await invoke<T>(command, args);
-        } catch (settleInvokeError) {
-          const error = settleInvokeError;
-
-          if (timer !== undefined) clearTimeout(timer);
+          resolve(await invoke<T>(command, args));
+        } catch (error) {
           // Command errors cross the boundary as strings; normalize to
           // Error for parity with worker-host rejections.
           reject(error instanceof Error ? error : new Error(String(error)));
-
-          return;
+        } finally {
+          if (timer !== undefined) clearTimeout(timer);
         }
-        const value = settleInvokeValue;
-
-        if (timer !== undefined) clearTimeout(timer);
-        resolve(value);
-
-        return;
       };
-      settleInvoke();
+      fireAndForget(settle(), 'graphql-cache-host');
     });
   }
 
   // Failure tolerated: reads/writes still work, only push-driven
   // re-execution is lost — same degradation as a broken worker port.
-
-  const settleListen = async () => {
+  async function listenForAffectedOps(): Promise<UnlistenFn | undefined> {
     try {
       return await listen<OpsAffectedPayload>(OPS_AFFECTED_EVENT, (event) => {
         const prefix = `${clientId}:`;
@@ -206,16 +197,14 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           }
         }
       });
-    } catch (settleListenError) {
-      const error = settleListenError;
-
+    } catch (error) {
       console.warn('graphql cache ops-affected listener failed', error);
-      return await undefined;
+      return undefined;
     }
-  };
-  const unlistenOps: Promise<UnlistenFn | undefined> = settleListen();
+  }
+  const unlistenOps = listenForAffectedOps();
 
-  const settleListenResult = async () => {
+  async function listenForSettlements(): Promise<UnlistenFn | undefined> {
     try {
       return await listen<MutationSettlement>(
         MUTATION_SETTLED_EVENT,
@@ -223,17 +212,14 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           for (const cb of settlementSubscribers) cb(event.payload);
         }
       );
-    } catch (settleListenResultError) {
-      const error = settleListenResultError;
-
+    } catch (error) {
       console.warn('graphql cache mutation-settled listener failed', error);
-      return await undefined;
+      return undefined;
     }
-  };
-  const unlistenSettlements: Promise<UnlistenFn | undefined> =
-    settleListenResult();
+  }
+  const unlistenSettlements = listenForSettlements();
 
-  const settleListenResultResult = async () => {
+  async function listenForCacheChanges(): Promise<UnlistenFn | undefined> {
     try {
       return await listen<CacheChangedPayload>(CACHE_CHANGED_EVENT, (event) => {
         const revision = parseCacheRevision(event.payload.revision);
@@ -254,15 +240,12 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
             });
         }
       });
-    } catch (settleListenResultResultError) {
-      const error = settleListenResultResultError;
-
+    } catch (error) {
       console.warn('graphql cache change listener failed', error);
-      return await undefined;
+      return undefined;
     }
-  };
-  const unlistenCacheChanges: Promise<UnlistenFn | undefined> =
-    settleListenResultResult();
+  }
+  const unlistenCacheChanges = listenForCacheChanges();
 
   async function listenForHydration(): Promise<UnlistenFn | undefined> {
     try {
@@ -286,10 +269,6 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     }
   }
   const unlistenHydration = listenForHydration();
-  async function removeHydrationListener(): Promise<void> {
-    const unlisten = await unlistenHydration;
-    unlisten?.();
-  }
 
   async function initialize(): Promise<void> {
     const { default: schemaSdl } = await import(
@@ -315,15 +294,18 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     }
   }
   const ready = initialize();
-  void (async () => {
-    try {
-      await ready;
-    } catch (error) {
-      options.onInitializationError?.(
-        error instanceof Error ? error : new Error(String(error))
-      );
-    }
-  })();
+  fireAndForget(
+    (async () => {
+      try {
+        await ready;
+      } catch (error) {
+        options.onInitializationError?.(
+          error instanceof Error ? error : new Error(String(error))
+        );
+      }
+    })(),
+    'graphql-cache-host'
+  );
 
   const opId = (opKey: number) => `${clientId}:${opKey}`;
 
@@ -714,28 +696,14 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       hydrationSubscribers.clear();
       generationChangeSubscribers.clear();
       settlementSubscribers.clear();
-
-      const settleUnlistenOps = async () => {
-        const settleUnlistenOpsValue = await unlistenOps;
-        const fn = settleUnlistenOpsValue;
-        return await fn?.();
-      };
-      void settleUnlistenOps();
-
-      const settleUnlistenCacheChanges = async () => {
-        const settleUnlistenCacheChangesValue = await unlistenCacheChanges;
-        const fn = settleUnlistenCacheChangesValue;
-        return await fn?.();
-      };
-      void settleUnlistenCacheChanges();
-      void removeHydrationListener();
-
-      const settleUnlistenSettlements = async () => {
-        const settleUnlistenSettlementsValue = await unlistenSettlements;
-        const fn = settleUnlistenSettlementsValue;
-        return await fn?.();
-      };
-      void settleUnlistenSettlements();
+      for (const unlisten of [
+        unlistenOps,
+        unlistenCacheChanges,
+        unlistenHydration,
+        unlistenSettlements,
+      ]) {
+        fireAndForget(unlistenWhenReady(unlisten), 'graphql-cache-host');
+      }
     },
   };
 }

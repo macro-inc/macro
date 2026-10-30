@@ -17,7 +17,6 @@ const tabTypes: Record<HomeTab, ReadonlySet<HomeTypeFilter>> = {
     'tasks',
     'email',
     'channels',
-    'chats',
     'agents',
     'projects',
     'github',
@@ -96,7 +95,18 @@ export function buildHomeSearchRequest(
   }
 
   if (types.has('agents')) {
-    filters.agent_session_filters = { include: true };
+    const agentSessionFilters: NonNullable<
+      EntityFilters['agent_session_filters']
+    > = { include: true };
+
+    const chatFilters: NonNullable<EntityFilters['chat_filters']> = {};
+
+    if (hasNotificationFilter) {
+      chatFilters.notification_filters = notificationFilters;
+    }
+
+    filters.agent_session_filters = agentSessionFilters;
+    filters.chat_filters = chatFilters;
   }
 
   if (types.has('channels')) {
@@ -111,22 +121,12 @@ export function buildHomeSearchRequest(
     }
 
     filters.channel_filters = channelFilters;
-  }
 
-  if (types.has('channels')) {
-    filters.channel_thread_filters = {
-      participant_ids: [context.userId ?? NIL_UUID],
-    };
-  }
-
-  if (types.has('chats')) {
-    const chatFilters: NonNullable<EntityFilters['chat_filters']> = {};
-
-    if (hasNotificationFilter) {
-      chatFilters.notification_filters = notificationFilters;
+    if (context.userId) {
+      filters.channel_thread_filters = {
+        participant_ids: [context.userId],
+      };
     }
-
-    filters.chat_filters = chatFilters;
   }
 
   updateSub_types();

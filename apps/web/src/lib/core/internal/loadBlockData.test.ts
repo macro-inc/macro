@@ -14,15 +14,11 @@ describe('loadBlockDataAfterComponentPreload', () => {
 
     const result = loadBlockDataAfterComponentPreload(load, preload);
     let settled = false;
-
-    const settleResult = async () => {
+    const observe = async () => {
       await result;
-
       settled = true;
-
-      return;
     };
-    void settleResult();
+    const observed = observe();
 
     await Promise.resolve();
     expect(load).toHaveBeenCalledOnce();
@@ -31,6 +27,7 @@ describe('loadBlockDataAfterComponentPreload', () => {
 
     finishPreload?.();
     await expect(result).resolves.toBe('loaded');
+    await observed;
   });
 
   it('returns normally for an eager component without preload', async () => {

@@ -95,6 +95,87 @@ describe('composeAgentContextPrompt with a trigger', () => {
     );
   });
 
+  it('lists a thread-root image on its message so the agent can fetch it', () => {
+    const fileId = '9ec21122-4bd8-473f-bfb0-21d2e6e5f03b';
+    const markdown = composeAgentContextPrompt({
+      promptMarkdown: 'see screenshot and create a task',
+      trigger: {
+        kind: 'mentioned',
+        surface: {
+          type: 'channel',
+          id: 'c1',
+          name: 'eng',
+          channel_type: 'public',
+        },
+        prompt_message_id: 'm2',
+        sender: {
+          id: 'macro|julia@example.com',
+          name: 'Julia',
+          email: 'julia@example.com',
+        },
+        reply_target: { kind: 'thread', root_id: 'm1' },
+        thread: {
+          root_id: 'm1',
+          messages: [
+            {
+              id: 'm1',
+              author: {
+                id: 'macro|teo@example.com',
+                name: 'Teo',
+                email: 'teo@example.com',
+              },
+              content: 'We need agent templates',
+              posted_at: '2026-10-08T14:00:00Z',
+              attachments: [
+                {
+                  entity_type: 'static/image',
+                  entity_id: fileId,
+                  url: `https://static.example/file/${fileId}`,
+                },
+                { entity_type: 'document', entity_id: 'doc-1' },
+              ],
+            },
+            {
+              id: 'm2',
+              author: {
+                id: 'macro|julia@example.com',
+                name: 'Julia',
+                email: 'julia@example.com',
+              },
+              content: 'see screenshot and create a task',
+              posted_at: '2026-10-08T14:02:00Z',
+            },
+          ],
+          messages_omitted: false,
+        },
+      },
+    });
+
+    expect(hiddenContext(markdown)).toBe(
+      [
+        '<trigger kind="mentioned">',
+        '  <note>Julia mentioned you, and that mention opened this session. Their message is the prompt.</note>',
+        '  <discussion>',
+        '    <channel id="c1" name="eng" type="public"/>',
+        '    <origin>This prompt was posted in a channel thread, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.</origin>',
+        '    <sender name="Julia" email="julia@example.com" id="macro|julia@example.com"/>',
+        '    <reply_target kind="thread" thread="m1">',
+        '      <note>The prompt was posted as a reply in the thread below. It is about that thread.</note>',
+        '    </reply_target>',
+        '    <note>Attachments are listed on each message and can be fetched by their url.</note>',
+        '    <thread root="m1">',
+        `      <message id="m1" author="Teo" author_email="teo@example.com" author_id="macro|teo@example.com" at="2026-10-08T14:00:00Z">We need agent templates`,
+        `        <attachment type="static/image" id="${fileId}" url="https://static.example/file/${fileId}"/>`,
+        '        <attachment type="document" id="doc-1"/>',
+        '      </message>',
+        '      <message id="m2" author="Julia" author_email="julia@example.com" author_id="macro|julia@example.com" at="2026-10-08T14:02:00Z" mentioned_you="true">see screenshot and create a task</message>',
+        '    </thread>',
+        '  </discussion>',
+        '</trigger>',
+      ].join('\n')
+    );
+  });
+
   it('renders an inferred follow-up after the session block and warns the inference can be wrong', () => {
     const markdown = composeAgentContextPrompt({
       promptMarkdown: 'and the popover one too',
@@ -164,12 +245,13 @@ describe('composeAgentContextPrompt with a trigger', () => {
       },
     });
 
-    expect(hiddenContext(markdown)).toBe(
+    const context = hiddenContext(markdown);
+    expect(context).toContain(
+      '<session owner="Julia" owner_id="macro|julia@example.com">'
+    );
+    expect(context).toContain('Choose acting_as explicitly');
+    expect(context?.slice(context.indexOf('<trigger'))).toBe(
       [
-        '<session owner="Julia" owner_id="macro|julia@example.com">',
-        '  <prompted_by name="Julia" id="macro|julia@example.com" is_owner="true"/>',
-        '  <note>Julia owns this session and sent this prompt.</note>',
-        '</session>',
         '<trigger kind="follow_up" addressed_by="inferred">',
         '  <note>This session was already running when Julia posted this message in its discussion. It neither mentions you nor quote-replies to you: a model judged from the discussion that it was meant for you. That judgment can be wrong, so if the message reads as meant for someone else, say so briefly instead of acting on it. The message is the prompt.</note>',
         '  <discussion>',
@@ -544,6 +626,184 @@ describe('composeAgentContextPrompt with a trigger', () => {
         '    </discussion>',
         '  </event>',
         '</trigger>',
+      ].join('\n')
+    );
+  });
+
+  it('renders a routine fired by a started call with who started it', () => {
+    const markdown = composeAgentContextPrompt({
+      promptMarkdown: 'Prepare notes.',
+      trigger: {
+        kind: 'routine',
+        routine_id: 'r-4',
+        name: 'Call prep',
+        owner: {
+          id: 'macro|julia@example.com',
+          name: 'Julia',
+          email: 'julia@example.com',
+        },
+        instructions: 'Draft talking points for this call.',
+        triggers: [{ type: 'events', events: ['call.started'] }],
+        firing: {
+          type: 'event',
+          event: {
+            event: 'call_started',
+            call: {
+              id: 'call-0',
+              title: 'Standup',
+              channel_id: 'c1',
+              channel_name: 'eng',
+              started_at: '2026-10-08T14:00:00Z',
+              started_by: {
+                id: 'macro|julia@example.com',
+                name: 'julia@example.com',
+                email: 'julia@example.com',
+              },
+              participants: [
+                {
+                  id: 'macro|julia@example.com',
+                  name: 'julia@example.com',
+                  email: 'julia@example.com',
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    expect(hiddenContext(markdown)).toBe(
+      [
+        '<trigger kind="routine">',
+        '  <note>The routine Call prep, owned by Julia, fired. The prompt is what the routine asks you to do.</note>',
+        '  <routine id="r-4" name="Call prep" owner="Julia" owner_email="julia@example.com" owner_id="macro|julia@example.com"/>',
+        '  <instructions>Draft talking points for this call.</instructions>',
+        '  <triggers>',
+        '    <events names="call.started"/>',
+        '  </triggers>',
+        '  <event type="call_started">',
+        '    <call id="call-0" title="Standup" channel="eng" channel_id="c1" started_at="2026-10-08T14:00:00Z">',
+        '      <started_by name="julia@example.com" email="julia@example.com" id="macro|julia@example.com"/>',
+        '      <participants>',
+        '        <participant name="julia@example.com" email="julia@example.com" id="macro|julia@example.com"/>',
+        '      </participants>',
+        '    </call>',
+        '  </event>',
+        '</trigger>',
+      ].join('\n')
+    );
+  });
+
+  it('renders a routine fired by an ended call with its people and a cut transcript', () => {
+    const markdown = composeAgentContextPrompt({
+      promptMarkdown: 'Post the recap.',
+      trigger: {
+        kind: 'routine',
+        routine_id: 'r-5',
+        name: 'Call recap',
+        owner: {
+          id: 'macro|julia@example.com',
+          name: 'Julia',
+          email: 'julia@example.com',
+        },
+        instructions: 'Post a recap with action items.',
+        triggers: [{ type: 'events', events: ['call.ended'] }],
+        firing: {
+          type: 'event',
+          event: {
+            event: 'call_ended',
+            call: {
+              id: 'call-1',
+              title: 'Acme renewal',
+              channel_id: 'c1',
+              channel_name: 'sales',
+              started_at: '2026-10-08T14:00:00Z',
+              ended_at: '2026-10-08T14:30:00Z',
+              participants: [
+                {
+                  id: 'macro|julia@example.com',
+                  name: 'julia@example.com',
+                  email: 'julia@example.com',
+                },
+                { id: 'g-1', name: 'Sam (Acme)' },
+              ],
+              transcript: [
+                {
+                  speaker: 'Sam (Acme)',
+                  text: 'We renew if SSO ships.',
+                  at: '2026-10-08T14:01:00Z',
+                },
+              ],
+              transcript_omitted: true,
+            },
+          },
+        },
+      },
+    });
+
+    expect(hiddenContext(markdown)).toBe(
+      [
+        '<trigger kind="routine">',
+        '  <note>The routine Call recap, owned by Julia, fired. The prompt is what the routine asks you to do.</note>',
+        '  <routine id="r-5" name="Call recap" owner="Julia" owner_email="julia@example.com" owner_id="macro|julia@example.com"/>',
+        '  <instructions>Post a recap with action items.</instructions>',
+        '  <triggers>',
+        '    <events names="call.ended"/>',
+        '  </triggers>',
+        '  <event type="call_ended">',
+        '    <call id="call-1" title="Acme renewal" channel="sales" channel_id="c1" started_at="2026-10-08T14:00:00Z" ended_at="2026-10-08T14:30:00Z">',
+        '      <participants>',
+        '        <participant name="julia@example.com" email="julia@example.com" id="macro|julia@example.com"/>',
+        '        <participant name="Sam (Acme)" id="g-1"/>',
+        '      </participants>',
+        '      <transcript omitted="true">',
+        '        <note>Speakers are named by audio track, so people sharing a device share a speaker.</note>',
+        '        <line speaker="Sam (Acme)" at="2026-10-08T14:01:00Z">We renew if SSO ships.</line>',
+        '        <note>The rest of the transcript is not shown. ReadCallRecord with this call id returns all of it.</note>',
+        '      </transcript>',
+        '    </call>',
+        '  </event>',
+        '</trigger>',
+      ].join('\n')
+    );
+  });
+
+  it('says so when an ended call has no transcript', () => {
+    const markdown = composeAgentContextPrompt({
+      promptMarkdown: 'Post the recap.',
+      trigger: {
+        kind: 'routine',
+        routine_id: 'r-6',
+        name: 'Call recap',
+        owner: { id: 'macro|julia@example.com', name: 'Julia' },
+        instructions: 'Post a recap.',
+        triggers: [{ type: 'events', events: ['call.ended'] }],
+        firing: {
+          type: 'event',
+          event: {
+            event: 'call_ended',
+            call: {
+              id: 'call-2',
+              started_at: '2026-10-08T14:00:00Z',
+              ended_at: '2026-10-08T14:05:00Z',
+              participants: [],
+              summary: 'A short check-in.',
+              transcript_omitted: false,
+            },
+          },
+        },
+      },
+    });
+
+    expect(hiddenContext(markdown)).toContain(
+      [
+        '    <call id="call-2" started_at="2026-10-08T14:00:00Z" ended_at="2026-10-08T14:05:00Z">',
+        '      <participants/>',
+        '      <summary>A short check-in.</summary>',
+        '      <transcript>',
+        '        <note>Nothing was transcribed.</note>',
+        '      </transcript>',
+        '    </call>',
       ].join('\n')
     );
   });

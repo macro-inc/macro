@@ -1,20 +1,25 @@
 import type { IUser } from '@core/user';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createEditor } from 'lexical';
+import { createEditor, type LexicalEditor } from 'lexical';
 import { createSignal, type ParentProps } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createMenuOperations } from '../../../shared/inlineMenu';
 import { useEmailSearchMention } from './hooks/useEmailSearchMention';
 import { MentionsMenu } from './MentionsMenu';
+import { createItemHandler } from './utils/mentionHandlers';
 import * as mobileSort from './utils/mobileSort';
 
 const mocks = vi.hoisted(() => ({
   crmEnabled: false,
+  whatsappEnabled: false,
+  whatsappUserIds: [] as string[],
   mobile: false,
   requestedBuckets: [] as string[],
   contacts: [] as import('@core/context/quickAccess').EntityItem[],
   hasMoreContacts: false,
   loadMoreContacts: vi.fn(async () => {}),
+  calendarEvents:
+    [] as import('../../../utils/mentionsUtils').CalendarEventMentionItem[],
 }));
 
 vi.mock('@app/features/crm/record-adapter', () => ({
@@ -38,9 +43,54 @@ vi.mock('@core/block', () => ({
   useMaybeBlockId: () => undefined,
   useMaybeBlockName: () => undefined,
 }));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableCrm: {},
-  isFeatureEnabled: () => mocks.crmEnabled,
+vi.mock('@core/constant/featureFlags', () => {
+  const enableCrm = { name: 'crm' };
+  const enableWhatsappLinked = { name: 'whatsapp' };
+  return {
+    enableCrm,
+    enableWhatsappLinked,
+    isFeatureEnabled: (flag: unknown) =>
+      flag === enableWhatsappLinked ? mocks.whatsappEnabled : mocks.crmEnabled,
+    ENABLE_BEARER_TOKEN_AUTH: false,
+  };
+});
+vi.mock('@app/features/external-chat/queries/production-api', () => ({
+  externalChatApi: {},
+}));
+vi.mock('@queries/gate', () => ({
+  queryReadyGate: (query: { isSuccess: boolean }) => query.isSuccess,
+}));
+vi.mock('@queries/external-chats', () => ({
+  useExternalChatsQuery: (_api: unknown, userId: () => string) => ({
+    get isSuccess() {
+      mocks.whatsappUserIds.push(userId());
+      return userId() !== '';
+    },
+    data: [
+      {
+        id: 'group-1',
+        name: 'Design Crit',
+        ownerId: 'macro|gab@macro.com',
+        unreadCount: 0,
+        canSend: true,
+      },
+      {
+        id: 'group-2',
+        name: 'Launch Room',
+        ownerId: 'macro|gab@macro.com',
+        unreadCount: 0,
+        canSend: true,
+      },
+      // Shared with the viewer: only its owner may share it on.
+      {
+        id: 'group-3',
+        name: 'Design Review',
+        ownerId: 'macro|ana@macro.com',
+        unreadCount: 0,
+        canSend: false,
+      },
+    ],
+  }),
 }));
 vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
@@ -66,6 +116,7 @@ vi.mock('@core/context/quickAccess', () => ({
 }));
 vi.mock('@core/context/user', () => ({
   useEmail: () => () => 'gab@macro.com',
+  useUserId: () => () => 'macro|gab@macro.com',
 }));
 vi.mock('@core/constant/allBlocks', () => ({
   fileTypeToBlockName: () => 'md',
@@ -88,6 +139,15 @@ vi.mock('./utils/mentionHandlers', () => ({ createItemHandler: vi.fn() }));
 vi.mock('./hooks/useEmailSearchMention', () => ({
   useEmailSearchMention: vi.fn(),
 }));
+vi.mock('./hooks/useBookingLinkMention', () => ({
+  useBookingLinkMention: () => ({
+    bookingLinks: () => [],
+    isLoading: () => false,
+  }),
+}));
+vi.mock('./hooks/useCalendarEventMention', () => ({
+  useCalendarEventMention: () => ({ events: () => mocks.calendarEvents }),
+}));
 vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
 vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
 vi.mock('@ui', () => ({
@@ -97,14 +157,30 @@ vi.mock('@ui', () => ({
 }));
 
 const originalScrollIntoView = Element.prototype.scrollIntoView;
+const mockNoEmails = () =>
+  vi.mocked(useEmailSearchMention).mockReturnValue({
+    emails: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+  });
+const manyUsers: IUser[] = Array.from({ length: 20 }, (_, i) => ({
+  id: `macro|person${i}@macro.com`,
+  name: `Person ${i}`,
+  email: `person${i}@macro.com`,
+}));
 
 afterEach(() => {
   mocks.crmEnabled = false;
+  mocks.whatsappEnabled = false;
+  mocks.whatsappUserIds = [];
   mocks.mobile = false;
   mocks.requestedBuckets = [];
   mocks.contacts = [];
   mocks.hasMoreContacts = false;
   mocks.loadMoreContacts.mockClear();
+  mocks.calendarEvents = [];
   cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -219,6 +295,51 @@ it.each([false, true])(
   }
 );
 
+it('closes the mobile menu on the first Escape', () => {
+  mocks.mobile = true;
+  Element.prototype.scrollIntoView = vi.fn();
+  mockNoEmails();
+  const menu = createMenuOperations();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      editor={createEditor()}
+      users={() => manyUsers}
+      sources={['users']}
+    />
+  ));
+
+  menu.openMenu();
+  expect(menu.isOpen()).toBe(true);
+  expect(screen.queryByText(/View all/)).toBeNull();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(menu.isOpen()).toBe(false);
+  expect(screen.queryByText(/View all/)).toBeNull();
+});
+
+it('leaves a category list on the first desktop Escape and closes on the second', () => {
+  Element.prototype.scrollIntoView = vi.fn();
+  mockNoEmails();
+  const menu = createMenuOperations();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      editor={createEditor()}
+      users={() => manyUsers}
+      sources={['users']}
+    />
+  ));
+
+  menu.openMenu();
+  fireEvent.keyDown(document, { key: 'ArrowRight' });
+  expect(screen.getByText('Back to everything')).toBeTruthy();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(menu.isOpen()).toBe(true);
+  expect(screen.queryByText('Back to everything')).toBeNull();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(menu.isOpen()).toBe(false);
+});
+
 it('only paginates an open mobile menu and resumes on reopen', async () => {
   mocks.mobile = true;
   mocks.crmEnabled = true;
@@ -280,6 +401,38 @@ it('offers CRM companies and contacts', () => {
   expect(mocks.requestedBuckets).toContain('crm_contact');
 });
 
+it('offers calendar events and picks one', () => {
+  Element.prototype.scrollIntoView = vi.fn();
+  vi.mocked(useEmailSearchMention).mockReturnValue({
+    emails: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+  } as unknown as ReturnType<typeof useEmailSearchMention>);
+  mocks.calendarEvents = [
+    {
+      kind: 'calendarEvent',
+      id: 'event-1',
+      data: { eventId: 'event-1', title: 'Planning', when: 'Mon, Oct 26' },
+    },
+  ];
+  const onPick = vi.fn();
+  const menu = createMenuOperations();
+  menu.openMenu();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      users={() => []}
+      anchor={document.createElement('div')}
+      onPick={onPick}
+    />
+  ));
+  expect(screen.getByText('Calendar events')).toBeTruthy();
+  fireEvent.click(screen.getByText('Planning'));
+  expect(onPick).toHaveBeenCalledWith(mocks.calendarEvents[0]);
+});
+
 it('opens cell pickers without replaying the menu entrance animation', () => {
   const menu = createMenuOperations();
   menu.openMenu();
@@ -296,4 +449,70 @@ it('opens cell pickers without replaying the menu entrance animation', () => {
   ));
   expect(screen.getByText('No results')).toBeTruthy();
   expect(container.querySelector('.menu-open-animation')).toBeNull();
+});
+
+it('records mentions against the editing source outside a legacy block', () => {
+  vi.mocked(useEmailSearchMention).mockReturnValue({
+    emails: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+  } as unknown as ReturnType<typeof useEmailSearchMention>);
+  const editor = {
+    dispatchCommand: vi.fn(),
+    getRootElement: () => null,
+  } as unknown as LexicalEditor;
+  render(() => (
+    <MentionsMenu
+      menu={createMenuOperations()}
+      users={() => []}
+      editor={editor}
+      sourceDocumentId="doc-1"
+    />
+  ));
+  expect(createItemHandler).toHaveBeenCalledWith(
+    expect.objectContaining({ blockId: 'doc-1' })
+  );
+});
+
+it("offers the viewer's own WhatsApp chats to share by mention, only in channel composers", () => {
+  mocks.whatsappEnabled = true;
+  Element.prototype.scrollIntoView = vi.fn();
+  vi.mocked(useEmailSearchMention).mockReturnValue({
+    emails: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+  } as unknown as ReturnType<typeof useEmailSearchMention>);
+  const menu = createMenuOperations();
+  menu.openMenu();
+  menu.setSearchTerm('design');
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      users={() => []}
+      block="channel"
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  expect(screen.getByText('WhatsApp chats')).toBeTruthy();
+  expect(screen.getByText('Design Crit')).toBeTruthy();
+  expect(screen.queryByText('Launch Room')).toBeNull();
+  expect(screen.queryByText('Design Review')).toBeNull();
+  cleanup();
+
+  mocks.whatsappUserIds = [];
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      users={() => []}
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  expect(screen.queryByText('WhatsApp chats')).toBeNull();
+  expect(mocks.whatsappUserIds.every((id) => id === '')).toBe(true);
 });

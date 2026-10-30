@@ -6,20 +6,26 @@ version = "0.1.0"
 
 [features]
 default = []
+decisions = ["dep:ai_billing", "dep:async-trait", "dep:macro_user_id", "dep:tokio"]
 outbound = ["dep:macro_env_var", "dep:reqwest", "dep:tokio"]
 
 [dependencies]
+ai_billing = { path = "../ai_billing", optional = true }
 ai_usage = { path = "../ai_usage" }
+async-trait = { workspace = true, optional = true }
 macro_env_var = { path = "../macro_env_var", optional = true }
+macro_user_id = { path = "../macro_user_id", optional = true }
 reqwest = { workspace = true, optional = true }
+schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, optional = true, features = ["time"] }
+tokio = { workspace = true, optional = true, features = ["rt", "sync", "time"] }
 tracing = { workspace = true }
+utoipa = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_user_id = { path = "../macro_user_id" }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }
 wiremock = { workspace = true }

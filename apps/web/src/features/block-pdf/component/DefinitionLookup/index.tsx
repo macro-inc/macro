@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   autoUpdate,
   type ComputePositionReturn,
@@ -116,21 +117,22 @@ export function DefinitionLookup(props: IProps) {
     strategy: 'absolute',
     middlewareData: undefined,
   });
-  const updatePosition = () => {
-    if (!props.anchorRef || !termRef) return;
-
-    const anchor = props.anchorRef;
-    const target = termRef;
-    const settleComputePositionHandler0 = setCoord;
-    const settleComputePosition = async () => {
-      const settleComputePositionValue = await computePosition(anchor, target, {
+  const positionTerm = async (anchor: Element, term: HTMLDivElement) => {
+    setCoord(
+      await computePosition(anchor, term, {
         placement: 'bottom',
         strategy: 'absolute',
         middleware: [offset(props.index === 0 ? 2 : 8), shift({ padding: 8 })],
-      });
-      return await settleComputePositionHandler0(settleComputePositionValue);
-    };
-    settleComputePosition();
+      })
+    );
+  };
+  const updatePosition = () => {
+    if (!props.anchorRef || !termRef) return;
+
+    fireAndForget(
+      positionTerm(props.anchorRef, termRef),
+      'pdf-definition-lookup'
+    );
   };
   createEffect((prevPageWidth) => {
     const newPageWidth = pageWidth();

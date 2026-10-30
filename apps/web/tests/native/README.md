@@ -74,6 +74,43 @@ not pointer hit-testing: WebKitWebDriver's native clicks can land on an adjacent
 row in the Tauri window, and All is now beyond the numeric tab shortcuts.
 Assertions compare exact row identities, not just counts.
 
+## Native external-link regression
+
+After rebuilding the native binary, run `bun run native:e2e:links` inside the
+same `.#tauri-e2e` shell. This focused suite serves a small HTML fixture instead
+of the full frontend; it uses the real app's window creation, navigation plugin,
+Tauri event IPC, and Linux WebKit. No login, backend, or frontend WASM is used at
+runtime. A disposable `xdg-open` executable records launches at the OS process
+boundary so no real browser or external network request is started.
+
+Checks include the plain PR anchor inside a propagation-stopping panel, pointer
+and keyboard activation, a normal `_blank` link, same-frame external navigation,
+`window.open`, and absolute/relative Macro app links. Each external activation
+must launch exactly once and retain the original webview. Prevented clicks and
+browser-only/local-file popup URLs must not launch anything. The desktop JS click
+interceptor must be absent. A trusted standalone HTML document must open in a
+separate native window, not be converted to an SPA navigation or external launch.
+Artifacts are under `test-results/native/links-*`.
+This is Linux coverage; macOS/Windows native popup handling and the unchanged
+mobile JS fallback need platform-specific verification.
+
+## Native notification activation regression
+
+After `bun run native:e2e:build`, run `bun run native:e2e:notifications` in the
+same `.#tauri-e2e` shell. A disposable Rust notification daemon owns only the
+isolated session bus. The production Linux notification adapter runs in the real
+WebKit window and calls the actual native commands; no IPC is mocked. The suite
+checks the advertised default action, two independent notification handles,
+activation-token/click delivery through GTK to the correct JS callback, dismissal
+without navigation, and explicit close. Artifacts are in
+`test-results/native/notifications-*`.
+
+This is not a compositor focus test: Xvfb has no Wayland activation protocol. On a
+real desktop, separately check clicking a notification with Macro minimized,
+hidden, or on another workspace. Both the shell and GTK must support activation
+tokens for Wayland focus. It also does not test process relaunch or authenticated
+notification-target rendering (the callback navigates a local fixture).
+
 ## Exhaustive filter-selection matrix
 
 ```sh
@@ -194,6 +231,8 @@ bun run native:e2e:check      # standalone harness TypeScript check
 ```
 
 - Missing WebKitWebDriver/Xvfb: enter `.#tauri-e2e`, not the default shell.
+  This shell also pins the software EGL renderer to the same Nix package set;
+  loading a newer host Mesa can otherwise abort WebKit with `EGL_BAD_PARAMETER`.
 - `unshare: Operation not permitted`: the host/CI runner must permit unprivileged
   user namespaces. Fail closed; do not remove isolation or run against hosted data.
 - Startup timeout: inspect Vite/native logs and request errors first. Never reset

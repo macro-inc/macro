@@ -2,6 +2,7 @@ import { blockNameToFileExtensionSet } from '@core/constant/allBlocks';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { heicConversionService } from '@core/heic/service';
 import type { FetchError } from '@core/service';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { ResultError } from '@core/util/result';
 import {
   createStaticUploadFile,
@@ -21,6 +22,7 @@ import {
   type MediaType,
   type VideoNode,
 } from '@macro-inc/lexical-core';
+import { Telemetry } from '@macro-inc/observability';
 import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fileExtension } from '@service-storage/util/filename';
 import {
@@ -99,6 +101,18 @@ export const TRY_INSERT_MEDIA_UPLOAD_COMMAND: LexicalCommand<
   MediaType | 'all'
 > = createCommand('TRY_INSERT_MEDIA_UPLOAD_COMMAND');
 
+/** Starts an upload, reporting a failure with the media type it was for. */
+function uploadInBackground(upload: Promise<unknown>, mediaType: MediaType) {
+  const report = async () => {
+    try {
+      await upload;
+    } catch (error) {
+      Telemetry.error(error, { surface: 'media-upload', mediaType });
+    }
+  };
+  fireAndForget(report(), 'media-upload');
+}
+
 function validateMediaFile(file: UploadFile, mediaType: MediaType): boolean {
   const ext = fileExtension(file.name);
   return ext != null && blockNameToFileExtensionSet[mediaType].has(ext);
@@ -110,7 +124,9 @@ export async function addMediaFromFile(
   mediaType: MediaType,
   constrainedMediaDimensions?: { width: number; height: number }
 ) {
+  if (!editor.isEditable()) return { success: false };
   const processedFile = await processFile(createUploadFile(file));
+  if (!editor.isEditable()) return { success: false };
   if (!validateMediaFile(processedFile, mediaType)) return { success: false };
   editor.dispatchCommand(INSERT_MEDIA_COMMAND, {
     type: 'local',
@@ -331,7 +347,7 @@ function registerMediaPlugin(editor: LexicalEditor) {
 
     editor.dispatchCommand(UPLOAD_MEDIA_START_COMMAND, [key, mediaType]);
 
-    uploadStaticFiles(
+    await uploadStaticFiles(
       [file],
       (id) => {
         cachedUploads.set(uploadKey, id);
@@ -398,7 +414,10 @@ function registerMediaPlugin(editor: LexicalEditor) {
 
           $safeInsertMediaNode(node);
           const nodeKey = node.getKey();
-          handleUpload(payload.file, nodeKey, payload.url, mediaType);
+          uploadInBackground(
+            handleUpload(payload.file, nodeKey, payload.url, mediaType),
+            mediaType
+          );
           return true;
         }
 
@@ -560,7 +579,7 @@ function registerMediaPlugin(editor: LexicalEditor) {
                 ? 'video'
                 : null;
             if (type) {
-              addMediaFromFile(editor, file, type);
+              uploadInBackground(addMediaFromFile(editor, file, type), type);
             }
           }
           input.remove();

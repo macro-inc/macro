@@ -1,4 +1,5 @@
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useNotificationsForEntity } from '@notifications/notification-helpers';
 import type { UnifiedNotification } from '@notifications/types';
 import type { MessageParent } from '@service-storage/messages';
@@ -52,6 +53,15 @@ export function MarkMessageNotifications(props: {
   const [inFlight, setInFlight] = createSignal(false);
   let attempts = 0;
   let attemptedIds = '';
+  const markRead = async (unread: UnifiedNotification[]) => {
+    try {
+      await notificationSource.bulkMarkAsRead(unread);
+    } catch (error) {
+      console.error('Failed to mark message notifications as read', error);
+    } finally {
+      setInFlight(false);
+    }
+  };
 
   createEffect(() => {
     const unread = notifications().filter(
@@ -70,27 +80,7 @@ export function MarkMessageNotifications(props: {
     if (attempts >= MAX_MARK_ATTEMPTS) return;
     attempts += 1;
     setInFlight(true);
-    const settleBulkMarkAsReadFinally = async () => {
-      setInFlight(false);
-
-      return;
-    };
-    const settleBulkMarkAsRead = async () => {
-      try {
-        try {
-          return await notificationSource.bulkMarkAsRead(unread);
-        } catch (settleBulkMarkAsReadError) {
-          const error = settleBulkMarkAsReadError;
-
-          console.error('Failed to mark message notifications as read', error);
-
-          return;
-        }
-      } finally {
-        await settleBulkMarkAsReadFinally();
-      }
-    };
-    void settleBulkMarkAsRead();
+    fireAndForget(markRead(unread), 'mark-message-notifications');
   });
 
   return props.children;

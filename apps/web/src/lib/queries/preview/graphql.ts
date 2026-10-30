@@ -4,6 +4,7 @@ import {
   selectRecords,
 } from '@app/lib/graphql-cache';
 import { createUrqlQuery } from '@app/lib/urql-solid';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { DEFAULT_ITEM_TYPE, type ItemType } from '@service-storage/client';
@@ -69,33 +70,19 @@ function normalizedItemType(item: ItemEntity): ItemType {
   return item.type ?? DEFAULT_ITEM_TYPE;
 }
 
+const GRAPHQL_ENTITY_TYPES: Record<GraphqlPreviewType, EntityType> = {
+  document: 'DOCUMENT',
+  chat: 'CHAT',
+  project: 'PROJECT',
+  email: 'THREAD',
+  channel: 'CHANNEL',
+  call: 'CALL_RECORD',
+  crm_company: 'COMPANY',
+  initiative: 'INITIATIVE',
+};
+
 function graphqlEntityType(type: GraphqlPreviewType): EntityType {
-  return match(type)
-    .with('document', (): EntityType => {
-      return 'DOCUMENT';
-    })
-    .with('chat', (): EntityType => {
-      return 'CHAT';
-    })
-    .with('project', (): EntityType => {
-      return 'PROJECT';
-    })
-    .with('email', (): EntityType => {
-      return 'THREAD';
-    })
-    .with('channel', (): EntityType => {
-      return 'CHANNEL';
-    })
-    .with('call', (): EntityType => {
-      return 'CALL_RECORD';
-    })
-    .with('crm_company', (): EntityType => {
-      return 'COMPANY';
-    })
-    .with('initiative', (): EntityType => {
-      return 'INITIATIVE';
-    })
-    .exhaustive();
+  return GRAPHQL_ENTITY_TYPES[type];
 }
 
 export function isGraphqlPreviewItem(
@@ -483,7 +470,8 @@ export async function setGraphqlPreviewName(
       ...base,
       __typename: 'GraphqlSoupInitiative' as const,
     }))
-    .exhaustive();
+    .exhaustive(() => null);
+  if (!record) return;
   await writeGraphqlPreviewCache({
     query: stringifyDocument(ItemPreviewNameCacheWriteDocument),
     operationName: 'ItemPreviewNameCacheWrite',
@@ -621,16 +609,13 @@ function startPreviewBatch(
     if (host) {
       // One keyed read for the entire batch. Minimal cached titles can render
       // while the richer selection loads, without spawning child queries.
-
-      const settleReadRecordsByKeys = async () => {
+      const readCachedPreviews = async () => {
         try {
-          const settleReadRecordsByKeysValue = await readRecordsByKeys(
+          const { records } = await readRecordsByKeys(
             host,
             previewSelection,
             items.map((item) => normalizedRecordKey(item)!)
           );
-          const { records } = settleReadRecordsByKeysValue;
-
           if (disposed) return;
           const previews = new Map<string, PreviewItem>();
           for (const { recordKey, record } of records) {
@@ -638,36 +623,27 @@ function startPreviewBatch(
             if (preview) previews.set(recordKey, preview);
           }
           setCached(previews);
-
-          return;
         } catch {
-          return await undefined;
+          /* Cached titles are optional; the batch query still loads them. */
         }
       };
-      void settleReadRecordsByKeys();
+      fireAndForget(readCachedPreviews(), 'graphql-preview');
     }
     let refreshing: Promise<void> | undefined;
+    const refetchFromNetwork = async () => {
+      try {
+        await result.refetch({ requestPolicy: 'cache-and-network' });
+      } finally {
+        refreshing = undefined;
+      }
+    };
     const refresh = () => {
       // A save can settle after its hover card/mention has unmounted. Never
       // resurrect an orphan query when that callback requests a refresh.
       if (disposed) return Promise.resolve();
       // Re-register cache dependencies as well as forcing a network refresh,
       // so a failed/offline refresh does not disconnect later optimistic edits.
-      const settleRefetchFinally = async () => {
-        refreshing = undefined;
-
-        return;
-      };
-      const settleRefetch = async () => {
-        try {
-          await result.refetch({ requestPolicy: 'cache-and-network' });
-
-          return await undefined;
-        } finally {
-          await settleRefetchFinally();
-        }
-      };
-      refreshing ??= settleRefetch();
+      refreshing ??= refetchFromNetwork();
       return refreshing;
     };
     return { value: { result, cached, refresh }, dispose };

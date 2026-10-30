@@ -26,20 +26,17 @@ export async function fetchBinaryDocumentData(
   const documentData = maybeDocument.value;
   const versionId = documentData.documentMetadata.documentVersionId;
 
-  const settleWaitForDocumentPresignedUrlReady = async () => {
-    try {
-      return await waitForDocumentPresignedUrlReady({
-        documentId,
-        versionId,
-      });
-    } catch (settleWaitForDocumentPresignedUrlReadyError) {
-      const error = settleWaitForDocumentPresignedUrlReadyError;
-
-      console.error('error waiting for binary document location', error);
-      return await undefined;
-    }
-  };
-  const location = await settleWaitForDocumentPresignedUrlReady();
+  let location:
+    | Awaited<ReturnType<typeof waitForDocumentPresignedUrlReady>>
+    | undefined;
+  try {
+    location = await waitForDocumentPresignedUrlReady({
+      documentId,
+      versionId,
+    });
+  } catch (error) {
+    console.error('error waiting for binary document location', error);
+  }
 
   if (
     !location ||

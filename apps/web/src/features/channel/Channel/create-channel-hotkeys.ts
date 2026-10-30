@@ -1,5 +1,6 @@
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { MessageListItem } from '@service-storage/messages';
 import type { Accessor } from 'solid-js';
 import type { MessageActions, MessageData } from '../Message';
@@ -121,10 +122,13 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
       const msg = getSelectedMessage();
       if (!msg) return false;
       const actions = options.getMessageActions(msg);
-      actions?.onReply?.({
-        message: msg,
-        ...getMessageReplyPreviewTexts(msg.id),
-      });
+      fireAndForget(
+        actions?.onReply?.({
+          message: msg,
+          ...getMessageReplyPreviewTexts(msg.id),
+        }),
+        'channel-hotkeys'
+      );
       return true;
     },
   });
@@ -147,7 +151,7 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
       const msg = getSelectedMessage();
       if (!msg) return false;
       const actions = options.getMessageActions(msg);
-      actions?.onEdit?.({ message: msg });
+      fireAndForget(actions?.onEdit?.({ message: msg }), 'channel-hotkeys');
       return true;
     },
   });
@@ -183,7 +187,7 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
       const msg = getSelectedMessage();
       if (!msg) return false;
       const actions = options.getMessageActions(msg);
-      actions?.onDelete?.({ message: msg });
+      fireAndForget(actions?.onDelete?.({ message: msg }), 'channel-hotkeys');
       return true;
     },
   });

@@ -1,5 +1,6 @@
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type Accessor, createEffect, untrack } from 'solid-js';
 import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 import { useCall } from './use-call';
@@ -16,6 +17,8 @@ export function ChannelCallAutoJoin(props: {
   channelId: string;
   pendingJoinCall: Accessor<boolean>;
   onHandled: () => void;
+  /** Wait for metadata; agent DMs cannot host calls. */
+  canCall?: Accessor<boolean | undefined>;
 }) {
   const { setActiveTab } = useChannelTab();
   // Mirror ChannelCallButton's tab-sync behavior so leaving via the
@@ -28,6 +31,13 @@ export function ChannelCallAutoJoin(props: {
 
   createEffect(() => {
     if (!props.pendingJoinCall()) return;
+    const canCall = props.canCall ? props.canCall() : true;
+    if (canCall === undefined) return;
+    if (!canCall) {
+      setActiveTab(getCallLeaveTab());
+      props.onHandled();
+      return;
+    }
 
     untrack(() => {
       if (!ENABLE_CALLS) {
@@ -48,22 +58,16 @@ export function ChannelCallAutoJoin(props: {
         return;
       }
 
-      const settleJoinCallFinally = async () => {
-        return await props.onHandled();
-      };
-      const settleJoinCall = async () => {
+      const joinFromDeepLink = async () => {
         try {
-          try {
-            return await call.joinCall();
-          } catch (settleJoinCallError) {
-            const e = settleJoinCallError;
-            return await console.error('Auto-join call failed', e);
-          }
+          await call.joinCall('deep_link');
+        } catch (e) {
+          console.error('Auto-join call failed', e);
         } finally {
-          await settleJoinCallFinally();
+          props.onHandled();
         }
       };
-      settleJoinCall();
+      fireAndForget(joinFromDeepLink(), 'channel-call');
     });
   });
 

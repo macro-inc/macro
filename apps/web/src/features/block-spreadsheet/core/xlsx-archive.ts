@@ -57,7 +57,7 @@ function archiveEntries(
   const count = data.getUint16(end + 10, true);
   const centralSize = data.getUint32(end + 12, true);
   const centralStart = data.getUint32(end + 16, true);
-  updateArchiveEntries2();
+  checkCentralDirectory();
   const entries: ArchiveEntry[] = [];
   let offset = centralStart;
   let expanded = 0;
@@ -76,9 +76,9 @@ function archiveEntries(
       nameSize +
       data.getUint16(offset + 30, true) +
       data.getUint16(offset + 32, true);
-    updateArchiveEntries3(next, flags, method);
+    checkEntryHeader(next, flags, method);
     const name = strFromU8(bytes.subarray(offset + 46, offset + 46 + nameSize));
-    updateArchiveEntries(name);
+    checkEntryName(name);
     names.add(name);
     expanded += size;
     if (expanded > XLSX_MAX_EXPANDED_BYTES)
@@ -107,12 +107,12 @@ function archiveEntries(
     throw new Error('Workbooks written by Macro must not contain macros.');
   return { entries, centralStart };
 
-  function updateArchiveEntries3(next: number, flags: number, method: number) {
+  function checkEntryHeader(next: number, flags: number, method: number) {
     if (next > end || flags & 1 || (method !== 0 && method !== 8))
       throw invalid();
   }
 
-  function updateArchiveEntries2() {
+  function checkCentralDirectory() {
     if (
       data.getUint32(end + 4, true) !== 0 ||
       count !== data.getUint16(end + 8, true) ||
@@ -123,7 +123,7 @@ function archiveEntries(
       throw invalid();
   }
 
-  function updateArchiveEntries(name: string) {
+  function checkEntryName(name: string) {
     if (
       !name ||
       name.startsWith('/') ||
@@ -219,10 +219,6 @@ export function xlsxFeatureWarnings(names: string[]): string[] {
     if (/^xl\/externalLinks\//.test(name))
       warnings.add(
         'External workbook links are not supported; formulas that use them keep their last calculated values.'
-      );
-    if (/^xl\/tables\//.test(name))
-      warnings.add(
-        'Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.'
       );
     if (/(^|\/)vbaProject\.bin$/i.test(name))
       warnings.add(

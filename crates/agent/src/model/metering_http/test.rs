@@ -792,6 +792,89 @@ fn incomplete_stream_snapshots_are_never_promoted_to_final_usage() {
     assert!(matches!(chat.evidence(), UsageEvidence::Missing(_)));
 }
 
+#[test]
+fn every_protocol_reports_why_the_provider_stopped() {
+    let mut anthropic = Facts::new(WireProtocol::Anthropic, false, None);
+    anthropic.event(
+        br#"{"type":"message_start","message":{"usage":{"input_tokens":10,"output_tokens":1}}}"#,
+    );
+    anthropic.event(
+        br#"{"type":"message_delta","delta":{"stop_reason":"refusal"},"usage":{"output_tokens":0}}"#,
+    );
+    anthropic.event(br#"{"type":"message_stop"}"#);
+    assert_eq!(anthropic.stop_reason.as_deref(), Some("refusal"));
+
+    let mut responses = Facts::new(WireProtocol::Responses, false, None);
+    responses.event(br#"{"type":"response.incomplete","response":{"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"}}}"#);
+    assert_eq!(responses.stop_reason.as_deref(), Some("max_output_tokens"));
+
+    let mut completed = Facts::new(WireProtocol::Responses, false, None);
+    completed.event(br#"{"type":"response.completed","response":{"status":"completed"}}"#);
+    assert_eq!(completed.stop_reason.as_deref(), Some("completed"));
+
+    let mut chat = Facts::new(WireProtocol::ChatCompletions, false, None);
+    chat.event(br#"{"choices":[{"delta":{"content":"hi"},"finish_reason":null}]}"#);
+    chat.event(br#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#);
+    chat.event(br#"{"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":2}}"#);
+    assert_eq!(chat.stop_reason.as_deref(), Some("length"));
+
+    let mut gemini = Facts::new(WireProtocol::Gemini, false, None);
+    gemini.event(br#"{"candidates":[{"finishReason":"SAFETY"}]}"#);
+    assert_eq!(gemini.stop_reason.as_deref(), Some("SAFETY"));
+}
+
+/// Rig's streaming span keeps only usage; the stop reason comes from here.
+#[tokio::test]
+async fn the_stop_reason_lands_on_the_model_call_span() {
+    use opentelemetry::trace::TracerProvider as _;
+    use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
+    use tracing::Instrument as _;
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let layer = tracing_opentelemetry::layer().with_tracer(provider.tracer("test"));
+    let _guard = tracing::subscriber::set_default(tracing_subscriber::registry().with(layer));
+    tracing::callsite::rebuild_interest_cache();
+
+    let journal = Arc::new(Journal::default());
+    let sse = concat!(
+        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg\",\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}\n\n",
+        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"refusal\"},\"usage\":{\"output_tokens\":0}}\n\n",
+        "data: {\"type\":\"message_stop\"}\n\n"
+    );
+    let client = MeteredHttpClient::new(Transport::new(sse), "anthropic", WireProtocol::Anthropic);
+    context(
+        journal.clone(),
+        WireProtocol::Anthropic,
+        "anthropic",
+        "model",
+    )
+    .scope(
+        async {
+            let mut body = client.send_streaming(request()).await.unwrap().into_body();
+            while body.next().await.is_some() {}
+        }
+        .instrument(tracing::info_span!("chat_streaming")),
+    )
+    .await;
+
+    provider.force_flush().unwrap();
+    let spans = exporter.get_finished_spans().unwrap();
+    let call = spans
+        .iter()
+        .find(|span| span.name == "chat_streaming")
+        .expect("the model call span finished");
+    let reasons = call
+        .attributes
+        .iter()
+        .find(|kv| kv.key.as_str() == attr::RESPONSE_FINISH_REASONS)
+        .map(|kv| kv.value.to_string());
+    assert_eq!(reasons.as_deref(), Some("[\"refusal\"]"));
+}
+
 #[tokio::test]
 async fn replayed_admission_never_executes_again() {
     let journal = Arc::new(Journal {

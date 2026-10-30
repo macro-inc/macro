@@ -2,7 +2,7 @@ import type { MacroId } from '@app/lib/identity/macro-id';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import { getDisplayName } from '@core/user';
-import UsersThreeIcon from '@phosphor/users-three.svg';
+import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import { firstPartyBotName } from '@queries/bots/first-party-bot-name';
 import { useBotProfile } from '@queries/bots/profiles';
 import { queryReadyGate } from '@queries/gate';

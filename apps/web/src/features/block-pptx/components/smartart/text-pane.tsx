@@ -5,7 +5,8 @@
  * the arrow keys move between bullets, as in PowerPoint.
  */
 
-import X from '@phosphor/x.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import X from '@icon/system/regular/x.svg';
 import {
   createMemo,
   createSignal,
@@ -60,26 +61,11 @@ export function SmartArtTextPane(props: {
   /** Pane edits run one after another, in the order they were made. */
   let chain: Promise<unknown> = Promise.resolve();
   const enqueue = <T,>(task: () => Promise<T>): Promise<T> => {
-    const settleChainHandler0 = task;
-    const settleChainHandler1 = task;
-    const settleChain = async () => {
-      try {
-        await chain;
-      } catch {
-        return await settleChainHandler0();
-      }
-      return await settleChainHandler1();
-    };
-    const next = settleChain();
-
-    const settleNext = async () => {
-      try {
-        return await next;
-      } catch {
-        return await undefined;
-      }
-    };
-    chain = settleNext();
+    const next = (async () => {
+      await chain;
+      return task();
+    })();
+    chain = Promise.allSettled([next]);
     return next;
   };
 
@@ -110,12 +96,16 @@ export function SmartArtTextPane(props: {
     pending.set(id, {
       text,
       at: s().target(),
-      timer: setTimeout(() => void commit(id), TYPING_DELAY),
+      timer: setTimeout(
+        () => fireAndForget(commit(id), 'pptx-editor'),
+        TYPING_DELAY
+      ),
     });
   };
   // Closing the pane (or deselecting the graphic) sends what was typed.
   onCleanup(() => {
-    for (const id of [...pending.keys()]) void commit(id);
+    for (const id of [...pending.keys()])
+      fireAndForget(commit(id), 'pptx-editor');
   });
 
   /** Puts the caret in a bullet: at its start, its end, or an offset. */
@@ -217,12 +207,12 @@ export function SmartArtTextPane(props: {
     if (e.key === 'Tab' || e.key === 'Enter') e.preventDefault();
     if (action.kind === 'none') return;
     e.preventDefault();
-    void run(action, input);
+    fireAndForget(run(action, input), 'pptx-editor');
   };
 
   return (
     <div
-      class="absolute z-20 flex w-60 flex-col rounded-lg border border-edge bg-menu text-ink shadow-xl"
+      class="menu-surface absolute z-20 flex w-60 flex-col"
       style={{
         left: `${props.position.left}px`,
         top: `${props.position.top}px`,
@@ -283,16 +273,12 @@ export function SmartArtTextPane(props: {
                   }}
                   onBlur={(e) => {
                     const el = e.currentTarget;
-
-                    const settleCommit = async () => {
+                    const commitDraft = async () => {
                       await commit(id, el.value);
-
                       if (document.activeElement !== el)
                         setDraft(id, undefined);
-
-                      return;
                     };
-                    void settleCommit();
+                    fireAndForget(commitDraft(), 'pptx-editor');
                   }}
                   onKeyDown={(e) => onKeyDown(e, id)}
                 />

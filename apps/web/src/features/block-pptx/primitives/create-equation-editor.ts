@@ -7,6 +7,7 @@
  */
 
 import type { EditOp, EditResult } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
   createEffect,
@@ -220,7 +221,7 @@ export function createEquationEditor(options: EquationEditorOptions) {
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => {
       timer = undefined;
-      void sync();
+      fireAndForget(sync(), 'pptx-editor');
     }, delay);
   }
 
@@ -286,7 +287,7 @@ export function createEquationEditor(options: EquationEditorOptions) {
     text = '',
     asDisplay = where.kind === 'box'
   ) {
-    void flush();
+    fireAndForget(flush(), 'pptx-editor');
     setFresh({ where, text, display: asDisplay });
     queueMicrotask(() => focusInput(text.length));
   }
@@ -352,7 +353,7 @@ export function createEquationEditor(options: EquationEditorOptions) {
 
   /** Closes the editor; the equation stays selected. */
   function close() {
-    void flush();
+    fireAndForget(flush(), 'pptx-editor');
     if (fresh()) setFresh(undefined);
     else setDismissed(selectedKey());
     options.onClose();
@@ -399,31 +400,30 @@ export function createEquationEditor(options: EquationEditorOptions) {
     const key = `${ink()}|${text}`;
     let found = thumbnails.get(key);
     if (!found) {
-      const settleRender = async () => {
-        try {
-          return await render(text, THUMBNAIL_SIZE, false);
-        } catch {
-          return await undefined;
-        }
-      };
-      found = settleRender();
+      found = renderThumbnail(text);
       thumbnails.set(key, found);
     }
     return found;
+  }
+
+  async function renderThumbnail(text: string) {
+    try {
+      return await render(text, THUMBNAIL_SIZE, false);
+    } catch {
+      return undefined;
+    }
   }
 
   onCleanup(() => {
     if (timer) clearTimeout(timer);
     const picture = preview();
     if (picture) URL.revokeObjectURL(picture.url);
-    for (const p of thumbnails.values()) {
-      const settleP = async () => {
-        const settlePValue = await p;
-        const picture = settlePValue;
-        return await (picture && URL.revokeObjectURL(picture.url));
-      };
-      void settleP();
-    }
+    const revoke = async (pending: Promise<EquationPicture | undefined>) => {
+      const thumb = await pending;
+      if (thumb) URL.revokeObjectURL(thumb.url);
+    };
+    for (const p of thumbnails.values())
+      fireAndForget(revoke(p), 'pptx-editor');
   });
 
   return {

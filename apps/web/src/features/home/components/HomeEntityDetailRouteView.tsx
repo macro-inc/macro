@@ -12,6 +12,7 @@ import { useMarkdownName } from '@block-md/component/MarkdownNameProvider';
 import { useMarkdownDocumentTools } from '@block-md/component/useMarkdownDocumentTools';
 import { useMarkdownDocument } from '@block-md/context/markdown-document-context';
 import { ChannelDetailTopBar } from '@channel/Channel/ChannelDetail';
+import { ChannelTitleIcon } from '@channel/components/ChannelTopIcon';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import type { PreviewBlockTarget } from '@components/app/previewTarget';
@@ -69,11 +70,22 @@ function HomeEntityBreadcrumb(props: {
             onClick={item.onSelect}
             tooltip={props.name()}
           >
-            <EntityIcon
-              targetType={entityDetailBlockType(props.target) ?? 'channel'}
-              size="xs"
-              class="shrink-0"
-            />
+            <Show
+              when={
+                props.target.type === 'channel' ? props.target.id : undefined
+              }
+              fallback={
+                <EntityIcon
+                  targetType={entityDetailBlockType(props.target) ?? 'unknown'}
+                  size="xs"
+                  class="shrink-0"
+                />
+              }
+            >
+              {(channelId) => (
+                <ChannelTitleIcon channelId={channelId()} suppressClick />
+              )}
+            </Show>
             <span class="truncate">{props.name()}</span>
           </ViewBreadcrumbs.Button>
           <Show when={props.fileMenu}>

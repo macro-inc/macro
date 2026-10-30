@@ -8,6 +8,7 @@ import { trackMention } from '@app/lib/queries/storage/mentions';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import type { BlockName } from '@core/block';
 import { itemToBlockName } from '@core/constant/allBlocks';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type EntityDragEvent, isEntityDragEvent } from '@entity';
 import { throttle } from '@solid-primitives/scheduled';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
@@ -141,7 +142,7 @@ export function useEditorEntityDrop(props: {
     dndDragMove.clear();
     // Only soup entity drags insert mentions (not e.g. sidebar favorite drags).
     if (!isEntityDragEvent(event)) return;
-    dndDragEnd(event);
+    fireAndForget(dndDragEnd(event), 'markdown-entity-drop');
   });
 
   onDragMove((event) => {

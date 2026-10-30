@@ -1,6 +1,7 @@
 export type ChannelsTab = 'browse' | 'recents' | 'threads';
 
-export type ChannelsGroup = 'channels' | 'direct_messages';
+/** The All tab's conversation lists, each its own paginated query. */
+export type ChannelsGroup = 'team_channels' | 'channels' | 'direct_messages';
 
 export type ChannelListSort = 'viewed_at' | 'updated_at' | 'created_at';
 
@@ -14,7 +15,6 @@ export type ChannelsQueryScope = ChannelsGroup | 'recents';
 
 export type ChannelsViewState = {
   tab: ChannelsTab;
-  mobileTab: ChannelsQueryScope;
   expandedGroups: Record<ChannelsRailSection, boolean>;
   /**
    * Channel labels this user has collapsed. Labels themselves are team data;
@@ -27,6 +27,8 @@ export type ChannelsViewState = {
    * split's history entry, which is too costly for a per-click filter.
    */
   threadsChannelId: string | undefined;
+  /** Show only conversations with unread activity in the rail. */
+  unreadOnly: boolean;
   sortBy: Record<ChannelsSortGroup, ChannelListSort>;
   asideWidth: number;
 };

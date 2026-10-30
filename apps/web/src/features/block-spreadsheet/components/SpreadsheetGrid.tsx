@@ -1,7 +1,15 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Square from '@icon/system/regular/square.svg';
 import { cellPlainText } from '@macro-inc/spreadsheet/cell-mentions';
+import {
+  checkboxChecked,
+  selectedCheckboxes,
+} from '@macro-inc/spreadsheet/checkboxes';
 import type { ConditionalAppearance } from '@macro-inc/spreadsheet/conditional-formatting';
 import {
+  accountingParts,
   literalNumber,
   literalNumberDisplay,
 } from '@macro-inc/spreadsheet/number-display';
@@ -11,7 +19,13 @@ import type {
   SheetDrawing,
 } from '@macro-inc/spreadsheet/sheet-drawings';
 import { sqrefBounds } from '@macro-inc/spreadsheet/sheet-rules';
-import CaretDown from '@phosphor/caret-down.svg';
+import {
+  type SheetTable,
+  tableAt,
+  tableBounds,
+} from '@macro-inc/spreadsheet/sheet-tables';
+import { tableCellLook } from '@macro-inc/spreadsheet/table-styles';
+import CheckSquare from '@phosphor-fill/check-square-fill.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   createEffect,
@@ -20,6 +34,7 @@ import {
   createSignal,
   createUniqueId,
   For,
+  type JSX,
   on,
   onCleanup,
   onMount,
@@ -29,6 +44,7 @@ import type { SpreadsheetCommentsCapability } from '../context/spreadsheet-comme
 import type { SpreadsheetMentions } from '../context/spreadsheet-mentions';
 import { SPREADSHEET_CLIPBOARD_TYPE } from '../core/cell-copy';
 import type { ChartData } from '../core/chart-data';
+import type { TableReferences } from '../core/formula-completion';
 import type {
   FormulaReferenceSpan,
   FormulaTextSelection,
@@ -52,7 +68,9 @@ import {
   type SpreadsheetCells,
 } from '../core/spreadsheet-document';
 import type { SpreadsheetCursor } from '../core/spreadsheet-presence';
+import { CellDatePicker, datePickerKeyDay } from './CellDatePicker';
 import { CellListMenu } from './CellListMenu';
+import { ChoiceChip } from './ChoiceChip';
 import { ConditionalIcon } from './ConditionalIcon';
 import {
   cellBackground,
@@ -61,13 +79,39 @@ import {
   dataBarBackground,
 } from './cell-colors';
 import type { CompleteFormula } from './create-formula-assistance';
+import { createDragAutoScroll, DRAG_SLOP } from './drag-auto-scroll';
 import { FormulaInput } from './FormulaInput';
+import { SelectionMoveHandle } from './SelectionMoveHandle';
 import { type DrawingRect, SheetDrawingLayer } from './SheetDrawingLayer';
 import { type CellAction, SpreadsheetCellMenu } from './SpreadsheetCellMenu';
 import {
   type HeaderAction,
   SpreadsheetHeaderMenu,
 } from './SpreadsheetHeaderMenu';
+
+/** What the grid draws for tables beyond their style. */
+export type TableGridUi = {
+  /** The menu of a header cell of `table`, in sheet column `column`. */
+  columnMenu: (table: () => SheetTable, column: number) => JSX.Element;
+  /** A table's name and menu, placed by `style` above its header row or,
+   * for a table in the first row, compact in the column header bar. */
+  tableMenu: (
+    table: () => SheetTable,
+    style: () => JSX.CSSProperties,
+    inHeader: () => boolean
+  ) => JSX.Element;
+  /** Why a cell's value does not fit its column's type. */
+  mismatch: (row: number, column: number) => string | undefined;
+  /** The aggregate a total row cell shows, such as `Sum`. */
+  totalLabel: (row: number, column: number) => string | undefined;
+  /** A table's column names. */
+  columnNames: (table: string) => string[];
+  /** The table whose menu is open. */
+  menuTable: () => string | undefined;
+};
+
+/** The height of a table's name above its header row. */
+const TABLE_CHIP_HEIGHT = 22;
 
 export type GridValue = {
   display: string;
@@ -84,8 +128,9 @@ const ROW_HEADER_WIDTH = 46;
 const CELL_PADDING_X = 3;
 const CELL_PADDING_Y = 2;
 const CELL_LINE_HEIGHT = 1.2;
+/** Excel indents each level by three spaces of the workbook's default font. */
+const INDENT_EMS = 0.75;
 const MAX_ROW_HEIGHT = 160;
-const TOUCH_SLOP = 8;
 
 export function renderedSelectionCell(
   root: ParentNode | undefined,
@@ -170,6 +215,8 @@ export function SpreadsheetGrid(props: {
   mentions?: SpreadsheetMentions;
   sheetId?: string;
   complete?: CompleteFormula;
+  /** Tables whose names and columns the cell editor completes. */
+  tableReferences?: () => TableReferences | undefined;
   rowCount?: number;
   columnCount?: number;
   /** The imported workbook's font for cells without their own. */
@@ -191,6 +238,12 @@ export function SpreadsheetGrid(props: {
     target: CellSelection
   ) => void | Promise<void>;
   onCopyMetadata?: (cut?: boolean) => string;
+  /** Drag the selection's border to move its cells by rows and columns. */
+  onMoveSelection?: (
+    selection: CellSelection,
+    rows: number,
+    columns: number
+  ) => void;
   values: Record<string, GridValue>;
   /** Excel notes by address, marked in their cells. */
   notes?: Record<string, string>;
@@ -199,8 +252,20 @@ export function SpreadsheetGrid(props: {
   /** The active cell's list of allowed values, offered in a dropdown. */
   listItems?: string[];
   onPickListItem?: (item: string) => void;
-  /** Ranges (Excel sqrefs) whose cells show a dropdown arrow. */
-  dropdownRanges?: string[];
+  /** The active cell offers a calendar while it is edited; `date` is its day. */
+  datePicker?: { date?: Date };
+  onPickDate?: (day: Date) => void;
+  /**
+   * Dropdown rules: their ranges (Excel sqrefs), whose cells show an arrow,
+   * and their choice colors by lowercase text.
+   */
+  dropdowns?: { range: string; colors?: Map<string, string> }[];
+  /** Select a checkbox cell and toggle it. */
+  onToggleCheckbox?: (position: CellPosition) => void;
+  /** Tables, drawn with their style. */
+  tables?: SheetTable[];
+  /** Tables' menus, column types and total row labels. */
+  tableUi?: TableGridUi;
   /** Images and charts over the sheet. */
   drawings?: SheetDrawing[];
   image?: (key: string) => string | undefined;
@@ -261,6 +326,11 @@ export function SpreadsheetGrid(props: {
   const hiddenColumns = createMemo(() => new Set(props.hiddenColumns));
   const hiddenRows = createMemo(() => new Set(props.hiddenRows));
   const defaultFontSize = () => props.defaultFont?.size ?? 10;
+  /** Unzoomed pixels a cell's indent takes from its content. */
+  const indentWidth = (cell?: SpreadsheetCell) =>
+    cell?.indent && cell.horizontalAlign !== 'center'
+      ? cell.indent * fontPixels(undefined, defaultFontSize()) * INDENT_EMS
+      : 0;
   const [fillTarget, setFillTarget] = createSignal<CellSelection>();
   // The cell whose list is open; moving the selection closes it.
   const [listOpenAt, setListOpenAt] = createSignal<string>();
@@ -269,17 +339,56 @@ export function SpreadsheetGrid(props: {
     !props.editing &&
     !props.formulaEditing &&
     !!props.listItems?.length;
-  const dropdownBounds = createMemo(() =>
-    (props.dropdownRanges ?? []).flatMap(sqrefBounds)
-  );
-  const hasDropdown = (row: number, column: number) =>
-    dropdownBounds().some(
-      (bounds) =>
-        row >= bounds.top &&
-        row <= bounds.bottom &&
-        column >= bounds.left &&
-        column <= bounds.right
+  // The selection's move border and fill handle drag with a mouse or pen.
+  const selectionDraggable = () =>
+    !touchMode() && !props.readonly && !props.editing && !props.formulaEditing;
+  // Opening an editor without typing asks for a calendar, shown once the cell
+  // is known to offer one. Typing, Escape and ending the edit close it.
+  const [pickerOpen, setPickerOpen] = createSignal(false);
+  // The day its keys moved to; it starts at the cell's day, or today.
+  const [pickerDay, setPickerDay] = createSignal<Date>();
+  const shownPickerDay = () => {
+    if (!props.editing || !pickerOpen() || !props.datePicker) return;
+    const now = new Date();
+    return (
+      pickerDay() ??
+      props.datePicker.date ??
+      new Date(now.getFullYear(), now.getMonth(), now.getDate())
     );
+  };
+  function openDatePicker() {
+    setPickerDay(undefined);
+    setPickerOpen(props.editing);
+  }
+  createEffect(() => {
+    if (!props.editing) setPickerOpen(false);
+  });
+  const dropdownAreas = createMemo(() =>
+    (props.dropdowns ?? []).map((dropdown) => ({
+      bounds: sqrefBounds(dropdown.range),
+      colors: dropdown.colors,
+    }))
+  );
+  const dropdownAt = (row: number, column: number) =>
+    dropdownAreas().find((area) =>
+      area.bounds.some(
+        (bounds) =>
+          row >= bounds.top &&
+          row <= bounds.bottom &&
+          column >= bounds.left &&
+          column <= bounds.right
+      )
+    );
+  const opensListOnPress = (position: CellPosition) =>
+    listOpenAt() !== undefined &&
+    listOpenAt() !== cellAddress(position) &&
+    dropdownAt(position.row, position.column) !== undefined;
+  /** Pressing a cell closes an open list, or opens that dropdown cell's list. */
+  function closeOrMoveList(position: CellPosition, extend = false) {
+    const opens = !extend && opensListOnPress(position);
+    setListOpenAt(undefined);
+    if (opens) queueMicrotask(() => setListOpenAt(cellAddress(position)));
+  }
   const [selectedDrawing, setSelectedDrawing] = createSignal<string>();
   const [resizing, setResizing] = createSignal<{
     column: number;
@@ -306,8 +415,6 @@ export function SpreadsheetGrid(props: {
     | {
         kind: 'selection' | 'reference';
         pointerId: number;
-        x: number;
-        y: number;
         fixed: CellPosition;
         startX: number;
         startY: number;
@@ -316,7 +423,8 @@ export function SpreadsheetGrid(props: {
       }
     | undefined;
   let lastTap: { address: string; time: number } | undefined;
-  let autoScrollFrame: number | undefined;
+  // The cell the drag in progress last extended to.
+  let dragCell: string | undefined;
   const columnWidth = (column: number) =>
     resizing()?.column === column
       ? resizing()!.width
@@ -335,6 +443,18 @@ export function SpreadsheetGrid(props: {
         ? ''
         : (literalNumberDisplay(cell) ?? cellPlainText(cell?.value ?? '')))
     );
+  };
+  const accounting = (address: string) => {
+    const cell = props.cells[address];
+    if (cell?.format !== 'accounting') return;
+    if (props.showFormulas && cell.value.startsWith('=')) return;
+    const value = props.values[address];
+    const numeric = value
+      ? value.number !== undefined
+      : literalNumber(cell) !== undefined;
+    return numeric
+      ? accountingParts(display(address), cell.decimals)
+      : undefined;
   };
   const rootStyle = getComputedStyle(document.documentElement);
   const fontFamilies = {
@@ -392,7 +512,14 @@ export function SpreadsheetGrid(props: {
       const pixels = fontPixels(cell, defaultFontSize());
       const lineHeight = pixels * CELL_LINE_HEIGHT;
       let lines = 1;
-      lines = updateFont(cell, pixels, lines, address, position, lineHeight);
+      lines = wrappedLineCount(
+        cell,
+        pixels,
+        lines,
+        address,
+        position,
+        lineHeight
+      );
       heights[position.row] = Math.max(
         heights[position.row],
         Math.min(MAX_ROW_HEIGHT, Math.ceil(lines * lineHeight + verticalInset))
@@ -404,7 +531,7 @@ export function SpreadsheetGrid(props: {
       heights[row] = hidden.has(row) ? 0 : heights[row] * zoom;
     return heights;
 
-    function updateFont(
+    function wrappedLineCount(
       cell: SpreadsheetCell,
       pixels: number,
       lines: number,
@@ -417,7 +544,10 @@ export function SpreadsheetGrid(props: {
           context.font = `${cell.italic ? 'italic ' : ''}${cell.bold ? 600 : 400} ${pixels}px ${fontFamily(cell)}`;
         lines = wrappedLines(
           display(address),
-          columnWidth(position.column) - CELL_PADDING_X * 2 - borderInset,
+          columnWidth(position.column) -
+            CELL_PADDING_X * 2 -
+            borderInset -
+            indentWidth(cell),
           (text) =>
             context?.measureText(text).width ?? text.length * pixels * 0.6,
           Math.ceil((MAX_ROW_HEIGHT - verticalInset) / lineHeight)
@@ -484,6 +614,47 @@ export function SpreadsheetGrid(props: {
     return offsets;
   });
   // Only columns in view (plus the selection) are rendered, like rows.
+  /** The table holding the active cell, whose name shows above it. */
+  const activeTable = createMemo(() =>
+    tableAt(
+      props.tables,
+      props.selection.anchor.row,
+      props.selection.anchor.column
+    )
+  );
+  const [hovered, setHovered] = createSignal<CellPosition>();
+  const [chipHovered, setChipHovered] = createSignal<string>();
+  /** Tables whose names show: the active cell's, the pointer's, and one
+   * whose name or menu the pointer is on. */
+  const namedTables = createMemo(() => {
+    const point = hovered();
+    const names = new Set(
+      [
+        activeTable()?.name,
+        point && tableAt(props.tables, point.row, point.column)?.name,
+        chipHovered(),
+        props.tableUi?.menuTable(),
+      ].filter((name) => name !== undefined)
+    );
+    return [...names].filter((name) =>
+      props.tables?.some((table) => table.name === name)
+    );
+  });
+  /** Once the active table's header row scrolls away, the column headers
+   * show its column names, as Google Sheets does. */
+  const stickyNames = createMemo(() => {
+    const table = activeTable();
+    if (!table || !props.tableUi) return;
+    const { top, left, bottom } = tableBounds(table);
+    const edge = scrollTop() + headerHeight();
+    if (rowOffsets()[top + 1] > edge || rowOffsets()[bottom + 1] <= edge)
+      return;
+    return new Map(
+      props.tableUi
+        .columnNames(table.name)
+        .map((name, offset) => [left + offset, name])
+    );
+  });
   const visibleColumns = createMemo(() => {
     const offsets = columnOffsets();
     const left = scrollLeft() - 200;
@@ -627,10 +798,22 @@ export function SpreadsheetGrid(props: {
     width: width(props.selection.anchor.column),
     height: `${rowHeights()[props.selection.anchor.row]}px`,
   });
+  // As in Excel, the active cell shows its own fill: the range's tint has a
+  // hole there, and the active outline draws that edge.
+  const rangeClip = () => {
+    const area = bounds();
+    const { row, column } = props.selection.anchor;
+    const columns = columnOffsets();
+    const rows = rowOffsets();
+    const left = columns[column] - columns[area.left];
+    const right = columns[column + 1] - columns[area.left];
+    const top = rows[row] - rows[area.top];
+    const bottom = rows[row + 1] - rows[area.top];
+    return `polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${left}px ${top}px, ${right}px ${top}px, ${right}px ${bottom}px, ${left}px ${bottom}px, ${left}px ${top}px)`;
+  };
 
-  function stopTouchGesture() {
-    if (autoScrollFrame !== undefined) cancelAnimationFrame(autoScrollFrame);
-    autoScrollFrame = undefined;
+  function stopDrag() {
+    autoScroll.stop();
     touchGesture = undefined;
   }
 
@@ -643,9 +826,11 @@ export function SpreadsheetGrid(props: {
         time - lastTap.time <= 500 &&
         cellAddress(props.selection.anchor) === address &&
         cellAddress(props.selection.focus) === address;
+      closeOrMoveList(position);
       props.onSelect(position);
       if (repeat && !props.readonly) {
         props.onEdit();
+        openDatePicker();
         // iOS may synthesize mousedown on the old cell after mounting its editor.
         keepReferenceFocus = true;
         lastTap = undefined;
@@ -659,8 +844,8 @@ export function SpreadsheetGrid(props: {
   function endPointer(event: PointerEvent) {
     if (touchGesture && event.pointerId !== touchGesture.pointerId) return;
     const gesture = touchGesture;
-    stopTouchGesture();
-    updateEndPointer();
+    stopDrag();
+    tapUnmovedGesture();
     dragging = false;
     headerDrag = undefined;
     props.onReferenceEnd?.();
@@ -670,19 +855,14 @@ export function SpreadsheetGrid(props: {
     if (source && target && !props.readonly) {
       const generation = ++fillGeneration;
       // Keep the preview until formula relocation has committed the new cells.
-      const settleResolveFinally = async () => {
-        if (generation === fillGeneration) setFillTarget(undefined);
-
-        return;
-      };
-      const settleResolve = async () => {
+      const commitFill = async () => {
         try {
-          return await Promise.resolve(props.onFill?.(source, target));
+          await props.onFill?.(source, target);
         } finally {
-          await settleResolveFinally();
+          if (generation === fillGeneration) setFillTarget(undefined);
         }
       };
-      void settleResolve();
+      fireAndForget(commitFill(), 'spreadsheet-editor');
     }
     const resize = resizing();
     if (resize && !props.readonly)
@@ -695,12 +875,12 @@ export function SpreadsheetGrid(props: {
     setResizingRow(undefined);
     rowResizeStart = undefined;
 
-    function updateEndPointer() {
+    function tapUnmovedGesture() {
       if (
         gesture?.kind === 'tap' &&
         !gesture.moved &&
         Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) <=
-          TOUCH_SLOP
+          DRAG_SLOP
       ) {
         tapCell(gesture.position, event.timeStamp);
       } else if (
@@ -711,7 +891,7 @@ export function SpreadsheetGrid(props: {
         Math.hypot(
           event.clientX - gesture.startX,
           event.clientY - gesture.startY
-        ) <= TOUCH_SLOP
+        ) <= DRAG_SLOP
       ) {
         // The accessible grip extends over nearby cells. A tap in its invisible
         // padding should still select that cell; only a drag claims the grip.
@@ -721,7 +901,7 @@ export function SpreadsheetGrid(props: {
   }
 
   function cancelPointer() {
-    stopTouchGesture();
+    stopDrag();
     lastTap = undefined;
     dragging = false;
     headerDrag = undefined;
@@ -785,11 +965,17 @@ export function SpreadsheetGrid(props: {
     for (const address of addresses) {
       const cell = props.cells[address];
       context.font = `${cell?.italic ? 'italic ' : ''}${cell?.bold ? 600 : 400} ${fontPixels(cell, defaultFontSize())}px ${fontFamily(cell)}`;
-      const text = display(address);
+      const parts = accounting(address);
+      const text = parts
+        ? `${parts.symbol} ${parts.amount}${parts.padding}`
+        : display(address);
       for (const line of text.split('\n'))
         measured = Math.max(
           measured,
-          context.measureText(line).width + CELL_PADDING_X * 2 + 1 / scale()
+          context.measureText(line).width +
+            CELL_PADDING_X * 2 +
+            indentWidth(cell) +
+            1 / scale()
         );
     }
     props.onResizeColumn?.(
@@ -805,6 +991,8 @@ export function SpreadsheetGrid(props: {
     target instanceof HTMLTextAreaElement ||
     (target instanceof HTMLElement && !!target.closest('[contenteditable]'));
   const focusGrid = () => grid.focus({ preventScroll: true });
+  const modified = (event: MouseEvent) =>
+    event.shiftKey || event.metaKey || event.ctrlKey;
   const selectHeaderRange = (
     axis: 'row' | 'column',
     index: number,
@@ -832,15 +1020,25 @@ export function SpreadsheetGrid(props: {
     const anchor = event.shiftKey ? props.selection.anchor[axis] : index;
     headerDrag = { axis, anchor };
     selectHeaderRange(axis, index, anchor);
+    followPointer(event);
   };
 
+  /**
+   * The cell at a point. Cells hidden under the sticky headers or outside the
+   * visible area give way to the nearest cell in view.
+   */
   function positionAtPoint(x: number, y: number): CellPosition {
     const rect = grid.getBoundingClientRect();
-    const column = offsetIndex(
-      columnOffsets(),
-      x - rect.left + grid.scrollLeft
+    const left = Math.max(
+      headerWidth(),
+      Math.min(x - rect.left, grid.clientWidth - 1)
     );
-    const row = offsetIndex(rowOffsets(), y - rect.top + grid.scrollTop);
+    const top = Math.max(
+      headerHeight(),
+      Math.min(y - rect.top, grid.clientHeight - 1)
+    );
+    const column = offsetIndex(columnOffsets(), left + grid.scrollLeft);
+    const row = offsetIndex(rowOffsets(), top + grid.scrollTop);
     // Offsets start at the first cell after the headers.
     return {
       row: Math.min(rowCount() - 1, row),
@@ -848,43 +1046,49 @@ export function SpreadsheetGrid(props: {
     };
   }
 
-  function moveTouchHandle() {
+  /** Extend the drag in progress (range, header, fill, or reference) to a cell. */
+  function dragTo(position: CellPosition) {
+    const address = cellAddress(position);
+    if (address === dragCell) return;
+    dragCell = address;
     const gesture = touchGesture;
-    if (!gesture || gesture.kind === 'tap' || !gesture.moved) return;
-    const position = positionAtPoint(gesture.x, gesture.y);
-    if (gesture.kind === 'reference') props.onReferenceMove?.(position);
-    else props.onSelectRange(gesture.fixed, position);
-  }
-
-  function scrollTouchHandle() {
-    const gesture = touchGesture;
-    if (!gesture || gesture.kind === 'tap' || !gesture.moved) return;
-    const rect = grid.getBoundingClientRect();
-    const step = (point: number, start: number, end: number) =>
-      point < start + 24 ? -10 : point > end - 24 ? 10 : 0;
-    const x = step(gesture.x, rect.left + headerWidth(), rect.right);
-    const y = step(gesture.y, rect.top + headerHeight(), rect.bottom);
-    if (x || y) {
-      const previousLeft = grid.scrollLeft;
-      const previousTop = grid.scrollTop;
-      grid.scrollLeft += x;
-      grid.scrollTop += y;
-      if (previousLeft !== grid.scrollLeft || previousTop !== grid.scrollTop) {
-        setScrollTop(grid.scrollTop);
-        moveTouchHandle();
-      }
-    }
-    autoScrollFrame = requestAnimationFrame(scrollTouchHandle);
-  }
-
-  function movePointer(event: PointerEvent) {
-    if (headerDrag && event.buttons === 1) {
-      const position = positionAtPoint(event.clientX, event.clientY);
+    if (headerDrag)
       selectHeaderRange(
         headerDrag.axis,
         position[headerDrag.axis],
         headerDrag.anchor
       );
+    else if (gesture?.kind === 'reference') props.onReferenceMove?.(position);
+    else if (gesture?.kind === 'selection')
+      props.onSelectRange(gesture.fixed, position);
+    else if (props.pickingReference) props.onReferenceMove?.(position);
+    else if (fillSource) previewFill(position);
+    else if (dragging) props.onSelect(position, true);
+  }
+
+  const autoScroll = createDragAutoScroll({
+    element: () => grid,
+    inset: () => ({ left: headerWidth(), top: headerHeight() }),
+    axis: () => headerDrag && (headerDrag.axis === 'column' ? 'x' : 'y'),
+    onEdge: (x, y) => {
+      // Render the rows and columns coming into view before the scroll event.
+      setScrollLeft(grid.scrollLeft);
+      setScrollTop(grid.scrollTop);
+      dragTo(positionAtPoint(x, y));
+    },
+    // Ending would apply a fill or reference whose release point is unknown.
+    onLostRelease: cancelPointer,
+  });
+
+  function followPointer(event: PointerEvent, moved?: boolean) {
+    dragCell = undefined;
+    autoScroll.follow(event, moved);
+  }
+
+  function movePointer(event: PointerEvent) {
+    autoScroll.move(event);
+    if (headerDrag && event.buttons === 1) {
+      dragTo(positionAtPoint(event.clientX, event.clientY));
       return;
     }
     const gesture = touchGesture;
@@ -892,7 +1096,7 @@ export function SpreadsheetGrid(props: {
     if (gesture.kind === 'tap') {
       if (
         Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) >
-        TOUCH_SLOP
+        DRAG_SLOP
       ) {
         gesture.moved = true;
         lastTap = undefined;
@@ -905,16 +1109,14 @@ export function SpreadsheetGrid(props: {
         Math.hypot(
           event.clientX - gesture.startX,
           event.clientY - gesture.startY
-        ) <= TOUCH_SLOP
+        ) <= DRAG_SLOP
       )
         return;
       gesture.moved = true;
       lastTap = undefined;
-      autoScrollFrame = requestAnimationFrame(scrollTouchHandle);
+      followPointer(event, true);
     }
-    gesture.x = event.clientX;
-    gesture.y = event.clientY;
-    moveTouchHandle();
+    dragTo(positionAtPoint(event.clientX, event.clientY));
   }
 
   const touchRange = () => props.referenceSelection ?? props.selection;
@@ -940,7 +1142,7 @@ export function SpreadsheetGrid(props: {
       rect.top -
       grid.scrollTop;
     const tapPosition =
-      Math.hypot(event.clientX - handleX, event.clientY - handleY) > TOUCH_SLOP
+      Math.hypot(event.clientX - handleX, event.clientY - handleY) > DRAG_SLOP
         ? positionAtPoint(event.clientX, event.clientY)
         : undefined;
     keepReferenceFocus =
@@ -950,8 +1152,6 @@ export function SpreadsheetGrid(props: {
     touchGesture = {
       kind: reference ? 'reference' : 'selection',
       pointerId: event.pointerId,
-      x: event.clientX,
-      y: event.clientY,
       startX: event.clientX,
       startY: event.clientY,
       moved: false,
@@ -989,6 +1189,8 @@ export function SpreadsheetGrid(props: {
   function editKeyDown(event: KeyboardEvent) {
     event.stopPropagation();
     if (event.isComposing) return;
+    const day = shownPickerDay();
+    if (day && datePickerKeyDown(event, day)) return;
     if (event.key === 'Escape') {
       event.preventDefault();
       props.onCancel();
@@ -1006,6 +1208,28 @@ export function SpreadsheetGrid(props: {
       focusGrid();
       revealSelection();
     }
+  }
+
+  /** Keys of an open date picker. Others, such as typing, stay the editor's. */
+  function datePickerKeyDown(event: KeyboardEvent, day: Date) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setPickerOpen(false);
+      return true;
+    }
+    if (event.key === 'Enter' && !event.altKey) {
+      event.preventDefault();
+      props.onPickDate?.(day);
+      props.onMove(event.shiftKey ? -1 : 1, 0);
+      focusGrid();
+      revealSelection();
+      return true;
+    }
+    const next = datePickerKeyDay(event, day);
+    if (!next) return false;
+    event.preventDefault();
+    setPickerDay(next);
+    return true;
   }
 
   function copyCells(event: ClipboardEvent) {
@@ -1099,7 +1323,7 @@ export function SpreadsheetGrid(props: {
           type,
           onDocumentClipboard as EventListener
         );
-      stopTouchGesture();
+      stopDrag();
     });
   });
 
@@ -1183,6 +1407,10 @@ export function SpreadsheetGrid(props: {
         selectionBounds(props.selection).right >
         selectionBounds(props.selection).left
       }
+      inTable={!!activeTable()}
+      hasCheckboxes={() =>
+        selectedCheckboxes(props.cells, props.selection).length > 0
+      }
       onRestoreFocus={focusGrid}
       onAction={cellAction}
     >
@@ -1206,6 +1434,7 @@ export function SpreadsheetGrid(props: {
             '--spreadsheet-cell-padding': `${CELL_PADDING_X * scale()}px`,
             '--spreadsheet-cell-padding-y': `${CELL_PADDING_Y * scale()}px`,
           }}
+          onPointerLeave={() => setHovered(undefined)}
           onScroll={(event) => {
             setScrollTop(event.currentTarget.scrollTop);
             setScrollLeft(event.currentTarget.scrollLeft);
@@ -1222,8 +1451,13 @@ export function SpreadsheetGrid(props: {
           onContextMenu={(event) => {
             if (isInput(event.target)) return;
             const cell = event.target.closest<HTMLElement>('[data-address]');
-            if (!cell || !grid.contains(cell)) return;
-            const parsed = parseCellAddress(cell.dataset.address ?? '');
+            // The selection's move border opens the menu for the selection.
+            const parsed =
+              cell && grid.contains(cell)
+                ? parseCellAddress(cell.dataset.address ?? '')
+                : event.target.closest('[data-selection-move]')
+                  ? props.selection.anchor
+                  : undefined;
             if (!parsed) return;
             event.preventDefault();
             event.stopPropagation();
@@ -1264,7 +1498,7 @@ export function SpreadsheetGrid(props: {
               if (first) revealDrawing(first.id);
               return;
             }
-            if (hasAltKey()) {
+            if (opensListKey()) {
               event.preventDefault();
               setListOpenAt(cellAddress(props.selection.anchor));
               return;
@@ -1274,11 +1508,12 @@ export function SpreadsheetGrid(props: {
               (event.metaKey || event.ctrlKey) &&
               event.key.toLowerCase() === 'a';
             props.onKeyDown(event);
+            if (event.key === 'Enter' || event.key === 'F2') openDatePicker();
             // Select all ends at the last cell; revealing it would scroll away
             // from the cells the user is looking at.
-            updateOnKeyDown();
+            revealMovedSelection();
 
-            function hasAltKey() {
+            function opensListKey() {
               return (
                 event.altKey &&
                 event.key === 'ArrowDown' &&
@@ -1287,7 +1522,7 @@ export function SpreadsheetGrid(props: {
               );
             }
 
-            function updateOnKeyDown() {
+            function revealMovedSelection() {
               if (
                 !selectsAll &&
                 !props.editing &&
@@ -1327,7 +1562,7 @@ export function SpreadsheetGrid(props: {
               <div
                 role="columnheader"
                 aria-label="Select all cells"
-                class="sticky left-0 z-30 shrink-0 border-b border-r border-edge bg-panel"
+                class="sticky left-0 z-30 shrink-0 border-b border-r border-ink/12 bg-panel"
                 style={{ width: `${headerWidth()}px` }}
               >
                 <button
@@ -1354,7 +1589,7 @@ export function SpreadsheetGrid(props: {
                       width: width(column),
                       left: `${columnOffsets()[column]}px`,
                     }}
-                    class="absolute top-0 bottom-0 border-b border-r border-edge-muted"
+                    class="absolute top-0 bottom-0 border-b border-r border-ink/12"
                     classList={{
                       'bg-accent-bg text-accent':
                         column >= bounds().left && column <= bounds().right,
@@ -1393,7 +1628,19 @@ export function SpreadsheetGrid(props: {
                             );
                         }}
                       >
-                        {columnName(column)}
+                        <Show
+                          when={stickyNames()?.get(column)}
+                          fallback={columnName(column)}
+                        >
+                          {(name) => (
+                            <span
+                              data-table-column-name
+                              class="block truncate px-1 font-semibold text-ink"
+                            >
+                              {name()}
+                            </span>
+                          )}
+                        </Show>
                       </button>
                     </SpreadsheetHeaderMenu>
                     <Show when={!props.readonly && props.onResizeColumn}>
@@ -1479,7 +1726,7 @@ export function SpreadsheetGrid(props: {
                 >
                   <div
                     role="rowheader"
-                    class="sticky left-0 z-10 shrink-0 border-b border-r border-edge-muted bg-panel text-center text-ink-muted select-none"
+                    class="sticky left-0 z-10 shrink-0 border-b border-r border-ink/12 bg-panel text-center text-ink-muted select-none"
                     style={{
                       width: `${headerWidth()}px`,
                       'font-size': `${11 * scale()}px`,
@@ -1595,9 +1842,17 @@ export function SpreadsheetGrid(props: {
                       const selected = () => selectedCell(position);
                       const value = () => props.values[address];
                       const cell = () => props.cells[address];
-                      // Conditional formatting draws over the cell's style.
+                      // Conditional formatting draws over the cell's style,
+                      // and the cell's style over its table's.
                       const look = () => value()?.conditional;
                       const fill = () => look()?.fillColor ?? cell()?.fillColor;
+                      const table = () =>
+                        tableCellLook(props.tables, row, column);
+                      const header = () => table()?.header;
+                      const mismatch = () =>
+                        props.tableUi?.mismatch(row, column);
+                      const totalLabel = () =>
+                        props.tableUi?.totalLabel(row, column);
                       const border = (
                         edge: 'Top' | 'Right' | 'Bottom' | 'Left'
                       ) => {
@@ -1619,8 +1874,9 @@ export function SpreadsheetGrid(props: {
                                 : 'solid';
                         return `${width}px ${line} ${cellBorderColor(cell()?.[`border${edge}Color`], fill())}`;
                       };
-                      // A fill covers the gridlines around its cell, as in
-                      // Excel; the right and bottom lines are drawn here.
+                      // A fill covers the gridlines around its cell and a
+                      // border replaces the gridline it lies on, as in Excel;
+                      // the right and bottom lines are drawn here.
                       const gridline = (edge: 'Right' | 'Bottom') => {
                         const next = cellAddress(
                           edge === 'Right'
@@ -1630,7 +1886,10 @@ export function SpreadsheetGrid(props: {
                         return props.showGridlines === false ||
                           fill() ||
                           props.values[next]?.conditional?.fillColor ||
-                          props.cells[next]?.fillColor
+                          props.cells[next]?.fillColor ||
+                          props.cells[next]?.[
+                            edge === 'Right' ? 'borderLeft' : 'borderTop'
+                          ]
                           ? '1px solid transparent'
                           : undefined;
                       };
@@ -1640,17 +1899,32 @@ export function SpreadsheetGrid(props: {
                         value()
                           ? value()!.number !== undefined
                           : literalNumber(cell()) !== undefined;
+                      const checked = () =>
+                        cell()?.checkbox
+                          ? checkboxChecked(display(address))
+                          : undefined;
                       const horizontalAlign = () => {
                         const align = cell()?.horizontalAlign;
+                        // Indenting an automatic cell aligns it left, as in Excel.
                         return align && align !== 'auto'
                           ? align
-                          : numeric() &&
-                              !(
-                                props.showFormulas &&
-                                cell()?.value.startsWith('=')
-                              )
-                            ? 'right'
-                            : 'left';
+                          : checked() !== undefined
+                            ? 'center'
+                            : numeric() &&
+                                !cell()?.indent &&
+                                !(
+                                  props.showFormulas &&
+                                  cell()?.value.startsWith('=')
+                                )
+                              ? 'right'
+                              : 'left';
+                      };
+                      const indentPadding = (side: 'left' | 'right') => {
+                        const width = indentWidth(cell()) * scale();
+                        return width > 0 &&
+                          (horizontalAlign() === 'right') === (side === 'right')
+                          ? `${width}px`
+                          : undefined;
                       };
                       const pending = () =>
                         !!props.pendingFormulas &&
@@ -1658,6 +1932,11 @@ export function SpreadsheetGrid(props: {
                         !props.showFormulas &&
                         !!cell()?.value.startsWith('=') &&
                         cell()?.format !== 'text';
+                      const dropdown = () => dropdownAt(row, column);
+                      const chipColor = () =>
+                        dropdown()?.colors?.get(
+                          display(address).trim().toLowerCase()
+                        );
                       const decorated = () =>
                         !!props.mentions &&
                         !(
@@ -1672,10 +1951,10 @@ export function SpreadsheetGrid(props: {
                           id={`${id}-${address}`}
                           role="gridcell"
                           aria-colindex={column + 2}
-                          aria-label={`${address}${display(address) ? `: ${display(address)}` : ''}`}
+                          aria-label={cellAriaLabel()}
                           aria-selected={selected()}
                           data-address={address}
-                          aria-description={getSpreadsheetGridAriaDescription()}
+                          aria-description={cellAriaDescription()}
                           onMouseEnter={(event) => {
                             if (
                               !props.editing &&
@@ -1688,11 +1967,11 @@ export function SpreadsheetGrid(props: {
                               );
                           }}
                           onMouseLeave={() => props.comments?.leave()}
-                          title={getSpreadsheetGridTitle()}
-                          style={getSpreadsheetGridStyle()}
-                          class="absolute top-0 bottom-0 flex flex-col border-b border-r border-edge-muted bg-panel text-ink select-none"
+                          title={cellTitle()}
+                          style={cellStyle()}
+                          class="absolute top-0 bottom-0 flex flex-col border-b border-r border-ink/12 bg-panel text-ink select-none"
                           classList={{
-                            'font-semibold': look()?.bold ?? cell()?.bold,
+                            'font-semibold': cellBold(),
                             'tabular-nums': numeric(),
                             'text-failure': !!value()?.error,
                           }}
@@ -1729,28 +2008,23 @@ export function SpreadsheetGrid(props: {
                             keepReferenceFocus =
                               props.onReferenceStart?.({ row, column }) ??
                               false;
+                            followPointer(event);
                             if (keepReferenceFocus) return;
                             dragging = true;
+                            closeOrMoveList({ row, column }, event.shiftKey);
                             props.onSelect({ row, column }, event.shiftKey);
                             focusGrid();
                           }}
                           onPointerEnter={(event) => {
                             if (event.pointerType === 'touch') return;
-                            if (props.pickingReference && event.buttons === 1) {
-                              props.onReferenceMove?.({ row, column });
-                              return;
-                            }
-                            if (fillSource && event.buttons === 1) {
-                              previewFill({ row, column });
-                              return;
-                            }
-                            if (dragging && event.buttons === 1)
-                              props.onSelect({ row, column }, true);
+                            setHovered(position);
+                            if (event.buttons === 1) dragTo({ row, column });
                             else dragging = false;
                           }}
                           onDblClick={() => {
-                            if (!touchMode() && !props.referenceSelection)
-                              props.onEdit();
+                            if (touchMode() || props.referenceSelection) return;
+                            props.onEdit();
+                            openDatePicker();
                           }}
                         >
                           <Show when={look()?.dataBar}>
@@ -1777,13 +2051,14 @@ export function SpreadsheetGrid(props: {
                           </Show>
                           <Show
                             when={active() && props.editing}
-                            fallback={getSpreadsheetGridFallback()}
+                            fallback={cellContent()}
                           >
                             <FormulaInput
                               mentions={props.mentions}
                               label={`Edit ${address}`}
                               autoFocus
                               complete={props.complete}
+                              tableReferences={props.tableReferences}
                               readonly={props.readonly}
                               selectionRequest={props.editorSelection}
                               references={props.draftReferences}
@@ -1792,9 +2067,14 @@ export function SpreadsheetGrid(props: {
                                 (isTouchDevice() && !!props.referenceSelection)
                               }
                               onSelectionChange={props.onTextSelection}
-                              class="absolute inset-0 size-full resize-none overflow-hidden bg-panel px-[var(--spreadsheet-cell-padding)] py-[var(--spreadsheet-cell-padding-y)] font-normal text-left text-ink outline-none select-text"
+                              // Inherits the cell's fill, font, color and indent;
+                              // automatic alignment edits from the left, as in Excel.
+                              class={`absolute inset-0 size-full resize-none overflow-hidden bg-inherit pl-[calc(var(--spreadsheet-cell-padding)_+_var(--spreadsheet-cell-indent-left,0px))] pr-[calc(var(--spreadsheet-cell-padding)_+_var(--spreadsheet-cell-indent-right,0px))] py-[var(--spreadsheet-cell-padding-y)] [text-decoration-line:inherit] outline-none select-text ${editorAlignClass()}`}
                               value={props.draft}
-                              onInput={props.onDraft}
+                              onInput={(value) => {
+                                setPickerOpen(false);
+                                props.onDraft(value);
+                              }}
                               onKeyDown={editKeyDown}
                               onBlur={() => {
                                 if (props.editing) props.onCommit();
@@ -1810,7 +2090,7 @@ export function SpreadsheetGrid(props: {
                           </Show>
                           <Show
                             when={
-                              hasDropdown(row, column) &&
+                              dropdown() &&
                               !(active() && listButtonShown()) &&
                               !(active() && props.editing)
                             }
@@ -1848,6 +2128,25 @@ export function SpreadsheetGrid(props: {
                               </button>
                             </Show>
                           </Show>
+                          <Show
+                            when={
+                              !props.readonly &&
+                              props.tableUi &&
+                              !(active() && props.editing) &&
+                              header()
+                            }
+                          >
+                            {(header) =>
+                              props.tableUi?.columnMenu(header, column)
+                            }
+                          </Show>
+                          <Show when={mismatch()}>
+                            <span
+                              aria-hidden="true"
+                              data-type-mismatch
+                              class="pointer-events-none absolute left-0 top-0 size-0 border-t-[6px] border-r-[6px] border-t-warning border-r-transparent"
+                            />
+                          </Show>
                           <Show when={props.comments?.hasComment(address)}>
                             <button
                               type="button"
@@ -1877,9 +2176,29 @@ export function SpreadsheetGrid(props: {
                         </div>
                       );
 
-                      function getSpreadsheetGridAriaDescription():
-                        | string
-                        | undefined {
+                      function cellAriaLabel(): string {
+                        const state =
+                          checked() !== undefined
+                            ? `: ${checked() ? 'checked' : 'not checked'}`
+                            : display(address)
+                              ? `: ${display(address)}`
+                              : '';
+                        return `${address}${state}`;
+                      }
+
+                      function cellBold() {
+                        return look()?.bold ?? cell()?.bold ?? table()?.bold;
+                      }
+
+                      function editorAlignClass() {
+                        return cell()?.horizontalAlign === 'center'
+                          ? 'text-center'
+                          : cell()?.horizontalAlign === 'right'
+                            ? 'text-right'
+                            : 'text-left';
+                      }
+
+                      function cellAriaDescription(): string | undefined {
                         return (
                           [
                             props.comments?.hasComment(address)
@@ -1888,16 +2207,18 @@ export function SpreadsheetGrid(props: {
                             props.notes?.[address]
                               ? `Note: ${props.notes[address]}`
                               : '',
+                            mismatch() ? `Type mismatch: ${mismatch()}` : '',
                           ]
                             .filter(Boolean)
                             .join('. ') || undefined
                         );
                       }
 
-                      function getSpreadsheetGridTitle(): string | undefined {
+                      function cellTitle(): string | undefined {
                         return (
                           value()?.error ??
                           value()?.warning ??
+                          mismatch() ??
                           (decorated()
                             ? undefined
                             : cellPlainText(
@@ -1906,29 +2227,21 @@ export function SpreadsheetGrid(props: {
                         );
                       }
 
-                      function getSpreadsheetGridStyle() {
+                      function cellStyle() {
                         return {
                           width: width(column),
                           left: `${columnOffsets()[column]}px`,
                           'scroll-margin-top': `${headerHeight()}px`,
                           'scroll-margin-left': `${headerWidth()}px`,
-                          'border-top': border('Top'),
-                          'border-right': border('Right') ?? gridline('Right'),
-                          'border-bottom':
-                            border('Bottom') ?? gridline('Bottom'),
-                          'border-left': border('Left'),
-                          'background-color': cellBackground(fill()),
-                          color: cellForeground(
-                            look()?.textColor ?? cell()?.textColor,
-                            fill()
-                          ),
+                          ...cellBorders(),
+                          ...cellColors(),
                           'font-family': fontFamily(cell()),
                           'font-size': `${fontPixels(cell(), defaultFontSize()) * scale()}px`,
                           'font-style':
                             (look()?.italic ?? cell()?.italic)
                               ? 'italic'
                               : undefined,
-                          'text-decoration-line': buildTextdecorationline(),
+                          'text-decoration-line': textDecorationLine(),
                           'text-align': horizontalAlign(),
                           'justify-content':
                             cell()?.verticalAlign === 'top'
@@ -1937,11 +2250,45 @@ export function SpreadsheetGrid(props: {
                                 ? 'flex-end'
                                 : 'center',
                           'padding-block': 'var(--spreadsheet-cell-padding-y)',
+                          'padding-left': indentPadding('left'),
+                          'padding-right': indentPadding('right'),
+                          '--spreadsheet-cell-indent-left':
+                            indentPadding('left'),
+                          '--spreadsheet-cell-indent-right':
+                            indentPadding('right'),
                           'line-height': CELL_LINE_HEIGHT,
                         };
                       }
 
-                      function buildTextdecorationline() {
+                      function cellBorders() {
+                        return {
+                          'border-top': border('Top') ?? table()?.borderTop,
+                          'border-right': border('Right') ?? gridline('Right'),
+                          'border-bottom':
+                            border('Bottom') ??
+                            table()?.borderBottom ??
+                            gridline('Bottom'),
+                          'border-left': border('Left'),
+                        };
+                      }
+
+                      function cellColors() {
+                        return {
+                          'background-color':
+                            cellBackground(fill()) ??
+                            table()?.background ??
+                            // A translucent tint reads on light and dark themes alike.
+                            (table()?.stripe &&
+                              `color-mix(in srgb, ${table()?.stripe} 18%, transparent)`),
+                          color:
+                            cellForeground(
+                              look()?.textColor ?? cell()?.textColor,
+                              fill()
+                            ) ?? (fill() ? undefined : table()?.color),
+                        };
+                      }
+
+                      function textDecorationLine() {
                         return (
                           [
                             (look()?.underline ?? cell()?.underline)
@@ -1956,11 +2303,14 @@ export function SpreadsheetGrid(props: {
                         );
                       }
 
-                      function getSpreadsheetGridFallback() {
+                      function cellContent() {
                         return (
                           <div
                             class="relative w-full min-h-0 overflow-hidden text-ellipsis px-[var(--spreadsheet-cell-padding)]"
-                            classList={{ 'pl-5': !!look()?.icon }}
+                            classList={{
+                              'pl-5': !!look()?.icon,
+                              'pr-5': !!dropdown(),
+                            }}
                             style={{
                               'white-space': cell()?.wrap
                                 ? 'pre-wrap'
@@ -1987,13 +2337,92 @@ export function SpreadsheetGrid(props: {
                                 />
                               }
                             >
-                              {look()?.showValue === false
-                                ? ''
-                                : decorated()
-                                  ? props.mentions!.renderText(
-                                      cell()!.value.replace(/^'/, '')
-                                    )
-                                  : display(address)}
+                              {look()?.showValue === false ? (
+                                ''
+                              ) : checked() !== undefined ? (
+                                <button
+                                  type="button"
+                                  tabIndex={-1}
+                                  role="checkbox"
+                                  aria-checked={checked()}
+                                  aria-label={address}
+                                  aria-disabled={props.readonly}
+                                  data-checkbox
+                                  class="relative inline-flex size-[1.2em] align-top rounded-sm bg-transparent p-0 text-current before:absolute before:-inset-1 not-touch:hover:bg-hover touch:before:-inset-3"
+                                  classList={{
+                                    'pointer-events-none':
+                                      props.readonly ||
+                                      props.editing ||
+                                      !!props.formulaEditing,
+                                  }}
+                                  // Modified clicks extend or add to the
+                                  // selection, as on any other cell.
+                                  onPointerDown={(event) => {
+                                    if (event.button !== 0 || modified(event))
+                                      return;
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                  }}
+                                  onClick={(event) => {
+                                    if (modified(event)) return;
+                                    event.stopPropagation();
+                                    props.onToggleCheckbox?.(position);
+                                    focusGrid();
+                                  }}
+                                  onDblClick={(event) =>
+                                    event.stopPropagation()
+                                  }
+                                >
+                                  {checked() ? (
+                                    <CheckSquare class="size-full" />
+                                  ) : (
+                                    <Square class="size-full" />
+                                  )}
+                                </button>
+                              ) : chipColor() ? (
+                                <ChoiceChip color={chipColor()!}>
+                                  {display(address)}
+                                </ChoiceChip>
+                              ) : totalLabel() ? (
+                                <span class="flex items-baseline justify-between gap-[0.4em]">
+                                  <span
+                                    aria-hidden="true"
+                                    data-total-label
+                                    class="min-w-0 shrink truncate text-[0.8em] font-normal text-ink-extra-muted"
+                                  >
+                                    {totalLabel()}
+                                  </span>
+                                  <span class="shrink-0">
+                                    {display(address)}
+                                  </span>
+                                </span>
+                              ) : decorated() ? (
+                                props.mentions!.renderText(
+                                  cell()!.value.replace(/^'/, '')
+                                )
+                              ) : (
+                                <Show
+                                  when={accounting(address)}
+                                  fallback={display(address)}
+                                >
+                                  {(parts) => (
+                                    <span
+                                      data-accounting
+                                      class="flex justify-between gap-[0.25em]"
+                                    >
+                                      <span class="shrink-0">
+                                        {parts().symbol}
+                                      </span>
+                                      <span class="min-w-0 overflow-hidden text-ellipsis">
+                                        {parts().amount}
+                                        <span class="invisible">
+                                          {parts().padding}
+                                        </span>
+                                      </span>
+                                    </span>
+                                  )}
+                                </Show>
+                              )}
                             </Show>
                           </div>
                         );
@@ -2087,11 +2516,53 @@ export function SpreadsheetGrid(props: {
                 onReturnFocus={focusGrid}
               />
             </Show>
+            <Show when={props.tableUi}>
+              {(ui) => (
+                <For each={namedTables()}>
+                  {(name) => {
+                    const table = () =>
+                      props.tables?.find((item) => item.name === name);
+                    return (
+                      <Show when={table()}>
+                        {(current) => {
+                          // A table in the first row shows its name in the
+                          // column header bar, covering no cells.
+                          const inHeader = () =>
+                            tableBounds(current()).top === 0;
+                          return (
+                            <div
+                              class="contents"
+                              onPointerEnter={() => setChipHovered(name)}
+                              onPointerLeave={() => setChipHovered(undefined)}
+                            >
+                              {ui().tableMenu(
+                                current,
+                                () => {
+                                  const { top, left } = tableBounds(current());
+                                  return {
+                                    left: `${columnOffsets()[left]}px`,
+                                    top: inHeader()
+                                      ? '0px'
+                                      : `${rowOffsets()[top] - TABLE_CHIP_HEIGHT}px`,
+                                    height: `${inHeader() ? headerHeight() : TABLE_CHIP_HEIGHT}px`,
+                                  };
+                                },
+                                inHeader
+                              )}
+                            </div>
+                          );
+                        }}
+                      </Show>
+                    );
+                  }}
+                </For>
+              )}
+            </Show>
             <div
               aria-hidden="true"
               data-selection-range
               class="pointer-events-none absolute z-[1] border border-accent bg-accent/10"
-              style={rangeStyle()}
+              style={{ ...rangeStyle(), 'clip-path': rangeClip() }}
             />
             <div
               aria-hidden="true"
@@ -2099,6 +2570,30 @@ export function SpreadsheetGrid(props: {
               class="pointer-events-none absolute z-[2] border-2 border-accent"
               style={activeStyle()}
             />
+            <Show when={selectionDraggable() && props.onMoveSelection}>
+              {(onMoveSelection) => (
+                <SelectionMoveHandle
+                  bounds={selectionBounds(props.selection)}
+                  rowCount={rowCount()}
+                  columnCount={columnCount()}
+                  rangeStyle={rangeStyle}
+                  positionAtPoint={positionAtPoint}
+                  scroller={grid}
+                  headerWidth={headerWidth()}
+                  headerHeight={headerHeight()}
+                  sheetId={props.sheetId}
+                  onClick={(position, extend) => {
+                    props.onSelect(position, extend);
+                    focusGrid();
+                  }}
+                  onDblClick={props.onEdit}
+                  onMove={(rows, columns) => {
+                    focusGrid();
+                    onMoveSelection()(props.selection, rows, columns);
+                  }}
+                />
+              )}
+            </Show>
             <Show when={listButtonShown() && props.listItems}>
               {(items) => {
                 const address = () => cellAddress(props.selection.anchor);
@@ -2111,21 +2606,69 @@ export function SpreadsheetGrid(props: {
                   <CellListMenu
                     address={address()}
                     items={items()}
+                    colors={
+                      dropdownAt(
+                        props.selection.anchor.row,
+                        props.selection.anchor.column
+                      )?.colors
+                    }
                     open={listOpenAt() === address()}
                     onOpenChange={(open) =>
                       setListOpenAt(open ? address() : undefined)
                     }
                     style={{
-                      left: `${columnOffsets()[props.selection.anchor.column + 1] + 1}px`,
-                      top: `${rowOffsets()[props.selection.anchor.row + 1] - size()}px`,
-                      width: `${size()}px`,
-                      height: `${size()}px`,
+                      left: `${columnOffsets()[props.selection.anchor.column]}px`,
+                      top: `${rowOffsets()[props.selection.anchor.row]}px`,
+                      width: `${columnOffsets()[props.selection.anchor.column + 1] - columnOffsets()[props.selection.anchor.column] + 1 + size()}px`,
+                      height: `${rowHeights()[props.selection.anchor.row]}px`,
+                    }}
+                    buttonSize={size()}
+                    onPointerDownOutside={(event) => {
+                      const cell =
+                        event.target instanceof Element
+                          ? event.target.closest<HTMLElement>('[data-address]')
+                          : null;
+                      const position =
+                        cell && grid.contains(cell)
+                          ? parseCellAddress(cell.dataset.address ?? '')
+                          : undefined;
+                      // That cell's press handler opens its list instead.
+                      if (
+                        position &&
+                        !event.detail.isContextMenu &&
+                        opensListOnPress(position)
+                      )
+                        event.preventDefault();
                     }}
                     onPick={(item) => props.onPickListItem?.(item)}
                     onRestoreFocus={focusGrid}
                   />
                 );
               }}
+            </Show>
+            <Show when={shownPickerDay()}>
+              {(day) => (
+                <Show
+                  when={renderedSelectionCell(grid, {
+                    anchor: props.selection.anchor,
+                    focus: props.selection.anchor,
+                  })}
+                >
+                  {(anchor) => (
+                    <CellDatePicker
+                      anchor={anchor()}
+                      value={props.datePicker?.date}
+                      day={day()}
+                      onDayChange={setPickerDay}
+                      onPick={(picked) => {
+                        props.onPickDate?.(picked);
+                        focusGrid();
+                      }}
+                      onDismiss={() => setPickerOpen(false)}
+                    />
+                  )}
+                </Show>
+              )}
             </Show>
             <Show
               when={
@@ -2194,15 +2737,7 @@ export function SpreadsheetGrid(props: {
                 />
               )}
             </Show>
-            <Show
-              when={
-                !touchMode() &&
-                !props.readonly &&
-                !props.editing &&
-                !props.formulaEditing &&
-                props.onFill
-              }
-            >
+            <Show when={selectionDraggable() && props.onFill}>
               <button
                 type="button"
                 tabIndex={-1}
@@ -2221,6 +2756,7 @@ export function SpreadsheetGrid(props: {
                   fillGeneration++;
                   fillSource = props.selection;
                   setFillTarget(props.selection);
+                  followPointer(event);
                   focusGrid();
                 }}
               />

@@ -1,4 +1,5 @@
 /** Gateway liveness for forms, apart from `./forms` to keep the websocket out of startup. */
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useEntitySubscription } from '@queries/connection/tracked-entities';
 import { createConnectionWebsocketEffect } from '@service-connection/websocket';
 import type { Accessor } from 'solid-js';
@@ -32,14 +33,14 @@ export function useFormChangedSync(formId: Accessor<string | undefined>) {
     const changed = parseMessageData(message, formChangedSchema);
     const id = formId();
     if (!changed || !id || changed.formId !== id) return;
-    void invalidatePreview(id);
+    fireAndForget(invalidatePreview(id), 'forms-sync');
     for (const key of [
       formsKeys.detail(id).queryKey,
       formsKeys.summary(id).queryKey,
       formsKeys.tally(id).queryKey,
       myResponseKeyOf(id),
     ])
-      void queryClient.invalidateQueries({ queryKey: key });
+      queryClient.invalidateQueries({ queryKey: key });
   });
 }
 
@@ -60,13 +61,14 @@ export function useFormDatabaseSync(
         ? { entity_type: 'database', entity_id: id }
         : undefined;
     },
-    (entity) => void invalidateDatabase(entity.entity_id)
+    (entity) =>
+      fireAndForget(invalidateDatabase(entity.entity_id), 'forms-sync')
   );
   useDatabaseMetadataChanges((change) => {
     if (!isEditor() || change.databaseId !== databaseId()) return;
-    void invalidateDatabase(change.databaseId);
+    fireAndForget(invalidateDatabase(change.databaseId), 'forms-sync');
     const id = formId();
-    if (id) void invalidatePreview(id);
+    if (id) fireAndForget(invalidatePreview(id), 'forms-sync');
   });
 }
 
@@ -81,10 +83,10 @@ export function useFormResponsesSync(
   useDatabaseTableChanges((change) => {
     const id = formId();
     if (!id || change.databaseId !== databaseId()) return;
-    void queryClient.invalidateQueries({
+    queryClient.invalidateQueries({
       queryKey: formsKeys.summary(id).queryKey,
     });
-    void queryClient.invalidateQueries({
+    queryClient.invalidateQueries({
       queryKey: formsKeys.tally(id).queryKey,
     });
   });

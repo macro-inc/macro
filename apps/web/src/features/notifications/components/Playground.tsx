@@ -3,6 +3,7 @@ import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import { formatDate } from '@core/util/date';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { NotificationRow } from '@entity';
 import { Button } from '@ui';
 import {
@@ -21,6 +22,7 @@ import {
 import { NOTIFICATION_LABEL_BY_TYPE } from '../notification-preview';
 import {
   DefaultDocumentNameResolver,
+  DefaultUserAvatarResolver,
   DefaultUserNameResolver,
 } from '../notification-resolvers';
 import { createNotificationSource } from '../notification-source';
@@ -145,21 +147,23 @@ function BrowserFormat(props: { notification: UnifiedNotification }) {
   const hasData = () => hasNotificationMetadata(props.notification);
   const [browserNotif, setBrowserNotif] = createSignal<any>(null);
 
+  const loadBrowserNotification = async (notification: UnifiedNotification) => {
+    setBrowserNotif(
+      await toPlatformNotificationData(
+        notification,
+        DefaultUserNameResolver,
+        DefaultDocumentNameResolver,
+        DefaultUserAvatarResolver
+      )
+    );
+  };
+
   createEffect(() => {
     if (hasData()) {
-      const settleToPlatformNotificationDataHandler0 = setBrowserNotif;
-      const settleToPlatformNotificationData = async () => {
-        const settleToPlatformNotificationDataValue =
-          await toPlatformNotificationData(
-            props.notification,
-            DefaultUserNameResolver,
-            DefaultDocumentNameResolver
-          );
-        return await settleToPlatformNotificationDataHandler0(
-          settleToPlatformNotificationDataValue
-        );
-      };
-      settleToPlatformNotificationData();
+      fireAndForget(
+        loadBrowserNotification(props.notification),
+        'notifications-playground'
+      );
     } else {
       setBrowserNotif(null);
     }
@@ -243,7 +247,7 @@ function PermissionButton(props: { platformNotif: any }) {
           when={props.platformNotif.permission() === 'granted'}
           fallback={
             <Button
-              variant="accent"
+              variant="primary"
               onClick={() => props.platformNotif.requestPermission()}
             >
               Enable Browser Notifications
@@ -294,7 +298,7 @@ function CustomBuilder(props: {
 
         <div class="pt-4 border-t border-edge-muted">
           <Button
-            variant="accent"
+            variant="primary"
             onClick={() => props.onTest(props.customNotification)}
           >
             🔔 Test Browser Notification
@@ -371,7 +375,7 @@ function NotificationDetail(props: {
             </p>
           </div>
           <Button
-            variant="accent"
+            variant="primary"
             onClick={() => props.onTest(props.notification)}
           >
             🔔 Test Notification
@@ -581,22 +585,25 @@ function PlaygroundContent() {
         console.warn('no layout manager');
         return;
       }
-      maybeHandlePlatformNotification(
-        notification,
-        {
-          showNotification: async (data: PlatformNotificationData) => {
-            const notif = new Notification(data.title, data.options);
-            return {
-              onClick: (cb: any) => {
-                notif.addEventListener('click', cb);
-              },
-              close: () => {
-                notif.close();
-              },
-            };
-          },
-        } as PlatformNotificationState,
-        layoutManager
+      fireAndForget(
+        maybeHandlePlatformNotification(
+          notification,
+          {
+            showNotification: async (data: PlatformNotificationData) => {
+              const notif = new Notification(data.title, data.options);
+              return {
+                onClick: (cb: any) => {
+                  notif.addEventListener('click', cb);
+                },
+                close: () => {
+                  notif.close();
+                },
+              };
+            },
+          } as PlatformNotificationState,
+          layoutManager
+        ),
+        'notifications-playground'
       );
     };
 

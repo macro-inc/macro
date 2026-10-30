@@ -77,7 +77,7 @@ function allowedBoardColumns(
     return option.propertyOptionId ? [option.propertyOptionId] : [];
   });
 
-  return new Set(columnIds);
+  return columnIds;
 }
 
 export function filterTaskBoardColumns(
@@ -88,7 +88,9 @@ export function filterTaskBoardColumns(
   const allowedColumnIds = allowedBoardColumns(grouping, facets);
 
   return columns.filter((column) => {
-    return allowedColumnIds.size === 0 || allowedColumnIds.has(column.id);
+    return (
+      allowedColumnIds.length === 0 || allowedColumnIds.includes(column.id)
+    );
   });
 }
 

@@ -69,6 +69,7 @@ it('updates an already cached card title after renaming a form', async () => {
       confirmationMessage: '',
       createdAt: '2026-10-05T00:00:00Z',
       updatedAt: '2026-10-05T00:00:00Z',
+      isHiddenInDrive: false,
     },
   });
   const key = previewKeys.item('workshop').queryKey;
@@ -159,6 +160,7 @@ it('refreshes the linked database’s card after renaming a form, without guessi
       confirmationMessage: '',
       createdAt: '2026-10-05T00:00:00Z',
       updatedAt: '2026-10-05T00:00:00Z',
+      isHiddenInDrive: false,
     },
   });
   const linked = previewKeys.item('workshop-database').queryKey;
@@ -227,6 +229,7 @@ it('refreshes the cards of the forms over a renamed database, and only theirs', 
         confirmationMessage: '',
         createdAt: '2026-10-05T00:00:00Z',
         updatedAt: '2026-10-05T00:00:00Z',
+        isHiddenInDrive: false,
       },
     ]
   );
@@ -249,6 +252,7 @@ it('refreshes the cards of the forms over a renamed database, and only theirs', 
         confirmationMessage: '',
         createdAt: '2026-10-05T00:00:00Z',
         updatedAt: '2026-10-05T00:00:00Z',
+        isHiddenInDrive: false,
       },
     },
     {
@@ -269,6 +273,7 @@ it('refreshes the cards of the forms over a renamed database, and only theirs', 
         confirmationMessage: '',
         createdAt: '2026-10-05T00:00:00Z',
         updatedAt: '2026-10-05T00:00:00Z',
+        isHiddenInDrive: false,
       },
     },
   ]);

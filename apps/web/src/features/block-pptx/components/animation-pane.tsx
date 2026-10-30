@@ -9,12 +9,13 @@ import type {
   ShapeOutline,
   SlideOutline,
 } from '@core/pptx-engine/types';
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowUp from '@phosphor/arrow-up.svg';
-import Clock from '@phosphor/clock.svg';
-import Play from '@phosphor/play.svg';
-import Trash from '@phosphor/trash.svg';
-import X from '@phosphor/x.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
+import Clock from '@icon/system/regular/clock.svg';
+import Play from '@icon/system/regular/play.svg';
+import Trash from '@icon/system/regular/trash.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import type { PresentationEngine } from '../context/pptx-editor-context';
@@ -61,6 +62,17 @@ export function AnimationPane(props: {
   const ro = () => env.readonly();
   const animations = () => env.slide()?.animations ?? [];
   const numbers = () => clickNumbers(animations());
+  /** Moves the picked animation one place, keeping it picked. */
+  const movePicked = async (delta: -1 | 1) => {
+    const i = anim.picked();
+    if (i === undefined) return;
+    await c.moveAnimation(i, delta);
+    anim.pick(i + delta);
+  };
+  const removeAnimation = async (i: number) => {
+    await c.removeAnimations([i]);
+    anim.pick();
+  };
   return (
     <aside
       class="flex w-72 shrink-0 flex-col border-edge-muted border-l bg-panel"
@@ -70,67 +82,50 @@ export function AnimationPane(props: {
       <div class="flex h-9 items-center justify-between border-edge-muted border-b px-3">
         <span class="font-semibold text-ink text-sm">Animation Pane</span>
         <Button
+          aria-label="Close"
+          tooltip="Close"
           size="icon-sm"
           variant="ghost"
-          label="Close"
           onClick={props.onClose}
         >
-          <X />
+          <X class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
       <div class="flex items-center gap-1 border-edge-muted border-b px-2 py-1.5">
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           data-testid="pptx-animation-play"
           disabled={animations().length === 0}
           onClick={anim.preview}
         >
-          <Play />
+          <Play class="size-3 touch:size-6 shrink-0 pointer-events-none" />
           Play All
         </Button>
         <div class="flex-1" />
         <Button
+          aria-label="Move earlier"
           size="icon-sm"
           variant="ghost"
-          label="Move earlier"
           tooltip="Move Earlier"
           disabled={ro() || (anim.picked() ?? 0) === 0}
-          onClick={() => {
-            const i = anim.picked();
-
-            const settleMoveAnimation = async (i: number) => {
-              await c.moveAnimation(i, -1);
-
-              return await anim.pick(i - 1);
-            };
-            if (i !== undefined) void settleMoveAnimation(i);
-          }}
+          onClick={() => fireAndForget(movePicked(-1), 'pptx-editor')}
         >
-          <ArrowUp />
+          <ArrowUp class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
         <Button
+          aria-label="Move later"
           size="icon-sm"
           variant="ghost"
-          label="Move later"
           tooltip="Move Later"
           disabled={
             ro() ||
             anim.picked() === undefined ||
             anim.picked()! >= animations().length - 1
           }
-          onClick={() => {
-            const i = anim.picked();
-
-            const settleMoveAnimationResult = async (i: number) => {
-              await c.moveAnimation(i, 1);
-
-              return await anim.pick(i + 1);
-            };
-            if (i !== undefined) void settleMoveAnimationResult(i);
-          }}
+          onClick={() => fireAndForget(movePicked(1), 'pptx-editor')}
         >
-          <ArrowDown />
+          <ArrowDown class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
       <div class="min-h-0 flex-1 overflow-y-auto p-1" role="listbox">
@@ -158,13 +153,8 @@ export function AnimationPane(props: {
                   props.onSelectShape(a.shapeId);
                 }}
                 onKeyDown={(e) => {
-                  const settleRemoveAnimations = async () => {
-                    await c.removeAnimations([i()]);
-
-                    return await anim.pick();
-                  };
                   if ((e.key === 'Delete' || e.key === 'Backspace') && !ro())
-                    void settleRemoveAnimations();
+                    fireAndForget(removeAnimation(i()), 'pptx-editor');
                 }}
               >
                 <span class="w-4 shrink-0 text-right text-ink-muted tabular-nums">
@@ -188,13 +178,7 @@ export function AnimationPane(props: {
                     data-testid="pptx-animation-remove"
                     onClick={(e) => {
                       e.stopPropagation();
-
-                      const settleRemoveAnimationsResult = async () => {
-                        await c.removeAnimations([i()]);
-
-                        return await anim.pick();
-                      };
-                      void settleRemoveAnimationsResult();
+                      fireAndForget(removeAnimation(i()), 'pptx-editor');
                     }}
                   >
                     <Trash class="size-3" />

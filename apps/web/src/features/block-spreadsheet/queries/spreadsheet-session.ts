@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createAwareness } from '@macro-inc/collaboration/collab/awareness';
 import type { Chatter } from '@macro-inc/collaboration/collab/chatter';
 import { createSyncEngine } from '@macro-inc/collaboration/collab/engine';
@@ -51,34 +52,25 @@ function serializeSnapshotOperation<T>(
   documentId: string,
   operation: () => Promise<T>
 ): Promise<T> {
-  const settleOperationHandler0 = operation;
-  const settleOperation = async () => {
+  const runAfterPrevious = async () => {
     await (snapshotOperations.get(documentId) ?? Promise.resolve());
-    return await settleOperationHandler0();
+    return await operation();
   };
-  const pending = settleOperation();
-
-  const settlePending = async () => {
+  const pending = runAfterPrevious();
+  // The next operation waits for this one whether or not it fails.
+  const waitForPending = async () => {
     try {
       await pending;
-    } catch {
-      return;
-    }
-
-    return;
+    } catch {}
   };
-  const settled = settlePending();
+  const settled = waitForPending();
   snapshotOperations.set(documentId, settled);
-
-  const settleSettled = async () => {
+  const forgetWhenSettled = async () => {
     await settled;
-
     if (snapshotOperations.get(documentId) === settled)
       snapshotOperations.delete(documentId);
-
-    return;
   };
-  void settleSettled();
+  fireAndForget(forgetWhenSettled(), 'spreadsheet-session');
   return pending;
 }
 
@@ -222,7 +214,7 @@ export function createSpreadsheetSession(
     setDoc(manager.doc);
     setReady(true);
     setError(undefined);
-    if (options.canEdit()) void wal.flush();
+    if (options.canEdit()) fireAndForget(wal.flush(), 'spreadsheet-session');
   }
 
   async function acceptSnapshot(initial: InitialSync): Promise<void> {
@@ -318,7 +310,7 @@ export function createSpreadsheetSession(
     engine.stop();
     wal.destroy();
     options.syncSource.cleanup();
-    void disposeSession();
+    fireAndForget(disposeSession(), 'spreadsheet-session');
   });
 
   return {

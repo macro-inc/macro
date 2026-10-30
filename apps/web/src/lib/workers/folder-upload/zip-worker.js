@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 
-self.onmessage = function (event) {
+self.onmessage = async function (event) {
   const { taskId, action, files, fileDetails, folderPaths } = event.data;
 
   if (action === 'zipFiles') {
@@ -12,7 +12,18 @@ self.onmessage = function (event) {
       },
     });
 
-    zipFiles(taskId, files, fileDetails, folderPaths ?? []);
+    try {
+      await zipFiles(taskId, files, fileDetails, folderPaths ?? []);
+    } catch (error) {
+      console.error('ZipWorker: Error in zipFiles:', error);
+      self.postMessage({
+        taskId,
+        type: 'error',
+        data: {
+          message: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
   }
 };
 

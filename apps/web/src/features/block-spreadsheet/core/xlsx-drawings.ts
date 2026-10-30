@@ -280,7 +280,7 @@ export function readChart(
           titleDeleted = value.val === '1' || value.val === 'true';
         else if (node.local === 'legendPos')
           legend = LEGENDS[value.val as keyof typeof LEGENDS] ?? 'right';
-        else updateLegend();
+        else readLegendOrLiteral();
       } else if (node.uri === DRAWING) {
         if (
           series &&
@@ -291,10 +291,10 @@ export function readChart(
           else if (parent === 'ln' && stack.length - 2 === seriesColorDepth)
             series.noLine = true;
         }
-        updateText();
+        readTitleOrColor();
       }
 
-      function updateText() {
+      function readTitleOrColor() {
         if (node.local === 't' && titleDepth !== undefined) text = '';
         else if (
           seriesColorDepth !== undefined &&
@@ -312,7 +312,7 @@ export function readChart(
           color.modifiers.push([node.local, Number(value.val)]);
       }
 
-      function updateLegend() {
+      function readLegendOrLiteral() {
         if (node.local === 'legend') legend ??= 'right';
         else if (node.local === 'pivotSource') linked.pivot = true;
         else if (node.local === 'numLit' || node.local === 'strLit')
@@ -334,10 +334,10 @@ export function readChart(
             plot: { kind: kind === 'bar' ? 'column' : kind, series: [] },
             axes: [],
           };
-        } else updateDirection();
+        } else readPlotChild();
       }
 
-      function updateDirection() {
+      function readPlotChild() {
         if (plot && parent === plot.local) {
           if (node.local === 'barDir') plot.direction = value.val;
           else if (node.local === 'radarStyle' && value.val === 'filled')
@@ -358,10 +358,10 @@ export function readChart(
             node.local === 'dateAx')
         )
           axis = {};
-        else updateId();
+        else readAxisOrSeriesChild();
       }
 
-      function updateId() {
+      function readAxisOrSeriesChild() {
         if (axis && node.local === 'axId' && parent?.endsWith('Ax'))
           axis.id = value.val;
         else if (axis && node.local === 'axPos') axis.position = value.val;
@@ -405,9 +405,9 @@ export function readChart(
       } else if (literal && node.local === 'v' && text !== undefined) {
         literal.points.set(literal.at, text);
         text = undefined;
-      } else updateLiteral();
+      } else finishLiteral();
 
-      function updateLiteral() {
+      function finishLiteral() {
         if (literal && (node.local === 'numLit' || node.local === 'strLit')) {
           const { kind, points, count } = literal;
           const length = Math.min(
@@ -432,10 +432,10 @@ export function readChart(
           stack.length < (seriesColorDepth ?? 0)
         )
           seriesColorDepth = undefined;
-        else updateName();
+        else finishSeries();
       }
 
-      function updateName() {
+      function finishSeries() {
         if (node.local === 'ser' && series && plot) {
           const name = nameParts.filter(Boolean).join(' ');
           if (name) series.name = name;
@@ -615,11 +615,11 @@ export function readSheetDrawings(options: {
       return;
     }
     let from = point(value.from);
-    let to = buildTo();
+    let to = anchorEnd();
     let extent = value.extent;
-    updateFrom();
+    placeAbsoluteAnchor();
     // Pictures that move but do not size with their cells keep their size.
-    updateTo(content);
+    keepPictureSize(content);
     if (!from || (!to && !(extent && extent.cx > 0 && extent.cy > 0))) {
       skipped++;
       return;
@@ -628,21 +628,21 @@ export function readSheetDrawings(options: {
       skipped++;
       return;
     }
-    const name = buildName2(content);
-    const placement = buildPlacement(from);
+    const name = contentName(content);
+    const placement = placementOf(from);
     if (content.type === 'shape') {
       return finishShape(content);
     }
     if (content.type === 'diagram') {
       const drawing = diagramDrawing(archive, relations, content.data);
       // The frame's size in EMU, else the anchor's.
-      const frame = buildFrame(content);
-      const shape = buildShape(drawing, frame, content);
+      const frame = contentFrame(content);
+      const shape = diagramShapeOf(drawing, frame, content);
       if (shape) drawings.push({ ...placement, type: 'shape', shape });
       else unsupported = true;
       return;
     }
-    const target = buildTarget(content);
+    const target = relationTarget(content);
     if (!target || target.external) {
       skipped++;
       return;
@@ -655,14 +655,14 @@ export function readSheetDrawings(options: {
         warnings
       );
       if (!image) return;
-      drawings.push(buildFinish(image, content));
+      drawings.push(imageDrawing(image, content));
     } else {
       const chart = readChart(archive, target.target, options.theme, warnings);
       if (chart) drawings.push({ ...placement, type: 'chart', chart });
       else skipped++;
     }
 
-    function buildFinish(
+    function imageDrawing(
       image: string,
       contentInput: Extract<NonNullable<typeof content>, { type: 'pic' }>
     ): SheetDrawing {
@@ -676,7 +676,7 @@ export function readSheetDrawings(options: {
       };
     }
 
-    function buildName2(
+    function contentName(
       contentInput: Extract<
         NonNullable<typeof content>,
         { type: 'pic' | 'chart' | 'shape' | 'diagram' }
@@ -687,7 +687,7 @@ export function readSheetDrawings(options: {
         : contentInput.name;
     }
 
-    function buildShape2(
+    function readShapeContent(
       contentInput: Extract<NonNullable<typeof content>, { type: 'shape' }>
     ) {
       return (
@@ -695,11 +695,11 @@ export function readSheetDrawings(options: {
       );
     }
 
-    function buildTo() {
+    function anchorEnd() {
       return value.kind === 'twoCellAnchor' ? point(value.to) : undefined;
     }
 
-    function buildShape(
+    function diagramShapeOf(
       drawing: XmlElement | undefined,
       frame: { cx: number; cy: number },
       contentInput: Extract<NonNullable<typeof content>, { type: 'diagram' }>
@@ -715,7 +715,7 @@ export function readSheetDrawings(options: {
       );
     }
 
-    function buildPlacement(from: DrawingPoint) {
+    function placementOf(from: DrawingPoint) {
       return {
         id: `drawing-${drawings.length + 1}`,
         ...(name && { name: name.slice(0, 256) }),
@@ -726,7 +726,7 @@ export function readSheetDrawings(options: {
       };
     }
 
-    function updateFrom() {
+    function placeAbsoluteAnchor() {
       if (value.kind === 'absoluteAnchor' && value.position) {
         from = options.locate(
           value.position.x / EMU_PER_PIXEL,
@@ -736,7 +736,7 @@ export function readSheetDrawings(options: {
       }
     }
 
-    function buildTarget(
+    function relationTarget(
       contentInput: Extract<
         NonNullable<typeof content>,
         { type: 'pic' | 'chart' }
@@ -748,7 +748,7 @@ export function readSheetDrawings(options: {
       );
     }
 
-    function buildFrame(
+    function contentFrame(
       contentInput: Extract<NonNullable<typeof content>, { type: 'diagram' }>
     ) {
       return contentInput.extent &&
@@ -760,7 +760,7 @@ export function readSheetDrawings(options: {
           : options.extent(placement);
     }
 
-    function updateTo(
+    function keepPictureSize(
       contentInput: Extract<
         NonNullable<typeof content>,
         { type: 'pic' | 'chart' | 'shape' | 'diagram' }
@@ -783,7 +783,7 @@ export function readSheetDrawings(options: {
     function finishShape(
       contentInput: Extract<NonNullable<typeof content>, { type: 'shape' }>
     ) {
-      const shape = buildShape2(contentInput);
+      const shape = readShapeContent(contentInput);
       if (!shape || !contentInput.element) {
         skipped++;
         return;
@@ -835,9 +835,9 @@ export function readSheetDrawings(options: {
         return;
       }
       if (!anchor) return;
-      updateMarker(anchor);
+      readAnchorMarker(anchor);
 
-      function updateMarker(anchorInput: NonNullable<typeof anchor>) {
+      function readAnchorMarker(anchorInput: NonNullable<typeof anchor>) {
         if (node.uri === XDR) {
           if (
             (node.local === 'from' || node.local === 'to') &&
@@ -856,11 +856,11 @@ export function readSheetDrawings(options: {
               x: Number(value.x) || 0,
               y: Number(value.y) || 0,
             };
-          else updateExtent(anchorInput);
-        } else updateEmbed(anchorInput);
+          else readAnchorExtent(anchorInput);
+        } else readPictureChild(anchorInput);
       }
 
-      function updateEmbed(anchorInput: NonNullable<typeof anchor>) {
+      function readPictureChild(anchorInput: NonNullable<typeof anchor>) {
         if (node.uri === DRAWING && anchorInput.content?.type === 'pic') {
           if (node.local === 'blip') anchorInput.content.embed = value.embed;
           else if (node.local === 'ext' && parent === 'xfrm')
@@ -878,10 +878,10 @@ export function readSheetDrawings(options: {
             value.uri === DIAGRAM
               ? { type: 'diagram', name: anchorInput.content.name }
               : { type: 'other' };
-        else updateExtent2(anchorInput);
+        else readShapeExtent(anchorInput);
       }
 
-      function updateExtent2(anchorInput: NonNullable<typeof anchor>) {
+      function readShapeExtent(anchorInput: NonNullable<typeof anchor>) {
         if (
           node.uri === DRAWING &&
           node.local === 'ext' &&
@@ -899,10 +899,10 @@ export function readSheetDrawings(options: {
               cx: Number(value.cx) || 0,
               cy: Number(value.cy) || 0,
             };
-        } else updateData(anchorInput);
+        } else readDiagramData(anchorInput);
       }
 
-      function updateData(anchorInput: NonNullable<typeof anchor>) {
+      function readDiagramData(anchorInput: NonNullable<typeof anchor>) {
         if (
           node.uri === DIAGRAM &&
           node.local === 'relIds' &&
@@ -918,7 +918,7 @@ export function readSheetDrawings(options: {
           anchorInput.content.id = value.id;
       }
 
-      function updateExtent(anchorInput: NonNullable<typeof anchor>) {
+      function readAnchorExtent(anchorInput: NonNullable<typeof anchor>) {
         if (node.local === 'ext' && parent === anchorInput.kind)
           anchorInput.extent = {
             cx: Number(value.cx) || 0,
@@ -1204,8 +1204,8 @@ function generatedChart(chart: SheetChart, values: ChartValues): string {
         const index = seriesIndex++;
         const color = (value.color ?? palette[index % palette.length]).slice(1);
         const solid = `<a:solidFill><a:srgbClr val="${color}"/></a:solidFill>`;
-        const lined = buildLined();
-        const fill = buildFill();
+        const lined = isLinePlot();
+        const fill = seriesShapeXml();
         // A fixed name is written as its text.
         const fixed =
           value.nameRef === undefined
@@ -1215,7 +1215,7 @@ function generatedChart(chart: SheetChart, values: ChartValues): string {
                 .filter(Boolean)
                 .join(' ');
         const label = fixed ?? value.name;
-        const name = buildName();
+        const name = seriesNameXml();
         const xy = plot.kind === 'scatter' || plot.kind === 'bubble';
         const categories = xy
           ? value.categories === undefined
@@ -1231,7 +1231,7 @@ function generatedChart(chart: SheetChart, values: ChartValues): string {
                 : ''
             }`
           : `<c:val>${reference(value.values, 'numRef')}</c:val>`;
-        const marker = buildMarker();
+        const marker = markerXml();
         const inverted =
           plot.kind === 'column' ||
           plot.kind === 'bar' ||
@@ -1242,7 +1242,7 @@ function generatedChart(chart: SheetChart, values: ChartValues): string {
           plot.kind === 'stock';
         return `<c:ser><c:idx val="${index}"/><c:order val="${index}"/>${name}${fill}${inverted ? '<c:invertIfNegative val="0"/>' : ''}${marker}${categories}${numbers}${smooth ? '<c:smooth val="0"/>' : ''}</c:ser>`;
 
-        function buildName() {
+        function seriesNameXml() {
           return value.nameRef !== undefined && fixed === undefined
             ? `<c:tx>${reference(value.nameRef, 'strRef')}</c:tx>`
             : label
@@ -1250,7 +1250,7 @@ function generatedChart(chart: SheetChart, values: ChartValues): string {
               : '';
         }
 
-        function buildLined() {
+        function isLinePlot() {
           return (
             plot.kind === 'line' ||
             plot.kind === 'scatter' ||
@@ -1258,7 +1258,7 @@ function generatedChart(chart: SheetChart, values: ChartValues): string {
           );
         }
 
-        function buildMarker() {
+        function markerXml() {
           return plot.kind === 'stock'
             ? '<c:marker><c:symbol val="none"/></c:marker>'
             : plot.kind === 'line' ||
@@ -1268,7 +1268,7 @@ function generatedChart(chart: SheetChart, values: ChartValues): string {
               : '';
         }
 
-        function buildFill() {
+        function seriesShapeXml() {
           return lined
             ? `<c:spPr><a:ln w="28575" cap="rnd">${value.noLine ? '<a:noFill/>' : solid}<a:round/></a:ln></c:spPr>`
             : plot.kind === 'stock'

@@ -5,12 +5,13 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { fireAndForget } from '@core/util/fireAndForget';
+import CheckIcon from '@icon/system/regular/check.svg';
 import {
   type NotificationStack,
   openNotification,
   type UnifiedNotification,
 } from '@notifications';
-import CheckIcon from '@phosphor/check.svg';
 import { Button } from '@ui';
 import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
 import type { Notification } from '../types/notification';
@@ -69,11 +70,12 @@ export function DocumentMentionPill(props: {
       <EntityIcon targetType={targetType()} size="xs" />
       <span class="truncate min-w-0">{documentName()}</span>
       <Button
+        variant="ghost"
         class="absolute -top-1.5 -right-1.5 size-5 bg-surface border border-edge-muted/50 p-0 place-items-center hidden group-hover:grid hover:bg-accent! hover:text-surface!"
         tooltip="Mark as done"
         onClick={(e) => {
           e.stopPropagation();
-          markAsDone();
+          fireAndForget(markAsDone(), 'notifications');
         }}
       >
         <CheckIcon class="size-2.5" />

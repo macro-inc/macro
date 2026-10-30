@@ -7,6 +7,7 @@ import { registerClient } from '@core/util/mockClient';
 import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { Result } from 'neverthrow';
+import { readJsonBody } from '../read-json-body';
 import { TAG_NAME_CONFLICT_CODE } from './errors';
 import type { AddPropertyOptionRequest } from './generated/schemas/addPropertyOptionRequest';
 import type { BulkEntityPropertiesRequest } from './generated/schemas/bulkEntityPropertiesRequest';
@@ -304,15 +305,9 @@ export const propertiesServiceClient = {
         body: JSON.stringify(args.body),
         errorResponseHandler: async (response) => {
           if (response.status === 409) {
-            const settleJson = async () => {
-              try {
-                return await response.json();
-              } catch {
-                return await null;
-              }
-            };
-            const body =
-              (await settleJson()) as TagPromotionConflictResponse | null;
+            const body = (await readJsonBody(
+              response
+            )) as TagPromotionConflictResponse | null;
             if (body?.conflicting_option) {
               return {
                 code: TAG_NAME_CONFLICT_CODE,

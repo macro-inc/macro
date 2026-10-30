@@ -7,9 +7,9 @@ import { InspectorSelect } from './inspector-select';
  */
 
 import type { AutoLayout, NodeInfo, Sizing } from '@core/fig-engine/types';
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowRight from '@phosphor/arrow-right.svg';
-import CornersOut from '@phosphor/corners-out.svg';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
+import CornersOut from '@icon/system/regular/corners-out.svg';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { Constraint, Patch } from '../primitives/create-fig-editor';
 import { ChoiceRow, NumberField, ParsedField } from './design-fields';
@@ -245,7 +245,8 @@ export function SizingControl(props: {
   return (
     <Show when={props.info.sizing && choices().length > 1}>
       <InspectorSelect
-        class="w-10 shrink-0 [&_button]:px-1 [&_svg]:hidden"
+        class="w-10 shrink-0"
+        compact
         label={props.axis === 0 ? 'Width sizing' : 'Height sizing'}
         testId={props.axis === 0 ? 'fig-sizing-w' : 'fig-sizing-h'}
         value={props.info.sizing?.[props.axis] ?? 'FIXED'}

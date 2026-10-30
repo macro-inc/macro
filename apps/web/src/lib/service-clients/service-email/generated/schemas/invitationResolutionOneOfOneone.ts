@@ -7,7 +7,7 @@
 import type { InvitationResolutionOneOfOneoneKind } from './invitationResolutionOneOfOneoneKind';
 
 /**
- * More than one owned account could respond; never guess.
+ * More than one authorized account could respond; never guess.
  */
 export type InvitationResolutionOneOfOneone = {
   kind: InvitationResolutionOneOfOneoneKind;

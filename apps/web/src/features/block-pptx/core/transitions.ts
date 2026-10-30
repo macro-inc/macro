@@ -1,9 +1,9 @@
-import { match as matchBranch } from 'ts-pattern';
 /**
  * Slide transitions as Web Animations keyframes for the incoming and
  * outgoing slide images, approximating PowerPoint's effects.
  */
 
+import { match as matchBranch } from 'ts-pattern';
 /** Keyframes for the incoming and outgoing slide of a transition. */
 export interface TransitionFrames {
   incoming?: Keyframe[];

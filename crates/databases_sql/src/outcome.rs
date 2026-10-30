@@ -1,4 +1,4 @@
-//! What a statement did, shaped for agents and the chat that shows them:
+//! What a statement did, shaped for SQL clients, agents and chat:
 //! typed cells with what renders them, versions read and written, and changes.
 
 use std::collections::HashMap;
@@ -14,8 +14,12 @@ use crate::catalog::ViewerCatalog;
 use crate::service::SqlError;
 
 /// The answer to one statement.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
 pub struct SqlOutcome {
+    /// Owning database of each visible table referenced by this outcome.
+    pub table_databases: HashMap<TableId, models_databases::DatabaseId>,
     /// The rows a `SELECT` returned; `None` for a write.
     pub result: Option<ResultSet>,
     /// How many rows a write changed.
@@ -36,6 +40,7 @@ pub struct SqlOutcome {
 
 /// The statement that ran: a read, or the table (and for a type change, the
 /// column) it wrote.
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
 #[serde(
@@ -45,6 +50,7 @@ pub struct SqlOutcome {
 )]
 pub enum SqlStatement {
     /// A committed schema command. IDs remain available even without a follow-up read.
+    #[serde(rename_all = "camelCase")]
     Schema {
         /// Owning database.
         database_id: models_databases::DatabaseId,
@@ -54,6 +60,7 @@ pub enum SqlStatement {
     /// A `SELECT`.
     Select,
     /// An `INSERT`.
+    #[serde(rename_all = "camelCase")]
     Insert {
         /// The table written.
         table_id: TableId,
@@ -61,6 +68,7 @@ pub enum SqlStatement {
         table_name: String,
     },
     /// An `UPDATE`.
+    #[serde(rename_all = "camelCase")]
     Update {
         /// The table written.
         table_id: TableId,
@@ -68,6 +76,7 @@ pub enum SqlStatement {
         table_name: String,
     },
     /// A `DELETE`.
+    #[serde(rename_all = "camelCase")]
     Delete {
         /// The table written.
         table_id: TableId,
@@ -75,6 +84,7 @@ pub enum SqlStatement {
         table_name: String,
     },
     /// An `ALTER COLUMN … TYPE`.
+    #[serde(rename_all = "camelCase")]
     AlterColumnType {
         /// The table.
         table_id: TableId,
@@ -90,10 +100,14 @@ pub enum SqlStatement {
 }
 
 /// A `SELECT`'s rows, as the engine's typed cells.
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct ResultSet {
+    /// Table whose rows the result identities refer to; absent for aggregates.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_table: Option<TableId>,
     /// The columns, in select-list order.
     pub columns: Vec<ResultColumn>,
     /// One cell per column per row; `null` is an empty cell.
@@ -104,6 +118,7 @@ pub struct ResultSet {
 }
 
 /// One result column, with what its cells mean.
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
@@ -152,8 +167,36 @@ pub(crate) fn shape(
     } else {
         Vec::new()
     };
+    let result = result_set(catalog, query, outcome);
+    let written_table = match query {
+        Query::Select(_) => None,
+        Query::Insert(insert) => Some(insert.table),
+        Query::Update(update) => Some(update.table),
+        Query::Delete(delete) => Some(delete.table),
+        Query::AlterColumnType(alter) => Some(alter.table),
+    };
+    let table_databases = outcome
+        .read_tables
+        .iter()
+        .copied()
+        .chain(new_versions.keys().copied())
+        .chain(written_table)
+        .chain(outcome.columns.iter().filter_map(|column| column.table))
+        .chain(result.iter().flat_map(|result| {
+            result
+                .columns
+                .iter()
+                .filter_map(|column| column.related_table)
+        }))
+        .filter_map(|table| {
+            catalog
+                .table(table)
+                .map(|(database, _)| (table, database.database.id))
+        })
+        .collect();
     Ok(SqlOutcome {
-        result: result_set(catalog, query, outcome),
+        table_databases,
+        result,
         changes_applied: outcome.changes_applied as usize,
         inserted_row_ids: outcome.inserted_row_ids.clone(),
         new_versions,
@@ -234,8 +277,22 @@ fn result_set(catalog: &ViewerCatalog, query: &Query, outcome: &Outcome) -> Opti
         };
         Some(select.relations[select.binding(*key)?.relation].table)
     };
-    let row_shaped = outcome.row_ids.len() == outcome.rows.len();
+    let row_shaped = matches!(query, Query::Select(select)
+        if select.group_by.is_none() && !select.items.iter().any(|item| matches!(item, SelectItem::Aggregate { .. })))
+        && outcome.row_ids.len() == outcome.rows.len();
     Some(ResultSet {
+        source_table: if row_shaped {
+            match query {
+                Query::Select(select) => select
+                    .relations
+                    .first()
+                    .map(|relation| relation.table)
+                    .filter(|table| catalog.table(*table).is_some()),
+                _ => None,
+            }
+        } else {
+            None
+        },
         columns: outcome
             .columns
             .iter()

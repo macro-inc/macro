@@ -1,8 +1,8 @@
-import { hapticImpact } from '@core/mobile/haptics';
-import DotsThreeIcon from '@phosphor/dots-three.svg';
+import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
 import {
+  type ComponentProps,
   createEffect,
   createMemo,
   createSignal,
@@ -11,6 +11,7 @@ import {
   on,
   onCleanup,
   Show,
+  splitProps,
 } from 'solid-js';
 import { MobileDockButton } from './MobileDockButton';
 import { MobileDockIsland } from './MobileDockIsland';
@@ -62,6 +63,8 @@ type PillTabsProps<T extends string> = {
    * logic accounts for a sticky leading element's width.
    */
   leading?: JSXElement;
+  /** Scrollable variant only: content after the built-in pills. */
+  trailing?: JSXElement;
 };
 
 /**
@@ -84,37 +87,29 @@ export function PillTabs<T extends string>(props: PillTabsProps<T>) {
   );
 }
 
-function PillButton<T extends string>(props: {
-  item: PillTabItem<T>;
-  active: boolean;
-  onSelect: () => void;
-}) {
+export function PillButton(
+  props: ComponentProps<'button'> & { active: boolean; iconOnly?: boolean }
+) {
+  const [local, rest] = splitProps(props, ['active', 'iconOnly', 'class']);
   return (
     <button
       type="button"
-      data-checked={props.active ? '' : undefined}
-      aria-pressed={props.active}
-      aria-label={props.item.ariaLabel}
+      data-checked={local.active ? '' : undefined}
+      aria-pressed={local.active}
       class={cn(
         'h-10 shrink-0 whitespace-nowrap rounded-full px-3.5 text-xs font-medium island',
-        props.item.iconOnly && 'flex w-10 items-center justify-center px-0',
-        props.active
-          ? 'bg-accent text-surface'
-          : 'bg-chrome text-ink-extra-muted'
+        local.iconOnly && 'flex w-10 items-center justify-center px-0',
+        local.active ? 'bg-ink text-surface' : 'bg-chrome text-ink-extra-muted',
+        local.class
       )}
+      {...rest}
       onPointerDown={(e) => {
         e.preventDefault();
+        const handler = rest.onPointerDown;
+        if (typeof handler === 'function') handler(e);
+        else if (handler) handler[0](handler[1], e);
       }}
-      // Haptic on activation, not on touch-down: a pan that starts on a pill
-      // never activates it (the pan handler suppresses the click), so it must
-      // not buzz either.
-      onClick={() => {
-        hapticImpact('light');
-        props.onSelect();
-      }}
-    >
-      {props.item.label}
-    </button>
+    />
   );
 }
 
@@ -328,12 +323,16 @@ function ScrollablePillTabs<T extends string>(props: PillTabsProps<T>) {
         <For each={props.items}>
           {(item) => (
             <PillButton
-              item={item}
               active={props.value === item.value}
-              onSelect={() => props.onChange(item.value)}
-            />
+              iconOnly={item.iconOnly}
+              aria-label={item.ariaLabel}
+              onClick={() => props.onChange(item.value)}
+            >
+              {item.label}
+            </PillButton>
           )}
         </For>
+        {props.trailing}
       </div>
     </div>
   );
@@ -444,10 +443,13 @@ function MenuOverflowPillTabs<T extends string>(props: PillTabsProps<T>) {
       <For each={visibleItems()}>
         {(item) => (
           <PillButton
-            item={item}
             active={props.value === item.value}
-            onSelect={() => props.onChange(item.value)}
-          />
+            iconOnly={item.iconOnly}
+            aria-label={item.ariaLabel}
+            onClick={() => props.onChange(item.value)}
+          >
+            {item.label}
+          </PillButton>
         )}
       </For>
       <Show when={overflowItems().length > 0}>
@@ -478,13 +480,7 @@ function MenuOverflowPillTabs<T extends string>(props: PillTabsProps<T>) {
                           // Let text tabs name themselves instead of Close's default label.
                           aria-label={item.ariaLabel ?? ''}
                           aria-pressed={props.value === item.value}
-                          class={
-                            props.value === item.value
-                              ? 'text-accent'
-                              : undefined
-                          }
                           onClick={() => {
-                            hapticImpact('light');
                             props.onChange(item.value);
                           }}
                         >
@@ -496,7 +492,6 @@ function MenuOverflowPillTabs<T extends string>(props: PillTabsProps<T>) {
                     <MobileDrawer.Close
                       aria-label="Tabs"
                       class="flex h-9 shrink-0 items-center px-3 text-sm font-medium text-ink-muted"
-                      onClick={() => hapticImpact('light')}
                     >
                       Tabs
                     </MobileDrawer.Close>

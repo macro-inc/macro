@@ -53,7 +53,10 @@ export function Root(props: PropertyRootProps) {
 
       // Fallback: find the trigger by property ID (handles remount case)
       const root = document.querySelector(`[data-property-id="${propertyId}"]`);
-      const trigger = root?.querySelector('button');
+      // Row actions can precede the value editor; restore focus to its trigger.
+      const trigger = root?.querySelector<HTMLButtonElement>(
+        'button:not([data-property-row-action])'
+      );
       if (trigger) {
         trigger.focus();
       }

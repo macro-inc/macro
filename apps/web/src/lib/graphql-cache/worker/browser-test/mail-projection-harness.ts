@@ -1,3 +1,4 @@
+import { startDetached } from '@core/util/startDetached';
 import { createClient, gql, stringifyDocument } from '@urql/core';
 import { filter, map, pipe } from 'wonka';
 import { createDraftThread } from '../../../queries/email/graphql/optimistic-thread';
@@ -140,12 +141,17 @@ async function refresh(append = false) {
   }
 }
 
+const showFailure = (error: unknown): void => {
+  result.dataset.status = 'failed';
+  result.textContent = String(error);
+};
+
 for (const control of document.querySelectorAll('select'))
   control.addEventListener('change', () => {
-    void refresh();
+    startDetached(refresh(), showFailure);
   });
 more.addEventListener('click', () => {
-  void refresh(true);
+  startDetached(refresh(true), showFailure);
 });
 
 document
@@ -188,6 +194,8 @@ document.querySelector('#create-draft')!.addEventListener('click', async () => {
     const now = new Date().toISOString();
     const draft: SaveEmailDraftMutation['saveEmailDraft']['draft'] = {
       __typename: 'GraphqlSoupEmailMessage',
+      draftGeneration: 0,
+      operationStatus: null,
       id: id(8001),
       threadId: id(8002),
       providerId: null,
@@ -203,6 +211,7 @@ document.querySelector('#create-draft')!.addEventListener('click', async () => {
       isDraft: true,
       hasAttachments: false,
       scheduledSendTime: null,
+      scheduledSendStatus: null,
       from: { email: 'sender@example.com', name: null, photoUrl: null },
       to: [{ email: 'recipient@example.com', name: null, photoUrl: null }],
       cc: [],

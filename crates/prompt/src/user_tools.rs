@@ -20,7 +20,10 @@ use crate::types::StaticPrompt;
 
 static TITLE: &str = "User Tools";
 
-static INSTRUCTIONS: &str = r##"- Booking links use conversational confirmation in every surface. First use `ListBookingLinks`
+/// Shared booking confirmation rules, independent of the email review host.
+pub static BOOKING_PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(
+    "Booking Confirmation",
+    r##"- Booking links use conversational confirmation in every surface. First use `ListBookingLinks`
   to find existing links and reusable availability. Resolve team and host identities with tools;
   never ask for IDs, revisions or JSON. Default to personal ownership unless a team is requested.
   Explain the complete proposal in readable prose: ownership and named hosts, who attends,
@@ -32,9 +35,12 @@ static INSTRUCTIONS: &str = r##"- Booking links use conversational confirmation 
   `userConfirmation`. Do not quote the original request or invent approval. These tools save
   immediately, with no booking review form. Do not use `AskUser` or an elicitation for booking
   details. For edits preserve unrequested settings, and re-read and reconfirm if the revision
-  conflicts. Return the saved URL. If the same proposal is already approved, do not ask again.
+  conflicts. Share the saved URL with an `<m-booking-link-mention>` chip (see Mentions), not a
+  bare URL. If the same proposal is already approved, do not ask again."##,
+    "Booking changes require the user's explicit reply to the complete proposal.",
+);
 
-- User tools are tools that must be executed by a user on the frontend.
+static INSTRUCTIONS: &str = r##"- User tools are tools that must be executed by a user on the frontend.
   A user tool will return "PendingUserExecution" until a user chooses to
   accept / reject the tool.
 
@@ -64,21 +70,7 @@ or CreateConfirmedCalendarEvent, which are for surfaces without a composer.";
 /// The user-tools prompt section for composer-capable chat hosts.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
 
-static SESSION_INSTRUCTIONS: &str = r##"- Booking links use conversational confirmation in every surface. First use `ListBookingLinks`
-  to find existing links and reusable availability. Resolve team and host identities with tools;
-  never ask for IDs, revisions or JSON. Default to personal ownership unless a team is requested.
-  Explain the complete proposal in readable prose: ownership and named hosts, who attends,
-  meeting name and description, duration, location or Google Meet, time zone, weekly hours and
-  date exceptions, link name, buffers, minimum notice, booking window, slot interval, daily limit,
-  guest questions, and whether bookings are enabled. Group related settings so it is easy to
-  review. Ask whether to proceed, and end the turn. Only after the user's reply approving that
-  proposal, call `CreateBookingLink` or `EditBookingLink`, quoting the reply verbatim in
-  `userConfirmation`. Do not quote the original request or invent approval. These tools save
-  immediately, with no booking review form. Do not use `AskUser` or an elicitation for booking
-  details. For edits preserve unrequested settings, and re-read and reconfirm if the revision
-  conflicts. Return the saved URL. If the same proposal is already approved, do not ask again.
-
-- Before reaching for `SendEmail` or `CreateCalendarEvent`, look at where the newest prompt came
+static SESSION_INSTRUCTIONS: &str = r##"- Before reaching for `SendEmail` or `CreateCalendarEvent`, look at where the newest prompt came
   from. The context block names a conversation parent when that prompt was posted in a
   channel or document thread instead of typed in the agent session view. It is decided per
   prompt, not per session: the same session can be driven from both places, so check the
@@ -100,6 +92,11 @@ static SESSION_INSTRUCTIONS: &str = r##"- Booking links use conversational confi
   how the agent works. Lead with the draft the way a colleague would - "Here's the event I'd
   create - look good?" or "Here's the email - want me to send it?" - with no preamble about
   where the prompt came from or how confirmation works.
+
+- Your private conversation with the user is the exception. When the context block says the
+  prompt was posted in your private conversation with the user, they are reading along, and a
+  review card or an `AskUser` question appears right there for them to answer. Treat that prompt
+  like one typed in the agent session view.
 
 - From the agent session view, `SendEmail` and `CreateCalendarEvent` are reviewed by the user
   before they run. Calling one opens a review card in the session, the turn waits while the user
@@ -125,13 +122,21 @@ static SESSION_INTENT: &str = "The model checks where the newest prompt came fro
 user tool: from a channel or document thread it states the whole email or event verbatim in its \
 reply, asks, and sends or creates only on the user's approving reply through SendConfirmedEmail \
 or CreateConfirmedCalendarEvent - without ever explaining the session, review card or thread \
-mechanics to the user; from the session view it calls SendEmail or CreateCalendarEvent and lets \
-the review card be the confirmation, never asking for confirmation in prose first.";
+mechanics to the user; from the session view, or the user's private conversation with the agent, \
+it calls SendEmail or CreateCalendarEvent and lets the review card be the confirmation, never \
+asking for confirmation in prose first, and asks questions with AskUser.";
 
 /// The user-tools prompt section for an agent session, whose in-process
 /// agent finishes user tools in the turn through a review elicitation.
 pub static SESSION_PROMPT: StaticPrompt<'static> =
     StaticPrompt::borrowed(TITLE, SESSION_INSTRUCTIONS, SESSION_INTENT);
+
+/// Saved reviews return immediately instead of holding an elicitation open.
+pub static CODE_MODE_SESSION_PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(
+    TITLE,
+    include_str!("user_tools/code_mode.md"),
+    "Present editable drafts without blocking the conversation; user actions arrive separately.",
+);
 
 #[cfg(test)]
 mod test;

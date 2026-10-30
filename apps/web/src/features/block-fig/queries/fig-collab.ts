@@ -5,6 +5,7 @@
  * `.fig` stays the base every person opens.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import { schema } from '@loro-mirror/core';
 import { createAwareness } from '@macro-inc/collaboration/collab/awareness';
 import type { Chatter } from '@macro-inc/collaboration/collab/chatter';
@@ -118,15 +119,13 @@ class TrackedWALSyncer extends WALSyncer<Uint8Array> {
 
   override append(update: Uint8Array): Promise<void> {
     const appended = super.append(update);
-
-    const settleAppended = async () => {
+    // Only when it settles matters here; callers of append see a failure.
+    const settle = async () => {
       try {
-        return await appended;
-      } catch {
-        return;
-      }
+        await appended;
+      } catch {}
     };
-    this.lastAppend = settleAppended();
+    this.lastAppend = settle();
     return appended;
   }
 }
@@ -260,7 +259,7 @@ export function createDesignCollabSession(
       started = true;
     }
     setState({ t: 'ready', doc: manager.doc });
-    if (options.canEdit()) void wal.flush();
+    if (options.canEdit()) fireAndForget(wal.flush(), 'fig-collab');
   }
 
   async function accept(initial: InitialSync) {
@@ -294,15 +293,11 @@ export function createDesignCollabSession(
 
   async function hydrate() {
     await wal.ready();
-
-    const settleLoadCachedState = async () => {
-      try {
-        return await loadCachedState(manager, snapshots, walStore);
-      } catch {
-        return await false;
-      }
-    };
-    const cached = await settleLoadCachedState();
+    // An unreadable cache counts as no cache: the server copy loads instead.
+    let cached = false;
+    try {
+      cached = await loadCachedState(manager, snapshots, walStore);
+    } catch {}
     if (disposed) return;
     if (cached && designFormat(manager.doc) !== undefined) await start();
     else if (!(await options.exists()) && !(await seed())) return;
@@ -312,7 +307,8 @@ export function createDesignCollabSession(
     setConnection(opened);
     opened.source.listen((event) => {
       for (const listener of liveListeners) listener(event);
-      if (event.type === 'reconnect') void resync(event);
+      if (event.type === 'reconnect')
+        fireAndForget(resync(event), 'fig-collab');
     });
     if (peerId !== undefined) opened.source.registerPeerId(peerId);
     const initial = await opened.doInitialSync();
@@ -346,7 +342,7 @@ export function createDesignCollabSession(
         setState({ t: 'error', message: 'Unable to share this design.' });
     }
   }
-  void open();
+  fireAndForget(open(), 'fig-collab');
 
   onCleanup(() => {
     disposed = true;

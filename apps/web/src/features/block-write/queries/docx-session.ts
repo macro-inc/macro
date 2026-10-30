@@ -1,3 +1,5 @@
+import { fireAndForget } from '@core/util/fireAndForget';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import { createAwareness } from '@macro-inc/collaboration/collab/awareness';
 import type { Chatter } from '@macro-inc/collaboration/collab/chatter';
 import { createSyncEngine } from '@macro-inc/collaboration/collab/engine';
@@ -224,7 +226,7 @@ export function createDocxSession(options: DocxSessionOptions): DocxSession {
       started = true;
     }
     setState({ t: 'ready', doc: manager.doc });
-    if (options.canComment()) void wal.flush();
+    if (options.canComment()) fireAndForget(wal.flush(), 'docx-session');
   }
 
   async function accept(initial: InitialSync) {
@@ -270,17 +272,31 @@ export function createDocxSession(options: DocxSessionOptions): DocxSession {
     return true;
   }
 
+  async function readCachedState() {
+    try {
+      return await loadCachedState(manager, snapshots, walStore);
+    } catch {
+      return false;
+    }
+  }
+
+  async function resync(event: InitialSync) {
+    try {
+      await accept(event);
+      await wal.flush();
+    } catch (cause) {
+      console.error('DOCX session failed to resync', cause);
+      if (!disposed)
+        setState({
+          t: 'error',
+          message: 'Unable to open this document.',
+        });
+    }
+  }
+
   async function hydrate() {
     await wal.ready();
-
-    const settleLoadCachedState = async () => {
-      try {
-        return await loadCachedState(manager, snapshots, walStore);
-      } catch {
-        return await false;
-      }
-    };
-    const cached = await settleLoadCachedState();
+    const cached = await readCachedState();
     if (disposed) return;
     if (cached && isDocxSeeded(manager.doc)) await start();
     else if (!(await options.exists()) && !(await seed())) return;
@@ -289,28 +305,8 @@ export function createDocxSession(options: DocxSessionOptions): DocxSession {
     setConnection(opened);
     opened.source.listen((event) => {
       for (const listener of liveListeners) listener(event);
-
-      const settleAccept = async (
-        event: Extract<SyncSourceEvent, { type: 'reconnect' }>
-      ) => {
-        try {
-          await accept(event);
-
-          return await wal.flush();
-        } catch (settleAcceptError) {
-          const cause: unknown = settleAcceptError;
-
-          console.error('DOCX session failed to resync', cause);
-          if (!disposed)
-            setState({
-              t: 'error',
-              message: 'Unable to open this document.',
-            });
-
-          return;
-        }
-      };
-      if (event.type === 'reconnect') settleAccept(event);
+      if (event.type === 'reconnect')
+        fireAndForget(resync(event), 'docx-session');
     });
     if (peerId !== undefined) opened.source.registerPeerId(peerId);
     const initial = await opened.doInitialSync();
@@ -326,20 +322,22 @@ export function createDocxSession(options: DocxSessionOptions): DocxSession {
     await accept(initial.value);
   }
 
-  const settleHydrate = async () => {
+  async function open() {
     try {
-      return await hydrate();
-    } catch (settleHydrateError) {
-      const cause: unknown = settleHydrateError;
-
+      await hydrate();
+    } catch (cause) {
       console.error('DOCX session failed to open', cause);
       if (!disposed)
-        setState({ t: 'error', message: 'Unable to open this document.' });
-
-      return;
+        setState({
+          t: 'error',
+          message: thrownResultErrorHasCode(cause, 'CONFLICT')
+            ? 'This document is still processing. Try opening it again shortly.'
+            : 'Unable to open this document.',
+        });
     }
-  };
-  settleHydrate();
+  }
+
+  fireAndForget(open(), 'docx-session');
 
   onCleanup(() => {
     disposed = true;

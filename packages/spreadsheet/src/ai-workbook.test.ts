@@ -406,6 +406,88 @@ describe('spreadsheet AI atomic editing', () => {
     ).toThrow('referenced');
   });
 
+  it('converts a range to a table that formulas and reads name', () => {
+    const doc = document();
+    writeSpreadsheetCells(doc, {
+      A1: { value: 'Region' },
+      B1: { value: 'Qty' },
+      A2: { value: 'East' },
+      B2: { value: '2' },
+      A3: { value: 'West' },
+      B3: { value: '5' },
+    });
+    const edit = (
+      operations: Parameters<typeof prepareSpreadsheetEdit>[1]['operations']
+    ) => {
+      const result = prepareSpreadsheetEdit(
+        doc,
+        { action: 'edit', expectedRevision: 'v', operations },
+        calculator
+      );
+      doc.import(result.update);
+      return result;
+    };
+    const created = edit([
+      {
+        type: 'create_table',
+        sheetId: 'sheet1',
+        range: 'a1:b3',
+        name: 'Orders',
+        totalsRow: true,
+        columnTypes: [{ column: 'region', type: 'dropdown' }],
+      },
+      {
+        type: 'set_cells',
+        sheetId: 'sheet1',
+        cells: [{ address: 'D1', value: '=SUM(Orders[Qty])*2' }],
+      },
+    ]);
+    expect(created.changes[0]).toMatchObject({
+      type: 'create_table',
+      range: 'a1:b3',
+      summary: 'Converted A1:B3 in “Sheet1” to the table “Orders”.',
+    });
+    expect(created.warnings).toEqual([]);
+    const read = readSpreadsheetForAi(
+      doc,
+      'v',
+      { action: 'read', ranges: ['A4:D4', 'D1'] },
+      calculator
+    );
+    expect(read.sheets[0].tables).toEqual([
+      {
+        name: 'Orders',
+        range: 'A1:B4',
+        columns: ['Region', 'Qty'],
+        totalsRow: true,
+        columnTypes: [
+          { column: 'Region', type: 'dropdown' },
+          { column: 'Qty', type: 'number' },
+        ],
+      },
+    ]);
+    expect(
+      read.ranges[0].cells.map((cell) => [cell.source, cell.value])
+    ).toEqual([
+      ['Total', 'Total'],
+      ['=SUBTOTAL(109,[Qty])', 7],
+    ]);
+    expect(read.ranges[1].cells[0].value).toBe(14);
+    expect(() =>
+      edit([{ type: 'create_table', sheetId: 'sheet1', range: 'B2:C6' }])
+    ).toThrow('Tables cannot overlap');
+    expect(() =>
+      edit([
+        {
+          type: 'create_table',
+          sheetId: 'sheet1',
+          range: 'F1:G3',
+          name: 'orders',
+        },
+      ])
+    ).toThrow('already uses the name');
+  });
+
   it('adds, reads, replaces and clears in-cell dropdowns', () => {
     const doc = document();
     const lists = addSpreadsheetSheet(doc, 'Lists');
@@ -431,6 +513,10 @@ describe('spreadsheet AI atomic editing', () => {
         sheetId: 'sheet1',
         range: 'b2:b10',
         items: ['Open', 'In progress', 'Done', 'Open'],
+        colors: [
+          { item: 'Open', color: '#F4CCCC' },
+          { item: 'Done', color: '#d9ead3' },
+        ],
       },
       {
         type: 'set_dropdown',
@@ -438,6 +524,7 @@ describe('spreadsheet AI atomic editing', () => {
         range: 'C2:C10',
         source: 'Lists!A1:A2',
         rejectInvalid: false,
+        colors: [{ item: 'Grace', color: '#c9daf8' }],
       },
     ]);
     expect(added.changes.map((change) => change.summary)).toEqual([
@@ -452,12 +539,17 @@ describe('spreadsheet AI atomic editing', () => {
         allowBlank: true,
         showError: true,
         errorStyle: 'stop',
+        colors: [
+          { item: 'Open', color: '#f4cccc' },
+          { item: 'Done', color: '#d9ead3' },
+        ],
       },
       {
         range: 'C2:C10',
         type: 'list',
         formulas: ["'Lists'!$A$1:$A$2"],
         allowBlank: true,
+        colors: [{ item: 'Grace', color: '#c9daf8' }],
       },
     ]);
     const read = () =>
@@ -474,6 +566,10 @@ describe('spreadsheet AI atomic editing', () => {
         items: ['Open', 'In progress', 'Done'],
         dropdown: true,
         rejectInvalid: true,
+        colors: [
+          { item: 'Open', color: '#f4cccc' },
+          { item: 'Done', color: '#d9ead3' },
+        ],
       },
       {
         range: 'C2:C10',
@@ -481,6 +577,7 @@ describe('spreadsheet AI atomic editing', () => {
         source: "'Lists'!$A$1:$A$2",
         dropdown: true,
         rejectInvalid: false,
+        colors: [{ item: 'Grace', color: '#c9daf8' }],
       },
     ]);
     expect(read().ranges[1].validations).toBeUndefined();
@@ -493,11 +590,12 @@ describe('spreadsheet AI atomic editing', () => {
       readSpreadsheetWorkbook(doc)[0].metadata?.validations?.map((rule) => [
         rule.range,
         rule.formulas?.[0],
+        rule.colors?.map((entry) => entry.item),
       ])
     ).toEqual([
-      ['B2:B3 B5:B9', '"Open,In progress,Done"'],
-      ['C2:C3 C5:C9', "'Lists'!$A$1:$A$2"],
-      ['B4:C4', '"X"'],
+      ['B2:B3 B5:B9', '"Open,In progress,Done"', ['Open', 'Done']],
+      ['C2:C3 C5:C9', "'Lists'!$A$1:$A$2", ['Grace']],
+      ['B4:C4', '"X"', undefined],
     ]);
     // The list's source sheet keeps its name while the rule reads it.
     expect(() =>
@@ -545,10 +643,82 @@ describe('spreadsheet AI atomic editing', () => {
     expect(() => edit({ items: ['x'.repeat(300)] })).toThrow('253 characters');
     expect(() => edit({ source: 'SUM(B1:B2)' })).toThrow('Invalid dropdown');
     expect(() => edit({ source: 'Missing!B1:B2' })).toThrow('does not exist');
+    expect(() =>
+      edit({ items: ['a'], colors: [{ item: 'b', color: '#ffffff' }] })
+    ).toThrow('“b” is not one of the dropdown');
+    expect(() =>
+      edit({ items: ['a'], colors: [{ item: 'a', color: 'green' }] })
+    ).toThrow('Invalid color');
     expect(() => edit({ range: 'A1:A999', items: ['a'] })).toThrow(
       'Append rows'
     );
     expect(readSpreadsheetWorkbook(doc)[0].metadata).toBeUndefined();
+  });
+
+  it('adds checkboxes backed by TRUE and FALSE that formulas count', () => {
+    const doc = document();
+    writeSpreadsheetCells(doc, {
+      A2: { value: 'TRUE' },
+      A4: { value: 'Skip' },
+    });
+    const edit = (
+      operations: Parameters<typeof prepareSpreadsheetEdit>[1]['operations']
+    ) => {
+      const result = prepareSpreadsheetEdit(
+        doc,
+        { action: 'edit', expectedRevision: 'v', operations },
+        calculator
+      );
+      doc.import(result.update);
+      return result;
+    };
+    const added = edit([
+      { type: 'insert_checkboxes', sheetId: 'sheet1', range: 'a1:a4' },
+      {
+        type: 'set_cells',
+        sheetId: 'sheet1',
+        cells: [
+          { address: 'A3', value: 'TRUE' },
+          { address: 'B1', value: '=COUNTIF(A1:A4,TRUE)' },
+          { address: 'B2', value: '=COUNTIF(A:A,FALSE)' },
+        ],
+      },
+    ]);
+    expect(added.changes[0].summary).toBe(
+      'Added checkboxes to A1:A4 in “Sheet1”.'
+    );
+    expect(readSpreadsheetCells(doc)).toMatchObject({
+      A1: { value: 'FALSE', checkbox: true },
+      A2: { value: 'TRUE', checkbox: true },
+      A3: { value: 'TRUE', checkbox: true },
+      A4: { value: 'Skip', checkbox: true },
+    });
+    const cells = readSpreadsheetForAi(
+      doc,
+      'v',
+      { action: 'read', ranges: ['A1:B2'], includeStyles: true },
+      calculator
+    ).ranges[0].cells;
+    expect(cells.find((cell) => cell.address === 'A1')).toMatchObject({
+      type: 'boolean',
+      value: false,
+      style: { checkbox: true },
+    });
+    expect(cells.find((cell) => cell.address === 'B1')).toMatchObject({
+      value: 2,
+    });
+    expect(cells.find((cell) => cell.address === 'B2')).toMatchObject({
+      value: 1,
+    });
+    edit([
+      {
+        type: 'format_cells',
+        sheetId: 'sheet1',
+        range: 'A1:A4',
+        style: { checkbox: false },
+      },
+    ]);
+    expect(readSpreadsheetCells(doc).A1).toEqual({ value: 'FALSE' });
   });
 
   it('rejects oversized batches and invalid cells/styles/row counts without silently clamping', () => {

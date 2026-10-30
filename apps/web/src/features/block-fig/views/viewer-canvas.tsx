@@ -20,6 +20,7 @@ import type {
   NodeInfo,
   Rect,
 } from '@core/fig-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createEffect,
   createMemo,
@@ -315,9 +316,12 @@ export function ViewerCanvas(props: {
       !props.editor?.enabled()
     )
       return;
-    void props.editor.apply([
-      { op: 'set', ids: [label.frame.id], props: { name: trimmed } },
-    ]);
+    fireAndForget(
+      props.editor.apply([
+        { op: 'set', ids: [label.frame.id], props: { name: trimmed } },
+      ]),
+      'fig-canvas'
+    );
   };
   const [dpr, setDpr] = (() => {
     let value =
@@ -622,24 +626,16 @@ export function ViewerCanvas(props: {
     hoverNext = p;
     if (hoverPending) return;
     hoverPending = true;
-    const run = () => {
+    const run = async () => {
       const target = hoverNext;
-      const settleHoverAtFinally = async () => {
+      try {
+        await viewer.hoverAt(target, props.deepHeld());
+      } finally {
         hoverPending = false;
         if (hoverNext !== target) hoverAt(hoverNext);
-
-        return;
-      };
-      const settleHoverAt = async () => {
-        try {
-          return await viewer.hoverAt(target, props.deepHeld());
-        } finally {
-          await settleHoverAtFinally();
-        }
-      };
-      void settleHoverAt();
+      }
     };
-    run();
+    fireAndForget(run(), 'fig-canvas');
   };
 
   const panning = () => viewer.tool() === 'hand' || props.spaceHeld();
@@ -670,7 +666,7 @@ export function ViewerCanvas(props: {
   /** The resize handle (or edge) of the selection under a point. */
   const handleAt = (p: Point): Handle | undefined => {
     if (!transformable()) return undefined;
-    const info = buildInfo();
+    const info = layerInfo();
     if (viewer.selected().length === 1 && !isAxisAligned(info?.rotation ?? 0))
       return undefined;
     const box = screenBox();
@@ -678,12 +674,12 @@ export function ViewerCanvas(props: {
     const { b, x0, y0, x1, y1 } = box;
     const c = viewer.camera();
     const near = (a: number, v: number) => Math.abs(a - v) <= HANDLE_SLOP;
-    const inX = buildInX();
-    const inY = buildInY();
-    const w = buildW();
-    const e = buildE();
-    const n = buildN();
-    const s = buildS();
+    const inX = withinX();
+    const inY = withinY();
+    const w = onLeftEdge();
+    const e = onRightEdge();
+    const n = onTopEdge();
+    const s = onBottomEdge();
     const corner = cornerHandle();
     if (corner) return corner;
     // Edges only when the box is big enough to grab inside it.
@@ -702,31 +698,31 @@ export function ViewerCanvas(props: {
       return undefined;
     }
 
-    function buildInY() {
+    function withinY() {
       return p.y >= y0 - HANDLE_SLOP && p.y <= y1 + HANDLE_SLOP;
     }
 
-    function buildInX() {
+    function withinX() {
       return p.x >= x0 - HANDLE_SLOP && p.x <= x1 + HANDLE_SLOP;
     }
 
-    function buildS() {
+    function onBottomEdge() {
       return near(p.y, y1) && inX;
     }
 
-    function buildN() {
+    function onTopEdge() {
       return near(p.y, y0) && inX;
     }
 
-    function buildE() {
+    function onRightEdge() {
       return near(p.x, x1) && inY;
     }
 
-    function buildW() {
+    function onLeftEdge() {
       return near(p.x, x0) && inY;
     }
 
-    function buildInfo() {
+    function layerInfo() {
       return props.info?.();
     }
   };
@@ -781,7 +777,7 @@ export function ViewerCanvas(props: {
       return;
     }
     if (e.button !== 0) return;
-    const guide = buildGuide();
+    const guide = guideUnderPress();
     if (guide) {
       drag = { kind: 'guide', guide };
       props.aids?.move(guide, p);
@@ -797,7 +793,7 @@ export function ViewerCanvas(props: {
       requestOverlayDraw();
       return;
     }
-    const edit = buildEdit();
+    const edit = currentVectorEdit();
     if (editing() && edit && editor) {
       const hit = hitVector(
         edit.network,
@@ -823,12 +819,12 @@ export function ViewerCanvas(props: {
       return;
     }
     const label = frameLabelAt(p);
-    const handle = buildHandle();
-    const info = buildInfo2();
+    const handle = handleUnderPress();
+    const info = selectedInfo();
     const bounds = viewer.selectionBounds();
     if (startSelectionTransform()) return;
     const additive = e.shiftKey;
-    const pressed = buildPressed();
+    const pressed = pressTarget();
     const press: Extract<Drag, { kind: 'press' }> = {
       kind: 'press',
       start: p,
@@ -839,11 +835,8 @@ export function ViewerCanvas(props: {
       additive,
     };
     drag = press;
-
-    const settlePressed = async () => {
-      const settlePressedValue = await pressed;
-      const r = settlePressedValue;
-
+    const resolvePress = async () => {
+      const r = await pressed;
       press.resolved = r;
       // What a drag from here would move, lifted ahead of it.
       if (r && editing() && !r.row.locked && !additive && props.editor) {
@@ -851,10 +844,8 @@ export function ViewerCanvas(props: {
         if (ids.length > 0 && drag === press && !press.active)
           press.prepared = prepareMove(ids);
       }
-
-      return;
     };
-    void settlePressed();
+    fireAndForget(resolvePress(), 'fig-canvas');
 
     function isPanPress() {
       return e.button === 1 || panning() || e.pointerType === 'touch';
@@ -871,7 +862,7 @@ export function ViewerCanvas(props: {
             bounds,
             info
           ),
-          lines: buildLines(bounds),
+          lines: snapLinesNear(bounds),
         };
         return true;
       }
@@ -893,31 +884,31 @@ export function ViewerCanvas(props: {
       return false;
     }
 
-    function buildHandle() {
+    function handleUnderPress() {
       return label ? undefined : handleAt(p);
     }
 
-    function buildLines(bounds: Rect): SnapLines | undefined {
+    function snapLinesNear(bounds: Rect): SnapLines | undefined {
       return props.aids?.linesNear(bounds);
     }
 
-    function buildPoints(editorInput: NonNullable<typeof editor>) {
+    function penPoints(editorInput: NonNullable<typeof editor>) {
       return editorInput.penPath() ?? [];
     }
 
-    function buildEdit() {
+    function currentVectorEdit() {
       return editor?.vectorEdit();
     }
 
-    function buildGuide() {
+    function guideUnderPress() {
       return props.aids?.press(p);
     }
 
-    function buildInfo2() {
+    function selectedInfo() {
       return props.info?.();
     }
 
-    function buildPressed() {
+    function pressTarget() {
       return label
         ? pressFrameLabel(label, additive)
         : viewer.pressAt(p, {
@@ -928,18 +919,18 @@ export function ViewerCanvas(props: {
 
     function startPenStroke(editorInput: NonNullable<typeof editor>) {
       const at = pageAt(p);
-      const points = buildPoints(editorInput);
+      const points = penPoints(editorInput);
       const reach = PEN_CLOSE / viewer.camera().zoom;
       if (closesPath(points, at, reach)) {
         penCursor = undefined;
-        void editorInput.penFinish(true);
+        fireAndForget(editorInput.penFinish(true), 'fig-canvas');
         return;
       }
       // Pressing the last point again (a double-click) ends the path.
       if (endsPath(points, at, reach)) {
         if (points.length > 1) {
           penCursor = undefined;
-          void editorInput.penFinish(false);
+          fireAndForget(editorInput.penFinish(false), 'fig-canvas');
         }
         return;
       }
@@ -983,10 +974,13 @@ export function ViewerCanvas(props: {
    */
   const prepareMove = (ids: string[]): PreparedLift => {
     const prepared: PreparedLift = { ids, plan: planLift(ids), dropped: false };
-    void (async () => {
-      const plan = await prepared.plan;
-      if (plan && !prepared.dropped) compositor.lift(plan, true);
-    })();
+    fireAndForget(
+      (async () => {
+        const plan = await prepared.plan;
+        if (plan && !prepared.dropped) compositor.lift(plan, true);
+      })(),
+      'fig-canvas'
+    );
     return prepared;
   };
 
@@ -994,10 +988,13 @@ export function ViewerCanvas(props: {
   const dropPrepared = (prepared: PreparedLift | undefined) => {
     if (!prepared) return;
     prepared.dropped = true;
-    void (async () => {
-      const plan = await prepared.plan;
-      if (plan && compositor.isLifted(plan)) compositor.unlift();
-    })();
+    fireAndForget(
+      (async () => {
+        const plan = await prepared.plan;
+        if (plan && compositor.isLifted(plan)) compositor.unlift();
+      })(),
+      'fig-canvas'
+    );
   };
 
   /**
@@ -1104,18 +1101,15 @@ export function ViewerCanvas(props: {
     // The pointer came up while this was starting (a copy being made, or
     // the press still resolving): the move ends where it got to.
     if (drag !== press) {
-      void press.mover.end(pageAt(press.current));
+      fireAndForget(press.mover.end(pageAt(press.current)), 'fig-canvas');
       return;
     }
     if (start) {
-      const settleSnapTargets = async () => {
-        try {
-          return await snapTargets(ids);
-        } catch {
-          return await [];
-        }
-      };
-      const targets = await settleSnapTargets();
+      // Without snap targets the move still works, just unsnapped.
+      let targets: Rect[] = [];
+      try {
+        targets = await snapTargets(ids);
+      } catch {}
       press.snap = { start, targets, lines: props.aids?.linesNear(start) };
     }
   };
@@ -1182,9 +1176,9 @@ export function ViewerCanvas(props: {
       }
       return;
     }
-    updateDrag(drag);
+    followDrag(drag);
 
-    function updateDrag(
+    function followDrag(
       dragInput: Extract<
         NonNullable<typeof drag>,
         {
@@ -1234,10 +1228,10 @@ export function ViewerCanvas(props: {
           )
         );
         requestOverlayDraw();
-      } else updateCurrent(dragInput);
+      } else followEditDrag(dragInput);
     }
 
-    function updateCurrent(dragInput: NonNullable<typeof drag>) {
+    function followEditDrag(dragInput: NonNullable<typeof drag>) {
       if (dragInput.kind === 'pencil') {
         const at = pageAt(p);
         const last = dragInput.points[dragInput.points.length - 1];
@@ -1306,16 +1300,12 @@ export function ViewerCanvas(props: {
             // A press on a layer drags it (when editable and unlocked);
             // anywhere else draws a marquee.
             if (r && editing() && !r.row.locked && !press.additive)
-              void beginMove(press, e.altKey);
+              fireAndForget(beginMove(press, e.altKey), 'fig-canvas');
             else press.marquee = true;
           };
-          const settlePressedResultHandler0 = decide;
-          const settlePressedResult = async () => {
-            const settlePressedResultValue = await press.pressed;
-            return await settlePressedResultHandler0(settlePressedResultValue);
-          };
+          const decideWhenPressed = async () => decide(await press.pressed);
           if ('resolved' in press) decide(press.resolved);
-          else void settlePressedResult();
+          else fireAndForget(decideWhenPressed(), 'fig-canvas');
         }
         if (press.marquee) {
           marquee = {
@@ -1395,51 +1385,52 @@ export function ViewerCanvas(props: {
       marquee = undefined;
       linePreview = undefined;
       requestOverlayDraw();
-      void finishCreate(ended, e.shiftKey);
+      fireAndForget(finishCreate(ended, e.shiftKey), 'fig-canvas');
     } else if (ended.kind === 'vector') {
-      void ended.mover.end();
+      fireAndForget(ended.mover.end(), 'fig-canvas');
     } else if (ended.kind === 'pen') {
       requestOverlayDraw();
     } else if (ended.kind === 'pencil') {
       requestOverlayDraw();
-      void props.editor?.pencilFinish(
-        ended.points,
-        PENCIL_TOLERANCE / viewer.camera().zoom
+      fireAndForget(
+        props.editor?.pencilFinish(
+          ended.points,
+          PENCIL_TOLERANCE / viewer.camera().zoom
+        ),
+        'fig-canvas'
       );
     } else if (ended.kind === 'guide') {
-      void props.aids?.drop(ended.guide, local(e));
+      fireAndForget(props.aids?.drop(ended.guide, local(e)), 'fig-canvas');
     } else if (ended.kind === 'resize') {
-      void ended.resizer.end();
+      fireAndForget(ended.resizer.end(), 'fig-canvas');
     } else if (ended.kind === 'rotate') {
-      void ended.rotator.end();
+      fireAndForget(ended.rotator.end(), 'fig-canvas');
     } else if (ended.kind === 'press') {
       if (!ended.mover) dropPrepared(ended.prepared);
       if (ended.mover) {
         guides = [];
         requestOverlayDraw();
-        void ended.mover.end(pageAt(local(e)));
+        fireAndForget(ended.mover.end(pageAt(local(e))), 'fig-canvas');
       } else if (ended.marquee && marquee) {
         const c = viewer.camera();
         const a = screenToPage(c, { x: marquee.x, y: marquee.y });
-        void viewer.marqueeSelect(
-          { x: a.x, y: a.y, w: marquee.w / c.zoom, h: marquee.h / c.zoom },
-          e.shiftKey
+        fireAndForget(
+          viewer.marqueeSelect(
+            { x: a.x, y: a.y, w: marquee.w / c.zoom, h: marquee.h / c.zoom },
+            e.shiftKey
+          ),
+          'fig-canvas'
         );
         marquee = undefined;
         requestOverlayDraw();
       } else if (!ended.active) {
         // A click on one layer of a multi-selection selects just it.
-
-        const settlePressedResultResult = async () => {
-          const settlePressedResultResultValue = await ended.pressed;
-          const r = settlePressedResultResultValue;
-
+        const selectJustPressed = async () => {
+          const r = await ended.pressed;
           if (r?.wasSelected && !ended.additive && viewer.selected().length > 1)
-            void viewer.selectIds([r.row.id]);
-
-          return;
+            await viewer.selectIds([r.row.id]);
         };
-        void settlePressedResultResult();
+        fireAndForget(selectJustPressed(), 'fig-canvas');
       }
     }
   };
@@ -1543,7 +1534,7 @@ export function ViewerCanvas(props: {
         if (!drag) hoverAt(undefined);
         props.onPointer?.(null);
       }}
-      onDblClick={(e) => void onDoubleClick(e)}
+      onDblClick={(e) => fireAndForget(onDoubleClick(e), 'fig-canvas')}
       onDragOver={(e) => {
         const types = e.dataTransfer?.types ?? [];
         const ours = !!props.drop && types.includes(props.drop.type);
@@ -1558,26 +1549,22 @@ export function ViewerCanvas(props: {
         if (drop && data && editing()) {
           e.preventDefault();
           const at = pageAt(local(e));
-
-          const settleContainerAt = async () => {
-            const settleContainerAtValue = await viewer.containerAt(at);
-            const parent = settleContainerAtValue;
-            return await drop.onDrop(data, at, parent);
+          const dropAsset = async () => {
+            const parent = await viewer.containerAt(at);
+            drop.onDrop(data, at, parent);
           };
-          void settleContainerAt();
+          fireAndForget(dropAsset(), 'fig-canvas');
           return;
         }
         const files = [...(e.dataTransfer?.files ?? [])];
         if (!editing() || files.length === 0) return;
         e.preventDefault();
         const at = pageAt(local(e));
-
-        const settleContainerAtResult = async () => {
-          const settleContainerAtResultValue = await viewer.containerAt(at);
-          const parent = settleContainerAtResultValue;
-          return await props.editor?.importImages(files, at, parent);
+        const importImages = async () => {
+          const parent = await viewer.containerAt(at);
+          await props.editor?.importImages(files, at, parent);
         };
-        void settleContainerAtResult();
+        fireAndForget(importImages(), 'fig-canvas');
       }}
       onContextMenu={(e) => e.preventDefault()}
     >

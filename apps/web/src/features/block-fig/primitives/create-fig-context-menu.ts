@@ -6,6 +6,7 @@
  */
 
 import type { FigEngine } from '@core/fig-engine/client';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createSignal } from 'solid-js';
 import { type Point, screenToPage } from '../core/camera';
 import {
@@ -49,26 +50,23 @@ export function createFigContextMenu(options: {
   const selectionFacts = async (): Promise<SelectionFacts> => {
     const ids = viewer.selected().map((s) => s.id);
     const page = viewer.page();
-
-    const settleRows = async () => {
+    // A failed read leaves out the entries that depend on it.
+    const readRows = async () => {
       try {
         return await engine.rows(page, ids);
       } catch {
-        return await [];
+        return [];
       }
     };
-
-    const settleNodeInfo = async () => {
+    const readSingleInfo = async () => {
+      if (ids.length !== 1) return undefined;
       try {
         return await engine.nodeInfo(page, ids[0]);
       } catch {
-        return await undefined;
+        return undefined;
       }
     };
-    const [rows, info] = await Promise.all([
-      settleRows(),
-      ids.length === 1 ? settleNodeInfo() : Promise.resolve(undefined),
-    ]);
+    const [rows, info] = await Promise.all([readRows(), readSingleInfo()]);
     return {
       count: ids.length,
       canEdit: editor.enabled(),
@@ -125,7 +123,7 @@ export function createFigContextMenu(options: {
     e.preventDefault();
     if (target.closest(NO_MENU)) return;
     const canvas = target.closest<HTMLElement>('[data-testid="fig-canvas"]');
-    if (canvas) void openOnCanvas(e, canvas);
+    if (canvas) fireAndForget(openOnCanvas(e, canvas), 'fig-context-menu');
   };
 
   /** Selects a right-clicked row (unless selected), then opens the menu. */
@@ -143,7 +141,7 @@ export function createFigContextMenu(options: {
     const id = target.closest<HTMLElement>('[data-layer-id]')?.dataset.layerId;
     if (!id) return;
     e.preventDefault();
-    void openOnRow(e, id);
+    fireAndForget(openOnRow(e, id), 'fig-context-menu');
   };
 
   /** "Combine as variants": the selected components become a set. */
@@ -160,16 +158,19 @@ export function createFigContextMenu(options: {
     setMenu(undefined);
     if (action !== 'rename') options.focus();
     if (action === 'paste-here') {
-      if (open) void editor.pasteHere(open.page);
+      if (open) fireAndForget(editor.pasteHere(open.page), 'fig-context-menu');
     } else if (action === 'paste-replace') {
-      void editor.pasteToReplace();
+      fireAndForget(editor.pasteToReplace(), 'fig-context-menu');
     } else if (action === 'combine-as-variants') {
-      void combineAsVariants();
+      fireAndForget(combineAsVariants(), 'fig-context-menu');
     } else if (action === 'toggle-visible' && open?.facts) {
       // Several layers: hide them all unless all are hidden already.
-      void editor.setProps({ visible: !open.facts.anyVisible });
+      fireAndForget(
+        editor.setProps({ visible: !open.facts.anyVisible }),
+        'fig-context-menu'
+      );
     } else if (action === 'toggle-locked' && open?.facts) {
-      void editor.toggleLocked();
+      fireAndForget(editor.toggleLocked(), 'fig-context-menu');
     } else {
       options.run(action);
     }

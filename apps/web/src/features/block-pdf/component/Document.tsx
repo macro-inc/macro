@@ -17,6 +17,7 @@ import {
 } from '@core/constant/featureFlags';
 import { IS_MAC } from '@core/constant/isMac';
 import { observedSize } from '@core/directive/observedSize';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isInDOMRect } from '@core/util/rect';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
@@ -244,24 +245,17 @@ export function Document() {
     pdfViewer.detachListeners();
 
     const viewer = rootViewer;
-    const settleDestroyFinally = async () => {
-      popupViewer = undefined;
-      rootViewer = undefined;
-      pdfViewer.clearPair();
-      setDestroying(false);
-
-      return;
-    };
-    const settleDestroy = async () => {
+    const destroyViewer = async () => {
       try {
         await viewer.destroy();
-
-        return;
       } finally {
-        await settleDestroyFinally();
+        popupViewer = undefined;
+        rootViewer = undefined;
+        pdfViewer.clearPair();
+        setDestroying(false);
       }
     };
-    settleDestroy();
+    fireAndForget(destroyViewer(), 'pdf-document');
   });
 
   const saveModificationData = useSaveModificationData();
@@ -282,12 +276,11 @@ export function Document() {
       const annotationsPromise = loadAnnotations(documentProxy);
 
       if (updateModificationDataOnLoad()) {
-        const settleAnnotationsPromise = async () => {
+        const saveAfterAnnotations = async () => {
           await annotationsPromise;
-
-          return await saveModificationData();
+          await saveModificationData();
         };
-        settleAnnotationsPromise();
+        fireAndForget(saveAfterAnnotations(), 'pdf-document');
       }
 
       const documentId = pdf.documentId();
@@ -548,12 +541,11 @@ export function Document() {
       const revision = currentRevision();
       if (revision <= savedRevision()) return;
 
-      const settleSaveModificationData = async () => {
+      const saveRevision = async () => {
         await saveModificationData();
-
-        return await setSavedRevision(revision);
+        setSavedRevision(revision);
       };
-      settleSaveModificationData();
+      fireAndForget(saveRevision(), 'pdf-document');
     });
   }
 
@@ -615,5 +607,5 @@ export function Document() {
 export default Document;
 
 if (import.meta.hot) {
-  import('./PageOverlay');
+  fireAndForget(import('./PageOverlay'), 'pdf-document');
 }

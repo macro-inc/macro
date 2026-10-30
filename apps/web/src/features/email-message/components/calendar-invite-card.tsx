@@ -1,15 +1,26 @@
-import CalendarBlank from '@phosphor/calendar-blank.svg';
-import Check from '@phosphor/check.svg';
-import Clock from '@phosphor/clock.svg';
-import Info from '@phosphor/info.svg';
-import MapPin from '@phosphor/map-pin.svg';
-import PauseCircle from '@phosphor/pause-circle.svg';
-import Users from '@phosphor/users.svg';
-import VideoCamera from '@phosphor/video-camera.svg';
-import X from '@phosphor/x.svg';
-import { Button } from '@ui';
-import { createSignal, For, type JSX, Show } from 'solid-js';
+import { openExternalUrl } from '@core/util/url';
+import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
+import CalendarCheck from '@icon/system/regular/calendar-check.svg';
+import Check from '@icon/system/regular/check.svg';
+import Clock from '@icon/system/regular/clock.svg';
+import Info from '@icon/system/regular/info.svg';
+import MapPin from '@icon/system/regular/map-pin.svg';
+import PauseCircle from '@icon/system/regular/pause-circle.svg';
+import Users from '@icon/system/regular/users.svg';
+import VideoCamera from '@icon/system/regular/video-camera.svg';
+import X from '@icon/system/regular/x.svg';
+import { Button, Tabs } from '@ui';
+import {
+  createMemo,
+  createSignal,
+  For,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { match } from 'ts-pattern';
+import { sanitizeCalendarDescription } from '../../calendar/utils/calendar-description-sanitizer';
 import {
   type CalendarInvitation,
   type CalendarInvitationActions,
@@ -50,12 +61,19 @@ function MetaRow(props: { icon: JSX.Element; children: JSX.Element }) {
   );
 }
 
-/** Native host UI: no provider fetches, parser, grid, or HTML injection. */
+/**
+ * Native host UI with sanitized descriptions and host-supplied actions. A
+ * published event (a forwarded .ics) reads as a shared event: no response,
+ * only whether it is on the viewer's calendar and the host's `addToCalendar`.
+ */
 export function CalendarInviteCard(props: {
   invitation: CalendarInvitation;
   actions?: CalendarInvitationActions;
+  addToCalendar?: JSX.Element;
   hour12?: boolean;
   timeZone?: string;
+  /** Shown inside the calendar file it came from, so it must not point back at that file. */
+  inCalendarFile?: boolean;
 }) {
   const [descriptionExpanded, setDescriptionExpanded] = createSignal(false);
   const [attendeesExpanded, setAttendeesExpanded] = createSignal(false);
@@ -65,12 +83,23 @@ export function CalendarInviteCard(props: {
   };
   const invite = () =>
     displayedInvitation(props.invitation, props.actions?.resolution);
+  const descriptionHtml = createMemo(() =>
+    sanitizeCalendarDescription(invite().description ?? '')
+  );
+  const openDescriptionLink = (event: MouseEvent) => {
+    const anchor =
+      event.target instanceof Element ? event.target.closest('a[href]') : null;
+    if (!(anchor instanceof HTMLAnchorElement)) return;
+    event.preventDefault();
+    (props.actions?.openExternal ?? openExternalUrl)(anchor.href);
+  };
   const cancelled = () =>
     props.actions?.resolution?.kind === 'cancelled' ||
     invitationIsCancelled(props.invitation) ||
     resolved()?.isCancelled;
   const notification = () =>
     ['reply', 'counter'].includes(props.invitation.method);
+  const shared = () => props.invitation.method === 'publish';
   const schedule = () =>
     invitationSchedule(
       invite(),
@@ -95,6 +124,12 @@ export function CalendarInviteCard(props: {
         suffix: organizer() && `by ${organizer()}`,
         tone: 'failure',
       };
+    if (shared())
+      return {
+        text: 'Shared event',
+        suffix: organizer() && `organized by ${organizer()}`,
+        tone: 'neutral',
+      };
     if (resolved()?.isNewer)
       return { text: 'Updated in your calendar', tone: 'accent' };
     if (props.invitation.sequence > 0)
@@ -118,6 +153,32 @@ export function CalendarInviteCard(props: {
     props.invitation.method === 'request' &&
     resolved()?.canRespond &&
     props.actions?.respond;
+  const onCalendar = () =>
+    ['resolved', 'ambiguous'].includes(props.actions?.resolution?.kind ?? '');
+  const sharedStatus = () =>
+    match(props.actions?.resolution?.kind)
+      .with('resolved', () => 'On your calendar.')
+      .with(
+        'ambiguous',
+        () =>
+          'This event matches multiple accounts. Open your calendar to choose.'
+      )
+      .with('no_match', () => 'Not on your calendar.')
+      .with('disconnected', () => 'Connect a calendar to add this event.')
+      .with(
+        'still_syncing',
+        'loading',
+        () => 'Checking your connected calendar…'
+      )
+      .with(
+        'unavailable',
+        () => 'Calendar unavailable. Saved event details are shown.'
+      )
+      .otherwise(() =>
+        props.inCalendarFile
+          ? 'Shared event.'
+          : 'Shared event. Open the original email or event attachment to add it to a calendar.'
+      );
   const fallbackStatus = () =>
     match(props.actions?.resolution?.kind)
       .with('disconnected', () => 'Connect a calendar to respond from Macro.')
@@ -140,16 +201,22 @@ export function CalendarInviteCard(props: {
           ? 'Waiting for your calendar to catch up. Responses are paused until it does.'
           : 'Your connected calendar does not allow a response to this event.'
       )
-      .otherwise(
-        () =>
-          'Saved invitation. Open the original email or invitation attachment for more options.'
+      .otherwise(() =>
+        props.inCalendarFile
+          ? 'Saved invitation.'
+          : 'Saved invitation. Open the original email or invitation attachment for more options.'
       );
   const lastResponse = () => {
+    if (shared()) return;
     const response = resolved()?.response;
     return RESPONSES.find((option) => option.value === response)?.label;
   };
-  const visibleAttendees = () =>
-    attendeesExpanded() ? invite().attendees : invite().attendees.slice(0, 3);
+  const statusText = () => (shared() ? sharedStatus() : fallbackStatus());
+  const statusIcon = (): InvitationStatusIcon => {
+    if (shared() && onCalendar()) return 'on-calendar';
+    if (!shared() && resolved()?.isStale) return 'paused';
+    return 'info';
+  };
   const title = () => invitationDisplayTitle(invite().title);
   const scheduleIcon = () =>
     invite().start?.kind === 'date' ? <CalendarBlank /> : <Clock />;
@@ -166,7 +233,7 @@ export function CalendarInviteCard(props: {
       }
     >
       <section
-        aria-label={`Calendar invitation: ${title() || 'Untitled event'}`}
+        aria-label={`${shared() ? 'Shared event' : 'Calendar invitation'}: ${title() || 'Untitled event'}`}
         class="my-3 flex min-w-0 flex-col gap-4 rounded-xl border border-edge bg-surface-2 p-5 text-sm text-ink"
       >
         <header class="flex min-w-0 flex-col gap-1.5">
@@ -216,41 +283,20 @@ export function CalendarInviteCard(props: {
             </MetaRow>
           </Show>
           <Show when={!cancelled() && invite().attendees.length > 0}>
-            <MetaRow icon={<Users />}>
-              {visibleAttendees().map(participantName).join(', ')}
-              <Show when={invite().attendees.length > 3}>
-                {' '}
-                <Button
-                  variant="ghost"
-                  class="h-auto border-0 p-0 align-baseline text-sm font-medium text-accent"
-                  aria-expanded={attendeesExpanded()}
-                  onClick={() => setAttendeesExpanded((value) => !value)}
-                >
-                  {attendeesExpanded()
-                    ? 'Show fewer'
-                    : `+${invite().attendees.length - 3} more`}
-                </Button>
-              </Show>
-            </MetaRow>
+            <AttendeesRow
+              attendees={invite().attendees}
+              expanded={attendeesExpanded()}
+              onToggle={() => setAttendeesExpanded((value) => !value)}
+            />
           </Show>
         </ul>
         <Show when={!cancelled() && invite().description}>
-          <div class="flex flex-col items-start gap-1.5">
-            <p
-              class="whitespace-pre-wrap break-words text-ink-muted [overflow-wrap:anywhere]"
-              classList={{ 'line-clamp-2': !descriptionExpanded() }}
-            >
-              {invite().description}
-            </p>
-            <Button
-              variant="ghost"
-              class="h-auto border-0 p-0 text-xs font-medium text-accent"
-              aria-expanded={descriptionExpanded()}
-              onClick={() => setDescriptionExpanded((value) => !value)}
-            >
-              {descriptionExpanded() ? 'Show less' : 'Show more'}
-            </Button>
-          </div>
+          <InvitationDescription
+            html={descriptionHtml()}
+            expanded={descriptionExpanded()}
+            onToggle={() => setDescriptionExpanded((value) => !value)}
+            onClick={openDescriptionLink}
+          />
         </Show>
         <Show when={!cancelled()}>
           <div class="flex flex-col gap-3 border-t border-edge pt-4">
@@ -258,157 +304,219 @@ export function CalendarInviteCard(props: {
               <Show
                 when={canRespond()}
                 fallback={
-                  <div class="flex min-w-0 items-start gap-2 text-ink-muted">
-                    <Show
-                      when={resolved()?.isStale}
-                      fallback={
-                        <Info class="mt-0.5 size-4 shrink-0 text-ink-subtle" />
-                      }
-                    >
-                      <PauseCircle class="mt-0.5 size-4 shrink-0 text-ink-subtle" />
-                    </Show>
-                    <p class="min-w-0">
-                      {fallbackStatus()}
-                      <Show when={lastResponse()}>
-                        <span class="mt-1 block text-xs">
-                          Last response: {lastResponse()}
-                        </span>
-                      </Show>
-                    </p>
-                  </div>
+                  <InvitationStatus
+                    icon={statusIcon()}
+                    text={statusText()}
+                    lastResponse={lastResponse()}
+                  />
                 }
               >
-                <div
-                  role="group"
+                <Tabs
+                  touch="segmented"
                   aria-label="Your response"
-                  class="flex overflow-hidden rounded-lg border border-edge"
-                >
-                  <For each={RESPONSES}>
-                    {(option, index) => (
-                      <Button
-                        variant="ghost"
-                        class={`h-10 gap-1 rounded-none px-3.5 text-sm text-ink aria-pressed:bg-accent-bg aria-pressed:font-semibold aria-pressed:text-accent ${index() > 0 ? 'border-l border-edge' : ''}`}
-                        aria-pressed={resolved()?.response === option.value}
-                        onClick={() => props.actions?.respond?.(option.value)}
-                      >
-                        <Show when={resolved()?.response === option.value}>
-                          <Check class="size-3.5" />
-                        </Show>
-                        {option.label}
-                      </Button>
-                    )}
-                  </For>
-                </div>
+                  options={RESPONSES}
+                  value={
+                    RESPONSES.find(
+                      (option) => option.value === resolved()?.response
+                    )?.value
+                  }
+                  onChange={(response) => props.actions?.respond?.(response)}
+                />
               </Show>
               <div class="flex items-center gap-2">
-                <Show when={getCalendarInviteCardWhen()}>
-                  <Button
-                    variant="ghost"
-                    class="h-10 border border-edge px-3.5 text-sm font-semibold text-ink"
-                    onClick={() => props.actions?.connectCalendar?.()}
-                  >
-                    Connect calendar
-                  </Button>
-                </Show>
-                <Show when={getCalendarInviteCardWhen4()}>
-                  <Button
-                    variant="ghost"
-                    class="h-10 gap-1.5 bg-accent px-3.5 text-sm font-semibold text-accent-contrast"
-                    aria-label="Join meeting"
-                    onClick={() => props.actions?.openExternal?.(conference()!)}
-                  >
-                    <VideoCamera class="size-4" />
-                    Join
-                  </Button>
-                </Show>
-                <Show when={props.actions?.openCalendar}>
-                  <Button
-                    variant="ghost"
-                    class="size-10 border border-edge p-0 text-ink-muted"
-                    aria-label="Open in calendar"
-                    onClick={() => props.actions?.openCalendar?.()}
-                  >
-                    <CalendarBlank class="size-4" />
-                  </Button>
-                </Show>
+                {props.addToCalendar}
+                <InvitationActionButtons
+                  actions={props.actions}
+                  conference={conference()}
+                />
               </div>
             </div>
-            <Show when={getCalendarInviteCardWhen2()}>
-              <p class="flex flex-wrap items-center gap-x-1 text-xs text-ink-subtle">
-                <Show when={canRespond()}>
-                  <span class="break-words [overflow-wrap:anywhere]">
-                    Responding as {resolved()?.respondingEmail}
-                  </span>
-                </Show>
-                <Show when={getCalendarInviteCardWhen3()}>
-                  <span aria-hidden="true">·</span>
-                </Show>
-                <Show when={props.actions?.showDay}>
-                  <Button
-                    variant="ghost"
-                    class="h-auto border-0 p-0 text-xs font-medium text-accent"
-                    aria-expanded={props.actions?.dayExpanded}
-                    onClick={() => props.actions?.showDay?.()}
-                  >
-                    View your day
-                  </Button>
-                </Show>
-              </p>
-            </Show>
+            <RespondingFooter
+              canRespond={!!canRespond()}
+              respondingEmail={resolved()?.respondingEmail}
+              actions={props.actions}
+            />
             <p
               role="status"
               aria-live="polite"
               class="text-xs text-ink-muted empty:hidden"
             >
-              {getCalendarInviteCardContent()}
+              {responseProgress(props.actions)}
             </p>
           </div>
         </Show>
       </section>
     </Show>
   );
+}
 
-  function getCalendarInviteCardWhen4():
-    | false
-    | ''
-    | ((url: string) => void)
-    | null
-    | undefined {
-    return conference() && props.actions?.openExternal;
-  }
+function responseProgress(actions: CalendarInvitationActions | undefined) {
+  return actions?.pending ? 'Saving response…' : actions?.error;
+}
 
-  function getCalendarInviteCardWhen3():
-    | false
-    | (() => void)
-    | null
-    | undefined {
-    return canRespond() && props.actions?.showDay;
-  }
+function AttendeesRow(props: {
+  attendees: InvitationParticipant[];
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const visible = () =>
+    props.expanded ? props.attendees : props.attendees.slice(0, 3);
+  return (
+    <MetaRow icon={<Users />}>
+      {visible().map(participantName).join(', ')}
+      <Show when={props.attendees.length > 3}>
+        {' '}
+        <Button
+          variant="ghost"
+          class="h-auto border-0 p-0 align-baseline text-sm font-medium text-accent"
+          aria-expanded={props.expanded}
+          onClick={() => props.onToggle()}
+        >
+          {props.expanded
+            ? 'Show fewer'
+            : `+${props.attendees.length - 3} more`}
+        </Button>
+      </Show>
+    </MetaRow>
+  );
+}
 
-  function getCalendarInviteCardWhen2():
-    | false
-    | ((
-        response: import('../core/calendar-invitation').InvitationResponse
-      ) => void)
-    | null
-    | undefined {
-    return canRespond() || props.actions?.showDay;
-  }
+function InvitationDescription(props: {
+  html: string;
+  expanded: boolean;
+  onToggle: () => void;
+  onClick: (event: MouseEvent) => void;
+}) {
+  return (
+    <div class="flex flex-col items-start gap-1.5">
+      <div
+        class="break-words text-ink-muted [overflow-wrap:anywhere] [&_a]:text-accent [&_a]:underline [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6"
+        classList={{ 'line-clamp-2': !props.expanded }}
+        innerHTML={props.html}
+        onClick={(event) => props.onClick(event)}
+      />
+      <Button
+        variant="ghost"
+        class="h-auto border-0 p-0 text-xs font-medium text-accent"
+        aria-expanded={props.expanded}
+        onClick={() => props.onToggle()}
+      >
+        {props.expanded ? 'Show less' : 'Show more'}
+      </Button>
+    </div>
+  );
+}
 
-  function getCalendarInviteCardWhen():
-    | false
-    | (() => void)
-    | null
-    | undefined {
-    return (
-      props.actions?.resolution?.kind === 'disconnected' &&
-      props.actions.connectCalendar
-    );
-  }
+type InvitationStatusIcon = 'on-calendar' | 'paused' | 'info';
 
-  function getCalendarInviteCardContent(): JSX.Element {
-    return props.actions?.pending ? 'Saving response…' : props.actions?.error;
-  }
+/** Why the viewer cannot respond here, with their last response if any. */
+function InvitationStatus(props: {
+  icon: InvitationStatusIcon;
+  text: string;
+  lastResponse: string | undefined;
+}) {
+  return (
+    <div class="flex min-w-0 items-start gap-2 text-ink-muted">
+      <Switch
+        fallback={<Info class="mt-0.5 size-4 shrink-0 text-ink-subtle" />}
+      >
+        <Match when={props.icon === 'on-calendar'}>
+          <CalendarCheck class="mt-0.5 size-4 shrink-0 text-ink-subtle" />
+        </Match>
+        <Match when={props.icon === 'paused'}>
+          <PauseCircle class="mt-0.5 size-4 shrink-0 text-ink-subtle" />
+        </Match>
+      </Switch>
+      <p class="min-w-0">
+        {props.text}
+        <Show when={props.lastResponse}>
+          <span class="mt-1 block text-xs">
+            Last response: {props.lastResponse}
+          </span>
+        </Show>
+      </p>
+    </div>
+  );
+}
+
+function InvitationActionButtons(props: {
+  actions?: CalendarInvitationActions;
+  conference: string | undefined;
+}) {
+  return (
+    <>
+      <Show
+        when={
+          props.actions?.resolution?.kind === 'disconnected' &&
+          props.actions.connectCalendar
+        }
+      >
+        <Button
+          variant="secondary"
+          onClick={() => props.actions?.connectCalendar?.()}
+        >
+          Connect calendar
+        </Button>
+      </Show>
+      <Show when={props.conference && props.actions?.openExternal}>
+        <Button
+          variant="primary"
+          aria-label="Join meeting"
+          onClick={() => props.actions?.openExternal?.(props.conference!)}
+        >
+          <VideoCamera class="size-3.5 touch:size-4" />
+          Join
+        </Button>
+      </Show>
+      <Show when={props.actions?.openCalendar}>
+        <Button
+          aria-label="Open in calendar"
+          tooltip="Open in calendar"
+          variant="secondary"
+          size="icon-md"
+          onClick={(event) =>
+            props.actions?.openCalendar?.({
+              openInNewSplit: event.shiftKey,
+            })
+          }
+        >
+          <CalendarBlank class="size-4" />
+        </Button>
+      </Show>
+    </>
+  );
+}
+
+/** Who the response comes from, and the way to the viewer's day. */
+function RespondingFooter(props: {
+  canRespond: boolean;
+  respondingEmail: string | undefined;
+  actions?: CalendarInvitationActions;
+}) {
+  return (
+    <Show when={props.canRespond || props.actions?.showDay}>
+      <p class="flex flex-wrap items-center gap-x-1 text-xs text-ink-subtle">
+        <Show when={props.canRespond}>
+          <span class="break-words [overflow-wrap:anywhere]">
+            Responding as {props.respondingEmail}
+          </span>
+        </Show>
+        <Show when={props.canRespond && props.actions?.showDay}>
+          <span aria-hidden="true">·</span>
+        </Show>
+        <Show when={props.actions?.showDay}>
+          <Button
+            variant="ghost"
+            class="h-auto border-0 p-0 text-xs font-medium text-accent"
+            aria-expanded={props.actions?.dayExpanded}
+            onClick={() => props.actions?.showDay?.()}
+          >
+            View your day
+          </Button>
+        </Show>
+      </p>
+    </Show>
+  );
 }
 
 /** Replies and counter-proposals: who responded and what they said, never RSVP or Join. */

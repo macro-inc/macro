@@ -1,6 +1,10 @@
 import { syncPushRegistrations } from '@core/auth/push-registration-lifecycle';
-import { enableUserInfoQuery } from '@core/context/user-info-gate';
+import {
+  enableUserInfoQuery,
+  shouldQueryUserInfo,
+} from '@core/context/user-info-gate';
 import { hasLoginCookie } from '@core/util/cookies';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult, type ResultType, throwOnErr } from '@core/util/result';
 import { authServiceClient } from '@service-auth/client';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
@@ -52,7 +56,7 @@ export function useUserInfoQuery(options?: UseUserInfoQueryOptions) {
     userInfoQueryOptions(
       typeof options?.enabled === 'function'
         ? options.enabled()
-        : (options?.enabled ?? true)
+        : (options?.enabled ?? shouldQueryUserInfo())
     )
   );
 }
@@ -85,7 +89,7 @@ export function invalidateAllAfterLogin() {
     }
     await syncPushRegistrations();
   };
-  void refreshPushRegistration();
+  fireAndForget(refreshPushRegistration(), 'push-registration');
   return invalidated;
 }
 

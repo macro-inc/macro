@@ -1,12 +1,17 @@
+import { FileDownloadButton } from '@core/component/FileDownload';
 import { Lightbox, LightboxToolbar } from '@core/component/Lightbox';
-
 import { isMobile } from '@core/mobile/isMobile';
+import {
+  createFileDownload,
+  type FileDownloadController,
+} from '@core/util/createFileDownload';
+import ChevronLeftIcon from '@icon/system/regular/caret-left.svg';
+import ChevronRightIcon from '@icon/system/regular/caret-right.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
-import ChevronLeftIcon from '@phosphor/caret-left.svg';
-import ChevronRightIcon from '@phosphor/caret-right.svg';
-import XIcon from '@phosphor/x.svg';
 import { Button, cn } from '@ui';
 import { type Accessor, createMemo, Show } from 'solid-js';
+import { mediaDownloadSource } from '../queries/static-media-download';
 import type { MediaItem } from './media-items';
 
 type MediaViewerDialogProps = {
@@ -19,11 +24,14 @@ type MediaViewerDialogProps = {
 
 function VideoViewerContent(props: {
   item: Accessor<MediaItem>;
+  download: FileDownloadController;
   onPrevious?: () => void;
   onNext?: () => void;
   indexLabel?: Accessor<string>;
   navigationHidden?: boolean;
 }) {
+  let opener: HTMLElement | undefined;
+
   let swipeTouchStartX = 0;
   let swipeTouchEndX = 0;
   let isSwiping = false;
@@ -68,15 +76,29 @@ function VideoViewerContent(props: {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      <Dialog.Content class="flex items-center justify-center bg-surface">
+      <Dialog.Content
+        class="flex items-center justify-center bg-surface"
+        onOpenAutoFocus={() => {
+          if (document.activeElement instanceof HTMLElement)
+            opener = document.activeElement;
+        }}
+        onCloseAutoFocus={(event) => {
+          if (opener?.isConnected) {
+            event.preventDefault();
+            opener.focus();
+          }
+        }}
+      >
         <LightboxToolbar isVisible={true}>
+          <FileDownloadButton download={props.download} iconOnly />
           <Dialog.CloseButton
+            aria-label="Close"
+            tooltip="Close"
             as={Button}
             variant="ghost"
             size="icon-md"
-            label="Close"
           >
-            <XIcon />
+            <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
         </LightboxToolbar>
 
@@ -135,6 +157,10 @@ function VideoViewerContent(props: {
 
 export function MediaViewerDialog(props: MediaViewerDialogProps) {
   const currentItem = createMemo(() => props.items()[props.currentIndex()]);
+  const download = createFileDownload(() => {
+    const item = currentItem();
+    return item?.kind === 'video' ? mediaDownloadSource(item) : undefined;
+  });
   const hasPrevious = () => props.currentIndex() > 0;
   const hasNext = () => props.currentIndex() < props.items().length - 1;
   const hasMultipleItems = () => props.items().length > 1;
@@ -152,7 +178,13 @@ export function MediaViewerDialog(props: MediaViewerDialogProps) {
   };
 
   return (
-    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+    <Dialog
+      open={props.open}
+      onOpenChange={(open) => {
+        if (!open) download.cancel();
+        props.onOpenChange(open);
+      }}
+    >
       <Dialog.Portal>
         <Dialog.Overlay class="fixed inset-0 z-modal scrim-glass" />
         <Show when={currentItem()}>
@@ -162,6 +194,7 @@ export function MediaViewerDialog(props: MediaViewerDialogProps) {
               fallback={
                 <VideoViewerContent
                   item={item}
+                  download={download}
                   onPrevious={hasPrevious() ? navigatePrevious : undefined}
                   onNext={hasNext() ? navigateNext : undefined}
                   indexLabel={hasMultipleItems() ? indexLabel : undefined}

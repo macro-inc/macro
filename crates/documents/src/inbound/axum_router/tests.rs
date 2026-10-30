@@ -144,6 +144,8 @@ struct FakeDocumentService {
     team_slug_calls: Mutex<Vec<TeamSlugCall>>,
     team_slug_result: Mutex<Option<TeamSlugResult>>,
     get_document_calls: Mutex<Vec<String>>,
+    get_text_calls: Mutex<Vec<String>>,
+    document_owner: Mutex<Option<Owner>>,
     copy_calls: Mutex<Vec<CreationPrincipal>>,
 }
 
@@ -225,7 +227,14 @@ impl DocumentService for FakeDocumentService {
         Ok(DocumentBasic {
             document_id: document_id.to_string(),
             document_name: "test document".to_string(),
-            owner: Owner::from_principal_str(JWT_USER_ID).expect("test user id should be valid"),
+            owner: self
+                .document_owner
+                .lock()
+                .unwrap()
+                .clone()
+                .unwrap_or_else(|| {
+                    Owner::from_principal_str(JWT_USER_ID).expect("test user id should be valid")
+                }),
             file_type: Some("pdf".to_string()),
             sub_type: None,
             branched_from_id: None,
@@ -308,9 +317,13 @@ impl DocumentService for FakeDocumentService {
 
     async fn get_document_text(
         &self,
-        _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
+        entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
     ) -> Result<String, DocumentError> {
-        panic!("unexpected get_document_text call")
+        self.get_text_calls
+            .lock()
+            .unwrap()
+            .push(entity_access_receipt.entity().entity_id.clone());
+        Ok("Extracted PDF text".into())
     }
 
     async fn create_document(
@@ -526,6 +539,10 @@ impl DocumentCreationService for FakeDocumentService {
         DocumentService::create_document(self, principal, document, job_id).await
     }
 
+    async fn initialize_canvas(&self, _document_id: &str) -> Result<(), DocumentError> {
+        panic!("unexpected Canvas initialization")
+    }
+
     async fn handle_task_properties(
         &self,
         _principal: &CreationPrincipal,
@@ -738,6 +755,9 @@ impl EntityAccessService for FakeEntityAccessService {
                     entity_type,
                 });
         }
+        if *self.deny_document_access.lock().unwrap() {
+            return Ok(None);
+        }
         Ok(Some(AccessLevel::Owner))
     }
 
@@ -843,6 +863,15 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         Ok(user_context(JWT_USER_ID))
     }
 
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
+
     async fn authorize_internal(
         &self,
         provided_key: &str,
@@ -881,6 +910,8 @@ impl MacroAuthorizationService for FakeAuthorizationService {
             acting_user: acting_user
                 .and_then(|claims| claims.user_id)
                 .map(|user_id| MacroUserAuthentication {
+                    origin: macro_authorization::CredentialOrigin::Bot,
+                    agent_id: None,
                     macro_user_id: user(&user_id),
                     user_context: user_context(&user_id),
                 }),
@@ -1501,6 +1532,7 @@ async fn create_routes_reject_callers_that_cannot_create_before_reading_the_body
     for path in [
         "/",
         "/create_markdown",
+        "/create_canvas",
         "/create_task",
         "/create_snippet",
         "/create_skill",
@@ -1531,6 +1563,7 @@ async fn internal_create_routes_reach_body_extraction() {
     for path in [
         "/",
         "/create_markdown",
+        "/create_canvas",
         "/create_task",
         "/create_snippet",
         "/create_skill",
@@ -1617,4 +1650,118 @@ async fn internal_create_rejects_bots() {
         );
     }
     assert!(document_service.create_calls().is_empty());
+}
+
+#[tokio::test]
+async fn document_text_endpoint_uses_the_authenticated_view_capability() {
+    let (router, documents, access, _) = test_router();
+    *documents.document_owner.lock().unwrap() =
+        Some(Owner::from_principal_str("macro|different-owner@example.com").unwrap());
+    let request = with_jwt(Request::get("/text-document/text-content"))
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        send(&router, request).await,
+        (StatusCode::OK, json!({"text":"Extracted PDF text"}))
+    );
+    assert_eq!(*documents.get_text_calls.lock().unwrap(), ["text-document"]);
+    assert_eq!(access.document_access_calls()[0].entity_id, "text-document");
+}
+
+#[tokio::test]
+async fn document_text_endpoint_does_not_read_when_view_access_is_denied() {
+    let (router, documents, access, _) = test_router();
+    *documents.document_owner.lock().unwrap() =
+        Some(Owner::from_principal_str("macro|different-owner@example.com").unwrap());
+    access.deny_document_access();
+    let request = with_jwt(Request::get("/text-document/text-content"))
+        .body(Body::empty())
+        .unwrap();
+    assert!(send_status(&router, request).await.is_client_error());
+    assert!(documents.get_text_calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn document_text_reads_live_markdown_and_propagates_live_source_failures() {
+    use crate::domain::text::{LiveMarkdownReader, read_text};
+    struct LiveReader(bool);
+    impl LiveMarkdownReader for LiveReader {
+        async fn markdown(&self, document_id: &str) -> Result<String, DocumentError> {
+            assert_eq!(document_id, "live-document");
+            if self.0 {
+                Ok("# Latest collaborative edit".into())
+            } else {
+                Err(DocumentError::Gone)
+            }
+        }
+    }
+    let documents = FakeDocumentService::default();
+    let mut document = documents
+        .internal_get_basic_document("live-document")
+        .await
+        .unwrap();
+    document.file_type = Some("md".into());
+    let receipt = || {
+        EntityAccessReceipt::dangerously_assert_authenticated_user(
+            user(JWT_USER_ID),
+            "live-document",
+            EntityType::Document,
+        )
+    };
+    let result = read_text(&documents, &LiveReader(true), receipt(), &document)
+        .await
+        .unwrap();
+    assert_eq!(result.text.as_deref(), Some("# Latest collaborative edit"));
+    assert!(matches!(
+        read_text(&documents, &LiveReader(false), receipt(), &document).await,
+        Err(DocumentError::Gone)
+    ));
+    assert!(documents.get_text_calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn document_text_content_route_coexists_with_legacy_extracted_text_route() {
+    let (router, _, _, _) = test_router();
+    // DSS merges its existing extracted-text router with the documents domain router.
+    // A duplicate GET path panics during merge, before the service can start.
+    let legacy = Router::new().route(
+        "/{document_id}/text",
+        axum::routing::get(|| async { axum::Json(json!({"text": "legacy extracted text"})) }),
+    );
+    let merged = legacy.merge(router);
+    let legacy_request = Request::get("/text-document/text")
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        send(&merged, legacy_request).await,
+        (StatusCode::OK, json!({"text":"legacy extracted text"}))
+    );
+    let current_request = with_jwt(Request::get("/text-document/text-content"))
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        send(&merged, current_request).await,
+        (StatusCode::OK, json!({"text":"Extracted PDF text"}))
+    );
+}
+
+#[tokio::test]
+async fn canvas_creation_requires_project_edit_access_before_metadata_creation() {
+    let (router, documents, access, _) = test_router();
+    access.deny_document_access();
+    let request = with_jwt(
+        Request::post("/create_canvas").header("content-type", "application/json"),
+    )
+    .body(Body::from(
+        json!({ "documentName": "Board", "projectId": "00000000-0000-0000-0000-000000000123" })
+            .to_string(),
+    ))
+    .unwrap();
+    let status = send_status(&router, request).await;
+    assert!(status.is_client_error());
+    assert!(documents.create_calls().is_empty());
+    assert_eq!(
+        access.document_access_calls()[0].entity_type,
+        EntityType::Project
+    );
 }

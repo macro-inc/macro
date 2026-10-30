@@ -3,6 +3,7 @@ import {
   shouldUseMobileClipboardImageRecovery,
 } from '@core/mobile/mobileClipboardImageRecovery';
 import { extractFileSystemEntries } from '@core/util/dataTransfer';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { mergeRegister } from '@lexical/utils';
 import {
   COMMAND_PRIORITY_NORMAL,
@@ -16,6 +17,18 @@ type FilePastePluginProps = {
     directories: FileSystemDirectoryEntry[]
   ) => void;
 };
+
+async function pasteRecoveredClipboardImages(
+  props: FilePastePluginProps,
+  fileEntries: FileSystemFileEntry[]
+) {
+  const entries = await recoverMobileClipboardImageEntries();
+  if (entries.length > 0) {
+    props.onPasteFilesAndDirs(entries, []);
+  } else if (fileEntries.length > 0) {
+    props.onPasteFilesAndDirs(fileEntries, []);
+  }
+}
 
 function registerFilePastePlugin(
   editor: LexicalEditor,
@@ -38,21 +51,10 @@ function registerFilePastePlugin(
           shouldUseMobileClipboardImageRecovery(data)
         ) {
           event.preventDefault();
-
-          const settleRecoverMobileClipboardImageEntries = async () => {
-            const settleRecoverMobileClipboardImageEntriesValue =
-              await recoverMobileClipboardImageEntries();
-            const entries = settleRecoverMobileClipboardImageEntriesValue;
-
-            if (entries.length > 0) {
-              props.onPasteFilesAndDirs(entries, []);
-            } else if (fileEntries.length > 0) {
-              props.onPasteFilesAndDirs(fileEntries, []);
-            }
-
-            return;
-          };
-          void settleRecoverMobileClipboardImageEntries();
+          fireAndForget(
+            pasteRecoveredClipboardImages(props, fileEntries),
+            'markdown-file-paste'
+          );
           return true;
         }
 

@@ -235,15 +235,10 @@ try {
         view: string | undefined,
         done: (value: { cases?: unknown; error?: string }) => void
       ) => {
-        void (async () => {
-          try {
-            const path = '/tests/native/filter-matrix.ts';
-            const matrix = await import(path);
-            done({ cases: matrix.describeCases(1, view) });
-          } catch (error) {
-            done({ error: String(error) });
-          }
-        })();
+        const path = '/tests/native/filter-matrix.ts';
+        import(path)
+          .then((matrix) => done({ cases: matrix.describeCases(1, view) }))
+          .catch((error: unknown) => done({ error: String(error) }));
       },
       matrixView
     );
@@ -266,15 +261,11 @@ try {
           view: string | undefined,
           done: (value: { progress?: typeof progress; error?: string }) => void
         ) => {
-          void (async () => {
-            try {
-              const path = '/tests/native/filter-matrix.ts';
-              const matrix = await import(path);
-              done({ progress: await matrix.runBatch(256, view) });
-            } catch (error) {
-              done({ error: String(error) });
-            }
-          })();
+          const path = '/tests/native/filter-matrix.ts';
+          import(path)
+            .then((matrix) => matrix.runBatch(256, view))
+            .then((batch) => done({ progress: batch }))
+            .catch((error: unknown) => done({ error: String(error) }));
         },
         matrixView
       );

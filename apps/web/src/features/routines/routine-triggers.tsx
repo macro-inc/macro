@@ -33,6 +33,7 @@ export function RoutineTriggers(props: {
           <RoutineEventScopeLabel
             kind={eventScopeKind(trigger())}
             ids={trigger().ids}
+            events={trigger().events}
           />
         </Suspense>
       )}

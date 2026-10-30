@@ -32,25 +32,19 @@ if (!buildServer) {
   );
 }
 
-
-const settleConcurrently = async () => {
-
-try { await concurrently([
-  {
-    command: `dotnet publish -c Release -r ${buildServer} --self-contained true -o ../dist/docx-server-${buildServer.replace(
-      'osx',
-      'mac'
-    )}`,
-    name: 'DocX',
-    cwd: serverDir,
-  },
-]); } catch (settleConcurrentlyError) { const e = settleConcurrentlyError;
-
-    console.error(e);
-    process.exit(1);
-
-return; }
-
-return await (console.log('done'));
-};
-settleConcurrently();
+try {
+  await concurrently([
+    {
+      command: `dotnet publish -c Release -r ${buildServer} --self-contained true -o ../dist/docx-server-${buildServer.replace(
+        'osx',
+        'mac'
+      )}`,
+      name: 'DocX',
+      cwd: serverDir,
+    },
+  ]);
+  console.log('done');
+} catch (e) {
+  console.error(e);
+  process.exit(1);
+}

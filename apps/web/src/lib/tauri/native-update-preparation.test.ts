@@ -15,14 +15,11 @@ describe('native restart preparation', () => {
     preparation.register(() => saved);
     let ready = false;
 
-    const settlePrepare = async () => {
+    const prepare = async () => {
       await preparation.prepare();
-
       ready = true;
-
-      return;
     };
-    const result = settlePrepare();
+    const result = prepare();
     await Promise.resolve();
     expect(flush).not.toHaveBeenCalled();
     expect(ready).toBe(false);

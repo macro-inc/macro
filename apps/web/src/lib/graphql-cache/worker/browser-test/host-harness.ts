@@ -153,19 +153,16 @@ try {
     variables: VARIABLES,
   });
 
-  const settleSlowRead = async () => {
+  const slowReadError = async (): Promise<unknown> => {
     try {
       await slowRead;
-    } catch (settleSlowReadError) {
-      const error: unknown = settleSlowReadError;
-
+      return undefined;
+    } catch (error) {
       order.push('old-request-rejected');
-      return await error;
+      return error;
     }
-
-    return await undefined;
   };
-  const slowOutcome = settleSlowRead();
+  const slowOutcome = slowReadError();
   await waitUntil('slow request admission', () =>
     telemetryEvents.some((event) => event.slow === true)
   );

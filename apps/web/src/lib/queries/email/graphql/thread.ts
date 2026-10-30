@@ -3,6 +3,7 @@ import {
   type UrqlInfiniteQueryResult,
 } from '@app/lib/urql-solid';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
 import {
   readRecordsByKeys,
@@ -105,6 +106,24 @@ type ThreadIdentity = {
   kind: 'remote' | 'local' | 'unknown';
 };
 
+async function readThreadIdentity(
+  host: Parameters<typeof readRecordsByKeys>[0],
+  threadId: string
+) {
+  try {
+    return await readRecordsByKeys(
+      host,
+      selectRecords(EmailThreadIdentityFieldsFragmentDoc),
+      [`GraphqlSoupEmailThread:${threadId}`]
+    );
+  } catch (error) {
+    // Initialization may retire the host while this first read is pending.
+    // Only session-wide fallback makes an unresolved route safe to fetch.
+    if (graphqlCacheEnabled()) throw error;
+    return undefined;
+  }
+}
+
 /** Resolve a durable local route before contacting the server with its ID. */
 async function cachedThreadIdentity(
   threadId: string,
@@ -115,26 +134,7 @@ async function cachedThreadIdentity(
   if (cacheRequired && !host) {
     throw new Error('Email cache is unavailable; thread identity is unknown');
   }
-
-  const settleReadRecordsByKeys = async (
-    cache: Parameters<typeof readRecordsByKeys>[0]
-  ) => {
-    try {
-      return await readRecordsByKeys(
-        cache,
-        selectRecords(EmailThreadIdentityFieldsFragmentDoc),
-        [`GraphqlSoupEmailThread:${threadId}`]
-      );
-    } catch (settleReadRecordsByKeysError) {
-      const error = settleReadRecordsByKeysError;
-
-      // Initialization may retire the host while this first read is pending.
-      // Only session-wide fallback makes an unresolved route safe to fetch.
-      if (graphqlCacheEnabled()) throw error;
-      return await undefined;
-    }
-  };
-  const result = host ? await settleReadRecordsByKeys(host) : undefined;
+  const result = host ? await readThreadIdentity(host, threadId) : undefined;
   // Cache fallback must not discard positive knowledge of an unsynced draft
   // or an already-resolved server alias, even if the latest lookup failed.
   if (
@@ -244,6 +244,11 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
   getGraphqlSoupClient();
   const host = getGraphqlCacheHost();
   const [identity, setIdentity] = createSignal<ThreadIdentity>();
+  const [returnedIdentity, setReturnedIdentity] = createSignal<{
+    requested: string;
+    queried: string;
+    canonical: string;
+  }>();
   let request = 0;
   let disposed = false;
   const refreshIdentity = async () => {
@@ -278,18 +283,25 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
   // the accessor's underlying route or props signal does.
   createEffect(
     on(createMemo(threadId), () => {
-      void refreshIdentity();
+      fireAndForget(refreshIdentity(), 'email-thread');
     })
   );
   const unsubscribe = host?.onCacheChanged(() => {
-    void refreshIdentity();
+    fireAndForget(refreshIdentity(), 'email-thread');
   });
   onCleanup(() => {
     disposed = true;
     unsubscribe?.();
   });
-  const resolvedThreadId = () =>
+  const queryThreadId = () =>
     identity()?.requested === threadId() ? identity()!.canonical : threadId();
+  const resolvedThreadId = () => {
+    const returned = returnedIdentity();
+    return returned?.requested === threadId() &&
+      returned.queried === queryThreadId()
+      ? returned.canonical
+      : queryThreadId();
+  };
   const query = createUrqlInfiniteQuery<
     EmailThreadPageQuery,
     EmailThreadPageQueryVariables,
@@ -300,7 +312,7 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
     client: getGraphqlSoupClient(),
     initialPageParam: 0,
     variables: (offset) => ({
-      threadId: resolvedThreadId(),
+      threadId: queryThreadId(),
       offset,
       limit: DEFAULT_THREAD_MESSAGES_LIMIT,
     }),
@@ -324,6 +336,18 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
         ? 'cache-only'
         : 'cache-and-network',
     keepPreviousData: false,
+    onResult: (result, { pageIndex }) => {
+      const canonical = result.data?.user.emailThread?.id;
+      const queried = result.operation.variables.threadId;
+      if (
+        pageIndex !== 0 ||
+        result.error ||
+        !canonical ||
+        queried !== untrack(queryThreadId)
+      )
+        return;
+      setReturnedIdentity({ requested: untrack(threadId), queried, canonical });
+    },
     select: ({ pages, pageParams }) => {
       const mapped = {
         pages: pages.map((page) =>

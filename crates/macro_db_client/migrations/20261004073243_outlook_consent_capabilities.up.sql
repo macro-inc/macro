@@ -1,0 +1,3 @@
+SET LOCAL lock_timeout = '1s';
+
+ALTER TABLE microsoft_link_attempts ADD COLUMN calendar_requested boolean NOT NULL DEFAULT false;

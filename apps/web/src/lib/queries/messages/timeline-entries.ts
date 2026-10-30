@@ -16,7 +16,7 @@ export function timelineEntryKey(entry: KeyedEntry): string {
   return match(entry)
     .with({ type: 'message' }, ({ message }) => message.id)
     .with({ type: 'activity' }, ({ activity }) => `activity:${activity.id}`)
-    .exhaustive();
+    .exhaustive((unknown) => JSON.stringify(unknown));
 }
 
 function timelineEntryPosition(entry: MessageTimelineEntry) {
@@ -29,7 +29,7 @@ function timelineEntryPosition(entry: MessageTimelineEntry) {
       id: activity.id,
       createdAt: activity.occurred_at,
     }))
-    .exhaustive();
+    .exhaustive(() => ({ id: '', createdAt: '' }));
 }
 
 /** Message-only projections for thread operations and document annotations. */

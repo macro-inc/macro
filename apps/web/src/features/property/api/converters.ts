@@ -1,7 +1,12 @@
 import type { PropertyValue } from '@service-properties/generated/schemas/propertyValue';
-import { match as matchBranch } from 'ts-pattern';
+import { match } from 'ts-pattern';
+import {
+  timeRangeFromInstants,
+  timeRangeToInstants,
+} from '../../database/core/cell-date-range';
 import { NUMBER_DECIMAL_PLACES } from '../constants';
 import type {
+  DateRangeValue,
   EntityPropertyWithDefinition,
   EntityReference,
   Property,
@@ -20,6 +25,7 @@ type NormalizedPropertyValue =
   | { type: 'NUMBER'; value: number }
   | { type: 'BOOLEAN'; value: boolean }
   | { type: 'DATE'; value: Date }
+  | { type: 'DATE_RANGE'; value: DateRangeValue }
   | { type: 'SELECT_OPTION'; value: string[] }
   | { type: 'ENTITY_REFERENCE'; value: EntityReference[] }
   | { type: 'LINK'; value: string[] }
@@ -72,7 +78,7 @@ export function entityPropertyFromApi(
   ) as ValueType;
 
   // Handle each value type with proper type checking
-  return matchBranch(valueType)
+  return match(valueType)
     .with('STRING', (): Property => {
       if (hasPropertyValueType(propertyValue, 'String')) {
         const stringVal = propertyValue.value;
@@ -124,6 +130,17 @@ export function entityPropertyFromApi(
       }
       return { ...baseProperty, valueType: 'DATE', value: null };
     })
+    .with(
+      'DATE_RANGE',
+      (): Property => ({
+        ...baseProperty,
+        valueType: 'DATE_RANGE',
+        value:
+          (propertyValue?.type === 'DateRange' &&
+            timeRangeFromInstants(propertyValue.value)) ||
+          null,
+      })
+    )
     .with('SELECT_STRING', 'SELECT_NUMBER', (valueType): Property => {
       if (hasPropertyValueType(propertyValue, 'SelectOption')) {
         const selectVal = propertyValue.value;
@@ -182,7 +199,7 @@ export function propertyValueToApi(
   apiValues: PropertyApiValues,
   isMultiSelect: boolean
 ): SetPropertyValue | null {
-  return matchBranch(apiValues)
+  return match(apiValues)
     .with({ valueType: 'STRING' }, (apiValues): SetPropertyValue | null => {
       if (apiValues.value == null) {
         return null;
@@ -208,6 +225,15 @@ export function propertyValueToApi(
       return {
         type: 'date',
         value: apiValues.value.toISOString(),
+      };
+    })
+    .with({ valueType: 'DATE_RANGE' }, (apiValues): SetPropertyValue | null => {
+      if (apiValues.value == null) {
+        return null;
+      }
+      return {
+        type: 'date_range',
+        value: timeRangeToInstants(apiValues.value),
       };
     })
     .with({ valueType: 'BOOLEAN' }, (apiValues): SetPropertyValue | null => {
@@ -295,7 +321,7 @@ export function propertyApiValuesToNormalized(
   }
 
   // Handle each PropertyApiValues type
-  return matchBranch(apiValues)
+  return match(apiValues)
     .with({ valueType: 'STRING' }, (apiValues): NormalizedPropertyValue => {
       if (apiValues.value !== null && typeof apiValues.value === 'string') {
         return { type: 'STRING', value: apiValues.value };
@@ -329,6 +355,13 @@ export function propertyApiValuesToNormalized(
       }
       return { type: 'EMPTY', value: null };
     })
+    .with(
+      { valueType: 'DATE_RANGE' },
+      (apiValues): NormalizedPropertyValue =>
+        apiValues.value
+          ? { type: 'DATE_RANGE', value: apiValues.value }
+          : { type: 'EMPTY', value: null }
+    )
     .with(
       { valueType: 'SELECT_STRING' },
       { valueType: 'SELECT_NUMBER' },

@@ -143,6 +143,8 @@ function invalidate(id = SESSION) {
   for (const listener of updates.listeners) listener({ agentSessionId: id });
 }
 
+const analytics = vi.hoisted(() => ({ track: vi.fn() }));
+vi.mock('@app/lib/analytics', () => ({ analytics }));
 vi.mock('@core/agent-fold/client', () => fold);
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: harness,
@@ -155,6 +157,13 @@ vi.mock('@queries/agent-session/log', () => ({
   watchAgentSessionLog: logSource.watch,
   canFollowAgentSessionLog: () => logSource.following,
   forgetAgentSessionLog: logSource.forget,
+  settled: async (work: Promise<unknown>) => {
+    try {
+      await work;
+    } catch {
+      // Callers that need the failure await `work` themselves.
+    }
+  },
 }));
 
 import {
@@ -164,6 +173,15 @@ import {
 } from '../../queries/agent-session/agent-session';
 import { forgetSessionCreated, markSessionCreated } from './recently-created';
 import { resetSessionTurns, sessionTurn } from './session-turn';
+
+/** What a promise settles with: its value, or its rejection reason. */
+async function settledValue(promise: Promise<unknown>): Promise<unknown> {
+  try {
+    return await promise;
+  } catch (reason) {
+    return reason;
+  }
+}
 
 const SESSION = '01a0abed-279f-724c-9f49-60dbedc79b6e';
 
@@ -310,6 +328,55 @@ describe('AgentSession', () => {
     live.release();
   });
 
+  it('counts an accepted prompt as an agent AI message, and nothing else', async () => {
+    harness.get.mockResolvedValue(ok({ ...session, botId: 'bot-id' }));
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+
+    await live.issue({ type: 'stop' });
+    await live.issue({ type: 'prompt', prompt: 'hi' });
+    harness.control.mockResolvedValueOnce(err([{ code: 'FORBIDDEN' }]));
+    await live.issue({ type: 'prompt', prompt: 'refused' });
+    await settle();
+
+    expect(analytics.track.mock.calls).toEqual([
+      [
+        'ai_message_sent',
+        {
+          surface: 'agent',
+          agentSessionId: SESSION,
+          agentId: 'bot-id',
+          newSession: false,
+          submitSurface: 'agent_session',
+          queued: false,
+          attachmentCount: 0,
+        },
+      ],
+    ]);
+    live.release();
+  });
+
+  it('reports the files an accepted prompt carries on its AI message', async () => {
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+
+    await live.issue({
+      type: 'prompt',
+      prompt: 'see these',
+      attachments: [
+        { uri: 'https://files.test/a', name: 'a.pdf' },
+        { uri: 'https://files.test/b', name: 'b.png' },
+      ],
+    });
+    await settle();
+
+    expect(analytics.track).toHaveBeenCalledExactlyOnceWith(
+      'ai_message_sent',
+      expect.objectContaining({ surface: 'agent', attachmentCount: 2 })
+    );
+    live.release();
+  });
+
   it('reissues the speculation under the id the harness minted instead', async () => {
     harness.control.mockResolvedValue(
       ok({ actionId: 'server-id', status: 'sent' })
@@ -417,7 +484,7 @@ describe('AgentSession', () => {
     logSource.fetched.mockReturnValue(log.promise);
     const live = AgentSession.acquire(SESSION);
 
-    void live.issue({ type: 'prompt', prompt: 'early' });
+    const issued = live.issue({ type: 'prompt', prompt: 'early' });
     await settle();
     expect(fold.pushSession).not.toHaveBeenCalled();
 
@@ -427,6 +494,7 @@ describe('AgentSession', () => {
       'snapshot',
       'speculated',
     ]);
+    await issued;
     live.release();
   });
 
@@ -835,7 +903,9 @@ describe('AgentSession', () => {
 
     it('waits out a refusal and loads once the create is readable', async () => {
       vi.useFakeTimers();
-      onTestFinished(() => void vi.useRealTimers());
+      onTestFinished(() => {
+        vi.useRealTimers();
+      });
       // The create has answered, but what it wrote is not readable yet.
       harness.get
         .mockResolvedValueOnce(err([{ code: 'UNAUTHORIZED' }]))
@@ -853,7 +923,9 @@ describe('AgentSession', () => {
 
     it('waits out a 404 from a create whose row is not visible yet', async () => {
       vi.useFakeTimers();
-      onTestFinished(() => void vi.useRealTimers());
+      onTestFinished(() => {
+        vi.useRealTimers();
+      });
       harness.get
         .mockResolvedValueOnce(err([{ code: 'NOT_FOUND' }]))
         .mockResolvedValue(ok(session));
@@ -868,20 +940,14 @@ describe('AgentSession', () => {
 
     it('gives up as a retryable failure, not denied access, if it never clears', async () => {
       vi.useFakeTimers();
-      onTestFinished(() => void vi.useRealTimers());
+      onTestFinished(() => {
+        vi.useRealTimers();
+      });
       harness.get.mockResolvedValue(err([{ code: 'UNAUTHORIZED' }]));
 
       const live = AgentSession.acquire(SESSION);
 
-      const settleLoad = async () => {
-        try {
-          return await live.load();
-        } catch (settleLoadError) {
-          const error: unknown = settleLoadError;
-          return await error;
-        }
-      };
-      const settled = settleLoad();
+      const settled = settledValue(live.load());
       // Past every retry, but still inside the window in which this tab's
       // creates are given the benefit of the doubt.
       await vi.advanceTimersByTimeAsync(20_000);
@@ -1160,6 +1226,9 @@ describe('AgentSession', () => {
           parts: [{ kind: 'text', text: 'Hi' }],
           stop: null,
           pending: false,
+          segments: [],
+          phase: null,
+          postedAt: null,
         },
         {
           agentSessionId: SESSION,
@@ -1172,6 +1241,9 @@ describe('AgentSession', () => {
           ],
           stop: null,
           pending: false,
+          segments: [],
+          phase: null,
+          postedAt: null,
         },
       ]);
       const [span] = renderSpans();
@@ -1297,6 +1369,9 @@ describe('AgentSession', () => {
             parts: [{ kind: 'text', text: 'hi' }],
             stop: null,
             pending: false,
+            segments: [],
+            phase: null,
+            postedAt: null,
           },
         },
         {
@@ -1309,6 +1384,9 @@ describe('AgentSession', () => {
             parts: [{ kind: 'thought', text: 'thinking' }],
             stop: null,
             pending: false,
+            segments: [],
+            phase: null,
+            postedAt: null,
           },
         },
       ] satisfies FoldedStreamEvent[]);
@@ -1360,6 +1438,9 @@ describe('AgentSession', () => {
             ],
             stop: null,
             pending: false,
+            segments: [],
+            phase: null,
+            postedAt: null,
           },
         },
       ] satisfies FoldedStreamEvent[]);

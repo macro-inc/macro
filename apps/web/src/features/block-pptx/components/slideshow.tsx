@@ -6,9 +6,10 @@
  */
 
 import type { DeckOutline, LinkRegion } from '@core/pptx-engine/types';
-import CaretLeft from '@phosphor/caret-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import X from '@phosphor/x.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import CaretLeft from '@icon/system/regular/caret-left.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import X from '@icon/system/regular/x.svg';
 import {
   createResource,
   createSignal,
@@ -25,6 +26,14 @@ import { createShow } from '../primitives/create-show';
 import { MediaPlayer } from './media-player';
 import { ShowCanvas } from './show-canvas';
 
+async function leaveFullscreen() {
+  try {
+    await document.exitFullscreen();
+  } catch {
+    // Fullscreen already ended.
+  }
+}
+
 export function SlideShow(props: {
   engine: PresentationEngine;
   deck: DeckOutline;
@@ -37,14 +46,8 @@ export function SlideShow(props: {
     deck: () => props.deck,
     start: props.start,
     onExit: (index) => {
-      const settleExitFullscreen = async () => {
-        try {
-          return await document.exitFullscreen();
-        } catch {
-          return;
-        }
-      };
-      if (document.fullscreenElement) void settleExitFullscreen();
+      if (document.fullscreenElement)
+        fireAndForget(leaveFullscreen(), 'pptx-slideshow');
       props.onExit(index);
     },
   });
@@ -139,7 +142,7 @@ export function SlideShow(props: {
         // Browser policy can keep the slideshow in its existing window.
       }
     };
-    void enterFullscreen();
+    fireAndForget(enterFullscreen(), 'pptx-slideshow');
     const onResize = () =>
       setSize({ w: window.innerWidth, h: window.innerHeight });
     const onFullscreen = () => {

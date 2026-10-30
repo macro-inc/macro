@@ -117,18 +117,9 @@ async function optimizeDependencies() {
   }
 }
 
-// Execute the function
-
-const settleOptimizeDependencies = async () => {
-  try {
-    return await optimizeDependencies();
-  } catch (settleOptimizeDependenciesError) {
-    const err = settleOptimizeDependenciesError;
-
-    console.error('Failed to optimize dependencies:', err);
-    process.exit(1);
-
-    return;
-  }
-};
-settleOptimizeDependencies();
+try {
+  await optimizeDependencies();
+} catch (err) {
+  console.error('Failed to optimize dependencies:', err);
+  process.exit(1);
+}

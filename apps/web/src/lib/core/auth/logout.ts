@@ -1,8 +1,11 @@
 import { clearMcpAuthAttempts } from '@app/features/settings/mcp-auth-attempt';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { clearNativeDiagnostics } from '@app/observability/native-diagnostics';
+import { reloadApp } from '@app/observability/reload';
 import { SERVER_HOSTS } from '@core/constant/servers';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { clearPipedreamCallbacks } from '@core/pipedream/connect-callback';
 import { syncLoginStorage } from '@core/util/cookies';
+import { isTauri } from '@core/util/platform';
 import { clearPostLoginRedirect } from '@core/util/postLoginRedirect';
 import { clearRegisteredCaches } from '@graphql-cache/lifecycle';
 import { rotateCacheScope } from '@graphql-cache/scope';
@@ -15,10 +18,18 @@ import {
   flushLocalDrafts,
   listLocalDrafts,
 } from '@queries/email/local-drafts';
+import { setEmailOutboxSession } from '@queries/email/outbox-session';
+import {
+  readEmailSendIntents,
+  settledSendAttempt,
+} from '@queries/email/send-queue';
 import { resetGraphqlSoupDoneSession } from '@queries/soup/graphql/done-session';
 import { clearDocumentQueryCache } from '@queries/storage/document-cache';
 import { clearOfflineDocumentContexts } from '@queries/storage/documentLoad/offline-context-runtime';
-
+import {
+  recordGraphqlMutationQueueCleared,
+  setGraphqlSoupSessionActive,
+} from '@service-storage/graphql-soup';
 import { raceTimeout } from '@solid-primitives/promise';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
@@ -44,21 +55,40 @@ const unauthenticatedUserInfo: UserInfoData = {
   createdAt: undefined,
 };
 
-export async function clearLocalAuthSession() {
+/** Clears composer storage as one more settled wipe, so a throw is a rejection. */
+async function clearComposerStorageSettled(): Promise<void> {
+  clearComposerStorage();
+}
+
+async function endProviderSessionInBackground(): Promise<void> {
+  try {
+    await fetch(SERVER_HOSTS['auth-logout'], {
+      credentials: 'include',
+      mode: 'no-cors',
+      redirect: 'manual',
+    });
+  } catch {
+    // The webview signs out locally either way.
+  }
+}
+
+export async function clearLocalAuthSession(
+  cause: 'logout' | 'session-expired' = 'logout'
+) {
+  await clearNativeDiagnostics();
+  clearPipedreamCallbacks();
   document.cookie =
     'login=false; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0; path=/; SameSite=Lax';
+  setEmailOutboxSession(undefined);
   syncLoginStorage(false);
   const documentContextsCleared = clearOfflineDocumentContexts();
   clearDocumentQueryCache(queryClient);
   clearTeamCalendarQueries();
   // Start every wipe before waiting, including stores not hydrated this session.
-  const settleResolveHandler0 = clearComposerStorage;
-  const settleResolve = async () => {
-    await Promise.resolve();
-    return await settleResolveHandler0();
-  };
   const results = await Promise.allSettled([
-    settleResolve(),
+    // Reads the queue before the cache wipe below deletes it.
+    recordGraphqlMutationQueueCleared(cause),
+    clearComposerStorageSettled(),
     documentContextsCleared,
     clearRegisteredCaches(),
     queryPersistence.clear(),
@@ -67,6 +97,8 @@ export async function clearLocalAuthSession() {
   if (results.some((result) => result.status === 'rejected')) {
     await rotateCacheScope();
   }
+  // Only after the wipes: clearing the cache needs its registered host.
+  setGraphqlSoupSessionActive(false);
   resetGraphqlSoupDoneSession();
   queryClient.setQueryData(authKeys.userInfo.queryKey, unauthenticatedUserInfo);
   clearMcpAuthAttempts();
@@ -83,9 +115,13 @@ export function useLogout() {
     try {
       const inspectDrafts = async () => {
         await flushLocalDrafts();
-        return await listLocalDrafts();
+        const [drafts, sends] = await Promise.all([
+          listLocalDrafts(),
+          readEmailSendIntents(),
+        ]);
+        return { drafts, sends };
       };
-      const drafts = await Promise.race([
+      const { drafts, sends } = await Promise.race([
         inspectDrafts(),
         new Promise<never>((_, reject) => {
           timer = setTimeout(
@@ -97,9 +133,16 @@ export function useLogout() {
       const unsynced = drafts.filter((draft) => draft.status !== 'synced');
       if (unsynced.length)
         warning = `${unsynced.length} draft(s) have changes saved only on this device. Signing out removes those changes and their pending attachments.`;
+      if (sends.some((send) => settledSendAttempt(send)?.status !== 'SENT'))
+        warning = [
+          warning,
+          'Pending sends remain saved for this account and resume when you sign in again. Sends already accepted by the server may still be delivered; signing out does not cancel them.',
+        ]
+          .filter(Boolean)
+          .join(' ');
     } catch {
       warning =
-        'Draft storage could not be checked. Signing out removes drafts and attachments saved only on this device, including any changes that have not synced.';
+        'Draft storage could not be checked. Signing out removes unsubmitted drafts and their pending attachments. Approved sends stay saved for this account; sends already accepted by the server may still be delivered.';
     } finally {
       clearTimeout(timer);
     }
@@ -124,23 +167,17 @@ export function useLogout() {
     analytics.track('sign_out');
     analytics.reset();
 
-    if (isNativeMobilePlatform()) {
-      const settleFetch = async () => {
-        try {
-          return await fetch(SERVER_HOSTS['auth-logout'], {
-            credentials: 'include',
-            mode: 'no-cors',
-            redirect: 'manual',
-          });
-        } catch {
-          return;
-        }
-      };
-      await settleFetch();
+    // The Tauri shell (desktop and mobile alike) can never navigate to the
+    // identity provider: its navigation plugin treats any off-origin URL as
+    // external and hands it to the system browser, which leaves the webview
+    // sitting on the signed-in screen. End the provider session with a
+    // background request instead and route the webview to /login in place.
+    if (isTauri()) {
+      await endProviderSessionInBackground();
       navigate('/login');
       // Native login reuses this WebView. End the document lifetime so queued
       // editor callbacks can never adopt the next account's draft session.
-      window.location.reload();
+      reloadApp('logout');
     } else {
       window.location.href = SERVER_HOSTS['auth-logout'];
     }

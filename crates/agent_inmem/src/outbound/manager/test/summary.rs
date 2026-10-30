@@ -111,7 +111,7 @@ async fn a_restarted_manager_reads_a_summary_in_place_of_the_turns_it_covered() 
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
-            warm: false,
+            purpose: agent_session::domain::model::SessionPurpose::Standalone,
             repo_branch: None,
             id,
             owner_id: Owner::User(owner()),
@@ -130,6 +130,7 @@ async fn a_restarted_manager_reads_a_summary_in_place_of_the_turns_it_covered() 
         .await
         .expect("the session row should create");
     let on_model = |acp_session_id| SessionFacts {
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         model: MODEL.to_owned(),
         acp_session_id,
         ..facts(id)
@@ -148,7 +149,10 @@ async fn a_restarted_manager_reads_a_summary_in_place_of_the_turns_it_covered() 
         Arc::new(crate::domain::mcp::NoMcpServers),
         Arc::new(crate::testing::TestModelAccess::paid()),
     );
-    let transport = before.attach(on_model(None), None).await;
+    let transport = before
+        .attach(on_model(None), None)
+        .await
+        .expect("history should restore");
     sessions
         .attach_session(id, RuntimeAttachment::solo(transport))
         .await
@@ -207,7 +211,7 @@ async fn a_restarted_manager_reads_a_summary_in_place_of_the_turns_it_covered() 
     let read: Vec<String> = engine.requests()[0]
         .messages
         .iter()
-        .map(|message| label(message))
+        .map(|message| label(without_invocation_context(message)))
         .collect();
     assert_eq!(
         read,

@@ -51,7 +51,7 @@ use crate::domain::coding_preferences::CodingPreferences;
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::{
     AgentSession, AgentSessionId, AgentSessionPreview, ExternalSession, Message, SandboxSize,
-    SessionBot, SessionStatus, StoredAgentSessionLog,
+    SessionBot, SessionSource, SessionStatus, SessionVisibility, StoredAgentSessionLog,
 };
 use crate::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlDisposition, ControlEvent,
@@ -196,6 +196,10 @@ where
         .route(
             "/{session_id}/log",
             get(get_agent_session_log_handler::<T, Access, Auth>),
+        )
+        .route(
+            "/{session_id}/log/folded",
+            get(get_agent_session_folded_log_handler::<T, Access, Auth>),
         )
         .route(
             "/{session_id}/name",
@@ -414,9 +418,10 @@ impl IntoResponse for AgentSessionApiError {
                 | AgentSessionError::TooManyPullRequests(_)
                 | AgentSessionError::InvalidPullRequestUrl),
             ) => (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
-            Self::Domain(error @ AgentSessionError::Archived(_)) => {
-                (StatusCode::CONFLICT, error.to_string()).into_response()
-            }
+            Self::Domain(
+                error
+                @ (AgentSessionError::Archived(_) | AgentSessionError::AnswersConversation(_)),
+            ) => (StatusCode::CONFLICT, error.to_string()).into_response(),
             // Somebody else answered first, or the agent moved on: nothing to
             // answer anymore, and the transcript already shows how it went.
             Self::Domain(error @ AgentSessionError::PermissionRequestNotFound(_)) => {
@@ -660,11 +665,10 @@ pub struct ExternalSessionResponse {
 
 impl From<ExternalSession> for ExternalSessionResponse {
     fn from(external: ExternalSession) -> Self {
-        let url = external.web_url();
         Self {
             provider: external.provider,
             name: external.external_name,
-            url,
+            url: external.external_url,
         }
     }
 }
@@ -948,6 +952,7 @@ pub async fn rename_agent_session_handler<
         (status = 204),
         (status = 401, body = String),
         (status = 403, body = String),
+        (status = 409, body = String, description = "The session answers an agent conversation"),
         (status = 500, body = String),
     )
 )]
@@ -1573,6 +1578,8 @@ pub struct LogFrameDto {
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum LogDirectionDto {
+    /// Trusted system-event invocation, separate from user prompts.
+    Notification,
     /// Runtime → server.
     ToServer,
     /// Server → runtime.
@@ -1663,6 +1670,70 @@ pub async fn get_agent_session_log_handler<
     Ok(Json(AgentSessionLogResponse {
         bot: log.bot,
         entries: log.entries.into_iter().map(Into::into).collect(),
+    }))
+}
+
+/// Response body for one session's folded log.
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionFoldedLogResponse {
+    /// The agent whose messages these are; it sent every agent message.
+    pub bot: SessionBot,
+    /// The conversation, oldest first: prompts, replies, tool calls and their
+    /// results, plans, permission requests and how each turn ended. Each
+    /// element is a `FoldedMessage` from the fold's TypeScript contract,
+    /// which the SDK exports; the schema is opaque here because those types
+    /// are described with specta rather than utoipa.
+    #[schema(value_type = Vec<Object>)]
+    pub messages: Vec<agent_fold::inbound::wire::FoldedMessage>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/agent-sessions/{session_id}/log/folded",
+    tag = "agent-sessions",
+    operation_id = "get_agent_session_folded_log",
+    params(("session_id" = Uuid, Path, description = "ID of the agent session")),
+    responses(
+        (status = 200, body = AgentSessionFoldedLogResponse),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// One agent session's history folded into renderable messages: the same
+/// fold the web client runs over [`get_agent_session_log_handler`]'s frames.
+///
+/// For readers that do not run the fold themselves, such as SDK programs and
+/// agents reading another session's history.
+#[tracing::instrument(
+    skip_all,
+    fields(
+        session_id = %session_id,
+        agent.session.folded_log.messages = tracing::field::Empty,
+    ),
+    err(Debug)
+)]
+pub async fn get_agent_session_folded_log_handler<
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    _access: AgentSessionAccessLevelExtractor<ViewAccessLevel, Access, Auth>,
+    State(state): State<AgentSessionRouterState<T, Access, Auth>>,
+    Path(session_id): Path<Uuid>,
+) -> Result<Json<AgentSessionFoldedLogResponse>, AgentSessionApiError> {
+    let session = AgentSessionId::new_from_uuid(session_id);
+    let log = state.service.folded_session_log(session).await?;
+    tracing::Span::current().record("agent.session.folded_log.messages", log.messages.len());
+
+    Ok(Json(AgentSessionFoldedLogResponse {
+        bot: log.bot,
+        messages: log
+            .messages
+            .into_iter()
+            .map(|message| agent_fold::inbound::wire::FoldedMessage::new(session, message))
+            .collect(),
     }))
 }
 
@@ -2219,6 +2290,8 @@ pub async fn create_agent_session_handler<
                             repo_url,
                             owner,
                             model: request.model.filter(|model| !model.trim().is_empty()),
+                            source: SessionSource::User,
+                            visibility: SessionVisibility::Listed,
                         })
                         .await?;
                     return Ok((
@@ -2251,6 +2324,8 @@ pub async fn create_agent_session_handler<
                 profile,
                 instructions,
                 model: request.model.filter(|model| !model.trim().is_empty()),
+                source: SessionSource::User,
+                visibility: SessionVisibility::Listed,
             })
             .await?;
         return Ok((
@@ -2401,3 +2476,6 @@ pub async fn warm_agent_session_handler<
         session: session.map(|session| AgentSessionResponse::new(session, true)),
     }))
 }
+
+/// Internal service controls used by AI tools.
+pub mod tool_actions;

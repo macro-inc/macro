@@ -22,6 +22,12 @@ use entity_access::domain::{
     ports::{AccessiblePipelines, EntityAccessService},
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use models_permissions::share_permission::{
+    SharePermissionV2, UpdateSharePermissionRequestV2,
+    channel_share_permission::{
+        ChannelSharePermission, UpdateChannelSharePermission, UpdateOperation,
+    },
+};
 use models_properties::service::{
     property_option::PropertyOptionValue, property_value::PropertyValue,
 };
@@ -237,6 +243,17 @@ pub trait PipelineRepo: Send + Sync + 'static {
         pipeline: &Pipeline,
         sharing: PipelineSharing,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+    /// The channels, direct messages included, the pipeline is shared with.
+    fn channel_grants(
+        &self,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Vec<ChannelSharePermission>, Self::Error>> + Send;
+    /// Change channel grants while the pipeline is live; false when it is not.
+    fn update_channel_grants(
+        &self,
+        id: Uuid,
+        grants: &[UpdateChannelSharePermission],
+    ) -> impl Future<Output = Result<bool, Self::Error>> + Send;
 }
 
 /// Pipeline use cases for HTTP and other driving adapters.
@@ -318,6 +335,19 @@ pub trait PipelineService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
         sharing: PipelineSharing,
     ) -> impl Future<Output = Result<(), PipelineError>> + Send;
+    /// Owner, team grant and channel recipients, for those who may share it.
+    fn share_permissions(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+    ) -> impl Future<Output = Result<SharePermissionV2, PipelineError>> + Send;
+    /// Change channel recipients. Like a document, anyone who can edit the
+    /// pipeline shares it with people and channels; only the owner changes
+    /// team access, through [`Self::share`].
+    fn update_share_permissions(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        request: UpdateSharePermissionRequestV2,
+    ) -> impl Future<Output = Result<SharePermissionV2, PipelineError>> + Send;
     /// Move to trash or restore.
     fn set_trashed(
         &self,
@@ -355,6 +385,58 @@ fn name(input: &str) -> Result<String, PipelineError> {
         ));
     }
     Ok(input.to_string())
+}
+
+/// Most channel grants one request may change.
+const MAX_CHANNEL_GRANTS_PER_UPDATE: usize = 100;
+
+/// The channel grants of a sharing request. Pipelines have no share link, and
+/// team access changes only through [`PipelineService::share`].
+fn requested_channel_grants(
+    request: UpdateSharePermissionRequestV2,
+) -> Result<Vec<UpdateChannelSharePermission>, PipelineError> {
+    if request.link_share.is_some()
+        || request.link_share_access_level.is_some()
+        || request.team_share_access_level.is_some()
+    {
+        return Err(PipelineError::Invalid(
+            "Share a pipeline with people and channels; only its owner changes team access",
+        ));
+    }
+    let grants = request.channel_share_permissions.unwrap_or_default();
+    if grants.len() > MAX_CHANNEL_GRANTS_PER_UPDATE {
+        return Err(PipelineError::Invalid(
+            "Share with at most 100 channels at a time",
+        ));
+    }
+    let mut channels = std::collections::HashSet::new();
+    for grant in &grants {
+        if !channels.insert(&grant.channel_id)
+            || Uuid::parse_str(&grant.channel_id).is_err()
+            || grant.access_level == Some(AccessLevel::Owner)
+            || (grant.operation != UpdateOperation::Remove && grant.access_level.is_none())
+        {
+            return Err(PipelineError::Invalid(
+                "Give each channel once, with view, comment or edit access",
+            ));
+        }
+    }
+    Ok(grants)
+}
+
+fn share_permission(
+    pipeline: &Pipeline,
+    channels: Vec<ChannelSharePermission>,
+) -> SharePermissionV2 {
+    SharePermissionV2 {
+        id: pipeline.id.to_string(),
+        owner: pipeline.user_id.clone(),
+        link_share: None,
+        link_share_access_level: None,
+        team_share_access_level: (pipeline.sharing == PipelineSharing::Team)
+            .then_some(AccessLevel::Edit),
+        channel_share_permissions: Some(channels),
+    }
 }
 
 impl<R: PipelineRepo, D, A, S> PipelineServiceImpl<R, D, A, S> {
@@ -667,6 +749,41 @@ where
             return Err(PipelineError::NotFound);
         }
         self.repo.share(&pipeline, sharing).await.map_err(storage)
+    }
+
+    async fn share_permissions(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+    ) -> Result<SharePermissionV2, PipelineError> {
+        let pipeline = self.pipeline(&receipt).await?;
+        if pipeline.trashed_at.is_some() {
+            return Err(PipelineError::NotFound);
+        }
+        let channels = self
+            .repo
+            .channel_grants(pipeline.id)
+            .await
+            .map_err(storage)?;
+        Ok(share_permission(&pipeline, channels))
+    }
+
+    async fn update_share_permissions(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        request: UpdateSharePermissionRequestV2,
+    ) -> Result<SharePermissionV2, PipelineError> {
+        let grants = requested_channel_grants(request)?;
+        let pipeline = self.pipeline(&receipt).await?;
+        if pipeline.trashed_at.is_some()
+            || !self
+                .repo
+                .update_channel_grants(pipeline.id, &grants)
+                .await
+                .map_err(storage)?
+        {
+            return Err(PipelineError::NotFound);
+        }
+        self.share_permissions(receipt).await
     }
 
     async fn set_trashed(

@@ -10,10 +10,12 @@ import type { MessageAttachment } from './messageAttachment';
 import type { MessageBotProfile } from './messageBotProfile';
 import type { MessageDeletedAt } from './messageDeletedAt';
 import type { MessageEditedAt } from './messageEditedAt';
+import type { MessageGuestName } from './messageGuestName';
 import type { MessageImportedAuthor } from './messageImportedAuthor';
 import type { MessageParent } from './messageParent';
 import type { MessageThreadId } from './messageThreadId';
 import type { MessageTriggeredBy } from './messageTriggeredBy';
+import type { MessageTriggeredVia } from './messageTriggeredVia';
 import type { SimpleMention } from './simpleMention';
 
 /**
@@ -31,6 +33,8 @@ export interface Message {
   deleted_at?: MessageDeletedAt;
   /** Last content edit, if any. */
   edited_at?: MessageEditedAt;
+  /** Display name of a verified call guest, retained after the call ends. */
+  guest_name?: MessageGuestName;
   /** Message UUID. */
   id: string;
   imported_author?: MessageImportedAuthor;
@@ -46,6 +50,9 @@ export interface Message {
   thread_id?: MessageThreadId;
   /** User who triggered a bot-authored message. */
   triggered_by?: MessageTriggeredBy;
+  /** Self-reported name of the client the user triggered it through, such
+as "Claude Code"; a display label only. */
+  triggered_via?: MessageTriggeredVia;
   /** Last persisted update. */
   updated_at: string;
 }

@@ -5,6 +5,7 @@
  * property record referenced by soup query results.
  */
 
+import { timeRangeToInstants } from '@app/features/database/core/cell-date-range';
 import type {
   Property,
   PropertyApiValues,
@@ -16,6 +17,37 @@ import { isInstantiatedProperty } from '@property/utils/typeGuards';
 import type { SoupPropertyFieldsFragment } from '../../service-clients/service-storage/graphql/generated/graphql';
 
 type GraphqlPropertyValue = NonNullable<SoupPropertyFieldsFragment['value']>;
+
+type ApiValuesOf<T extends PropertyApiValues['valueType']> = Extract<
+  PropertyApiValues,
+  { valueType: T }
+>;
+
+function dateRangePropertyValue(
+  value: ApiValuesOf<'DATE_RANGE'>['value']
+): GraphqlPropertyValue | null {
+  if (value == null) return null;
+  const { start, end } = timeRangeToInstants(value);
+  return {
+    __typename: 'GraphqlDateRangePropertyValue',
+    rangeStart: start,
+    rangeEnd: end,
+  };
+}
+
+function entityReferencePropertyValue(
+  refs: ApiValuesOf<'ENTITY'>['refs']
+): GraphqlPropertyValue | null {
+  if (refs == null || refs.length === 0) return null;
+  return {
+    __typename: 'GraphqlEntityReferencePropertyValue',
+    references: refs.map((ref) => ({
+      entityId: ref.entity_id,
+      entityType: ref.entity_type,
+      specificMessageId: ref.specific_message_id ?? null,
+    })),
+  };
+}
 
 /**
  * `PropertyApiValues` → the GraphQL property value as the server would
@@ -54,6 +86,8 @@ export function apiValuesToGraphqlPropertyValue(
             dateValue: apiValues.value.toISOString(),
           }
         : null;
+    case 'DATE_RANGE':
+      return dateRangePropertyValue(apiValues.value);
     case 'SELECT_STRING':
     case 'SELECT_NUMBER':
       return apiValues.values != null && apiValues.values.length > 0
@@ -63,16 +97,7 @@ export function apiValuesToGraphqlPropertyValue(
           }
         : null;
     case 'ENTITY':
-      return apiValues.refs != null && apiValues.refs.length > 0
-        ? {
-            __typename: 'GraphqlEntityReferencePropertyValue',
-            references: apiValues.refs.map((ref) => ({
-              entityId: ref.entity_id,
-              entityType: ref.entity_type,
-              specificMessageId: ref.specific_message_id ?? null,
-            })),
-          }
-        : null;
+      return entityReferencePropertyValue(apiValues.refs);
     case 'LINK':
       return apiValues.values != null && apiValues.values.length > 0
         ? {

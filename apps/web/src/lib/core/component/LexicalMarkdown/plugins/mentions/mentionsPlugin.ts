@@ -1,10 +1,12 @@
 import { untrackMention } from '@app/lib/queries/storage/mentions';
 import { verifyBlockName } from '@core/constant/allBlocks';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { $wrapNodeInElement, mergeRegister } from '@lexical/utils';
 import type { PeerIdValidator } from '@macro-inc/lexical-core';
 import {
   $collapseInlineSearch,
   $createAgentSessionMentionNode,
+  $createBookingLinkMentionNode,
   $createContactMentionNode,
   $createDateMentionNode,
   $createDocumentMentionNode,
@@ -26,6 +28,8 @@ import {
   $removeInlineSearch,
   type AgentSessionMentionInfo,
   AgentSessionMentionNode,
+  type BookingLinkMentionInfo,
+  BookingLinkMentionNode,
   type ContactMentionInfo,
   ContactMentionNode,
   type DateMentionInfo,
@@ -100,7 +104,8 @@ export const CLOSE_INLINE_SEARCH_COMMAND: LexicalCommand<void> = createCommand(
   'CLOSE_INLINE_SEARCH_COMMAND'
 );
 
-const TYPE_AT_SYMBOL_COMMAND: LexicalCommand<void> = createCommand(
+/** Opens the mention typeahead at the caret, as typing `@` there does. */
+export const TYPE_AT_SYMBOL_COMMAND: LexicalCommand<void> = createCommand(
   'TYPE_AT_SYMBOL_COMMAND'
 );
 
@@ -131,6 +136,9 @@ export const INSERT_PR_MENTION_COMMAND: LexicalCommand<PullRequestMentionInfo> =
 export const INSERT_THEME_MENTION_COMMAND: LexicalCommand<ThemeMentionInfo> =
   createCommand('INSERT_THEME_MENTION_COMMAND');
 
+export const INSERT_BOOKING_LINK_MENTION_COMMAND: LexicalCommand<BookingLinkMentionInfo> =
+  createCommand('INSERT_BOOKING_LINK_MENTION_COMMAND');
+
 export type ItemMention = {
   itemType:
     | 'document'
@@ -155,7 +163,9 @@ export type ItemMention = {
     | 'routine'
     | 'crm_company'
     | 'crm_contact'
-    | 'skill';
+    | 'crm_pipeline'
+    | 'skill'
+    | 'external_chat';
   itemId: string;
   fileType?: string;
   documentName?: string;
@@ -189,36 +199,70 @@ function $isUntrackedPullRequestMention(node: LexicalNode): boolean {
   return $isPullRequestMentionNode(node) && !node.getId();
 }
 
+type DocumentMentionTypes = {
+  fileType: string;
+  itemType?: ItemMention['itemType'];
+};
+
+/** A document mention's attachment types, by block name; `document` unless set. */
+const DOCUMENT_MENTION_TYPES = new Map<string, DocumentMentionTypes>([
+  ['pdf', { fileType: 'pdf' }],
+  ['write', { fileType: 'docx' }],
+  ['md', { fileType: 'md' }],
+  // task/snippet aliases are markdown documents
+  ['task', { fileType: 'md' }],
+  ['snippet', { fileType: 'md' }],
+  // skills are their own attachment type: either a markdown skill
+  // document or a built-in system skill
+  ['skill', { fileType: 'md', itemType: 'skill' }],
+  ['csv', { fileType: 'csv' }],
+  ['canvas', { fileType: 'canvas' }],
+  ['image', { fileType: 'png' }], // Default to png
+  ['channel', { fileType: 'channel', itemType: 'channel' }],
+  ['project', { fileType: 'project', itemType: 'project' }],
+  // A form reference: posting it grants the channel View on the form.
+  ['form', { fileType: 'form', itemType: 'form' }],
+  ['database', { fileType: 'database', itemType: 'database' }],
+  // A task project, never a document id.
+  ['initiative', { fileType: 'initiative', itemType: 'initiative' }],
+  ['chat', { fileType: 'chat', itemType: 'chat' }],
+  ['rss', { fileType: 'rss' }],
+  ['email', { fileType: 'email', itemType: 'thread' }],
+  ['call', { fileType: 'call', itemType: 'call' }],
+  ['calendar', { fileType: 'calendar_event', itemType: 'calendar_event' }],
+  ['company', { fileType: 'company', itemType: 'crm_company' }],
+  ['contact', { fileType: 'contact', itemType: 'crm_contact' }],
+  ['pipeline', { fileType: 'pipeline', itemType: 'crm_pipeline' }],
+  // Posting it shares the group with the channel's members.
+  ['external_chat', { fileType: 'external_chat', itemType: 'external_chat' }],
+  ['unknown', { fileType: 'unknown' }],
+]);
+
+function documentMentionTypes(
+  node: DocumentMentionNode
+): Required<DocumentMentionTypes> {
+  const blockName = node.getBlockName();
+  if (blockName === 'code') {
+    return {
+      fileType: node.getBlockParams()?.fileType || 'txt',
+      itemType: 'document',
+    };
+  }
+  const types = DOCUMENT_MENTION_TYPES.get(blockName);
+  return {
+    fileType: types?.fileType ?? '',
+    itemType: types?.itemType ?? 'document',
+  };
+}
+
 function $mentionItemFromNode(node: MentionNode): ItemMention {
   if ($isDocumentMentionNode(node)) {
-    let fileType = '';
-    let itemType: ItemMention['itemType'] = 'document';
-    const documentName = node.getDocumentName();
-    const blockName = node.getBlockName();
-    if (blockName === 'pdf') fileType = 'pdf';
-    else if (blockName === 'write') fileType = 'docx';
-    else if (blockName === 'md') fileType = 'md';
-    // task/snippet aliases are markdown documents
-    else if (blockName === 'task') fileType = 'md';
-    else if (blockName === 'snippet') fileType = 'md';
-    // skills are their own attachment type: either a markdown skill
-    // document or a built-in system skill
-    else if (blockName === 'skill') {
-      fileType = 'md';
-      itemType = 'skill';
-    } else if (blockName === 'csv') fileType = 'csv';
-    else
-      ({ fileType, itemType } = updateFileType(
-        blockName,
-        fileType,
-        itemType,
-        node
-      ));
+    const { fileType, itemType } = documentMentionTypes(node);
     return {
-      itemType: itemType,
+      itemType,
       itemId: node.getDocumentId(),
       fileType,
-      documentName,
+      documentName: node.getDocumentName(),
       channelType: node.getChannelType(),
     };
   } else if ($isUserMentionNode(node)) {
@@ -256,61 +300,6 @@ function $mentionItemFromNode(node: MentionNode): ItemMention {
       itemId: node.getDate(),
     };
   }
-
-  function updateFileType(
-    blockName: string,
-    fileType: string,
-    itemType: ItemMention['itemType'],
-    nodeInput: DocumentMentionNode
-  ) {
-    if (blockName === 'canvas') fileType = 'canvas';
-    else if (blockName === 'code') {
-      const blockParams = nodeInput.getBlockParams();
-      fileType = blockParams?.fileType || 'txt';
-    } else if (blockName === 'image') {
-      fileType = 'png'; // Default to png
-    } else if (blockName === 'channel') {
-      fileType = 'channel';
-      itemType = 'channel';
-    } else if (blockName === 'project') {
-      fileType = 'project';
-      itemType = 'project';
-    } else if (blockName === 'form') {
-      // A form reference: posting it grants the channel View on the form.
-      fileType = 'form';
-      itemType = 'form';
-    } else if (blockName === 'database') {
-      fileType = 'database';
-      itemType = 'database';
-    } else if (blockName === 'initiative') {
-      // A task project, never a document id.
-      fileType = 'initiative';
-      itemType = 'initiative';
-    } else if (blockName === 'chat') {
-      fileType = 'chat';
-      itemType = 'chat';
-    } else if (blockName === 'rss') {
-      fileType = 'rss';
-    } else if (blockName === 'email') {
-      fileType = 'email';
-      itemType = 'thread';
-    } else if (blockName === 'call') {
-      fileType = 'call';
-      itemType = 'call';
-    } else if (blockName === 'calendar') {
-      fileType = 'calendar_event';
-      itemType = 'calendar_event';
-    } else if (blockName === 'company') {
-      fileType = 'company';
-      itemType = 'crm_company';
-    } else if (blockName === 'contact') {
-      fileType = 'contact';
-      itemType = 'crm_contact';
-    } else if (blockName === 'unknown') {
-      fileType = 'unknown';
-    }
-    return { fileType, itemType };
-  }
 }
 
 // Validator for the position of the @ trigger. Only the text before the caret
@@ -333,7 +322,14 @@ function $deleteSelectedMentions(sourceDocumentId?: string) {
       if (!$isGroupMentionNode(node)) {
         const mentionUuid = node.getMentionUuid();
         if (mentionUuid && sourceDocumentId) {
-          untrackMention(sourceDocumentId, mentionUuid);
+          fireAndForget(
+            untrackMention(
+              sourceDocumentId,
+              mentionUuid,
+              $mentionItemFromNode(node).itemType
+            ),
+            'mention-tracking'
+          );
         }
       }
       node.remove();
@@ -370,6 +366,7 @@ const blockItemType = (blockName: string): ItemMention['itemType'] => {
     })
     .with('crm_company', () => 'crm_company')
     .with('crm_contact', () => 'crm_contact')
+    .with('crm_pipeline', () => 'crm_pipeline')
     .exhaustive();
 };
 
@@ -492,7 +489,10 @@ function registerMentionsPlugin(
               sourceDocumentId &&
               !databaseReferenceRemains(uuid)
             )
-              void untrackMention(sourceDocumentId, uuid);
+              fireAndForget(
+                untrackMention(sourceDocumentId, uuid, 'database'),
+                'mention-tracking'
+              );
             onRemoveMention?.({ itemType: card.itemType, itemId: card.itemId });
           }
         }
@@ -670,7 +670,10 @@ function registerMentionsPlugin(
           if (mutation === 'destroyed') {
             const mentionUuid = node.getMentionUuid();
             if (mentionUuid && sourceDocumentId) {
-              untrackMention(sourceDocumentId, mentionUuid);
+              fireAndForget(
+                untrackMention(sourceDocumentId, mentionUuid, 'agent_session'),
+                'mention-tracking'
+              );
             }
             onRemoveMention?.($mentionItemFromNode(node));
           }
@@ -716,6 +719,23 @@ function registerMentionsPlugin(
             mentionNode.selectEnd();
             return true;
           }
+          $insertNodes([mentionNode]);
+          if ($isRootOrShadowRoot(mentionNode.getParentOrThrow())) {
+            $wrapNodeInElement(mentionNode, $createParagraphNode);
+          }
+          mentionNode.selectEnd();
+        });
+        return true;
+      },
+      COMMAND_PRIORITY_NORMAL
+    ),
+
+    editor.registerCommand(
+      INSERT_BOOKING_LINK_MENTION_COMMAND,
+      (payload) => {
+        if (!editor.hasNode(BookingLinkMentionNode)) return false;
+        editor.update(() => {
+          const mentionNode = $createBookingLinkMentionNode(payload);
           $insertNodes([mentionNode]);
           if ($isRootOrShadowRoot(mentionNode.getParentOrThrow())) {
             $wrapNodeInElement(mentionNode, $createParagraphNode);
@@ -931,7 +951,10 @@ function registerMentionsPlugin(
               (node.getBlockName() !== 'database' ||
                 !databaseReferenceRemains(mentionUuid))
             ) {
-              untrackMention(sourceDocumentId, mentionUuid);
+              fireAndForget(
+                untrackMention(sourceDocumentId, mentionUuid, itemType),
+                'mention-tracking'
+              );
             }
             if (onRemoveMention) {
               onRemoveMention({
@@ -969,7 +992,10 @@ function registerMentionsPlugin(
             if (node) {
               const mentionUuid = node.getMentionUuid();
               if (mentionUuid && sourceDocumentId) {
-                untrackMention(sourceDocumentId, mentionUuid);
+                fireAndForget(
+                  untrackMention(sourceDocumentId, mentionUuid, 'user'),
+                  'mention-tracking'
+                );
               }
               if (onRemoveMention) {
                 onRemoveMention({
@@ -1007,7 +1033,10 @@ function registerMentionsPlugin(
             if (node) {
               const mentionUuid = node.getMentionUuid();
               if (mentionUuid && sourceDocumentId) {
-                untrackMention(sourceDocumentId, mentionUuid);
+                fireAndForget(
+                  untrackMention(sourceDocumentId, mentionUuid, 'contact'),
+                  'mention-tracking'
+                );
               }
               if (onRemoveMention) {
                 onRemoveMention({
@@ -1042,7 +1071,10 @@ function registerMentionsPlugin(
             if (node) {
               const mentionUuid = node.getMentionUuid();
               if (mentionUuid && sourceDocumentId) {
-                untrackMention(sourceDocumentId, mentionUuid);
+                fireAndForget(
+                  untrackMention(sourceDocumentId, mentionUuid, 'date'),
+                  'mention-tracking'
+                );
               }
               if (onRemoveMention) {
                 onRemoveMention({
@@ -1107,7 +1139,10 @@ function registerMentionsPlugin(
           if (mutation === 'destroyed') {
             const mentionUuid = node.getMentionUuid();
             if (mentionUuid && sourceDocumentId) {
-              untrackMention(sourceDocumentId, mentionUuid);
+              fireAndForget(
+                untrackMention(sourceDocumentId, mentionUuid, 'foreign'),
+                'mention-tracking'
+              );
             }
             onRemoveMention?.($mentionItemFromNode(node));
           } else if (mutation === 'created') {

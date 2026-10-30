@@ -81,9 +81,14 @@ const partlyDecoded = () =>
   file !== undefined && !trapped && !file.isComplete();
 
 const channel = new MessageChannel();
-channel.port1.onmessage = () => {
+channel.port1.onmessage = async () => {
   scheduled = false;
-  void pump();
+  try {
+    await pump();
+  } catch (error: unknown) {
+    // pump reports each request's failure itself; this is only a failed report.
+    console.error('[fig-engine] worker could not report a failure', error);
+  }
 };
 
 function schedule() {
@@ -368,7 +373,11 @@ async function serve(request: FigRequest) {
           .with({ method: 'liftPlan' }, () => {
             return f.liftPlan(a as number, b as string);
           })
-          .exhaustive();
+          .exhaustive(() => undefined);
+        if (json === undefined) {
+          fail(request.id, `unknown query method: ${request.method}`);
+          return;
+        }
         post({ id: request.id, ok: true, kind: 'query', json });
         return;
       }
@@ -438,7 +447,11 @@ async function serve(request: FigRequest) {
           .with('apply', () =>
             f.apply(request.page, request.ops ?? '[]', request.coalesce)
           )
-          .exhaustive();
+          .exhaustive(() => undefined);
+        if (json === undefined) {
+          fail(request.id, `unknown edit action: ${request.action}`);
+          return;
+        }
         post({ id: request.id, ok: true, kind: 'edit', json });
         return;
       }

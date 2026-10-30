@@ -1,4 +1,5 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { cellPlainText } from '@macro-inc/spreadsheet/cell-mentions';
 import {
   type DropdownOptions,
@@ -16,17 +17,29 @@ import {
   createSignal,
   For,
   on,
+  onCleanup,
+  onMount,
   Show,
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ChartDialog } from '../components/ChartDialog';
 import {
+  DateFormatDialog,
+  type DateFormatDialogState,
+} from '../components/DateFormatDialog';
+import {
   DropdownDialog,
   type DropdownDialogState,
 } from '../components/DropdownDialog';
-import { SpreadsheetFileMenu } from '../components/SpreadsheetActionMenus';
+import {
+  SpreadsheetFileMenu,
+  SpreadsheetImportButton,
+} from '../components/SpreadsheetActionMenus';
 import { SpreadsheetDialog } from '../components/SpreadsheetDialog';
-import { SpreadsheetFindDialog } from '../components/SpreadsheetDialogs';
+import {
+  SpreadsheetFindDialog,
+  SpreadsheetMoveDialog,
+} from '../components/SpreadsheetDialogs';
 import { SpreadsheetGoalSeekDialog } from '../components/SpreadsheetGoalSeekDialog';
 import {
   renderedSelectionCell,
@@ -45,17 +58,20 @@ import {
 } from '../components/SpreadsheetWorkbookDialogs';
 import type { SpreadsheetCommentsCapability } from '../context/spreadsheet-comments';
 import type { SpreadsheetMentions } from '../context/spreadsheet-mentions';
+import { cellDateInput, serialDay } from '../core/cell-date';
 import { cellEditValue } from '../core/cell-input';
 import { chartData, createChartReader } from '../core/chart-data';
 import { encodeCsv } from '../core/csv-export';
 import { formulaRangeReference } from '../core/formula-reference';
 import {
+  type CellSelection,
   cellAddress,
   positionFromAddress,
   selectionBounds,
 } from '../core/grid-selection';
 import { selectionToggleStyles } from '../core/selection-formatting';
 import {
+  choiceColors,
   dropdownOptions,
   listItems,
   type RangeValues,
@@ -67,21 +83,29 @@ import type { SpreadsheetCommentAnchor } from '../core/spreadsheet-comments';
 import {
   SPREADSHEET_MAX_COLUMNS,
   SPREADSHEET_MAX_ROWS,
+  type SpreadsheetCellStyle,
 } from '../core/spreadsheet-document';
 import { spreadsheetCursors } from '../core/spreadsheet-presence';
 import type { SpreadsheetCommand } from '../core/toolbar-types';
 import { SPREADSHEET_MAX_SHEETS } from '../core/workbook-document';
 import { CSV_MAX_BYTES } from '../core/workbook-file-types';
+import { cellNumberFormat } from '../core/xlsx-styles';
 import { createCalculation } from '../primitives/create-calculation';
 import { createCalculationStatus } from '../primitives/create-calculation-status';
 import { createDrawingActions } from '../primitives/create-drawing-actions';
 import { createGoalSeek } from '../primitives/create-goal-seek';
 import { createGridController } from '../primitives/create-grid-controller';
+import { createRangeMove } from '../primitives/create-range-move';
 import { createSheetActions } from '../primitives/create-sheet-actions';
+import type { SpreadsheetDownloadFormat } from '../primitives/create-spreadsheet-download';
 import type { SpreadsheetStore } from '../primitives/create-spreadsheet-store';
+import { createTableActions } from '../primitives/create-table-actions';
 import { createWorkbookActions } from '../primitives/create-workbook-actions';
+import { SpreadsheetTableDialogs, tableGridUi } from './SpreadsheetTables';
 
 export function SpreadsheetEditor(props: {
+  /** A saved workbook's document, recorded on traces. */
+  documentId?: string;
   store: SpreadsheetStore;
   mentions?: SpreadsheetMentions;
   name: string;
@@ -92,12 +116,20 @@ export function SpreadsheetEditor(props: {
   ownsClipboard?: (event: ClipboardEvent) => boolean;
   onExport: (content: string) => void;
   onExportXlsx: (bytes: Uint8Array) => void;
+  /**
+   * Hands the toolbar's downloads to actions outside it, such as the file
+   * menu. The function returns false while the sheet can't be exported yet.
+   */
+  onDownloadReady?: (
+    download: (format: SpreadsheetDownloadFormat) => boolean
+  ) => void;
 }) {
   let gridElement: HTMLDivElement | undefined;
   let editorElement!: HTMLElement;
   let importInput!: HTMLInputElement;
   const [zoom, setZoom] = createSignal(100);
-  const [showGridlines, setShowGridlines] = createSignal(true);
+  const showGridlines = () =>
+    props.store.activeSheet().metadata?.gridlines !== false;
   const [showFormulaBar, setShowFormulaBar] = createSignal(true);
   const [showFormulas, setShowFormulas] = createSignal(false);
   const [structureBusy, setStructureBusy] = createSignal(false);
@@ -174,6 +206,15 @@ export function SpreadsheetEditor(props: {
       ),
   });
   const values = calculation.values;
+  const tableActions = createTableActions({
+    store: props.store,
+    canEdit: editable,
+    selection: grid.selection,
+    values,
+    calculating: () => calculation.busy() || !!calculation.error(),
+    copyCells: calculation.copy,
+    setNotice: (message) => actions.setNotice(message),
+  });
   const activeValidation = createMemo(() =>
     validationAt(
       props.store.activeSheet().metadata?.validations,
@@ -181,6 +222,9 @@ export function SpreadsheetEditor(props: {
     )
   );
   const activeList = createMemo(() => {
+    // A table's total row offers its aggregates, as Excel does.
+    const totals = tableActions.totalChoices();
+    if (totals) return totals;
     const rule = activeValidation();
     if (rule?.type !== 'list' || rule.dropdown === false) return;
     const sheetId = props.store.activeSheetId();
@@ -192,15 +236,24 @@ export function SpreadsheetEditor(props: {
       ? { title: rule.promptTitle, message: rule.prompt ?? '' }
       : undefined;
   };
-  const dropdownRanges = createMemo(() =>
+  const dropdowns = createMemo(() =>
     (props.store.activeSheet().metadata?.validations ?? [])
       .filter((rule) => rule.type === 'list' && rule.dropdown !== false)
-      .map((rule) => rule.range)
+      .map((rule) => ({ range: rule.range, colors: choiceColors(rule) }))
   );
   const [dropdownDialog, setDropdownDialog] = createSignal<
     DropdownDialogState & { sheetId: string }
   >();
   const [dropdownError, setDropdownError] = createSignal<string>();
+  const rangeChoices = (range: string) => {
+    const dialog = dropdownDialog();
+    if (!dialog) return;
+    return listItems(
+      { range: dialog.range, type: 'list', formulas: [range] },
+      rangeValues(dialog.sheetId),
+      definedNames(dialog.sheetId)
+    );
+  };
   const selectionRange = () => {
     const bounds = selectionBounds(grid.selection());
     const first = cellAddress({ row: bounds.top, column: bounds.left });
@@ -258,6 +311,31 @@ export function SpreadsheetEditor(props: {
       );
     }
   }
+  // The dialog styles the cells it names, even if the selection moves while
+  // it is open (comment links can select a range).
+  const [dateFormatDialog, setDateFormatDialog] = createSignal<
+    DateFormatDialogState & { sheetId: string; selection: CellSelection }
+  >();
+  function openDateFormatDialog() {
+    if (!editable()) return;
+    const cell = activeCell();
+    setDateFormatDialog({
+      sheetId: props.store.activeSheetId(),
+      selection: grid.selection(),
+      range: selectionRange(),
+      numberFormat:
+        cell?.format === 'date' || cell?.format === 'time'
+          ? cellNumberFormat(cell)
+          : 'm/d/yyyy',
+      sample: values()[grid.activeAddress()]?.number,
+    });
+  }
+  function changeDateFormat(style: SpreadsheetCellStyle) {
+    const dialog = dateFormatDialog();
+    setDateFormatDialog(undefined);
+    if (dialog?.sheetId === props.store.activeSheetId())
+      grid.format(style, dialog.selection);
+  }
   const workbookActions = createWorkbookActions({
     store: props.store,
     values: calculation.workbookValues,
@@ -302,21 +380,67 @@ export function SpreadsheetEditor(props: {
     },
     grid
   );
+  const canMoveCells = () => editable() && props.store.canChangeStructure();
+  const rangeMove = createRangeMove({
+    documentId: props.documentId,
+    store: props.store,
+    canMove: canMoveCells,
+    moveRange: calculation.moveRange,
+    setBusy: setStructureBusy,
+    setNotice: actions.setNotice,
+    select: grid.selectRange,
+  });
   const remoteCursors = createMemo(() =>
     spreadsheetCursors(props.store.peers(), props.store.rowCount())
   );
   const activeCell = () => props.store.cells()[grid.activeAddress()];
+  // A calendar edits literal dates, and any value of a date-validated cell.
+  const activeDatePicker = createMemo(() => {
+    const cell = activeCell();
+    if (cell?.value.startsWith('=') && cell.format !== 'text') return;
+    const result = values()[grid.activeAddress()];
+    const date =
+      result?.date && result.number !== undefined
+        ? serialDay(result.number)
+        : undefined;
+    if (date || activeValidation()?.type === 'date') return { date };
+  });
   const footerNotice = () =>
     workbookActions.busy() ||
     workbookActions.notice() ||
     actions.notice() ||
     grid.notice();
   let pendingMenuAction: SpreadsheetCommand | undefined;
+  /** A dialog a grid menu chose, opened once the menu returns focus. */
+  let pendingDialog: (() => void) | undefined;
+  const tableUi = tableGridUi({
+    actions: tableActions,
+    editable,
+    canChangeStructure: () => props.store.canChangeStructure(),
+    changeColumns: (column, action) => {
+      grid.selectRange(
+        { row: 0, column },
+        { row: props.store.rowCount() - 1, column }
+      );
+      fireAndForget(headerAction('column', action), 'spreadsheet-editor');
+    },
+    restoreFocus: () => restoreEditorFocus(),
+    afterMenu: (open) => {
+      pendingDialog = open;
+    },
+  });
   const focusGrid = () => gridElement?.focus({ preventScroll: true });
   const revealSelection = () =>
     gridElement
       ?.querySelector(`[data-address="${cellAddress(grid.selection().focus)}"]`)
       ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  // One grid shows every sheet, so each opens scrolled to its own selection,
+  // including while a formula draft picks a reference there or returns home.
+  createEffect(
+    on(props.store.activeSheetId, () => queueMicrotask(revealSelection), {
+      defer: true,
+    })
+  );
   const goalSeek = createGoalSeek({
     sheets: () =>
       props.store.workbook().map((sheet) => ({
@@ -384,6 +508,12 @@ export function SpreadsheetEditor(props: {
     const pending = pendingMenuAction;
     pendingMenuAction = undefined;
     if (pending) command(pending);
+    const dialog = pendingDialog;
+    pendingDialog = undefined;
+    if (dialog) {
+      dialog();
+      return;
+    }
     // A drawing a menu just inserted keeps the focus.
     const inserted = insertedDrawing;
     insertedDrawing = undefined;
@@ -396,7 +526,10 @@ export function SpreadsheetEditor(props: {
       goalSeek.open() ||
       workbookActions.preview() ||
       workbookActions.sheetDialog() ||
-      dropdownDialog()
+      dropdownDialog() ||
+      tableActions.dialog() ||
+      tableActions.groupView() ||
+      dateFormatDialog()
     )
       return;
     if (grid.editing() === 'cell') {
@@ -413,9 +546,25 @@ export function SpreadsheetEditor(props: {
         editor.setSelectionRange(editor.value.length, editor.value.length);
     } else focusGrid();
   };
+  const canExport = () =>
+    props.store.ready() &&
+    !calculation.busy() &&
+    !calculation.error() &&
+    !grid.editing() &&
+    !workbookActions.busy();
+  props.onDownloadReady?.((format) => {
+    if (!canExport()) return false;
+    command(format === 'xlsx' ? 'export-xlsx' : 'export-csv');
+    return true;
+  });
   const menuCommand = (action: SpreadsheetCommand) => {
     // Create a new focus owner only after the menu's focus trap has closed.
-    if (action.startsWith('insert-') || action === 'dropdown')
+    if (
+      action.startsWith('insert-') ||
+      action === 'dropdown' ||
+      action === 'table' ||
+      action === 'custom-date-format'
+    )
       pendingMenuAction = action;
     else command(action);
   };
@@ -490,16 +639,16 @@ export function SpreadsheetEditor(props: {
       .with('undo', () => grid.undo())
       .with('redo', () => grid.redo())
       .with('cut', () => {
-        void actions.copy(true);
+        fireAndForget(actions.copy(true), 'spreadsheet-editor');
       })
       .with('copy', () => {
-        void actions.copy();
+        fireAndForget(actions.copy(), 'spreadsheet-editor');
       })
       .with('paste', () => {
-        void actions.paste();
+        fireAndForget(actions.paste(), 'spreadsheet-editor');
       })
       .with('paste-values', () => {
-        void actions.paste(true);
+        fireAndForget(actions.paste(true), 'spreadsheet-editor');
       })
       .with('clear-values', () => grid.clear())
       .with('clear-formatting', actions.clearFormatting)
@@ -521,28 +670,40 @@ export function SpreadsheetEditor(props: {
       .with('export-csv', exportCsv)
       .with('import', () => importInput.click())
       .with('export-xlsx', () => {
-        void workbookActions.exportExcel();
+        fireAndForget(workbookActions.exportExcel(), 'spreadsheet-editor');
       })
       .with('add-rows', () => props.store.appendRows(100))
-      .with('toggle-gridlines', () => setShowGridlines((value) => !value))
+      .with('toggle-gridlines', () => {
+        if (!editable()) return;
+        props.store.setMetadata({
+          ...props.store.activeSheet().metadata,
+          gridlines: showGridlines() ? false : undefined,
+        });
+      })
       .with('toggle-formula-bar', () => setShowFormulaBar((value) => !value))
       .with('toggle-formulas', () => setShowFormulas((value) => !value))
       .with('sort-asc', () => {
-        void actions.sort(false);
+        fireAndForget(actions.sort(false), 'spreadsheet-editor');
       })
       .with('sort-desc', () => {
-        void actions.sort(true);
+        fireAndForget(actions.sort(true), 'spreadsheet-editor');
       })
       .with('trim-whitespace', actions.trimWhitespace)
       .with('dropdown', openDropdownDialog)
+      .with('table', tableActions.convert)
+      .with('custom-date-format', openDateFormatDialog)
       .with('border-all', () => actions.borders('all'))
       .with('border-outer', () => actions.borders('outer'))
       .with('border-none', () => actions.borders('none'))
+      .with('indent-decrease', () => actions.indent(-1))
+      .with('indent-increase', () => actions.indent(1))
       .with('insert-sum', () => actions.insertFunction('SUM'))
       .with('insert-average', () => actions.insertFunction('AVERAGE'))
       .with('insert-count', () => actions.insertFunction('COUNT'))
       .with('insert-min', () => actions.insertFunction('MIN'))
       .with('insert-max', () => actions.insertFunction('MAX'))
+      .with('insert-checkbox', grid.insertCheckboxes)
+      .with('remove-checkbox', () => grid.format({ checkbox: false }))
       .exhaustive();
   }
 
@@ -587,7 +748,7 @@ export function SpreadsheetEditor(props: {
           )
         );
         setResize({ sheetId: sheet.id, axis, start, end });
-      } else await updateNext(action);
+      } else await applyHeaderAction(action);
     } catch (error) {
       actions.setNotice(
         error instanceof Error
@@ -598,7 +759,7 @@ export function SpreadsheetEditor(props: {
       setStructureBusy(false);
     }
 
-    async function updateNext(
+    async function applyHeaderAction(
       action: Exclude<
         HeaderAction,
         'copy' | 'insert-before' | 'insert-after' | 'delete' | 'resize'
@@ -721,21 +882,38 @@ export function SpreadsheetEditor(props: {
     }
   }
 
+  // Capture so formula-bar / toolbar inputs that stopPropagation cannot open
+  // the browser find dialog; always route Cmd/Ctrl+F to the sheet find bar.
+  onMount(() => {
+    const onFindShortcut = (event: KeyboardEvent) => {
+      if (
+        !(event.metaKey || event.ctrlKey) ||
+        event.altKey ||
+        event.code !== 'KeyF'
+      )
+        return;
+      event.preventDefault();
+      event.stopPropagation();
+      command('find');
+      queueMicrotask(() => {
+        const input = editorElement.querySelector<HTMLInputElement>(
+          '[aria-label="Find in sheet"]'
+        );
+        input?.focus();
+        input?.select();
+      });
+    };
+    editorElement.addEventListener('keydown', onFindShortcut, true);
+    onCleanup(() =>
+      editorElement.removeEventListener('keydown', onFindShortcut, true)
+    );
+  });
+
   return (
     <section
       ref={editorElement}
       class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden bg-panel text-ink"
       aria-label={`${props.name} spreadsheet`}
-      onKeyDown={(event) => {
-        if (
-          (event.metaKey || event.ctrlKey) &&
-          event.key.toLowerCase() === 'f'
-        ) {
-          event.preventDefault();
-          event.stopPropagation();
-          command('find');
-        }
-      }}
     >
       <SpreadsheetDialog
         open={!!resize()}
@@ -755,7 +933,7 @@ export function SpreadsheetEditor(props: {
           onKeyDown={(event) => event.stopPropagation()}
         >
           <SpreadsheetDialog.Title class="font-semibold">
-            Resize {getSpreadsheetEditorContent()}s
+            Resize {resizeAxis()}s
           </SpreadsheetDialog.Title>
           <SpreadsheetDialog.Description class="my-3 text-ink-muted">
             Enter the size in pixels.
@@ -764,8 +942,8 @@ export function SpreadsheetEditor(props: {
             aria-label="Size in pixels"
             type="number"
             required
-            min={getSpreadsheetEditorMin()}
-            max={getSpreadsheetEditorMax()}
+            min={resizeMin()}
+            max={resizeMax()}
             value={resizeSize()}
             onInput={(event) => setResizeSize(event.currentTarget.value)}
             onFocus={(event) => event.currentTarget.select()}
@@ -779,7 +957,7 @@ export function SpreadsheetEditor(props: {
             >
               Cancel
             </Button>
-            <Button type="submit" variant="strong">
+            <Button type="submit" variant="secondary">
               Apply
             </Button>
           </div>
@@ -803,8 +981,10 @@ export function SpreadsheetEditor(props: {
           >
             <span>Calculation is unavailable: {error()}</span>
             <Button
+              variant="ghost"
+              aria-label="Retry calculation"
+              tooltip="Retry calculation"
               size="sm"
-              label="Retry calculation"
               onClick={() => {
                 calculation.retry();
               }}
@@ -816,7 +996,7 @@ export function SpreadsheetEditor(props: {
       </Show>
       <SpreadsheetToolbar
         onComment={props.comments ? addComment : undefined}
-        canComment={getSpreadsheetEditorCanComment()}
+        canComment={userCanComment()}
         readonly={isEditorReadonly()}
         canUndo={props.store.canUndo()}
         canRedo={props.store.canRedo()}
@@ -824,6 +1004,7 @@ export function SpreadsheetEditor(props: {
           ...activeCell(),
           ...selectionToggleStyles(props.store.cells(), grid.selection()),
         }}
+        inTable={!!tableActions.activeTable()}
         zoom={zoom()}
         showGridlines={showGridlines()}
         showFormulaBar={showFormulaBar()}
@@ -841,7 +1022,7 @@ export function SpreadsheetEditor(props: {
           drawingActions.insertChart(type);
         }}
         onInsertImage={() => imageInput.click()}
-        onSelectDrawings={getSpreadsheetEditorOnSelectDrawings()}
+        onSelectDrawings={selectDrawingsAction()}
       />
       <input
         ref={imageInput}
@@ -852,7 +1033,11 @@ export function SpreadsheetEditor(props: {
         onChange={(event) => {
           const file = event.currentTarget.files?.[0];
           event.currentTarget.value = '';
-          if (file) void drawingActions.insertImage(file);
+          if (file)
+            fireAndForget(
+              drawingActions.insertImage(file),
+              'spreadsheet-editor'
+            );
         }}
       />
       <input
@@ -864,24 +1049,21 @@ export function SpreadsheetEditor(props: {
         onChange={(event) => {
           const file = event.currentTarget.files?.[0];
           event.currentTarget.value = '';
-          void importFile(file);
+          fireAndForget(importFile(file), 'spreadsheet-editor');
         }}
       />
-      <Show when={getSpreadsheetEditorWhen()}>
+      <Show when={showsFormulaBar()}>
         <FormulaBar
           mentions={props.mentions}
           editing={!!grid.editing()}
           complete={calculation.complete}
+          tableReferences={tableActions.references}
           selectionRequest={grid.editorSelection()}
           references={grid.draftReferences()}
-          pickingReference={getSpreadsheetEditorPickingReference()}
+          pickingReference={isPickingReference()}
           onSelectionChange={grid.setTextSelection}
-          address={
-            grid.editing()
-              ? grid.editingAddress()
-              : formulaRangeReference(grid.selection())
-          }
-          value={grid.editing() ? grid.draft() : cellEditValue(activeCell())}
+          address={formulaBarAddress()}
+          value={formulaBarValue()}
           readonly={!editable()}
           onNavigate={(address) => {
             const parts = address.split(':');
@@ -911,6 +1093,7 @@ export function SpreadsheetEditor(props: {
           mentions={props.mentions}
           sheetId={props.store.activeSheetId()}
           complete={calculation.complete}
+          tableReferences={tableActions.references}
           cells={props.store.cells()}
           zoom={zoom()}
           showGridlines={showGridlines()}
@@ -933,10 +1116,13 @@ export function SpreadsheetEditor(props: {
           hiddenColumns={props.store.activeSheet().metadata?.hiddenColumns}
           canChangeStructure={props.store.canChangeStructure()}
           onCellAction={command}
-          onHeaderAction={(axis, action) => void headerAction(axis, action)}
+          onHeaderAction={(axis, action) =>
+            fireAndForget(headerAction(axis, action), 'spreadsheet-editor')
+          }
           onResizeColumn={props.store.resizeColumn}
           onFill={grid.fill}
           onCopyMetadata={grid.copyMetadata}
+          onMoveSelection={moveSelectionAction()}
           values={values()}
           notes={props.store.activeSheet().metadata?.notes}
           drawings={props.store.activeSheet().metadata?.drawings}
@@ -968,16 +1154,30 @@ export function SpreadsheetEditor(props: {
           revealDrawing={revealDrawing()}
           inputMessage={inputMessage()}
           listItems={activeList()}
-          dropdownRanges={dropdownRanges()}
+          dropdowns={dropdowns()}
+          onToggleCheckbox={(position) => {
+            actions.clearNotice();
+            grid.select(position);
+            grid.toggleCheckboxes();
+          }}
+          tables={props.store.activeSheet().metadata?.tables}
+          tableUi={tableUi}
           onPickListItem={(item) => {
             if (!editable()) return;
             grid.commit();
+            if (tableActions.pickTotal(item)) return;
             // A choice is literal text, even one that starts like a formula.
             props.store.setCells({
               [grid.activeAddress()]: {
                 value: item.startsWith('=') ? `'${item}` : item,
               },
             });
+          }}
+          datePicker={activeDatePicker()}
+          onPickDate={(day) => {
+            if (day.getTime() !== activeDatePicker()?.date?.getTime())
+              grid.setDraft(cellDateInput(activeCell()?.value ?? '', day));
+            grid.commit();
           }}
           pendingFormulas={
             calculation.busy() &&
@@ -987,7 +1187,7 @@ export function SpreadsheetEditor(props: {
           comments={props.comments}
           selection={grid.selection()}
           editing={grid.editing() === 'cell' && grid.isEditingActiveSheet()}
-          formulaEditing={getSpreadsheetEditorFormulaEditing()}
+          formulaEditing={editingFormula()}
           editorSelection={grid.editorSelection()}
           referenceSelection={grid.referenceSelection()}
           referenceHighlights={grid.referenceHighlights()}
@@ -1022,6 +1222,17 @@ export function SpreadsheetEditor(props: {
             ) {
               event.preventDefault();
               command('find');
+              return;
+            }
+            // Google Sheets' shortcut to convert to a table.
+            if (
+              (event.metaKey || event.ctrlKey) &&
+              event.altKey &&
+              event.code === 'KeyT'
+            ) {
+              event.preventDefault();
+              event.stopPropagation();
+              tableActions.convert();
               return;
             }
             if (
@@ -1068,29 +1279,20 @@ export function SpreadsheetEditor(props: {
             actions.clearNotice();
             workbookActions.clearNotice();
             if (grid.editing()) queueMicrotask(restoreEditorFocus);
-            else {
-              focusGrid();
-              queueMicrotask(revealSelection);
-            }
+            else focusGrid();
           }}
           onAdd={() => {
             workbookActions.addSheet();
-            queueMicrotask(() => {
-              focusGrid();
-              revealSelection();
-            });
+            queueMicrotask(focusGrid);
           }}
           onRename={(id) => workbookActions.openSheetDialog('rename', id)}
           onDuplicate={(id) => {
             workbookActions.duplicateSheet(id);
-            queueMicrotask(() => {
-              focusGrid();
-              revealSelection();
-            });
+            queueMicrotask(focusGrid);
           }}
           onDelete={(id) => workbookActions.openSheetDialog('delete', id)}
           onMove={workbookActions.moveSheet}
-          onAddRows={getSpreadsheetEditorOnAddRows()}
+          onAddRows={addRowsAction()}
           addRowsLabel={`Add ${Math.min(100, SPREADSHEET_MAX_ROWS - props.store.rowCount())} rows`}
         />
         <span class="hidden shrink-0 whitespace-nowrap xl:inline">
@@ -1101,9 +1303,11 @@ export function SpreadsheetEditor(props: {
           when={editable() && props.store.rowCount() < SPREADSHEET_MAX_ROWS}
         >
           <Button
+            variant="ghost"
+            aria-label={`Add ${Math.min(100, SPREADSHEET_MAX_ROWS - props.store.rowCount())} rows`}
+            tooltip={`Add ${Math.min(100, SPREADSHEET_MAX_ROWS - props.store.rowCount())} rows`}
             size="sm"
             class="max-sm:hidden touch:min-h-[44px]"
-            label={`Add ${Math.min(100, SPREADSHEET_MAX_ROWS - props.store.rowCount())} rows`}
             onClick={() => {
               grid.commit();
               props.store.appendRows(100);
@@ -1119,9 +1323,11 @@ export function SpreadsheetEditor(props: {
           }
         >
           <Button
+            variant="ghost"
+            aria-label="Add 26 columns"
+            tooltip="Add 26 columns"
             size="sm"
             class="max-sm:hidden touch:min-h-[44px]"
-            label="Add 26 columns"
             onClick={() => {
               grid.commit();
               props.store.appendColumns(26);
@@ -1212,10 +1418,14 @@ export function SpreadsheetEditor(props: {
             </span>
           </Show>
         </div>
-        <div class="shrink-0 border-l border-edge-muted pl-1 max-sm:order-1">
+        <div class="flex shrink-0 items-center gap-0.5 border-l border-edge-muted pl-1 max-sm:order-1">
+          <SpreadsheetImportButton
+            disabled={isEditorReadonly()}
+            onCommand={menuCommand}
+          />
           <SpreadsheetFileMenu
             readonly={isEditorReadonly()}
-            canExport={getSpreadsheetEditorCanExport()}
+            canExport={canExport()}
             onCommand={menuCommand}
             onRestoreFocus={restoreEditorFocus}
           />
@@ -1237,12 +1447,32 @@ export function SpreadsheetEditor(props: {
           else focusGrid();
         }}
       />
+      <SpreadsheetMoveDialog
+        open={!!rangeMove.confirming()}
+        onConfirm={() =>
+          fireAndForget(rangeMove.confirm(), 'spreadsheet-editor')
+        }
+        onClose={rangeMove.cancel}
+        onRestoreFocus={focusGrid}
+      />
       <DropdownDialog
         dialog={dropdownDialog()}
         error={dropdownError()}
+        rangeChoices={rangeChoices}
         onSave={changeDropdown}
         onRemove={() => changeDropdown()}
         onClose={() => setDropdownDialog(undefined)}
+        onRestoreFocus={focusGrid}
+      />
+      <SpreadsheetTableDialogs
+        actions={tableActions}
+        readonly={!editable()}
+        onRestoreFocus={focusGrid}
+      />
+      <DateFormatDialog
+        dialog={dateFormatDialog()}
+        onSave={changeDateFormat}
+        onClose={() => setDateFormatDialog(undefined)}
         onRestoreFocus={focusGrid}
       />
       <SpreadsheetSheetDialog
@@ -1290,7 +1520,7 @@ export function SpreadsheetEditor(props: {
         solution={goalSeek.solution()}
         message={goalSeek.message()}
         onSeek={() => {
-          void goalSeek.seek();
+          fireAndForget(goalSeek.seek(), 'spreadsheet-editor');
         }}
         onApply={goalSeek.apply}
         onEdit={goalSeek.clearSolution}
@@ -1327,15 +1557,15 @@ export function SpreadsheetEditor(props: {
     </section>
   );
 
-  function getSpreadsheetEditorCanComment(): boolean | undefined {
+  function userCanComment(): boolean | undefined {
     return props.comments?.canComment();
   }
 
-  function getSpreadsheetEditorContent() {
+  function resizeAxis() {
     return resize()?.axis;
   }
 
-  function getSpreadsheetEditorOnAddRows(): (() => void) | undefined {
+  function addRowsAction(): (() => void) | undefined {
     return editable() && props.store.rowCount() < SPREADSHEET_MAX_ROWS
       ? () => {
           grid.commit();
@@ -1345,14 +1575,39 @@ export function SpreadsheetEditor(props: {
       : undefined;
   }
 
-  function getSpreadsheetEditorFormulaEditing(): boolean | undefined {
+  function editingFormula(): boolean | undefined {
     return (
       !!grid.editing() &&
       (grid.editing() === 'formula' || !grid.isEditingActiveSheet())
     );
   }
 
-  function getSpreadsheetEditorPickingReference(): boolean | undefined {
+  /** The formula bar shows the cell being edited, or the selection. */
+  function formulaBarAddress() {
+    return grid.editing()
+      ? grid.editingAddress()
+      : formulaRangeReference(grid.selection());
+  }
+
+  function formulaBarValue() {
+    return grid.editing()
+      ? grid.draft()
+      : cellEditValue(activeCell(), navigator.language);
+  }
+
+  function moveSelectionAction() {
+    if (!canMoveCells()) return;
+    return (selection: CellSelection, rows: number, columns: number) => {
+      grid.commit();
+      actions.clearNotice();
+      fireAndForget(
+        rangeMove.move(selection, rows, columns),
+        'spreadsheet-editor'
+      );
+    };
+  }
+
+  function isPickingReference(): boolean | undefined {
     return (
       grid.pickingReference() ||
       (isTouchDevice() && !!grid.referenceSelection())
@@ -1363,15 +1618,15 @@ export function SpreadsheetEditor(props: {
     return !editable() || actions.pending() || !!workbookActions.busy();
   }
 
-  function getSpreadsheetEditorMax(): string | number | undefined {
+  function resizeMax(): string | number | undefined {
     return resize()?.axis === 'row' ? 400 : 640;
   }
 
-  function getSpreadsheetEditorMin(): string | number | undefined {
+  function resizeMin(): string | number | undefined {
     return resize()?.axis === 'row' ? 21 : 64;
   }
 
-  function getSpreadsheetEditorOnSelectDrawings(): (() => void) | undefined {
+  function selectDrawingsAction(): (() => void) | undefined {
     return props.store.activeSheet().metadata?.drawings?.length
       ? () => {
           const [first] = [
@@ -1384,21 +1639,11 @@ export function SpreadsheetEditor(props: {
       : undefined;
   }
 
-  function getSpreadsheetEditorWhen(): boolean | null | undefined {
+  function showsFormulaBar(): boolean | null | undefined {
     return (
       showFormulaBar() ||
       grid.editing() === 'formula' ||
       (isTouchDevice() && !!grid.editing())
-    );
-  }
-
-  function getSpreadsheetEditorCanExport(): boolean {
-    return (
-      props.store.ready() &&
-      !calculation.busy() &&
-      !calculation.error() &&
-      !grid.editing() &&
-      !workbookActions.busy()
     );
   }
 }

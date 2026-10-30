@@ -3,14 +3,25 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useSettingsTabs } from './settingsTabsConfig';
 
 const platform = vi.hoisted(() => ({ current: 'web' }));
+const touch = vi.hoisted(() => ({ current: false }));
 let flagEnabled: () => boolean;
+let agentsEnabled: () => boolean = () => false;
 
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) => () => ({
-    enabled: flag.key === 'desktop-app' && flagEnabled(),
+    enabled:
+      (flag.key === 'desktop-app' && flagEnabled()) ||
+      (flag.key === 'enable-chat-v3-agents' && agentsEnabled()),
   }),
 }));
-vi.mock('../context/user', () => ({ useHasPermission: () => () => false }));
+vi.mock('../mobile/isTouchDevice', () => ({
+  isTouchDevice: () => touch.current,
+}));
+vi.mock('../context/user', () => ({
+  useHasPermission: () => () => false,
+  useEmail: () => () => undefined,
+  useUserId: () => () => undefined,
+}));
 vi.mock('../util/platform', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../util/platform')>()),
   isPlatform: (target: string) => target === platform.current,
@@ -74,6 +85,34 @@ describe('Notifications settings', () => {
       expect(personal?.items.map((item) => item.tab)).toContain(
         'Notifications'
       );
+    }
+  );
+});
+
+describe('Routines settings', () => {
+  // Desktop lists Routines in the Agents sidebar, which touch hides.
+  it.each([
+    { onTouch: false, agents: true, expected: false },
+    { onTouch: true, agents: false, expected: false },
+    { onTouch: true, agents: true, expected: true },
+  ])(
+    'is available on touch=$onTouch with agents=$agents: $expected',
+    ({ onTouch, agents, expected }) => {
+      touch.current = onTouch;
+      agentsEnabled = () => agents;
+      const tabs = createRoot((cleanup) => {
+        dispose = cleanup;
+        flagEnabled = () => false;
+        return useSettingsTabs();
+      });
+
+      expect(tabs.isAvailable('Routines')).toBe(expected);
+      const blocks = tabs.groups().find((group) => group.label === 'Blocks');
+      expect(blocks?.items.map((item) => item.tab).includes('Routines')).toBe(
+        expected
+      );
+      touch.current = false;
+      agentsEnabled = () => false;
     }
   );
 });

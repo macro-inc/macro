@@ -1,3 +1,5 @@
+import { DraftTransferAborted } from '@app/features/email-compose/context/compose-capabilities';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import { invalidateAllSoup, refetchSoupEntity } from '@queries/soup/cache';
@@ -5,11 +7,14 @@ import { emailClient } from '@service-email/client';
 import type {
   ApiDraftInput,
   CreateDraftResponse,
+  TransferDraftResponse,
 } from '@service-email/generated/schemas';
+import { getGraphqlCacheHost } from '@service-storage/graphql-soup';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { refreshEmailThreadCache } from './cache-cleanup';
+import { markThreadDraftSaved } from './draft-cache';
 import { emailKeys } from './keys';
 
 type CreateDraftParams = {
@@ -40,49 +45,18 @@ export function useSaveDraftMutation(
         },
         onSuccess(data, vars) {
           try {
-            const settleInvalidateQueriesHandler0 = Telemetry.error;
-            const settleInvalidateQueries = async () => {
-              try {
-                return await queryClient.invalidateQueries({
-                  queryKey: emailKeys.previews._def,
-                });
-              } catch (settleInvalidateQueriesError) {
-                return await settleInvalidateQueriesHandler0(
-                  settleInvalidateQueriesError
-                );
-              }
-            };
-            void settleInvalidateQueries();
+            queryClient.invalidateQueries({
+              queryKey: emailKeys.previews._def,
+            });
             const threadId = data.draft.thread_db_id;
             if (!threadId) return;
+            markThreadDraftSaved(threadId);
             if (!vars.skipSoupRefetch) {
-              const settleRefetchSoupEntityHandler0 = Telemetry.error;
-              const settleRefetchSoupEntity = async () => {
-                try {
-                  return await refetchSoupEntity(threadId, 'emailThread');
-                } catch (settleRefetchSoupEntityError) {
-                  return await settleRefetchSoupEntityHandler0(
-                    settleRefetchSoupEntityError
-                  );
-                }
-              };
-              void settleRefetchSoupEntity();
+              fireAndForget(
+                refetchSoupEntity(threadId, 'emailThread'),
+                'email-draft'
+              );
             }
-            // Reopening the thread reads the messages cache; drop it so the
-            // saved draft body isn't served stale.
-            const settleInvalidateQueriesResultHandler0 = Telemetry.error;
-            const settleInvalidateQueriesResult = async () => {
-              try {
-                return await queryClient.invalidateQueries({
-                  queryKey: emailKeys.threadMessages(threadId).queryKey,
-                });
-              } catch (settleInvalidateQueriesResultError) {
-                return await settleInvalidateQueriesResultHandler0(
-                  settleInvalidateQueriesResultError
-                );
-              }
-            };
-            void settleInvalidateQueriesResult();
           } catch (error) {
             Telemetry.error(error);
           }
@@ -95,6 +69,7 @@ export function useSaveDraftMutation(
 
 type DeleteDraftParams = {
   draftId: string;
+  draftGeneration?: number;
   /** Thread the draft belonged to, refetched so it leaves the drafts tab. */
   threadId?: string;
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
@@ -113,7 +88,10 @@ export function useDeleteDraftMutation(
     mutationFn: async (vars: DeleteDraftParams) => {
       await throwOnErr(
         async () =>
-          await emailClient.deleteDraft({ id: vars.draftId }, vars.linkId)
+          await emailClient.deleteDraft(
+            { id: vars.draftId, draftGeneration: vars.draftGeneration },
+            vars.linkId
+          )
       );
     },
     ...withCallbacks<void, Error, DeleteDraftParams>(
@@ -126,36 +104,18 @@ export function useDeleteDraftMutation(
             if (vars.threadId) {
               await refreshEmailThreadCache(vars.threadId);
             }
-            const settleInvalidateQueriesResultResultHandler0 = Telemetry.error;
-            const settleInvalidateQueriesResultResult = async () => {
-              try {
-                return await queryClient.invalidateQueries({
-                  queryKey: emailKeys.previews._def,
-                });
-              } catch (settleInvalidateQueriesResultResultError) {
-                return await settleInvalidateQueriesResultResultHandler0(
-                  settleInvalidateQueriesResultResultError
-                );
-              }
-            };
-            void settleInvalidateQueriesResultResult();
+            queryClient.invalidateQueries({
+              queryKey: emailKeys.previews._def,
+            });
             if (vars.skipSoupRefetch) return;
             // Refetch the thread (not the deleted draft) so its draft-derived
             // fields settle. No-op for compose drafts, whose thread is deleted
             // along with the draft, so the refetch finds nothing to update.
             if (vars.threadId) {
-              const threadId = vars.threadId;
-              const settleRefetchSoupEntityResultHandler0 = Telemetry.error;
-              const settleRefetchSoupEntityResult = async () => {
-                try {
-                  return await refetchSoupEntity(threadId, 'emailThread');
-                } catch (settleRefetchSoupEntityResultError) {
-                  return await settleRefetchSoupEntityResultHandler0(
-                    settleRefetchSoupEntityResultError
-                  );
-                }
-              };
-              void settleRefetchSoupEntityResult();
+              fireAndForget(
+                refetchSoupEntity(vars.threadId, 'emailThread'),
+                'email-draft'
+              );
             }
             // Discarding a draft changes view membership — the thread leaves
             // Signal/Drafts and a noise thread re-enters Noise — which a
@@ -170,4 +130,59 @@ export function useDeleteDraftMutation(
       callbacks
     ),
   }));
+}
+
+/** Moving creates a new server identity; old queued mutations retain their old target. */
+export async function transferEmailDraft(input: {
+  operationId: string;
+  draftId: string;
+  draftGeneration?: number;
+  sourceInboxId: string;
+  destinationInboxId: string;
+}) {
+  let result;
+  try {
+    result = await throwOnErr(() =>
+      emailClient.transferDraft(
+        input.draftId,
+        {
+          operation_id: input.operationId,
+          draft_generation: input.draftGeneration ?? 0,
+          destination_link_id: input.destinationInboxId,
+        },
+        input.sourceInboxId
+      )
+    );
+  } catch (originalError) {
+    const recovery = await throwOnErr(() =>
+      emailClient.recoverDraftTransfer(input.operationId)
+    );
+    if (!recovery.committed)
+      throw new DraftTransferAborted(
+        'The inbox change did not complete. Your original draft is preserved; you can edit it and try again.',
+        { cause: originalError }
+      );
+    result = recovery.committed;
+  }
+  // Cache refresh errors must not turn a committed move into a failed write.
+  // The caller shows the moved draft first. Evicting the source thread
+  // replaces a route that still shows it with the not-found page.
+  fireAndForget(refreshTransferredThreads(result), 'email-draft-transfer');
+  return result;
+}
+
+async function refreshTransferredThreads(result: TransferDraftResponse) {
+  await getGraphqlCacheHost()?.deleteRecords([
+    `GraphqlSoupEmailMessage:${result.source_id}`,
+  ]);
+  await Promise.all([
+    refreshEmailThreadCache(result.source_thread_id),
+    refreshEmailThreadCache(result.thread_id),
+  ]);
+  for (const threadId of [result.source_thread_id, result.thread_id]) {
+    await queryClient.invalidateQueries({
+      queryKey: emailKeys.threadMessages(threadId).queryKey,
+    });
+  }
+  invalidateAllSoup();
 }

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { fetchCalendarMentionPreview } from '@queries/calendar/mention-preview';
 import { type Accessor, createSignal } from 'solid-js';
 import {
@@ -32,6 +33,17 @@ export function targetRequestFromParams(
   };
 }
 
+async function fetchPreviewOrNull(
+  eventId: string,
+  occurrenceKey: string | undefined
+) {
+  try {
+    return await fetchCalendarMentionPreview(eventId, occurrenceKey);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * A target with an event id but no usable range — a copied `/app/calendar`
  * link or a mention without preview data — resolves through the calendar
@@ -47,16 +59,7 @@ export async function resolveTargetRequestFromPreview(
   }
   const occurrenceKey =
     typeof params.occurrenceKey === 'string' ? params.occurrenceKey : undefined;
-
-  const eventId = params.eventId;
-  const settleFetchCalendarMentionPreview = async () => {
-    try {
-      return await fetchCalendarMentionPreview(eventId, occurrenceKey);
-    } catch {
-      return await null;
-    }
-  };
-  const event = await settleFetchCalendarMentionPreview();
+  const event = await fetchPreviewOrNull(params.eventId, occurrenceKey);
   // A channel-shared meeting is on none of the viewer's calendars, so there
   // is no event of theirs for the block to focus.
   if (!event?.viewerEventId) return undefined;
@@ -128,6 +131,13 @@ export function createCalendarTargetAim(options: {
     setTarget(resolved);
   };
 
+  const applyFromPreview = async (
+    params: CalendarViewTarget,
+    requestId: number
+  ) => {
+    applyResolvedTarget(requestId, await resolveFromPreview(params, requestId));
+  };
+
   const aimAt = (params: CalendarViewTarget) => {
     const requestId = nextRequestId++;
     latestRequestId = requestId;
@@ -137,18 +147,7 @@ export function createCalendarTargetAim(options: {
       return;
     }
     if (typeof params.eventId === 'string' && params.eventId.length > 0) {
-      const settleResolveFromPreview = async () => {
-        const settleResolveFromPreviewValue = await resolveFromPreview(
-          params,
-          requestId
-        );
-        const resolved = settleResolveFromPreviewValue;
-
-        applyResolvedTarget(requestId, resolved);
-
-        return;
-      };
-      settleResolveFromPreview();
+      fireAndForget(applyFromPreview(params, requestId), 'calendar-target');
       return;
     }
     applyResolvedTarget(requestId, undefined);

@@ -3,7 +3,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ChatProviderIcon } from '@entity/components/ChatProviderIcon';
-import ChevronRightIcon from '@phosphor/caret-right.svg';
+import ChevronRightIcon from '@icon/system/regular/caret-right.svg';
 import {
   type SoupItemsQueryArgs,
   useSoupItemsQuery,

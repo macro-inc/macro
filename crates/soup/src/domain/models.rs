@@ -1,25 +1,48 @@
+#[cfg(feature = "ports")]
 pub(crate) mod contact_listing;
 pub mod grouping;
 
+#[cfg(feature = "ports")]
 mod exclusions;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "ports"))]
 mod test;
 
-use call::domain::models::GetCallRecordsRequest;
-use channels::domain::models::{GetChannelsRequest, GetThreadReplyRowsRequest};
 use crm::domain::auth::CrmTeamReceipt;
 use crm::domain::companies_repo::{CrmCompanyListSort, CrmCompanySoupCursor};
-use email::domain::models::{GetEmailsRequest, PreviewView};
-use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
-use filter_ast::Expr;
-use foreign_entity::domain::{models::SourceId, ports::ForeignEntityListQuery};
+use email::domain::models::PreviewView;
+use entity_access::domain::models::MemberTeamRole;
+use foreign_entity::domain::models::SourceId;
 use frecency::domain::models::{AggregateFrecency, FrecencyQueryErr};
 use github_pull_requests::domain::models::GithubPullRequestError;
 use item_filters::{
     EntityFilters,
-    ast::{
-        EntityFilterAst, ExpandErr, LiteralTree,
+    ast::{EntityFilterAst, ExpandErr},
+};
+use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::{Entity, EntityType};
+use models_grouping::GroupingConfig;
+use models_pagination::{
+    CursorWithValAndFilter, Frecency, NotifiedAt, Query, SimpleSortMethod, TouchedByMe,
+};
+use models_soup::SoupProperty;
+use models_soup::item::SoupItem;
+use non_empty::IsEmpty;
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+use uuid::Uuid;
+
+// Only the service's sub-request builders below use these.
+#[cfg(feature = "ports")]
+use {
+    call::domain::models::GetCallRecordsRequest,
+    channels::domain::models::{GetChannelsRequest, GetThreadReplyRowsRequest},
+    email::domain::models::GetEmailsRequest,
+    entity_access::domain::models::EntityAccessReceipt,
+    filter_ast::Expr,
+    foreign_entity::domain::ports::ForeignEntityListQuery,
+    item_filters::ast::{
+        LiteralTree,
         calendar_event::CalendarEventLiteral,
         call::CallLiteral,
         crm_company::CrmCompanyLiteral,
@@ -30,21 +53,10 @@ use item_filters::{
             properties_filter_matches_propertyless,
         },
     },
+    models_pagination::Cursor,
+    recursion::CollapsibleExt,
+    std::sync::Arc,
 };
-use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
-use models_grouping::GroupingConfig;
-use models_pagination::{
-    Cursor, CursorWithValAndFilter, Frecency, NotifiedAt, Query, SimpleSortMethod, TouchedByMe,
-};
-use models_soup::SoupProperty;
-use models_soup::item::SoupItem;
-use non_empty::IsEmpty;
-use recursion::CollapsibleExt;
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use thiserror::Error;
-use uuid::Uuid;
 
 /// Direction the merged Soup page is ordered in.
 ///
@@ -70,6 +82,14 @@ pub enum SoupType {
 }
 
 /// the parameters required for a [SimpleSortMethod]
+#[cfg(feature = "ports")]
+#[cfg_attr(
+    not(any(feature = "outbound", test)),
+    expect(
+        dead_code,
+        reason = "only the outbound Postgres repository and tests read it"
+    )
+)]
 #[derive(Debug, Clone)]
 pub struct SimpleSortRequest<'a> {
     /// the limit of the number of items to return
@@ -93,6 +113,14 @@ pub struct GroupedSortRequest<'a> {
     pub grouping: GroupingConfig,
 }
 
+#[cfg(feature = "ports")]
+#[cfg_attr(
+    not(any(feature = "outbound", test)),
+    expect(
+        dead_code,
+        reason = "only the outbound Postgres repository and tests read it"
+    )
+)]
 #[derive(Debug, Clone)]
 pub(crate) enum SimpleSortQuery {
     /// we dont have anything to filter out
@@ -105,6 +133,7 @@ pub(crate) enum SimpleSortQuery {
     ItemsAndFrecencyFilter(Query<Uuid, SimpleSortMethod, (Frecency, EntityFilterAst)>),
 }
 
+#[cfg(feature = "ports")]
 impl SimpleSortQuery {
     pub(crate) fn from_entity_cursor(
         cursor: Query<Uuid, SimpleSortMethod, Option<EntityFilterAst>>,
@@ -138,6 +167,7 @@ impl SimpleSortQuery {
     }
 }
 
+#[cfg(any(feature = "outbound", all(test, feature = "ports")))]
 impl SimpleSortQuery {
     pub(crate) fn sort_method(&self) -> &SimpleSortMethod {
         match self {
@@ -344,7 +374,7 @@ pub struct SoupRequest<T> {
     pub email_preview_view: PreviewView,
     /// Every inbox the caller can read (own + delegated via macro_user_links).
     /// Empty when the caller has no inboxes — `build_email_request` returns
-    /// `None` so the email branch is skipped.
+    /// `None` so the email branch is skipped, unless the request is CRM-scoped.
     pub link_ids: Vec<Uuid>,
 }
 
@@ -402,6 +432,7 @@ impl IntoSoupReqAst for SoupRequest<EntityFilterAst> {
     }
 }
 
+#[cfg(feature = "ports")]
 impl<T> SoupRequest<T> {
     /// returns a reference to the filters to pass to the paginator
     /// this is used to prevent passing back the full ast on each server request
@@ -410,6 +441,7 @@ impl<T> SoupRequest<T> {
     }
 }
 
+#[cfg(feature = "ports")]
 impl SoupRequest<Option<EntityFilterAst>> {
     /// take the parts of the [SoupRequest] that are only relevant to email
     /// and move them into a [GetEmailsRequest] if it is possible to create one.
@@ -424,7 +456,9 @@ impl SoupRequest<Option<EntityFilterAst>> {
         let entity_ast = self.entity_ast();
         let crm_scope = entity_ast.and_then(|a| a.email_filter.crm_scope.clone());
 
-        if self.link_ids.is_empty() {
+        // A CRM scope reads teammates' threads, which email authorizes against
+        // the scope, so a viewer without a mailbox of their own still sees them.
+        if self.link_ids.is_empty() && crm_scope.is_none() {
             return None;
         }
         // CRM-scoped requests must still reach email's authorization precheck,
@@ -1026,6 +1060,7 @@ pub struct WorkFeedSoupPage {
 /// (status, time bounds, attendee, organizer) live in the calendar leg's
 /// query builder, which the candidate query cannot reach. Rejecting up front
 /// beats silently returning a feed with those events unfiltered.
+#[cfg(feature = "ports")]
 pub(crate) fn calendar_filter_supported_by_notified(
     tree: Option<&Expr<CalendarEventLiteral>>,
 ) -> bool {
@@ -1044,6 +1079,7 @@ pub(crate) fn calendar_filter_supported_by_notified(
 /// ANDs a properties filter into the email filter tree as thread-level
 /// [EmailLiteral::Property] conditions, so the email query returns exactly
 /// the threads that satisfy it.
+#[cfg(feature = "ports")]
 fn with_properties_filter(
     tree: Option<Arc<Expr<EmailLiteral>>>,
     properties_filter: Option<&Expr<PropertiesLiteral>>,
@@ -1058,6 +1094,7 @@ fn with_properties_filter(
     }))
 }
 
+#[cfg(feature = "ports")]
 fn map_properties_to_email(expr: &Expr<PropertiesLiteral>) -> Expr<EmailLiteral> {
     match expr {
         Expr::And(a, b) => Expr::and(map_properties_to_email(a), map_properties_to_email(b)),
@@ -1070,6 +1107,7 @@ fn map_properties_to_email(expr: &Expr<PropertiesLiteral>) -> Expr<EmailLiteral>
 /// ANDs a properties filter (mapped to [CallLiteral::Property] conditions) into
 /// the call filter tree, so the call query returns exactly the calls that also
 /// satisfy the tag filter.
+#[cfg(feature = "ports")]
 fn with_call_properties_filter(
     tree: Option<Arc<Expr<CallLiteral>>>,
     properties_filter: Option<&Expr<PropertiesLiteral>>,
@@ -1084,6 +1122,7 @@ fn with_call_properties_filter(
     }))
 }
 
+#[cfg(feature = "ports")]
 fn map_properties_to_call(expr: &Expr<PropertiesLiteral>) -> Expr<CallLiteral> {
     match expr {
         Expr::And(a, b) => Expr::and(map_properties_to_call(a), map_properties_to_call(b)),
@@ -1091,6 +1130,15 @@ fn map_properties_to_call(expr: &Expr<PropertiesLiteral>) -> Expr<CallLiteral> {
         Expr::Not(a) => Expr::Not(Box::new(map_properties_to_call(a))),
         Expr::Literal(lit) => Expr::Literal(CallLiteral::Property(lit.clone())),
     }
+}
+
+/// An entity whose Companies or Contacts property names a CRM record.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CrmPropertyEdge {
+    /// The entity type the property row is stored under.
+    pub entity_type: models_properties::EntityType,
+    /// The entity id the property row is stored under.
+    pub entity_id: String,
 }
 
 /// Parameters for fetching CRM companies to fold into the soup feed.
@@ -1121,6 +1169,7 @@ pub struct GetCrmCompaniesRequest {
 
 /// Outcome of walking a `CrmCompanyLiteral` AST: the ids and the
 /// optional `hidden` constraint pulled out of the tree.
+#[cfg(feature = "ports")]
 #[derive(Debug, Default)]
 pub(crate) struct CrmCompanyFilterExtract {
     pub ids: Vec<Uuid>,
@@ -1134,6 +1183,7 @@ pub(crate) struct CrmCompanyFilterExtract {
 ///   - two `Hidden(_)` literals conflict (e.g. `Hidden(true) AND Hidden(false)`),
 ///   - an `Or(_, _)` branch mixes ids and a hidden literal (would change
 ///     set semantics in ways the simple extractor can't represent).
+#[cfg(feature = "ports")]
 fn extract_crm_company_filter(
     expr: &Expr<CrmCompanyLiteral>,
     out: &mut CrmCompanyFilterExtract,
@@ -1164,6 +1214,7 @@ fn extract_crm_company_filter(
 /// Helper for [`extract_crm_company_filter`]: an `Or` branch must be a
 /// pure id sub-tree (nested `Or` of `Id` literals) — any `Hidden`, `And`,
 /// or `Not` inside fails closed.
+#[cfg(feature = "ports")]
 fn or_is_ids_only(expr: &Expr<CrmCompanyLiteral>, out: &mut CrmCompanyFilterExtract) -> bool {
     match expr {
         Expr::Literal(CrmCompanyLiteral::Id(id)) => {
@@ -1305,6 +1356,9 @@ pub enum SoupErr {
     /// role is below admin/owner.
     #[error("Querying hidden CRM companies requires admin/owner team role")]
     CrmAdminRequired,
+    /// The filter is restricted to a CRM record the caller cannot see.
+    #[error("CRM record not found")]
+    CrmRecordNotFound,
     /// GitHub pull request listing failed.
     #[error(transparent)]
     GithubPullRequestErr(#[from] GithubPullRequestError),

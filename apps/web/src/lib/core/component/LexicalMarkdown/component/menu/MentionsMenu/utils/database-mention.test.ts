@@ -76,7 +76,7 @@ describe('mentioning a database', () => {
   });
 });
 
-it('inserts a CRM contact reference without sharing, inviting, or notification tracking', async () => {
+it('records a CRM contact reference without sharing, inviting, or notifying', async () => {
   trackMention.mockClear();
   const dispatchCommand = vi.fn();
   const onUserMention = vi.fn();
@@ -110,8 +110,14 @@ it('inserts a CRM contact reference without sharing, inviting, or notification t
     documentId: 'contact-1',
     documentName: 'Pat',
     blockName: 'contact',
+    mentionUuid: 'mention-1',
   });
-  expect(trackMention).not.toHaveBeenCalled();
+  // Recorded as a reference of the contact, which is not a notification.
+  expect(trackMention).toHaveBeenCalledWith(
+    'doc-1',
+    'crm_contact',
+    'contact-1'
+  );
   expect(onUserMention).not.toHaveBeenCalled();
   expect(onDocumentMention).not.toHaveBeenCalled();
   expect(onEmailMention).not.toHaveBeenCalled();

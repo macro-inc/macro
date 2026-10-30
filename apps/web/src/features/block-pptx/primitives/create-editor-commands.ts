@@ -28,6 +28,7 @@ import type {
   TextPos,
   TransitionPatch,
 } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { PptxEditorContext } from '../context/pptx-editor-context';
 import { effectInfo, specOf } from '../core/animation-catalog';
 import { orderRange, textInRange } from '../core/caret';
@@ -144,16 +145,12 @@ export function createEditorCommands(options: EditorCommandsOptions) {
   /** The selected cell range, when formatting goes to cells. */
   const cellRange = () =>
     editor.editing() ? undefined : options.tableTarget();
-  const runs = (props: RunPatch) => {
+  const runs = async (props: RunPatch) => {
     if (cellRange()) return formatCells(props);
-    const settleFormatWithHandler0 = options.refocus;
-    const settleFormatWith = async () => {
-      await editor.formatWith((t, range) => formatCommand(t, range, props));
-      return await settleFormatWithHandler0();
-    };
-    return settleFormatWith();
+    await editor.formatWith((t, range) => formatCommand(t, range, props));
+    options.refocus();
   };
-  const paragraphs = (props: ParaPatch) => {
+  const paragraphs = async (props: ParaPatch) => {
     if (cellRange())
       return tableOp((slideId, t) =>
         cellsOf(t).map((cell) => ({
@@ -164,12 +161,8 @@ export function createEditorCommands(options: EditorCommandsOptions) {
           props,
         }))
       );
-    const settleFormatWithResultHandler0 = options.refocus;
-    const settleFormatWithResult = async () => {
-      await editor.formatWith((t, range) => paragraphCommand(t, range, props));
-      return await settleFormatWithResultHandler0();
-    };
-    return settleFormatWithResult();
+    await editor.formatWith((t, range) => paragraphCommand(t, range, props));
+    options.refocus();
   };
 
   const toggle = (key: TextToggle) => runs({ [key]: !format()[key] });
@@ -394,7 +387,10 @@ export function createEditorCommands(options: EditorCommandsOptions) {
   const arrange = (to: 'front' | 'back' | 'forward' | 'backward') => {
     const s = slide();
     if (!s) return;
-    void apply(reorderOps(s.id, targets(), s.shapes, to));
+    fireAndForget(
+      apply(reorderOps(s.id, targets(), s.shapes, to)),
+      'pptx-editor'
+    );
   };
   /** Moves one shape `steps` places toward the front (negative: back). */
   const moveInZOrder = (shape: number, steps: number) => {
@@ -429,17 +425,20 @@ export function createEditorCommands(options: EditorCommandsOptions) {
   const alignShapes = (mode: AlignMode, toSlide = false) => {
     const s = slide();
     if (!s) return;
-    void apply(alignOps(s.id, targets(), mode, options.slideSize(), toSlide));
+    fireAndForget(
+      apply(alignOps(s.id, targets(), mode, options.slideSize(), toSlide)),
+      'pptx-editor'
+    );
   };
   const rotate = (change: 'right90' | 'left90' | 'flipH' | 'flipV') => {
     const s = slide();
     if (!s) return;
-    void apply(rotateOps(s.id, targets(), change));
+    fireAndForget(apply(rotateOps(s.id, targets(), change)), 'pptx-editor');
   };
   const resize = (size: { w?: number; h?: number }) => {
     const s = slide();
     if (!s) return;
-    void apply(sizeOps(s.id, targets(), size));
+    fireAndForget(apply(sizeOps(s.id, targets(), size)), 'pptx-editor');
   };
   const move = (at: { x?: number; y?: number }) =>
     each((s, shape) => ({
@@ -741,12 +740,15 @@ export function createEditorCommands(options: EditorCommandsOptions) {
   const applyBackgroundToAll = () => {
     const deck = session.outline();
     if (!deck) return;
-    void apply(
-      deck.slides.map((x) => ({
-        op: 'setBackground' as const,
-        slide: x.id,
-        fill: lastBackground ?? undefined,
-      }))
+    fireAndForget(
+      apply(
+        deck.slides.map((x) => ({
+          op: 'setBackground' as const,
+          slide: x.id,
+          fill: lastBackground ?? undefined,
+        }))
+      ),
+      'pptx-editor'
     );
   };
   const setBackground = (fill: FillSpec | null, all = false) => {
@@ -757,12 +759,15 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     const ids = all
       ? deck.slides.map((x) => x.id)
       : selectedSlides().map((x) => x.id);
-    void apply(
-      ids.map((id) => ({
-        op: 'setBackground' as const,
-        slide: id,
-        fill: fill ?? undefined,
-      }))
+    fireAndForget(
+      apply(
+        ids.map((id) => ({
+          op: 'setBackground' as const,
+          slide: id,
+          fill: fill ?? undefined,
+        }))
+      ),
+      'pptx-editor'
     );
   };
 
@@ -1213,25 +1218,11 @@ export function createEditorCommands(options: EditorCommandsOptions) {
   const serial =
     <A extends unknown[], T>(edit: (...args: A) => Promise<T>) =>
     (...args: A): Promise<T> => {
-      const settleAnimationQueue = async () => {
-        try {
-          await animationQueue;
-        } catch {
-          return await edit(...args);
-        }
-
-        return await edit(...args);
-      };
-      const next = settleAnimationQueue();
-
-      const settleNext = async () => {
-        try {
-          return await next;
-        } catch {
-          return;
-        }
-      };
-      animationQueue = settleNext();
+      const next = (async () => {
+        await animationQueue;
+        return edit(...args);
+      })();
+      animationQueue = Promise.allSettled([next]);
       return next;
     };
   /**

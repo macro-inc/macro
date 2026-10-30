@@ -2,7 +2,7 @@
 //! them. Both calls act as the harness, and control calls additionally act
 //! for the user whose mention they forward.
 
-use agent_runtime_protocol::domain::action::AgentAction;
+use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::AgentSessionId;
 use agent_session::inbound::axum_router::{
     ControlRequest, CreateAgentSessionRequest, CreateAgentSessionResponse,
@@ -72,6 +72,34 @@ impl HarnessApi {
         request: &CreateAgentSessionRequest,
         acting_user: &MacroUserIdStr<'static>,
     ) -> Result<CreateAgentSessionResponse, ApiError> {
+        // A trigger stream is not replayed. Creation can commit before reply
+        // reservation fails, so retry the same identity before any prompt.
+        let attempts = if request.id.is_some() && request.thread.is_some() {
+            2
+        } else {
+            0
+        };
+        tokio_retry::RetryIf::start(
+            tokio_retry::strategy::ExponentialBackoff::from_millis(2)
+                .factor(100)
+                .take(attempts),
+            || self.create_session_once(request, acting_user),
+            |error: &ApiError| match error {
+                ApiError::Http(_) => true,
+                ApiError::Refused { status, .. } => {
+                    status.is_server_error() || *status == StatusCode::TOO_MANY_REQUESTS
+                }
+                ApiError::ThreadSessionExists { .. } => false,
+            },
+        )
+        .await
+    }
+
+    async fn create_session_once(
+        &self,
+        request: &CreateAgentSessionRequest,
+        acting_user: &MacroUserIdStr<'static>,
+    ) -> Result<CreateAgentSessionResponse, ApiError> {
         let response = self
             .http
             .post(format!("{}/agent-sessions", self.base))
@@ -103,13 +131,25 @@ impl HarnessApi {
         action: AgentAction,
         context: Option<TriggerContext>,
     ) -> Result<(), ApiError> {
+        self.control_with_id(session, actor, action, context, None)
+            .await
+    }
+
+    async fn control_with_id(
+        &self,
+        session: AgentSessionId,
+        actor: &MacroUserIdStr<'static>,
+        action: AgentAction,
+        context: Option<TriggerContext>,
+        action_id: Option<AgentActionId>,
+    ) -> Result<(), ApiError> {
         let response = self
             .http
             .post(format!("{}/agent-sessions/{session}/control", self.base))
             .header(HARNESS_TOKEN_HEADER, &self.token)
             .header(HARNESS_ACTING_USER_HEADER, actor.as_ref())
             .json(&ControlRequest {
-                action_id: None,
+                action_id,
                 context,
                 action,
             })
@@ -126,10 +166,17 @@ impl HarnessApi {
         session: AgentSessionId,
         sender: &MacroUserIdStr<'static>,
         text: &str,
+        message_id: macro_uuid::Uuid,
         context: Option<TriggerContext>,
     ) -> Result<(), ApiError> {
-        self.control(session, sender, AgentAction::prompt(text), context)
-            .await
+        self.control_with_id(
+            session,
+            sender,
+            AgentAction::prompt(text),
+            context,
+            Some(AgentActionId::from_uuid(message_id)),
+        )
+        .await
     }
 }
 
@@ -147,3 +194,6 @@ async fn refuse_errors(response: reqwest::Response) -> Result<reqwest::Response,
     }
     Err(ApiError::Refused { status, message })
 }
+
+#[cfg(test)]
+mod test;

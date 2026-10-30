@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { uploadFiles } from '@core/util/upload';
 import { refetchHistory } from '@queries/history/history';
 import { refetchSoupEntity } from '@queries/soup/cache';
@@ -31,7 +32,10 @@ export function createFolderCommands(options: {
           body: { properties },
         });
       if (result.isErr()) throw result.error;
-      refetchSoupEntity(id, 'project', { refreshGraphql: true });
+      fireAndForget(
+        refetchSoupEntity(id, 'project', { refreshGraphql: true }),
+        'drive-folder-creation'
+      );
     },
     async upload(id, file) {
       const [result] = await uploadFiles([file], 'dss', { projectId: id });
@@ -39,11 +43,17 @@ export function createFolderCommands(options: {
       if (result.type === 'folder') {
         const folderId = await result.projectId;
         if (!folderId) throw new Error('Folder upload failed');
-        refetchSoupEntity(folderId, 'project', { includeRoot: true });
+        fireAndForget(
+          refetchSoupEntity(folderId, 'project', { includeRoot: true }),
+          'drive-folder-creation'
+        );
       } else {
-        refetchSoupEntity(result.documentId, 'document');
+        fireAndForget(
+          refetchSoupEntity(result.documentId, 'document'),
+          'drive-folder-creation'
+        );
       }
-      refetchHistory();
+      fireAndForget(refetchHistory(), 'drive-folder-creation');
     },
   };
 }

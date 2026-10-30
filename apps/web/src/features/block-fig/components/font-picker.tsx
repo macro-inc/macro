@@ -5,9 +5,10 @@
  * `preview`, which resolves to a CSS family to draw the name in.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import WarningCircle from '@icon/system/regular/warning-circle.svg';
 import { Popover } from '@kobalte/core/popover';
-import CaretDown from '@phosphor/caret-down.svg';
-import WarningCircle from '@phosphor/warning-circle.svg';
 import { Layer } from '@ui';
 import {
   createMemo,
@@ -39,13 +40,16 @@ function Row(props: {
     const observer = new IntersectionObserver((entries) => {
       if (!entries.some((e) => e.isIntersecting)) return;
       observer.disconnect();
-      void (async () => {
-        try {
-          setFace(await preview(props.family));
-        } catch {
-          // No preview: the name shows in the panel's font.
-        }
-      })();
+      fireAndForget(
+        (async () => {
+          try {
+            setFace(await preview(props.family));
+          } catch {
+            // No preview: the name shows in the panel's font.
+          }
+        })(),
+        'fig-fonts'
+      );
     });
     observer.observe(el);
     onCleanup(() => observer.disconnect());
@@ -163,7 +167,7 @@ export function FontPicker(props: {
       <Popover.Portal>
         <Layer depth={3}>
           <Popover.Content
-            class="fig-editor-theme z-modal flex max-h-96 w-64 flex-col rounded-xl border border-edge-muted bg-menu p-2 text-xs shadow-xl outline-none"
+            class="menu-surface fig-editor-theme z-modal flex max-h-96 w-64 flex-col p-2 text-xs outline-none"
             aria-label="Fonts"
             data-testid="fig-font-picker"
             onKeyDown={(e: KeyboardEvent) => {

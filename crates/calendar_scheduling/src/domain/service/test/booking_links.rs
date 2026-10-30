@@ -141,7 +141,22 @@ async fn edit_preserves_other_links_hours_and_profile_and_rejects_stale_changes(
 }
 
 #[tokio::test]
-async fn invalid_drafts_and_team_non_admins_do_not_write() {
+async fn any_team_member_can_create_a_team_link() {
+    let service = TestService::new(
+        Arc::new(Memory::default()),
+        Arc::new(Calendar::default()),
+        Members,
+    );
+    let team = Some(Uuid::now_v7());
+    let profile = profile(team);
+    let draft = BookingLinkDraft::from_parts(&profile.event_types[0], &profile.schedules[0]);
+    let link = service.create_link("member", team, draft).await.unwrap();
+    let listed = service.list_links("admin", team, None).await.unwrap();
+    assert_eq!(listed.links[0].event_type_id, link.event_type_id);
+}
+
+#[tokio::test]
+async fn invalid_drafts_and_non_members_do_not_write() {
     let memory = Arc::new(Memory::default());
     let service = TestService::new(memory.clone(), Arc::new(Calendar::default()), Members);
     let mut invalid = draft();
@@ -158,7 +173,7 @@ async fn invalid_drafts_and_team_non_admins_do_not_write() {
     ));
     assert!(matches!(
         service
-            .create_link("member", Some(Uuid::now_v7()), draft())
+            .create_link("stranger", Some(Uuid::now_v7()), draft())
             .await,
         Err(Error::Forbidden)
     ));

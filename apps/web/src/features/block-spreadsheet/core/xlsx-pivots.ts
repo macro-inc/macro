@@ -1,4 +1,5 @@
 import type { ConditionalStyle } from '@macro-inc/spreadsheet/sheet-rules';
+import type { WorkbookTable } from '@macro-inc/spreadsheet/structured-references';
 import {
   MAX_PIVOT_PART_LENGTH,
   MAX_SHEET_PIVOT_TABLES,
@@ -10,7 +11,6 @@ import {
   SPREADSHEET_MAX_ROWS,
 } from './spreadsheet-document';
 import type { XlsxArchive } from './xlsx-archive';
-import type { WorkbookTable } from './xlsx-formula';
 import { attributes, parse, relationships } from './xlsx-parts';
 
 const MAIN = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
@@ -220,8 +220,8 @@ export function readSheetPivotTables(options: {
   for (const relation of relationships(archive, options.sheetPath).values()) {
     if (relation.type !== 'pivotTable' || relation.external) continue;
     const tableBytes = archive.read(relation.target);
-    const cacheTarget = buildCacheTarget(relation);
-    const cacheBytes = buildCacheBytes(cacheTarget);
+    const cacheTarget = cacheDefinitionPath(relation);
+    const cacheBytes = readCacheBytes(cacheTarget);
     if (!tableBytes || !cacheTarget || !cacheBytes) {
       skipped = true;
       continue;
@@ -232,19 +232,19 @@ export function readSheetPivotTables(options: {
     // A source Macro does not hold: the cache keeps what Excel saved of it.
     let workbook: string | undefined;
     let connection: string | undefined;
-    ({ workbook, connection } = updateWorkbook(
+    ({ workbook, connection } = externalSource(
       source,
       cacheRelations,
       workbook,
       connection
     ));
-    const cached = buildCached(workbook, connection);
-    reference = updateReference(source, reference);
+    const cached = hasExternalSource(workbook, connection);
+    reference = sourceReferenceOf(source, reference);
     let table = text(tableBytes);
     let cache = text(cacheBytes);
     const tablePrefix = mainPrefix(table, 'pivotTableDefinition');
     const cachePrefix = mainPrefix(cache, 'pivotCacheDefinition');
-    const location = buildLocation(tablePrefix, table);
+    const location = tableLocation(tablePrefix, table);
     const { first, last } = pivotLocationBounds(location);
     if (
       isUnsupportedSource(source, cached, reference) ||
@@ -286,16 +286,21 @@ export function readSheetPivotTables(options: {
     // Without its records, Excel reads the source again when the file opens.
     // A source Macro does not hold keeps the records Excel saved, when they
     // fit, and Excel refreshes it only when asked to.
-    const relationshipPrefix = buildRelationshipPrefix(cache);
+    const relationshipPrefix = relationshipPrefixOf(cache);
     let records: string | undefined;
-    records = updateRecords(cached, cacheRelations, records);
+    records = readRecords(cached, cacheRelations, records);
     cache = withRootAttributes(
       cache,
       `${cachePrefix}pivotCacheDefinition`,
-      buildReadSheetPivotTables2(relationshipPrefix, cached, records)
+      cacheAttributeChanges(relationshipPrefix, cached, records)
     );
     // Export writes the link to the other workbook anew.
-    cache = updateCache2(workbook, relationshipPrefix, cache, cachePrefix);
+    cache = stripSourceRelationship(
+      workbook,
+      relationshipPrefix,
+      cache,
+      cachePrefix
+    );
     // Custom number formats are numbered in order of use, as export
     // numbers them again; unknown ones show as General.
     const formats: Record<string, string> = {};
@@ -328,16 +333,16 @@ export function readSheetPivotTables(options: {
         (_, start: string) => `${start}0"`
       );
     // The source as export writes it: tables become their cells.
-    cache = updateCache(reference, cache, cachePrefix);
+    cache = withSourceReference(reference, cache, cachePrefix);
     if (isOversizedPivot(table, cache)) {
       skipped = true;
       continue;
     }
     const from = formatCellAddress(first.row, first.column);
     const to = formatCellAddress(last.row, last.column);
-    const cells = buildCells(from, to);
+    const cells = rangeText(from, to);
     pivots.push(
-      buildReadSheetPivotTables(
+      sheetPivotTable(
         table,
         tablePrefix,
         cells,
@@ -366,7 +371,7 @@ export function readSheetPivotTables(options: {
   if (skipped) warnings.add(PIVOT_VALUES_WARNING);
   return pivots;
 
-  function buildCacheTarget(relation: {
+  function cacheDefinitionPath(relation: {
     target: string;
     type: string;
     external: boolean;
@@ -376,28 +381,28 @@ export function readSheetPivotTables(options: {
     )?.target;
   }
 
-  function buildRelationshipPrefix(cache: string) {
+  function relationshipPrefixOf(cache: string) {
     return new RegExp(`xmlns:([A-Za-z_][\\w.-]*)="${RELATIONSHIPS}"`).exec(
       cache
     )?.[1];
   }
 
-  function buildCached(
+  function hasExternalSource(
     workbook: string | undefined,
     connection: string | undefined
   ) {
     return workbook !== undefined || connection !== undefined;
   }
 
-  function buildCacheBytes(cacheTarget: string | undefined) {
+  function readCacheBytes(cacheTarget: string | undefined) {
     return cacheTarget && archive.read(cacheTarget);
   }
 
-  function buildCells(from: string, to: string) {
+  function rangeText(from: string, to: string) {
     return from === to ? from : `${from}:${to}`;
   }
 
-  function updateCache2(
+  function stripSourceRelationship(
     workbook: string | undefined,
     relationshipPrefix: string | undefined,
     cache: string,
@@ -439,13 +444,13 @@ export function readSheetPivotTables(options: {
     );
   }
 
-  function buildLocation(tablePrefix: string | undefined, table: string) {
+  function tableLocation(tablePrefix: string | undefined, table: string) {
     return new RegExp(
       `<${tablePrefix ?? ''}location\\b[^>]*\\sref="([^"]+)"`
     ).exec(table)?.[1];
   }
 
-  function updateCache(
+  function withSourceReference(
     reference: string | undefined,
     cache: string,
     cachePrefix: string
@@ -454,7 +459,7 @@ export function readSheetPivotTables(options: {
     return cache;
   }
 
-  function buildReadSheetPivotTables2(
+  function cacheAttributeChanges(
     relationshipPrefix: string | undefined,
     cached: boolean,
     records: string | undefined
@@ -466,7 +471,7 @@ export function readSheetPivotTables(options: {
     };
   }
 
-  function buildReadSheetPivotTables(
+  function sheetPivotTable(
     table: string,
     tablePrefix: string,
     cells: string,
@@ -491,7 +496,10 @@ export function readSheetPivotTables(options: {
     };
   }
 
-  function updateReference(source: CacheSource, reference: string | undefined) {
+  function sourceReferenceOf(
+    source: CacheSource,
+    reference: string | undefined
+  ) {
     if (source.kind === 'range')
       reference = sourceReference(
         source.sheet ?? options.sheetName,
@@ -511,7 +519,7 @@ export function readSheetPivotTables(options: {
     return reference;
   }
 
-  function updateRecords(
+  function readRecords(
     cached: boolean,
     cacheRelations: Map<
       string,
@@ -531,7 +539,7 @@ export function readSheetPivotTables(options: {
     return records;
   }
 
-  function updateWorkbook(
+  function externalSource(
     source: CacheSource,
     cacheRelations: Map<
       string,
@@ -709,7 +717,7 @@ export function pivotParts(
   if (records || link) {
     // Relationship ids need the namespace; an imported cache may not
     // declare it with this prefix.
-    const declared = buildDeclared();
+    const declared = declaresRelationshipNamespace();
     if (!declared && /^[^>]*\sxmlns:r="/.test(cache)) return;
     cache = withRootAttributes(cache, `${cachePrefix}pivotCacheDefinition`, {
       ...(!declared && { 'xmlns:r': RELATIONSHIPS }),
@@ -739,7 +747,7 @@ export function pivotParts(
     relationships,
   };
 
-  function buildDeclared() {
+  function declaresRelationshipNamespace() {
     return new RegExp(`\\sxmlns:r="${RELATIONSHIPS}"`).test(
       /^[^>]*>/.exec(cache)?.[0] ?? ''
     );

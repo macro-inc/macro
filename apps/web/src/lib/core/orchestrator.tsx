@@ -276,19 +276,18 @@ function createBlockHandle<S>(
   };
   const isMethodAvailable = (methodName: keyof S) =>
     !!registry[methodName]?.method;
-  const awaitMethodAvailable = (methodName: keyof S, timeout?: number) => {
-    const settleAwaitCondition = async () => {
-      try {
-        return await awaitCondition(
-          () => registry[methodName]?.method !== undefined,
-          timeout
-        );
-      } catch (settleAwaitConditionError) {
-        const e = settleAwaitConditionError;
-        return await console.error('awaitBlockMethodAvailable error', e);
-      }
-    };
-    return settleAwaitCondition();
+  const awaitMethodAvailable = async (
+    methodName: keyof S,
+    timeout?: number
+  ) => {
+    try {
+      return await awaitCondition(
+        () => registry[methodName]?.method !== undefined,
+        timeout
+      );
+    } catch (e) {
+      console.error('awaitBlockMethodAvailable error', e);
+    }
   };
   return new Proxy(
     { block, isMethodAvailable, awaitMethodAvailable },
@@ -606,39 +605,31 @@ export function awaitCondition(
   });
 }
 
-const awaitBlockRegistered = (
+const awaitBlockRegistered = async (
   blocks: BlockMap,
   id: string,
   timeout?: number
 ) => {
-  const settleAwaitConditionResult = async () => {
-    try {
-      return await awaitCondition(() => blocks[id] !== undefined, timeout);
-    } catch (settleAwaitConditionResultError) {
-      const e = settleAwaitConditionResultError;
-      return await console.error('awaitBlockRegistered', e);
-    }
-  };
-  return settleAwaitConditionResult();
+  try {
+    return await awaitCondition(() => blocks[id] !== undefined, timeout);
+  } catch (e) {
+    console.error('awaitBlockRegistered', e);
+  }
 };
 
-const awaitBlockMethodAvailable = (
+const awaitBlockMethodAvailable = async (
   registry: MethodRegistry<any>,
   method: string,
   timeout?: number
 ) => {
-  const settleAwaitConditionResultResult = async () => {
-    try {
-      return await awaitCondition(
-        () => registry[method]?.method !== undefined,
-        timeout
-      );
-    } catch (settleAwaitConditionResultResultError) {
-      const e = settleAwaitConditionResultResultError;
-      return await console.error('awaitMethod', e);
-    }
-  };
-  return settleAwaitConditionResultResult();
+  try {
+    return await awaitCondition(
+      () => registry[method]?.method !== undefined,
+      timeout
+    );
+  } catch (e) {
+    console.error('awaitMethod', e);
+  }
 };
 
 export const canNestBlock = (

@@ -1,5 +1,8 @@
+import { Dropdown } from '@ui/components/Dropdown';
 import '@fontsource-variable/inter';
 import '../../../index.css';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { ThrownResultError } from '@core/util/result';
 import { noopChatter } from '@macro-inc/collaboration/collab/chatter';
 import type { SnapshotStore } from '@macro-inc/collaboration/collab/snapshot-store';
 import { InMemoryWALStore } from '@macro-inc/collaboration/collab/wal';
@@ -16,6 +19,7 @@ import {
 } from '@macro-inc/collaboration/sync-service/source';
 import { createWebsocketStateSignal } from '@macro-inc/collaboration/websocket/solid/state-signal';
 import type { MessageListItem } from '@service-storage/messages';
+import { QueryClient } from '@tanstack/solid-query';
 import type { LoroDoc } from 'loro-crdt';
 import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -25,6 +29,7 @@ import ComplexMsa from '../core/fixtures/complex-msa.docx?url';
 import MutualNda from '../core/fixtures/mutual-nda.docx?url';
 import type { LocatedThread } from '../primitives/create-docx-comments';
 import type { DocxEditor } from '../primitives/create-docx-editor';
+import { docxOriginalQueryOptions } from '../queries/docx-original';
 import { buildSeedSnapshot } from '../queries/docx-seed';
 import { createDocxSession } from '../queries/docx-session';
 import { DocxEditorView } from '../views/DocxEditorView';
@@ -234,6 +239,13 @@ function FixtureThreadCard(props: {
   onResolve: (resolved: boolean) => void;
 }) {
   const [text, setText] = createSignal('');
+  const post = async () => {
+    try {
+      await props.onPost(text());
+    } catch (error) {
+      console.error('[docx-fixture]', error);
+    }
+  };
   return (
     <div
       data-fixture-thread={props.thread.root ? props.thread.id : 'draft'}
@@ -247,7 +259,7 @@ function FixtureThreadCard(props: {
             class="flex flex-col gap-2"
             onSubmit={(event) => {
               event.preventDefault();
-              void props.onPost(text());
+              fireAndForget(post(), 'docx-fixture');
             }}
           >
             <textarea
@@ -428,6 +440,16 @@ function Fixture() {
               onSelection={session.setSelection}
               commentRoots={roots}
               onReady={setEditor}
+              actions={(download) => (
+                <Dropdown>
+                  <Dropdown.Trigger aria-label="Document options">
+                    …
+                  </Dropdown.Trigger>
+                  <Dropdown.Content>
+                    <Dropdown.Item onSelect={download}>Download</Dropdown.Item>
+                  </Dropdown.Content>
+                </Dropdown>
+              )}
               onDownload={(bytes) => {
                 const url = URL.createObjectURL(
                   new Blob([bytes.slice().buffer], {
@@ -486,8 +508,20 @@ function LocalFixture() {
   const pair = params.get('local') === 'pair';
   const [docs, setDocs] = createSignal<LoroDoc[]>();
   const [editor, setEditor] = createSignal<DocxEditor>();
-  void (async () => {
-    const original = new Uint8Array(await (await fetch(fixture)).arrayBuffer());
+  const client = new QueryClient();
+  onCleanup(() => client.clear());
+  const loadSeed = async () => {
+    const original = await client.fetchQuery(
+      docxOriginalQueryOptions(documentId, async () => {
+        const response = await fetch(fixture);
+        if (response.status === 409)
+          throw new ThrownResultError([
+            { code: 'CONFLICT', message: 'Document is still processing.' },
+          ]);
+        if (!response.ok) throw new Error('Unable to download fixture.');
+        return new Uint8Array(await response.arrayBuffer());
+      })
+    );
     const snapshot = await buildSeedSnapshot(original);
     const { LoroDoc } = await import('loro-crdt');
     const a = new LoroDoc();
@@ -501,7 +535,15 @@ function LocalFixture() {
     a.subscribeLocalUpdates((u) => queueMicrotask(() => b.import(u)));
     b.subscribeLocalUpdates((u) => queueMicrotask(() => a.import(u)));
     setDocs([a, b]);
-  })();
+  };
+  const seed = async () => {
+    try {
+      await loadSeed();
+    } catch (error) {
+      console.error('[docx-fixture]', error);
+    }
+  };
+  fireAndForget(seed(), 'docx-fixture');
   window.docxFixture = {
     status: () => 'connected',
     ready: () => !!editor(),
@@ -538,7 +580,30 @@ function LocalFixture() {
                   peers={() => []}
                   displayName={shortName}
                   onReady={index() === 0 ? setEditor : undefined}
-                  onDownload={() => {}}
+                  actions={(download) => (
+                    <Dropdown>
+                      <Dropdown.Trigger aria-label="Document options">
+                        …
+                      </Dropdown.Trigger>
+                      <Dropdown.Content>
+                        <Dropdown.Item onSelect={download}>
+                          Download
+                        </Dropdown.Item>
+                      </Dropdown.Content>
+                    </Dropdown>
+                  )}
+                  onDownload={(bytes) => {
+                    const url = URL.createObjectURL(
+                      new Blob([bytes.slice().buffer], {
+                        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                      })
+                    );
+                    const anchor = document.createElement('a');
+                    anchor.href = url;
+                    anchor.download = 'fixture.docx';
+                    anchor.click();
+                    setTimeout(() => URL.revokeObjectURL(url), 1_000);
+                  }}
                   onError={(error) => console.error('[docx-fixture]', error)}
                 />
               </div>

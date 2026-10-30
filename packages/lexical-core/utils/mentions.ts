@@ -104,7 +104,8 @@ function documentMentionEntityType(blockName: string): string {
           'call',
           'automation',
           'form',
-          'database'
+          'database',
+          'external_chat'
         ),
         (kind) => kind
       )
@@ -116,6 +117,8 @@ function documentMentionEntityType(blockName: string): string {
       .with('contact', () => 'crm_contact')
       // A task project. Not a message reference type, so it is dropped below.
       .with('initiative', () => 'initiative')
+      // Dropped below for the same reason.
+      .with('pipeline', () => 'crm_pipeline')
       .with(P._, () => 'document')
       .exhaustive()
   );
@@ -126,8 +129,9 @@ function documentMentionEntityType(blockName: string): string {
  * the way the web editor tracks them while composing a channel message.
  * Document mentions map by block name; user mentions are re-tagged `bot`
  * when they target a bot principal. Contact, date, and PR mentions
- * carry no referencable entity and are skipped. Project (initiative) mentions
- * are skipped too: channel references auto-share their target with members.
+ * carry no referencable entity and are skipped. Project (initiative) and CRM
+ * pipeline mentions are skipped too: channel references auto-share their
+ * target with members.
  * Authored group mentions are preserved. Duplicates are dropped.
  */
 export function $extractChannelMentions(): ChannelMention[] {

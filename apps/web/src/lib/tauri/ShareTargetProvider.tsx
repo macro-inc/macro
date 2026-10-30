@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { OsType } from '@tauri-apps/plugin-os';
@@ -12,6 +13,7 @@ import {
   useContext,
 } from 'solid-js';
 import { useAndroidShares } from './androidShares';
+import { unlistenWhenReady } from './unlisten';
 
 interface StagedSharedFileData {
   token: string;
@@ -69,19 +71,8 @@ async function popSharedFiles(
   return Promise.all(
     results.map(async ({ token, name, mime_type, size, preview_path }) => {
       const isSharedText = isSharedTextMimeType(mime_type);
-
-      const settleReadSharedFileText = async () => {
-        try {
-          return await readSharedFileText(token);
-        } catch (settleReadSharedFileTextError) {
-          const error = settleReadSharedFileTextError;
-
-          console.error('failed to read shared text', { token, error });
-          return await undefined;
-        }
-      };
       const sharedText = isSharedText
-        ? await settleReadSharedFileText()
+        ? await readSharedFileTextIfAvailable(token)
         : undefined;
 
       return {
@@ -101,8 +92,30 @@ async function readSharedFileText(token: string): Promise<string> {
   return invoke<string>('read_shared_file_text', { token });
 }
 
+async function readSharedFileTextIfAvailable(
+  token: string
+): Promise<string | undefined> {
+  try {
+    return await readSharedFileText(token);
+  } catch (error) {
+    console.error('failed to read shared text', { token, error });
+    return undefined;
+  }
+}
+
 async function clearSharedFiles(tokens: readonly string[]): Promise<void> {
   await invoke('clear_shared_files', { tokens });
+}
+
+/** Best-effort removal of staged files that are no longer pending. */
+async function discardSharedFiles(
+  files: readonly PendingShareFile[]
+): Promise<void> {
+  try {
+    await clearSharedFiles(files.map((file) => file.token));
+  } catch {
+    // Nothing shows these files any more, so a failure needs no recovery.
+  }
 }
 
 async function uploadPendingShareFile(
@@ -172,14 +185,7 @@ export function ShareTargetProvider(props: {
     setPendingShareFileNames([]);
 
     if (files.length > 0) {
-      const settleClearSharedFiles = async () => {
-        try {
-          return await clearSharedFiles(files.map((file) => file.token));
-        } catch {
-          return;
-        }
-      };
-      void settleClearSharedFiles();
+      fireAndForget(discardSharedFiles(files), 'share-target');
     }
   };
 
@@ -219,16 +225,7 @@ export function ShareTargetProvider(props: {
         setPendingShareFiles(files);
         setPendingShareFileNames(filenames);
         if (previousFiles.length > 0 && !isSamePendingShare) {
-          const settleClearSharedFilesResult = async () => {
-            try {
-              return await clearSharedFiles(
-                previousFiles.map((file) => file.token)
-              );
-            } catch {
-              return;
-            }
-          };
-          void settleClearSharedFilesResult();
+          fireAndForget(discardSharedFiles(previousFiles), 'share-target');
         }
       } catch (error) {
         if (requestId !== nextRequestId) return;
@@ -239,27 +236,27 @@ export function ShareTargetProvider(props: {
 
     const unlisten = listen<ShareFilesReadyPayload>(
       'share-files-ready',
-      (event) => void loadPendingShareFiles(event.payload.filenames)
+      (event) =>
+        fireAndForget(
+          loadPendingShareFiles(event.payload.filenames),
+          'share-target'
+        )
     );
 
-    void (async () => {
-      try {
-        await unlisten;
-        const filenames = await getPendingShareFilenames();
-        await loadPendingShareFiles(filenames);
-      } catch (error) {
-        console.error('failed to initialize iOS share target', error);
-      }
-    })();
+    fireAndForget(
+      (async () => {
+        try {
+          await unlisten;
+          const filenames = await getPendingShareFilenames();
+          await loadPendingShareFiles(filenames);
+        } catch (error) {
+          console.error('failed to initialize iOS share target', error);
+        }
+      })(),
+      'share-target'
+    );
 
-    onCleanup(() => {
-      const settleUnlisten = async () => {
-        const settleUnlistenValue = await unlisten;
-        const fn = settleUnlistenValue;
-        return await fn();
-      };
-      return void settleUnlisten();
-    });
+    onCleanup(() => fireAndForget(unlistenWhenReady(unlisten), 'share-target'));
   });
 
   const value: ShareTargetContextValue = {

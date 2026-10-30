@@ -3,6 +3,7 @@ import { strFromU8 } from 'fflate';
 import { SaxesParser, type SaxesTagNS } from 'saxes';
 import {
   SPREADSHEET_DEFAULT_STYLE,
+  SPREADSHEET_MAX_INDENT,
   type SpreadsheetCellStyle,
 } from './spreadsheet-document';
 import { readNumberFormat } from './xlsx-styles';
@@ -86,6 +87,8 @@ type Xf = {
   fillId: number;
   borderId: number;
   alignment?: Attributes;
+  /** Its feature property bag, such as Excel's checkbox format. */
+  complement?: number;
 };
 
 function attributes(node: SaxesTagNS): Attributes {
@@ -251,7 +254,9 @@ export type XlsxStylesheet = {
 export function readXlsxStylesheet(
   text: string,
   theme: (string | undefined)[],
-  warnings: Set<string>
+  warnings: Set<string>,
+  /** The `xfComplement` indexes that are checkboxes. */
+  checkboxes: ReadonlySet<number>
 ): XlsxStylesheet {
   const formats = new Map<number, string>();
   const fonts: Font[] = [];
@@ -290,7 +295,7 @@ export function readXlsxStylesheet(
           formats.set(Number(value.numFmtId), value.formatCode);
         return;
       case 'rgbColor':
-        updateOn();
+        addPaletteColor();
         return;
       case 'font':
         if (parent === 'fonts') font = {};
@@ -302,20 +307,23 @@ export function readXlsxStylesheet(
         if (parent === 'borders') border = {};
         return;
       case 'xf':
-        updateXf();
+        startCellXf();
         return;
       case 'alignment':
         if (xf && parent === 'xf') xf.alignment = value;
         return;
+      case 'xfComplement':
+        if (xf) xf.complement = Number(value.i);
+        return;
     }
-    updateFg();
+    readFontOrFillChild();
 
-    function updateOn() {
+    function addPaletteColor() {
       if (parent === 'indexedColors' && /^[0-9a-f]{8}$/i.test(value.rgb ?? ''))
         customPalette.push(value.rgb.slice(2).toUpperCase());
     }
 
-    function updateXf() {
+    function startCellXf() {
       if (parent === 'cellXfs')
         xf = {
           numFmtId: Number(value.numFmtId ?? 0),
@@ -325,16 +333,16 @@ export function readXlsxStylesheet(
         };
     }
 
-    function updateFg() {
+    function readFontOrFillChild() {
       if (font && parent === 'font') {
-        updateBold(font);
+        readFontChild(font);
       } else if (fill && parent === 'patternFill') {
         if (node.local === 'fgColor') fill.fg = value;
         else if (node.local === 'bgColor') fill.bg = value;
-      } else updatePattern();
+      } else readFillChild();
     }
 
-    function updateBold(fontInput: NonNullable<typeof font>) {
+    function readFontChild(fontInput: NonNullable<typeof font>) {
       if (node.local === 'b') fontInput.bold = flag(value);
       else if (node.local === 'i') fontInput.italic = flag(value);
       else if (node.local === 'strike') fontInput.strike = flag(value);
@@ -350,7 +358,7 @@ export function readXlsxStylesheet(
         fontInput.effects = true;
     }
 
-    function updatePattern() {
+    function readFillChild() {
       if (fill && node.local === 'patternFill') {
         fill.pattern = value.patternType ?? 'none';
       } else if (fill && node.local === 'gradientFill') {
@@ -449,11 +457,11 @@ export function readXlsxStylesheet(
     const cellFont = fonts[definition.fontId];
     const base = fonts[0];
     const baseColor = color(base?.color);
-    updateBold2();
+    applyFont();
     const cellFill = fills[definition.fillId];
-    updateFillColor();
+    applyFill();
     const alignment = definition.alignment;
-    updateVerticalAlign();
+    applyAlignment();
     const cellBorder = borders[definition.borderId];
     for (const [edgeName, key] of [
       ['top', 'borderTop'],
@@ -471,6 +479,11 @@ export function readXlsxStylesheet(
     }
     if (cellBorder?.diagonal?.style && cellBorder.diagonal.style !== 'none')
       warnings.add('Diagonal borders are not imported.');
+    if (
+      definition.complement !== undefined &&
+      checkboxes.has(definition.complement)
+    )
+      result.checkbox = true;
     return Object.fromEntries(
       Object.entries(result).filter(
         ([key, value]) =>
@@ -479,15 +492,15 @@ export function readXlsxStylesheet(
       )
     );
 
-    function updateBold2() {
+    function applyFont() {
       if (cellFont) {
         if (cellFont.bold) result.bold = true;
         if (cellFont.italic) result.italic = true;
         if (cellFont.underline && cellFont.underline !== 'none')
           result.underline = true;
         if (cellFont.strike) result.strikethrough = true;
-        updateFontSize();
-        updateFontFamily();
+        applyFontSize();
+        applyFontFamily();
         // A font that names its own color keeps it, even when it resolves to
         // the default font's color; fonts that inherit it store nothing.
         const text = color(cellFont.color);
@@ -510,7 +523,7 @@ export function readXlsxStylesheet(
       }
     }
 
-    function updateFontSize() {
+    function applyFontSize() {
       if (
         cellFont.size &&
         Number.isFinite(cellFont.size) &&
@@ -522,7 +535,7 @@ export function readXlsxStylesheet(
       }
     }
 
-    function updateFontFamily() {
+    function applyFontFamily() {
       if (cellFont.name && cellFont.name !== base?.name) {
         result.fontFamily = /courier|mono|consolas/i.test(cellFont.name)
           ? 'mono'
@@ -541,10 +554,11 @@ export function readXlsxStylesheet(
       }
     }
 
-    function updateVerticalAlign() {
+    function applyAlignment() {
       if (alignment) {
         const horizontal = alignment.horizontal;
-        updateHorizontalAlign(horizontal);
+        applyHorizontalAlign(horizontal);
+        applyIndent(horizontal, alignment.indent);
         const vertical = alignment.vertical;
         if (vertical === 'top' || vertical === 'bottom')
           result.verticalAlign = vertical;
@@ -563,7 +577,7 @@ export function readXlsxStylesheet(
       }
     }
 
-    function updateHorizontalAlign(horizontal: string) {
+    function applyHorizontalAlign(horizontal: string) {
       if (
         horizontal === 'left' ||
         horizontal === 'center' ||
@@ -580,7 +594,18 @@ export function readXlsxStylesheet(
         result.horizontalAlign = 'left';
     }
 
-    function updateFillColor() {
+    function applyIndent(horizontal: string, indentText: string | undefined) {
+      // Excel ignores the indent of other alignments.
+      const indent = Number(indentText ?? 0);
+      if (
+        (horizontal === 'left' || horizontal === 'right') &&
+        Number.isInteger(indent) &&
+        indent > 0
+      )
+        result.indent = Math.min(SPREADSHEET_MAX_INDENT, indent);
+    }
+
+    function applyFill() {
       if (cellFill?.gradient?.length) {
         const first = color(cellFill.gradient[0]);
         if (first) result.fillColor = first;

@@ -9,14 +9,24 @@ import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import type { CallTokenResponse as ApiCallTokenResponse } from '@service-storage/generated/schemas/callTokenResponse';
 import type { CreateMeetingRequest } from '@service-storage/generated/schemas/createMeetingRequest';
 import type { EditCallRecordRequest } from '@service-storage/generated/schemas/editCallRecordRequest';
+import type { GuestChatMessage } from '@service-storage/generated/schemas/guestChatMessage';
+import type { GuestChatPage } from '@service-storage/generated/schemas/guestChatPage';
+import type { GuestChatPost } from '@service-storage/generated/schemas/guestChatPost';
 import type { InviteMeetingUsersRequest } from '@service-storage/generated/schemas/inviteMeetingUsersRequest';
 import type { LeaveCallResponse } from '@service-storage/generated/schemas/leaveCallResponse';
 import type { Meeting as ApiMeeting } from '@service-storage/generated/schemas/meeting';
 import type { MeetingPreparation } from '@service-storage/generated/schemas/meetingPreparation';
 import type { UpdateMeetingRequest } from '@service-storage/generated/schemas/updateMeetingRequest';
 import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
+import { readJsonBody } from '../read-json-body';
 
-export type { CallRecord, CreateMeetingRequest, UpdateMeetingRequest };
+export type {
+  CallRecord,
+  CreateMeetingRequest,
+  GuestChatMessage,
+  GuestChatPage,
+  UpdateMeetingRequest,
+};
 
 // Rust serializes these nullable fields explicitly; Orval marks Option<T> optional.
 export type CallTokenResponse = Required<ApiCallTokenResponse>;
@@ -31,6 +41,26 @@ export type MeetingParticipants = {
 const host: string = SERVER_HOSTS['document-storage-service'];
 
 export const callServiceClient = {
+  getGuestChat(callId: string, token: string) {
+    return safeFetch<GuestChatPage>(
+      `${host}/call/guest-chat/${encodeURIComponent(callId)}`,
+      {
+        credentials: 'omit',
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+  },
+  postGuestChat(callId: string, token: string, input: GuestChatPost) {
+    return safeFetch<GuestChatMessage>(
+      `${host}/call/guest-chat/${encodeURIComponent(callId)}`,
+      {
+        method: 'POST',
+        credentials: 'omit',
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify(input),
+      }
+    );
+  },
   prepareMeeting() {
     return fetchWithToken<MeetingPreparation>(`${host}/call/meetings/prepare`, {
       method: 'POST',
@@ -70,14 +100,9 @@ export const callServiceClient = {
         {
           errorResponseHandler: async (response) => {
             if (response.status === 400) {
-              const settleJson = async () => {
-                try {
-                  return await response.json();
-                } catch {
-                  return await undefined;
-                }
-              };
-              const body = await settleJson();
+              const body = (await readJsonBody(response)) as {
+                message?: unknown;
+              } | null;
               // Older servers route the literal "meetings" as a channel UUID.
               if (body?.message === 'Bad request: Invalid channel ID format')
                 return {

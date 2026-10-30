@@ -11,6 +11,10 @@ import {
   useNativeSplitNavigationHandler,
   useSplitNavigationHandler,
 } from '@core/util/useSplitNavigationHandler';
+import OpenIcon from '@icon/system/regular/arrows-out.svg';
+import ChatCircle from '@icon/system/regular/chat-circle.svg';
+import GitMerge from '@icon/system/regular/git-merge.svg';
+import GitPullRequest from '@icon/system/regular/git-pull-request.svg';
 import {
   $isPullRequestMentionNode,
   HISTORIC_TAG,
@@ -19,10 +23,8 @@ import {
   SKIP_DOM_SELECTION_TAG,
   SKIP_SCROLL_INTO_VIEW_TAG,
 } from '@macro-inc/lexical-core';
-import OpenIcon from '@phosphor/arrows-out.svg';
-import ChatCircle from '@phosphor/chat-circle.svg';
-import GitMerge from '@phosphor/git-merge.svg';
-import GitPullRequest from '@phosphor/git-pull-request.svg';
+import { useGithubLinkStatusQuery } from '@queries/auth/github-link';
+import { queryReadyGate } from '@queries/gate';
 import {
   usePrMentionQuery,
   usePullRequestByGithubKeyQuery,
@@ -56,6 +58,7 @@ const STATUS_ICON_CLASS: Record<string, string> = {
   open: 'text-success',
   merged: 'text-note',
   closed: 'text-failure',
+  draft: 'text-ink-muted',
 };
 
 function metadataRecord(metadata: unknown): Record<string, unknown> {
@@ -115,7 +118,11 @@ function pullRequestStatus(entity: ForeignEntity | undefined): string {
   if (!entity || entity.foreignEntitySource !== GITHUB_PULL_REQUEST_SOURCE) {
     return 'open';
   }
-  return optionalString(metadataRecord(entity.metadata).status) ?? 'open';
+  const metadata = metadataRecord(entity.metadata);
+  const status = optionalString(metadata.status) ?? 'open';
+  const isDraft = metadata.draft === true;
+  if (isDraft && status === 'open') return 'draft';
+  return status;
 }
 
 interface PullRequestParts {
@@ -185,6 +192,7 @@ const STATUS_PILL_CLASS: Record<string, string> = {
   open: 'bg-success/15 text-success',
   merged: 'bg-note/15 text-note',
   closed: 'bg-failure/15 text-failure',
+  draft: 'bg-ink-muted/15 text-ink-muted',
 };
 
 interface ChecksSummary {
@@ -250,11 +258,15 @@ function pullRequestPreview(
     ? (metadata.checks as GithubPullRequestCheckRun[])
     : undefined;
 
+  const rawStatus = optionalString(metadata.status) ?? 'open';
+  const isDraft = metadata.draft === true;
+  const status = isDraft && rawStatus === 'open' ? 'draft' : rawStatus;
+
   return {
     title: title ?? displayName ?? ref ?? fallbackLabel(label),
     ref,
     url: optionalString(metadata.url),
-    status: optionalString(metadata.status) ?? 'open',
+    status,
     additions: optionalNumber(metadata.additions),
     deletions: optionalNumber(metadata.deletions),
     commentCount: comments?.length || undefined,
@@ -382,7 +394,7 @@ export function PullRequestPreviewCard(props: {
 }) {
   return (
     <div class="select-none w-80 text-ink">
-      <Surface depth={3} class="glass bg-menu-glass rounded-xl">
+      <Surface depth={3} hideBorder class="menu-surface rounded-xl">
         <Suspense
           fallback={
             <div class="p-3 flex items-center justify-center text-sm text-ink-muted">
@@ -437,7 +449,7 @@ function UnsyncedPullRequestPreviewCard(props: {
 }) {
   return (
     <div class="select-none w-80 text-ink">
-      <Surface depth={3} class="glass bg-menu-glass rounded-xl">
+      <Surface depth={3} hideBorder class="menu-surface rounded-xl">
         <div class="flex items-center justify-between gap-2 p-2">
           <div class="flex items-center gap-2 min-w-0">
             <span class="relative size-4 shrink-0 inline-flex">
@@ -525,8 +537,8 @@ function PullRequestMentionContent(props: PullRequestMentionDecoratorProps) {
       data-pr-id={props.id}
       data-pr-label={label()}
       class={cn(
-        'pointer-events-auto inline-flex max-w-[min(20em,100%)] items-baseline',
-        reservesTitleWidth() && 'w-[20em]'
+        'pointer-events-auto inline-flex max-w-[min(32em,100%)] items-baseline',
+        reservesTitleWidth() && 'w-[32em]'
       )}
     >
       <span class="relative top-[0.125em] size-[1em] shrink-0 inline-flex mx-1">
@@ -550,6 +562,12 @@ export function PullRequestMention(props: PullRequestMentionDecoratorProps) {
   const selection = () => lexicalWrapper?.selection;
   const { openWithSplit } = useSplitLayout()!;
 
+  const githubLinkQuery = useGithubLinkStatusQuery({
+    enabled: () => !lexicalWrapper?.skipPreviewFetch,
+    // Virtualized rows remount while scrolling; they should not retry failures.
+    retryOnMount: false,
+  });
+
   const isSelectedAsNode = () => {
     const sel = selection();
     if (!sel) return false;
@@ -562,7 +580,27 @@ export function PullRequestMention(props: PullRequestMentionDecoratorProps) {
   );
   const entityId = () => props.id || urlEntity()?.id;
 
+  // When GitHub is not linked, render as a plain link instead of the fancy mention UI
+  const shouldRenderAsPlainLink = () => {
+    if (lexicalWrapper?.skipPreviewFetch) return false;
+    // An initial failure has no resource value and reading it during a retry
+    // suspends the surrounding surface. Refetch errors retain confirmed data;
+    // Solid Query exposes that value without suspending.
+    return !!(
+      props.url &&
+      !githubLinkQuery.isLoadingError &&
+      queryReadyGate(githubLinkQuery) &&
+      githubLinkQuery.data.status !== 'linked'
+    );
+  };
+
   const open = (e: MouseEvent | KeyboardEvent | null) => {
+    // Match the rendered plain-link destination: Enter must not open the
+    // internal PR split when GitHub is unlinked, even if props.id is set.
+    if (shouldRenderAsPlainLink()) {
+      openExternalUrl(props.url!);
+      return;
+    }
     const id = entityId();
     if (!id) {
       // A PR Macro has not synced has no split to open; fall back to GitHub.
@@ -597,40 +635,54 @@ export function PullRequestMention(props: PullRequestMentionDecoratorProps) {
   });
 
   return (
-    <HoverCard
-      trigger={
-        <span class="relative">
-          <span
-            class={cn(
-              'size-full py-0.5 cursor-default rounded-xs hover:bg-hover focus:bg-active',
-              isSelectedAsNode() && 'bg-active text-ink'
-            )}
-            {...navHandlers}
-          >
-            <PullRequestMentionContent {...props} />
-          </span>
-          <MentionTooltip show={isSelectedAsNode()} text="Open" />
-        </span>
-      }
-      content={
-        <Show
-          when={entityId()}
-          fallback={
-            <UnsyncedPullRequestPreviewCard
-              label={fallbackLabel(mentionFallbackLabel(props))}
-              url={props.url}
-            />
-          }
+    <Show
+      when={!shouldRenderAsPlainLink()}
+      fallback={
+        <a
+          href={props.url}
+          target="_blank"
+          rel="noreferrer"
+          class="text-link hover:text-link-hover visited:text-link-visited underline"
         >
-          {(id) => (
-            <PullRequestPreviewCard
-              id={id()}
-              fallbackLabel={mentionFallbackLabel(props)}
-            />
-          )}
-        </Show>
+          {fallbackLabel(mentionFallbackLabel(props))}
+        </a>
       }
-    />
+    >
+      <HoverCard
+        trigger={
+          <span class="relative">
+            <span
+              class={cn(
+                'size-full py-0.5 cursor-default rounded-xs hover:bg-hover focus:bg-active',
+                isSelectedAsNode() && 'bg-active text-ink'
+              )}
+              {...navHandlers}
+            >
+              <PullRequestMentionContent {...props} />
+            </span>
+            <MentionTooltip show={isSelectedAsNode()} text="Open" />
+          </span>
+        }
+        content={
+          <Show
+            when={entityId()}
+            fallback={
+              <UnsyncedPullRequestPreviewCard
+                label={fallbackLabel(mentionFallbackLabel(props))}
+                url={props.url}
+              />
+            }
+          >
+            {(id) => (
+              <PullRequestPreviewCard
+                id={id()}
+                fallbackLabel={mentionFallbackLabel(props)}
+              />
+            )}
+          </Show>
+        }
+      />
+    </Show>
   );
 }
 

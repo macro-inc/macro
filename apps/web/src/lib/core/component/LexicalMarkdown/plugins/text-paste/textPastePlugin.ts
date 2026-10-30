@@ -10,17 +10,23 @@ import {
   type BlockName,
   BlockRegistry,
 } from '@core/block';
+import { shouldUseMobileClipboardImageRecovery } from '@core/mobile/mobileClipboardImageRecovery';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isValidMacroAppHostname } from '@core/util/macroAppUrl';
 import { $isCodeNode } from '@lexical/code';
 import { $createLinkNode, $isLinkNode, LinkNode } from '@lexical/link';
 import { $findMatchingParent, mergeRegister } from '@lexical/utils';
 import {
+  $createBookingLinkMentionNode,
   $createPasteNode,
   $createPullRequestMentionNode,
   $isCustomCodeNode,
+  BookingLinkMentionNode,
   HISTORY_MERGE_TAG,
+  isMacroBookingUrl,
   PasteNode,
   PullRequestMentionNode,
+  parseBookingUrl,
 } from '@macro-inc/lexical-core';
 import {
   fetchPullRequestByGithubKey,
@@ -39,6 +45,7 @@ import {
   $isRangeSelection,
   COMMAND_PRIORITY_HIGH,
   type LexicalEditor,
+  type LexicalNode,
   PASTE_COMMAND,
 } from 'lexical';
 import { $insertNodesAndSplitList } from '../../utils';
@@ -177,15 +184,19 @@ export function parsePastedGithubPrUrl(text: string): PrRef | null {
   return { owner: match[1], repo: match[2], number: Number(match[3]) };
 }
 
+function $getCodeAncestor(node: LexicalNode) {
+  return $findMatchingParent(
+    node,
+    (node) => $isCodeNode(node) || $isCustomCodeNode(node)
+  );
+}
+
+/** Whether both ends of the selection sit in the same code block. */
 function $isSelectionInCode(): boolean {
   const selection = $getSelection();
   if (!$isRangeSelection(selection)) return false;
-  return (
-    $findMatchingParent(
-      selection.anchor.getNode(),
-      (node) => $isCodeNode(node) || $isCustomCodeNode(node)
-    ) !== null
-  );
+  const code = $getCodeAncestor(selection.anchor.getNode());
+  return code !== null && code.is($getCodeAncestor(selection.focus.getNode()));
 }
 
 /**
@@ -250,7 +261,7 @@ function $insertPastedGithubPullRequest(
       { tag: HISTORY_MERGE_TAG }
     );
   };
-  void upgradePlaceholder();
+  fireAndForget(upgradePlaceholder(), 'markdown-text-paste');
 }
 
 function $insertLargePlainTextPaste(
@@ -278,6 +289,85 @@ function $insertLargePlainTextPaste(
   return true;
 }
 
+/**
+ * Code blocks hold plain text, so paste it verbatim: the code highlighter
+ * drops mentions and chips inserted there, and parsing the text as Markdown
+ * strips its syntax. Files, including mobile pasteboard images, still go to
+ * the file paste handler.
+ */
+function $pasteIntoCode(event: ClipboardEvent, pastedText: string): boolean {
+  const clipboard = event.clipboardData;
+  if (
+    !clipboard ||
+    !pastedText ||
+    clipboard.files.length > 0 ||
+    shouldUseMobileClipboardImageRecovery(clipboard)
+  ) {
+    return false;
+  }
+  event.preventDefault();
+  $getSelection()?.insertRawText(pastedText);
+  return true;
+}
+
+function parsePastedTheme(pastedText: string) {
+  const themeV3 = parseThemeV3Json(pastedText);
+  if (themeV3) return themeV3;
+  const legacy = parseThemeV2Json(pastedText);
+  return legacy ? convertThemev2v3(legacy) : null;
+}
+
+function $insertPastedTheme(
+  editor: LexicalEditor,
+  event: ClipboardEvent,
+  themeV3: NonNullable<ReturnType<typeof parsePastedTheme>>
+): boolean {
+  const selection = $getSelection();
+  if ($isRangeSelection(selection) && !selection.isCollapsed()) return false;
+
+  event.preventDefault();
+  editor.dispatchCommand(INSERT_THEME_MENTION_COMMAND, {
+    name: themeV3.name,
+    data: themeV3,
+  });
+  return true;
+}
+
+/** A pasted Macro app link becomes a mention; other text may become a paste chip. */
+function $insertPastedMacroAppLink(
+  editor: LexicalEditor,
+  event: ClipboardEvent,
+  pastedText: string,
+  resolveAppLink?: MentionLinkResolver
+): boolean {
+  const parsedMacroAppUrl = resolvePastedMacroAppUrl(
+    pastedText,
+    resolveAppLink
+  );
+  if (!parsedMacroAppUrl?.id || !parsedMacroAppUrl.block) {
+    return $insertLargePlainTextPaste(editor, event, pastedText);
+  }
+
+  const selection = $getSelection();
+  if ($isRangeSelection(selection) && !selection.isCollapsed()) return false;
+
+  event.preventDefault();
+  if (parsedMacroAppUrl.block === 'pr') {
+    editor.dispatchCommand(INSERT_PR_MENTION_COMMAND, {
+      id: parsedMacroAppUrl.id,
+    });
+    return true;
+  }
+
+  editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+    documentId: parsedMacroAppUrl.id,
+    documentName: '',
+    blockName: parsedMacroAppUrl.block,
+    blockParams: parsedMacroAppUrl.params || {},
+  });
+  return true;
+}
+
 function registerTextPastePlugin(
   editor: LexicalEditor,
   resolveAppLink?: MentionLinkResolver
@@ -290,34 +380,16 @@ function registerTextPastePlugin(
           const pastedText: string =
             event.clipboardData?.getData('text/plain') || '';
 
-          // Check for theme JSON before checking for Macro URL
-          const themeV3 =
-            parseThemeV3Json(pastedText) ??
-            (() => {
-              const legacy = parseThemeV2Json(pastedText);
-              return legacy ? convertThemev2v3(legacy) : null;
-            })();
-          if (themeV3) {
-            const selection = $getSelection();
-            if ($isRangeSelection(selection) && !selection.isCollapsed())
-              return false;
+          if ($isSelectionInCode()) return $pasteIntoCode(event, pastedText);
 
-            event.preventDefault();
-            editor.dispatchCommand(INSERT_THEME_MENTION_COMMAND, {
-              name: themeV3.name,
-              data: themeV3,
-            });
-            return true;
-          }
+          // Check for theme JSON before checking for Macro URL
+          const themeV3 = parsePastedTheme(pastedText);
+          if (themeV3) return $insertPastedTheme(editor, event, themeV3);
 
           const githubPr = parsePastedGithubPrUrl(pastedText);
           if (githubPr && editor.hasNode(PullRequestMentionNode)) {
             const selection = $getSelection();
-            if (
-              !$isRangeSelection(selection) ||
-              !selection.isCollapsed() ||
-              $isSelectionInCode()
-            ) {
+            if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
               return false;
             }
 
@@ -326,33 +398,36 @@ function registerTextPastePlugin(
             return true;
           }
 
-          const parsedMacroAppUrl = resolvePastedMacroAppUrl(
+          const trimmedPaste = pastedText.trim();
+          if (
+            isMacroBookingUrl(trimmedPaste) &&
+            editor.hasNode(BookingLinkMentionNode)
+          ) {
+            const selection = $getSelection();
+            if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
+              return false;
+            }
+
+            const parsed = parseBookingUrl(trimmedPaste);
+            if (parsed) {
+              event.preventDefault();
+              const mention = $createBookingLinkMentionNode({
+                profileId: parsed.profileId,
+                slug: parsed.slug,
+                label: parsed.slug,
+                url: trimmedPaste,
+              });
+              $insertNodes([mention]);
+              return true;
+            }
+          }
+
+          return $insertPastedMacroAppLink(
+            editor,
+            event,
             pastedText,
             resolveAppLink
           );
-          if (!parsedMacroAppUrl?.id || !parsedMacroAppUrl.block) {
-            return $insertLargePlainTextPaste(editor, event, pastedText);
-          }
-
-          const selection = $getSelection();
-          if ($isRangeSelection(selection) && !selection.isCollapsed())
-            return false;
-
-          event.preventDefault();
-          if (parsedMacroAppUrl.block === 'pr') {
-            editor.dispatchCommand(INSERT_PR_MENTION_COMMAND, {
-              id: parsedMacroAppUrl.id,
-            });
-            return true;
-          }
-
-          editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
-            documentId: parsedMacroAppUrl.id,
-            documentName: '',
-            blockName: parsedMacroAppUrl.block,
-            blockParams: parsedMacroAppUrl.params || {},
-          });
-          return true;
         }
         return false;
       },

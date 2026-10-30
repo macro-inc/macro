@@ -578,19 +578,16 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
           get error() {
             return error;
           },
-          mutate: (input: {
+          mutate: async (input: {
             entityId: string;
             entityType: string;
             propertyDefinitionId: string;
           }) => {
-            const settleMutateAsync = async () => {
-              try {
-                return await mutateAsync(input);
-              } catch {
-                return await undefined;
-              }
-            };
-            void settleMutateAsync();
+            try {
+              await mutateAsync(input);
+            } catch {
+              /* `mutate` reports failures through the mutation state, not a rejection. */
+            }
           },
           mutateAsync,
         };
@@ -653,15 +650,12 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
           get error() {
             return error;
           },
-          mutate: (input: typeof variables) => {
-            const settleMutateAsyncResult = async () => {
-              try {
-                return await mutateAsync(input);
-              } catch {
-                return await undefined;
-              }
-            };
-            void settleMutateAsyncResult();
+          mutate: async (input: typeof variables) => {
+            try {
+              await mutateAsync(input);
+            } catch {
+              /* `mutate` reports failures through the mutation state, not a rejection. */
+            }
           },
           mutateAsync,
         };

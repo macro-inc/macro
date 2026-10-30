@@ -1,5 +1,6 @@
 import { createMarkdownFile } from '@app/lib/queries/items/create';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { propertyValueToApi } from '@property/api/converters';
 import type { PropertyApiValues } from '@property/types';
 import { refetchSoupEntity } from '@queries/soup/cache';
@@ -80,7 +81,10 @@ export async function createDocumentWithTags(
           body: { properties: tagUpdates },
         });
       if (result.isErr()) throw result.error;
-      refetchSoupEntity(documentId, 'document', { refreshGraphql: true });
+      fireAndForget(
+        refetchSoupEntity(documentId, 'document', { refreshGraphql: true }),
+        'create-document-with-tags'
+      );
     } catch {
       toast.failure(
         'Document created, but tags could not be saved. Add them from the document.'

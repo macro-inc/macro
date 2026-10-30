@@ -28,23 +28,23 @@ import {
 } from '@entity';
 import { formatCompactRelativeTimestamp } from '@entity/utils/timestamp';
 import GithubIcon from '@icon/mcp-github.svg';
+import ArrowBendUpLeftIcon from '@icon/system/regular/arrow-bend-up-left.svg?component-solid';
+import AtIcon from '@icon/system/regular/at.svg?component-solid';
+import BellSimpleIcon from '@icon/system/regular/bell-simple.svg?component-solid';
+import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg?component-solid';
+import ChatTeardropIcon from '@icon/system/regular/chat-teardrop.svg?component-solid';
+import ChatTextIcon from '@icon/system/regular/chat-text.svg?component-solid';
+import FilesIcon from '@icon/system/regular/files.svg';
+import GitMergeIcon from '@icon/system/regular/git-merge.svg';
+import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
+import PaperclipIcon from '@icon/system/regular/paperclip.svg?component-solid';
+import PhoneIcon from '@icon/system/regular/phone.svg?component-solid';
+import QuestionIcon from '@icon/system/regular/question.svg?component-solid';
+import SmileyIcon from '@icon/system/regular/smiley.svg?component-solid';
+import AgentIcon from '@icon/system/regular/sparkle.svg?component-solid';
+import UserPlusIcon from '@icon/system/regular/user-plus.svg?component-solid';
 import { formatCalendarReminderTime } from '@notifications';
 import { getNotificationSenderFallbackName } from '@notifications/notification-sender';
-import FilesIcon from '@phosphor/files.svg';
-import GitMergeIcon from '@phosphor/git-merge.svg';
-import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
-import ArrowBendUpLeftIcon from '@phosphor-icons/core/regular/arrow-bend-up-left.svg?component-solid';
-import AtIcon from '@phosphor-icons/core/regular/at.svg?component-solid';
-import BellSimpleIcon from '@phosphor-icons/core/regular/bell-simple.svg?component-solid';
-import CalendarBlankIcon from '@phosphor-icons/core/regular/calendar-blank.svg?component-solid';
-import ChatTeardropIcon from '@phosphor-icons/core/regular/chat-teardrop.svg?component-solid';
-import ChatTextIcon from '@phosphor-icons/core/regular/chat-text.svg?component-solid';
-import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
-import PhoneIcon from '@phosphor-icons/core/regular/phone.svg?component-solid';
-import QuestionIcon from '@phosphor-icons/core/regular/question.svg?component-solid';
-import SmileyIcon from '@phosphor-icons/core/regular/smiley.svg?component-solid';
-import AgentIcon from '@phosphor-icons/core/regular/sparkle.svg?component-solid';
-import UserPlusIcon from '@phosphor-icons/core/regular/user-plus.svg?component-solid';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
@@ -79,9 +79,6 @@ export interface InboxCardLayoutProps {
   /** Render unread state beside the title instead of in a row gutter. */
   showUnreadIndicator?: boolean;
 }
-
-/** Glyph size inside the card's avatar bubble — grows with the circle on
- * mobile, matching the narrow rows' icon factor (see InboxCard.Icon). */
 
 type NotificationTag = ReturnType<typeof getNotificationTag>;
 
@@ -217,67 +214,66 @@ const tagBubbleIcon = (tag: NotificationTag) =>
   match(tag)
     .with('new_email', () => () => (
       <EntityIcon
-        class={'size-4 mobile:size-6'}
+        class="size-4 mobile:size-6"
         targetType="email"
         theme="monochrome"
         size="fill"
       />
     ))
     .with('task_assigned', () => () => (
-      <EntityIcon
-        class={'size-4 mobile:size-6'}
-        targetType="task"
-        size="fill"
-      />
+      <EntityIcon class="size-4 mobile:size-6" targetType="task" size="fill" />
     ))
     .with('ai_response', () => () => (
-      <EntityIcon
-        class={'size-4 mobile:size-6'}
-        targetType="chat"
-        size="fill"
-      />
+      <EntityIcon class="size-4 mobile:size-6" targetType="chat" size="fill" />
     ))
     .with('channel_mention', () => () => (
-      <AtIcon class={'size-4 mobile:size-6'} />
+      <AtIcon class="size-4 mobile:size-6" />
     ))
     .with(
       'mentioned_in_document_comment',
       'replied_to_document_comment_thread',
       'commented_on_document',
-      () => () => <ChatTeardropIcon class={'size-4 mobile:size-6'} />
+      () => () => <ChatTeardropIcon class="size-4 mobile:size-6" />
     )
     .with('document_mention', () => () => (
-      <FilesIcon class={'size-4 mobile:size-6'} />
+      <FilesIcon class="size-4 mobile:size-6" />
     ))
     .with('channel_message_reaction', () => () => (
-      <SmileyIcon class={'size-4 mobile:size-6'} />
+      <SmileyIcon class="size-4 mobile:size-6" />
     ))
     .with('channel_message_reply', () => () => (
-      <ArrowBendUpLeftIcon class={'size-4 mobile:size-6'} />
+      <ArrowBendUpLeftIcon class="size-4 mobile:size-6" />
     ))
     .with('channel_message_send', () => () => (
-      <ChatTextIcon class={'size-4 mobile:size-6'} />
+      <ChatTextIcon class="size-4 mobile:size-6" />
     ))
-    .with('channel_invite', 'invite_to_team', () => () => (
-      <UserPlusIcon class={'size-4 mobile:size-6'} />
-    ))
+    .with(
+      'entity_access_requested',
+      'entity_access_granted',
+      'channel_invite',
+      'invite_to_team',
+      () => () => <UserPlusIcon class="size-4 mobile:size-6" />
+    )
     .with('call_started', () => () => (
-      <PhoneIcon class={'size-4 mobile:size-6'} />
+      <PhoneIcon class="size-4 mobile:size-6" />
     ))
     .with('agent_session_settled', () => () => (
-      <AgentIcon class={'size-4 mobile:size-6'} />
+      <AgentIcon class="size-4 mobile:size-6" />
     ))
     .with('agent_session_waiting_for_input', () => () => (
-      <QuestionIcon class={'size-4 mobile:size-6'} />
+      <QuestionIcon class="size-4 mobile:size-6" />
     ))
     .with('agent_session_mentioned', () => () => (
-      <AtIcon class={'size-4 mobile:size-6'} />
+      <AtIcon class="size-4 mobile:size-6" />
     ))
     .with('reminder', () => () => (
-      <BellSimpleIcon class={'size-4 mobile:size-6'} />
+      <BellSimpleIcon class="size-4 mobile:size-6" />
     ))
     .with('calendar_event_reminder', () => () => (
-      <CalendarBlankIcon class={'size-4 mobile:size-6'} />
+      <CalendarBlankIcon class="size-4 mobile:size-6" />
+    ))
+    .with('calendar_event_join_request', () => () => (
+      <UserPlusIcon class="size-4 mobile:size-6" />
     ))
     .with(
       'github_pr_status_changed',
@@ -286,11 +282,11 @@ const tagBubbleIcon = (tag: NotificationTag) =>
       'github_pr_comment',
       'github_pr_mention',
       'github_pr_review',
-      () => () => <GithubIcon class={'size-4 mobile:size-6'} />
+      () => () => <GithubIcon class="size-4 mobile:size-6" />
     )
     .with(
       P.when((value) => value?.startsWith('github_') ?? false),
-      () => () => <GithubIcon class={'size-4 mobile:size-6'} />
+      () => () => <GithubIcon class="size-4 mobile:size-6" />
     )
     .otherwise(() => undefined);
 
@@ -305,22 +301,24 @@ function ActionBubble(props: { tag: NotificationTag }) {
   );
 }
 
-function GithubStatusIcon(props: { status?: string }) {
+function GithubStatusIcon(props: { status?: string; draft?: boolean }) {
+  const isDraft = () => props.draft === true && props.status === 'open';
   const statusClass = () => {
     if (props.status === 'merged') return 'text-note';
     if (props.status === 'closed') return 'text-failure';
+    if (isDraft()) return 'text-ink-muted';
     if (props.status === 'open') return 'text-success';
     return undefined;
   };
 
   return (
-    <span class={cn('grid place-items-center', 'size-4 mobile:size-6')}>
+    <span class="grid place-items-center size-4 mobile:size-6">
       <Show
         when={props.status === 'merged'}
         fallback={
           <Show
             when={props.status === 'open' || props.status === 'closed'}
-            fallback={<GithubIcon class={'size-4 mobile:size-6'} />}
+            fallback={<GithubIcon class="size-4 mobile:size-6" />}
           >
             <GitPullRequestIcon
               class={cn('size-4 mobile:size-6', statusClass())}
@@ -598,6 +596,7 @@ function CardMarkdownLine(props: { text?: string; class?: string }) {
  */
 function CardClampedMarkdown(props: {
   text?: string;
+  inert?: boolean;
   /** Inline run rendered ahead of the text (e.g. a sender label or
    * attachment paperclip); wraps and clamps as part of the same lines. */
   prefix?: JSX.Element;
@@ -611,6 +610,7 @@ function CardClampedMarkdown(props: {
             markdown={value()}
             singleLine
             theme={inlineWrappingMarkdownTheme}
+            inert={props.inert}
           />
         )}
       </Show>
@@ -707,7 +707,7 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
           fallback={<InboxAvatar senderId={senderAvatarId()} />}
         >
           <EntityIcon
-            class={'size-4 mobile:size-6'}
+            class="size-4 mobile:size-6"
             targetType={getEntityIconType(entity())}
             size="fill"
             theme="monochrome"
@@ -717,6 +717,7 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
       title={text().title}
     >
       <CardClampedMarkdown
+        inert
         text={text().content}
         prefix={
           <>
@@ -762,7 +763,7 @@ export function ChannelMessageCardLayout(props: InboxCardLayoutProps) {
       icon={<ActionBubble tag={getNotificationTag(props.item.notification)} />}
       title={text().title}
     >
-      <CardClampedMarkdown text={text().content} />
+      <CardClampedMarkdown inert text={text().content} />
     </BaseCard>
   );
 }
@@ -915,6 +916,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
                       <PaperclipIcon class="mr-0.5 inline size-3.5 align-[-0.125em]" />
                     </Show>
                     <StaticMarkdown
+                      inert
                       markdown={context()}
                       singleLine
                       theme={unifiedListMarkdownTheme}
@@ -940,6 +942,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
                       <PaperclipIcon class="mr-0.5 inline size-3.5 align-[-0.125em]" />
                     </Show>
                     <StaticMarkdown
+                      inert
                       markdown={value()}
                       singleLine
                       theme={
@@ -1025,7 +1028,7 @@ export function DocumentCardLayout(props: InboxCardLayoutProps) {
           when={props.item.notification}
           fallback={
             <EntityIcon
-              class={'size-4 mobile:size-6'}
+              class="size-4 mobile:size-6"
               targetType={getEntityIconType(props.item.entity)}
               size="fill"
             />
@@ -1089,7 +1092,7 @@ export function TaskCardLayout(props: InboxCardLayoutProps) {
           when={props.item.notification}
           fallback={
             <EntityIcon
-              class={'size-4 mobile:size-6'}
+              class="size-4 mobile:size-6"
               size="fill"
               targetType={getEntityIconType(props.item.entity)}
             />
@@ -1134,7 +1137,7 @@ export function AiCardLayout(props: InboxCardLayoutProps) {
           when={props.item.notification}
           fallback={
             <EntityIcon
-              class={'size-4 mobile:size-6'}
+              class="size-4 mobile:size-6"
               targetType={getEntityIconType(props.item.entity)}
               size="fill"
             />
@@ -1191,7 +1194,7 @@ export function AgentSessionCardLayout(props: InboxCardLayoutProps) {
           when={props.item.notification}
           fallback={
             <EntityIcon
-              class={'size-4 mobile:size-6'}
+              class="size-4 mobile:size-6"
               targetType={getEntityIconType(props.item.entity)}
               size="fill"
             />
@@ -1310,6 +1313,11 @@ export function GithubCardLayout(props: InboxCardLayoutProps) {
     return props.item.entity.metadata.status;
   });
 
+  const isDraft = createMemo(() => {
+    if (!isGithubPrEntity(props.item.entity)) return false;
+    return props.item.entity.metadata.draft === true;
+  });
+
   const text = createMemo(() => {
     const entity = props.item.entity;
 
@@ -1366,7 +1374,7 @@ export function GithubCardLayout(props: InboxCardLayoutProps) {
             />
           }
         >
-          <GithubStatusIcon status={status()} />
+          <GithubStatusIcon status={status()} draft={isDraft()} />
         </Show>
       }
       title={text().title}
@@ -1448,7 +1456,7 @@ export function CallCardLayout(props: InboxCardLayoutProps) {
       {...props}
       icon={
         <EntityIcon
-          class={'size-4 mobile:size-6'}
+          class="size-4 mobile:size-6"
           targetType="call"
           size="fill"
           theme="monochrome"
@@ -1479,11 +1487,21 @@ export function CallCardLayout(props: InboxCardLayoutProps) {
 }
 
 /**
- * A calendar event row exists because its alarm fired: the event title leads,
- * the occurrence's date sits on the second line, and its local time on the
- * third — three lines tall, matching the other inbox layouts.
+ * A calendar event row exists because its alarm fired or someone asked to
+ * join it: the event title leads, then who asked when they did, then the
+ * occurrence's date, and its local time on an alarm — three lines tall,
+ * matching the other inbox layouts.
  */
 export function CalendarEventCardLayout(props: InboxCardLayoutProps) {
+  const senderName = createSenderDisplayName(
+    () => props.item.notification?.sender_id ?? undefined
+  );
+  const joinRequest = () =>
+    props.item.notification?.notification_metadata.tag ===
+    'calendar_event_join_request'
+      ? buildActionLabel({ sender: senderName(), action: 'asked to join' })
+      : undefined;
+
   const occurrence = () => {
     const meta = props.item.notification?.notification_metadata;
     if (meta?.tag === 'calendar_event_reminder') {
@@ -1515,16 +1533,22 @@ export function CalendarEventCardLayout(props: InboxCardLayoutProps) {
   return (
     <BaseCard
       {...props}
-      icon={<CalendarBlankIcon class={'size-4 mobile:size-6'} />}
+      icon={<CalendarBlankIcon class="size-4 mobile:size-6" />}
       title={props.item.entity.name || '(No title)'}
     >
+      <Show when={joinRequest()}>
+        {(value) => (
+          <InboxCard.Content class="truncate">{value()}</InboxCard.Content>
+        )}
+      </Show>
+
       <Show when={datePreview()}>
         {(value) => (
           <InboxCard.Content class="truncate">{value()}</InboxCard.Content>
         )}
       </Show>
 
-      <Show when={timePreview()}>
+      <Show when={!joinRequest() && timePreview()}>
         {(value) => (
           <InboxCard.Content class="truncate">{value()}</InboxCard.Content>
         )}
@@ -1546,7 +1570,7 @@ export function GenericCardLayout(props: InboxCardLayoutProps) {
       {...props}
       icon={
         <EntityIcon
-          class={'size-4 mobile:size-6'}
+          class="size-4 mobile:size-6"
           targetType={getEntityIconType(props.item.entity)}
           size="fill"
           theme="monochrome"

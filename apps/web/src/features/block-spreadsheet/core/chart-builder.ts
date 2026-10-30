@@ -286,10 +286,10 @@ export function guessLayout(
   // Scatter and bubble charts read x values from the first column (or
   // row) even when they are numbers, as Excel does.
   const kind = type && definitionOf(type)?.kind;
-  updateFirstColumn();
+  useFirstLineForXValues();
   return { range, orientation, firstRow, firstColumn };
 
-  function updateFirstColumn() {
+  function useFirstLineForXValues() {
     if (kind && isXy(kind)) {
       if (orientation === 'columns' && columns > 1) firstColumn = true;
       if (orientation === 'rows' && rows > 1) firstRow = true;
@@ -363,12 +363,12 @@ export function chartFromLayout(
         };
   for (let index = 0; index < shown; index++) {
     const at = index * step;
-    const name = buildName(at);
-    const labels = buildLabels();
+    const name = seriesNameRange(at);
+    const labels = categoryRange();
     const color = colors?.[index];
-    series.push(buildChartFromLayout(name, labels, at, color, definition));
+    series.push(seriesFor(name, labels, at, color, definition));
   }
-  const shell = buildShell(definition);
+  const shell = chartShell(definition);
   // The last series uses its own axis, as Excel's column-and-line chart does.
   if (comboOf(definition)) {
     const line = series.at(-1);
@@ -381,10 +381,10 @@ export function chartFromLayout(
       ],
     };
   }
-  const plot: ChartPlot = buildPlot(definition);
+  const plot: ChartPlot = plotFor(definition);
   return { ...shell, plots: [plot] };
 
-  function buildChartFromLayout(
+  function seriesFor(
     name: false | { top: number; bottom: number; left: number; right: number },
     labels:
       | false
@@ -424,7 +424,7 @@ export function chartFromLayout(
     };
   }
 
-  function buildName(at: number) {
+  function seriesNameRange(at: number) {
     return orientation === 'columns'
       ? firstRow && {
           top: range.top,
@@ -440,7 +440,7 @@ export function chartFromLayout(
         };
   }
 
-  function buildLabels() {
+  function categoryRange() {
     return orientation === 'columns'
       ? firstColumn && {
           top: dataTop,
@@ -456,9 +456,7 @@ export function chartFromLayout(
         };
   }
 
-  function buildPlot(
-    definitionValue: NonNullable<typeof definition>
-  ): ChartPlot {
+  function plotFor(definitionValue: NonNullable<typeof definition>): ChartPlot {
     return {
       kind: definitionValue.kind,
       ...('grouping' in definitionValue && {
@@ -473,7 +471,7 @@ export function chartFromLayout(
     };
   }
 
-  function buildShell(definitionValue: NonNullable<typeof definition>) {
+  function chartShell(definitionValue: NonNullable<typeof definition>) {
     return {
       ...(previous?.title && { title: previous.title }),
       ...(previous

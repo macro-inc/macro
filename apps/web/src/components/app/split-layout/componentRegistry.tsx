@@ -45,6 +45,10 @@ const CalendarRouteView = lazyNamed(
   () => import('@app/features/calendar-view/route-views'),
   'CalendarRouteView'
 );
+const BookingLinksRouteView = lazyNamed(
+  () => import('@app/features/scheduling/route-views'),
+  'BookingLinksRouteView'
+);
 const ChannelsRouteView = lazyNamed(
   () => import('@app/features/channels-view/route-views'),
   'ChannelsRouteView'
@@ -97,6 +101,10 @@ const ProjectView = lazyNamed(
   () => import('@app/features/projects/project-view'),
   'ProjectView'
 );
+const ExternalRouteView = lazyNamed(
+  () => import('@app/features/external-view/route-views'),
+  'ExternalRouteView'
+);
 const ReviewsRouteView = lazyNamed(
   () => import('@app/features/reviews-view/route-views'),
   'ReviewsRouteView'
@@ -126,7 +134,7 @@ const ComposeSkill = lazyNamed(
   'ComposeSkill'
 );
 const ComposeTask = lazyNamed(
-  () => import('@block-md/component/ComposeTask'),
+  () => import('@app/features/task-composer/compose-task'),
   'ComposeTask'
 );
 const ComposeDocument = lazyNamed(
@@ -334,7 +342,11 @@ registerComponent(
   () => <DriveRouteView />,
   () => composableLayout(true)
 );
-registerComponent('reviews', () => <ReviewsRouteView />);
+registerComponent(
+  'reviews',
+  () => <ReviewsRouteView />,
+  () => composableLayout(true)
+);
 registerComponent(
   'tasks',
   () => <TasksRouteView />,
@@ -396,11 +408,27 @@ registerComponent('email-compose', (params) => {
     typeof params.initialInboxId === 'string'
       ? params.initialInboxId
       : undefined;
+  const initialSubject =
+    typeof params.initialSubject === 'string'
+      ? params.initialSubject
+      : undefined;
+  const initialBodyText =
+    typeof params.initialBodyText === 'string'
+      ? params.initialBodyText
+      : undefined;
+  const initialAttachments = Array.isArray(params.initialAttachments)
+    ? params.initialAttachments.filter(
+        (value): value is File => value instanceof File
+      )
+    : undefined;
   return (
     <EmailCompose
       draftId={draftID}
       initialTo={initialTo}
       initialInboxId={initialInboxId}
+      initialSubject={initialSubject}
+      initialBodyText={initialBodyText}
+      initialAttachments={initialAttachments}
     />
   );
 });
@@ -460,6 +488,16 @@ registerComponent(
   () => <SettingsRouteView />,
   () => composableLayout()
 );
+registerComponent(
+  'booking-links',
+  () => <BookingLinksRouteView />,
+  () => composableLayout()
+);
+registerComponent(
+  'external',
+  () => <ExternalRouteView />,
+  () => composableLayout()
+);
 
 if (LOCAL_ONLY) {
   registerComponent(
@@ -513,18 +551,12 @@ if (LOCAL_ONLY) {
     lazy(() => import('@core/internal/ResizeDemo'))
   );
 
-  const settleOperation = async () => {
-    const settleOperationValue = await import(
-      '@notifications/components/Playground'
-    );
-    const m = settleOperationValue;
-    return await {
-      default: m.NotificationsPlayground,
-    };
-  };
   registerComponent(
     'notifications-playground',
-    lazy(() => settleOperation())
+    lazyNamed(
+      () => import('@notifications/components/Playground'),
+      'NotificationsPlayground'
+    )
   );
 
   registerComponent(

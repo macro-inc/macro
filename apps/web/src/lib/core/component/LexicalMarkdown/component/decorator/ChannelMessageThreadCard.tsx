@@ -1,6 +1,7 @@
 import { navigateToChannelMessage } from '@block-channel/utils/link';
 import { ReadonlyThread } from '@channel/StandaloneThread';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
+import { fireAndForget } from '@core/util/fireAndForget';
 
 type ChannelMessageThreadCardProps = {
   channelId: string;
@@ -17,11 +18,14 @@ export function ChannelMessageThreadCard(props: ChannelMessageThreadCardProps) {
       onClickMessage={(clickedMessageId, e) => {
         e.stopPropagation();
         const isReply = clickedMessageId !== props.messageId;
-        navigateToChannelMessage(
-          orchestrator,
-          props.channelId,
-          clickedMessageId,
-          isReply ? props.messageId : undefined
+        fireAndForget(
+          navigateToChannelMessage(
+            orchestrator,
+            props.channelId,
+            clickedMessageId,
+            isReply ? props.messageId : undefined
+          ),
+          'channel-message-thread-card'
         );
       }}
     />

@@ -13,4 +13,6 @@ export type RefreshCalendarEventOneOf = {
   event: RefreshCalendarEventOneOfEvent;
   /** Connected inbox whose calendars changed. */
   link_id: string;
+  /** False only when the run excludes changes to teammate OOO projections. */
+  team_ooo_changed: boolean;
 };

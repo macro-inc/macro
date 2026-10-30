@@ -5,7 +5,7 @@ language: tsx
 severity: error
 message: Feature core modules stay pure TypeScript — no Solid, urql, queries, generated GraphQL, app modules, or sibling layers.
 note: |-
-  Rule FE-33 in docs/STYLE_GUIDE.md. `core/` owns the feature's vocabulary
+  Rule FE-33 in docs/development/style-guide.md. `core/` owns the feature's vocabulary
   and the functions that describe, group, and summarize it. Wire types,
   clients, reactivity, and UI stay outside so a schema rename or a
   framework upgrade cannot churn core tests. Decode lives in `queries/`,
@@ -14,6 +14,18 @@ note: |-
   contexts and worker clients.
   Block-agent names its rendering layers `ui/` and `component/`.
 files:
+  - apps/web/src/features/command/core/**
+  - apps/web/src/features/document-composer/core/**
+  - apps/web/src/features/task-composer/core/**
+  - apps/web/src/features/universal-input/core/**
+  - apps/web/src/features/saved-views/core/**
+  - apps/web/src/features/calendar-notes/core/**
+  - apps/web/src/features/access-requests/core/**
+  - apps/web/src/features/agent-activity/core/**
+  - apps/web/src/features/agent-dms/core/**
+  - apps/web/src/features/agent-conversations/core/**
+  - apps/web/src/features/local-runtime/core/**
+  - apps/web/src/features/agent-interactions/core/**
   - apps/web/src/features/billing-lab/core/**
   - apps/web/src/features/calendar-team/core/**
   - apps/web/src/features/tasks-view/core/task-board*
@@ -30,7 +42,6 @@ files:
   - apps/web/src/features/meetings/core/**
   - apps/web/src/features/block-spreadsheet/core/**
   - apps/web/src/features/property/tags/core/**
-  - apps/web/src/features/claude-connection/core/**
   - apps/web/src/features/activity/core/**
   - apps/web/src/features/drive-view/core/**
   - apps/web/src/features/email-message/core/**

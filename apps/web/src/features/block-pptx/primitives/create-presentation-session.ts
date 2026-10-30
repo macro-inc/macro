@@ -19,6 +19,7 @@ import type {
   EditResult,
   SlideOutline,
 } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type Accessor, batch, createSignal, onCleanup } from 'solid-js';
 import type {
   EditOutcome,
@@ -254,16 +255,19 @@ export function createPresentationSession(
     const delay = options.autosaveDelay ?? 1500;
     if (delay <= 0) return;
     clearTimeout(timer);
-    timer = setTimeout(() => {
-      const settleSaveResultResult = async () => {
-        try {
-          return await save();
-        } catch {
-          return;
-        }
-      };
-      return void settleSaveResultResult();
-    }, delay);
+    timer = setTimeout(
+      () => fireAndForget(saveInBackground(), 'pptx-editor'),
+      delay
+    );
+  }
+
+  /** Saves without waiting; `save` already shows the user a failure. */
+  async function saveInBackground() {
+    try {
+      await save();
+    } catch {
+      // Reported through the save state and `notifyError`.
+    }
   }
 
   async function settle(outcome: EditOutcome): Promise<EditResult | null> {
@@ -374,37 +378,33 @@ export function createPresentationSession(
       );
     }
   }
-  const unwatch = options.watchStoredFile?.(() => void onStoredFileChanged());
+  const unwatch = options.watchStoredFile?.(() =>
+    fireAndForget(onStoredFileChanged(), 'pptx-editor')
+  );
+
+  async function breakGroup() {
+    setHistory((await engine.breakGroup()).history);
+  }
+
+  async function showRemoteChange(result: EditResult) {
+    try {
+      await absorb(result);
+    } catch (error) {
+      console.error('[pptx] could not show a change made elsewhere', error);
+    }
+  }
+
   // Other people's edits: re-render, but leave saving them to their editor.
   const unsubscribeRemote = engine.onRemoteChange?.((result, state) => {
     if (disposed) return;
     setHistory(state);
-
-    const settleAbsorb = async () => {
-      try {
-        return await absorb(result);
-      } catch (settleAbsorbError) {
-        const error: unknown = settleAbsorbError;
-
-        console.error('[pptx] could not show a change made elsewhere', error);
-
-        return;
-      }
-    };
-    void settleAbsorb();
+    fireAndForget(showRemoteChange(result), 'pptx-editor');
   });
 
   // Unsaved work is flushed when the tab is hidden and when the editor closes.
   const onHide = () => {
     if (document.visibilityState === 'hidden' && changeCount !== savedCount) {
-      const settleSave = async () => {
-        try {
-          return await save();
-        } catch {
-          return;
-        }
-      };
-      void settleSave();
+      fireAndForget(saveInBackground(), 'pptx-editor');
     }
   };
   document.addEventListener('visibilitychange', onHide);
@@ -414,15 +414,8 @@ export function createPresentationSession(
     replacedListeners.clear();
     document.removeEventListener('visibilitychange', onHide);
     clearTimeout(timer);
-
-    const settleSaveResult = async () => {
-      try {
-        return await save();
-      } catch {
-        return;
-      }
-    };
-    if (changeCount !== savedCount) void settleSaveResult();
+    if (changeCount !== savedCount)
+      fireAndForget(saveInBackground(), 'pptx-editor');
     disposed = true;
   });
 
@@ -441,18 +434,7 @@ export function createPresentationSession(
     apply: (ops, group) => run(() => engine.apply(ops, group)),
     undo: () => run(() => engine.undo()),
     redo: () => run(() => engine.redo()),
-    breakGroup: () => {
-      const settleBreakGroup = async () => {
-        try {
-          const settleBreakGroupValue = await engine.breakGroup();
-          const o = settleBreakGroupValue;
-          return await setHistory(o.history);
-        } catch {
-          return;
-        }
-      };
-      void settleBreakGroup();
-    },
+    breakGroup: () => fireAndForget(breakGroup(), 'pptx-editor'),
     save,
     refresh,
     reload,

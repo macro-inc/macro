@@ -1,4 +1,5 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { platformFetch } from '@core/util/platformFetch';
 import { WebsocketConnectionState } from '@macro-inc/collaboration/websocket';
 import { trackEntity } from '@queries/connection/requests';
@@ -33,11 +34,14 @@ export default function HttpStreamDebug() {
     const id = chatId();
     const connected = connectionState() === WebsocketConnectionState.Open;
     if (id && connected) {
-      trackEntity({
-        entity_type: 'chat',
-        entity_id: id,
-        action: 'open',
-      });
+      fireAndForget(
+        trackEntity({
+          entity_type: 'chat',
+          entity_id: id,
+          action: 'open',
+        }),
+        'ai-debug'
+      );
     }
   });
 
@@ -119,11 +123,14 @@ export default function HttpStreamDebug() {
         setChatId(data.chat_id);
       }
       // Subscribe to the chat entity so the connection gateway routes messages to us
-      trackEntity({
-        entity_type: 'chat',
-        entity_id: data.chat_id || chatId(),
-        action: 'open',
-      });
+      fireAndForget(
+        trackEntity({
+          entity_type: 'chat',
+          entity_id: data.chat_id || chatId(),
+          action: 'open',
+        }),
+        'ai-debug'
+      );
     } catch (err) {
       setError(`Error: ${err}`);
       setIsStreaming(false);
@@ -167,7 +174,7 @@ export default function HttpStreamDebug() {
           <div class="flex gap-2">
             <Button
               onClick={sendMessage}
-              variant="accent"
+              variant="primary"
               disabled={isStreaming()}
             >
               {isStreaming() ? 'Streaming...' : 'Send Message'}
@@ -180,7 +187,7 @@ export default function HttpStreamDebug() {
                 setError(null);
                 setIsStreaming(false);
               }}
-              variant="outline"
+              variant="secondary"
             >
               Reset
             </Button>

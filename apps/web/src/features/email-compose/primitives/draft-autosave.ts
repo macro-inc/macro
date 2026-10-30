@@ -1,5 +1,19 @@
 import { debounce } from '@solid-primitives/scheduled';
 import { createSignal, onCleanup } from 'solid-js';
+import { startReported } from './background-work';
+
+/** Runs `next` once `previous` settles, whether it fulfilled or rejected. */
+async function afterSettled<T>(
+  previous: Promise<unknown>,
+  next: () => Promise<T>
+): Promise<T> {
+  try {
+    await previous;
+  } catch {
+    // The next write runs whatever the previous one's outcome.
+  }
+  return await next();
+}
 
 /** Capture live editor values before queuing; each write sees the preceding draft ID. */
 export function createDraftAutosave<Snapshot, Result>(options: {
@@ -13,11 +27,10 @@ export function createDraftAutosave<Snapshot, Result>(options: {
   onLocalSaved?(): void;
 }) {
   let pending: { snapshot: Snapshot } | undefined;
+  let failed: { snapshot: Snapshot } | undefined;
   let queue: Promise<Result | undefined> = Promise.resolve(undefined);
   let localWrites: Promise<void> = Promise.resolve();
   let newestSnapshot = 0;
-  const [inputIdle, setInputIdle] = createSignal(true);
-  const [shouldAcknowledge, setShouldAcknowledge] = createSignal(true);
   const [localSaveState, setLocalSaveState] = createSignal<
     'saving' | 'saved' | 'failed'
   >('saved');
@@ -38,113 +51,86 @@ export function createDraftAutosave<Snapshot, Result>(options: {
       try {
         await options.saveLocalSnapshot?.(snapshot);
         if (revision === newestSnapshot) {
+          failed = undefined;
           setLocalSaveState('saved');
           options.onLocalSaved?.();
         }
       } catch (error) {
-        if (revision === newestSnapshot) setLocalSaveState('failed');
+        if (revision === newestSnapshot) {
+          failed = { snapshot };
+          setLocalSaveState('failed');
+        }
         options.onLocalError?.(error);
         throw error;
       }
     };
     // A failed disk write must not prevent the next edit from trying again.
-    const settleLocalWritesHandler0 = writeNewestSnapshot;
-    const settleLocalWritesHandler1 = writeNewestSnapshot;
-    const settleLocalWrites = async () => {
-      try {
-        await localWrites;
-      } catch {
-        return await settleLocalWritesHandler0();
-      }
-      return await settleLocalWritesHandler1();
-    };
-    localWrites = settleLocalWrites();
+    localWrites = afterSettled(localWrites, writeNewestSnapshot);
     return flushLocal();
   };
   const cancel = () => {
     scheduled.clear();
     pending = undefined;
-    setInputIdle(true);
+    failed = undefined;
   };
   const enqueue = (snapshot: Snapshot, local: Promise<void>) => {
     const write = async () => {
       await local;
       return await options.persist(snapshot);
     };
-    const settleQueueHandler0 = write;
-    const settleQueueHandler1 = write;
-    const settleQueue = async () => {
-      try {
-        await queue;
-      } catch {
-        return await settleQueueHandler0();
-      }
-      return await settleQueueHandler1();
-    };
-    queue = settleQueue();
+    queue = afterSettled(queue, write);
     return queue;
   };
-  const save = (
-    snapshot = options.capture(),
-    saveOptions: { acknowledge?: boolean } = {}
-  ) => {
-    setShouldAcknowledge(saveOptions.acknowledge !== false);
+  const save = (snapshot = options.capture()) => {
     cancel();
     return enqueue(snapshot, saveLocally(snapshot));
   };
+  // Background saves report failures through onError instead of rejecting.
+  const startSave = (work: Promise<unknown>) =>
+    startReported(work, (error) => options.onError?.(error));
   const scheduled = debounce(() => {
-    setInputIdle(true);
     if (options.paused()) return;
-
-    const settleSave = async () => {
-      try {
-        return await save();
-      } catch (settleSaveError) {
-        const error = settleSaveError;
-        return await options.onError?.(error);
-      }
-    };
-    void settleSave();
+    startSave(save());
   }, 500);
+  // WebKit can suspend storage and timers once the app is hidden, and aborts
+  // writes in flight. Send the debounced server save before that happens, and
+  // retry a failed local write whenever visibility changes.
+  const flushOnVisibilityChange = () => {
+    if (options.paused() || (!pending && !failed)) return;
+    startSave(save());
+  };
+  document.addEventListener('visibilitychange', flushOnVisibilityChange);
   onCleanup(() => {
-    const flush = pending;
+    document.removeEventListener('visibilitychange', flushOnVisibilityChange);
+    const retry = failed;
+    const flush = pending ?? retry;
     cancel();
     // Reading the live thread/editor here can reenter Solid's disposal of
-    // that same view. The last edit already captured and queued its local copy.
-
-    const settleEnqueue = async (snapshot: Snapshot) => {
-      try {
-        return await enqueue(snapshot, flushLocal());
-      } catch (settleEnqueueError) {
-        const error = settleEnqueueError;
-        return await options.onError?.(error);
-      }
-    };
-    if (flush && !options.paused()) void settleEnqueue(flush.snapshot);
+    // that same view. The last edit already captured its local copy; a copy
+    // that failed is written again before the editor holding it is gone.
+    if (flush && !options.paused())
+      startSave(
+        enqueue(
+          flush.snapshot,
+          retry ? saveLocally(flush.snapshot) : flushLocal()
+        )
+      );
   });
   return {
     save,
+    async saveLocal(snapshot = options.capture()) {
+      cancel();
+      await saveLocally(snapshot);
+    },
     cancel,
     settled: () => queue,
     flushLocal,
     localSaveState,
-    acknowledgeSaved: () => inputIdle() && shouldAcknowledge(),
     schedule() {
       if (options.paused()) return;
-      setShouldAcknowledge(true);
-      setInputIdle(false);
       const snapshot = options.capture();
       pending = { snapshot };
-
-      const settleSaveLocally = async () => {
-        try {
-          return await saveLocally(snapshot);
-        } catch (settleSaveLocallyError) {
-          const error = settleSaveLocallyError;
-          return await options.onError?.(error);
-        }
-      };
-      void settleSaveLocally();
+      startSave(saveLocally(snapshot));
       scheduled();
     },
   };

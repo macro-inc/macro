@@ -10,12 +10,14 @@ import {
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { GroupByField } from '@queries/soup/grouped/types';
 import type { SoupAstBody, SoupAstItemsQueryArgs } from '@queries/soup/items';
+import { match } from 'ts-pattern';
 import {
   EMPTY_TASK_FACET_CONTEXT,
   TASK_FACETS,
   type TaskFacetContext,
 } from '../filters/task-facets';
 import type {
+  TaskCrmScope,
   TaskGroupBy,
   TaskReferenceScope,
   TaskSortId,
@@ -113,9 +115,23 @@ export type BuildTaskQueryOptions = {
   sort: SortSelection<TaskSortId>[];
   /** Only tasks whose property references this entity. */
   reference?: TaskReferenceScope;
-  /** Board Project columns use the initiative property, not legacy folders. */
+  /** Only tasks associated with this CRM record, resolved by the server. */
+  crm?: TaskCrmScope;
+  /** Only tasks whose name contains this text, case-insensitively. */
+  nameContains?: string;
+  /** Board Project columns use explicit property grouping for column editing. */
   board?: boolean;
 };
+
+/** The Soup CRM association naming the record. */
+export const taskCrmAssociation = (crm: TaskCrmScope) =>
+  match(crm)
+    .with({ type: 'activity' }, () => 'activity' as const)
+    .with({ type: 'company' }, ({ id }) => ({ company: id }))
+    .with({ type: 'contact' }, ({ id }) => ({ contact: id }))
+    .exhaustive(() => {
+      throw new Error('Unsupported CRM task scope');
+    });
 
 /** Builds the concrete Soup AST used only by the production Tasks view. */
 export function buildTaskQuery(
@@ -128,11 +144,10 @@ export function buildTaskQuery(
 
   if (primarySort?.reversed) sortDirection = 'asc';
 
-  const compiledFacets = compileFacets(
-    options.facets,
-    TASK_FACETS,
-    options.facetContext ?? EMPTY_TASK_FACET_CONTEXT
-  );
+  const compiledFacets = compileFacets(options.facets, TASK_FACETS, {
+    ...(options.facetContext ?? EMPTY_TASK_FACET_CONTEXT),
+    viewerId: options.userId,
+  });
 
   const properties = propertyScope(
     options.tab,
@@ -143,9 +158,15 @@ export function buildTaskQuery(
 
   const taskDocuments = documentScope(options.tab, options.userId);
 
-  const documents: TaskAst = compiledFacets.df
-    ? { '&': [taskDocuments, compiledFacets.df] }
-    : taskDocuments;
+  const documents =
+    combine(
+      '&',
+      [
+        taskDocuments,
+        compiledFacets.df,
+        options.nameContains ? literal('nc', options.nameContains) : undefined,
+      ].filter((node): node is TaskAst => node !== undefined)
+    ) ?? taskDocuments;
 
   const body: SoupAstBody = {
     ...nonTaskTargets,
@@ -153,6 +174,7 @@ export function buildTaskQuery(
   };
 
   if (properties) body.propf = properties;
+  if (options.crm) body.crma = taskCrmAssociation(options.crm);
 
   return {
     params: {

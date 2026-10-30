@@ -1,5 +1,8 @@
+import { toast } from '@core/component/Toast/Toast';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import { usePlatformNotificationState } from '@notifications';
 import { DefaultUserNameResolver } from '@notifications/notification-resolvers';
 import {
@@ -100,6 +103,14 @@ export function startCallRinger(
   return ringer;
 }
 
+async function closeQuietly(ctx: AudioContext) {
+  try {
+    await ctx.close();
+  } catch {
+    // An already-closed context has nothing left to release.
+  }
+}
+
 function playRingSound(): RingSound | undefined {
   const Ctx =
     window.AudioContext ?? (window as WebkitWindow).webkitAudioContext;
@@ -152,14 +163,7 @@ function playRingSound(): RingSound | undefined {
   const timeoutId = window.setTimeout(() => {
     stopped = true;
 
-    const settleClose = async () => {
-      try {
-        return await ctx.close();
-      } catch {
-        return;
-      }
-    };
-    void settleClose();
+    fireAndForget(closeQuietly(ctx), 'call-ring');
   }, totalMs);
 
   return {
@@ -169,14 +173,7 @@ function playRingSound(): RingSound | undefined {
       stopped = true;
       window.clearTimeout(timeoutId);
 
-      const settleCloseResult = async () => {
-        try {
-          return await ctx.close();
-        } catch {
-          return;
-        }
-      };
-      void settleCloseResult();
+      fireAndForget(closeQuietly(ctx), 'call-ring');
     },
   };
 }
@@ -269,7 +266,7 @@ export function CallStartedNotifier() {
       closeCallNotification(resolution.callId);
       // The creator's other devices never receive call_started; a refetch
       // picks the now-answered call up for their active-call badges.
-      void invalidateActiveCallQueries();
+      fireAndForget(invalidateActiveCallQueries(), 'channel-call');
       return;
     }
 
@@ -291,7 +288,7 @@ export function CallStartedNotifier() {
       channelId: resolution.channelId,
       callId: resolution.callId,
     });
-    void invalidateActiveCallQueries();
+    fireAndForget(invalidateActiveCallQueries(), 'channel-call');
   });
 
   createCallEventsEffect({
@@ -327,25 +324,37 @@ export function CallStartedNotifier() {
         createdAt,
         createdBy: createdBy ?? '',
       });
-      void invalidateActiveCallQueries();
+      fireAndForget(invalidateActiveCallQueries(), 'channel-call');
 
       // The cache above is updated for every call, including our own; only the
       // ring and the toast are skipped when we're already in it or started it.
       if (callCtx.activeCallId() === callId) return;
       if (isFromSelf) return;
 
-      void emitCallStartedNotification({
-        channelId,
-        callId,
-        createdBy,
-        channelName: channelsCtx.channelsById()[channelId]?.name ?? undefined,
-        notif,
-        isJoined: () => callCtx.activeCallId() === callId,
-      });
+      fireAndForget(
+        emitCallStartedNotification({
+          channelId,
+          callId,
+          createdBy,
+          channelName: channelsCtx.channelsById()[channelId]?.name ?? undefined,
+          notif,
+          isJoined: () => callCtx.activeCallId() === callId,
+        }),
+        'channel-call'
+      );
     },
   });
 
   return null;
+}
+
+async function joinFromNotification(channelId: string) {
+  try {
+    await joinChannelCall(channelId);
+  } catch (error) {
+    Telemetry.error(error, { surface: 'channel-call' });
+    toast.failure('Failed to join call');
+  }
 }
 
 async function emitCallStartedNotification(args: {
@@ -412,7 +421,7 @@ async function emitCallStartedNotification(args: {
     };
     handle.onClick(() => {
       window.focus();
-      void joinChannelCall(channelId);
+      fireAndForget(joinFromNotification(channelId), 'channel-call');
       handle.close();
       untrack();
       ringer.stop();

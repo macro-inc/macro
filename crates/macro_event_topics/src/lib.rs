@@ -87,7 +87,10 @@ topics! {
     MacroCalendarTopic => "macro.calendar",
     /// Agent session lifecycle facts: opened, turns, waiting for input, settled, stopped, renamed, deleted.
     MacroAgentSessionLifecycleTopic => "macro.agent_session_lifecycle",
-    /// Runs of frames appended to an agent session's log, for realtime viewers served by another process.
+    /// Retired: runs of appended agent session log frames now travel over a
+    /// Redis Stream (`agent_session_realtime::outbound::redis_stream`). Kept
+    /// declared until every harness task publishing here has been replaced;
+    /// remove it, and its cluster topic, after that rollout.
     MacroAgentSessionLogTopic => "macro.agent_session_log",
     /// Database lifecycle (created, renamed, trashed, restored, purged) and table-change events.
     MacroDatabasesTopic => "macro.databases",

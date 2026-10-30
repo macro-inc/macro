@@ -13,10 +13,11 @@ import type {
   PrototypeHotspot,
   PrototypeInfo,
 } from '@core/fig-engine/prototype-types';
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import ArrowRight from '@phosphor/arrow-right.svg';
-import LinkIcon from '@phosphor/link.svg';
-import XIcon from '@phosphor/x.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import {
   createEffect,
   createMemo,
@@ -64,15 +65,13 @@ function createFrameImages(engine: FigEngine, page: number) {
     const key = `${frame}@${s}`;
     let url = cache.get(key);
     if (!url) {
-      const settleExportPng = async () => {
-        const settleExportPngValue = await engine.exportPng(page, frame, s);
-        const blob = settleExportPngValue;
-
+      const exportUrl = async () => {
+        const blob = await engine.exportPng(page, frame, s);
         const u = URL.createObjectURL(blob);
         urls.push(u);
-        return await u;
+        return u;
       };
-      url = settleExportPng();
+      url = exportUrl();
       cache.set(key, url);
     }
     return url;
@@ -407,20 +406,15 @@ export function PresentMode(props: {
   const FrameImage = (p: { frame: PrototypeFrame; testId: string }) => {
     const [src, setSrc] = createSignal<string>();
     const scale = () => fit() * dpr();
-    const load = (s: number) => {
-      const settleImagesHandler0 = setSrc;
-      const settleImages = async () => {
-        try {
-          const settleImagesValue = await images(p.frame.id, s);
-          return await settleImagesHandler0(settleImagesValue);
-        } catch {
-          return await setSrc(undefined);
-        }
-      };
-      void settleImages();
+    const load = async (s: number) => {
+      try {
+        setSrc(await images(p.frame.id, s));
+      } catch {
+        setSrc(undefined);
+      }
     };
     // The image comes from the engine (an external system).
-    createEffect(on(scale, load));
+    createEffect(on(scale, (s) => fireAndForget(load(s), 'fig-present')));
     return (
       <div
         class="absolute top-0 left-0"

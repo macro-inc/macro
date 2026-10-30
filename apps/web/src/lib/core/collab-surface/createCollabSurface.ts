@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import { createLoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { RawUpdate } from '@macro-inc/collaboration/collab/shared';
@@ -11,8 +12,8 @@ import {
   LORO_WAL_DB_NAME,
 } from '@macro-inc/collaboration/collab/wal';
 import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
+import { Telemetry } from '@macro-inc/observability';
 import { ensureCollabSurface } from '@queries/storage/requests';
-
 import type { CollabSurfaceResponse } from '@service-storage/service';
 import { createCollabSurfaceSource } from '@service-sync/source';
 import { type Accessor, createSignal } from 'solid-js';
@@ -123,37 +124,18 @@ export function createCollabSurfaceSession(
 
   const optimisticSnapshot = opts.optimisticSnapshot;
   if (optimisticSnapshot) {
-    const settleIngest = async () => {
-      try {
-        return await loroManager.ingest({
-          kind: 'optimistic',
-          snapshot: optimisticSnapshot,
-        });
-      } catch (settleIngestError) {
-        const error = settleIngestError;
-
-        console.error('collab surface: optimistic ingest failed', error);
-
-        return;
-      }
-    };
-    void settleIngest();
+    fireAndForget(
+      loroManager.ingest({ kind: 'optimistic', snapshot: optimisticSnapshot }),
+      'collab-surface-optimistic-ingest'
+    );
   }
 
-  const settleIngestLocalSnapshot = async () => {
-    try {
-      return await ingestLocalSnapshot(loroManager, snapshotStore, walStore);
-    } catch (settleIngestLocalSnapshotError) {
-      const error = settleIngestLocalSnapshotError;
+  fireAndForget(
+    ingestLocalSnapshot(loroManager, snapshotStore, walStore),
+    'collab-surface-local-snapshot'
+  );
 
-      console.error('collab surface: local snapshot ingest failed', error);
-
-      return;
-    }
-  };
-  void settleIngestLocalSnapshot();
-
-  void (async () => {
+  const connect = async () => {
     // Load-or-create. Idempotent on the backend, so mounting the same
     // surface in several places (or racing another client) is fine.
     const ensured = await ensureCollabSurface({
@@ -196,7 +178,19 @@ export function createCollabSurfaceSession(
       return;
     }
     await loroManager.ingest({ kind: 'dss', snapshot: sync.value.snapshot });
-  })();
+  };
+
+  const start = async () => {
+    try {
+      await connect();
+    } catch (error) {
+      Telemetry.error(error, { surface: 'collab-surface' });
+      if (!disposed && !syncSource()) {
+        setConnectionError('failed to load or create the surface');
+      }
+    }
+  };
+  fireAndForget(start(), 'collab-surface');
 
   return {
     surfaceId,

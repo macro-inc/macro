@@ -1,3 +1,4 @@
+import type { ViewLayout } from '@service-storage/generated/schemas/viewLayout';
 import { until } from '@solid-primitives/promise';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import type {
@@ -38,6 +39,8 @@ export type RecordCreation = {
   titleColumn?: string;
   open: boolean;
   intentId?: string;
+  /** A label among `values` that the write may add as a new option. */
+  option?: string;
 };
 
 /**
@@ -51,7 +54,7 @@ export function createRecordActions(options: {
   source: DatabaseRowsSource;
   columns: Accessor<DatabaseViewColumn[]>;
   visibleColumns: Accessor<DatabaseViewColumn[]>;
-  layout: Accessor<'table' | 'board'>;
+  layout: Accessor<ViewLayout['kind']>;
   canEdit: Accessor<boolean>;
   /** The view filters, so a saved record can fall outside it. */
   constrained: Accessor<boolean>;
@@ -177,7 +180,8 @@ export function createRecordActions(options: {
   }
   /**
    * Show a record arrived at from elsewhere where it sits in the table. A
-   * record this view does not show (filtered out, or a board) opens instead.
+   * record this view does not show (filtered out, or a board or timeline)
+   * opens instead.
    */
   function reveal(rowId: string) {
     if (
@@ -268,62 +272,59 @@ export function createRecordActions(options: {
       values[titleField.id] = creation.title;
     const saved = await controller.save(
       { kind: 'create', values },
-      { label: 'new record', createIntentId: creation.intentId }
+      {
+        label: 'new record',
+        createIntentId: creation.intentId,
+        option: creation.option,
+      }
     );
     if (saved.isErr()) return false;
     const rowId = saved.value.insertedRowIds[0];
     if (rowId && creation.open) editCreatedRow(rowId);
     return true;
   }
-  /** Start typing in the first record, or the blank row; a board opens its first card. */
+  /** Start typing in the first record, or the blank row; a board or timeline opens its first record. */
   function focusFirstCell(): Promise<void> {
     if (firstCellRequest) return firstCellRequest;
-    const settleOperationFinally = async () => {
-      firstCellRequest = undefined;
-
-      return;
-    };
-    const settleOperation = async () => {
-      try {
-        return await (async () => {
-          if (options.source.loading()) {
-            const ready = until(() => !options.source.loading());
-            cancelFirstCellWait = ready.dispose;
-
-            const settleReady = async () => {
-              try {
-                return await ready;
-              } catch {
-                return await undefined;
-              }
-            };
-            await settleReady();
-            cancelFirstCellWait = undefined;
-          }
-          if (
-            disposed ||
-            !options.canEdit() ||
-            options.source.error() ||
-            !options.source.snapshot()
-          )
-            return;
-          const field = options.visibleColumns().find(canEditCell);
-          if (!field) return;
-          const table = options.layout() === 'table';
-          const row = table ? draftRows.project(rows())[0] : rows()[0];
-          if (row) {
-            if (table) options.editCell(row.rowId, field.id);
-            else open(row.rowId);
-          } else if (table) {
-            focusBlankRow();
-          }
-        })();
-      } finally {
-        await settleOperationFinally();
-      }
-    };
-    firstCellRequest = settleOperation();
+    firstCellRequest = trackFirstCellRequest();
     return firstCellRequest;
+  }
+  async function trackFirstCellRequest() {
+    try {
+      // Awaited, so the request is recorded before it is cleared.
+      await focusFirstCellWhenLoaded();
+    } finally {
+      firstCellRequest = undefined;
+    }
+  }
+  async function focusFirstCellWhenLoaded() {
+    if (options.source.loading()) {
+      const ready = until(() => !options.source.loading());
+      cancelFirstCellWait = ready.dispose;
+      try {
+        await ready;
+      } catch {
+        // Disposed while waiting; the checks below stop here.
+      }
+      cancelFirstCellWait = undefined;
+    }
+    if (
+      disposed ||
+      !options.canEdit() ||
+      options.source.error() ||
+      !options.source.snapshot()
+    )
+      return;
+    const field = options.visibleColumns().find(canEditCell);
+    if (!field) return;
+    const table = options.layout() === 'table';
+    const row = table ? draftRows.project(rows())[0] : rows()[0];
+    if (row) {
+      if (table) options.editCell(row.rowId, field.id);
+      else open(row.rowId);
+    } else if (table) {
+      focusBlankRow();
+    }
   }
   /** Where focus goes back when the delete dialog closes. */
   const deleteDialogReturnFocus = () =>

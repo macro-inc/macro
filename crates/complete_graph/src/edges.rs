@@ -15,8 +15,8 @@ use graphql_activity::{
 };
 use graphql_crm::{CrmRecord, GraphqlCrmPipelineEntry, load_pipeline_entries};
 use graphql_email::{
-    EmailContentKey, GraphqlSoupEmailMessage, SoupEmailEdgeReader,
-    email_message_selection_requires_full_payload, load_email_messages,
+    EmailContentKey, GraphqlEmailThreadFocus, GraphqlSoupEmailMessage, SoupEmailEdgeReader,
+    email_message_selection_requires_full_payload, load_email_messages, load_email_thread_focus,
     load_email_thread_mail_projection, load_email_thread_metadata, load_latest_email_message,
 };
 use graphql_favorite::{EntityFavoriteEdgeReader, load_entity_favorite};
@@ -580,6 +580,40 @@ where
         let metadata = load_email_thread_metadata::<ER>(ctx, self.thread_id).await?;
         Ok(metadata
             .reminder_returned_at
+            .map(|timestamp| timestamp.to_rfc3339()))
+    }
+
+    /// The thread's Focus classification: whether it belongs in Focus, why,
+    /// and how important it is. `null` until the thread is classified, and
+    /// for threads in inboxes the viewer does not own.
+    async fn focus(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<GraphqlEmailThreadFocus>> {
+        load_email_thread_focus(ctx, self.thread_id).await
+    }
+
+    /// Timestamp of the latest outbound message, in RFC 3339 format: the SENT
+    /// view's sort key.
+    async fn latest_outbound_message_ts(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<String>> {
+        let metadata = load_email_thread_metadata::<ER>(ctx, self.thread_id).await?;
+        Ok(metadata
+            .latest_outbound_message_ts
+            .map(|timestamp| timestamp.to_rfc3339()))
+    }
+
+    /// Timestamp of the latest message that is not spam, in RFC 3339 format:
+    /// the sort key of every mail view except INBOX and SENT.
+    async fn latest_non_spam_message_ts(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<String>> {
+        let metadata = load_email_thread_metadata::<ER>(ctx, self.thread_id).await?;
+        Ok(metadata
+            .latest_non_spam_message_ts
             .map(|timestamp| timestamp.to_rfc3339()))
     }
 

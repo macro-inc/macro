@@ -30,6 +30,7 @@ export function useChannelCallsSource(
   // The quick-access pool is not this channel's calls, so matches come from
   // the search service.
   const search = createSearchState({
+    surface: () => 'channel_calls',
     text: searchText,
     disableLocalSearch: () => true,
     buildRequest: (request) =>

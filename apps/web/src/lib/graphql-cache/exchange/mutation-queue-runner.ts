@@ -30,6 +30,7 @@
  * queued and scheduling the pump are idempotent wakeups and are not fenced.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Client,
   CombinedError,
@@ -42,15 +43,23 @@ import { type DocumentNode, Kind, parse } from 'graphql';
 import { match } from 'ts-pattern';
 import type { CacheHost } from '../host/types';
 import type {
-  CacheRevision,
   ClaimedMutation,
+  CommitOptimisticWriteResult,
+  DeferOptimisticWriteResult,
   EnqueueOptimisticMutationResult,
-  HydrationSearchChanges,
   MutationClaim,
   QueryRevalidationWire,
-  RecordFieldChange,
   RollbackOptimisticWriteResult,
 } from '../protocol';
+import {
+  failureDetails,
+  type MutationAttemptDetails,
+  type MutationAttemptOutcome,
+  type MutationAttemptTelemetry,
+  NOOP_MUTATION_ATTEMPT_TELEMETRY,
+  NOOP_MUTATION_QUEUE_TELEMETRY,
+  recoverySkipReason,
+} from './mutation-queue-telemetry';
 import type { NormalizedCacheExchangeOptions } from './normalized-cache-exchange';
 import {
   notifyOptimisticMutationEnqueued,
@@ -68,6 +77,9 @@ const QUEUE_ATTEMPT_CONTEXT_KEY = 'normalizedCacheQueueAttempt';
 export const QUEUE_REQUEST_TIMEOUT_MS = 60_000;
 export const QUEUE_LEASE_MS = 5 * 60_000;
 const EMPTY_QUEUE_POLL_MS = 30_000;
+// A deferred admission usually waits on user info, which lands within a
+// second or two of the cache client at startup.
+const DEFERRED_ADMISSION_RETRY_MS = 1_000;
 const MAX_MUTATION_SERVER_FAILURES = 10;
 const MUTATION_LIFECYCLE_TIMEOUT_MS = 2_000;
 
@@ -104,6 +116,7 @@ export type QueueAttemptContext = AttemptToken & {
   serverFailureCount: number;
   /** Transport-only metadata; urql drops the response on error-free payloads. */
   response?: Response;
+  telemetry?: MutationAttemptTelemetry;
 };
 
 function claimOf(token: AttemptToken): MutationClaim {
@@ -152,6 +165,100 @@ export function replayDocument(query: string, name?: string): DocumentNode {
   return { ...document, definitions };
 }
 
+/** Bookkeeping for one settlement, filled in by `settle` and its helpers. */
+type Settlement = {
+  result: OperationResult;
+  retryAt: number | undefined;
+  settled: boolean;
+  replacementTransactionId: string | undefined;
+  disposition: 'committed' | 'queued' | 'superseded' | 'permanently-failed';
+  outcome: MutationAttemptOutcome;
+  details: MutationAttemptDetails;
+};
+
+/**
+ * A valid GraphQL payload can arrive over HTTP 5xx without an urql error.
+ * Never commit it or bypass the retry policy.
+ */
+function withHttpServerFailure(
+  result: OperationResult,
+  response: Response | undefined
+): OperationResult {
+  if (!response || response.status < 500 || result.error) return result;
+  return {
+    ...result,
+    data: undefined,
+    error: new CombinedError({
+      networkError: new Error(`HTTP ${response.status}`),
+      response,
+    }),
+  };
+}
+
+function withRetryExhausted(result: OperationResult): OperationResult {
+  return {
+    ...result,
+    error: new CombinedError({
+      graphQLErrors: [
+        {
+          message: `Mutation stopped after ${MAX_MUTATION_SERVER_FAILURES} server failures: ${result.error?.message}`,
+          extensions: { code: 'MUTATION_RETRY_EXHAUSTED' },
+        },
+      ],
+      response: result.error?.response,
+    }),
+  };
+}
+
+/**
+ * A lost acknowledgement may hide a completed transaction. Preserve optimism
+ * and let a fresh durable claim decide.
+ */
+function recordAckLost(state: Settlement): void {
+  state.retryAt = Date.now() + QUEUE_LEASE_MS;
+  state.disposition = 'queued';
+  state.outcome = 'ack-lost';
+  state.details = { ...state.details, retryDelayMs: QUEUE_LEASE_MS };
+}
+
+function settledResult(
+  state: Settlement,
+  attempt: QueueAttemptContext
+): OperationResult {
+  return withOptimisticMutationDisposition(
+    state.result,
+    state.disposition === 'superseded'
+      ? {
+          kind: 'superseded',
+          transactionId: attempt.transactionId,
+          replacementTransactionId:
+            state.replacementTransactionId ?? attempt.transactionId,
+        }
+      : {
+          kind: state.disposition,
+          transactionId: attempt.transactionId,
+        }
+  );
+}
+
+/**
+ * urql represents HTTP 5xx as networkError too. Count actual server
+ * responses, never connection failures or timeouts.
+ */
+function isServerFailure(
+  result: OperationResult,
+  response: Response | undefined
+): boolean {
+  return (
+    (response?.status ?? 0) >= 500 ||
+    (result.error?.graphQLErrors.length ?? 0) > 0
+  );
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function retryDelayMs(attemptCount: number): number {
   return Math.min(1_000 * 2 ** Math.max(0, attemptCount - 1), 60_000);
 }
@@ -164,12 +271,14 @@ export function withQueueRequestTimeout(op: Operation): Operation {
     ...op.context,
     fetch: async (input, init) => {
       const timeoutSignal = AbortSignal.timeout(QUEUE_REQUEST_TIMEOUT_MS);
-      const response = await operationFetch(input, {
-        ...init,
-        signal: init?.signal
-          ? AbortSignal.any([init.signal, timeoutSignal])
-          : timeoutSignal,
-      });
+      const send = () =>
+        operationFetch(input, {
+          ...init,
+          signal: init?.signal
+            ? AbortSignal.any([init.signal, timeoutSignal])
+            : timeoutSignal,
+        });
+      const response = await (attempt?.telemetry?.run(send) ?? send());
       if (attempt) attempt.response = response;
       return response;
     },
@@ -274,6 +383,7 @@ export type MutationQueueRunnerDeps = {
     | 'onMutationAttemptResult'
     | 'shouldRetryMutation'
     | 'onCacheError'
+    | 'mutationQueueTelemetry'
   >;
   /** Lease owner for this exchange's claims. */
   owner: string;
@@ -336,8 +446,16 @@ export function createMutationQueueRunner(
   deps: MutationQueueRunnerDeps
 ): MutationQueueRunner {
   const { host, client, options, owner, forward, writeThrough } = deps;
+  const telemetry =
+    options.mutationQueueTelemetry ?? NOOP_MUTATION_QUEUE_TELEMETRY;
   const liveQueuedOps = new Map<string, LiveQueuedOperation>();
   let storageGeneration = 0;
+  let activeAttempt: AttemptToken | undefined;
+  // Queue IDs advance in order; retries advance their lease.
+  // Keep the watermark after settlement so a late claim cannot revive an old head.
+  let latestClaim:
+    | Pick<ClaimedMutation, 'transactionId' | 'leaseGeneration'>
+    | undefined;
   // The durable queue is strictly ordered. A confirmed head keeps its server
   // response until local settlement succeeds, without repeating a server
   // effect after a cache failure. Process loss still requires server-side
@@ -350,8 +468,25 @@ export function createMutationQueueRunner(
   let deferredUntil: number | undefined;
   let drainTimer: ReturnType<typeof setTimeout> | undefined;
 
-  function isCurrent(token: StorageEpoch): boolean {
-    return token.storageGeneration === storageGeneration;
+  function isNewClaim(claim: ClaimedMutation): boolean {
+    if (!latestClaim) return true;
+    const id = BigInt(claim.transactionId);
+    const previousId = BigInt(latestClaim.transactionId);
+    return (
+      id > previousId ||
+      (id === previousId &&
+        BigInt(claim.leaseGeneration) > BigInt(latestClaim.leaseGeneration))
+    );
+  }
+
+  function isCurrent(token: StorageEpoch | AttemptToken): boolean {
+    if (token.storageGeneration !== storageGeneration) return false;
+    if (!('leaseGeneration' in token)) return true;
+    return (
+      activeAttempt?.transactionId === token.transactionId &&
+      activeAttempt?.leaseOwner === token.leaseOwner &&
+      activeAttempt?.leaseGeneration === token.leaseGeneration
+    );
   }
 
   /** Moves the head only while `token` has survived every storage reset. */
@@ -369,7 +504,7 @@ export function createMutationQueueRunner(
     drainTimer = setTimeout(
       () => {
         drainTimer = undefined;
-        void drainQueue();
+        fireAndForget(drainQueue(), 'graphql-cache-mutation-queue');
       },
       drainRequested ? 0 : delayMs
     );
@@ -404,9 +539,32 @@ export function createMutationQueueRunner(
       leaseOwner: owner,
       leaseGeneration: claimed.leaseGeneration,
       attemptCount: claimed.attemptCount,
-      serverFailureCount: buildServerFailureCount(),
+      serverFailureCount: claimed.serverFailureCount ?? 0,
       storageGeneration: epoch.storageGeneration,
     };
+    if (!isCurrent(epoch) || !isNewClaim(claimed)) return;
+    latestClaim = claimed;
+    activeAttempt = attempt;
+    const attemptTelemetry = telemetry.attempt(claimed);
+    attempt.telemetry = attemptTelemetry;
+    // Settlement ends a sent attempt; anything that returns before sending
+    // without its own outcome was retired by a storage reset.
+    let sent = false;
+    try {
+      await routeClaimedAttempt(claimed, attempt, attemptTelemetry, () => {
+        sent = true;
+      });
+    } finally {
+      if (!sent) attemptTelemetry.finish('detached');
+    }
+  }
+
+  async function routeClaimedAttempt(
+    claimed: ClaimedMutation,
+    attempt: QueueAttemptContext,
+    attemptTelemetry: MutationAttemptTelemetry,
+    markSent: () => void
+  ): Promise<void> {
     const confirmed = confirmedOf(head);
     if (confirmed?.transactionId === claimed.transactionId) {
       // claim → settling: re-apply the server's response before admission
@@ -425,36 +583,32 @@ export function createMutationQueueRunner(
     if (!transition(attempt, PREPARING)) return;
     try {
       if (options.prepareMutationQueue) await prepareQueueRecovery();
-      if (
-        options.beforeMutationAttempt &&
-        !(await boundedMutationLifecycle(() =>
-          options.beforeMutationAttempt!(claimed)
-        ))
-      ) {
-        // preparing → settling → idle: discard obsolete local intent.
-        if (!transition(attempt, SETTLING)) return;
-        await host.rollbackOptimisticWrite(
-          claimed.transactionId,
-          claimOf(attempt),
-          'Obsolete local intent',
-          'LOCAL_SUPERSEDED'
-        );
-        if (!transition(attempt, IDLE)) return;
-        resolveLiveOperationsAsQueued();
-        scheduleDrain();
+      const admission = options.beforeMutationAttempt
+        ? await boundedMutationLifecycle(() =>
+            options.beforeMutationAttempt!(claimed)
+          )
+        : true;
+      if (admission === 'defer') {
+        await deferAdmission(claimed, attempt);
+        attemptTelemetry.finish('deferred');
+        return;
+      }
+      if (!admission) {
+        await discardObsoleteIntent(claimed, attempt, attemptTelemetry);
         return;
       }
     } catch {
-      await failPreparation(claimed, attempt);
+      await failPreparation(claimed, attempt, attemptTelemetry);
       return;
     }
     // A superseded create can already exist on the server. Replay it to
     // recover its identity before sending the newer edit or discard.
     // Older hosts omit this flag: conservatively replay rather than loop
     // forever asking the engine to discard a write it must retain.
-    const discard = buildDiscard();
+    const discard =
+      claimed.superseded && claimed.requiresConfirmation === false;
     // preparing → idle (discard) or in-flight (send).
-    if (!transition(attempt, buildRouteClaimedMutation())) return;
+    if (!transition(attempt, discard ? IDLE : IN_FLIGHT)) return;
     deferredUntil = undefined;
     if (discard) {
       const discarded = await host.deferOptimisticWrite(
@@ -463,93 +617,153 @@ export function createMutationQueueRunner(
         Date.now(),
         'superseded before network replay'
       );
-      if (discarded.kind !== 'discarded-superseded') {
-        throw new Error('superseded mutation was unexpectedly deferred');
-      }
-      const live = liveQueuedOps.get(claimed.transactionId);
-      if (live) {
-        liveQueuedOps.delete(claimed.transactionId);
-        live.resolveRoute(
-          queuedMutationResult(live.operation, claimed.transactionId)
-        );
-      }
-      resolveLiveOperationsAsQueued();
-      scheduleDrain();
+      finishSupersededDiscard(claimed, discarded, attemptTelemetry);
       return;
     }
     const live = liveQueuedOps.get(claimed.transactionId);
-    if (live) {
-      liveQueuedOps.delete(claimed.transactionId);
-      live.resolveRoute(undefined);
-      forward(
-        withQueueRequestTimeout(withQueueAttempt(live.operation, attempt))
-      );
-    } else {
-      let replayOperation: Operation | undefined;
-      try {
-        const replay = client.mutation(
+    if (!live) {
+      await replayClaimedHead(claimed, attempt, attemptTelemetry);
+      return;
+    }
+    liveQueuedOps.delete(claimed.transactionId);
+    live.resolveRoute(undefined);
+    markSent();
+    attemptTelemetry.sent('live');
+    forward(withQueueRequestTimeout(withQueueAttempt(live.operation, attempt)));
+    // Any other live operation is ordered behind the claimed head.
+    resolveLiveOperationsAsQueued();
+  }
+
+  /** in-flight: replays a head no live caller is waiting on. */
+  async function replayClaimedHead(
+    claimed: ClaimedMutation,
+    attempt: QueueAttemptContext,
+    attemptTelemetry: MutationAttemptTelemetry
+  ): Promise<void> {
+    let replayOperation: Operation | undefined;
+    attemptTelemetry.sent('replay');
+    try {
+      const result = await client
+        .mutation(
           replayDocument(claimed.query, claimed.operationName),
           claimed.variables,
           {
             requestPolicy: 'network-only',
             [QUEUE_ATTEMPT_CONTEXT_KEY]: attempt,
           }
+        )
+        .toPromise();
+      replayOperation = result.operation;
+      // Normal exchange results settle the attempt in writeThrough
+      // before resolving. Reject only an otherwise-unhandled error.
+      if (result.error && isActive(head)) throw result.error;
+    } catch (error) {
+      try {
+        // in-flight → settling → idle: the replay never reached settlement.
+        if (!transition(attempt, SETTLING)) return;
+        const rolledBack = await host.rollbackOptimisticWrite(
+          claimed.transactionId,
+          claimOf(attempt),
+          errorText(error),
+          error instanceof CombinedError ? mutationErrorCode(error) : undefined
         );
-
-        const settleToPromise = async () => {
-          const settleToPromiseValue = await replay.toPromise();
-          const result = settleToPromiseValue;
-
-          replayOperation = result.operation;
-          // Normal exchange results settle the attempt in writeThrough
-          // before resolving. Reject only an otherwise-unhandled error.
-          if (result.error && isActive(head)) {
-            return await Promise.reject(result.error);
-          }
-
-          return;
-        };
-        await settleToPromise();
-      } catch (error) {
-        try {
-          // in-flight → settling → idle: the replay never reached settlement.
-          if (!transition(attempt, SETTLING)) return;
-          const rolledBack = await host.rollbackOptimisticWrite(
-            claimed.transactionId,
-            claimOf(attempt),
-            mutationFailureMessage(error),
-            mutationFailureCode(error)
-          );
-          if (!isCurrent(attempt)) return;
-          updateRouteClaimedMutation(rolledBack, replayOperation);
-        } finally {
-          if (transition(attempt, IDLE)) scheduleDrain();
-        }
+        if (!isCurrent(attempt)) return;
+        finishFailedReplay(
+          rolledBack,
+          error,
+          attempt,
+          attemptTelemetry,
+          replayOperation
+        );
+      } finally {
+        if (transition(attempt, IDLE)) scheduleDrain();
       }
     }
     // Any other live operation is ordered behind the claimed head.
     resolveLiveOperationsAsQueued();
+  }
 
-    function buildDiscard() {
-      return claimed.superseded && claimed.requiresConfirmation === false;
+  /** preparing → settling → idle: discard obsolete local intent. */
+  async function discardObsoleteIntent(
+    claimed: ClaimedMutation,
+    attempt: QueueAttemptContext,
+    attemptTelemetry: MutationAttemptTelemetry
+  ): Promise<void> {
+    if (!transition(attempt, SETTLING)) return;
+    await host.rollbackOptimisticWrite(
+      claimed.transactionId,
+      claimOf(attempt),
+      'Obsolete local intent',
+      'LOCAL_SUPERSEDED'
+    );
+    if (!transition(attempt, IDLE)) return;
+    attemptTelemetry.finish('discarded', { errorCode: 'LOCAL_SUPERSEDED' });
+    resolveLiveOperationsAsQueued();
+    scheduleDrain();
+  }
+
+  /** preparing → idle: a superseded head the server never needs was dropped. */
+  function finishSupersededDiscard(
+    claimed: ClaimedMutation,
+    discarded: DeferOptimisticWriteResult,
+    attemptTelemetry: MutationAttemptTelemetry
+  ): void {
+    if (discarded.kind !== 'discarded-superseded') {
+      throw new Error('superseded mutation was unexpectedly deferred');
     }
-
-    function buildServerFailureCount(): number {
-      return claimed.serverFailureCount ?? 0;
+    attemptTelemetry.finish('superseded');
+    const live = liveQueuedOps.get(claimed.transactionId);
+    if (live) {
+      liveQueuedOps.delete(claimed.transactionId);
+      live.resolveRoute(
+        queuedMutationResult(live.operation, claimed.transactionId)
+      );
     }
+    resolveLiveOperationsAsQueued();
+    scheduleDrain();
+  }
 
-    function buildRouteClaimedMutation():
-      | HeadState
-      | ((head: HeadState) => HeadState) {
-      return discard ? IDLE : IN_FLIGHT;
+  /** Records a replay that failed before settlement and was rolled back. */
+  function finishFailedReplay(
+    rolledBack: RollbackOptimisticWriteResult,
+    error: unknown,
+    attempt: QueueAttemptContext,
+    attemptTelemetry: MutationAttemptTelemetry,
+    replayOperation: Operation | undefined
+  ): void {
+    attemptTelemetry.finish(
+      rolledBack.kind === 'rolled-back' ? 'rolled-back' : 'superseded',
+      error instanceof CombinedError
+        ? failureDetails(error, error.response ?? attempt.response)
+        : { failure: 'local' }
+    );
+    if (rolledBack.kind === 'rolled-back') {
+      fireAndForget(
+        deps.revalidate(rolledBack.revalidations ?? [], replayOperation),
+        'graphql-cache-mutation-queue'
+      );
     }
+  }
 
-    function updateRouteClaimedMutation(
-      rolledBack: RollbackOptimisticWriteResult,
-      replayOperation: Parameters<typeof deps.revalidate>[1]
-    ) {
-      if (rolledBack.kind === 'rolled-back') {
-        void deps.revalidate(rolledBack.revalidations ?? [], replayOperation);
+  /** preparing → settling → idle, keeping a head its admission cannot judge yet. */
+  async function deferAdmission(
+    claimed: ClaimedMutation,
+    attempt: QueueAttemptContext
+  ): Promise<void> {
+    try {
+      if (!transition(attempt, SETTLING)) return;
+      await host.deferOptimisticWrite(
+        claimed.transactionId,
+        claimOf(attempt),
+        Date.now() + DEFERRED_ADMISSION_RETRY_MS,
+        'Admission deferred'
+      );
+    } catch {
+      // The lease expires and the head is claimed again; nothing is lost.
+    } finally {
+      if (transition(attempt, IDLE)) {
+        resolveLiveOperationsAsQueued();
+        scheduleDrain(DEFERRED_ADMISSION_RETRY_MS);
       }
     }
   }
@@ -557,7 +771,8 @@ export function createMutationQueueRunner(
   /** preparing → settling → idle for a head whose recovery state failed. */
   async function failPreparation(
     claimed: ClaimedMutation,
-    attempt: QueueAttemptContext
+    attempt: QueueAttemptContext,
+    attemptTelemetry: MutationAttemptTelemetry
   ): Promise<void> {
     queuePreparation = undefined;
     try {
@@ -599,6 +814,10 @@ export function createMutationQueueRunner(
         'LOCAL_RECOVERY_FAILED'
       );
       if (!isCurrent(attempt)) return;
+      attemptTelemetry.finish('recovery-failed', {
+        failure: 'local',
+        errorCode: 'LOCAL_RECOVERY_FAILED',
+      });
       liveQueuedOps.delete(claimed.transactionId);
       live?.resolveRoute(
         withOptimisticMutationDisposition(result, {
@@ -616,6 +835,13 @@ export function createMutationQueueRunner(
   }
 
   async function drainQueue(): Promise<void> {
+    // A retired host stays disabled for good: stop polling instead of failing
+    // every 30 seconds against the no-op host.
+    if (host.disabled) {
+      telemetry.skipped('host-disabled');
+      resolveLiveOperationsAsQueued();
+      return;
+    }
     if (isActive(head)) {
       // Every newly enqueued operation is behind the claimed head. Its
       // caller can stop waiting; durable replay now owns the mutation.
@@ -660,6 +886,7 @@ export function createMutationQueueRunner(
 
       await routeClaimedMutation(claimed, epoch);
     } catch {
+      telemetry.skipped('claim-failed');
       // Enqueue already succeeded, so callers must observe these as
       // queued even if the runner cannot currently inspect the head.
       resolveLiveOperationsAsQueued();
@@ -672,16 +899,16 @@ export function createMutationQueueRunner(
 
   async function prepareQueueRecovery(): Promise<void> {
     try {
-      queuePreparation ??= boundedMutationLifecycle(() =>
-        options.prepareMutationQueue!()
-      );
+      queuePreparation ??= (async () => {
+        const prepared = await boundedMutationLifecycle(() =>
+          options.prepareMutationQueue!()
+        );
+        if (prepared === false) queuePreparation = undefined;
+      })();
       await queuePreparation;
     } catch (error) {
       queuePreparation = undefined;
-      console.warn(
-        '[graphql-cache] Unable to prepare mutation recovery',
-        error
-      );
+      telemetry.skipped(recoverySkipReason(error));
     }
   }
 
@@ -709,7 +936,26 @@ export function createMutationQueueRunner(
     enqueue: EnqueueOptimisticMutationResult,
     epoch: StorageEpoch
   ): Promise<OperationResult | undefined> {
+    notifyOptimisticMutationEnqueued(op);
+    // Enqueue IDs are monotonic and immutable. A delayed acknowledgement must
+    // not replace the live observer for a head already claimed by the pump.
+    const stale =
+      enqueue.initialClaim.kind === 'claimed'
+        ? !isNewClaim(enqueue.initialClaim.mutation)
+        : latestClaim !== undefined &&
+          BigInt(enqueue.transactionId) <= BigInt(latestClaim.transactionId);
+    if (!isCurrent(epoch) || stale)
+      return queuedMutationResult(op, enqueue.transactionId);
     if (enqueue.upsertKind.kind === 'replaced-pending') {
+      const removedId = enqueue.upsertKind.removedTransactionId;
+      if (
+        activeAttempt?.transactionId === removedId ||
+        confirmedOf(head)?.transactionId === removedId
+      ) {
+        activeAttempt = undefined;
+        head = IDLE;
+        deferredUntil = undefined;
+      }
       const superseded = liveQueuedOps.get(
         enqueue.upsertKind.removedTransactionId
       );
@@ -729,7 +975,6 @@ export function createMutationQueueRunner(
         resolveRoute: resolve,
       });
     });
-    notifyOptimisticMutationEnqueued(op);
     try {
       await match(enqueue.initialClaim)
         .with({ kind: 'claimed' }, ({ mutation }) =>
@@ -744,7 +989,10 @@ export function createMutationQueueRunner(
           resolveLiveOperationsAsQueued();
           scheduleDrain(EMPTY_QUEUE_POLL_MS);
         })
-        .exhaustive();
+        .exhaustive(() => {
+          resolveLiveOperationsAsQueued();
+          scheduleDrain();
+        });
     } catch (error) {
       // Enqueue already succeeded. Preserve durable-runner ownership even
       // if routing or claim rollback fails unexpectedly.
@@ -755,304 +1003,246 @@ export function createMutationQueueRunner(
     return await routed;
   }
 
+  /** Reports a cache error without letting a failing callback escape. */
+  function reportCacheError(error: unknown, op: Operation): void {
+    try {
+      options.onCacheError?.(error, op);
+    } catch {
+      // A diagnostic callback cannot undo settlement or stop retries.
+    }
+  }
+
   async function settle(
     networkResult: OperationResult,
     attempt: QueueAttemptContext
   ): Promise<OperationResult> {
-    let result = networkResult;
-    const op = result.operation;
+    const state: Settlement = {
+      result: networkResult,
+      retryAt: undefined,
+      settled: false,
+      replacementTransactionId: undefined,
+      disposition: 'queued',
+      outcome: 'detached',
+      details: {},
+    };
     const detachedResult = () =>
-      withOptimisticMutationDisposition(result, {
+      withOptimisticMutationDisposition(state.result, {
         kind:
-          result.data != null && !result.error
+          state.result.data != null && !state.result.error
             ? 'committed'
             : 'permanently-failed',
         transactionId: attempt.transactionId,
       });
-    if (!transition(attempt, receiveResult)) return detachedResult();
-    const claim = claimOf(attempt);
-    let retryAt: number | undefined;
-    let settled = false;
-    let replacementTransactionId: string | undefined;
-    let disposition:
-      | 'committed'
-      | 'queued'
-      | 'superseded'
-      | 'permanently-failed' = 'queued';
+    const attemptTelemetry =
+      attempt.telemetry ?? NOOP_MUTATION_ATTEMPT_TELEMETRY;
+    if (!transition(attempt, receiveResult)) {
+      attemptTelemetry.finish('detached');
+      return detachedResult();
+    }
     try {
-      const response = buildResponse();
-      const httpServerFailure = isHttpServerFailure(response);
-      // A valid GraphQL payload can arrive over HTTP 5xx without an
-      // urql error. Never commit it or bypass the retry policy.
-      if (httpServerFailure && !result.error) {
-        result = {
-          ...result,
-          data: undefined,
-          error: new CombinedError({
-            networkError: new Error(`HTTP ${response.status}`),
-            response,
-          }),
-        };
-      }
-      if (result.error || result.data == null) {
-        const detached = await settleFailure(httpServerFailure);
-        if (detached) return detached;
-      } else {
-        const confirmed = { transactionId: attempt.transactionId, result };
-        if (!transition(attempt, confirm(confirmed))) return detachedResult();
-        await recordAttemptResult(attempt, result, false);
-        if (!isCurrent(attempt)) return detachedResult();
-        const committed = await host.commitOptimisticWrite(
-          attempt.transactionId,
-          claim,
-          { ...deps.cacheDocument(op), data: result.data }
-        );
-        if (!transition(attempt, forgetConfirmed)) return detachedResult();
-        settled = true;
-        recordCommittedIdentityErrors(committed.identityErrors);
-        if (committed.kind === 'failed') {
-          const error = new Error(committed.error);
-          try {
-            options.onCacheError?.(error, op);
-          } catch {
-            // A diagnostic callback cannot undo confirmed settlement.
-          }
-          result = {
-            ...result,
-            data: undefined,
-            error: new CombinedError({ networkError: error }),
-          };
-          replacementTransactionId = committed.replacementTransactionId;
-          disposition = buildSettle2();
-          updateSettle2(committed);
-        } else if (committed.kind === 'committed-superseded') {
-          replacementTransactionId = committed.replacementTransactionId;
-          disposition = 'superseded';
-          await deps.deleteReportedRecords(result);
-        } else {
-          disposition = 'committed';
-          await deps.deleteReportedRecords(result);
-          if (!isCurrent(attempt)) return detachedResult();
-          const replay = deps.replayExplicitEffects(op, result.data, () =>
-            isCurrent(attempt)
-          );
-          if (replay) await replay;
-          await updateSettle(committed);
-        }
-      }
+      const response = state.result.error?.response ?? attempt.response;
+      state.result = withHttpServerFailure(state.result, response);
+      const current =
+        state.result.error || state.result.data == null
+          ? await settleFailure(state, attempt, response)
+          : await settleSuccess(state, attempt);
+      if (!current) return detachedResult();
     } catch (error) {
-      try {
-        options.onCacheError?.(error, op);
-      } catch {
-        // Reporting cannot discard the retained response or stop retries.
-      }
-      updateRetryAt();
+      reportCacheError(error, networkResult.operation);
+      if (!state.settled && isCurrent(attempt)) recordAckLost(state);
     } finally {
-      updateDeferredUntil();
-    }
-    return withOptimisticMutationDisposition(result, buildSettle());
-
-    function buildSettle2():
-      | 'committed'
-      | 'superseded'
-      | 'permanently-failed'
-      | 'queued' {
-      return replacementTransactionId ? 'superseded' : 'permanently-failed';
-    }
-
-    function buildSettle(): import('./optimistic').OptimisticMutationDispositionMetadata {
-      return disposition === 'superseded'
-        ? {
-            kind: 'superseded',
-            transactionId: attempt.transactionId,
-            replacementTransactionId:
-              replacementTransactionId ?? attempt.transactionId,
-          }
-        : {
-            kind: disposition,
-            transactionId: attempt.transactionId,
-          };
-    }
-
-    function updateReplacementTransactionId(
-      rolledBack: RollbackOptimisticWriteResult
-    ) {
-      if (rolledBack.kind === 'discarded-superseded') {
-        replacementTransactionId = rolledBack.replacementTransactionId;
-        disposition = 'superseded';
-      } else {
-        disposition = 'permanently-failed';
-        void deps.revalidate(rolledBack.revalidations ?? [], op);
-      }
-    }
-
-    function updateRetryAt() {
-      if (!settled && isCurrent(attempt)) {
-        retryAt = Date.now() + QUEUE_LEASE_MS;
-        // A lost acknowledgement may hide a completed transaction.
-        // Preserve optimism and let a fresh durable claim decide.
-        disposition = 'queued';
-      }
-    }
-
-    function updateDeferredUntil() {
       if (transition(attempt, release)) {
         liveQueuedOps.delete(attempt.transactionId);
-        deferredUntil = retryAt;
+        deferredUntil = state.retryAt;
         scheduleDrain(
-          retryAt === undefined ? 0 : Math.max(0, retryAt - Date.now())
+          state.retryAt === undefined
+            ? 0
+            : Math.max(0, state.retryAt - Date.now())
         );
       }
+      attemptTelemetry.finish(state.outcome, state.details);
     }
+    return settledResult(state, attempt);
+  }
 
-    async function buildRolledBack() {
-      return await host.rollbackOptimisticWrite(
-        attempt.transactionId,
-        claim,
-        result.error?.message ?? 'mutation returned no data',
-        mutationErrorCode(result.error)
-      );
+  /**
+   * Defers a failed attempt for a retry or rolls it back. Returns false when
+   * the attempt lost its token along the way.
+   */
+  async function settleFailure(
+    state: Settlement,
+    attempt: QueueAttemptContext,
+    response: Response | undefined
+  ): Promise<boolean> {
+    state.details = failureDetails(state.result.error, response);
+    let retry = false;
+    if (state.result.error && options.shouldRetryMutation) {
+      try {
+        retry = await options.shouldRetryMutation(state.result.error);
+      } catch (error) {
+        options.onCacheError?.(error, state.result.operation);
+      }
     }
-
-    async function buildDeferred(serverFailure: boolean, retryAt: number) {
-      return await host.deferOptimisticWrite(
+    if (!isCurrent(attempt)) return false;
+    const serverFailure = isServerFailure(state.result, response);
+    const exhausted =
+      retry &&
+      serverFailure &&
+      attempt.serverFailureCount + 1 >= MAX_MUTATION_SERVER_FAILURES;
+    if (exhausted) {
+      retry = false;
+      state.result = withRetryExhausted(state.result);
+    }
+    await recordAttemptResult(attempt, state.result, retry);
+    if (!isCurrent(attempt)) return false;
+    const message = state.result.error?.message ?? 'mutation returned no data';
+    if (retry) {
+      state.details.retryDelayMs = retryDelayMs(attempt.attemptCount);
+      state.retryAt = Date.now() + state.details.retryDelayMs;
+      const deferred = await host.deferOptimisticWrite(
         attempt.transactionId,
-        claim,
-        retryAt,
-        result.error?.message ?? 'mutation returned no data',
+        claimOf(attempt),
+        state.retryAt,
+        message,
         serverFailure
       );
+      if (!isCurrent(attempt)) return false;
+      recordDeferral(state, deferred);
+      return true;
     }
+    const rolledBack = await host.rollbackOptimisticWrite(
+      attempt.transactionId,
+      claimOf(attempt),
+      message,
+      mutationErrorCode(state.result.error)
+    );
+    if (!isCurrent(attempt)) return false;
+    recordRollback(state, rolledBack, exhausted);
+    return true;
+  }
 
-    function updateSettle2(
-      committed: HydrationSearchChanges & {
-        fieldChanges?: RecordFieldChange[];
-        identityErrors?: string[];
-        mutationUuid?: string;
-        revision: CacheRevision;
-        revisionAdvanced: boolean;
-        changed: string[];
-        affectedOps: string[];
-        reset: boolean;
-        revalidations?: QueryRevalidationWire[];
-      } & { kind: 'failed'; error: string; replacementTransactionId?: string }
-    ) {
-      if (!replacementTransactionId) {
-        void deps.revalidate(committed.revalidations ?? [], op);
-      }
+  /**
+   * Commits a confirmed attempt locally. Returns false when the attempt lost
+   * its token along the way.
+   */
+  async function settleSuccess(
+    state: Settlement,
+    attempt: QueueAttemptContext
+  ): Promise<boolean> {
+    const { result } = state;
+    const op = result.operation;
+    const confirmed: ConfirmedMutation = {
+      transactionId: attempt.transactionId,
+      result,
+    };
+    if (!transition(attempt, confirm(confirmed))) return false;
+    await recordAttemptResult(attempt, result, false);
+    if (!isCurrent(attempt)) return false;
+    const committed = await host.commitOptimisticWrite(
+      attempt.transactionId,
+      claimOf(attempt),
+      { ...deps.cacheDocument(op), data: result.data }
+    );
+    if (!transition(attempt, forgetConfirmed)) return false;
+    state.settled = true;
+    for (const error of committed.identityErrors ?? []) {
+      reportCacheError(new Error(error), op);
     }
-
-    async function updateSettle(
-      committed: HydrationSearchChanges & {
-        fieldChanges?: RecordFieldChange[];
-        identityErrors?: string[];
-        mutationUuid?: string;
-        revision: CacheRevision;
-        revisionAdvanced: boolean;
-        changed: string[];
-        affectedOps: string[];
-        reset: boolean;
-        revalidations?: QueryRevalidationWire[];
-      } & { kind: 'committed' }
-    ) {
-      if (isCurrent(attempt))
-        await deps.revalidate(committed.revalidations ?? [], op);
+    if (committed.kind === 'failed') {
+      recordCommitFailure(state, committed);
+      return true;
     }
-
-    function isHttpServerFailure(response: ReturnType<typeof buildResponse>) {
-      return (response?.status ?? 0) >= 500;
+    if (committed.kind === 'committed-superseded') {
+      state.replacementTransactionId = committed.replacementTransactionId;
+      state.disposition = 'superseded';
+      state.outcome = 'superseded';
+      await deps.deleteReportedRecords(result);
+      return true;
     }
+    state.disposition = 'committed';
+    state.outcome = 'committed';
+    await deps.deleteReportedRecords(result);
+    if (!isCurrent(attempt)) return false;
+    const replay = deps.replayExplicitEffects(op, result.data, () =>
+      isCurrent(attempt)
+    );
+    if (replay) await replay;
+    if (isCurrent(attempt))
+      await deps.revalidate(committed.revalidations ?? [], op);
+    return true;
+  }
 
-    function recordCommittedIdentityErrors(errors: string[] | undefined) {
-      for (const error of errors ?? []) {
-        try {
-          options.onCacheError?.(new Error(error), op);
-        } catch {
-          /* Diagnostics cannot undo confirmed settlement. */
-        }
-      }
+  function recordDeferral(
+    state: Settlement,
+    deferred: DeferOptimisticWriteResult
+  ): void {
+    state.settled = true;
+    if (deferred.kind === 'discarded-superseded') {
+      state.retryAt = undefined;
+      state.replacementTransactionId = deferred.replacementTransactionId;
+      state.disposition = 'superseded';
+      state.outcome = 'superseded';
+    } else {
+      state.disposition = 'queued';
+      state.outcome = 'retry-scheduled';
     }
+  }
 
-    async function settleFailure(
-      httpServerFailure: boolean
-    ): Promise<OperationResult | undefined> {
-      let retry = false;
-      retry = await updateRetry2(retry);
-      if (!isCurrent(attempt)) return detachedResult();
-      // urql represents HTTP 5xx as networkError too. Count actual
-      // server responses, never connection failures or timeouts.
-      const serverFailure = buildServerFailure(httpServerFailure);
-      retry = updateRetry(retry, serverFailure);
-      await recordAttemptResult(attempt, result, retry);
-      if (!isCurrent(attempt)) return detachedResult();
-      if (retry) {
-        retryAt = Date.now() + retryDelayMs(attempt.attemptCount);
-        const deferred = await buildDeferred(serverFailure, retryAt);
-        if (!isCurrent(attempt)) return detachedResult();
-        settled = true;
-        if (deferred.kind === 'discarded-superseded') {
-          retryAt = undefined;
-          replacementTransactionId = deferred.replacementTransactionId;
-          disposition = 'superseded';
-        } else {
-          disposition = 'queued';
-        }
-      } else {
-        const rolledBack = await buildRolledBack();
-        if (!isCurrent(attempt)) return detachedResult();
-        settled = true;
-        updateReplacementTransactionId(rolledBack);
-      }
-      return undefined;
+  function recordRollback(
+    state: Settlement,
+    rolledBack: RollbackOptimisticWriteResult,
+    exhausted: boolean
+  ): void {
+    state.settled = true;
+    if (rolledBack.kind === 'discarded-superseded') {
+      state.replacementTransactionId = rolledBack.replacementTransactionId;
+      state.disposition = 'superseded';
+      state.outcome = 'superseded';
+      return;
     }
+    state.disposition = 'permanently-failed';
+    state.outcome = exhausted ? 'retry-exhausted' : 'rolled-back';
+    fireAndForget(
+      deps.revalidate(rolledBack.revalidations ?? [], state.result.operation),
+      'graphql-cache-mutation-queue'
+    );
+  }
 
-    function buildResponse() {
-      return result.error?.response ?? attempt.response;
-    }
-
-    function buildServerFailure(httpServerFailure: boolean) {
-      return httpServerFailure || (result.error?.graphQLErrors.length ?? 0) > 0;
-    }
-
-    async function updateRetry2(retry: boolean) {
-      if (result.error && options.shouldRetryMutation) {
-        try {
-          retry = await options.shouldRetryMutation(result.error);
-        } catch (error) {
-          options.onCacheError?.(error, op);
-        }
-      }
-      return retry;
-    }
-
-    function updateRetry(retry: boolean, serverFailure: boolean) {
-      if (
-        retry &&
-        serverFailure &&
-        attempt.serverFailureCount + 1 >= MAX_MUTATION_SERVER_FAILURES
-      ) {
-        retry = false;
-        result = {
-          ...result,
-          error: new CombinedError({
-            graphQLErrors: [
-              {
-                message: `Mutation stopped after ${MAX_MUTATION_SERVER_FAILURES} server failures: ${result.error?.message}`,
-                extensions: { code: 'MUTATION_RETRY_EXHAUSTED' },
-              },
-            ],
-            response: result.error?.response,
-          }),
-        };
-      }
-      return retry;
+  /** The server confirmed the attempt but its local commit failed. */
+  function recordCommitFailure(
+    state: Settlement,
+    committed: Extract<CommitOptimisticWriteResult, { kind: 'failed' }>
+  ): void {
+    const op = state.result.operation;
+    const error = new Error(committed.error);
+    reportCacheError(error, op);
+    state.result = {
+      ...state.result,
+      data: undefined,
+      error: new CombinedError({ networkError: error }),
+    };
+    const replacementTransactionId = committed.replacementTransactionId;
+    state.replacementTransactionId = replacementTransactionId;
+    state.disposition = replacementTransactionId
+      ? 'superseded'
+      : 'permanently-failed';
+    state.outcome = replacementTransactionId ? 'superseded' : 'rolled-back';
+    state.details = { failure: 'local', errorCode: 'LOCAL_COMMIT_FAILED' };
+    if (!replacementTransactionId) {
+      fireAndForget(
+        deps.revalidate(committed.revalidations ?? [], op),
+        'graphql-cache-mutation-queue'
+      );
     }
   }
 
   function resetStorage(): void {
     storageGeneration += 1;
+    activeAttempt = undefined;
+    latestClaim = undefined;
     head = IDLE;
     deferredUntil = undefined;
+    telemetry.storageReset();
     resolveLiveOperationsAsQueued();
   }
 
@@ -1061,15 +1251,11 @@ export function createMutationQueueRunner(
     isCurrent,
     admit,
     settle,
-    start: () => scheduleDrain(),
+    start: () => {
+      telemetry.loaded(async () => host.inspectMutations?.());
+      scheduleDrain();
+    },
     wake: wakeDrain,
     resetStorage,
   };
-}
-
-function mutationFailureMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-function mutationFailureCode(error: unknown): string | undefined {
-  return error instanceof CombinedError ? mutationErrorCode(error) : undefined;
 }

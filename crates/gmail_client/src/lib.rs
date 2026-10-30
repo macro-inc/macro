@@ -16,8 +16,13 @@ mod test;
 
 use regex::Regex;
 use std::sync::LazyLock;
+use std::time::Duration;
 
 const MAX_ERROR_BODY_LEN: usize = 1024;
+// A stalled request fails instead of holding its worker, and its mailbox's
+// request-gate permit, indefinitely. Callers size permit leases above this.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 static EMAIL_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap());
@@ -58,6 +63,9 @@ use models_email::gmail::{
 pub struct GmailClient {
     /// The inner client used to make requests
     inner: reqwest::Client,
+    /// Sending crosses a durable submission boundary and must never be retried
+    /// or redirected automatically by the transport.
+    send_client: reqwest::Client,
     /// The base url for Gmail API
     base_url: String,
     /// The url for fetching google certs
@@ -67,10 +75,21 @@ pub struct GmailClient {
     /// The expected audience for the jwt passed by Google
     audience: String,
     /// The GCP topic name we listen on for inbox updates
-    subscription_topic: String,
+    subscription_topic: Option<String>,
 }
 
 impl GmailClient {
+    /// Client for API calls that do not register push subscriptions.
+    pub fn without_watch() -> Self {
+        Self::new_with_urls(
+            None,
+            "https://www.googleapis.com/gmail/v1".to_string(),
+            "https://people.googleapis.com/v1".to_string(),
+            "https://www.googleapis.com/oauth2/v3/certs".to_string(),
+            "macro-gmail-webhook".to_string(),
+        )
+    }
+
     pub fn new(subscription_topic: String) -> Self {
         Self::new_with_urls(
             subscription_topic,
@@ -87,19 +106,30 @@ impl GmailClient {
     /// endpoints. HTTP transport details and endpoint values remain private to
     /// this crate.
     pub fn new_with_urls(
-        subscription_topic: String,
+        subscription_topic: impl Into<Option<String>>,
         gmail_url: String,
         people_url: String,
         jwks_url: String,
         audience: String,
     ) -> Self {
         Self {
-            inner: reqwest::Client::new(),
+            inner: reqwest::Client::builder()
+                .timeout(REQUEST_TIMEOUT)
+                .connect_timeout(CONNECT_TIMEOUT)
+                .build()
+                .expect("Gmail HTTP client should initialize"),
+            send_client: reqwest::Client::builder()
+                .timeout(REQUEST_TIMEOUT)
+                .connect_timeout(CONNECT_TIMEOUT)
+                .retry(reqwest::retry::never())
+                .redirect(reqwest::redirect::Policy::none())
+                .build()
+                .expect("Gmail send HTTP client should initialize"),
             base_url: gmail_url.trim_end_matches('/').to_string(),
             certs_url: jwks_url,
             contacts_url: people_url.trim_end_matches('/').to_string(),
             audience,
-            subscription_topic,
+            subscription_topic: subscription_topic.into(),
         }
     }
 
@@ -227,6 +257,30 @@ impl GmailClient {
         .await
     }
 
+    /// Adds and removes labels on many messages in one request (at most
+    /// [`models_email::gmail::gmail_ops::MAX_BATCH_MODIFY_MESSAGES`] ids).
+    #[tracing::instrument(
+        skip(self, access_token, provider_message_ids),
+        fields(message_count = provider_message_ids.len()),
+        err
+    )]
+    pub async fn batch_modify_message_labels(
+        &self,
+        access_token: &str,
+        provider_message_ids: &[String],
+        label_ids_to_add: &[String],
+        label_ids_to_remove: &[String],
+    ) -> Result<(), GmailApiHttpError> {
+        labels::batch_modify_message_labels(
+            self,
+            access_token,
+            provider_message_ids,
+            label_ids_to_add,
+            label_ids_to_remove,
+        )
+        .await
+    }
+
     /// Fetches a specific message from Gmail by its provider ID.
     /// Returns raw Gmail MessageResource - callers should map to service layer structs.
     #[tracing::instrument(skip(self, access_token), err)]
@@ -236,6 +290,17 @@ impl GmailClient {
         message_provider_id: &str,
     ) -> Result<Option<MessageResource>, GmailApiHttpError> {
         get_message(self, access_token, message_provider_id).await
+    }
+
+    /// Fetches a message's original RFC 822 bytes, or `None` when Gmail no
+    /// longer has it.
+    #[tracing::instrument(skip(self, access_token), err)]
+    pub async fn get_raw_message(
+        &self,
+        access_token: &str,
+        message_provider_id: &str,
+    ) -> Result<Option<Vec<u8>>, GmailApiHttpError> {
+        messages::get_raw_message(self, access_token, message_provider_id).await
     }
 
     #[tracing::instrument(skip(self, access_token), err)]
@@ -256,6 +321,16 @@ impl GmailClient {
         thread_id: Option<&str>,
     ) -> Result<models_email::gmail::SentMessageResource, GmailApiHttpError> {
         messages::send_message(self, access_token, mime, thread_id).await
+    }
+
+    /// Looks for a unique sent message by its RFC 5322 Message-ID, including trash.
+    #[tracing::instrument(skip(self, access_token, message_id), err)]
+    pub async fn find_sent_message(
+        &self,
+        access_token: &str,
+        message_id: &str,
+    ) -> Result<Option<models_email::gmail::SentMessageResource>, GmailApiHttpError> {
+        messages::find_sent_message(self, access_token, message_id).await
     }
 
     /// Fetches an attachment from Gmail by its provider ID

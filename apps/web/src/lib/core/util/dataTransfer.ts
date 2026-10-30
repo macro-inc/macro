@@ -16,14 +16,12 @@ export async function readClipboardAsDataTransfer(): Promise<DataTransfer | null
 
   const dataTransfer = new DataTransfer();
 
-  const settleRead = async () => {
-    try {
-      return await clipboard.read();
-    } catch {
-      return await [];
-    }
-  };
-  const items = await settleRead();
+  let items: ClipboardItems = [];
+  try {
+    items = await clipboard.read();
+  } catch {
+    // Fall back to plain text below.
+  }
   for (const item of items) {
     for (const type of item.types) {
       if (type !== 'text/html' && type !== 'text/plain') continue;
@@ -33,14 +31,12 @@ export async function readClipboardAsDataTransfer(): Promise<DataTransfer | null
   }
 
   if (dataTransfer.types.length === 0) {
-    const settleReadText = async () => {
-      try {
-        return await clipboard.readText();
-      } catch {
-        return await '';
-      }
-    };
-    const text = await settleReadText();
+    let text = '';
+    try {
+      text = await clipboard.readText();
+    } catch {
+      // Nothing readable on the clipboard.
+    }
     if (text) dataTransfer.setData('text/plain', text);
   }
 
@@ -72,29 +68,20 @@ export async function writeClipboardData(
       items['text/html'] = new Blob([html], { type: 'text/html' });
     }
 
-    const settleWrite = async () => {
-      try {
-        await clipboard.write([new ClipboardItem(items)]);
-
-        return await true;
-      } catch {
-        return await false;
-      }
-    };
-    const wrote = await settleWrite();
-    if (wrote) return true;
+    try {
+      await clipboard.write([new ClipboardItem(items)]);
+      return true;
+    } catch {
+      // Fall back to plain text below.
+    }
   }
 
-  const settleWriteText = async () => {
-    try {
-      await clipboard.writeText(text);
-
-      return await true;
-    } catch {
-      return await false;
-    }
-  };
-  return settleWriteText();
+  try {
+    await clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 const EMPTY_RESULT: ExtractedEntries = {

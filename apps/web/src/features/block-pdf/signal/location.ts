@@ -380,13 +380,13 @@ async function applyCustomHighlights(
   viewer.container().scrollTop = currentScrollTop;
   viewer.container().scrollLeft = currentScrollLeft;
 
-  if (searchResult?.state === FindState.NOT_FOUND) {
-    console.warn('Terms not found:', terms);
+  if (searchResult.isErr()) {
+    console.warn('Highlight search timed out:', terms);
     return;
   }
 
-  if (!searchResult) {
-    console.warn('Search result is undefined');
+  if (searchResult.value?.state === FindState.NOT_FOUND) {
+    console.warn('Terms not found:', terms);
     return;
   }
 
@@ -497,29 +497,18 @@ function useGoToPdfLocation() {
         });
 
         // Wait for the find controller to be ready
+        const findControllerStateEvent = await waitForSignal(
+          findControllerStateEventSignal,
+          (val) =>
+            val?.state === FindState.FOUND || val?.state === FindState.NOT_FOUND
+        );
 
-        const settleWaitForSignal = async () => {
-          try {
-            return await waitForSignal(
-              findControllerStateEventSignal,
-              (val) =>
-                val?.state === FindState.FOUND ||
-                val?.state === FindState.NOT_FOUND
-            );
-          } catch (settleWaitForSignalError) {
-            const _e = settleWaitForSignalError;
-
-            console.error('search timed out');
-            return await undefined;
-          }
-        };
-        const findControllerStateEvent = await settleWaitForSignal();
-
-        if (!findControllerStateEvent) {
+        if (findControllerStateEvent.isErr()) {
+          console.warn('search timed out', { location });
           return;
         }
 
-        if (findControllerStateEvent.state === FindState.NOT_FOUND) {
+        if (findControllerStateEvent.value?.state === FindState.NOT_FOUND) {
           console.warn('unable to find match', { location });
           // TODO: fallback to raw query
           return;
@@ -591,7 +580,7 @@ function useGoToPdfLocation() {
       return;
     }
 
-    go(location);
+    await go(location);
   };
 }
 
@@ -601,30 +590,11 @@ const useGoToPreviousLocation = () => {
   const isViewerReady = useIsViewerReadyForScroll();
 
   return async () => {
-    const rootViewer = viewer();
-
-    const settleWaitForSignalResultResult = async () => {
-      const settleWaitForSignalResultResultValue = await waitForSignal(
-        pdf.persistedViewLocation,
-        (location) => !!location,
-        300
-      );
-      const prevLocationHash = settleWaitForSignalResultResultValue;
-
-      const settleWaitForSignalResult = async () => {
-        await waitForSignal(isViewerReady);
-
-        if (rootViewer && prevLocationHash) {
-          rootViewer.goToLocationHash(prevLocationHash);
-        }
-
-        return;
-      };
-      settleWaitForSignalResult();
-
-      return;
-    };
-    await settleWaitForSignalResultResult();
+    const prevLocationHash = pdf.persistedViewLocation();
+    if (!prevLocationHash) return;
+    const ready = await waitForSignal(isViewerReady);
+    if (ready.isErr()) return;
+    viewer()?.goToLocationHash(prevLocationHash);
   };
 };
 

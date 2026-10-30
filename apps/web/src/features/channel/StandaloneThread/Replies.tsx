@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createMemo, For, type ParentProps, Show } from 'solid-js';
 import { Message, type MessageActions, type MessageData } from '../Message';
 import { Thread } from '../Thread';
@@ -165,7 +166,10 @@ export function Replies(props: RepliesProps) {
                   onClick={(event) => {
                     const parent = ctx.parent();
                     if (!parent) return;
-                    replyAction()?.({ message: parent, event });
+                    fireAndForget(
+                      replyAction()?.({ message: parent, event }),
+                      'channel-thread'
+                    );
                   }}
                   aria-label="Reply"
                 />

@@ -3,11 +3,43 @@
  */
 
 import type { MessagePart } from '@service-agent-fold/generated/types';
+import type { ExecutionRecord } from '@service-agent-harness/generated/schemas';
 import { render } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ToolCallContext } from './shared';
 import { ToolCallPart } from './ToolCallPart';
+
+const codeQuery = vi.hoisted(() => ({
+  record: undefined as ExecutionRecord | undefined,
+  read: vi.fn(),
+}));
+vi.mock('@queries/agent-session/code-execution', () => ({
+  useAgentCodeExecutionQuery: (
+    session: () => string,
+    execution: () => string | undefined
+  ) => {
+    codeQuery.read(session(), execution());
+    return {
+      isSuccess: true,
+      isPending: false,
+      isError: false,
+      get data() {
+        return codeQuery.record;
+      },
+    };
+  },
+}));
+
+vi.mock('../../views/PresentedReviewPart', () => ({
+  PresentedReviewPart: (props: { sessionId: string; reviewId: string }) => (
+    <div
+      data-testid="persisted-review"
+      data-session={props.sessionId}
+      data-review={props.reviewId}
+    />
+  ),
+}));
 
 // Rich renderers own their result controls; this test verifies dispatch and
 // context without mounting their split-layout and query dependencies.
@@ -17,6 +49,8 @@ vi.mock('@core/component/AI/component/tool/handler', () => ({
     name: string;
     json: unknown;
     response?: { json: unknown };
+    error?: string;
+    stopped?: boolean;
     isComplete: boolean;
     renderContext: {
       renderContext: { grouped?: boolean; isStreaming: boolean };
@@ -25,6 +59,9 @@ vi.mock('@core/component/AI/component/tool/handler', () => ({
     <div
       data-testid="macro-tool"
       data-response={JSON.stringify(props.response?.json)}
+      data-error={props.error}
+      data-stopped={String(props.stopped ?? false)}
+      data-complete={String(props.isComplete)}
       data-grouped={String(props.renderContext.renderContext.grouped)}
       data-streaming={String(props.renderContext.renderContext.isStreaming)}
     >
@@ -380,25 +417,31 @@ describe('ToolCallPart Macro tools', () => {
       { name: 'ReadContent', status: 'running', ...overrides }
     );
 
-  it('keeps a running Macro tool on the compact active row', () => {
+  it('renders a running Macro tool through its renderer while it runs', () => {
     const rendered = render(() => (
       <ToolCallPart part={readContent()} context={context(true)} />
     ));
-    expect(rendered.getByTestId('title').textContent).toBe('ReadContent');
-    expect(rendered.getAllByTestId('tool-card')).toHaveLength(1);
-    expect(rendered.getByTestId('tool-card').dataset.expandable).toBe('false');
+    const richTool = rendered.getByTestId('macro-tool');
+    expect(richTool.dataset.complete).toBe('false');
+    expect(richTool.dataset.streaming).toBe('true');
+    expect(richTool.dataset.stopped).toBe('false');
+    expect(richTool.dataset.response).toBeUndefined();
+    expect(rendered.queryByTestId('tool-card')).toBeNull();
   });
 
   it('marks a Macro call cut off by the turn as stopped', () => {
     // The turn ended with this call still `running` in the log; it settles
-    // and, with no response to show, keeps the labelled card.
+    // and renders through its renderer as stopped, with no response.
     const rendered = render(() => (
       <ToolCallPart part={readContent()} context={context(false)} />
     ));
-    expect(rendered.getByTestId('tool-card').dataset.status).toBe('completed');
+    const richTool = rendered.getByTestId('macro-tool');
+    expect(richTool.dataset.stopped).toBe('true');
+    expect(richTool.dataset.complete).toBe('true');
+    expect(richTool.dataset.streaming).toBe('false');
   });
 
-  it('keeps a stopped call labelled even when it already has renderable output', () => {
+  it('withholds the output of a stopped call even when it would render', () => {
     const rendered = render(() => (
       <ToolCallPart
         part={readContent({
@@ -412,8 +455,9 @@ describe('ToolCallPart Macro tools', () => {
         context={context(false)}
       />
     ));
-    expect(rendered.getByTestId('trailing').textContent).toBe('Stopped');
-    expect(rendered.queryByTestId('macro-tool')).toBeNull();
+    const richTool = rendered.getByTestId('macro-tool');
+    expect(richTool.dataset.stopped).toBe('true');
+    expect(richTool.dataset.response).toBeUndefined();
   });
 
   it('reuses the registered result renderer without an outer tool disclosure', () => {
@@ -498,24 +542,75 @@ describe('ToolCallPart Macro tools', () => {
     expect(rendered.getByTestId('tool-card')).not.toBeNull();
   });
 
-  it('shows a failed Macro tool as a faded summary', () => {
+  it('shows a failed Macro tool through its renderer with the reason and no result', () => {
     const rendered = render(() => (
       <ToolCallPart
         part={toolUse(
           {
             kind: 'macro',
             input: { limit: 5 },
-            output: null,
-            error: 'permission denied',
+            output: 'Failed to list entities: permission denied',
+            error: 'Failed to list entities: permission denied',
           },
           { name: 'ListEntities', status: 'failed' }
         )}
         context={context(false)}
       />
     ));
+    const richTool = rendered.getByTestId('macro-tool');
+    expect(richTool.textContent).toBe('ListEntities');
+    expect(richTool.dataset.error).toBe(
+      'Failed to list entities: permission denied'
+    );
+    expect(richTool.dataset.response).toBeUndefined();
+    expect(rendered.queryByTestId('tool-card')).toBeNull();
+  });
+
+  it('treats a result that reports no success as a failure with its message', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={toolUse(
+          {
+            kind: 'macro',
+            input: {
+              documentId: '4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46',
+              documentName: 'Plan',
+            },
+            output: {
+              success: false,
+              documentId: '4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46',
+              message: 'Only the owner can rename',
+            },
+            error: null,
+          },
+          { name: 'RenameDocument' }
+        )}
+        context={context(false)}
+      />
+    ));
+    const richTool = rendered.getByTestId('macro-tool');
+    expect(richTool.dataset.error).toBe('Only the owner can rename');
+    expect(richTool.dataset.response).toBeUndefined();
+  });
+
+  it('keeps a failed call whose arguments do not fit its schema on the card', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={readContent({
+          status: 'failed',
+          detail: {
+            kind: 'macro',
+            input: { documentId: 'not-a-uuid' },
+            output: null,
+            error: 'not found',
+          },
+        })}
+        context={context(false)}
+      />
+    ));
+    expect(rendered.queryByTestId('macro-tool')).toBeNull();
     expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
     expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
-    expect(rendered.getByTestId('tool-card').dataset.expandable).toBe('false');
   });
 });
 
@@ -1105,8 +1200,12 @@ describe('ToolCallPart result summaries', () => {
   it.each([
     {
       name: 'MoveToProject',
-      input: {},
+      input: {
+        entityType: 'document',
+        entityId: '4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46',
+      },
       output: { success: false, message: 'Denied' },
+      reason: 'Denied',
     },
     {
       name: 'WebFetch',
@@ -1118,6 +1217,7 @@ describe('ToolCallPart result summaries', () => {
           error_code: 'url_not_accessible',
         },
       },
+      reason: 'url_not_accessible',
     },
     {
       name: 'WebSearch',
@@ -1129,10 +1229,11 @@ describe('ToolCallPart result summaries', () => {
           error_code: 'unavailable',
         },
       },
+      reason: 'unavailable',
     },
   ])(
     'shows a validated $name response failure even if the call completed',
-    ({ name, input, output }) => {
+    ({ name, input, output, reason }) => {
       const rendered = render(() => (
         <ToolCallPart
           part={toolUse(
@@ -1142,9 +1243,10 @@ describe('ToolCallPart result summaries', () => {
           context={context(false)}
         />
       ));
-      expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
-      expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
-      expect(rendered.queryByTestId('macro-tool')).toBeNull();
+      const richTool = rendered.getByTestId('macro-tool');
+      expect(richTool.dataset.error).toBe(reason);
+      expect(richTool.dataset.response).toBeUndefined();
+      expect(rendered.queryByTestId('tool-card')).toBeNull();
     }
   );
 
@@ -1373,4 +1475,279 @@ describe('coding agent dispatch', () => {
       expect(view.queryByTestId('tool-card')).toBeNull();
     }
   );
+});
+
+describe('code execution results', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+  });
+
+  const executionId = '019a0000-0000-7000-8000-000000000001';
+  const codePart = (server: string): ToolUsePart => ({
+    kind: 'tool_use',
+    id: 'execute-1',
+    status: 'completed',
+    name: { kind: 'mcp', server, tool: 'ExecuteCode' },
+    detail: {
+      kind: 'other',
+      acpKind: 'other',
+      input: { execution_id: executionId, source: 'return { count: 1 };' },
+      result: {
+        executionId,
+        status: 'failed',
+        result: { count: 1 },
+        error: null,
+      },
+      output: null,
+      error: null,
+    },
+  });
+
+  beforeEach(() => {
+    codeQuery.read.mockClear();
+    codeQuery.record = {
+      executionId,
+      source: 'return { count: 1 };',
+      activity: [],
+      activityTruncated: false,
+      status: 'failed',
+      result: null,
+      error: 'Later step failed',
+      calls: [
+        {
+          id: 'call-1',
+          name: 'ReadContent',
+          input: { documentId: '4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46' },
+          output: { content: { text: 'saved contents' }, comments: [] },
+          error: null,
+          status: 'completed',
+          outputOmitted: false,
+        },
+        {
+          id: 'call-2',
+          name: 'DisplayResults',
+          input: { view: { widgets: [] } },
+          output: { message: 'done' },
+          error: null,
+          status: 'completed',
+          outputOmitted: false,
+        },
+        {
+          id: 'call-3',
+          name: 'CreateDocument',
+          input: {},
+          output: null,
+          error: null,
+          status: 'unknown',
+          outputOmitted: false,
+        },
+      ],
+    };
+  });
+
+  it('hides source and folds observed SDK ops into the peek window', () => {
+    codeQuery.record = {
+      ...codeQuery.record!,
+      activity: [
+        { id: 1, label: 'Classify content', status: 'completed' },
+        { id: 2, label: 'Classify content', status: 'running' },
+        { id: 3, label: 'Read documents', status: 'failed' },
+      ],
+      activityTruncated: true,
+    };
+    const rendered = render(() => (
+      <ToolCallPart
+        part={codePart('macro_internal')}
+        context={context(false)}
+      />
+    ));
+    expect(rendered.container.textContent).not.toContain(
+      'return { count: 1 };'
+    );
+    const group = rendered.getByRole('button', { name: /Called 3 tools/ });
+    expect(group.getAttribute('aria-expanded')).toBe('false');
+    expect(
+      rendered
+        .queryAllByTestId('tool-card')
+        .filter((row) =>
+          /Classify content|Read documents/.test(row.textContent ?? '')
+        )
+    ).toHaveLength(0);
+
+    group.click();
+    expect(group.getAttribute('aria-expanded')).toBe('true');
+    const activity = rendered
+      .getAllByTestId('tool-card')
+      .filter((row) =>
+        /Classify content|Read documents/.test(row.textContent ?? '')
+      );
+    expect(activity).toHaveLength(3);
+    expect(activity[0].textContent).toContain('Classify content');
+    expect(activity[0].dataset.status).toBe('completed');
+    expect(activity[1].textContent).toContain('Outcome unknown');
+    expect(activity[2].dataset.status).toBe('failed');
+    expect(rendered.container.textContent).not.toContain('API calls');
+    expect(rendered.container.textContent).toContain('first 128 requests');
+  });
+
+  it('opens the peek window for live SDK operations', () => {
+    vi.useFakeTimers();
+    codeQuery.record = {
+      ...codeQuery.record!,
+      status: 'running',
+      error: null,
+      calls: [],
+      activity: [
+        { id: 1, label: 'Browse workspace', status: 'completed' },
+        { id: 2, label: 'Search email', status: 'running' },
+      ],
+    };
+    const part = codePart('macro_internal');
+    part.status = 'running';
+    const rendered = render(() => (
+      <ToolCallPart part={part} context={context(true)} />
+    ));
+    const group = rendered.getByRole('button');
+    expect(group.textContent).toContain('Calling 2 tools');
+    expect(rendered.container.textContent).not.toContain('Workspace activity');
+    vi.advanceTimersByTime(150);
+    expect(group.getAttribute('aria-expanded')).toBe('true');
+    const rows = rendered.getAllByTestId('tool-card');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toContain('Browse workspace');
+    expect(rows[0].dataset.status).toBe('completed');
+    expect(rows[1].textContent).toContain('Search email');
+    expect(rows[1].dataset.status).toBe('running');
+    vi.useRealTimers();
+  });
+
+  it('loads trusted records and keeps custom components after a script failure', () => {
+    const part = codePart('macro_internal');
+    const rendered = render(() => (
+      <ToolCallPart part={part} context={context(false)} />
+    ));
+    expect(codeQuery.read).toHaveBeenCalledWith('session', executionId);
+    expect(rendered.getAllByTestId('tool-card')[0].dataset.status).toBe(
+      'failed'
+    );
+    expect(rendered.getAllByTestId('tool-card')[0].textContent).toContain(
+      'Failed'
+    );
+    expect(rendered.getByTestId('dashboard-view')).toBeDefined();
+    expect(rendered.container.textContent).toContain('Outcome unknown');
+    expect(rendered.getByTestId('macro-tool').textContent).toBe('ReadContent');
+    expect(
+      JSON.parse(rendered.getByTestId('macro-tool').dataset.response ?? '')
+    ).toEqual({ content: { text: 'saved contents' }, comments: [] });
+  });
+
+  it('recovers completed inner results after Stop drops the final receipt', () => {
+    const part = codePart('macro_internal');
+    part.status = 'failed';
+    if (part.detail.kind === 'other') {
+      part.detail.result = null;
+      part.detail.output = null;
+    }
+    const rendered = render(() => (
+      <ToolCallPart part={part} context={context(false)} />
+    ));
+    expect(codeQuery.read).toHaveBeenCalledWith('session', executionId);
+    expect(rendered.getByTestId('macro-tool').textContent).toBe('ReadContent');
+  });
+
+  it('explains unavailable results when an execution ID belongs to another program', () => {
+    codeQuery.record = {
+      ...codeQuery.record!,
+      source: 'return "other program";',
+    };
+    const rendered = render(() => (
+      <ToolCallPart
+        part={codePart('macro_internal')}
+        context={context(false)}
+      />
+    ));
+    expect(rendered.queryByTestId('macro-tool')).toBeNull();
+    expect(rendered.queryByTestId('dashboard-view')).toBeNull();
+    expect(rendered.getByRole('status').textContent).toContain(
+      'Tool results are unavailable.'
+    );
+  });
+
+  it('loads server-accepted UUIDs with reserved variant bits', () => {
+    const id = '35e6f7a8-b9c0-4d1e-2f3a-4b5c6d7e8f90';
+    const part = codePart('macro_internal');
+    if (part.detail.kind === 'other') {
+      part.detail.input = { execution_id: id, source: 'return { count: 1 };' };
+      part.detail.result = null;
+    }
+    codeQuery.record = { ...codeQuery.record!, executionId: id };
+    const rendered = render(() => (
+      <ToolCallPart part={part} context={context(false)} />
+    ));
+    expect(codeQuery.read).toHaveBeenCalledWith('session', id);
+    expect(rendered.getByTestId('macro-tool').textContent).toBe('ReadContent');
+    expect(rendered.getAllByTestId('tool-card')[0].textContent).toContain(
+      'Failed'
+    );
+  });
+
+  it('does not let an external MCP server select the code-mode record view', () => {
+    codeQuery.read.mockClear();
+    const rendered = render(() => (
+      <ToolCallPart part={codePart('external')} context={context(false)} />
+    ));
+    expect(codeQuery.read).not.toHaveBeenCalled();
+    expect(rendered.queryByTestId('dashboard-view')).toBeNull();
+    expect(rendered.getByTestId('title').textContent).toBe('ExecuteCode');
+  });
+});
+
+describe('ACP review presentations', () => {
+  const reviewId = '019a0000-0000-7000-8000-000000000005';
+  const part = (
+    server = 'macro_internal',
+    callId = `review_${reviewId}`
+  ): ToolUsePart => ({
+    kind: 'tool_use',
+    id: callId,
+    status: 'completed',
+    name: { kind: 'mcp', server, tool: 'PresentReview' },
+    detail: {
+      kind: 'other',
+      acpKind: 'other',
+      input: { reviewId, kind: 'email', title: 'Drafts' },
+      output: null,
+      result: { reviewId, message: 'Presented to the user' },
+      error: null,
+    },
+  });
+  it('renders saved reviews immediately while the surrounding agent continues', () => {
+    const ctx = context(true);
+    const view = render(() => <ToolCallPart part={part()} context={ctx} />);
+    const card = view.getByTestId('persisted-review');
+    expect(card.dataset.session).toBe(ctx.sessionId);
+    expect(card.dataset.review).toBe(reviewId);
+  });
+  it('does not duplicate the card for the ordinary tool invocation', () => {
+    const view = render(() => (
+      <ToolCallPart
+        part={part('macro_internal', 'ordinary-call')}
+        context={context(false)}
+      />
+    ));
+    expect(view.queryByTestId('persisted-review')).toBeNull();
+  });
+  it('does not accept a presentation from another MCP server', () => {
+    const view = render(() => (
+      <ToolCallPart part={part('external')} context={context(false)} />
+    ));
+    expect(view.queryByTestId('persisted-review')).toBeNull();
+  });
 });

@@ -52,6 +52,7 @@ import { handleRefreshCalendar } from '../calendar/sync';
 // listener. Must be imported somewhere that always loads on app start — this
 // provider is guaranteed to mount alongside the other sync handlers.
 import '@app/features/routines/queries/sync';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createConnectionWebsocketEffect,
   parseWebsocketPayload,
@@ -91,7 +92,10 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
     match(data)
       .with({ type: 'github_pull_request_updated' }, () => {
         withParsedWebsocketPayload(data.type, data.data, (payload) => {
-          void handlePullRequestUpdated(payload);
+          fireAndForget(
+            handlePullRequestUpdated(payload),
+            'websocket-query-sync'
+          );
         });
       })
       .with({ type: 'agent_session_preview' }, () => {
@@ -102,7 +106,7 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
         );
       })
       .with({ type: 'contacts_invalidation' }, () => {
-        invalidateContacts();
+        fireAndForget(invalidateContacts(), 'websocket-query-sync');
       })
       .with({ type: 'timeline_activity' }, () => {
         withParsedWebsocketPayload(
@@ -161,7 +165,10 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
           data.type,
           data.data,
           (event) => {
-            void handleAgentSessionChanges(event);
+            fireAndForget(
+              handleAgentSessionChanges(event),
+              'websocket-query-sync'
+            );
           }
         );
       })
@@ -198,7 +205,7 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
       // Signup seeding is fire-and-forget, so refresh Soup and the provisioned
       // properties and favorites when it finishes.
       .with({ type: 'starter_docs_initialized' }, () => {
-        void invalidateFavorites();
+        fireAndForget(invalidateFavorites(), 'websocket-query-sync');
         invalidateAllProperties();
         invalidateAllSoup();
       })

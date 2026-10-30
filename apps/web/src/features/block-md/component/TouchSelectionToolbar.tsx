@@ -1,15 +1,15 @@
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import { hasNativeEditMenu } from '@core/mobile/nativeEditMenu';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import ChatTeardrop from '@phosphor/chat-teardrop.svg';
-import GridIcon from '@phosphor/grid-four.svg';
-import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
-import SparkleIcon from '@phosphor-icons/core/bold/sparkle-bold.svg?component-solid';
-import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import CheckSquareIcon from '@phosphor-icons/core/regular/check-square.svg?component-solid';
-import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
+import CheckIcon from '@icon/system/bold/check-bold.svg?component-solid';
+import SparkleIcon from '@icon/system/bold/sparkle-bold.svg?component-solid';
+import LoadingIcon from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import ChatTeardrop from '@icon/system/regular/chat-teardrop.svg';
+import CheckSquareIcon from '@icon/system/regular/check-square.svg?component-solid';
+import GridIcon from '@icon/system/regular/grid-four.svg';
+import LinkIcon from '@icon/system/regular/link.svg?component-solid';
 import { Button } from '@ui';
 import {
   createEffect,
@@ -25,7 +25,6 @@ type TouchOption = {
   key: string;
   content: () => JSX.Element;
   onSelect: () => void;
-  disabled?: () => boolean;
 };
 
 // Toolbar buttons give no touch-down feedback: the ghost variant's
@@ -47,17 +46,18 @@ type TouchOption = {
 export function TouchSelectionToolbar(props: {
   canEdit: boolean;
   canComment: boolean;
-  isConverting: boolean;
   /** False when the popup opened for a bare caret (inside a comment). */
   hasSelection: boolean;
-  showTasksOption: boolean;
+  showCreateTaskOption: boolean;
+  createTaskLabel: string;
+  isConverting: boolean;
   showTableOption: boolean;
   showEditWithAiOption: boolean;
   /** The caret/selection touches an existing comment thread. */
   showOpenCommentOption: boolean;
   locationCopied: boolean;
   setPopupVisible: (visible: boolean) => void;
-  onConvertToTasks: () => void;
+  onCreateTask: () => void;
   onConvertListToTable: () => void;
   onOpenComment: () => void;
   onShare: () => void;
@@ -92,20 +92,21 @@ export function TouchSelectionToolbar(props: {
       }
       return list;
     }
-    if (props.showTasksOption) {
+    if (props.showCreateTaskOption) {
       list.push({
-        key: 'tasks',
+        key: 'task',
         content: () => (
           <>
             <Dynamic
               component={props.isConverting ? LoadingIcon : CheckSquareIcon}
               class="size-4"
             />
-            {props.isConverting ? 'Converting...' : 'Tasks'}
+            {props.createTaskLabel}
           </>
         ),
-        onSelect: () => props.onConvertToTasks(),
-        disabled: () => props.isConverting,
+        onSelect: () => {
+          if (!props.isConverting) props.onCreateTask();
+        },
       });
     }
     if (props.showTableOption) {
@@ -230,7 +231,7 @@ export function TouchSelectionToolbar(props: {
   createEffect(() => {
     // Reset paging only when the option *set* changes (e.g. caret mode vs.
     // selection mode) — a cosmetic rerender of the same options (the Share
-    // icon flipping to a check, the Tasks label while converting) keeps the
+    // icon flipping to a check, the Task label while converting) keeps the
     // user's page; the clamp effect below handles any repartition.
     const keys = options()
       .map((option) => option.key)
@@ -397,7 +398,6 @@ export function TouchSelectionToolbar(props: {
                 class={
                   'px-2 text-xs rounded-md py-1.25 shrink-0 whitespace-nowrap hover:bg-none! active:bg-none! hover:text-ink-muted! [-webkit-tap-highlight-color:transparent]'
                 }
-                depth={3}
                 variant="ghost"
               >
                 {option.content()}
@@ -411,7 +411,6 @@ export function TouchSelectionToolbar(props: {
             class={
               'rounded-md shrink-0 hover:bg-none! active:bg-none! hover:text-ink-muted! [-webkit-tap-highlight-color:transparent]'
             }
-            depth={3}
             variant="ghost"
           >
             <CaretRightIcon class="size-4" />
@@ -424,7 +423,6 @@ export function TouchSelectionToolbar(props: {
           class={
             'rounded-md shrink-0 hover:bg-none! active:bg-none! hover:text-ink-muted! [-webkit-tap-highlight-color:transparent]'
           }
-          depth={3}
           variant="ghost"
           aria-label="Previous options"
           onClick={() => page(-1)}
@@ -486,9 +484,7 @@ export function TouchSelectionToolbar(props: {
                         class={
                           'px-2 text-xs rounded-md py-1.25 shrink-0 whitespace-nowrap hover:bg-none! active:bg-none! hover:text-ink-muted! [-webkit-tap-highlight-color:transparent]'
                         }
-                        depth={3}
                         variant="ghost"
-                        disabled={option.disabled?.()}
                         onClick={() => option.onSelect()}
                       >
                         {option.content()}
@@ -508,7 +504,6 @@ export function TouchSelectionToolbar(props: {
           class={
             'rounded-md shrink-0 hover:bg-none! active:bg-none! hover:text-ink-muted! [-webkit-tap-highlight-color:transparent]'
           }
-          depth={3}
           variant="ghost"
           aria-label="More options"
           onClick={() => page(1)}

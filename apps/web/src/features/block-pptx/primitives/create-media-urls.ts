@@ -26,21 +26,23 @@ export function createMediaUrls(engine: PresentationEngine) {
     return url;
   };
 
+  /** Reads a clip; a failed read is forgotten, so the next request retries. */
+  const readOrForget = async (part: string) => {
+    try {
+      return await read(part);
+    } catch {
+      urls.delete(part);
+      return undefined;
+    }
+  };
+
   /** The address to play `media` from, if it can be played here. */
   const urlOf = (media: MediaOutline): Promise<string | undefined> => {
     if (!media.part) return Promise.resolve(playableUrl(media.url));
     const part = media.part;
     let url = urls.get(part);
     if (!url) {
-      const settleRead = async () => {
-        try {
-          return await read(part);
-        } catch {
-          urls.delete(part);
-          return await undefined;
-        }
-      };
-      url = settleRead();
+      url = readOrForget(part);
       urls.set(part, url);
     }
     return url;

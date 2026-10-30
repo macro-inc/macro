@@ -14,6 +14,7 @@ import {
   type AgentSessionRecord,
   type IssueResult,
 } from '@app/lib/queries/agent-session/agent-session';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { AgentSessionRenamedEvent } from '@queries/agent-session/realtime-protocol';
 import { fetchAgentSession } from '@queries/agent-session/requests';
 import {
@@ -278,7 +279,10 @@ export function createAgentSession(
       // replaces it when it lands, through the same store, so the resource
       // resolves here and the fetch settles it in the background.
       await show(session, cached, 'cached');
-      void settleInBackground(session, renameRefreshAtStart);
+      fireAndForget(
+        settleInBackground(session, renameRefreshAtStart),
+        'agent-session'
+      );
       return cached.session;
     }
   );
@@ -299,13 +303,8 @@ export function createAgentSession(
     subscribeAgentSessionRenamed((event) => {
       if (event.agentSessionId !== sessionId()) return;
       const run = ++renameRefresh;
-
-      const settleFetchAgentSession = async () => {
-        const settleFetchAgentSessionValue = await fetchAgentSession(
-          event.agentSessionId
-        );
-        const session = settleFetchAgentSessionValue;
-
+      const refreshName = async () => {
+        const session = await fetchAgentSession(event.agentSessionId);
         if (
           session.isErr() ||
           run !== renameRefresh ||
@@ -319,10 +318,8 @@ export function createAgentSession(
         mutate((current) =>
           current ? { ...current, name: session.value.name } : current
         );
-
-        return;
       };
-      void settleFetchAgentSession();
+      fireAndForget(refreshName(), 'agent-session');
     })
   );
 
@@ -331,7 +328,7 @@ export function createAgentSession(
     subscribeAgentSessionUpdated((event) => {
       if (event.agentSessionId !== sessionId()) return;
       const run = ++updateRefresh;
-      void (async () => {
+      const refreshSession = async () => {
         const session = await fetchAgentSession(event.agentSessionId);
         if (
           session.isErr() ||
@@ -341,7 +338,8 @@ export function createAgentSession(
           return;
         }
         mutate((current) => (current ? session.value : current));
-      })();
+      };
+      fireAndForget(refreshSession(), 'agent-session');
     })
   );
 
@@ -366,7 +364,7 @@ export function createAgentSession(
     messages: () => list,
     loadFailed: () => failure() !== undefined,
     accessDenied: () => failure() instanceof AgentSessionAccessDenied,
-    retry: () => void refetch(),
+    retry: () => fireAndForget(refetch(), 'agent-session'),
     issue: (action) => {
       const current = live();
       return current

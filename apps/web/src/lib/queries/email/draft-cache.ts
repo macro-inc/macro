@@ -7,6 +7,11 @@ const savedThreads = new Set<string>();
 
 export function markThreadDraftSaved(threadId: string) {
   savedThreads.add(threadId);
+  // A save can settle after thread cleanup, or without mounting the thread.
+  queryClient.removeQueries({
+    queryKey: emailKeys.threadMessages(threadId).queryKey,
+    type: 'inactive',
+  });
 }
 
 export function clearSavedDraftThreadCache(threadId: string) {

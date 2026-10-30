@@ -6,6 +6,7 @@
  * surface, and the live sessions' machines all live in one place.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import type {
   FoldedMessage,
   FoldedStreamEvent,
@@ -167,17 +168,14 @@ export async function readSession(
 }
 
 /** Drop a session's machine once nothing is watching it. */
+async function requestClose(sessionId: string): Promise<void> {
+  try {
+    await request((id) => ({ id, kind: 'close', sessionId }));
+  } catch (error: unknown) {
+    console.warn('[agent-fold] session could not be closed', error);
+  }
+}
+
 export function closeSession(sessionId: string): void {
-  const settleRequest = async () => {
-    try {
-      return await request((id) => ({ id, kind: 'close', sessionId }));
-    } catch (settleRequestError) {
-      const error: unknown = settleRequestError;
-
-      console.warn('[agent-fold] session could not be closed', error);
-
-      return;
-    }
-  };
-  void settleRequest();
+  fireAndForget(requestClose(sessionId), 'agent-fold');
 }

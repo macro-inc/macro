@@ -17,6 +17,9 @@ export interface WebsocketOptions<
 > {
   readonly binaryType?: BinaryType;
 
+  /** Connect immediately by default; false waits for an explicit reconnect(). */
+  readonly autoConnect?: boolean;
+
   /**
    * The Buffer to use.
    */

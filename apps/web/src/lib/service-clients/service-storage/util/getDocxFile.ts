@@ -96,14 +96,11 @@ export async function getDocxExpandedParts(
                 `Part ${p.path}'s content does not exist but is expected to exist`
               );
 
-              const settleRemovePart = async () => {
-                try {
-                  return await opfsDocHandle.removePart(p.path, p.sha);
-                } catch {
-                  return;
-                }
-              };
-              await settleRemovePart();
+              try {
+                await opfsDocHandle.removePart(p.path, p.sha);
+              } catch {
+                // Best effort: the corrupt part is fetched again next time.
+              }
               return null;
             }
             return { sha: p.sha, path: p.path, content: buffer };

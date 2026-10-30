@@ -70,6 +70,7 @@ export function useSendChatMessage() {
     }
 
     analytics.track('ai_message_sent', {
+      surface: 'chat',
       model: model ?? DEFAULT_MODEL,
       attachmentCount: attachments.length,
     });

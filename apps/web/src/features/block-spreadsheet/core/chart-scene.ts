@@ -99,7 +99,7 @@ function extent(plots: ChartPlotData[], categories: number): [number, number] {
       if (hasNegative) see(-1);
       continue;
     }
-    updateIndex(plot);
+    seePlotValues(plot);
     // Bars and areas grow from zero; lines and prices need not.
     if (plot.kind === 'column' || plot.kind === 'bar' || plot.kind === 'area')
       see(0);
@@ -112,7 +112,7 @@ function extent(plots: ChartPlotData[], categories: number): [number, number] {
     return low === 0 ? [0, 1] : [Math.min(0, low), Math.max(0, high)];
   return [low, high];
 
-  function updateIndex(plot: ChartPlotData) {
+  function seePlotValues(plot: ChartPlotData) {
     if (plot.grouping === 'stacked')
       for (let index = 0; index < categories; index++) {
         let positive = 0;
@@ -170,8 +170,8 @@ export function chartScene(
   const surface = data.plots.find((plot) => plot.kind === 'surface');
   const bands = surface && surfaceBands(surface, data.palette);
   // Legend entries: slices of a pie, bands of a surface, otherwise series.
-  const entries = buildEntries();
-  updateY();
+  const entries = legendEntries();
+  reserveLegendSpace();
   if (right - left < 20 || bottom - top < 20) return { shapes };
   if (round) {
     roundChart(shapes, round, data, { top, bottom, left, right });
@@ -229,17 +229,17 @@ export function chartScene(
       6 * scale
     );
   };
-  updateLeft();
+  reserveAxisLabelSpace();
   if (right - left < 20 || bottom - top < 20) return { shapes };
   const box = { top, bottom, left, right };
   if (scatter) {
     scatterChart(shapes, data, box, font, scale, valueScale);
     return { shapes };
   }
-  const values = buildValues();
+  const values = primaryValueAxis();
   // Gridlines and value labels.
   for (const tick of values.ticks) {
-    const processTick = () => {
+    const pushGridTick = () => {
       const at = values.scale(tick);
       shapes.push(
         horizontal
@@ -269,12 +269,12 @@ export function chartScene(
             }
       );
     };
-    processTick();
+    pushGridTick();
   }
   const secondaryValues = secondary.length
     ? valueScale(secondary, [bottom, top])
     : undefined;
-  updateChartScene2();
+  pushSecondaryAxisLabels();
   // Category bands; horizontal bars list the first category at the bottom.
   const span = horizontal ? bottom - top : right - left;
   const band = span / count;
@@ -321,8 +321,8 @@ export function chartScene(
     (a, b) => Number(a.kind === 'line') - Number(b.kind === 'line')
   );
   for (const plot of ordered) {
-    const axis = buildAxis(plot);
-    updateChartScene(plot, axis);
+    const axis = valueAxisFor(plot);
+    pushPlotShapes(plot, axis);
   }
   shapes.push(
     horizontal
@@ -355,7 +355,7 @@ export function chartScene(
   );
   return { shapes };
 
-  function buildEntries() {
+  function legendEntries() {
     return round
       ? data.categories.map((name, index) => ({
           name,
@@ -383,7 +383,7 @@ export function chartScene(
           );
   }
 
-  function updateLeft() {
+  function reserveAxisLabelSpace() {
     if (horizontal) {
       const labelWidth = Math.min(
         (right - left) * 0.35,
@@ -401,7 +401,7 @@ export function chartScene(
     }
   }
 
-  function updateChartScene2() {
+  function pushSecondaryAxisLabels() {
     if (secondaryValues)
       for (const tick of secondaryValues.ticks)
         shapes.push({
@@ -416,18 +416,18 @@ export function chartScene(
         });
   }
 
-  function buildValues() {
+  function primaryValueAxis() {
     return valueScale(
       primary.length ? primary : data.plots,
       horizontal ? [left, right] : [bottom, top]
     );
   }
 
-  function buildAxis(plot: ChartPlotData) {
+  function valueAxisFor(plot: ChartPlotData) {
     return plot.secondary && secondaryValues ? secondaryValues : values;
   }
 
-  function updateChartScene(
+  function pushPlotShapes(
     plot: ChartPlotData,
     axis: {
       scale: ScaleLinear<number, number, never>;
@@ -452,7 +452,7 @@ export function chartScene(
     else lines(shapes, plot, data, axis.scale, center, axis.format, scale);
   }
 
-  function updateY() {
+  function reserveLegendSpace() {
     if (data.legend && entries.length) {
       const swatch = 8 * scale;
       const row = font * 1.6;

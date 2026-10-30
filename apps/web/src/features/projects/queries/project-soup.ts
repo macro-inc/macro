@@ -30,6 +30,7 @@ export function projectSoupInput(filters: ProjectFilters): SoupInput {
   );
   if (!input?.initial) throw new Error('Initiative Soup input is unavailable');
   const predicates: GraphqlInitiativeExpr[] = [{ literal: { include: true } }];
+  if (filters.owner) predicates.push({ literal: { owner: filters.owner } });
   if (filters.query)
     predicates.push({ literal: { nameContains: filters.query } });
   if (filters.dueBefore)
@@ -101,6 +102,7 @@ export function projectSoupRows(
           id: item.id,
           name: item.displayName ?? 'Untitled project',
           updatedAt: item.metadata.updatedAt ?? '',
+          createdAt: item.metadata.createdAt ?? undefined,
           access:
             permission?.__typename === 'GraphqlAccessLevelPermission'
               ? accessLevels[permission.accessLevel]

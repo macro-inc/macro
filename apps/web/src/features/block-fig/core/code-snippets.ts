@@ -62,11 +62,11 @@ export function tailwindFor(info: NodeInfo): string[] {
   const out: string[] = [`w-${twPx(info.width)}`, `h-${twPx(info.height)}`];
   const text = isText(info);
   const fill = solid(info.fills);
-  updateTailwindFor5();
+  pushFillClass();
   const stroke = solid(info.strokes);
-  updateTailwindFor3();
+  pushBorderClasses();
   const r = uniformRadius(info);
-  updateTailwindFor4();
+  pushRadiusClasses();
   const s = shadow(info);
   if (s) {
     const inset = s.type === 'INNER_SHADOW' ? 'inset ' : '';
@@ -79,19 +79,19 @@ export function tailwindFor(info: NodeInfo): string[] {
   if (info.opacity < 0.999)
     out.push(`opacity-${arb(String(round(info.opacity)))}`);
   const al = info.autoLayout;
-  updateTailwindFor2();
+  pushFlexClasses();
   const t = info.text;
-  updateTailwindFor7();
+  pushTypographyClasses();
   return out;
 
-  function updateTailwindFor7() {
+  function pushTypographyClasses() {
     if (text && t) {
       if (t.fontFamily) out.push(`font-${arb(`'${t.fontFamily}'`)}`);
       if (t.fontSize) out.push(`text-${twPx(t.fontSize)}`);
       const weight = fontWeight(t.fontStyle);
       if (weight) out.push(`font-${arb(String(weight))}`);
       if (t.fontStyle?.toLowerCase().includes('italic')) out.push('italic');
-      updateTailwindFor6(t);
+      pushLeadingClass(t);
       if (t.letterSpacing && t.letterSpacing[0] !== 0) {
         const [v, unit] = t.letterSpacing;
         out.push(
@@ -108,14 +108,14 @@ export function tailwindFor(info: NodeInfo): string[] {
     }
   }
 
-  function updateTailwindFor6(tInput: NonNullable<typeof t>) {
+  function pushLeadingClass(tInput: NonNullable<typeof t>) {
     if (tInput.lineHeight && tInput.lineHeight[1] !== 'RAW') {
       const [v, unit] = tInput.lineHeight;
       out.push(`leading-${unit === 'PERCENT' ? arb(`${round(v)}%`) : twPx(v)}`);
     }
   }
 
-  function updateTailwindFor5() {
+  function pushFillClass() {
     if (fill) {
       out.push(
         `${text ? 'text' : 'bg'}-${arb(cssColor(fill.hex, fill.alpha))}`
@@ -127,7 +127,7 @@ export function tailwindFor(info: NodeInfo): string[] {
     }
   }
 
-  function updateTailwindFor4() {
+  function pushRadiusClasses() {
     if (typeof r === 'number' && r > 0) {
       out.push(
         r >= Math.min(info.width, info.height) / 2
@@ -145,7 +145,7 @@ export function tailwindFor(info: NodeInfo): string[] {
     }
   }
 
-  function updateTailwindFor3() {
+  function pushBorderClasses() {
     if (stroke && info.strokeWeight) {
       out.push(
         info.strokeWeight === 1
@@ -157,7 +157,7 @@ export function tailwindFor(info: NodeInfo): string[] {
     }
   }
 
-  function updateTailwindFor2() {
+  function pushFlexClasses() {
     if (al && (al.mode === 'HORIZONTAL' || al.mode === 'VERTICAL')) {
       out.push('flex', al.mode === 'VERTICAL' ? 'flex-col' : 'flex-row');
       if (al.wrap) out.push('flex-wrap');
@@ -168,7 +168,7 @@ export function tailwindFor(info: NodeInfo): string[] {
         paddingBottom: b,
         paddingLeft: l,
       } = al;
-      updateTailwindFor(t, b, l, rr);
+      pushPaddingClasses(t, b, l, rr);
       const justify = match(al.primaryAlign ?? 'MIN')
         .with('CENTER', () => 'justify-center')
         .with('MAX', () => 'justify-end')
@@ -183,7 +183,7 @@ export function tailwindFor(info: NodeInfo): string[] {
     }
   }
 
-  function updateTailwindFor(t: number, b: number, l: number, rr: number) {
+  function pushPaddingClasses(t: number, b: number, l: number, rr: number) {
     if (t === b && l === rr && t === l && t > 0) out.push(`p-${twPx(t)}`);
     else {
       if (l === rr && l > 0) out.push(`px-${twPx(l)}`);
@@ -233,7 +233,7 @@ export function swiftUIFor(info: NodeInfo): string[] {
   const lines: string[] = [];
   const mod = (m: string) => lines.push(`  ${m}`);
   const t = info.text;
-  updateSwiftUIFor3();
+  pushViewLines();
   const s = shadow(info);
   if (s && s.type === 'DROP_SHADOW')
     mod(
@@ -246,7 +246,7 @@ export function swiftUIFor(info: NodeInfo): string[] {
     mod(`.rotationEffect(.degrees(${round(-info.rotation)}))`);
   return lines;
 
-  function updateSwiftUIFor3() {
+  function pushViewLines() {
     if (isText(info) && t) {
       lines.push(`Text(${swiftString(t.characters)})`);
       const weight = swiftWeight(t.fontStyle);
@@ -257,7 +257,7 @@ export function swiftUIFor(info: NodeInfo): string[] {
         mod('.multilineTextAlignment(.center)');
       if (t.alignHorizontal === 'RIGHT')
         mod('.multilineTextAlignment(.trailing)');
-      updateSwiftUIFor2(t);
+      pushKerning(t);
       if (t.decoration === 'UNDERLINE') mod('.underline()');
       if (t.decoration === 'STRIKETHROUGH') mod('.strikethrough()');
       const fill = solid(info.fills);
@@ -273,7 +273,7 @@ export function swiftUIFor(info: NodeInfo): string[] {
             ? `RoundedRectangle(cornerRadius: ${round(r)})`
             : 'Rectangle()';
       const fill = solid(info.fills);
-      updateSwiftUIFor(al, fill, r, shape);
+      pushStackLines(al, fill, r, shape);
       const stroke = solid(info.strokes);
       if (stroke && info.strokeWeight)
         mod(
@@ -282,7 +282,7 @@ export function swiftUIFor(info: NodeInfo): string[] {
     }
   }
 
-  function updateSwiftUIFor2(tValue: NonNullable<typeof t>) {
+  function pushKerning(tValue: NonNullable<typeof t>) {
     if (tValue.letterSpacing && tValue.letterSpacing[0] !== 0) {
       const [v, unit] = tValue.letterSpacing;
       const pt = unit === 'PERCENT' ? (v / 100) * (tValue.fontSize ?? 12) : v;
@@ -290,7 +290,7 @@ export function swiftUIFor(info: NodeInfo): string[] {
     }
   }
 
-  function updateSwiftUIFor(
+  function pushStackLines(
     al: AutoLayout | null,
     fill: { hex: string; alpha: number } | undefined,
     r: string | number | undefined,
@@ -355,16 +355,16 @@ export function composeFor(info: NodeInfo): string[] {
           ? `RoundedCornerShape(topStart = ${round(info.cornerRadius.top_left)}.dp, topEnd = ${round(info.cornerRadius.top_right)}.dp, bottomEnd = ${round(info.cornerRadius.bottom_right)}.dp, bottomStart = ${round(info.cornerRadius.bottom_left)}.dp)`
           : undefined;
   const shape = shapeOf();
-  updateComposeFor3();
+  pushShadowModifier();
   if (Math.abs(info.rotation) > 0.01)
     modifiers.push(`.rotate(degrees = ${round(-info.rotation)}f)`);
   modifiers.push(`.width(${round(info.width)}.dp)`);
   if (!isText(info)) modifiers.push(`.height(${round(info.height)}.dp)`);
   if (info.opacity < 0.999) modifiers.push(`.alpha(${round(info.opacity)}f)`);
   const stroke = solid(info.strokes);
-  updateComposeFor4();
+  pushBorderModifier();
   const fill = solid(info.fills);
-  updateComposeFor2();
+  pushBackgroundModifier();
   const al = info.autoLayout;
   const flex = al && (al.mode === 'HORIZONTAL' || al.mode === 'VERTICAL');
   if (flex && al) {
@@ -400,7 +400,7 @@ export function composeFor(info: NodeInfo): string[] {
           .with('RIGHT', () => 'Right')
           .otherwise(() => 'Justify')}`
       );
-    updateComposeFor5(style, t);
+    pushLetterSpacing(style, t);
     return [
       'Text(',
       `  text = ${kotlinString(t.characters)},`,
@@ -413,12 +413,12 @@ export function composeFor(info: NodeInfo): string[] {
       ')',
     ];
   }
-  const container = buildContainer();
+  const container = containerName();
   const args = modifier.map((m) => `  ${m}`);
-  updateComposeFor();
+  pushArrangementArgs();
   return [`${container}(`, ...args, ') {', '  // Content', '}'];
 
-  function updateComposeFor5(style: string[], tInput: NonNullable<typeof t>) {
+  function pushLetterSpacing(style: string[], tInput: NonNullable<typeof t>) {
     if (tInput.letterSpacing && tInput.letterSpacing[0] !== 0) {
       const [v, unit] = tInput.letterSpacing;
       style.push(
@@ -427,32 +427,32 @@ export function composeFor(info: NodeInfo): string[] {
     }
   }
 
-  function updateComposeFor4() {
+  function pushBorderModifier() {
     if (stroke && info.strokeWeight)
       modifiers.push(
         `.border(width = ${round(info.strokeWeight)}.dp, color = ${composeColor(stroke.hex, stroke.alpha)}${shape ? `, shape = ${shape}` : ''})`
       );
   }
 
-  function updateComposeFor3() {
+  function pushShadowModifier() {
     if (s && s.type === 'DROP_SHADOW')
       modifiers.push(
         `.shadow(elevation = ${round(s.radius / 2)}.dp, spotColor = ${composeColor(s.color, s.alpha)}${shape ? `, shape = ${shape}` : ''})`
       );
   }
 
-  function updateComposeFor2() {
+  function pushBackgroundModifier() {
     if (fill && !isText(info))
       modifiers.push(
         `.background(color = ${composeColor(fill.hex, fill.alpha)}${shape ? `, shape = ${shape}` : ''})`
       );
   }
 
-  function buildContainer() {
+  function containerName() {
     return !flex ? 'Box' : al?.mode === 'VERTICAL' ? 'Column' : 'Row';
   }
 
-  function updateComposeFor() {
+  function pushArrangementArgs() {
     if (flex && al) {
       const horizontal = al.mode === 'HORIZONTAL';
       const arrangement =

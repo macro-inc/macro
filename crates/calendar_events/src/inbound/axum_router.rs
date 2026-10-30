@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    extract::{FromRef, Query, State},
-    http::StatusCode,
+    extract::{FromRef, Path, Query, State},
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -79,6 +79,7 @@ where
             "/calendar-events/team-out-of-office",
             get(list_team_out_of_office::<S, Auth>),
         )
+        .route("/calendar-events/{event_id}/ics", get(event_ics::<S, Auth>))
         .with_state(state)
 }
 
@@ -274,7 +275,7 @@ pub struct TeamOutOfOfficeItem {
     event_id: Uuid,
     /// Stable occurrence key within the event.
     occurrence_key: String,
-    /// Event title, absent when the event's visibility withholds details.
+    /// Event title, absent unless the teammate shares event details.
     #[serde(skip_serializing_if = "Option::is_none")]
     title: Option<String>,
     /// Occurrence time span.
@@ -418,6 +419,69 @@ pub struct CalendarMentionPreviewItem {
 #[serde(rename_all = "camelCase")]
 pub struct CalendarMentionPreviewResponse {
     items: Vec<CalendarMentionPreviewItem>,
+}
+
+/// Export an event the requester can see — their own, or one shared with a
+/// channel they belong to — as an iCalendar file named after its title.
+#[tracing::instrument(skip_all, fields(event_id = %event_id), err)]
+#[utoipa::path(
+    get,
+    path = "/calendar-events/{event_id}/ics",
+    tag = "calendar_events",
+    params(("event_id" = Uuid, Path, description = "Calendar event entity id")),
+    responses(
+        (status = 200, description = "The event as an iCalendar document", content_type = "text/calendar", body = String),
+        (status = 401, description = "Authentication required"),
+        (status = 404, description = "Event not found or not visible to the requester"),
+        (status = 500, description = "Calendar query failed"),
+    )
+)]
+pub async fn event_ics<S, Auth>(
+    State(state): State<CalendarRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(event_id): Path<Uuid>,
+) -> Result<Response, CalendarApiError>
+where
+    S: CalendarOccurrenceService,
+    Auth: MacroAuthorizationService,
+{
+    let ics = state
+        .service
+        .event_ics(user.authorization.user.macro_user_id.as_ref(), event_id)
+        .await
+        .map_err(|error| {
+            tracing::error!(error = ?error, "failed to export calendar event");
+            CalendarApiError {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                message: "unable to export calendar event",
+            }
+        })?
+        .ok_or(CalendarApiError {
+            status: StatusCode::NOT_FOUND,
+            message: "calendar event was not found",
+        })?;
+    Ok((
+        [
+            (
+                header::CONTENT_TYPE,
+                "text/calendar; charset=utf-8".to_string(),
+            ),
+            (header::CONTENT_DISPOSITION, ics_disposition(&ics.title)),
+        ],
+        ics.document,
+    )
+        .into_response())
+}
+
+/// An attachment named after the event title. The plain `filename` is an
+/// ASCII fallback; clients that read `filename*` (RFC 6266) get the title.
+fn ics_disposition(title: &str) -> String {
+    let title = title.trim();
+    let name = if title.is_empty() { "event" } else { title };
+    format!(
+        "attachment; filename=\"event.ics\"; filename*=UTF-8''{}.ics",
+        urlencoding::encode(name)
+    )
 }
 
 /// Resolve mentioned calendar events to the requester's own projections.

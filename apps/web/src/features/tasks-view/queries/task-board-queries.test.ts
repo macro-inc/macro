@@ -2,7 +2,6 @@ import { createSoupEntityRow } from '@app/features/soup/collection/rows';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { Client } from '@urql/core';
-import { ok } from 'neverthrow';
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { boardEntity, boardProperty } from '../tests/task-board-fixture';
@@ -10,18 +9,14 @@ import { createTaskBoardQueries } from './task-board-queries';
 
 const fixture = vi.hoisted(() => ({
   definitions: {} as Record<string, unknown>,
-  permissions: [] as Record<string, unknown>[],
-  ids: undefined as (() => readonly string[]) | undefined,
+  projectQueries: [] as Record<string, unknown>[],
+  projectIds: [] as string[],
   save: vi.fn(async (_input: unknown) => {}),
-  getProject: vi.fn(async (_id: string) =>
-    ok({ id: 'launch', userAccessLevel: 'edit' })
-  ),
 }));
 
 vi.mock('@queries/storage/document-metadata', () => ({
-  useDocumentAccessLevelsQuery: (ids: () => readonly string[]) => {
-    fixture.ids = ids;
-    return fixture.permissions;
+  useDocumentAccessLevelsQuery: () => {
+    throw new Error('Task permissions must not be prefetched');
   },
 }));
 vi.mock('@queries/properties/definitions', () => ({
@@ -30,11 +25,19 @@ vi.mock('@queries/properties/definitions', () => ({
 vi.mock('@queries/properties/entity', () => ({
   useBulkSaveEntityPropertiesMutation: () => ({ mutateAsync: fixture.save }),
 }));
-vi.mock('@service-storage/initiative', () => ({
-  initiativeClient: { get: fixture.getProject },
-}));
 vi.mock('@app/features/projects/queries/project-identity', () => ({
-  createProjectDetailQuery: () => ({ isSuccess: false, data: undefined }),
+  createProjectIdentityQuery: (
+    _client: unknown,
+    _user: unknown,
+    id: () => string
+  ) => {
+    fixture.projectIds.push(id());
+    return (
+      fixture.projectQueries[fixture.projectIds.length - 1] ?? {
+        isSuccess: false,
+      }
+    );
+  },
 }));
 
 const disposers: (() => void)[] = [];
@@ -61,9 +64,8 @@ function setup(
 }
 
 beforeEach(() => {
-  fixture.permissions = [
-    { isSuccess: true, data: { documentId: 'one', accessLevel: 'edit' } },
-  ];
+  fixture.projectQueries = [];
+  fixture.projectIds = [];
   fixture.definitions = {
     isSuccess: false,
     get data() {
@@ -72,10 +74,6 @@ beforeEach(() => {
   };
   fixture.save.mockReset();
   fixture.save.mockResolvedValue(undefined);
-  fixture.getProject.mockReset();
-  fixture.getProject.mockResolvedValue(
-    ok({ id: 'launch', userAccessLevel: 'edit' })
-  );
 });
 
 afterEach(() => {
@@ -85,33 +83,16 @@ afterEach(() => {
   disposers.length = 0;
 });
 
-it.each(['pending', 'stale'])(
-  'deduplicates permission queries and rejects %s permission data',
-  (state) => {
-    fixture.permissions = [
-      state === 'stale'
-        ? { isSuccess: true, data: { documentId: 'old', accessLevel: 'owner' } }
-        : {
-            isSuccess: false,
-            get data() {
-              throw new Error('pending permission data must not be read');
-            },
-          },
-    ];
-    const entity = boardEntity('one');
-    const source = setup({
-      rows: () => [
-        createSoupEntityRow(entity, { groupId: 'a' }),
-        createSoupEntityRow(entity, { groupId: 'b' }),
-      ],
-      grouping: () => 'assignee',
-    });
+it('allows task editing without a permission prefetch and keeps missing-row guards', () => {
+  const source = setup();
 
-    expect(fixture.ids?.()).toEqual(['one']);
-    expect(source.actions.canEditTask('one')).toBe(false);
-    expect(source.actions.canMoveTo('assignee', 'b')).toBe(false);
-  }
-);
+  expect(source.actions.canEditTask('one')).toBe(true);
+  expect(source.actions.canEditTask('missing')).toBe(false);
+  expect(source.canEditProperty('missing', SYSTEM_PROPERTY_IDS.PRIORITY)).toBe(
+    false
+  );
+  expect(fixture.projectIds).toEqual([]);
+});
 
 it('blocks overlapping property writes and restores editability when a write fails', async () => {
   fixture.definitions = {
@@ -141,6 +122,12 @@ it('blocks overlapping property writes and restores editability when a write fai
   await expect(source.saveProperty('one', property, values)).rejects.toThrow(
     'no longer editable'
   );
+  await expect(
+    source.actions.save(
+      { id: 'one', fromLane: '', toLane: PROPERTY_OPTION_IDS.PRIORITY.HIGH },
+      'priority'
+    )
+  ).rejects.toThrow('no longer editable');
   reject(new Error('rejected'));
   await failed;
 
@@ -148,28 +135,59 @@ it('blocks overlapping property writes and restores editability when a write fai
   expect(source.actions.canEditTask('one')).toBe(true);
 });
 
-it('checks project edit access before writing and releases the task lock on rejection', async () => {
+it('attempts project moves without destination edit access and preserves column labels', async () => {
   fixture.definitions = {
     isSuccess: true,
     data: [boardProperty(SYSTEM_PROPERTY_IDS.PROJECT, null).definition],
   };
-  fixture.getProject.mockResolvedValueOnce(
-    ok({ id: 'launch', userAccessLevel: 'view' })
+  fixture.projectQueries = [
+    {
+      isSuccess: true,
+      data: { id: 'launch', name: 'Launch', access: 'view' },
+    },
+  ];
+  const source = setup({
+    grouping: () => 'project',
+    rows: () => [
+      createSoupEntityRow(boardEntity('one'), { groupId: 'launch' }),
+    ],
+  });
+
+  expect(source.columns().find((column) => column.id === 'launch')?.label).toBe(
+    'Launch'
   );
-  const source = setup();
+  expect(fixture.projectIds).toEqual(['launch']);
+  expect(source.actions.canMoveTo('project', 'launch')).toBe(true);
 
+  fixture.save.mockRejectedValueOnce(new Error('server rejected'));
   await expect(
-    source.saveProperty(
-      'one',
-      source.property('one', SYSTEM_PROPERTY_IDS.PROJECT)!,
-      {
-        valueType: 'ENTITY',
-        refs: [{ entity_id: 'launch', entity_type: 'INITIATIVE' }],
-      }
+    source.actions.save(
+      { id: 'one', fromLane: '', toLane: 'launch' },
+      'project'
     )
-  ).rejects.toThrow('not editable');
+  ).rejects.toThrow('server rejected');
+  expect(fixture.save).toHaveBeenCalledOnce();
+});
 
-  expect(fixture.getProject).toHaveBeenCalledWith('launch');
-  expect(fixture.save).not.toHaveBeenCalled();
+it('releases the property lock after a server rejects a project write', async () => {
+  fixture.definitions = {
+    isSuccess: true,
+    data: [boardProperty(SYSTEM_PROPERTY_IDS.PROJECT, null).definition],
+  };
+  const source = setup();
+  const property = source.property('one', SYSTEM_PROPERTY_IDS.PROJECT)!;
+  const values = {
+    valueType: 'ENTITY' as const,
+    refs: [{ entity_id: 'launch', entity_type: 'INITIATIVE' as const }],
+  };
+  fixture.save.mockRejectedValueOnce(new Error('server rejected'));
+
+  await expect(source.saveProperty('one', property, values)).rejects.toThrow(
+    'server rejected'
+  );
   expect(source.actions.canEditTask('one')).toBe(true);
+  expect(fixture.save).toHaveBeenCalledOnce();
+
+  await source.saveProperty('one', property, values);
+  expect(fixture.save).toHaveBeenCalledTimes(2);
 });

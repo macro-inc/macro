@@ -5,15 +5,17 @@
 
 import type { CodeNode } from '@lexical/code';
 import { PrismTokenizer } from '@lexical/code';
-import type { LinkNode } from '@lexical/link';
+import { $isAutoLinkNode, type LinkNode } from '@lexical/link';
 import { $getListDepth, type ListItemNode, type ListNode } from '@lexical/list';
 import type { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import type { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
 import {
   $isClassedBlockNode,
+  type AgentActivityNode,
   type AgentContextNode,
   type AgentSessionMentionNode,
   type AwaitNode,
+  type BookingLinkMentionNode,
   type ClassedBlockNode,
   type ConnectAppNode,
   type ContactMentionNode,
@@ -77,14 +79,17 @@ import {
   ENABLE_STATIC_DOCUMENT_CARDS,
   ENABLE_SVG_PREVIEW,
 } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { MarkNode } from '@lexical/mark';
 import type { SearchMatchNode } from '@macro-inc/lexical-core/nodes/SearchMatchNode';
 import { theme as baseTheme, createTheme } from '../../theme';
 import { forceSingleLine, setEditorStateFromMarkdown } from '../../utils';
 import { StaticCodeBoxAccessory } from '../accessory/CodeBoxAccessory';
+import { AgentActivity as AgentActivityDecorator } from '../decorator/AgentActivity';
 import { AgentContext as AgentContextDecorator } from '../decorator/AgentContext';
 import { AgentSessionMention as AgentSessionMentionDecorator } from '../decorator/AgentSessionMention';
 import { Await as AwaitDecorator } from '../decorator/Await';
+import { BookingLinkMention as BookingLinkMentionDecorator } from '../decorator/BookingLinkMention';
 import { ConnectApp as ConnectAppDecorator } from '../decorator/ConnectApp';
 import { ContactMention as ContactMentionDecorator } from '../decorator/ContactMention';
 import { CursorSystemNotification as CursorSystemNotificationDecorator } from '../decorator/CursorSystemNotification';
@@ -249,6 +254,7 @@ function getTextClassName(
     | DocumentMentionNode
     | AgentSessionMentionNode
     | PullRequestMentionNode
+    | BookingLinkMentionNode
     | ContactMentionNode
     | DateMentionNode
     | WatermarkNode,
@@ -344,7 +350,8 @@ function eraseRenderableElement<T extends ElementNode>(
 }
 
 const Text: TypedRenderableEntity<TextNode> = {
-  guard: (node: LexicalNode): node is TextNode => node.__type === 'text',
+  guard: (node: LexicalNode): node is TextNode =>
+    node.__type === 'text' || node.__type === 'unlinked-text',
   render: (props) => {
     return (
       <span class={getTextClassName(props.node, props.theme)}>
@@ -429,6 +436,20 @@ const PullRequestMention: TypedRenderableEntity<PullRequestMentionNode> = {
   render: (props) => (
     <span class={getTextClassName(props.node, props.theme)}>
       <PullRequestMentionDecorator
+        {...props.node.exportComponentProps()}
+        key={props.node.getKey()}
+        theme={props.theme}
+      />
+    </span>
+  ),
+};
+
+const BookingLinkMention: TypedRenderableEntity<BookingLinkMentionNode> = {
+  guard: (node: LexicalNode): node is BookingLinkMentionNode =>
+    node.__type === 'booking-link-mention',
+  render: (props) => (
+    <span class={getTextClassName(props.node, props.theme)}>
+      <BookingLinkMentionDecorator
         {...props.node.exportComponentProps()}
         key={props.node.getKey()}
         theme={props.theme}
@@ -570,6 +591,18 @@ const AgentContext: TypedRenderableEntity<AgentContextNode> = {
     node.__type === 'agent-context',
   render: (props) => (
     <AgentContextDecorator
+      {...props.node.exportComponentProps()}
+      key={props.node.getKey()}
+      theme={props.theme}
+    />
+  ),
+};
+
+const AgentActivity: TypedRenderableEntity<AgentActivityNode> = {
+  guard: (node: LexicalNode): node is AgentActivityNode =>
+    node.__type === 'agent-activity',
+  render: (props) => (
+    <AgentActivityDecorator
       {...props.node.exportComponentProps()}
       key={props.node.getKey()}
       theme={props.theme}
@@ -843,16 +876,21 @@ const HorizontalRule: TypedRenderableEntity<HorizontalRuleNode> = {
 };
 
 const Link: TypedRenderableElement<LinkNode> = {
-  guard: (node: LexicalNode): node is LinkNode => node.__type === 'link',
-  render: (props) => (
-    <LinkWithPreview
-      url={props.node.__url}
-      class={props.theme.link}
-      title={props.node.__title ?? props.node.__url}
-    >
-      {props.children}
-    </LinkWithPreview>
-  ),
+  guard: (node: LexicalNode): node is LinkNode =>
+    node.__type === 'link' || node.__type === 'autolink',
+  render: (props) => {
+    if ($isAutoLinkNode(props.node) && props.node.getIsUnlinked())
+      return props.children;
+    return (
+      <LinkWithPreview
+        url={props.node.__url}
+        class={props.theme.link}
+        title={props.node.__title ?? props.node.__url}
+      >
+        {props.children}
+      </LinkWithPreview>
+    );
+  },
 };
 
 const Mark: TypedRenderableElement<MarkNode> = {
@@ -992,12 +1030,14 @@ const InlineEntities: RenderableEntity[] = [
   eraseRenderableEntity(DocumentMention),
   eraseRenderableEntity(AgentSessionMention),
   eraseRenderableEntity(PullRequestMention),
+  eraseRenderableEntity(BookingLinkMention),
   eraseRenderableEntity(DocumentCard),
   eraseRenderableEntity(ContactMention),
   eraseRenderableEntity(DateMention),
   eraseRenderableEntity(GroupMention),
   eraseRenderableEntity(Await),
   eraseRenderableEntity(AgentContext),
+  eraseRenderableEntity(AgentActivity),
   eraseRenderableEntity(ReplyTarget),
   eraseRenderableEntity(CursorSystemNotification),
   eraseRenderableEntity(MagicChip),
@@ -1084,23 +1124,34 @@ function Document(
     theme: EditorThemeClasses;
     rootRef?: (ref: HTMLDivElement) => void;
     singleLine?: boolean;
+    inert?: boolean;
   } & StaticRenderOptions
 ): JSX.Element {
+  // Read while the parsed editor state is active, before rendering decorators.
+  const accessibleText = props.inert
+    ? props.rootNode.getTextContent()
+    : undefined;
   return (
-    <div
-      class={cn(
-        'markdown-content',
-        props.theme.root,
-        'wrap-break-word max-w-full'
-      )}
-      ref={props.rootRef}
-    >
-      <MapRender
-        children={props.rootNode.getChildren()}
-        theme={props.theme}
-        lazy={props.lazy}
-      />
-    </div>
+    <>
+      <Show when={props.inert}>
+        <span class="sr-only">{accessibleText}</span>
+      </Show>
+      <div
+        class={cn(
+          'markdown-content',
+          props.theme.root,
+          'wrap-break-word max-w-full'
+        )}
+        ref={props.rootRef}
+        inert={props.inert}
+      >
+        <MapRender
+          children={props.rootNode.getChildren()}
+          theme={props.theme}
+          lazy={props.lazy}
+        />
+      </div>
+    </>
   );
 }
 
@@ -1145,6 +1196,8 @@ export function StaticMarkdown(props: {
   target?: 'internal' | 'external' | 'both';
   singleLine?: boolean;
   lazy?: boolean;
+  /** Disable preview interactions while exposing a plain-text equivalent to assistive technology. */
+  inert?: boolean;
 }) {
   let {
     editor: contextEditor,
@@ -1201,24 +1254,34 @@ export function StaticMarkdown(props: {
   // TODO: Move citations to bulk query when built in backend
   createEffect(() => {
     const editor = currentEditor();
+    const markdown = props.markdown;
+    const target = props.target;
+    const singleLine = props.singleLine;
+    // Without citations the replacement is identical; re-rendering it would
+    // parse the markdown again and rebuild the same DOM.
+    if (!markdown.includes('[[')) return;
+
+    // A newer render owns the editor state; drop this lookup's late result.
+    let current = true;
+    onCleanup(() => {
+      current = false;
+    });
 
     // Handle citations without affecting mentions
-
-    const settleReplaceCitations = async () => {
-      const settleReplaceCitationsValue = await replaceCitations(
-        props.markdown
-      );
-      const content: string = settleReplaceCitationsValue;
-
-      setEditorStateFromMarkdown(editor, content, props.target);
-      if (props.singleLine) {
-        forceSingleLine(editor);
+    const renderCitations = async () => {
+      try {
+        const content = await replaceCitations(markdown);
+        if (!current || content === markdown) return;
+        setEditorStateFromMarkdown(editor, content, target);
+        if (singleLine) {
+          forceSingleLine(editor);
+        }
+        setEditorState(editor.getEditorState());
+      } catch (error) {
+        console.error('Failed to resolve markdown citations', error);
       }
-      setEditorState(editor.getEditorState());
-
-      return;
     };
-    settleReplaceCitations();
+    fireAndForget(renderCitations(), 'static-markdown');
   });
 
   const domTree = createMemo(() => {
@@ -1228,6 +1291,7 @@ export function StaticMarkdown(props: {
         theme: mergedTheme(),
         lazy: lazy(),
         rootRef: props.rootRef,
+        inert: props.inert,
       });
     });
   });

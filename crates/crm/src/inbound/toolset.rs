@@ -12,6 +12,7 @@ mod create_contact;
 mod get_company;
 mod list_companies;
 pub mod pipelines;
+pub mod transfer;
 
 #[cfg(test)]
 mod test;

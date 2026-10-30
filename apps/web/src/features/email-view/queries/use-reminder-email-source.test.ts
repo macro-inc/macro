@@ -1,6 +1,6 @@
 import type { EmailEntity } from '@entity';
 import type { EmailReminderSummary } from '@service-storage/generated/schemas/emailReminderSummary';
-import { createRoot } from 'solid-js';
+import { batch, createRoot } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { EmailViewState } from '../types';
@@ -55,6 +55,7 @@ function mount() {
       search: 'persisted text',
       inboxIds: ['selected-inbox'],
       facets: {},
+      focusSort: 'importance',
       collapsedSidebarSectionIds: [],
     });
     const [collection, setCollection] = createStore({
@@ -146,6 +147,72 @@ function item(
     },
   };
 }
+
+it('automatically advances alias-filtered reminder pages until a match without refetching sparse pages', async () => {
+  const {
+    source,
+    collection,
+    setCollection,
+    setHydration,
+    setLaterHydration,
+    setState,
+  } = mount();
+  const first = { items: [item('unmatched')], nextCursor: 'second' };
+  const second = { items: [item('also-unmatched')], nextCursor: 'third' };
+  collection.fetchNextPage
+    .mockImplementationOnce(async () => {
+      setCollection('data', 'pages', [first, second]);
+      setLaterHydration({
+        isPending: false,
+        isFetching: false,
+        data: { entities: [] },
+      });
+    })
+    .mockImplementationOnce(async () => {
+      setCollection({
+        hasNextPage: false,
+        data: {
+          pages: [first, second, { items: [item('match')], nextCursor: '' }],
+        },
+      });
+      setLaterHydration('data', { entities: [email('match')] });
+    });
+  batch(() => {
+    setState('aliasFilter', {
+      inboxId: 'selected-inbox',
+      emailAddress: 'resident@example.com',
+    });
+    setCollection('data', 'pages', [first]);
+    setHydration('data', { entities: [] });
+  });
+  await vi.waitFor(() =>
+    expect(source.reminderForThread?.('match')).toBeDefined()
+  );
+  expect(collection.fetchNextPage).toHaveBeenCalledTimes(2);
+  expect(collection.refetch).not.toHaveBeenCalled();
+  expect(source.hasMore()).toBe(false);
+  expect(source.items().filter((row) => row.kind === 'entity')).toHaveLength(1);
+});
+
+it('stops automatic reminder pagination on errors and allows retry', async () => {
+  const { source, collection, setCollection, setState } = mount();
+  collection.fetchNextPage.mockRejectedValueOnce(new Error('Page unavailable'));
+  setState('aliasFilter', {
+    inboxId: 'selected-inbox',
+    emailAddress: 'resident@example.com',
+  });
+  await vi.waitFor(() =>
+    expect(source.error()).toEqual(new Error('Page unavailable'))
+  );
+  expect(collection.fetchNextPage).toHaveBeenCalledOnce();
+  collection.fetchNextPage.mockImplementationOnce(async () => {
+    setCollection('hasNextPage', false);
+  });
+  await source.loadMore();
+  expect(collection.fetchNextPage).toHaveBeenCalledTimes(2);
+  expect(source.hasMore()).toBe(false);
+  expect(source.error()).toBeUndefined();
+});
 
 it('uses collection clock metadata only for hydrated rows and clears it outside the tab', () => {
   const { source, setCollection, setHydration, setState } = mount();
@@ -261,15 +328,11 @@ it('shares the in-flight final-page wait until native hydration publishes the ne
   const concurrent = source.loadMore();
   expect(concurrent).toBe(first);
   let settled = false;
-
-  const settleFirst = async () => {
+  const observeFirst = async () => {
     await first;
-
     settled = true;
-
-    return;
   };
-  void settleFirst();
+  const observed = observeFirst();
   await Promise.resolve();
   release();
   await Promise.resolve();
@@ -285,6 +348,7 @@ it('shares the in-flight final-page wait until native hydration publishes the ne
     data: { entities: [email('last')] },
   });
   await first;
+  await observed;
   await nextEmail;
   expect(mocks.open).toHaveBeenCalledWith({ id: 'last', fallbackName: 'last' });
   expect(

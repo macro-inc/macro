@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish a built image in Ohio. Explicit operator action; never run by Pulumi."""
+"""Publish a built image in its deployment region. Explicit operator action; never run by Pulumi."""
 import argparse
 import hashlib
 import json
@@ -9,13 +9,15 @@ import time
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('image_directory', type=Path)
-parser.add_argument('bucket', help='Existing private Ohio image-artifact bucket')
+parser.add_argument('bucket', help='Existing private image-artifact bucket in the target region')
 parser.add_argument('--role', default='vmimport', help='Existing VM Import service role')
+parser.add_argument('--region', choices=['us-east-1', 'us-east-2'], default='us-east-2')
+parser.add_argument('--name-prefix', choices=['macro-observability', 'macro-database-collector'], default='macro-observability')
 args = parser.parse_args()
 
 def aws(*arguments):
     result = subprocess.run(
-        ['aws', '--region', 'us-east-2', '--output', 'json', *arguments],
+        ['aws', '--region', args.region, '--output', 'json', *arguments],
         check=True, capture_output=True, text=True,
     )
     return json.loads(result.stdout) if result.stdout.strip() else {}
@@ -23,8 +25,9 @@ def aws(*arguments):
 identity = aws('sts', 'get-caller-identity')
 if identity['Account'] != '569036502058':
     raise SystemExit('Use the Macro AWS account (569036502058)')
-if aws('s3api', 'get-bucket-location', '--bucket', args.bucket)['LocationConstraint'] != 'us-east-2':
-    raise SystemExit('Image bucket must be in Ohio')
+bucket_region = aws('s3api', 'get-bucket-location', '--bucket', args.bucket)['LocationConstraint'] or 'us-east-1'
+if bucket_region != args.region:
+    raise SystemExit('Image bucket must be in the target region')
 public_access = aws('s3api', 'get-public-access-block', '--bucket', args.bucket)['PublicAccessBlockConfiguration']
 if not all(public_access.get(key) for key in [
     'BlockPublicAcls', 'IgnorePublicAcls', 'BlockPublicPolicy', 'RestrictPublicBuckets',
@@ -38,11 +41,11 @@ if image.suffix != '.vhd':
     raise SystemExit('Expected the VHD image format')
 with image.open('rb') as source:
     digest = hashlib.file_digest(source, 'sha256').hexdigest()
-key = f'observability/{digest}.vhd'
-subprocess.run(['aws', '--region', 'us-east-2', 's3', 'cp', str(image),
+key = f'{args.name_prefix}/{digest}.vhd'
+subprocess.run(['aws', '--region', args.region, 's3', 'cp', str(image),
                 f's3://{args.bucket}/{key}', '--sse', 'AES256'], check=True)
 task = aws('ec2', 'import-snapshot', '--role-name', args.role, '--encrypted',
-           '--description', f'Macro observability {digest}',
+           '--description', f'{args.name_prefix} {digest}',
            '--disk-container', json.dumps({
                'Format': 'VHD', 'UserBucket': {'S3Bucket': args.bucket, 'S3Key': key},
            }))['ImportTaskId']
@@ -60,14 +63,14 @@ while time.monotonic() < deadline:
 else:
     raise SystemExit(f'Import still pending: inspect {task} before retrying publication')
 print(f'Imported snapshot: {snapshot}', flush=True)
-ami = aws('ec2', 'register-image', '--name', f'macro-observability-{digest[:20]}',
+ami = aws('ec2', 'register-image', '--name', f'{args.name_prefix}-{digest[:20]}',
           '--architecture', 'x86_64', '--virtualization-type', 'hvm',
           '--boot-mode', 'uefi', '--ena-support', '--imds-support', 'v2.0',
           '--root-device-name', '/dev/xvda',
           '--block-device-mappings', json.dumps([{
               'DeviceName': '/dev/xvda',
               'Ebs': {'SnapshotId': snapshot, 'VolumeType': 'gp3',
-                      'VolumeSize': 30, 'DeleteOnTermination': True},
+                      'DeleteOnTermination': True},
           }]))['ImageId']
 print(f'AMI: {ami}; SHA256: {digest}', flush=True)
 aws('ec2', 'create-tags', '--resources', ami, snapshot, '--tags',

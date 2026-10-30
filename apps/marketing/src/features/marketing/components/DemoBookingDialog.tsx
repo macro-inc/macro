@@ -7,9 +7,9 @@ import { createFrameEscape } from '../primitives/createFrameEscape';
 import './demo-booking-dialog.css';
 
 // The booking page allows framing from its own origin only.
-const BOOKING_PATH = new URL(DEMO_BOOKING_URL).pathname;
+export const BOOKING_PATH = new URL(DEMO_BOOKING_URL).pathname;
 // The framed booking page posts this to the page around it once a guest books.
-const BOOKING_MADE = 'macro:booking-made';
+export const BOOKING_MADE = 'macro:booking-made';
 
 /**
  * A refused frame (booking paths that do not allow framing yet, or an app copy
@@ -17,13 +17,17 @@ const BOOKING_MADE = 'macro:booking-made';
  * booking page itself rather than leave them in front of it.
  */
 const leaveIfRefused = (frame: HTMLIFrameElement) => {
-  let shown = false;
+  if (wasRefused(frame)) window.open(DEMO_BOOKING_URL, '_self');
+};
+
+/** Whether a booking frame holds a browser error page instead of the app. */
+export const wasRefused = (frame: HTMLIFrameElement) => {
   try {
-    shown = frame.contentWindow?.location.pathname.startsWith('/app/') === true;
+    return !frame.contentWindow?.location.pathname.startsWith('/app/');
   } catch {
     // The error page is cross-origin, so reading its location throws.
+    return true;
   }
-  if (!shown) window.open(DEMO_BOOKING_URL, '_self');
 };
 
 /**

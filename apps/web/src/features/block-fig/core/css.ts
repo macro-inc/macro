@@ -54,9 +54,9 @@ export function cssFor(info: NodeInfo): string[] {
   lines.push(`width: ${px(info.width)};`, `height: ${px(info.height)};`);
   if (Math.abs(info.rotation) > 0.01)
     lines.push(`transform: rotate(${round(-info.rotation)}deg);`);
-  updateCssFor();
+  pushFillCss();
   const stroke = info.strokes.map(paintCss).find(Boolean);
-  updateCssFor3();
+  pushBorderCss();
   const r = info.cornerRadius;
   if (r) {
     const values = [r.top_left, r.top_right, r.bottom_right, r.bottom_left];
@@ -77,12 +77,12 @@ export function cssFor(info: NodeInfo): string[] {
     lines.push(`backdrop-filter: blur(${px(backdrop.radius / 2)});`);
   if (info.opacity < 0.999) lines.push(`opacity: ${round(info.opacity)};`);
   const t = info.text;
-  updateCssFor5();
+  pushTypographyCss();
   const al = info.autoLayout;
-  updateCssFor2();
+  pushAutoLayoutCss();
   return lines;
 
-  function updateCssFor5() {
+  function pushTypographyCss() {
     if (t) {
       if (t.fontFamily) lines.push(`font-family: "${t.fontFamily}";`);
       if (t.fontSize) lines.push(`font-size: ${px(t.fontSize)};`);
@@ -102,7 +102,7 @@ export function cssFor(info: NodeInfo): string[] {
           `letter-spacing: ${unit === 'PERCENT' ? `${round(v / 100)}em` : px(v)};`
         );
       }
-      updateCssFor4(t);
+      pushTextAlignCss(t);
       if (t.decoration === 'UNDERLINE')
         lines.push('text-decoration: underline;');
       if (t.decoration === 'STRIKETHROUGH')
@@ -112,21 +112,21 @@ export function cssFor(info: NodeInfo): string[] {
     }
   }
 
-  function updateCssFor4(tInput: NonNullable<typeof t>) {
+  function pushTextAlignCss(tInput: NonNullable<typeof t>) {
     if (tInput.alignHorizontal && tInput.alignHorizontal !== 'LEFT')
       lines.push(
         `text-align: ${tInput.alignHorizontal === 'JUSTIFIED' ? 'justify' : tInput.alignHorizontal.toLowerCase()};`
       );
   }
 
-  function updateCssFor3() {
+  function pushBorderCss() {
     if (stroke && info.strokeWeight) {
       const style = info.dashPattern?.length ? 'dashed' : 'solid';
       lines.push(`border: ${px(info.strokeWeight)} ${style} ${stroke};`);
     }
   }
 
-  function updateCssFor2() {
+  function pushAutoLayoutCss() {
     if (al) {
       lines.push(
         'display: flex;',
@@ -145,7 +145,7 @@ export function cssFor(info: NodeInfo): string[] {
     }
   }
 
-  function updateCssFor() {
+  function pushFillCss() {
     if (info.type !== 'TEXT') {
       const fills = info.fills.map(paintCss).filter(Boolean).reverse();
       if (fills.length === 1 && !fills[0]?.includes('gradient'))

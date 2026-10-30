@@ -370,12 +370,10 @@ describe('shared channel notification refresh', () => {
     f.queue.onPatch(patch(), false);
     await tick();
     const done = vi.fn();
-    const settleRefreshHandler0 = done;
-    const settleRefresh = async () => {
-      const settleRefreshValue = await f.queue.refresh([descriptor()]);
-      return await settleRefreshHandler0(settleRefreshValue);
+    const refreshThenDone = async () => {
+      done(await f.queue.refresh([descriptor()]));
     };
-    const refresh = settleRefresh();
+    const refresh = refreshThenDone();
     pending.resolve({});
     await Promise.resolve();
     expect(done).not.toHaveBeenCalled();

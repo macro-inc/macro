@@ -1,6 +1,5 @@
 import { useUserContext } from '@core/context/user';
 import { useOwnUserName } from '@queries/auth/user-name-self';
-import { useInstructionsMdTextQuery } from '@queries/storage/instructions-md';
 import { getOpenEntitiesPrompt } from './openEntitiesPrompt';
 
 const ABOUT_MACRO = `
@@ -27,7 +26,6 @@ Internal terminology and knowledge
 `;
 
 export function useAdditionalInstructions() {
-  const userInstructionsQuery = useInstructionsMdTextQuery();
   const { email } = useUserContext();
   const userName = useOwnUserName();
   return (currentChatId?: string) => {
@@ -42,13 +40,6 @@ export function useAdditionalInstructions() {
       if (email()) {
         prompt += `\nEmail: ${email()}`;
       }
-    }
-    const userInstructions =
-      userInstructionsQuery.isSuccess && userInstructionsQuery.data;
-    if (userInstructions) {
-      prompt +=
-        '\nThese are system instructions provided by the user. Follow them\n';
-      prompt += userInstructions;
     }
     const openEntities = getOpenEntitiesPrompt(currentChatId);
     if (openEntities) {

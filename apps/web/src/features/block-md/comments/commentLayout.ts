@@ -32,6 +32,60 @@ export const MIN_THREAD_GAP = 10;
 // the throttle time for layout updates.
 const LAYOUT_THROTTLE = 60;
 
+type StackInput<T> = CommentViewerInitialLayout<T> & { height: number };
+
+/**
+ * Stacks margin threads (sorted by their marks' positions) so no two cards
+ * overlap and none starts above the top of the margin, where it could never
+ * be scrolled to. The anchor (the active thread) sits beside its mark, moved
+ * up only as far as it takes to end inside the page; threads above it are
+ * pushed up and threads below it are pushed down. When the threads above do
+ * not fit between the top of the page and the anchor, the whole stack is
+ * pushed down instead. Threads below may run past the page's bottom; the
+ * document scrolls to them.
+ */
+export function stackMarginThreads<T>(
+  threads: readonly StackInput<T>[],
+  anchorIndex: number,
+  pageHeight: number
+): Array<CommentLayout<T>> {
+  const anchor = threads[anchorIndex];
+  if (!anchor) return [];
+  const tops = threads.map((thread) => thread.layout.originalYPosition);
+
+  tops[anchorIndex] = Math.max(
+    0,
+    Math.min(tops[anchorIndex], pageHeight - anchor.height)
+  );
+  for (let i = anchorIndex + 1; i < threads.length; i++) {
+    const previousEnd = tops[i - 1] + threads[i - 1].height;
+    tops[i] = Math.max(tops[i], previousEnd + MIN_THREAD_GAP);
+  }
+  for (let i = anchorIndex - 1; i >= 0; i--) {
+    tops[i] = Math.min(
+      tops[i],
+      tops[i + 1] - threads[i].height - MIN_THREAD_GAP
+    );
+  }
+
+  // Threads pushed above the top come back down, and push the rest down.
+  let floor = 0;
+  for (let i = 0; i < threads.length; i++) {
+    tops[i] = Math.max(tops[i], floor);
+    floor = tops[i] + threads[i].height + MIN_THREAD_GAP;
+  }
+
+  return threads.map((thread, i): CommentLayout<T> => {
+    const end = tops[i] + thread.height;
+    const overflow: Overflow =
+      end >= pageHeight ? 'bottom' : tops[i] <= 0 ? 'top' : null;
+    return {
+      ...thread,
+      layout: { height: thread.height, calculatedYPos: tops[i], overflow },
+    };
+  });
+}
+
 export function createCommentLayout() {
   const { state } = useMarkdownDocument();
   const commentState = state.comments;
@@ -141,57 +195,6 @@ export function createCommentLayout() {
     setMarkLayouts(layouts);
   });
 
-  function computeLayout<T>({
-    initialAnchor,
-    input,
-    direction,
-    containerHeight,
-    containerPadding = 0,
-  }: {
-    initialAnchor: number;
-    input: (CommentViewerInitialLayout<T> & { height: number })[];
-    direction: 'up' | 'down';
-    containerHeight: number;
-    containerPadding?: number;
-  }): Array<CommentLayout<T>> {
-    let anchor = initialAnchor;
-    if (direction === 'up') {
-      input.reverse();
-    }
-    const out = input.map((i): CommentLayout<T> => {
-      let calculatedYPos = 0;
-      if (direction === 'up') {
-        calculatedYPos = Math.min(
-          anchor - i.height - MIN_THREAD_GAP,
-          i.layout.originalYPosition
-        );
-        anchor = calculatedYPos;
-      } else {
-        calculatedYPos = Math.max(
-          anchor + MIN_THREAD_GAP,
-          i.layout.originalYPosition
-        );
-        anchor = calculatedYPos + i.height;
-      }
-
-      let overflow: Overflow = null;
-      if (calculatedYPos <= 0 + containerPadding) overflow = 'top';
-      if (anchor >= containerHeight - containerPadding) overflow = 'bottom';
-      return {
-        ...i,
-        layout: {
-          height: i.height,
-          calculatedYPos,
-          overflow,
-        },
-      };
-    });
-    if (direction === 'up') {
-      out.reverse();
-    }
-    return out;
-  }
-
   createEffect(() => {
     const pageHeight = notebookHeight();
 
@@ -235,67 +238,17 @@ export function createCommentLayout() {
       middleMarkId ?? sortedThreadsByOriginalPosition[0].id;
     if (!anchorPositionId) return;
 
-    let sliceTo = sortedThreadsByOriginalPosition.findIndex(
-      (thread) => thread.id === anchorPositionId
+    const anchorIndex = Math.max(
+      0,
+      sortedThreadsByOriginalPosition.findIndex(
+        (thread) => thread.id === anchorPositionId
+      )
     );
-    if (sliceTo === -1) {
-      sliceTo = 0;
-    }
-    const sliceFrom = sliceTo + 1;
-
-    // all threads on page above the anchor with height
-    const sliceAboveAnchor = sortedThreadsByOriginalPosition.slice(0, sliceTo);
-    // all threads on page below the anchor with height
-    const sliceBelowAnchor = sortedThreadsByOriginalPosition.slice(sliceFrom);
-
-    // calculate closest fit for anchor within bounds of container
-    const anchorElement = sortedThreadsByOriginalPosition[sliceTo];
-    const anchorHeight = anchorElement.height;
-
-    // check if original y plus height fits inside bounds for anchor
-    const paddedHeight = pageHeight - CONTAINER_PADDING;
-    let anchorTop = anchorElement.layout.originalYPosition;
-    let anchorEnd = anchorTop + anchorHeight;
-    if (anchorEnd > paddedHeight) {
-      const anchorOverflow = anchorEnd - paddedHeight;
-      anchorTop -= anchorOverflow;
-    }
-
-    // handle edge case where anchor element is larger than container
-    if (anchorTop < 0) {
-      anchorTop = 0;
-    }
-    anchorEnd = anchorTop + anchorHeight;
-
-    const layoutAboveAnchor = computeLayout({
-      initialAnchor: anchorTop,
-      direction: 'up',
-      input: sliceAboveAnchor,
-      containerHeight: pageHeight,
-      containerPadding: CONTAINER_PADDING,
-    });
-
-    const layoutBelowAnchor = computeLayout({
-      initialAnchor: anchorEnd,
-      direction: 'down',
-      input: sliceBelowAnchor,
-      containerHeight: pageHeight,
-      containerPadding: CONTAINER_PADDING,
-    });
-
-    // the positioning of all threads on the page
-    const out: CommentLayout<{ id: MarkId }>[] = [
-      ...layoutAboveAnchor,
-      {
-        ...anchorElement,
-        layout: {
-          height: anchorHeight,
-          calculatedYPos: anchorTop,
-          overflow: null,
-        },
-      },
-      ...layoutBelowAnchor,
-    ];
+    const out = stackMarginThreads(
+      sortedThreadsByOriginalPosition,
+      anchorIndex,
+      pageHeight - CONTAINER_PADDING
+    );
 
     for (const layout of out) {
       setThreadPositions(layout.id, layout);
@@ -303,7 +256,6 @@ export function createCommentLayout() {
   });
 
   return {
-    notebookHeight,
     setThreadHeights,
     threadPositions,
   };

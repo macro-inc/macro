@@ -1,4 +1,5 @@
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { makePersisted } from '@solid-primitives/storage';
 import {
   type Accessor,
@@ -71,7 +72,7 @@ export function createInputView(options: CreateInputViewOptions): InputView {
     on(
       snapshot,
       (current) => {
-        options.callbacks?.onChange?.(current);
+        fireAndForget(options.callbacks?.onChange?.(current), 'channel-input');
       },
       { defer: true }
     )

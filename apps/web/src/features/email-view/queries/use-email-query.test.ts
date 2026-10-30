@@ -1,3 +1,4 @@
+import type { LocalDraft } from '@app/features/email-compose/core/local-draft';
 import type { EmailEntity } from '@entity/types/entity';
 import {
   type SoupAstItemsQuery,
@@ -14,6 +15,15 @@ import {
   type EmailDataSourceItem,
   useEmailDataSource,
 } from './use-email-query';
+
+const localDrafts = vi.hoisted(() => ({ read: (): LocalDraft[] => [] }));
+vi.mock('@queries/email/local-draft-source', async () => ({
+  ...(await import('@queries/email/local-draft-entities')),
+  createLocalDraftSource: (enabled: () => boolean) => ({
+    drafts: () => (enabled() ? localDrafts.read() : []),
+    ready: () => true,
+  }),
+}));
 
 const searchQueryMock = vi.hoisted(() => vi.fn());
 const favoritesQueryMock = vi.hoisted(() => vi.fn());
@@ -53,6 +63,21 @@ vi.mock('@queries/soup/items', () => ({ useSoupAstItemsQuery: vi.fn() }));
 vi.mock('./use-scheduled-email-source', () => ({
   useScheduledEmailSource: () => ({
     items: () => scheduledRows.current,
+    isLoading: () => false,
+    isFetching: () => false,
+    error: () => undefined,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+    refresh: async () => {},
+  }),
+}));
+const focusRows = vi.hoisted(() => ({
+  current: [] as import('./use-email-query').EmailDataSourceItem[],
+}));
+vi.mock('./use-focus-email-source', () => ({
+  useFocusEmailSource: () => ({
+    items: () => focusRows.current,
     isLoading: () => false,
     isFetching: () => false,
     error: () => undefined,
@@ -102,6 +127,7 @@ function mount(search = '') {
       search,
       inboxIds: ['inbox-a'],
       facets: {},
+      focusSort: 'importance',
       collapsedSidebarSectionIds: [],
     });
     const [entities, setDiscoveryEntities] = createSignal([email('noise')]);
@@ -151,6 +177,11 @@ function mount(search = '') {
         setSearchDiscoveryEntities(rows);
         setRetainedSearchEntities(rows);
       });
+    const [searchHasMore, setSearchHasMore] = createSignal(true);
+    const [searchFetching, setSearchFetching] = createSignal(false);
+    const searchNext = vi.fn(async () => {
+      setSearchHasMore(false);
+    });
     const searchRefetch = vi.fn(async () => {});
     const retainedSearchRefetch = vi.fn(async () => {});
     let searchCount = 0;
@@ -173,10 +204,15 @@ function mount(search = '') {
             return discovery || !retentionLoading();
           },
           isPlaceholderData: false,
-          isFetching: false,
+          get isFetching() {
+            return discovery && searchFetching();
+          },
           isFetchingNextPage: false,
-          hasNextPage: true,
+          get hasNextPage() {
+            return discovery && searchHasMore();
+          },
           error: null,
+          fetchNextPage: searchNext,
           refetch: discovery ? searchRefetch : retainedSearchRefetch,
         };
       }
@@ -203,6 +239,7 @@ function mount(search = '') {
       error: null,
       hasNextPage: true,
       isFetchingNextPage: false,
+      isFetchNextPageError: false,
       isEnabled: true,
       transport: 'graphql',
       fetchNextPage: vi.fn(async () => {}),
@@ -210,14 +247,24 @@ function mount(search = '') {
       refresh: vi.fn(async () => {}),
       resetToInitialPage: vi.fn(),
     };
+    const extraLists: {
+      query: SoupAstItemsQuery;
+      setError: (error?: Error) => void;
+      setMissing: (missing: boolean) => void;
+    }[] = [];
     let listCount = 0;
     vi.mocked(useSoupAstItemsQuery).mockImplementation(() => {
       if (listCount++ === 0) return query;
-      return {
+      const [lookupError, setError] = createSignal<Error>();
+      const [missing, setMissing] = createSignal(false);
+      const lookup: SoupAstItemsQuery = {
         isFetching: false,
-        error: null,
+        get error() {
+          return lookupError() ?? null;
+        },
         hasNextPage: false,
         isFetchingNextPage: false,
+        isFetchNextPageError: false,
         isEnabled: true,
         transport: 'graphql',
         fetchNextPage: vi.fn(async () => {}),
@@ -226,7 +273,9 @@ function mount(search = '') {
         resetToInitialPage: vi.fn(),
         get data() {
           if (retentionLoading()) throw new Error('Read pending retained mail');
-          return { entities: retainedEntities(), groups: undefined };
+          return missing()
+            ? undefined
+            : { entities: retainedEntities(), groups: undefined };
         },
         get isPending() {
           return retentionLoading();
@@ -236,6 +285,8 @@ function mount(search = '') {
         },
         isPlaceholderData: false,
       };
+      extraLists.push({ query: lookup, setError, setMissing });
+      return lookup;
     });
     const source = useEmailDataSource(state, {
       tagSets: () => [],
@@ -244,6 +295,10 @@ function mount(search = '') {
     return {
       source,
       query,
+      extraLists,
+      searchNext,
+      setSearchHasMore,
+      setSearchFetching,
       setState,
       setEntities,
       setDiscoveryEntities,
@@ -267,7 +322,97 @@ function mount(search = '') {
 }
 
 describe('Email list query transitions', () => {
+  const alias = { inboxId: 'inbox-a', emailAddress: 'resident@example.com' };
+
+  it('refreshes the current alias membership readers after refreshing search, but not inactive readers', async () => {
+    const root = mount('invoice');
+    root.setSearchHasMore(false);
+    root.setRetainedEntities([email('search')]);
+    root.setState('aliasFilter', alias);
+    expect(ids(root.source)).toEqual(['search']);
+    const oldReader = root.extraLists[0].query;
+    root.searchRefetch.mockImplementation(async () => {
+      root.setSearchFetching(true);
+      await Promise.resolve();
+      root.setSearchFetching(false);
+    });
+    await root.source.refresh();
+    const activeReader = root.extraLists.at(-1)!.query;
+    expect(activeReader).not.toBe(oldReader);
+    expect(activeReader.refresh).toHaveBeenCalledOnce();
+    expect(oldReader.refresh).not.toHaveBeenCalled();
+    root.setState('aliasFilter', undefined);
+    await root.source.refresh();
+    expect(activeReader.refresh).toHaveBeenCalledOnce();
+  });
+
+  it('retains rows and exposes a failed retained alias read until an explicit retry', async () => {
+    const root = mount('invoice');
+    root.setSearchHasMore(false);
+    root.setRetainedEntities([email('search')]);
+    batch(() => {
+      root.setState('aliasFilter', alias);
+      root.setState('facets', { read: ['unread'] });
+    });
+    expect(ids(root.source)).toEqual(['search']);
+    const retained = root.extraLists.at(-1)!;
+    batch(() => {
+      retained.setError(new Error('Alias membership unavailable'));
+      retained.setMissing(true);
+    });
+    expect(root.source.error()).toEqual(
+      new Error('Alias membership unavailable')
+    );
+    expect(ids(root.source)).toEqual(['search']);
+    vi.mocked(retained.query.refresh).mockImplementation(async () => {
+      retained.setError(undefined);
+      retained.setMissing(false);
+    });
+    await root.source.refresh();
+    expect(retained.query.refresh).toHaveBeenCalledOnce();
+    expect(root.retainedSearchRefetch).toHaveBeenCalledOnce();
+    expect(root.source.error()).toBeUndefined();
+  });
+
+  it('advances sparse alias search pages and waits for membership before fetching again', async () => {
+    const root = mount('invoice');
+    root.setRetainedEntities([]);
+    root.searchNext
+      .mockImplementationOnce(async () => {
+        root.setSearchEntities([email('search'), email('still-unmatched')]);
+        root.setRetainedEntities([]);
+        root.setRetentionLoading(true);
+      })
+      .mockImplementationOnce(async () => {
+        root.setSearchEntities([
+          email('search'),
+          email('still-unmatched'),
+          email('match'),
+        ]);
+        root.setRetainedEntities([email('match')]);
+        root.setSearchHasMore(false);
+      });
+    root.setState('aliasFilter', alias);
+    await vi.waitFor(() => expect(root.searchNext).toHaveBeenCalledOnce());
+    expect(root.source.isLoading()).toBe(true);
+    expect(ids(root.source)).toEqual([]);
+    root.setRetentionLoading(false);
+    await vi.waitFor(() => expect(ids(root.source)).toEqual(['match']));
+    expect(root.searchNext).toHaveBeenCalledTimes(2);
+    expect(root.source.hasMore()).toBe(false);
+  });
+
+  it('stops sparse alias search on exhaustion rather than looping an empty result', async () => {
+    const root = mount('invoice');
+    root.setRetainedEntities([]);
+    root.setState('aliasFilter', alias);
+    await vi.waitFor(() => expect(root.source.hasMore()).toBe(false));
+    expect(root.searchNext).toHaveBeenCalledOnce();
+    expect(ids(root.source)).toEqual([]);
+    expect(root.source.isLoading()).toBe(false);
+  });
   beforeEach(() => {
+    localDrafts.read = () => [];
     vi.clearAllMocks();
     favoritesQueryMock.mockReturnValue({
       isSuccess: true,
@@ -277,6 +422,7 @@ describe('Email list query transitions', () => {
       refetch: vi.fn(async () => {}),
     });
     scheduledRows.current = [];
+    focusRows.current = [];
   });
   afterEach(() => dispose?.());
 
@@ -344,6 +490,35 @@ describe('Email list query transitions', () => {
     expect(ids(source)).toEqual(['noise']);
   });
 
+  it('lists the Focus source on the Focus tab and pauses Soup discovery', () => {
+    focusRows.current = [
+      {
+        kind: 'entity',
+        id: 'focus-row',
+        entity: {
+          ...email('focus'),
+          focus: {
+            category: 'CUSTOMER',
+            importance: 87,
+            needsReply: true,
+            needsFollowUp: false,
+          },
+        },
+      } as EmailDataSourceItem,
+    ];
+    const { source, setState } = mount();
+    expect(ids(source)).toEqual(['noise']);
+
+    setState('tab', 'focus');
+    expect(ids(source)).toEqual(['focus']);
+    expect(source.hasMore()).toBe(false);
+    const options = vi.mocked(useSoupAstItemsQuery).mock.calls[0][1];
+    expect(options?.().enabled).toBe(false);
+
+    setState('tab', 'noise');
+    expect(ids(source)).toEqual(['noise']);
+  });
+
   it('does not read disabled native data on the Reminders tab', () => {
     const { source, setState } = mount();
     expect(() => setState('tab', 'reminders')).not.toThrow();
@@ -353,6 +528,16 @@ describe('Email list query transitions', () => {
     );
     setState('tab', 'noise');
     expect(ids(source)).toEqual(['noise']);
+  });
+
+  it('drops a done row from Signal and Noise even when the page still lists it', () => {
+    const { source, setState, setEntities } = mount();
+    const archived = { ...email('archived'), done: true };
+    const active = { ...email('active'), done: false };
+    setEntities([archived, active]);
+    expect(ids(source)).toEqual(['active']);
+    setState('tab', 'important');
+    expect(ids(source)).toEqual(['active']);
   });
 
   it('lists done rows on Archived and drops a row when it is unarchived', () => {
@@ -369,6 +554,16 @@ describe('Email list query transitions', () => {
     setEntities([{ ...archived, done: false }, active]);
     expect(ids(source)).toEqual([]);
     expect(source.isLoading()).toBe(false);
+  });
+
+  it('keeps archived hits when searching Signal and Noise', () => {
+    const { source, setState, setSearchEntities } = mount('invoice');
+    const archived = { ...email('archived'), done: true };
+    const active = { ...email('active'), done: false };
+    setSearchEntities([archived, active]);
+    expect(ids(source)).toEqual(['archived', 'active']);
+    setState('tab', 'important');
+    expect(ids(source)).toEqual(['archived', 'active']);
   });
 
   it('trims archived search results to done threads', () => {
@@ -722,3 +917,160 @@ vi.mock('./use-reminder-email-source', () => ({
     refresh: async () => {},
   }),
 }));
+
+it('recovers a first-use draft before remote discovery and preserves mailbox/search scope', () => {
+  const [copies, setCopies] = createSignal<LocalDraft[]>([
+    {
+      key: 'local-draft',
+      draftId: 'local-draft',
+      threadId: 'local-thread',
+      accountId: 'alice',
+      generation: 'generation',
+      revision: 1,
+      acknowledgedRevision: 0,
+      content: { subject: 'Offline receipt' },
+      attachments: [],
+      status: 'dirty',
+      updatedAt: 1,
+    },
+  ]);
+  localDrafts.read = copies;
+  const state = mount();
+  state.setState({ tab: 'drafts', inboxIds: undefined });
+  state.setLoading(true);
+  expect(ids(state.source)).toEqual(['local-thread']);
+  expect(state.source.isLoading()).toBe(false);
+  state.setState('inboxIds', ['inbox-a']);
+  expect(ids(state.source)).toEqual([]);
+  setCopies([
+    { ...copies()[0], inboxId: 'inbox-a', senderEmail: 'alias@example.com' },
+  ]);
+  expect(ids(state.source)).toEqual(['local-thread']);
+  state.setState('aliasFilter', {
+    inboxId: 'inbox-a',
+    emailAddress: 'another@example.com',
+  });
+  expect(ids(state.source)).toEqual([]);
+  state.setState('aliasFilter', undefined);
+  state.setState('search', 'receipt');
+  expect(ids(state.source)).toContain('local-thread');
+  state.setState('search', 'unrelated');
+  expect(ids(state.source)).not.toContain('local-thread');
+  state.setState({ search: '', facets: { read: ['unread'] } });
+  expect(ids(state.source)).toEqual([]);
+  state.setState({ facets: {}, tab: 'sent' });
+  expect(ids(state.source)).toEqual([]);
+  state.setState('tab', 'drafts');
+  state.setLoading(false);
+  state.setEntities([{ ...email('local-thread'), isDraft: true }]);
+  expect(ids(state.source)).toEqual(['local-thread']);
+  expect(
+    state.source.items().find((row) => row.kind === 'entity')?.entity.name
+  ).toBe('Offline receipt');
+  setCopies([{ ...copies()[0], status: 'synced', acknowledgedRevision: 1 }]);
+  expect(ids(state.source)).toEqual(['local-thread']);
+});
+
+it('keeps confirmed thread flags when a local reply supplies newer draft text', () => {
+  localDrafts.read = () => [
+    {
+      key: 'reply',
+      draftId: 'reply',
+      threadId: 'thread',
+      accountId: 'alice',
+      inboxId: 'inbox-a',
+      generation: 'generation',
+      revision: 1,
+      acknowledgedRevision: 0,
+      content: { subject: 'Local reply' },
+      attachments: [],
+      status: 'dirty',
+      updatedAt: 1,
+    },
+  ];
+  const state = mount();
+  state.setState('tab', 'drafts');
+  state.setEntities([
+    {
+      ...email('thread'),
+      isDraft: true,
+      isRead: false,
+      done: true,
+      isImportant: true,
+      isSignal: false,
+    },
+  ]);
+  state.setState('facets', { read: ['unread'], done: ['done'] });
+  expect(ids(state.source)).toEqual(['thread']);
+  expect(
+    state.source.items().find((row) => row.kind === 'entity')?.entity
+  ).toMatchObject({
+    name: 'Local reply',
+    isRead: false,
+    done: true,
+    isImportant: true,
+    isSignal: false,
+  });
+});
+
+it('does not resurrect a filtered thread with synthetic local draft flags', () => {
+  localDrafts.read = () => [
+    {
+      key: 'reply',
+      draftId: 'reply',
+      threadId: 'thread',
+      accountId: 'alice',
+      inboxId: 'inbox-a',
+      generation: 'generation',
+      revision: 1,
+      acknowledgedRevision: 0,
+      content: { subject: 'Local reply' },
+      attachments: [],
+      status: 'dirty',
+      updatedAt: 1,
+    },
+  ];
+  const state = mount();
+  state.setState({ tab: 'drafts', facets: { done: ['not-done'] } });
+  state.setDiscoveryEntities([]);
+  state.setRetainedEntities([
+    { ...email('thread'), isDraft: true, done: true },
+  ]);
+  expect(ids(state.source)).toEqual([]);
+  state.setState('facets', { done: ['done'] });
+  expect(ids(state.source)).toEqual(['thread']);
+});
+
+it('retains a remote body-search match when its local draft subject does not match', () => {
+  localDrafts.read = () => [
+    {
+      key: 'reply',
+      draftId: 'reply',
+      threadId: 'thread',
+      accountId: 'alice',
+      inboxId: 'inbox-a',
+      generation: 'generation',
+      revision: 1,
+      acknowledgedRevision: 0,
+      content: { subject: 'Weekly update' },
+      attachments: [],
+      status: 'dirty',
+      updatedAt: 1,
+    },
+  ];
+  const state = mount('invoice');
+  state.setState('tab', 'all');
+  state.setSearchEntities([
+    {
+      ...email('thread'),
+      name: 'Weekly update',
+      snippet: 'Your invoice is attached',
+    },
+  ]);
+  expect(ids(state.source)).toEqual(['thread']);
+  expect(
+    state.source.items().find((row) => row.kind === 'entity')?.entity
+  ).toMatchObject({
+    snippet: 'Your invoice is attached',
+  });
+});

@@ -4,7 +4,7 @@ import { getPermissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { queryReadyGate } from '@queries/gate';
 import type { CardPosition } from '@service-storage/generated/schemas/cardPosition';
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
@@ -28,8 +28,14 @@ import {
 import { DatabaseToolbar } from '../database/components/database-toolbar';
 import { DatabaseProvider, useDatabase } from '../database/context/database';
 import type { CardMove } from '../database/core/board-moves';
+import type { DatabaseCellValue } from '../database/core/database-view';
+import { newViewNeedsColumn } from '../database/core/view-creation';
 import type { ViewChange } from '../database/core/view-state';
-import { allRecordsView, boardLayout } from '../database/core/views';
+import {
+  allRecordsView,
+  boardLayout,
+  timelineLayout,
+} from '../database/core/views';
 import {
   type DatabaseOpFailure,
   databaseOpMessage,
@@ -37,6 +43,7 @@ import {
 import type { BoardPositions } from '../database/views/database-board-view';
 import { DatabaseRecords } from '../database/views/database-records';
 import type { DatabaseRecordsActions } from '../database/views/database-records-view';
+import { CrmListSkeleton } from './components/list-state';
 import type { Pipeline } from './core/pipeline';
 import { createCrmRecordDependencies } from './queries/dependencies';
 import { createPipelineApi } from './queries/pipeline-data';
@@ -45,6 +52,7 @@ import {
   type PipelineViews,
   usePipelineTableQuery,
 } from './queries/pipeline-views';
+import { AddPipelineRecordDialog } from './views/add-pipeline-record';
 
 /** Pipelines supply their own identity and owner to the existing share dialog. */
 export function PipelineShare(props: {
@@ -53,7 +61,7 @@ export function PipelineShare(props: {
 }) {
   const openShare = useShareModal(() => ({
     id: props.pipeline.id,
-    blockAlias: 'database',
+    blockAlias: 'pipeline',
     itemType: 'crm_pipeline',
     name: props.pipeline.name,
     owner: props.pipeline.userId,
@@ -63,7 +71,7 @@ export function PipelineShare(props: {
   return (
     <ShareTrigger
       id={props.pipeline.id}
-      blockType="database"
+      blockType="pipeline"
       onClick={openShare}
       copyLink={props.onCopyLink}
     />
@@ -81,11 +89,7 @@ export function PipelineDatabaseEditor(props: {
       class="@container/database flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-canvas-base text-ink"
       style={{ '--database-title-column-width': '18rem' }}
     >
-      <Suspense
-        fallback={
-          <div class="p-4 text-sm text-ink-muted">Loading pipeline…</div>
-        }
-      >
+      <Suspense fallback={<CrmListSkeleton label="Loading pipeline" />}>
         <Show when={props.pipeline.id} keyed>
           {(_id) => (
             <PipelineRecords
@@ -159,6 +163,8 @@ function PipelineRecords(props: {
   const canEdit = () =>
     props.pipeline.grant === 'owner' || props.pipeline.grant === 'edit';
   const api = createPipelineApi(deps.storage, props.pipeline);
+  const [composing, setComposing] =
+    createSignal<Record<string, DatabaseCellValue>>();
   return (
     <StaticMarkdownContext>
       <DatabaseProvider
@@ -177,6 +183,7 @@ function PipelineRecords(props: {
             changeView({ query: { ...view().query, filter: null } })
           }
           boardPositions={boardPositions}
+          onComposeRecord={setComposing}
           renderTextEditor={(editor) => <DatabaseTextEditor {...editor} />}
           renderTextValue={(value) => <DatabaseTextValue value={value} />}
           renderMentionPicker={(picker) => (
@@ -198,7 +205,9 @@ function PipelineRecords(props: {
               view={view()}
               selectedViewId={selectedView()?.id}
               canEdit={canEdit()}
-              recordType={props.pipeline.recordType}
+              pipeline={props.pipeline}
+              composing={composing()}
+              onCompose={setComposing}
               onSelectView={setSelectedViewId}
               onChangeView={changeView}
               actions={actions}
@@ -218,7 +227,10 @@ function PipelineToolbar(props: {
   view: DatabaseView;
   selectedViewId: string | undefined;
   canEdit: boolean;
-  recordType: Pipeline['recordType'];
+  pipeline: Pipeline;
+  /** The new record's starting values while its form is open. */
+  composing: Record<string, DatabaseCellValue> | undefined;
+  onCompose: (values: Record<string, DatabaseCellValue> | undefined) => void;
   onSelectView: (id: string | undefined) => void;
   onChangeView: (change: ViewChange) => void;
   actions: DatabaseRecordsActions;
@@ -227,7 +239,9 @@ function PipelineToolbar(props: {
   const database = useDatabase();
   const columns = () => database.data.rows.columns();
   // A column added with a board shows once the table is read again.
-  const refreshColumns = () => void database.data.rows.refresh('refresh');
+  const refreshColumns = () => {
+    database.data.rows.refresh('refresh');
+  };
   return (
     <DatabaseToolbar
       columns={columns()}
@@ -240,11 +254,7 @@ function PipelineToolbar(props: {
       onCreateView={(created) =>
         props.views.create(props.view, created, columns()).map((view) => {
           props.onSelectView(view.id);
-          if (
-            created.layout === 'board' &&
-            created.groupBy.kind === 'new-status'
-          )
-            refreshColumns();
+          if (newViewNeedsColumn(created)) refreshColumns();
         })
       }
       onRenameView={(target, name) =>
@@ -269,6 +279,18 @@ function PipelineToolbar(props: {
               .showAsBoardWithStatusColumn(target, columns())
               .map(refreshColumns)
           )
+          .with({ kind: 'timeline', range: { kind: 'column' } }, ({ range }) =>
+            props.views
+              .update(target, {
+                layout: timelineLayout(range.columnId, columns()),
+              })
+              .map(() => undefined)
+          )
+          .with({ kind: 'timeline', range: { kind: 'new-column' } }, () =>
+            props.views
+              .showAsTimelineWithTimeRangeColumn(target, columns())
+              .map(refreshColumns)
+          )
           .exhaustive()
       }
       onDeleteView={(target) => {
@@ -278,14 +300,33 @@ function PipelineToolbar(props: {
       actions={
         <>
           <Show when={props.canEdit}>
-            <Button
-              variant="outline"
-              disabled={props.actions.pending()}
-              onClick={() => void props.actions.createRecord()}
-            >
+            <Button variant="secondary" onClick={() => props.onCompose({})}>
               <PlusIcon class="size-4" />
-              {props.recordType === 'company' ? 'Add company' : 'Add contact'}
+              {props.pipeline.recordType === 'company'
+                ? 'Add deal'
+                : 'Add contact'}
             </Button>
+          </Show>
+          <Show when={props.canEdit && props.composing} keyed>
+            {(initialValues) => (
+              <AddPipelineRecordDialog
+                pipeline={props.pipeline}
+                columns={columns()}
+                initialValues={initialValues}
+                onCreate={props.actions.createRow}
+                onClose={() => props.onCompose(undefined)}
+                renderTextEditor={(editor) => (
+                  <DatabaseTextEditor {...editor} />
+                )}
+                renderTextValue={(value) => <DatabaseTextValue value={value} />}
+                renderMentionPicker={(picker) => (
+                  <DatabaseMentionPicker {...picker} />
+                )}
+                renderMentionValue={(id, entityType) => (
+                  <DatabaseMentionValue id={id} entityType={entityType} />
+                )}
+              />
+            )}
           </Show>
           {props.pipelineActions}
         </>
@@ -298,10 +339,9 @@ function PipelineToolbar(props: {
 function PipelineRefresh() {
   const database = useDatabase();
   onMount(() => {
-    const timer = setInterval(
-      () => void database.data.rows.refresh('refresh'),
-      5000
-    );
+    const timer = setInterval(() => {
+      database.data.rows.refresh('refresh');
+    }, 5000);
     onCleanup(() => clearInterval(timer));
   });
   return null;

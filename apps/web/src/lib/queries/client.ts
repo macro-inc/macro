@@ -2,6 +2,7 @@ import {
   initializeNativeNetworkStatus,
   subscribeNativeNetworkStatus,
 } from '@core/mobile/native-network-status';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { onlineManager } from '@tanstack/query-core';
@@ -39,7 +40,7 @@ if (isPlatform(['ios', 'android'])) {
       if (status !== 'unknown') setOnline(status === 'online');
     })
   );
-  void initializeNativeNetworkStatus();
+  fireAndForget(initializeNativeNetworkStatus(), 'native-network-status');
 }
 
 const buster = import.meta.env.__APP_VERSION__ ?? 'dev';

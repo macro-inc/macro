@@ -11,6 +11,7 @@ use crate::{
         call::CallLiteral,
         channel::{ChannelLiteral, ChannelThreadLiteral, ChannelTypeFilter},
         chat::{ChatLiteral, ChatRole},
+        crm_association::{CrmAssociation, document_crm_associations},
         crm_company::CrmCompanyLiteral,
         crm_contact::CrmContactLiteral,
         database_row::DatabaseRowLiteral,
@@ -39,6 +40,8 @@ pub mod call;
 pub mod channel;
 /// contains the ast literal value for chat
 pub mod chat;
+/// CRM record association scope for associated-item queries.
+pub mod crm_association;
 /// contains the ast literal value for crm companies
 pub mod crm_company;
 /// CRM contact filter literals. Contacts are opt-in.
@@ -200,6 +203,10 @@ pub struct EntityFilterAst {
     /// Restrict to the authenticated viewer's favorites before pagination when true.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub favorites_only: Option<bool>,
+    /// Restrict every entity type to items associated with this CRM record
+    /// before pagination. Soup authorizes and resolves the record first.
+    #[serde(default, rename = "crma", skip_serializing_if = "Option::is_none")]
+    pub crm_association: Option<CrmAssociation>,
     /// filters applied to canonical calendar events
     #[serde(default, rename = "calf")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
@@ -285,6 +292,7 @@ impl EntityFilterAst {
         let email_tree = EmailFilters::expand_ast(entity_filter.email_filters)?.map(Arc::new);
         Ok(Some(EntityFilterAst {
             favorites_only: entity_filter.favorites_only,
+            crm_association: None,
             calendar_event_filter: CalendarEventFilters::expand_ast(
                 entity_filter.calendar_event_filters,
             )?
@@ -345,11 +353,26 @@ impl EntityFilterAst {
             .is_some_and(crm_company_requests_admin)
     }
 
+    /// Every distinct CRM record this filter restricts to, from the top-level
+    /// scope and from document [`document::DocumentLiteral::CrmAssociated`]
+    /// literals, in first-seen order.
+    pub fn crm_associations(&self) -> Vec<CrmAssociation> {
+        let mut records = Vec::new();
+        if let Some(record) = self.crm_association {
+            records.push(record);
+        }
+        if let Some(tree) = self.document_filter.as_deref() {
+            document_crm_associations(tree, &mut records);
+        }
+        records
+    }
+
     /// mock function to create the an empty ast
     #[cfg(feature = "mock")]
     pub fn mock_empty() -> Self {
         Self {
             favorites_only: None,
+            crm_association: None,
             calendar_event_filter: None,
             document_filter: None,
             project_filter: None,
@@ -389,6 +412,7 @@ impl IsEmpty for EntityFilterAst {
     fn is_empty(&self) -> bool {
         let EntityFilterAst {
             favorites_only,
+            crm_association,
             calendar_event_filter,
             document_filter,
             project_filter,
@@ -407,6 +431,7 @@ impl IsEmpty for EntityFilterAst {
             properties_filter,
         } = self;
         favorites_only != &Some(true)
+            && crm_association.is_none()
             && calendar_event_filter.is_none()
             && document_filter.is_none()
             && project_filter.is_none()

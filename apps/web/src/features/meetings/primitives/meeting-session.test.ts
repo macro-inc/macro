@@ -66,6 +66,7 @@ describe('meeting session ownership', () => {
     });
     await session.join(undefined, preferences);
     const leaving = session.leave();
+    expect(session.credentials()).toBeUndefined();
     expect(capabilities.release).toHaveBeenCalledExactlyOnceWith(
       token.shareToken,
       token.token
@@ -83,8 +84,25 @@ describe('meeting session ownership', () => {
     const end = vi.spyOn(trace, 'end');
     const { session, dispose } = setup({ prepare: async () => {} });
 
-    await session.join(undefined, preferences);
+    await session.join(undefined, preferences, {
+      setupId: 'setup-1',
+      microphone: 'blocked',
+      camera: 'granted',
+    });
 
+    expect(attributes).toHaveBeenCalledWith('meeting.setup.id', 'setup-1');
+    expect(attributes).toHaveBeenCalledWith(
+      'meeting.join.microphone_access',
+      'blocked'
+    );
+    expect(attributes).toHaveBeenCalledWith(
+      'meeting.join.camera_access',
+      'granted'
+    );
+    expect(attributes).toHaveBeenCalledWith(
+      'meeting.join.microphone_track',
+      false
+    );
     expect(phases.mock.calls.map(([name]) => name)).toEqual([
       'meeting.join.previous_session',
       'meeting.join.create',
@@ -257,6 +275,7 @@ describe('meeting session ownership', () => {
 
   it('validates guest names before requesting a token and respects media preferences', async () => {
     const { session, capabilities, dispose } = setup();
+    expect(session.credentials()).toBeUndefined();
     await session.join('  ', preferences);
     expect(capabilities.join).not.toHaveBeenCalled();
     expect(session.error()).toContain('Enter your name');
@@ -264,7 +283,9 @@ describe('meeting session ownership', () => {
     expect(capabilities.join).toHaveBeenCalledWith('Taylor');
     expect(capabilities.connect).toHaveBeenCalledWith(token, preferences);
     expect(session.joinedCallId()).toBe(token.callId);
+    expect(session.credentials()).toEqual(token);
     dispose();
+    expect(session.credentials()).toBeUndefined();
   });
 
   it('releases a late token after the page is closed without opening media', async () => {
@@ -307,6 +328,7 @@ describe('meeting session ownership', () => {
     expect(session.joining()).toBe(false);
     expect(session.error()).toContain('Could not join');
     expect(session.joinedCallId()).toBeUndefined();
+    expect(session.credentials()).toBeUndefined();
     dispose();
   });
 

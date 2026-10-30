@@ -4,6 +4,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { invalidateContacts } from '@core/user/contactService';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { invalidateListChannels } from '@queries/channel/channels';
 import {
   useGetOrCreateDirectMessageMutation,
@@ -61,7 +62,7 @@ export function useSendMessageToPeople() {
     if (!senderId) return;
     await beforeSend?.(channelId);
 
-    const settleMutateAsync = async () => {
+    const send = async () => {
       try {
         return await sendMessage.mutateAsync({
           parent: { type: 'channel', id: channelId },
@@ -70,14 +71,14 @@ export function useSendMessageToPeople() {
           optimisticId: newMessageId(),
         });
       } catch {
-        return await null;
+        return null;
       }
     };
-    const messageResponse = await settleMutateAsync();
+    const messageResponse = await send();
     if (!messageResponse) return;
 
-    invalidateListChannels();
-    invalidateContacts();
+    fireAndForget(invalidateListChannels(), 'messages');
+    fireAndForget(invalidateContacts(), 'messages');
 
     const navigateToChannel = async () => {
       replaceSplit({

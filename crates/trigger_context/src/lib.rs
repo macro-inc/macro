@@ -22,6 +22,10 @@ pub enum TriggerContext {
     Mentioned(DiscussionContext),
     /// A further message in the discussion of a session that is already running.
     FollowUp(FollowUpContext),
+    /// A message in the agent's private conversation with the person, who
+    /// reads the reply there as it is written. Earlier turns are the
+    /// session's own history, so the discussion carries no channel activity.
+    Conversation(DiscussionContext),
     /// The agent was assigned a task.
     TaskAssigned(TaskAssignedContext),
     /// Someone opened the session from the composer. Their prompt arrives
@@ -59,6 +63,19 @@ pub struct ContextPerson {
     pub email: Option<String>,
 }
 
+/// A file attached to a context message.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContextAttachment {
+    /// What was attached, such as `static/image`, `static/video`, or `document`.
+    pub entity_type: String,
+    /// Its id. For a static file, the file id used in `/file/{id}`.
+    pub entity_id: String,
+    /// Where the agent can fetch it. Only static files have one, filled in by
+    /// the harness from its static file service address.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+}
+
 /// A message the agent may read.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContextMessage {
@@ -70,6 +87,9 @@ pub struct ContextMessage {
     pub content: String,
     /// When it was posted.
     pub posted_at: DateTime<Utc>,
+    /// Files attached to this message. Empty is omitted on the wire.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<ContextAttachment>,
 }
 
 /// Messages of one discussion, oldest first.
@@ -103,6 +123,76 @@ pub struct DiscussionContext {
     /// with the message. Empty off channels.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub channel: Vec<ContextThread>,
+}
+
+impl DiscussionContext {
+    /// Files attached to the prompt's own thread, the prompting message first.
+    ///
+    /// Background channel activity is not included: those files are not what
+    /// the prompt is about.
+    #[must_use]
+    pub fn prompt_thread_attachments(&self) -> Vec<&ContextAttachment> {
+        let Some(thread) = &self.thread else {
+            return Vec::new();
+        };
+        let (prompt, rest): (Vec<&ContextMessage>, Vec<&ContextMessage>) = thread
+            .messages
+            .iter()
+            .partition(|message| message.id == self.prompt_message_id);
+        prompt
+            .into_iter()
+            .chain(rest)
+            .flat_map(|message| message.attachments.iter())
+            .collect()
+    }
+
+    /// Every attachment the agent will read about: the quoted message, the
+    /// prompt's thread, and background channel activity.
+    pub fn attachments_mut(&mut self) -> impl Iterator<Item = &mut ContextAttachment> {
+        let quoted = match &mut self.reply_target {
+            ReplyTarget::Quote {
+                message: Some(message),
+                ..
+            } => Some(message),
+            ReplyTarget::Quote { message: None, .. }
+            | ReplyTarget::Thread { .. }
+            | ReplyTarget::None => None,
+        };
+        quoted
+            .into_iter()
+            .chain(
+                self.thread
+                    .iter_mut()
+                    .chain(self.channel.iter_mut())
+                    .flat_map(|thread| thread.messages.iter_mut()),
+            )
+            .flat_map(|message| message.attachments.iter_mut())
+    }
+}
+
+impl TriggerContext {
+    /// The discussion this trigger was posted in, when it was one.
+    #[must_use]
+    pub fn discussion(&self) -> Option<&DiscussionContext> {
+        match self {
+            Self::Mentioned(discussion) | Self::Conversation(discussion) => Some(discussion),
+            Self::FollowUp(follow_up) => Some(&follow_up.discussion),
+            Self::TaskAssigned(_) | Self::Requested(_) | Self::Dispatched(_) | Self::Routine(_) => {
+                None
+            }
+        }
+    }
+
+    /// The discussion this trigger was posted in, mutably.
+    pub fn discussion_mut(&mut self) -> Option<&mut DiscussionContext> {
+        match self {
+            Self::Mentioned(discussion) | Self::Conversation(discussion) => Some(discussion),
+            Self::FollowUp(follow_up) => Some(&mut follow_up.discussion),
+            Self::TaskAssigned(_) | Self::Requested(_) | Self::Dispatched(_) | Self::Routine(_) => {
+                None
+            }
+        }
+    }
 }
 
 /// Where a discussion lives. Each carries its name, so the agent is never
@@ -485,6 +575,80 @@ pub enum RoutineEvent {
         /// Its id.
         entity_id: String,
     },
+    /// A call the routine's owner started began.
+    CallStarted {
+        /// The call as it stands at the start.
+        call: CallStartedSnapshot,
+    },
+    /// A call the routine's owner joined ended.
+    CallEnded {
+        /// The call.
+        call: CallSnapshot,
+    },
+}
+
+/// A call that just started, read under the routine owner's access.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CallStartedSnapshot {
+    /// Call id.
+    pub id: Uuid,
+    /// The call's name, when it has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// The channel the call is in; absent for meetings outside one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel_id: Option<Uuid>,
+    /// That channel's name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel_name: Option<String>,
+    /// When it started.
+    pub started_at: DateTime<Utc>,
+    /// Who started it.
+    pub started_by: ContextPerson,
+    /// Everyone who has joined so far, people and guests.
+    pub participants: Vec<ContextPerson>,
+}
+
+/// An ended call, read under the routine owner's access.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CallSnapshot {
+    /// Call id.
+    pub id: Uuid,
+    /// The call's name, when it has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// The channel the call was held in; absent for meetings outside one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel_id: Option<Uuid>,
+    /// That channel's name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel_name: Option<String>,
+    /// When it started.
+    pub started_at: DateTime<Utc>,
+    /// When it ended.
+    pub ended_at: DateTime<Utc>,
+    /// Everyone who joined, people and guests.
+    pub participants: Vec<ContextPerson>,
+    /// AI summary of the call, once one has been written.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    /// What was said, oldest first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub transcript: Vec<TranscriptLine>,
+    /// Whether the end of the transcript was left out.
+    pub transcript_omitted: bool,
+}
+
+/// One stretch of speech in a call transcript.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TranscriptLine {
+    /// Who spoke, as a reader would name them. Attributed by audio track, so
+    /// people sharing a device share a speaker.
+    pub speaker: String,
+    /// What they said.
+    pub text: String,
+    /// When they started speaking.
+    pub at: DateTime<Utc>,
 }
 
 /// A document, read under the routine owner's access.

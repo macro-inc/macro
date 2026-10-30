@@ -1,17 +1,23 @@
 import type { MutationInspection } from '../protocol';
+
 /**
  * Browser CacheHost: routes cache RPC through the SharedWorker coordinator to
  * the currently elected dedicated cache engine. Unsupported browsers receive
  * a storage-free no-op host.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
+import { match } from 'ts-pattern';
+import { ignoreRejection } from '../ignore-rejection';
 import { deleteLegacyNormalizedCacheIdb } from '../legacy-idb-cleanup';
 import {
   ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
   type AffectedOperationsResult,
   type CachedQueryInstanceWire,
   type CachedQueryVariantWire,
+  type CachePush,
   type CacheRequest,
+  type CacheResponse,
   type CacheResponseErrorCode,
   type CacheRevision,
   type CalendarCommitArgs,
@@ -59,15 +65,21 @@ import {
   createCacheCoordinatorPageAdapter,
 } from '../worker/coordinator-page-adapter';
 import type { EngineOpenOutcome } from '../worker/coordinator-protocol';
+import { WorkerRestartedError } from '../worker/effect-worker-transport';
 import { isUnambiguousCacheScope } from '../worker/stale-databases';
 import {
   CacheBootstrapExhaustedError,
   COORDINATOR_CONNECT_ATTEMPTS,
+  COORDINATOR_CONNECT_RETRY_DELAYS_MS,
   COORDINATOR_CONNECT_TIMEOUT_MS,
   STARTUP_RESPONSE_GRACE_MS,
 } from '../worker/startup';
 import { CacheNavigationError } from './navigation-error';
 import { createNoopCacheHost } from './noop-host';
+import {
+  CacheReadAvailability,
+  isReadOnlyCacheRequest,
+} from './read-availability';
 import type {
   AffectedOperationsListener,
   CacheChangeListener,
@@ -225,6 +237,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
   const clientId = crypto.randomUUID();
   const pending = new Map<number, Pending>();
+  const readAvailability = new CacheReadAvailability();
   const activeOpKeys = new Set<number>();
   const registeredOpKeys = new Set<number>();
   const lostRegisteredOpKeys = new Set<number>();
@@ -248,7 +261,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   let state: HostState = 'idle';
   let initialization: Promise<void> | undefined;
   let initializationAttempt = 0;
-  let navigationGeneration = 0;
+  let transportGeneration = 0;
+  let transportInterruption: Error | undefined;
+  let coordinatorRestarts = 0;
   let suspension: Promise<void> | undefined;
   let initializationError: Error | undefined;
   let replacementError: CacheResponseError | undefined;
@@ -295,55 +310,61 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     });
   };
 
-  const onMessage = (event: MessageEvent<WorkerMessage>) => {
-    const msg = event.data;
-    if (isCachePush(msg)) {
-      if (msg.kind === 'cache-hydrated') {
-        for (const cb of hydrationSubscribers) {
-          if (msg.searchChangedBuckets === undefined) cb(msg.revision);
-          else
-            cb(msg.revision, {
-              searchChangedBuckets: msg.searchChangedBuckets,
-            });
-        }
-        return;
+  const opKeysForClient = (opIds: readonly string[]): number[] => {
+    const prefix = `${clientId}:`;
+    return [
+      ...new Set(
+        opIds.flatMap((id) => {
+          if (!id.startsWith(prefix)) return [];
+          const suffix = id.slice(prefix.length);
+          const opKey = Number(suffix);
+          return Number.isSafeInteger(opKey) && String(opKey) === suffix
+            ? [opKey]
+            : [];
+        })
+      ),
+    ];
+  };
+
+  const onCachePush = (msg: CachePush) => {
+    if (msg.kind === 'cache-hydrated') {
+      for (const cb of hydrationSubscribers) {
+        if (msg.searchChangedBuckets === undefined) cb(msg.revision);
+        else
+          cb(msg.revision, {
+            searchChangedBuckets: msg.searchChangedBuckets,
+          });
       }
-      if (msg.kind === 'cache-changed') {
-        if (msg.reset) {
-          for (const cb of generationChangeSubscribers)
-            cb({ storage: 'reset' });
-        }
-        for (const cb of cacheChangeSubscribers) {
-          if (msg.reset || msg.searchChangedBuckets === undefined)
-            cb(msg.revision);
-          else
-            cb(msg.revision, {
-              searchChangedBuckets: msg.searchChangedBuckets,
-            });
-        }
-        return;
-      }
-      if (msg.kind === 'mutation-settled') {
-        for (const cb of settlementSubscribers) cb(msg.settlement);
-        return;
-      }
-      const prefix = `${clientId}:`;
-      const opKeys = [
-        ...new Set(
-          msg.opIds.flatMap((id) => {
-            if (!id.startsWith(prefix)) return [];
-            const suffix = id.slice(prefix.length);
-            const opKey = Number(suffix);
-            return Number.isSafeInteger(opKey) && String(opKey) === suffix
-              ? [opKey]
-              : [];
-          })
-        ),
-      ];
-      updateOnMessage2(opKeys, msg);
       return;
     }
-    if (!isCacheResponse(msg)) return;
+    if (msg.kind === 'cache-changed') {
+      if (msg.reset) {
+        for (const cb of generationChangeSubscribers) cb({ storage: 'reset' });
+      }
+      for (const cb of cacheChangeSubscribers) {
+        if (msg.reset || msg.searchChangedBuckets === undefined)
+          cb(msg.revision);
+        else
+          cb(msg.revision, {
+            searchChangedBuckets: msg.searchChangedBuckets,
+          });
+      }
+      return;
+    }
+    if (msg.kind === 'mutation-settled') {
+      for (const cb of settlementSubscribers) cb(msg.settlement);
+      return;
+    }
+    const opKeys = opKeysForClient(msg.opIds);
+    if (opKeys.length > 0) {
+      for (const cb of affectedSubscribers) {
+        if (msg.fieldChanges) cb(opKeys, msg.fieldChanges);
+        else cb(opKeys);
+      }
+    }
+  };
+
+  const onCacheResponse = (msg: CacheResponse) => {
     const entry = pending.get(msg.id);
     if (!entry) return;
     if (!msg.ok) {
@@ -359,32 +380,22 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     }
     pending.delete(msg.id);
     if (entry.timer !== undefined) clearTimeout(entry.timer);
-    updateOnMessage(entry);
+    if (
+      (entry.kind === 'read' || entry.kind === 'write') &&
+      entry.opKey !== undefined &&
+      activeOpKeys.has(entry.opKey)
+    ) {
+      registeredOpKeys.add(entry.opKey);
+    }
     recordRequestOutcome(entry, 'success');
     entry.resolve(msg.result);
     finishGracefulDisposeIfDrained();
+  };
 
-    function updateOnMessage2(
-      opKeys: number[],
-      msgInput: Extract<NonNullable<typeof msg>, { kind: 'ops-affected' }>
-    ) {
-      if (opKeys.length > 0) {
-        for (const cb of affectedSubscribers) {
-          if (msgInput.fieldChanges) cb(opKeys, msgInput.fieldChanges);
-          else cb(opKeys);
-        }
-      }
-    }
-
-    function updateOnMessage(entryValue: NonNullable<typeof entry>) {
-      if (
-        (entryValue.kind === 'read' || entryValue.kind === 'write') &&
-        entryValue.opKey !== undefined &&
-        activeOpKeys.has(entryValue.opKey)
-      ) {
-        registeredOpKeys.add(entryValue.opKey);
-      }
-    }
+  const onMessage = (event: MessageEvent<WorkerMessage>) => {
+    const msg = event.data;
+    if (isCachePush(msg)) onCachePush(msg);
+    else if (isCacheResponse(msg)) onCacheResponse(msg);
   };
 
   function beginRecoveryGeneration(): void {
@@ -424,6 +435,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       return;
     if (ownerEpoch <= latestReplacementEpoch) return;
     latestReplacementEpoch = ownerEpoch;
+    resumeCacheReads();
     // Initial readiness completes the already-running first handshake.
     if (state === 'initializing' && !recoveryInProgress) return;
     const change: CacheGenerationChange = {
@@ -438,15 +450,71 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       markPendingRegistrations(replacementReadOpKeys);
     }
     if (state !== 'ready' && state !== 'awaiting-replacement') return;
+    fireAndForget(reinitialize(), 'graphql-cache-host');
+  }
 
-    const settleStartInitialization = async () => {
-      try {
-        return await startInitialization();
-      } catch {
-        return await undefined;
+  /** Restarts the handshake; its failure is already handled by the host. */
+  async function reinitialize(): Promise<void> {
+    try {
+      await startInitialization();
+    } catch {
+      // startInitialization records and reports its own failure.
+    }
+  }
+
+  function resumeCacheReads(): void {
+    if (state === 'failed' || state === 'suspended' || state === 'disposed')
+      return;
+    readAvailability.resume();
+    for (const [id, entry] of pending) {
+      if (entry.kind === 'init')
+        armRequestTimeout(id, entry, initializationTimeoutMs);
+      else if (isReadOnlyCacheRequest(entry.kind))
+        armRequestTimeout(id, entry, requestTimeoutMs);
+    }
+  }
+
+  function waitForCacheReads(): void {
+    if (state === 'failed' || state === 'suspended' || state === 'disposed')
+      return;
+    readAvailability.wait();
+    // Keep read/write/teardown admission ordered at the coordinator. Pausing
+    // their deadlines must not create a separate page-side read queue.
+    for (const entry of pending.values()) {
+      if (
+        (entry.kind === 'init' || isReadOnlyCacheRequest(entry.kind)) &&
+        entry.timer !== undefined
+      ) {
+        clearTimeout(entry.timer);
+        entry.timer = undefined;
       }
-    };
-    void settleStartInitialization();
+    }
+  }
+
+  function onOwnerHandoffBlocked(): void {
+    if (state === 'failed' || state === 'suspended' || state === 'disposed')
+      return;
+    const error = new Error(
+      'cache reads unavailable after owner handoff timeout'
+    );
+    beginRecoveryGeneration();
+    for (const key of activeOpKeys) lostRegisteredOpKeys.add(key);
+    replacementReadOpKeys.clear();
+    readAvailability.block(error);
+    // Cancel only the callers, not initialization or admitted worker fibers.
+    // Writes remain queued until the engine has safely drained and reopened.
+    for (const [id, entry] of pending) {
+      if (entry.kind === 'init' && entry.timer !== undefined) {
+        clearTimeout(entry.timer);
+        entry.timer = undefined;
+      }
+      if (!isReadOnlyCacheRequest(entry.kind)) continue;
+      pending.delete(id);
+      if (entry.timer !== undefined) clearTimeout(entry.timer);
+      recordRequestOutcome(entry, 'error', error);
+      entry.reject(error);
+    }
+    finishGracefulDisposeIfDrained();
   }
 
   function observeOwnerEpochLoss(error: CacheResponseError): void {
@@ -494,21 +562,30 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       onEngineReplaced: (epoch, outcome) => {
         if (adapter === created) onEngineReplaced(epoch, outcome);
       },
+      onCacheReadAvailabilityChanged: (availability) => {
+        if (adapter !== created) return;
+        match(availability)
+          .with('ready', resumeCacheReads)
+          .with('waiting', waitForCacheReads)
+          .with('blocked', onOwnerHandoffBlocked)
+          .exhaustive();
+      },
       onStartupProgress: (progress) => {
         if (adapter !== created) return;
         initializationTimeoutMs =
           options.initializationTimeoutMs ??
           progress.timeoutMs + STARTUP_RESPONSE_GRACE_MS;
         for (const [id, entry] of pending) {
-          if (entry.kind === 'init')
+          if (entry.kind === 'init' && !readAvailability.timeoutsPaused)
             armRequestTimeout(id, entry, initializationTimeoutMs);
         }
       },
       onTerminalError: (error) => {
         // start() also rejects; let the bounded registration loop retry before
         // reporting a terminal failure or quarantining any cache scope.
-        if (adapter === created && !registrationInProgress && !suspension)
-          failTransport(error);
+        if (adapter !== created || registrationInProgress || suspension) return;
+        if (error instanceof WorkerRestartedError) reconnectCoordinator(error);
+        else failTransport(error);
       },
       onCacheUnavailable: (reason) => {
         if (adapter === created) retireUnavailable(reason);
@@ -537,6 +614,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         attempt < COORDINATOR_CONNECT_ATTEMPTS;
         attempt += 1
       ) {
+        // Cancellation may arrive after a retry timer fires, before this continuation.
+        if (initializationId !== initializationAttempt)
+          throw new CacheNavigationError();
+        if (state !== 'initializing')
+          throw new Error('cache worker host was disposed during startup');
         const current = getAdapter();
         let timer: ReturnType<typeof setTimeout> | undefined;
         try {
@@ -567,6 +649,28 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
             attempt + 1 === COORDINATOR_CONNECT_ATTEMPTS
           )
             throw error;
+          if (timer !== undefined) clearTimeout(timer);
+          const retryStartedAt = now();
+          let completed = false;
+          try {
+            await new Promise<void>((resolve, reject) => {
+              cancelRegistration = reject;
+              timer = setTimeout(
+                resolve,
+                COORDINATOR_CONNECT_RETRY_DELAYS_MS[attempt]
+              );
+            });
+            completed = true;
+          } finally {
+            telemetry.record({
+              name: 'graphql_cache.registration_retry',
+              operationCategory: 'initialization',
+              outcome: completed ? 'success' : 'abrupt',
+              errorCode: classifyCacheError(error),
+              count: attempt + 1,
+              durationMs: now() - retryStartedAt,
+            });
+          }
         } finally {
           if (timer !== undefined) clearTimeout(timer);
           cancelRegistration = undefined;
@@ -581,7 +685,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     if (legacyIdbDeletionStarted) return;
     legacyIdbDeletionStarted = true;
     // Cutover cleanup must never delay cache startup or any cache RPC.
-    void deleteLegacyNormalizedCacheIdb(options.scope);
+    fireAndForget(
+      deleteLegacyNormalizedCacheIdb(options.scope),
+      'graphql-cache-host'
+    );
   }
 
   function rejectPending(error: Error, transportUncertain = false): void {
@@ -618,10 +725,13 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         try {
           // A pagehide during graceful retirement must reach the adapter so it
           // can terminate immediately without classifying navigation as loss.
-          void adapter.dispose(
-            preserveDatabase
-              ? { graceful: false, preserveDatabase: true }
-              : { graceful: false }
+          fireAndForget(
+            adapter.dispose(
+              preserveDatabase
+                ? { graceful: false, preserveDatabase: true }
+                : { graceful: false }
+            ),
+            'graphql-cache-host'
           );
         } catch {
           // The original disposal promise still owns final settlement.
@@ -632,19 +742,12 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     if (!adapter) return Promise.resolve();
     adapterDisposeWasGraceful = graceful;
     try {
-      const activeAdapter = adapter;
-      const settleDispose = async () => {
-        try {
-          return await activeAdapter.dispose(
-            preserveDatabase
-              ? { graceful, preserveDatabase: true }
-              : { graceful }
-          );
-        } catch {
-          return await undefined;
-        }
-      };
-      adapterDisposePromise = settleDispose();
+      // Disposal is best effort; the host is closing either way.
+      adapterDisposePromise = ignoreRejection(
+        adapter.dispose(
+          preserveDatabase ? { graceful, preserveDatabase: true } : { graceful }
+        )
+      );
     } catch {
       // The host is already closed and cannot safely retry disposal.
       adapterDisposePromise = Promise.resolve();
@@ -697,17 +800,17 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     { uncertain = false, preserveDatabase = false } = {}
   ): void {
     state = 'failed';
+    readAvailability.resume();
     initialization = undefined;
     initializationError = error;
     rejectPending(error, uncertain);
     clearSubscribers();
     unregisterPagehide();
-    const settleDisposeAdapterHandler0 = finishTelemetry;
-    const settleDisposeAdapter = async () => {
+    const disposeThenFinishTelemetry = async () => {
       await disposeAdapter(false, preserveDatabase);
-      return await settleDisposeAdapterHandler0();
+      finishTelemetry();
     };
-    void settleDisposeAdapter();
+    fireAndForget(disposeThenFinishTelemetry(), 'graphql-cache-host');
   }
 
   /**
@@ -772,19 +875,15 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     const quarantine = storageWasUntouched
       ? Promise.resolve()
       : quarantineCacheScope(options.scope);
-
-    const settleQuarantine = async () => {
+    const reportAfterQuarantine = async () => {
       await quarantine;
-
       try {
         reportFailure(error);
       } catch {
         // Failure reporting cannot reopen or invalidate completed quarantine.
       }
-
-      return;
     };
-    void settleQuarantine();
+    fireAndForget(reportAfterQuarantine(), 'graphql-cache-host');
   }
 
   function stopStorageHealthSampling(): void {
@@ -806,22 +905,22 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     preserveDatabase = false
   ): void {
     if (adapterDisposalStarted) {
-      if (!graceful) void disposeAdapter(false, preserveDatabase);
+      if (!graceful)
+        fireAndForget(
+          disposeAdapter(false, preserveDatabase),
+          'graphql-cache-host'
+        );
       return;
     }
     adapterDisposalStarted = true;
-
-    const settleDisposeAdapterResult = async () => {
+    const disposeThenFinish = async () => {
       await disposeAdapter(graceful, preserveDatabase);
-
       if (state !== 'disposing') return;
       state = 'disposed';
       unregisterPagehide();
       finishTelemetry();
-
-      return;
     };
-    void settleDisposeAdapterResult();
+    fireAndForget(disposeThenFinish(), 'graphql-cache-host');
   }
 
   function finishGracefulDisposeIfDrained(): void {
@@ -861,7 +960,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       disposalMode = 'abrupt';
       const quarantine = hasAdmittedEnqueue();
       clearSubscribers();
-      if (quarantine) void quarantineCacheScope(options.scope);
+      if (quarantine)
+        fireAndForget(
+          quarantineCacheScope(options.scope),
+          'graphql-cache-host'
+        );
       rejectPending(new Error('cache worker host was abruptly disposed'), true);
       startAdapterDisposal(false);
       return;
@@ -890,7 +993,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
     const quarantine = hasAdmittedEnqueue();
     disposalMode = 'abrupt';
-    if (quarantine) void quarantineCacheScope(options.scope);
+    if (quarantine)
+      fireAndForget(quarantineCacheScope(options.scope), 'graphql-cache-host');
     rejectPending(new Error('cache worker host was abruptly disposed'), true);
     startAdapterDisposal(false);
   }
@@ -909,6 +1013,54 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     await retirement;
   }
 
+  function suspendTransport(error: Error): void {
+    state = 'suspended';
+    readAvailability.resume();
+    transportGeneration += 1;
+    transportInterruption = error;
+    initializationAttempt += 1;
+    beginRecoveryGeneration();
+    // All active operations need fresh dependencies after reconnect, including
+    // reads that never reached the old engine before the connection was lost.
+    for (const key of activeOpKeys) lostRegisteredOpKeys.add(key);
+    replacementReadOpKeys.clear();
+    cancelRegistration?.(error);
+    rejectPending(error, true);
+    if (adapter) adapter.onmessage = null;
+    suspension = finishSuspension(initialization, disposeAdapter(false, true));
+    finishTelemetry();
+  }
+
+  function reconnectCoordinator(cause: WorkerRestartedError): void {
+    if (state === 'failed' || state === 'suspended') return;
+    const error = new CacheResponseError(
+      'cache coordinator transport restarted',
+      OWNER_EPOCH_LOST_ERROR_CODE,
+      { cause }
+    );
+    telemetry.record({
+      name: 'graphql_cache.owner',
+      operationCategory: 'lifecycle',
+      outcome: 'abrupt',
+      ownerEvent: 'coordinator-restarted',
+      errorCode: 'transport',
+    });
+    if (state === 'disposing' || state === 'disposed') {
+      stopForSession(error, { uncertain: true, preserveDatabase: true });
+      return;
+    }
+    // Bound restarts during startup just like registration retries. A completed
+    // handshake resets this budget; separate later restarts can recover again.
+    if (++coordinatorRestarts >= COORDINATOR_CONNECT_ATTEMPTS) {
+      stopStorageHealthSampling();
+      stopForSession(error, { uncertain: true, preserveDatabase: true });
+      reportFailure(error);
+      return;
+    }
+    suspendTransport(error);
+    fireAndForget(resumeTransport(), 'graphql-cache-host');
+  }
+
   function onPagehide(event: PageTransitionEvent): void {
     if (
       !event.persisted ||
@@ -920,34 +1072,22 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       return;
     }
     if (state === 'suspended') return;
-    state = 'suspended';
-    navigationGeneration += 1;
-    initializationAttempt += 1;
-    beginRecoveryGeneration();
-    // All active operations need fresh dependencies after reconnect, including
-    // reads that never reached the old engine before the page was frozen.
-    for (const key of activeOpKeys) lostRegisteredOpKeys.add(key);
-    replacementReadOpKeys.clear();
-    cancelRegistration?.(new CacheNavigationError());
-    rejectPending(new CacheNavigationError(), true);
-    if (adapter) adapter.onmessage = null;
-    suspension = finishSuspension(initialization, disposeAdapter(false, true));
-    finishTelemetry();
+    suspendTransport(new CacheNavigationError());
   }
 
-  async function resumeAfterNavigation(): Promise<void> {
+  async function resumeTransport(): Promise<void> {
     try {
-      // Keep the host and all its subscribers alive; only the page transport is
-      // replaced. Initialization waits for the suspended startup to unwind.
+      // Keep the host and subscribers; only the connection and engine epochs
+      // are replaced. Wait for the interrupted startup to unwind first.
       await startInitialization();
     } catch {
-      // Non-navigation failures already invoke the normal product fallback.
+      // Initialization failures already invoke the normal product fallback.
     }
   }
 
   function onPageshow(event: PageTransitionEvent): void {
     if (!event.persisted || state !== 'suspended') return;
-    void resumeAfterNavigation();
+    fireAndForget(resumeTransport(), 'graphql-cache-host');
   }
 
   function navigationError(): CacheNavigationError | undefined {
@@ -987,6 +1127,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       return Promise.reject(new Error('cache worker host was disposed'));
     }
 
+    if (isReadOnlyCacheRequest(msg.kind) && readAvailability.error) {
+      return Promise.reject(readAvailability.error);
+    }
     const id = nextRequestId++;
     return new Promise((resolve, reject) => {
       const entry: Pending = {
@@ -997,19 +1140,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         admitted: false,
         startedAt: now(),
       };
-      const timeoutMs =
-        msg.kind === 'init'
+      const timeoutMs = readAvailability.timeoutsPaused
+        ? undefined
+        : msg.kind === 'init'
           ? initializationTimeoutMs
-          : msg.kind === 'current-revision' ||
-              msg.kind === 'current-storage-generation' ||
-              msg.kind === 'read' ||
-              msg.kind === 'read-records-by-keys' ||
-              msg.kind === 'search' ||
-              msg.kind === 'entity-filter' ||
-              msg.kind === 'calendar-range' ||
-              msg.kind === 'inspect-mutations' ||
-              msg.kind === 'inspect-query' ||
-              msg.kind === 'inspect-query-variants'
+          : isReadOnlyCacheRequest(msg.kind)
             ? requestTimeoutMs
             : undefined;
       if (timeoutMs !== undefined) {
@@ -1073,9 +1208,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   }
 
   function startStorageHealthSampling(): void {
-    void observeStorageHealth();
+    fireAndForget(observeStorageHealth(), 'graphql-cache-host');
     storageHealthTimer ??= setIntervalFn(() => {
-      void observeStorageHealth();
+      fireAndForget(observeStorageHealth(), 'graphql-cache-host');
     }, storageHealthIntervalMs);
   }
 
@@ -1123,13 +1258,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       if (attempt !== initializationAttempt) throw new CacheNavigationError();
       return await sendInit();
     })();
-
-    const settleReady = async () => {
+    const completeHandshake = async () => {
       try {
         await ready;
-      } catch (settleReadyError) {
-        const error: unknown = settleReadyError;
-
+      } catch (error) {
         const initializationFailure = asError(error);
         if (attempt !== initializationAttempt) throw initializationFailure;
         initialization = undefined;
@@ -1140,10 +1272,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         }
         throw initializationFailure;
       }
-
       if (attempt !== initializationAttempt || state !== 'initializing') return;
       state = 'ready';
       initialization = undefined;
+      coordinatorRestarts = 0;
       if (suspended) {
         // A surviving coordinator need not send engine-replaced to a late
         // joiner. Resets while frozen are unknowable, so conservatively
@@ -1168,10 +1300,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         replacementReadOpKeys.clear();
         emitAffectedKeys(opKeys);
       }
-
-      return;
     };
-    const handshake = settleReady();
+    const handshake = completeHandshake();
     initialization = handshake;
     return handshake;
   }
@@ -1201,16 +1331,25 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     msg: DistributiveOmit<CacheRequest, 'id'>,
     opKey?: number
   ): Promise<unknown> {
-    const generation = navigationGeneration;
-    await ensureInitialized();
-    // Do not admit an old-page operation to a newly restored transport.
-    if (generation !== navigationGeneration) throw new CacheNavigationError();
+    const generation = transportGeneration;
+    if (state === 'ready') {
+      await ensureInitialized();
+    } else {
+      await readAvailability.waitUntilReady(
+        ensureInitialized,
+        isReadOnlyCacheRequest(msg.kind)
+      );
+    }
+    // Never admit an interrupted operation to a different transport generation.
+    if (generation !== transportGeneration)
+      throw transportInterruption ?? new CacheNavigationError();
     return await request(msg, opKey);
   }
 
   function trackActiveOperation(opKey: number): void {
     activeOpKeys.add(opKey);
-    if (state === 'suspended') lostRegisteredOpKeys.add(opKey);
+    if (state === 'suspended' || readAvailability.error)
+      lostRegisteredOpKeys.add(opKey);
     else if (recoveryInProgress) replacementReadOpKeys.add(opKey);
   }
 
@@ -1227,9 +1366,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     },
 
     async currentStorageGeneration(): Promise<string> {
-      await ensureInitialized();
       return parseStorageGeneration(
-        await request({ kind: 'current-storage-generation' })
+        await initializedRequest({ kind: 'current-storage-generation' })
       );
     },
 
@@ -1492,10 +1630,14 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       if (state !== 'ready' && state !== 'initializing') return;
       if (state === 'initializing') {
         try {
-          await ensureInitialized();
+          await readAvailability.waitUntilReady(ensureInitialized, false);
         } catch {
           return;
         }
+      } else {
+        // Match ordinary RPC admission so a same-turn teardown cannot pass a
+        // read waiting for the parked coordinator and leave its deps alive.
+        await ensureInitialized();
       }
       // Disposal or owner loss can win while an initialization await yields.
       if (state !== 'ready') return;

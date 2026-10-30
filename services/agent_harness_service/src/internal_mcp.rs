@@ -1,6 +1,8 @@
 //! Macro Internal MCP: session tools served by the harness, separate from workspace MCP.
 
-use std::sync::Arc;
+use agent_code_mode::{domain::SessionCodeMode, inbound::toolset::CodeModeToolContext};
+use agent_code_mode::{domain::reviews::ReviewService, inbound::reviews::ReviewToolContext};
+use std::sync::{Arc, OnceLock};
 
 use agent_session::domain::ports::AgentSessionRepo;
 use agent_session::{
@@ -14,6 +16,7 @@ use axum::{
     middleware::{self, Next},
     response::Response,
 };
+use cognition::domain::Cognition;
 use rmcp::{
     ServerHandler,
     model::{
@@ -39,11 +42,10 @@ fn toolset() -> AsyncToolCollection<SessionToolContext> {
 }
 
 /// Build the internal endpoint with per-request session authentication.
-pub fn router<A: AgentSessionRepo + 'static>(
+pub(super) fn router<A: AgentSessionRepo + 'static>(
     authority: Arc<A>,
-    service: Arc<dyn SessionPullRequests>,
-    tasks: Arc<dyn SessionTasks>,
     host: String,
+    tools: InternalTools,
 ) -> Router {
     let mut config = StreamableHttpServerConfig::default().with_allowed_hosts([
         host,
@@ -55,12 +57,7 @@ pub fn router<A: AgentSessionRepo + 'static>(
     config.stateful_mode = false;
     config.json_response = true;
     let server = StreamableHttpService::new(
-        move || {
-            Ok(InternalTools {
-                service: service.clone(),
-                tasks: tasks.clone(),
-            })
-        },
+        move || Ok(tools.clone()),
         Arc::new(LocalSessionManager::default()),
         config,
     );
@@ -74,9 +71,14 @@ async fn authenticate(session: AuthenticatedSession, mut request: Request, next:
     next.run(request).await
 }
 
-struct InternalTools {
-    service: Arc<dyn SessionPullRequests>,
-    tasks: Arc<dyn SessionTasks>,
+#[derive(Clone)]
+pub(super) struct InternalTools {
+    pub(super) service: Arc<dyn SessionPullRequests>,
+    pub(super) tasks: Arc<dyn SessionTasks>,
+    pub(super) code_mode: Option<Arc<dyn SessionCodeMode>>,
+    pub(super) cognition: Option<Arc<dyn Cognition>>,
+    pub(super) reviews: Arc<OnceLock<ReviewService>>,
+    pub(super) gate: Arc<dyn agent_inmem::domain::tool_gate::NativeToolGate>,
 }
 
 impl ServerHandler for InternalTools {
@@ -88,6 +90,14 @@ impl ServerHandler for InternalTools {
         )
         .with_title("Macro Internal MCP");
         info.instructions = Some(prompt::pull_requests::internal_mcp_instructions());
+        info.instructions.as_mut().expect("instructions are set").push_str(
+            " macro_internal.PresentReview presents editable email/calendar draft stacks or questions through the shared session stream. It completes immediately as Presented to the user and never waits for approval. Later account-holder decisions deliver typed review.decided and review.settled system events. GetReview reads saved drafts and outcomes by reviewId. DecideReview uses the same claim/execute path and requires a real request from the review’s account holder in the current turn; system notifications never authorize decisions. After presenting an import plan, ask \"Should I kick it off?\"; when the review’s account holder says yes, submit it with macro_internal.DecideReview. These tools are available even when code mode is disabled.",
+        );
+        if self.code_mode.is_some() {
+            info.instructions.as_mut().expect("instructions are set").push_str(
+                " macro_internal.ExecuteCode, macro_internal.DescribeCodeTools and macro_internal.ReadCodeDocs are available directly, without tool search. Follow their descriptions for the JavaScript main module, SDK entity indexes and symbol references, and persistent review workflow. Reuse indexes and references already in context.",
+            );
+        }
         info
     }
 
@@ -96,8 +106,49 @@ impl ServerHandler for InternalTools {
         _: Option<PaginatedRequestParams>,
         _: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<ListToolsResult, rmcp::ErrorData> {
-        Ok(ListToolsResult {
-            tools: toolset()
+        let mut definitions: Vec<_> = toolset()
+            .tools
+            .iter()
+            .map(|(name, tool)| {
+                Tool::new(
+                    name.clone(),
+                    tool.description.clone(),
+                    Arc::new(tool.input_schema.clone()),
+                )
+                .with_title(tool.annotations.title)
+                .annotate(
+                    ToolAnnotations::with_title(tool.annotations.title)
+                        .read_only(tool.annotations.kind.read_only_hint())
+                        .destructive(tool.annotations.kind.destructive_hint())
+                        .idempotent(tool.annotations.idempotent)
+                        .open_world(tool.annotations.open_world),
+                )
+            })
+            .collect();
+        if self.code_mode.is_some() {
+            definitions.extend(
+                agent_code_mode::inbound::toolset::toolset()
+                    .tools
+                    .iter()
+                    .map(|(name, tool)| {
+                        Tool::new(
+                            name.clone(),
+                            tool.description.clone(),
+                            Arc::new(tool.input_schema.clone()),
+                        )
+                        .with_title(tool.annotations.title)
+                        .annotate(
+                            ToolAnnotations::with_title(tool.annotations.title)
+                                .read_only(tool.annotations.kind.read_only_hint())
+                                .destructive(tool.annotations.kind.destructive_hint())
+                                .idempotent(tool.annotations.idempotent)
+                                .open_world(tool.annotations.open_world),
+                        )
+                    }),
+            );
+        }
+        definitions.extend(
+            agent_code_mode::inbound::reviews::toolset()
                 .tools
                 .iter()
                 .map(|(name, tool)| {
@@ -114,15 +165,25 @@ impl ServerHandler for InternalTools {
                             .idempotent(tool.annotations.idempotent)
                             .open_world(tool.annotations.open_world),
                     )
-                })
-                .collect(),
+                }),
+        );
+        for tool in &mut definitions {
+            if !matches!(
+                tool.name.as_ref(),
+                "DescribeCodeTools" | "ReadCodeDocs" | "ExecuteCode"
+            ) {
+                ai_toolset::actor::add_actor_schema(Arc::make_mut(&mut tool.input_schema));
+            }
+        }
+        Ok(ListToolsResult {
+            tools: definitions,
             ..Default::default()
         })
     }
 
     async fn call_tool(
         &self,
-        request: CallToolRequestParams,
+        mut request: CallToolRequestParams,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
         let AuthenticatedSession(grant) = context
@@ -132,11 +193,90 @@ impl ServerHandler for InternalTools {
             .ok_or_else(|| {
                 rmcp::ErrorData::invalid_request("Missing session authorization", None)
             })?;
-        // Session tools run as the owner; a session owned by anything else
-        // has nobody to run them as.
+        // Resolve actor choices from a user-owned session and its verified turn.
+        // Sessions owned by anything else have no account authority.
         let owner = grant
             .owner_user()
             .map_err(|error| rmcp::ErrorData::invalid_request(error.to_string(), None))?;
+        let mut acting_user = owner.clone();
+        if !matches!(
+            request.name.as_ref(),
+            "ExecuteCode" | "DescribeCodeTools" | "ReadCodeDocs"
+        ) {
+            let arguments = serde_json::Value::Object(request.arguments.take().unwrap_or_default());
+            let (_, cleaned) = match ai_toolset::actor::ToolActor::take(&arguments) {
+                Ok(selection) => selection,
+                Err(error) => {
+                    return Ok(CallToolResult::error(vec![Content::text(
+                        error.to_string(),
+                    )]));
+                }
+            };
+            use agent_inmem::domain::tool_gate::NativeToolVerdict;
+            match self
+                .gate
+                .check(grant.id, request.name.as_ref(), &arguments)
+                .await
+            {
+                NativeToolVerdict::RunAs(user) => acting_user = user,
+                NativeToolVerdict::Refuse(reason) => {
+                    return Ok(CallToolResult::error(vec![Content::text(reason)]));
+                }
+                NativeToolVerdict::Run => {}
+            }
+            request.arguments = cleaned.as_object().cloned();
+        }
+        let review_tools = agent_code_mode::inbound::reviews::toolset();
+        if review_tools.tools.contains_key(request.name.as_ref()) {
+            let service = self.reviews.get().ok_or_else(|| {
+                rmcp::ErrorData::internal_error("Review service is unavailable", None)
+            })?;
+            let result = review_tools
+                .try_tool_call(
+                    ReviewToolContext {
+                        service: service.clone(),
+                        session: grant.clone(),
+                    },
+                    RequestContext::new(acting_user.clone()).with_genai_telemetry(false),
+                    &request.name,
+                    &serde_json::Value::Object(request.arguments.unwrap_or_default()),
+                )
+                .await
+                .map_err(|error| rmcp::ErrorData::invalid_params(error.to_string(), None))?;
+            return Ok(match result {
+                Ok(value) => CallToolResult::structured(value),
+                Err(error) => CallToolResult::error(vec![Content::text(error.description)]),
+            });
+        }
+        if let Some(code_mode) = &self.code_mode {
+            let tools = agent_code_mode::inbound::toolset::toolset();
+            if tools.tools.contains_key(request.name.as_ref()) {
+                // The session actor meters the outer MCP call. Only SDK calls
+                // bypass ACP and retain the toolset's own telemetry.
+                let mut request_context =
+                    RequestContext::new(acting_user.clone()).with_genai_telemetry(false);
+                request_context.cancel = context.ct.clone();
+                let result = tools
+                    .try_tool_call(
+                        CodeModeToolContext {
+                            service: code_mode.clone(),
+                            session: grant.clone(),
+                            cognition: self.cognition.clone(),
+                        },
+                        request_context,
+                        &request.name,
+                        &serde_json::Value::Object(request.arguments.unwrap_or_default()),
+                    )
+                    .await
+                    .map_err(|error| rmcp::ErrorData::invalid_params(error.to_string(), None))?;
+                return Ok(match result {
+                    // A failed program is a completed execution with a receipt.
+                    // MCP errors discard structured content in some runtimes.
+                    Ok(value) => CallToolResult::structured(value),
+                    Err(error) => CallToolResult::error(vec![Content::text(error.description)]),
+                });
+            }
+        }
         let result = toolset()
             .try_tool_call(
                 SessionToolContext {
@@ -144,7 +284,7 @@ impl ServerHandler for InternalTools {
                     tasks: self.tasks.clone(),
                     session: grant.id,
                 },
-                RequestContext::new(owner.clone()),
+                RequestContext::new(acting_user.clone()),
                 &request.name,
                 &serde_json::Value::Object(request.arguments.unwrap_or_default()),
             )

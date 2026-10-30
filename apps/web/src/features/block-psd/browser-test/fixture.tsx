@@ -12,6 +12,7 @@
 import '@fontsource-variable/inter';
 import '../../../index.css';
 import { PsdEngine } from '@core/psd-engine/client';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { PsdEditorProvider } from '../context/psd-editor-context';
@@ -117,7 +118,7 @@ function Fixture() {
       setError(String(e));
     }
   };
-  void start();
+  fireAndForget(start(), 'psd-fixture');
 
   return (
     <div class="flex h-screen flex-col bg-page text-ink">

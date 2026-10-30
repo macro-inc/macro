@@ -1,4 +1,5 @@
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { until } from '@solid-primitives/promise';
 import { createEffect, createRoot, createSignal } from 'solid-js';
 
@@ -28,25 +29,16 @@ export function whenSplitManagerReady(
       );
     }
 
-    const settleWaitHandler0 = reject;
-    const settleWaitHandler1 = resolve;
-    const settleWaitFinally = async () => {
-      return await abortSignal.removeEventListener('abort', onAbort);
-    };
-    const settleWait = async () => {
+    const forward = async () => {
       try {
-        let settleWaitValue;
-        try {
-          settleWaitValue = await wait;
-        } catch (settleWaitError) {
-          return await settleWaitHandler0(settleWaitError);
-        }
-        return await settleWaitHandler1(settleWaitValue);
+        resolve(await wait);
+      } catch (error) {
+        reject(error);
       } finally {
-        await settleWaitFinally();
+        abortSignal.removeEventListener('abort', onAbort);
       }
     };
-    settleWait();
+    fireAndForget(forward(), 'split-manager-ready');
 
     if (abortSignal.aborted) {
       onAbort();

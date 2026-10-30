@@ -4,6 +4,7 @@
  */
 
 import type { SlideOutline } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import type { PresentationEngine } from '../context/pptx-editor-context';
 import type { PresentationSession } from './create-presentation-session';
@@ -54,23 +55,17 @@ export function createThumbnails(options: {
     });
     const wanted = () =>
       options.session.outline()?.slides.some((s) => s.id === slide.id) ?? false;
-
-    const settleBackground = async () => {
+    const render = async () => {
       try {
-        const settleBackgroundValue = await options.queue.background(
-          async () => {
-            // The slide may have moved since it was queued.
-            const index =
-              options.session
-                .outline()
-                ?.slides.findIndex((s) => s.id === slide.id) ?? -1;
-            if (index < 0) return undefined;
-            return options.engine.render(index, width);
-          },
-          wanted
-        );
-        const bitmap = settleBackgroundValue;
-
+        const bitmap = await options.queue.background(async () => {
+          // The slide may have moved since it was queued.
+          const index =
+            options.session
+              .outline()
+              ?.slides.findIndex((s) => s.id === slide.id) ?? -1;
+          if (index < 0) return undefined;
+          return options.engine.render(index, width);
+        }, wanted);
         const current = entries().get(slide.id);
         update(slide.id, {
           version,
@@ -85,8 +80,6 @@ export function createThumbnails(options: {
             ?.slides.find((s) => s.id === slide.id);
           if (latest) request(latest);
         }
-
-        return;
       } catch {
         const current = entries().get(slide.id);
         update(slide.id, {
@@ -95,11 +88,9 @@ export function createThumbnails(options: {
           width: current?.width ?? 0,
           pending: false,
         });
-
-        return;
       }
     };
-    void settleBackground();
+    fireAndForget(render(), 'pptx-editor');
   }
 
   onCleanup(() => {

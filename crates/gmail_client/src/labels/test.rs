@@ -107,3 +107,52 @@ async fn modifies_message_labels_with_the_wire_request() {
     .await
     .unwrap();
 }
+
+#[tokio::test]
+async fn batch_modifies_every_message_in_one_request() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/users/me/messages/batchModify"))
+        .and(body_json(json!({
+            "ids": ["message-1", "message-2"],
+            "addLabelIds": [],
+            "removeLabelIds": ["INBOX"]
+        })))
+        .respond_with(ResponseTemplate::new(204))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    batch_modify_message_labels(
+        &client(&server),
+        "token",
+        &["message-1".to_string(), "message-2".to_string()],
+        &[],
+        &["INBOX".to_string()],
+    )
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn batch_modify_surfaces_rate_limits() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/users/me/messages/batchModify"))
+        .respond_with(
+            ResponseTemplate::new(429).set_body_string("Too many concurrent requests for user"),
+        )
+        .mount(&server)
+        .await;
+
+    let error = batch_modify_message_labels(
+        &client(&server),
+        "token",
+        &["message-1".to_string()],
+        &["TRASH".to_string()],
+        &[],
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.status(), Some(StatusCode::TOO_MANY_REQUESTS));
+}

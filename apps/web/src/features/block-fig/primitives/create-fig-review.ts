@@ -6,6 +6,7 @@
 
 import type { FigEngine } from '@core/fig-engine/client';
 import type { PrototypeInfo } from '@core/fig-engine/prototype-types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffect, createSignal, on, onMount } from 'solid-js';
 import type { PanelTab } from '../components/design-panel';
 import type { FigViewerContext } from '../context/fig-viewer-context';
@@ -68,14 +69,12 @@ export function createFigReview(options: {
   // external system), again after every edit.
   createEffect(
     on([panelTab, viewer.page, viewer.editVersion], ([tab]) => {
-      if (tab === 'prototype') void loadPrototype();
+      if (tab === 'prototype') fireAndForget(loadPrototype(), 'fig-review');
     })
   );
 
-  /** The screen the selection is on (its top-level layer). */
-  const selectedScreen = async () => {
-    const id = viewer.selected()[0]?.id;
-    if (!id) return undefined;
+  /** The screen a layer is on (its top-level layer). */
+  const screenOf = async (id: string) => {
     try {
       const chain = await engine.ancestry(viewer.page(), id);
       return chain[0]?.id;
@@ -84,16 +83,24 @@ export function createFigReview(options: {
     }
   };
 
+  /** The screen the selection is on. */
+  const selectedScreen = async () => {
+    const id = viewer.selected()[0]?.id;
+    return id ? await screenOf(id) : undefined;
+  };
+
+  /** A page's prototype, or undefined when the engine cannot read it. */
+  const prototypeOf = async (page: number) => {
+    try {
+      return await engine.prototype(page);
+    } catch {
+      return undefined;
+    }
+  };
+
   /** Presents from `frame`, else from the selection's screen or the flow. */
   const present = async (frame?: string) => {
-    const settlePrototype = async () => {
-      try {
-        return await engine.prototype(viewer.page());
-      } catch {
-        return await undefined;
-      }
-    };
-    const info = await settlePrototype();
+    const info = await prototypeOf(viewer.page());
     if (!info) return;
     const start = frame ?? presentStart(info, await selectedScreen());
     if (!start) {
@@ -107,14 +114,7 @@ export function createFigReview(options: {
   /** Opens the page holding `frame` and presents it (a frame link). */
   const presentFrame = async (frame: string) => {
     for (let p = 0; p < viewer.pages.length; p++) {
-      const settlePrototypeResult = async () => {
-        try {
-          return await engine.prototype(p);
-        } catch {
-          return await undefined;
-        }
-      };
-      const info = await settlePrototypeResult();
+      const info = await prototypeOf(p);
       if (!info?.frames.some((f) => f.id === frame)) continue;
       if (p !== viewer.page()) await viewer.openPage(p);
       setPresenting({ info, page: p, start: frame });
@@ -124,7 +124,8 @@ export function createFigReview(options: {
   };
 
   onMount(() => {
-    if (context.presentAt) void presentFrame(context.presentAt);
+    if (context.presentAt)
+      fireAndForget(presentFrame(context.presentAt), 'fig-review');
   });
 
   const copyFrameLink = async (frame: string) => {
@@ -160,7 +161,7 @@ export function createFigReview(options: {
     if (!action || (action === 'comment-tool' && !comments)) return false;
     e.preventDefault();
     e.stopPropagation();
-    if (action === 'present') void present();
+    if (action === 'present') fireAndForget(present(), 'fig-review');
     else toggleComments();
     return true;
   };
@@ -183,15 +184,7 @@ export function createFigReview(options: {
     ];
     // Figma starts a flow at the screen a page's first connection leaves.
     if (edited && flowsOf(info).length === 0) {
-      const settleAncestry = async () => {
-        try {
-          return await engine.ancestry(viewer.page(), id);
-        } catch {
-          return await [];
-        }
-      };
-      const chain = await settleAncestry();
-      const screen = chain[0]?.id;
+      const screen = await screenOf(id);
       if (screen && info.frames.some((f) => f.id === screen))
         ops.push({ op: 'setFlowStart', id: screen, name: 'Flow 1' });
     }
@@ -199,7 +192,10 @@ export function createFigReview(options: {
   };
 
   const setFlowStart = (frame: string, name: string | null) =>
-    void editor.apply([{ op: 'setFlowStart', id: frame, name }]);
+    fireAndForget(
+      editor.apply([{ op: 'setFlowStart', id: frame, name }]),
+      'fig-review'
+    );
 
   return {
     comments,

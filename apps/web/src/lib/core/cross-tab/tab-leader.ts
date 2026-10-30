@@ -1,3 +1,5 @@
+import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import { Tab } from 'tab-election';
 
@@ -17,13 +19,20 @@ export const createTabLeaderSignal = (namespace: string): Accessor<boolean> => {
   const [isLeader, setIsLeader] = createSignal<boolean>(false);
   const tab = new Tab(namespace);
 
-  tab.waitForLeadership(() => {
-    setIsLeader(true);
+  const lead = async () => {
+    try {
+      await tab.waitForLeadership(() => {
+        setIsLeader(true);
 
-    return () => {
-      setIsLeader(false);
-    };
-  });
+        return () => {
+          setIsLeader(false);
+        };
+      });
+    } catch (error) {
+      Telemetry.error(error, { surface: 'tab-leader', namespace });
+    }
+  };
+  fireAndForget(lead(), 'tab-leader');
 
   onCleanup(() => {
     tab.close();

@@ -25,6 +25,8 @@ fn persisted_row_metadata_survives_property_enrichment() {
         pull_request_url: Some("https://github.com/macro/macro/pull/6712".to_owned()),
         turn_state: Some("running".to_owned()),
         thread_id: None,
+        source: "user".to_owned(),
+        visibility: "listed".to_owned(),
         is_archived: false,
         status: "event".to_owned(),
         status_event_name: Some("acp_ready".to_owned()),
@@ -402,13 +404,13 @@ async fn by_ids_respects_access(pool: PgPool) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// An inline `@macro` session (`list_hidden`) is missing from broad lists for
+/// An inline `@macro` session (hidden) is missing from broad lists for
 /// everyone, but a named id still finds it and hydrating by id still works.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn hidden_sessions_stay_out_of_broad_lists(pool: PgPool) -> anyhow::Result<()> {
     let fixture = seed(&pool).await?;
     sqlx::query!(
-        "UPDATE agent_session SET list_hidden = TRUE WHERE id = $1",
+        "UPDATE agent_session SET visibility = 'hidden' WHERE id = $1",
         fixture.shared,
     )
     .execute(&pool)
@@ -455,5 +457,136 @@ async fn hidden_sessions_stay_out_of_broad_lists(pool: PgPool) -> anyhow::Result
     .await?;
     assert_eq!(ids(&hydrated), vec![fixture.shared]);
 
+    Ok(())
+}
+
+/// Hidden unthreaded DM contexts use the same broad-list visibility boundary
+/// as inline mentions, without losing owner access by ID.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn hidden_dm_contexts_are_omitted_from_home_and_agents_but_open_by_id(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let fixture = seed(&pool).await?;
+    let dm = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO comms_channels (id, channel_type, owner_id) VALUES ($1, 'direct_message', $2)",
+        dm,
+        OWNER
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!("INSERT INTO comms_channel_participants (channel_id, user_id, role) VALUES ($1, $2, 'owner')", dm, OWNER)
+        .execute(&pool).await?;
+    sqlx::query!("INSERT INTO comms_channel_agents (channel_id, bot_id, kind, user_id) VALUES ($1, $2, 'direct', $3)", dm, BOT_ID, OWNER)
+        .execute(&pool).await?;
+    sqlx::query!("INSERT INTO agent_conversation_sessions (session_id, channel_id, bot_id) VALUES ($1, $2, $3)", fixture.shared, dm, BOT_ID)
+        .execute(&pool).await?;
+    // The session domain's enabled policy persists these two flags.
+    sqlx::query!(
+        "UPDATE agent_session SET visibility = 'hidden', for_warming = FALSE WHERE id = $1",
+        fixture.shared
+    )
+    .execute(&pool)
+    .await?;
+    for literal in [
+        AgentSessionLiteral::Include,
+        AgentSessionLiteral::Owner(Owner::from_principal_str(OWNER)?),
+    ] {
+        let listed = cursor_soup(&pool, request(OWNER, Some(Expr::val(literal)))).await?;
+        assert_eq!(ids(&listed), vec![fixture.private]);
+    }
+    let named = cursor_soup(
+        &pool,
+        request(
+            OWNER,
+            Some(Expr::val(AgentSessionLiteral::Id(fixture.shared))),
+        ),
+    )
+    .await?;
+    assert_eq!(ids(&named), vec![fixture.shared]);
+    let entities = [EntityType::AgentSession.with_entity_string(fixture.shared.to_string())];
+    let opened = by_ids(
+        &pool,
+        AdvancedSortParams {
+            entities: &entities,
+            user_id: MacroUserIdStr::parse_from_str(OWNER)?,
+        },
+    )
+    .await?;
+    assert_eq!(ids(&opened), vec![fixture.shared]);
+    let channel = sqlx::query_scalar!("SELECT id FROM comms_channels WHERE id = $1", dm)
+        .fetch_one(&pool)
+        .await?;
+    assert_eq!(channel, dm);
+    Ok(())
+}
+
+/// A routine's unlisted runs stay reachable for whoever asks for them, say a
+/// routine started them, and are what a list asks for by source or
+/// visibility: alone, or left out.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn unlisted_runs_leave_lists_that_exclude_them(pool: PgPool) -> anyhow::Result<()> {
+    let fixture = seed(&pool).await?;
+    sqlx::query!(
+        "UPDATE agent_session SET source = 'routine', visibility = 'unlisted' WHERE id = $1",
+        fixture.private,
+    )
+    .execute(&pool)
+    .await?;
+    let routine = || Expr::val(AgentSessionLiteral::Source(AgentSessionSource::Routine));
+    let unlisted = || {
+        Expr::val(AgentSessionLiteral::Visibility(
+            AgentSessionVisibility::Unlisted,
+        ))
+    };
+
+    let all = cursor_soup(
+        &pool,
+        request(OWNER, Some(Expr::val(AgentSessionLiteral::Include))),
+    )
+    .await?;
+    assert_eq!(ids(&all), vec![fixture.private, fixture.shared]);
+    let SoupItem::AgentSession(run) = &all[0] else {
+        panic!("expected an agent session");
+    };
+    assert_eq!(run.source, AgentSessionSource::Routine);
+    assert_eq!(run.visibility, AgentSessionVisibility::Unlisted);
+
+    let only_runs = cursor_soup(
+        &pool,
+        request(
+            OWNER,
+            Some(Expr::and(
+                Expr::val(AgentSessionLiteral::Include),
+                routine(),
+            )),
+        ),
+    )
+    .await?;
+    assert_eq!(ids(&only_runs), vec![fixture.private]);
+    let without_runs = cursor_soup(
+        &pool,
+        request(
+            OWNER,
+            Some(Expr::and(
+                Expr::val(AgentSessionLiteral::Include),
+                Expr::is_not(routine()),
+            )),
+        ),
+    )
+    .await?;
+    assert_eq!(ids(&without_runs), vec![fixture.shared]);
+    let listed = cursor_soup(
+        &pool,
+        request(
+            OWNER,
+            Some(Expr::and(
+                Expr::val(AgentSessionLiteral::Include),
+                Expr::is_not(unlisted()),
+            )),
+        ),
+    )
+    .await?;
+    assert_eq!(ids(&listed), vec![fixture.shared]);
     Ok(())
 }

@@ -64,6 +64,7 @@ export function BillingPreview(props: {
   const [summaryStatus, setSummaryStatus] =
     createSignal<SummaryStatus>('loaded');
   const [hasPaid, setHasPaid] = createSignal(false);
+  const [trialEligible, setTrialEligible] = createSignal(true);
   const [permission, setPermission] = createSignal(true);
   const [aiUsage, setAiUsage] = createSignal(false);
   const [pending, setPending] = createSignal(false);
@@ -85,12 +86,14 @@ export function BillingPreview(props: {
           : undefined,
       aiUsageEnabled: aiUsage(),
       pending: pending(),
+      trialEligible: trialEligible(),
     });
   const reset = () => {
     setAccount('solo');
     setPlan('free');
     setSummaryStatus('loaded');
     setHasPaid(false);
+    setTrialEligible(true);
     setPermission(true);
     setAiUsage(false);
     setPending(false);
@@ -106,17 +109,17 @@ export function BillingPreview(props: {
         <div class="flex flex-wrap gap-2">
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             onClick={() => setPaywallOpen(true)}
           >
             Preview paywall
           </Button>
-          <Button size="sm" variant="outline" onClick={reset}>
+          <Button size="sm" variant="secondary" onClick={reset}>
             Reset preview
           </Button>
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             onClick={() => {
               reset();
               setPaywallOpen(false);
@@ -176,6 +179,11 @@ export function BillingPreview(props: {
           />
           <div class="flex flex-wrap gap-x-6">
             <PreviewCheckbox
+              label="Eligible for Pro trial"
+              checked={trialEligible()}
+              onChange={setTrialEligible}
+            />
+            <PreviewCheckbox
               label="Billing permission"
               checked={permission()}
               onChange={setPermission}
@@ -209,7 +217,7 @@ export function BillingPreview(props: {
 
   const selectPlan = (tier: 'premium' | 'max') =>
     setAction(
-      `Preview only · ${state().tier === 'free' ? 'Checkout' : 'Change plan'}: ${PLAN_BY_TIER[tier].name}${state().tier === 'free' && tier === 'premium' ? ' · 30-day trial' : ''} · no billing changes made`
+      `Preview only · ${state().tier === 'free' ? 'Checkout' : 'Change plan'}: ${PLAN_BY_TIER[tier].name}${state().tier === 'free' && tier === 'premium' && trialEligible() ? ' · 30-day trial' : ''} · no billing changes made`
     );
   const manage = () =>
     setAction('Preview only · Manage subscription · no billing changes made');
@@ -219,7 +227,7 @@ export function BillingPreview(props: {
       when={active()}
       fallback={props.renderLive(
         <div class="flex flex-wrap items-center gap-3">
-          <Button size="sm" variant="outline" onClick={() => setActive(true)}>
+          <Button size="sm" variant="secondary" onClick={() => setActive(true)}>
             Preview billing & paywall
           </Button>
           <span class="text-xs text-ink-muted">Local development</span>

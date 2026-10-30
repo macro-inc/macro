@@ -358,10 +358,17 @@ describe('single sign-on', () => {
   });
 });
 
+let googleSignup: Promise<void> | undefined;
+
 function Journey(props: SignupJourneySlots) {
   return (
     <section>
-      <button type="button" onClick={() => void props.onGoogle()}>
+      <button
+        type="button"
+        onClick={() => {
+          googleSignup = props.onGoogle();
+        }}
+      >
         Connect work email
       </button>
       <button type="button" onClick={props.onSignIn}>
@@ -384,6 +391,7 @@ describe('desktop sign-up', () => {
     click('Connect work email');
     await screen.findByText('new@acme.com new');
     expect(fake.calls()).toContain('sso:google:signup');
+    await googleSignup;
   });
 
   it('shows the email form inside the slides for an emailed sign-up link', () => {

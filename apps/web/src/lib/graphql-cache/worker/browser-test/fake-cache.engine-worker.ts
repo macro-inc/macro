@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 
+import { startDetached } from '@core/util/startDetached';
 import type {
   CacheRequest,
   CacheResponse,
@@ -153,6 +154,14 @@ const execute = async (
   }
 };
 
+async function runAfter(
+  previous: Promise<void>,
+  work: () => Promise<void>
+): Promise<void> {
+  await previous;
+  await work();
+}
+
 async function activate(
   activation: PageToEngineEnvelope,
   port: MessagePort
@@ -244,67 +253,6 @@ async function activate(
             if (!parsed.ok) return;
             const message: CoordinatorToEngineEnvelope = parsed.value;
             if (message.ownerEpoch !== activation.ownerEpoch) return;
-            const settleQueueFinally = async () => {
-              return await requestShutdown?.();
-            };
-            const settleQueue = async () => {
-              try {
-                return await queue;
-              } finally {
-                await settleQueueFinally();
-              }
-            };
-
-            const settleQueueResult = async (
-              message: Extract<
-                CoordinatorToEngineEnvelope,
-                { kind: 'engine-request' }
-              >
-            ) => {
-              await queue;
-
-              let response: CacheResponse;
-              try {
-                response = await execute(
-                  activeDatabase,
-                  message.request,
-                  engineState
-                );
-              } catch (error) {
-                response = {
-                  id: message.request.id,
-                  ok: false,
-                  error: error instanceof Error ? error.message : String(error),
-                };
-              }
-              sendEngine(
-                withVersion<EngineToCoordinatorEnvelope>({
-                  kind: 'engine-response',
-                  ownerEpoch: activation.ownerEpoch,
-                  routeId: message.routeId,
-                  response,
-                })
-              );
-              if (
-                response.ok &&
-                (message.request.kind === 'write' ||
-                  message.request.kind === 'clear')
-              ) {
-                sendEngine(
-                  withVersion<EngineToCoordinatorEnvelope>({
-                    kind: 'engine-push',
-                    ownerEpoch: activation.ownerEpoch,
-                    push: {
-                      kind: 'cache-changed',
-                      revision:
-                        engineState.revision.toString() as typeof INITIAL_CACHE_REVISION,
-                    },
-                  })
-                );
-              }
-
-              return;
-            };
             switch (message.kind) {
               case 'heartbeat':
                 if (!ignoreHeartbeats) {
@@ -320,7 +268,11 @@ async function activate(
               case 'drain-engine':
                 if (draining) return;
                 draining = true;
-                void settleQueue();
+                // activate awaits the same queue and reports its failure.
+                startDetached(
+                  runAfter(queue, async () => requestShutdown?.()),
+                  () => requestShutdown?.()
+                );
                 break;
               case 'engine-request':
                 if (draining) return;
@@ -335,7 +287,48 @@ async function activate(
                     message.request.kind === 'read' &&
                     message.request.query.includes('Slow'),
                 });
-                queue = settleQueueResult(message);
+                queue = runAfter(queue, async () => {
+                  let response: CacheResponse;
+                  try {
+                    response = await execute(
+                      activeDatabase,
+                      message.request,
+                      engineState
+                    );
+                  } catch (error) {
+                    response = {
+                      id: message.request.id,
+                      ok: false,
+                      error:
+                        error instanceof Error ? error.message : String(error),
+                    };
+                  }
+                  sendEngine(
+                    withVersion<EngineToCoordinatorEnvelope>({
+                      kind: 'engine-response',
+                      ownerEpoch: activation.ownerEpoch,
+                      routeId: message.routeId,
+                      response,
+                    })
+                  );
+                  if (
+                    response.ok &&
+                    (message.request.kind === 'write' ||
+                      message.request.kind === 'clear')
+                  ) {
+                    sendEngine(
+                      withVersion<EngineToCoordinatorEnvelope>({
+                        kind: 'engine-push',
+                        ownerEpoch: activation.ownerEpoch,
+                        push: {
+                          kind: 'cache-changed',
+                          revision:
+                            engineState.revision.toString() as typeof INITIAL_CACHE_REVISION,
+                        },
+                      })
+                    );
+                  }
+                });
                 break;
             }
           };
@@ -411,6 +404,13 @@ async function activate(
   self.close();
 }
 
+// An uncaught error reaches the page's worker `error` listener; a rejection does not.
+const failWorker = (error: unknown): void => {
+  setTimeout(() => {
+    throw error;
+  });
+};
+
 self.onmessage = (event: MessageEvent<unknown>) => {
   if (
     typeof event.data === 'object' &&
@@ -444,5 +444,5 @@ self.onmessage = (event: MessageEvent<unknown>) => {
     port?.close();
     return;
   }
-  void activate(parsed.value, port);
+  startDetached(activate(parsed.value, port), failWorker);
 };

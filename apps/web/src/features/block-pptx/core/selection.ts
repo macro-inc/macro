@@ -1,10 +1,10 @@
-import { match as matchBranch } from 'ts-pattern';
 /**
  * Multi-shape selection geometry: bounding boxes, marquee picking, group
  * scaling, and the align/distribute commands. Pure; units are points.
  */
 
 import type { EditOp, ShapeOutline } from '@core/pptx-engine/types';
+import { match as matchBranch } from 'ts-pattern';
 import { type Box, boxOf, corners, type Point } from './geometry';
 
 /** An axis-aligned rectangle. */

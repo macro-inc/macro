@@ -12,6 +12,7 @@
 import '@fontsource-variable/inter';
 import '../../../index.css';
 import { FigEngine } from '@core/fig-engine/client';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createSignal, For, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { FigOpening } from '../components/fig-opening';
@@ -152,49 +153,41 @@ function Fixture() {
       reads: (id) => memory()?.reads(id) ?? 0,
     };
     const library = params.get('library') ?? 'design-system.fig';
-
-    const settleFetch = async () => {
-      const settleFetchValue = await fetch(`${__FIG_CORPUS_URL__}${library}`);
-      const r = settleFetchValue;
-      return await r.arrayBuffer();
+    const fetchLibrary = async () => {
+      const response = await fetch(`${__FIG_CORPUS_URL__}${library}`);
+      return await response.arrayBuffer();
     };
-
-    const settleAll = async () => {
+    const loadLibraries = async () => {
       try {
-        const settleAllValue = await Promise.all([
-          settleFetch(),
+        const [lib, app] = await Promise.all([
+          fetchLibrary(),
           FigEngine.blank('App'),
         ]);
-        const [lib, app] = settleAllValue;
-
         setMemory(
           createMemoryLibraries([
             { id: 'design-system', name: 'Design system', bytes: lib },
             { id: 'app', name: 'App', bytes: app.slice().buffer },
           ])
         );
-        return await openDesign(params.get('open') ?? 'design-system');
-      } catch (settleAllError) {
-        const e: unknown = settleAllError;
-        return await setError(String(e));
+        await openDesign(params.get('open') ?? 'design-system');
+      } catch (e) {
+        setError(String(e));
       }
     };
-    void settleAll();
+    fireAndForget(loadLibraries(), 'fig-viewer');
   }
 
   const file = params.get('file');
   if (params.has('new')) {
-    const settleBlank = async () => {
+    const openBlank = async () => {
       try {
-        const settleBlankValue = await FigEngine.blank('Untitled');
-        const bytes = settleBlankValue;
-        return await open(bytes.slice().buffer, 'Untitled');
-      } catch (settleBlankError) {
-        const e: unknown = settleBlankError;
-        return await setError(String(e));
+        const bytes = await FigEngine.blank('Untitled');
+        await open(bytes.slice().buffer, 'Untitled');
+      } catch (e) {
+        setError(String(e));
       }
     };
-    void settleBlank();
+    fireAndForget(openBlank(), 'fig-viewer');
   } else if (file) {
     const openCorpusFile = async () => {
       try {
@@ -205,7 +198,7 @@ function Fixture() {
         setError(String(error));
       }
     };
-    void openCorpusFile();
+    fireAndForget(openCorpusFile(), 'fig-viewer');
   }
 
   return (
@@ -221,7 +214,7 @@ function Fixture() {
                   class="rounded border border-edge-muted px-2 text-ink-muted hover:text-ink"
                   data-testid={`fig-fixture-open-${d.id}`}
                   disabled={current() === d.id}
-                  onClick={() => void openDesign(d.id)}
+                  onClick={() => fireAndForget(openDesign(d.id), 'fig-viewer')}
                 >
                   {d.name}
                 </button>
@@ -279,14 +272,8 @@ function Fixture() {
                   fonts,
                   libraries: design && store ? store.source(design) : undefined,
                   save: async (bytes) => {
-                    const settleOpen = async () => {
-                      const settleOpenValue = await FigEngine.open(
-                        bytes.slice().buffer
-                      );
-                      const e = settleOpenValue;
-                      return await e.close();
-                    };
-                    if (params.has('reload')) await settleOpen();
+                    if (params.has('reload'))
+                      (await FigEngine.open(bytes.slice().buffer)).close();
                     if (design) store?.store(design, bytes);
                     setSaves((x) => [...x, bytes]);
                   },

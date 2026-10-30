@@ -1,5 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
-import { cn, InlineCheckbox } from '@ui';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { InlineCheckbox } from '@ui';
 import { Show } from 'solid-js';
 import type { CrmContact as CrmContactResponse } from '../core/contact';
 import { useSetContactHiddenMutation } from './use-crm';
@@ -45,10 +46,10 @@ export function ContactSharingSection(props: { contact?: CrmContactResponse }) {
                 role="checkbox"
                 aria-checked={isShared()}
                 disabled={hiddenMutation.isPending}
-                onClick={() => void handleToggle(contact(), !isShared())}
-                class={cn(
-                  'inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none w-fit border border-ink-muted/[0.08] bg-ink-muted/[0.025] text-ink hover:bg-ink-muted/[0.06]'
-                )}
+                onClick={() =>
+                  fireAndForget(handleToggle(contact(), !isShared()), 'crm')
+                }
+                class="inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none w-fit border border-ink-muted/[0.08] bg-ink-muted/[0.025] text-ink hover:bg-ink-muted/[0.06]"
               >
                 <InlineCheckbox checked={isShared()} />
                 <span class="whitespace-nowrap">Visible in CRM</span>

@@ -14,14 +14,14 @@ val keystorePropertiesFile = rootProject.file("keystore.properties")
 // Defer signing failures until release work is requested so debug builds remain usable.
 val releaseSigningProperties = runCatching {
     if (!keystorePropertiesFile.isFile) {
-        throw GradleException("Release builds require keystore.properties; see docs/ANDROID_DEVELOPMENT.md")
+        throw GradleException("Release builds require keystore.properties; see docs/development/android.md")
     }
     val properties = Properties().apply {
         keystorePropertiesFile.inputStream().use { load(it) }
     }
     for (name in listOf("keyAlias", "keyPassword", "storePassword", "storeFile")) {
         if (properties.getProperty(name).isNullOrBlank()) {
-            throw GradleException("Missing $name in keystore.properties; see docs/ANDROID_DEVELOPMENT.md")
+            throw GradleException("Missing $name in keystore.properties; see docs/development/android.md")
         }
     }
     if (!rootProject.file(properties.getProperty("storeFile")).isFile) {
@@ -35,7 +35,7 @@ if (firebaseConfigured) {
 }
 gradle.taskGraph.whenReady {
     if (!firebaseConfigured && allTasks.any { it.name.contains("Release") }) {
-        throw GradleException("Release builds require app/google-services.json for com.macro.workspace.mobile; see docs/ANDROID_DEVELOPMENT.md")
+        throw GradleException("Release builds require app/google-services.json for com.macro.workspace.mobile; see docs/development/android.md")
     }
     if (allTasks.any { it.name.contains("Release") }) {
         releaseSigningProperties.getOrThrow()
@@ -50,6 +50,11 @@ val tauriProperties = Properties().apply {
 }
 
 android {
+    compileOptions {
+        isCoreLibraryDesugaringEnabled = true
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
     compileSdk = 36
     namespace = "com.macro.workspace.mobile"
     defaultConfig {
@@ -106,6 +111,7 @@ rust {
 }
 
 dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation("androidx.webkit:webkit:1.14.0")
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.activity:activity-ktx:1.10.1")

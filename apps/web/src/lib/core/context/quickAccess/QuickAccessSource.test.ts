@@ -1,3 +1,4 @@
+import type { LocalDraft } from '@app/features/email-compose/core/local-draft';
 import type {
   CrmCompanyEntity,
   CrmContactEntity,
@@ -16,6 +17,7 @@ import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
 import type { HydrationSearchChanges } from '@graphql-cache/protocol';
 import type { CachedGraphqlChannel } from '@queries/channel/graphql';
 import type { HistoryItem } from '@queries/history/types';
+import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
 import { render } from '@solidjs/testing-library';
 import {
@@ -26,9 +28,11 @@ import {
 } from '@tanstack/solid-query';
 import {
   createComponent,
+  createMemo,
   createRenderEffect,
   createRoot,
   createSignal,
+  untrack,
 } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useQuickAccess } from './context';
@@ -42,10 +46,18 @@ import {
   type QuickAccessListOptions,
 } from './types';
 
+const localDrafts = vi.hoisted(() => ({ read: (): LocalDraft[] => [] }));
+vi.mock('@queries/email/local-draft-source', async () => ({
+  createLocalDraftSource: (enabled: () => boolean) => ({
+    drafts: () => (enabled() ? localDrafts.read() : []),
+    ready: () => true,
+  }),
+}));
+
 const mocks = vi.hoisted(() => ({
   search: vi.fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>(),
   history: [] as HistoryItem[],
-  channels: vi.fn(() => []),
+  channels: vi.fn<() => ApiChannelWithLatest[]>(() => []),
   cachedChannels: (): CachedGraphqlChannel[] => [],
   projectedChannels: [] as CachedGraphqlChannel[],
   changed: undefined as
@@ -60,6 +72,8 @@ const mocks = vi.hoisted(() => ({
   initiatives: [] as InitiativeEntity[],
   databases: [] as ListedDatabase[],
   crmEnabled: (): boolean => true,
+  projectsEnabled: (): boolean => true,
+  graphqlEnabled: (): boolean => true,
   cacheEnabled: true,
   queries: {} as Partial<
     Record<
@@ -68,14 +82,28 @@ const mocks = vi.hoisted(() => ({
     >
   >,
 }));
+vi.mock('@core/context/user', () => ({
+  useIsAuthenticated: () => () => true,
+  useUserId: () => () => 'viewer',
+}));
+
 vi.mock('@core/constant/featureFlags', () => ({
   enableCrm: {},
   enableDatabases: {},
   enableForms: {},
+  enableGraphqlSoup: { key: 'enable-graphql-soup' },
+  enableProjects: { key: 'enable-projects' },
   isFeatureEnabled: () => mocks.crmEnabled(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: mocks.crmEnabled() }),
+  useFeatureFlag: (flag: { key?: string }) => () => ({
+    enabled:
+      flag.key === 'enable-graphql-soup'
+        ? mocks.graphqlEnabled()
+        : flag.key === 'enable-projects'
+          ? mocks.projectsEnabled()
+          : mocks.crmEnabled(),
+  }),
 }));
 vi.mock('@core/constant/allBlocks', () => ({
   itemToSafeName: (item: { name: string }) => item.name,
@@ -170,9 +198,6 @@ vi.mock('@queries/soup/recently-viewed', () => ({
   useRecentlyViewedSoupQuery: () =>
     mocks.queries['recently-viewed']?.() ?? { data: [], isSuccess: true },
 }));
-vi.mock('@queries/storage/instructions-md', () => ({
-  useInstructionsMdIdQuery: () => ({ data: undefined }),
-}));
 vi.mock('@queries/storage/databases', () => ({
   useDatabasesQuery: () => ({ data: mocks.databases, isSuccess: true }),
 }));
@@ -183,12 +208,15 @@ vi.mock('@service-storage/util/filename', () => ({
   formatDocumentName: (name: string) => name,
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
-  getGraphqlSoupCacheHost: () => ({
-    search: mocks.search,
-    onCacheChanged: mocks.onCacheChanged,
-    readRecordsByKeys: mocks.readRecordsByKeys,
-    disabled: !mocks.cacheEnabled,
-  }),
+  getGraphqlSoupCacheHost: () =>
+    untrack(mocks.graphqlEnabled)
+      ? {
+          search: mocks.search,
+          onCacheChanged: mocks.onCacheChanged,
+          readRecordsByKeys: mocks.readRecordsByKeys,
+          disabled: !mocks.cacheEnabled,
+        }
+      : undefined,
 }));
 
 let dispose: (() => void) | undefined;
@@ -221,6 +249,7 @@ function page(start: number, count: number, more = false): SearchCachePage {
   };
 }
 beforeEach(() => {
+  localDrafts.read = () => [];
   vi.clearAllMocks();
   vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
   mocks.history = [];
@@ -232,6 +261,8 @@ beforeEach(() => {
   mocks.initiatives = [];
   mocks.databases = [];
   mocks.crmEnabled = () => true;
+  mocks.projectsEnabled = () => true;
+  mocks.graphqlEnabled = () => true;
   mocks.cacheEnabled = true;
   mocks.queries = {};
   mocks.readRecordsByKeys.mockReset().mockResolvedValue({
@@ -279,6 +310,23 @@ const companyHit: SearchDocumentWire = {
   searchText: 'acme | acme.example',
   timestampMs: Date.parse(cachedCompany.updatedAt),
   sourceHash: 'company-hash',
+};
+const cachedInitiative = {
+  __typename: 'GraphqlSoupInitiative',
+  displayName: 'Launch plan',
+  metadata: {
+    ownerId: 'owner',
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-02T00:00:00.000Z',
+  },
+};
+const initiativeHit: SearchDocumentWire = {
+  profile: 'quick-access-v1',
+  recordKey: 'GraphqlSoupInitiative:initiative-1',
+  bucket: 'initiative',
+  searchText: 'launch plan',
+  timestampMs: Date.parse(cachedInitiative.metadata.updatedAt),
+  sourceHash: 'initiative-hash',
 };
 const restCompany: CrmCompanyEntity = {
   id: 'company-1',
@@ -392,6 +440,75 @@ function renderRetainedList(
 }
 
 describe('Quick Access source integration', () => {
+  it('starts cached email search when the GraphQL flag arrives after mounting', async () => {
+    const [enabled, setEnabled] = createSignal(false);
+    mocks.graphqlEnabled = enabled;
+    mocks.search.mockResolvedValue({
+      documents: [
+        {
+          profile: 'quick-access-v1',
+          recordKey: 'GraphqlSoupEmailThread:thread-1',
+          bucket: 'email',
+          searchText: 'weekly update | teo | teo@example.com',
+          timestampMs: 1,
+          sourceHash: 'email-hash',
+        },
+      ],
+      nextCursor: null,
+    });
+    mocks.readRecordsByKeys.mockResolvedValue({
+      revision: INITIAL_CACHE_REVISION,
+      records: [
+        {
+          recordKey: 'GraphqlSoupEmailThread:thread-1',
+          record: {
+            __typename: 'GraphqlSoupEmailThread',
+            id: 'thread-1',
+            name: 'Weekly update',
+            ownerId: 'owner',
+            createdAt: '2026-01-01T00:00:00Z',
+            updatedAt: '2026-01-01T00:00:00Z',
+            viewedAt: null,
+            senderName: 'Teo',
+            senderEmail: 'teo@example.com',
+            linkId: 'inbox',
+            isRead: true,
+            isDraft: false,
+            isImportant: false,
+            inboxVisible: true,
+          },
+        },
+      ],
+    });
+    const { source, list } = setup((source) => ({
+      source,
+      // The shared mobile/desktop entity source owns lists in a memo.
+      list: createMemo(() =>
+        source.useList({
+          buckets: ['email'],
+          searchTerm: () => 'teo',
+        })
+      ),
+    }));
+    expect(source.usesSearchProjection()).toBe(false);
+    expect(list().items()).toEqual([]);
+    expect(mocks.search).not.toHaveBeenCalled();
+
+    setEnabled(true);
+    await vi.waitFor(() => {
+      expect(source.usesSearchProjection()).toBe(true);
+      expect(
+        list()
+          .items()
+          .map((item) => item.id)
+      ).toEqual(['thread-1']);
+    });
+
+    setEnabled(false);
+    expect(source.usesSearchProjection()).toBe(false);
+    expect(list().items()).toEqual([]);
+  });
+
   it('keeps cached document order and fuzzy matches stable across typing and backspacing', async () => {
     const names = [
       'Seamus snip',
@@ -575,8 +692,79 @@ describe('Quick Access source integration', () => {
       }
     }
   );
-  it('uses only GraphQL channels when the cache is enabled', async () => {
+  it('keeps known channels searchable before the cache has hydrated them', async () => {
+    mocks.channels.mockReturnValue([
+      {
+        id: 'uncached-channel',
+        name: 'Planning',
+        channel_type: 'public',
+        owner_id: 'owner',
+        participants: [],
+        auto_join_team: false,
+        is_participant: true,
+        created_at: '2026-08-01T00:00:00.000Z',
+        updated_at: '2026-08-02T00:00:00.000Z',
+      },
+    ]);
+    const [cached, setCached] = createSignal<CachedGraphqlChannel[]>([]);
+    mocks.cachedChannels = cached;
+    const list = setup((source) =>
+      source.useList({ buckets: ['channel'], searchTerm: () => 'planning' })
+    );
+
+    expect(list.items().map((item) => item.id)).toEqual(['uncached-channel']);
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items().map((item) => item.id)).toEqual(['uncached-channel']);
+
+    setCached([
+      cachedChannel('uncached-channel', {
+        name: 'Planning',
+        ownerId: 'cached-owner',
+        participantIds: ['participant-1'],
+        channelType: 'private',
+        createdAt: '2026-07-01T00:00:00.000Z',
+        interactedAt: '2026-08-03T00:00:00.000Z',
+      }),
+    ]);
+    expect(list.items().map((item) => item.id)).toEqual(['uncached-channel']);
+    expect(list.items()[0]).toMatchObject({
+      data: {
+        ownerId: 'cached-owner',
+        participantIds: ['participant-1'],
+        channelType: 'private',
+        createdAt: '2026-07-01T00:00:00.000Z',
+        interactedAt: '2026-08-03T00:00:00.000Z',
+      },
+    });
+  });
+
+  it('merges complete channels with cached channels and prefers cached metadata', async () => {
     const channel = cachedChannel('cached-channel');
+    mocks.channels.mockReturnValue([
+      {
+        id: channel.id,
+        name: 'Previous name',
+        channel_type: 'public',
+        owner_id: 'owner',
+        participants: [],
+        auto_join_team: false,
+        is_participant: true,
+        created_at: channel.createdAt,
+        updated_at: channel.updatedAt,
+        viewed_at: '2026-08-03T00:00:00.000Z',
+      },
+      {
+        id: 'uncached-channel',
+        name: 'Planning',
+        channel_type: 'public',
+        owner_id: 'owner',
+        participants: [],
+        auto_join_team: false,
+        is_participant: true,
+        created_at: channel.createdAt,
+        updated_at: channel.updatedAt,
+      },
+    ]);
     mocks.cachedChannels = () => [channel];
     mocks.search.mockResolvedValue({
       documents: [channelHit(channel)],
@@ -590,9 +778,15 @@ describe('Quick Access source integration', () => {
       expect(lists.every((list) => !list.isLoading())).toBe(true)
     );
     for (const list of lists) {
-      expect(list.items().map((item) => item.id)).toEqual(['cached-channel']);
+      expect(list.items().map((item) => item.id)).toEqual([
+        'cached-channel',
+        'uncached-channel',
+      ]);
+      expect(list.items()[0].searchText).toBe(channel.name);
+      expect(list.items()[0].sortTimestamp).toBe(
+        Date.parse('2026-08-03T00:00:00.000Z')
+      );
     }
-    expect(mocks.channels).not.toHaveBeenCalled();
   });
 
   it('loads channels beyond the recent query through cache search', async () => {
@@ -610,7 +804,57 @@ describe('Quick Access source integration', () => {
     expect(list.items()).toHaveLength(75);
     expect(new Set(list.items().map((item) => item.id)).size).toBe(75);
     expect(list.items().some((item) => item.id === 'channel-74')).toBe(true);
-    expect(mocks.channels).not.toHaveBeenCalled();
+  });
+
+  it('uses projected channel metadata beyond the recent cache page while preserving live viewed recency', async () => {
+    const [knownChannels, setKnownChannels] = createSignal<
+      ApiChannelWithLatest[]
+    >([
+      {
+        id: 'renamed-channel',
+        name: 'Old planning name',
+        channel_type: 'public',
+        owner_id: 'owner',
+        participants: [],
+        auto_join_team: false,
+        is_participant: true,
+        created_at: '2026-08-01T00:00:00.000Z',
+        updated_at: '2026-08-02T00:00:00.000Z',
+        viewed_at: '2026-08-03T00:00:00.000Z',
+      },
+    ]);
+    mocks.channels.mockImplementation(knownChannels);
+    const projectedChannel = cachedChannel('renamed-channel', {
+      name: 'New planning name',
+    });
+    mocks.projectedChannels = [projectedChannel];
+    mocks.search.mockResolvedValue({
+      documents: [channelHit(projectedChannel)],
+      nextCursor: null,
+    });
+    const list = setup((source) =>
+      source.useList({ buckets: ['channel'], searchTerm: () => 'new planning' })
+    );
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items().map((item) => item.searchText)).toEqual([
+      'New planning name',
+    ]);
+    expect(list.items()[0].sortTimestamp).toBe(
+      Date.parse('2026-08-03T00:00:00.000Z')
+    );
+
+    setKnownChannels((channels) =>
+      channels.map((channel) => ({
+        ...channel,
+        viewed_at: '2026-08-04T00:00:00.000Z',
+      }))
+    );
+    expect(list.items().map((item) => item.searchText)).toEqual([
+      'New planning name',
+    ]);
+    expect(list.items()[0].sortTimestamp).toBe(
+      Date.parse('2026-08-04T00:00:00.000Z')
+    );
   });
 
   it('sorts projected and known browse rows together using viewed recency', async () => {
@@ -862,6 +1106,102 @@ describe('Quick Access source integration', () => {
     }
   );
 
+  it('finds a cached project absent from the REST feed', async () => {
+    mocks.readRecordsByKeys.mockResolvedValue({
+      revision: INITIAL_CACHE_REVISION,
+      records: [
+        {
+          recordKey: 'GraphqlSoupInitiative:initiative-1',
+          record: cachedInitiative,
+        },
+      ],
+    });
+    mocks.search.mockResolvedValue({
+      documents: [initiativeHit],
+      nextCursor: null,
+    });
+    const list = setup((source) =>
+      source.useList({ buckets: ['initiative'], searchTerm: () => 'launch' })
+    );
+    await vi.waitFor(() => expect(list.items()).toHaveLength(1));
+    expect(mocks.search).toHaveBeenCalledWith(
+      expect.objectContaining({ buckets: ['initiative'], query: 'launch' })
+    );
+    expect(list.items()[0]).toMatchObject({
+      id: 'initiative-1',
+      kind: 'entity',
+      bucket: 'initiative',
+      searchText: 'Launch plan',
+      data: { type: 'initiative', name: 'Launch plan', ownerId: 'owner' },
+    });
+  });
+
+  it('merges project cache hits with the REST feed without duplicates', async () => {
+    mocks.initiatives = [
+      {
+        id: 'initiative-1',
+        type: 'initiative',
+        name: 'Launch plan',
+        ownerId: 'owner',
+        updatedAt: '2025-01-02T00:00:00.000Z',
+      },
+    ];
+    mocks.search.mockResolvedValue({
+      documents: [initiativeHit],
+      nextCursor: null,
+    });
+    const list = setup((source) =>
+      source.useList({ buckets: ['initiative'], searchTerm: () => 'launch' })
+    );
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items().map((item) => item.id)).toEqual(['initiative-1']);
+  });
+
+  it('shows a renamed project by its cached name while the REST feed is stale', async () => {
+    mocks.initiatives = [
+      {
+        id: 'initiative-1',
+        type: 'initiative',
+        name: 'Old name',
+        ownerId: 'owner',
+        updatedAt: '2025-01-01T00:00:00.000Z',
+      },
+    ];
+    mocks.readRecordsByKeys.mockResolvedValue({
+      revision: INITIAL_CACHE_REVISION,
+      records: [
+        {
+          recordKey: 'GraphqlSoupInitiative:initiative-1',
+          record: cachedInitiative,
+        },
+      ],
+    });
+    mocks.search.mockResolvedValue({
+      documents: [initiativeHit],
+      nextCursor: null,
+    });
+    const list = setup((source) =>
+      source.useList({ buckets: ['initiative'], searchTerm: () => 'launch' })
+    );
+    await vi.waitFor(() =>
+      expect(list.items()[0]).toMatchObject({
+        id: 'initiative-1',
+        searchText: 'Launch plan',
+        data: { name: 'Launch plan' },
+      })
+    );
+    expect(list.items()).toHaveLength(1);
+  });
+
+  it('does not search cached projects when Projects is disabled', () => {
+    mocks.projectsEnabled = () => false;
+    const list = setup((source) =>
+      source.useList({ buckets: ['initiative'], searchTerm: () => 'launch' })
+    );
+    expect(list.items()).toEqual([]);
+    expect(mocks.search).not.toHaveBeenCalled();
+  });
+
   it('merges CRM cache hits with the REST feed without duplicates', async () => {
     mocks.companies = [restCompany];
     mocks.search.mockResolvedValue({
@@ -1082,7 +1422,7 @@ describe('Quick Access source integration', () => {
     ).toEqual(['folder', 'note', 'task']);
   });
 
-  it('lists task projects with document search hits without searching the cache for them', async () => {
+  it('lists task projects from the REST feed with document hits while searching cached projects too', async () => {
     mocks.initiatives = [
       {
         type: 'initiative',
@@ -1121,7 +1461,7 @@ describe('Quick Access source integration', () => {
     ).toMatchObject({ bucket: 'initiative', data: { type: 'initiative' } });
     expect(mocks.search).toHaveBeenCalledWith(
       expect.objectContaining({
-        buckets: expect.not.arrayContaining(['initiative']),
+        buckets: expect.arrayContaining(['initiative']),
       })
     );
   });
@@ -1338,4 +1678,107 @@ describe('database command discovery', () => {
     });
     expect(mocks.history).toEqual([]);
   });
+});
+
+it('finds an unqueued first-use draft by title without a cached thread and retires it after sync', async () => {
+  const [copies, setCopies] = createSignal<LocalDraft[]>([
+    {
+      key: 'local-draft',
+      draftId: 'local-draft',
+      threadId: 'local-thread',
+      accountId: 'viewer',
+      generation: 'generation',
+      revision: 1,
+      acknowledgedRevision: 0,
+      content: { subject: 'Offline receipt' },
+      attachments: [],
+      status: 'dirty',
+      updatedAt: 1,
+    },
+  ]);
+  localDrafts.read = copies;
+  const [term, setTerm] = createSignal('receipt');
+  const { source, list, notes } = setup((source) => ({
+    source,
+    list: source.useList({ buckets: ['email'], searchTerm: term }),
+    notes: source.useList({ buckets: ['note'], searchTerm: term }),
+  }));
+  expect(list.items().map((item) => item.id)).toEqual(['local-thread']);
+  expect(source.getById('local-thread')?.data.name).toBe('Offline receipt');
+  expect(notes.items()).toEqual([]);
+  setTerm('unrelated');
+  expect(list.items()).toEqual([]);
+  setTerm('receipt');
+  setCopies([{ ...copies()[0], status: 'synced', acknowledgedRevision: 1 }]);
+  expect(list.items()).toEqual([]);
+  expect(source.getById('local-thread')).toBeUndefined();
+});
+
+it('keeps a cached sender hit when the same thread has an unmatched local draft', async () => {
+  localDrafts.read = () => [
+    {
+      key: 'reply',
+      draftId: 'reply',
+      threadId: 'thread-1',
+      accountId: 'viewer',
+      generation: 'generation',
+      revision: 1,
+      acknowledgedRevision: 0,
+      content: { subject: 'Weekly update' },
+      attachments: [],
+      status: 'dirty',
+      updatedAt: 1,
+    },
+  ];
+  mocks.search.mockResolvedValue({
+    documents: [
+      {
+        profile: 'quick-access-v1',
+        recordKey: 'GraphqlSoupEmailThread:thread-1',
+        bucket: 'email',
+        searchText: 'weekly update | teo | teo@example.com',
+        timestampMs: 1,
+        sourceHash: 'hash',
+      },
+    ],
+    nextCursor: null,
+  });
+  mocks.readRecordsByKeys.mockResolvedValue({
+    revision: INITIAL_CACHE_REVISION,
+    records: [
+      {
+        recordKey: 'GraphqlSoupEmailThread:thread-1',
+        record: {
+          __typename: 'GraphqlSoupEmailThread',
+          id: 'thread-1',
+          name: 'Weekly update',
+          ownerId: 'viewer',
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+          viewedAt: null,
+          senderName: 'Teo',
+          senderEmail: 'teo@example.com',
+          linkId: 'inbox',
+          isRead: true,
+          isDraft: false,
+          isImportant: false,
+          inboxVisible: true,
+        },
+      },
+    ],
+  });
+  const loaded = Promise.withResolvers<void>();
+  const list = setup((source) => {
+    const list = source.useList({
+      buckets: ['email'],
+      searchTerm: () => 'teo',
+    });
+    createRenderEffect(() => {
+      if (!list.isLoading()) loaded.resolve();
+    });
+    return list;
+  });
+  await loaded.promise;
+  expect(list.items().map((item) => item.id)).toEqual(['thread-1']);
+  expect(list.items()[0].searchText).toContain('teo@example.com');
 });

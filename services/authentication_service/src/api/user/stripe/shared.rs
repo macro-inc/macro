@@ -68,9 +68,11 @@ pub enum StripeOperationError {
     UnexpectedStripeResponse,
     #[error("The 30-day trial is only available for your first Premium subscription")]
     TrialUnavailable,
+    #[error("Checkout changed in another tab. Please try again.")]
+    CheckoutConflict,
     #[error("Could not create checkout")]
     CheckoutGateway(StripeCheckoutError),
-    #[error("User already has an active subscription")]
+    #[error("You already have a subscription. Open Manage in Settings → Billing to update it.")]
     AlreadySubscribed,
     #[error("Teams service error")]
     TeamsErr(#[from] teams::domain::model::TeamError),
@@ -104,6 +106,7 @@ impl IntoResponse for StripeOperationError {
             StripeOperationError::StripeErr(_) => StatusCode::INTERNAL_SERVER_ERROR,
             StripeOperationError::PromoCodeNotFound => StatusCode::NOT_FOUND,
             StripeOperationError::UnexpectedStripeResponse => StatusCode::INTERNAL_SERVER_ERROR,
+            StripeOperationError::CheckoutConflict => StatusCode::CONFLICT,
             StripeOperationError::AlreadySubscribed => StatusCode::CONFLICT,
             StripeOperationError::TrialUnavailable => StatusCode::CONFLICT,
             StripeOperationError::CheckoutGateway(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -153,6 +156,11 @@ impl From<CheckoutError<StripeCheckoutError>> for StripeOperationError {
             CheckoutError::TrialUnavailable => Self::TrialUnavailable,
             CheckoutError::PlanUnavailable => Self::PlanUnavailable,
             CheckoutError::PromoCodeNotFound => Self::PromoCodeNotFound,
+            CheckoutError::Gateway(StripeCheckoutError::TrialUnavailable) => Self::TrialUnavailable,
+            CheckoutError::Gateway(StripeCheckoutError::ExistingSubscription) => {
+                Self::AlreadySubscribed
+            }
+            CheckoutError::Gateway(StripeCheckoutError::CheckoutConflict) => Self::CheckoutConflict,
             CheckoutError::Gateway(error) => Self::CheckoutGateway(error),
         }
     }

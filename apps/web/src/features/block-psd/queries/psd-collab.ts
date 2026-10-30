@@ -5,6 +5,7 @@
  * stored `.psd` stays the base every person opens.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import { schema } from '@loro-mirror/core';
 import { createAwareness } from '@macro-inc/collaboration/collab/awareness';
 import type { Chatter } from '@macro-inc/collaboration/collab/chatter';
@@ -259,7 +260,7 @@ export function createPsdCollabSession(
       started = true;
     }
     setState({ t: 'ready', doc: manager.doc });
-    if (options.canEdit()) void wal.flush();
+    if (options.canEdit()) fireAndForget(wal.flush(), 'psd-collab');
   }
 
   async function accept(initial: InitialSync) {
@@ -293,15 +294,12 @@ export function createPsdCollabSession(
 
   async function hydrate() {
     await wal.ready();
-
-    const settleLoadCachedState = async () => {
-      try {
-        return await loadCachedState(manager, snapshots, walStore);
-      } catch {
-        return await false;
-      }
-    };
-    const cached = await settleLoadCachedState();
+    let cached = false;
+    try {
+      cached = await loadCachedState(manager, snapshots, walStore);
+    } catch {
+      // No usable local copy: load from the server.
+    }
     if (disposed) return;
     if (cached && documentFormat(manager.doc) !== undefined) await start();
     else if (!(await options.exists()) && !(await seed())) return;
@@ -311,7 +309,8 @@ export function createPsdCollabSession(
     setConnection(opened);
     opened.source.listen((event) => {
       for (const listener of liveListeners) listener(event);
-      if (event.type === 'reconnect') void resync(event);
+      if (event.type === 'reconnect')
+        fireAndForget(resync(event), 'psd-collab');
     });
     if (peerId !== undefined) opened.source.registerPeerId(peerId);
     const initial = await opened.doInitialSync();
@@ -348,7 +347,7 @@ export function createPsdCollabSession(
         setState({ t: 'error', message: 'Unable to share this document.' });
     }
   }
-  void open();
+  fireAndForget(open(), 'psd-collab');
 
   onCleanup(() => {
     disposed = true;

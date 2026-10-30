@@ -34,9 +34,12 @@ use entity_access::domain::{
     ports::{EntityAccessService, NoOpEntityAccessService},
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
-use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicUsize, Ordering},
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 use uuid::Uuid;
 
@@ -65,6 +68,8 @@ struct RecordingMessages {
     reacts: Arc<Mutex<Vec<RecordedReaction>>>,
     /// Error every mutation returns instead of succeeding.
     mutation_error: Option<fn() -> messages::domain::ports::MessageError>,
+    /// Root messages every timeline read returns.
+    timeline: Vec<messages::domain::models::MessageListItem>,
 }
 
 impl RecordingMessages {
@@ -82,9 +87,11 @@ impl RecordingMessages {
                 .stored_sender
                 .clone()
                 .unwrap_or_else(|| Sender::new_from_user(user_id())),
+            guest_name: None,
             imported_author: None,
             bot_profile: None,
             mentions: vec![],
+            triggered_via: None,
             triggered_by: None,
             content: "stored".to_string(),
             created_at: chrono::Utc::now(),
@@ -146,9 +153,11 @@ impl messages::domain::api::MessageCommands for RecordingMessages {
             parent,
             thread_id: input.thread_id,
             sender_id: sender,
+            guest_name: None,
             imported_author: None,
             bot_profile: None,
             mentions: vec![],
+            triggered_via: None,
             triggered_by: access
                 .acting_user_id()
                 .map(|user| user.as_ref().to_string()),
@@ -252,7 +261,11 @@ impl messages::domain::api::MessageReader for RecordingMessages {
         _: EntityAccessReceipt<messages::domain::service::MessageView>,
         _: messages::domain::ports::MessageTimelineQuery,
     ) -> Result<messages::domain::ports::MessagePage, messages::domain::ports::MessageError> {
-        unimplemented!("read path unused by mutation tools")
+        Ok(messages::domain::ports::MessagePage {
+            items: self.timeline.clone(),
+            next_cursor: None,
+            previous_cursor: None,
+        })
     }
     async fn timeline_entries(
         &self,
@@ -316,6 +329,8 @@ struct ToolTestChannelService {
     metadata_name: Option<String>,
     shares: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid, Vec<ReferencedShareItem>)>>>,
     deny_share: bool,
+    user_names: HashMap<MacroUserIdStr<'static>, String>,
+    fail_user_names: bool,
 }
 
 impl ToolTestChannelService {
@@ -365,9 +380,7 @@ impl ChannelService for ToolTestChannelService {
 
     async fn set_channel_picture(
         &self,
-        _access: entity_access::domain::models::EntityAccessReceipt<
-            entity_access::domain::models::AdminParticipantRole,
-        >,
+        _access: crate::domain::ports::ChannelPictureAccess,
         _picture_id: Option<uuid::Uuid>,
     ) -> Result<(), crate::domain::ports::ChannelMutationErr> {
         unimplemented!("picture mutation is not used by this fixture")
@@ -408,6 +421,25 @@ impl ChannelService for ToolTestChannelService {
                 .clone()
                 .unwrap_or_else(|| "Previous".to_string()),
         })
+    }
+
+    async fn get_user_display_names(
+        &self,
+        user_ids: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<HashMap<MacroUserIdStr<'static>, String>, crate::domain::ports::ChannelMessagesErr>
+    {
+        if self.fail_user_names {
+            return Err(crate::domain::ports::ChannelMessagesErr::Repo(
+                anyhow::anyhow!("names unavailable"),
+            ));
+        }
+        Ok(user_ids
+            .into_iter()
+            .filter_map(|user_id| {
+                let name = self.user_names.get(&user_id)?.clone();
+                Some((user_id, name))
+            })
+            .collect())
     }
 
     async fn get_attachment_references(
@@ -1202,6 +1234,7 @@ async fn send_channel_message_posts_as_the_context_actor_for_the_user() {
         content: "hello".to_string(),
         channel_id,
         thread_id: None,
+        attachments: vec![],
     };
 
     tool.call(
@@ -1250,6 +1283,76 @@ async fn send_channel_message_posts_as_the_context_actor_for_the_user() {
     );
     assert_eq!(default_input.content, "hello");
     assert_eq!(bot_of(custom_access), Some(BotId::TEST_A));
+}
+
+#[tokio::test]
+async fn send_channel_message_maps_attachments_to_message_references() {
+    let video_id = Uuid::new_v4().to_string();
+    let document_id = Uuid::new_v4().to_string();
+    let messages = RecordingMessages::default();
+    let posts = messages.posts.clone();
+    let tool: SendChannelMessage = serde_json::from_value(serde_json::json!({
+        "content": "",
+        "channel_id": Uuid::new_v4(),
+        "attachments": [
+            { "id": video_id, "kind": "video", "width": 1920, "height": 1080 },
+            { "id": format!(" {document_id} "), "kind": "document", "width": 10, "height": 10 },
+        ],
+    }))
+    .expect("attachments deserialize");
+
+    tool.call(
+        ServiceContext(ChannelToolContext::new(
+            Arc::new(messages),
+            ToolTestChannelService::default(),
+            ToolTestAccessService::default(),
+        )),
+        RequestContext::new(user_id()),
+    )
+    .await
+    .expect("member can post attachments");
+
+    let posts = posts.lock().expect("post lock");
+    let [(_, input)] = posts.as_slice() else {
+        panic!("expected one post, got {}", posts.len());
+    };
+    assert_eq!(
+        input.attachments,
+        vec![
+            messages::domain::models::NewAttachment {
+                entity_type: "static/video".to_string(),
+                entity_id: video_id,
+                width: Some(1920),
+                height: Some(1080),
+            },
+            messages::domain::models::NewAttachment {
+                entity_type: "document".to_string(),
+                entity_id: document_id,
+                width: None,
+                height: None,
+            },
+        ]
+    );
+}
+
+#[test]
+fn send_channel_message_without_attachments_still_deserializes() {
+    let tool: SendChannelMessage = serde_json::from_value(serde_json::json!({
+        "content": "hello",
+        "channel_id": Uuid::new_v4(),
+    }))
+    .expect("attachments are optional");
+    assert!(tool.attachments.is_empty());
+}
+
+#[test]
+fn send_channel_message_schema_is_valid() {
+    generate_validated_input_schema::<SendChannelMessage>().expect("valid schema");
+}
+
+#[test]
+fn create_channel_media_upload_schema_is_valid() {
+    generate_validated_input_schema::<super::CreateChannelMediaUpload>().expect("valid schema");
 }
 
 #[tokio::test]
@@ -1678,7 +1781,10 @@ async fn open_direct_message_opens_a_one_to_one_dm_as_the_user() {
         panic!("expected one dm, got {}", dms.len());
     };
     assert_eq!(actor.as_user(), Some(&user_id()));
-    assert_eq!(request.recipient_id.as_ref(), "macro|teammate@example.com");
+    assert_eq!(
+        request.recipient_id.as_user().map(|id| id.as_ref()),
+        Some("macro|teammate@example.com"),
+    );
 }
 
 #[tokio::test]
@@ -1718,4 +1824,147 @@ async fn open_direct_message_needs_someone_besides_the_user() {
     .expect_err("a dm with only the user is refused");
 
     assert!(error.description.contains("other than the user"));
+}
+
+fn channel_message(
+    channel_id: Uuid,
+    sender: Sender,
+    preview: Vec<messages::domain::models::Message>,
+) -> messages::domain::models::MessageListItem {
+    let message = RecordingMessages::default().stored_message(
+        &channel_id.to_string(),
+        Uuid::now_v7(),
+        vec![],
+    );
+    let message = messages::domain::models::Message {
+        sender_id: sender,
+        ..message
+    };
+    messages::domain::models::MessageListItem {
+        state: messages::domain::models::ThreadState {
+            root_id: message.id,
+            user_id: message.sender_id.as_ref().into(),
+            created_at: message.created_at,
+            updated_at: message.created_at,
+            resolved: false,
+            deleted_at: None,
+            anchor: None,
+        },
+        thread: messages::domain::models::MessageThreadPreview {
+            reply_count: preview.len() as i64,
+            latest_reply_at: None,
+            preview,
+        },
+        message,
+    }
+}
+
+fn person(email: &str) -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from(format!("macro|{email}")).expect("valid macro user id")
+}
+
+fn read_latest(channel_id: Uuid) -> ReadChannelMessages {
+    serde_json::from_value(serde_json::json!({
+        "channelId": channel_id,
+        "windowType": "latest",
+    }))
+    .expect("valid read")
+}
+
+#[tokio::test]
+async fn read_channel_messages_names_each_sender_as_the_app_does() {
+    let channel_id = Uuid::now_v7();
+    let mut reply = RecordingMessages::default().stored_message(
+        &channel_id.to_string(),
+        Uuid::now_v7(),
+        vec![],
+    );
+    reply.sender_id = Sender::new_from_user(person("gab@macro.com"));
+    let mut bot_message = channel_message(
+        channel_id,
+        Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID),
+        vec![],
+    );
+    bot_message.message.bot_profile = Some(messages::domain::models::BotSenderProfile {
+        name: "Release bot".to_string(),
+        avatar_url: None,
+    });
+    // Newest first, as the timeline returns roots.
+    let messages = RecordingMessages {
+        timeline: vec![
+            bot_message,
+            channel_message(
+                channel_id,
+                Sender::new_from_user(person("no-name@macro.com")),
+                vec![],
+            ),
+            channel_message(
+                channel_id,
+                Sender::new_from_user(person("gab@macro.com")),
+                vec![reply],
+            ),
+        ],
+        ..Default::default()
+    };
+    let service = ToolTestChannelService {
+        user_names: HashMap::from([(person("gab@macro.com"), "Pine Martin".to_string())]),
+        ..Default::default()
+    };
+    let context = ChannelToolContext::new(
+        Arc::new(messages),
+        service,
+        ToolTestAccessService::default(),
+    );
+
+    let response = read_latest(channel_id)
+        .call(ServiceContext(context), RequestContext::new(user_id()))
+        .await
+        .expect("read");
+
+    let json = serde_json::to_value(&response).expect("serializable");
+    let named = &json["messages"][0];
+    assert_eq!(named["senderId"], "macro|gab@macro.com");
+    assert_eq!(named["senderName"], "Pine Martin");
+    assert_eq!(
+        named["thread"]["preview"][0]["senderName"], "Pine Martin",
+        "a preview reply names its sender too"
+    );
+    let unnamed = &json["messages"][1];
+    assert_eq!(unnamed["senderId"], "macro|no-name@macro.com");
+    assert!(
+        unnamed.get("senderName").is_none(),
+        "a person without a profile name is known by the id alone"
+    );
+    assert_eq!(json["messages"][2]["senderName"], "Release bot");
+}
+
+#[tokio::test]
+async fn read_channel_messages_reads_without_names_when_the_lookup_fails() {
+    let channel_id = Uuid::now_v7();
+    let messages = RecordingMessages {
+        timeline: vec![channel_message(
+            channel_id,
+            Sender::new_from_user(person("gab@macro.com")),
+            vec![],
+        )],
+        ..Default::default()
+    };
+    let service = ToolTestChannelService {
+        user_names: HashMap::from([(person("gab@macro.com"), "Pine Martin".to_string())]),
+        fail_user_names: true,
+        ..Default::default()
+    };
+    let context = ChannelToolContext::new(
+        Arc::new(messages),
+        service,
+        ToolTestAccessService::default(),
+    );
+
+    let response = read_latest(channel_id)
+        .call(ServiceContext(context), RequestContext::new(user_id()))
+        .await
+        .expect("a failed name lookup does not fail the read");
+
+    assert_eq!(response.messages.len(), 1);
+    assert_eq!(response.messages[0].sender_name, None);
 }

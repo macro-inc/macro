@@ -2,7 +2,8 @@ import { toast } from '@core/component/Toast/Toast';
 import { hapticImpact } from '@core/mobile/haptics';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { nativeNetworkStatus } from '@core/mobile/native-network-status';
-import Spinner from '@phosphor-icons/core/bold/spinner-bold.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import Spinner from '@icon/system/bold/spinner-bold.svg';
 import { cn } from '@ui';
 import {
   type Accessor,
@@ -81,27 +82,23 @@ export function PullToRefresh(props: {
    * without cancelling it, so the gesture can return to idle first. */
   let attempt: Promise<'ok' | 'failed'> | undefined;
 
+  const runRefresh = async (): Promise<'ok' | 'failed'> => {
+    try {
+      await props.onRefresh();
+      return 'ok';
+    } catch {
+      return 'failed';
+    }
+  };
+
   const startRefresh = () => {
-    const settleOnRefresh = async () => {
-      try {
-        await props.onRefresh();
-      } catch {
-        return await ('failed' as const);
-      }
-
-      return await ('ok' as const);
-    };
-    const started = settleOnRefresh();
+    const started = runRefresh();
     attempt = started;
-
-    const settleStarted = async () => {
+    const clearAttempt = async () => {
       await started;
-
       if (attempt === started) attempt = undefined;
-
-      return;
     };
-    void settleStarted();
+    fireAndForget(clearAttempt(), 'pull-to-refresh');
     return started;
   };
 
@@ -122,13 +119,11 @@ export function PullToRefresh(props: {
     // gesture's own target element out from under it.
     const pending = attempt ?? startRefresh();
 
-    const settleAll = async () => {
-      const settleAllValue = await Promise.all([
+    const reportOutcome = async () => {
+      const [outcome] = await Promise.all([
         Promise.race([pending, cap]),
         minSpin,
       ]);
-      const [outcome] = settleAllValue;
-
       // Report a failure only when nothing reached the wire. A refresh
       // still running at the cap says nothing either way, so it stays
       // quiet unless the native monitor is certain there is no path out
@@ -139,10 +134,8 @@ export function PullToRefresh(props: {
         toast.failure("You're offline");
       }
       retract();
-
-      return;
     };
-    void settleAll();
+    fireAndForget(reportOutcome(), 'pull-to-refresh');
   };
 
   const onTouchStart = (e: TouchEvent) => {

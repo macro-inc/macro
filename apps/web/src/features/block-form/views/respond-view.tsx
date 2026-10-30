@@ -1,8 +1,10 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import ArrowRight from '@phosphor/arrow-right.svg';
-import CalendarCheck from '@phosphor/calendar-check.svg';
-import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
-import Spinner from '@phosphor/spinner.svg';
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
+import CalendarCheck from '@icon/system/regular/calendar-check.svg';
+import PaperPlaneTilt from '@icon/system/regular/paper-plane-tilt.svg';
+import Spinner from '@icon/system/regular/spinner.svg';
 import { Button, cn } from '@ui';
 import {
   createMemo,
@@ -207,7 +209,7 @@ export function RespondView(props: {
                 }
                 footer={
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     class="self-start"
                     onClick={() => {
                       respond.restartPreview();
@@ -234,7 +236,7 @@ export function RespondView(props: {
                 />
                 <Show when={step().preview}>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     class="self-start"
                     onClick={() => {
                       respond.restartPreview();
@@ -253,8 +255,8 @@ export function RespondView(props: {
               aria-busy="true"
               aria-label="Loading"
             >
-              <div class="h-24 animate-pulse rounded-xl bg-hover" />
-              <div class="h-24 animate-pulse rounded-xl bg-hover" />
+              <ListSkeleton.Bar class="h-24 w-full rounded-xl" />
+              <ListSkeleton.Bar class="h-24 w-full rounded-xl" />
             </div>
           </Match>
           <Match
@@ -281,11 +283,13 @@ export function RespondView(props: {
                   Your saved response couldn’t be loaded.
                 </p>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   class="self-start"
                   disabled={unavailable().retrying}
                   aria-busy={unavailable().retrying}
-                  onClick={() => void respond.retryResponse()}
+                  onClick={() =>
+                    fireAndForget(respond.retryResponse(), 'form-respond')
+                  }
                 >
                   Try again
                 </Button>
@@ -304,10 +308,10 @@ export function RespondView(props: {
                 Nothing you entered was submitted. Try again in a moment.
               </p>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 class="mt-2 self-start"
-                onClick={() => void retry()}
+                onClick={() => fireAndForget(retry(), 'form-respond')}
               >
                 Try again
               </Button>
@@ -329,14 +333,15 @@ export function RespondView(props: {
                 }}
                 onMessageOwner={
                   signedIn() && context.viewer.userId() !== form().ownerId
-                    ? () =>
-                        void context
+                    ? () => {
+                        context
                           .messageOwner(form().ownerId)
                           .mapErr((failure) =>
                             context.notify.failure(
                               `The conversation couldn’t be opened: ${failure.message}`
                             )
-                          )
+                          );
+                      }
                     : undefined
                 }
               />
@@ -380,7 +385,7 @@ export function RespondView(props: {
                   <>
                     <Show when={confirmation().booking}>
                       <Button
-                        variant="cta"
+                        variant="primary"
                         class="self-start"
                         onClick={() => {
                           respond.openBooking();
@@ -414,7 +419,7 @@ export function RespondView(props: {
                 onSubmit={(event) => {
                   event.preventDefault();
                   if (answering().isLast) {
-                    void submitAndReveal();
+                    fireAndForget(submitAndReveal(), 'form-respond');
                     return;
                   }
                   if (respond.next()) revealTop();
@@ -428,7 +433,7 @@ export function RespondView(props: {
                       : 'overflow-hidden rounded-xl border border-edge bg-surface shadow-xs divide-y divide-edge-divider'
                   }
                 >
-                  <Show when={getRespondViewWhen(answering())}>
+                  <Show when={hasSectionHeader(answering())}>
                     <div
                       class={
                         props.compact
@@ -600,7 +605,7 @@ export function RespondView(props: {
                   </Show>
                   <Button
                     type="submit"
-                    variant="cta"
+                    variant="primary"
                     size="md"
                     disabled={answering().submitting || answering().uploading}
                     aria-busy={answering().submitting}
@@ -641,7 +646,7 @@ export function RespondView(props: {
     </div>
   );
 
-  function getRespondViewWhen(
+  function hasSectionHeader(
     answering: Extract<ReturnType<typeof respond.view>, { kind: 'answering' }>
   ): string | boolean | null | undefined {
     return (

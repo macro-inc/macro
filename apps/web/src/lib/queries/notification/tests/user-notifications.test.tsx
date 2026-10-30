@@ -114,6 +114,15 @@ import {
   restoreSoupEntityToDoneFilteredQueries,
 } from '@queries/soup/normalized-cache';
 
+/** Settles with `mutation`, ignoring a rejection the test does not assert on. */
+async function settled(mutation: Promise<unknown>): Promise<void> {
+  try {
+    await mutation;
+  } catch {
+    /* These tests assert the rollback, not the rejection. */
+  }
+}
+
 const mockOptimisticUpdateSoupItemUpdatedAt = vi.mocked(
   optimisticUpdateSoupItemUpdatedAt
 );
@@ -143,6 +152,14 @@ type GraphqlMutationOptions = {
     context: unknown
   ) => unknown;
 };
+
+const inFlightMutations = new Set<Promise<unknown>>();
+
+afterEach(async () => {
+  const pending = [...inFlightMutations];
+  inFlightMutations.clear();
+  await Promise.all(pending);
+});
 
 beforeEach(() => {
   graphqlCacheEnabledMock.mockReturnValue(true);
@@ -196,7 +213,7 @@ beforeEach(() => {
           return error;
         },
         mutate: (input: GraphqlMutationInput) => {
-          void mutateAsync(input);
+          inFlightMutations.add(mutateAsync(input));
         },
         mutateAsync,
       };
@@ -782,15 +799,9 @@ describe('notification mutations', () => {
 
       const TestComponent = () => {
         const mutation = useMarkNotificationsAsSeenMutation();
-
-        const settleMutateAsync = async () => {
-          try {
-            return await mutation.mutateAsync({ notificationIds: ['n1'] });
-          } catch {
-            return;
-          }
-        };
-        mutatePromise = settleMutateAsync();
+        mutatePromise = settled(
+          mutation.mutateAsync({ notificationIds: ['n1'] })
+        );
         return null;
       };
 
@@ -914,15 +925,9 @@ describe('notification mutations', () => {
 
       const TestComponent = () => {
         const mutation = useMarkNotificationsAsDoneMutation();
-
-        const settleMutateAsyncResult = async () => {
-          try {
-            return await mutation.mutateAsync({ notificationIds: ['n1'] });
-          } catch {
-            return;
-          }
-        };
-        mutatePromise = settleMutateAsyncResult();
+        mutatePromise = settled(
+          mutation.mutateAsync({ notificationIds: ['n1'] })
+        );
         return null;
       };
 

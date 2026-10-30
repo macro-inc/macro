@@ -332,8 +332,8 @@ export function createBuilder(options: BuilderOptions) {
     if (committed && pruned > 0)
       options.notify.success(
         pruned === 1
-          ? 'Removed 1 screener rule that checked it.'
-          : `Removed ${pruned} screener rules that checked it.`
+          ? 'Removed 1 gate rule that checked it.'
+          : `Removed ${pruned} gate rules that checked it.`
       );
     return committed;
   }
@@ -363,32 +363,29 @@ export function createBuilder(options: BuilderOptions) {
         .filter((write) => write.written)
         .map((write) => write.sequence)
     );
-    const settleOperationHandler0 = settleIdle;
-    const settleOperationFinally = async () => {
-      return await settleOperationHandler0();
-    };
-    const settleOperation = async () => {
+    const read = async () => {
       try {
-        return await (async () => {
-          try {
-            await options.refetch();
-            setPendingWrites((current) =>
-              current.filter((write) => !covered.has(write.sequence))
-            );
-          } catch {
-            // The read failed: the landed writes stay shown, they are the truth.
-            return;
-          } finally {
-            reading = undefined;
-          }
-          // Writes that landed during the read need a read of their own.
-          if (pendingWrites().some((write) => write.written)) reconcile();
-        })();
+        await options.refetch();
+        setPendingWrites((current) =>
+          current.filter((write) => !covered.has(write.sequence))
+        );
+      } catch {
+        // The read failed: the landed writes stay shown, they are the truth.
+        return;
       } finally {
-        await settleOperationFinally();
+        reading = undefined;
+      }
+      // Writes that landed during the read need a read of their own.
+      if (pendingWrites().some((write) => write.written)) reconcile();
+    };
+    const readThenSettle = async () => {
+      try {
+        await read();
+      } finally {
+        settleIdle();
       }
     };
-    reading = settleOperation();
+    reading = readThenSettle();
   }
 
   /**

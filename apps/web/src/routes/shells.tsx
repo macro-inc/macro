@@ -1,10 +1,19 @@
+import { CreateContextProvider } from '@app/features/command/context/create-context';
 import { SplitRouter } from '@app/lib/split-router';
+import { AppProviders } from '@components/app/AppProviders';
 import { dismissBootShell } from '@components/app/boot-shell';
 import { AppChrome, PageContent } from '@components/app/Layout';
-import { SplitLayout } from '@components/app/split-layout/SplitLayout';
+import {
+  SplitLayout,
+  SplitLayoutProvider,
+} from '@components/app/split-layout/SplitLayout';
 import { useIsAuthenticated } from '@core/auth';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { releaseNotificationCover } from '@macro/tauri/push-api';
+import { ImperativeDialogHost } from '@ui';
 import { type JSX, onCleanup, onMount, type ParentProps, Show } from 'solid-js';
 import { LIKELY_NEXT_VIEWS } from './lazy-route-views';
+import { PublicBookingShell } from './public-booking-shell';
 
 /** Takes over from index.html's boot shell once this shell has drawn. */
 function useDismissBootShell() {
@@ -14,8 +23,12 @@ function useDismissBootShell() {
 /** Sign-in, onboarding, invite, and handoff pages: the page alone. */
 export function AuthShell(): JSX.Element {
   useDismissBootShell();
+  onMount(() =>
+    fireAndForget(releaseNotificationCover(), 'notification-launch')
+  );
   return (
     <PageContent>
+      <ImperativeDialogHost />
       <SplitRouter.Outlet />
     </PageContent>
   );
@@ -25,17 +38,20 @@ function FocusedPage(props: ParentProps) {
   useDismissBootShell();
   return (
     <div class="min-h-0 flex-1 overflow-y-auto bg-page text-ink">
+      <ImperativeDialogHost />
       {props.children}
     </div>
   );
 }
 
-/** Booking links: a scrolling page on the page background, without app chrome. */
+/** Booking links keep a native exit outside the lazy page/loading boundary. */
 export function FocusedShell(): JSX.Element {
+  useDismissBootShell();
   return (
-    <FocusedPage>
+    <PublicBookingShell>
+      <ImperativeDialogHost />
       <SplitRouter.Outlet />
-    </FocusedPage>
+    </PublicBookingShell>
   );
 }
 
@@ -56,9 +72,13 @@ export function withFormRespondShell(Page: () => JSX.Element) {
           </FocusedPage>
         }
       >
-        <AppPage>
-          <Page />
-        </AppPage>
+        <AppProviders>
+          <CreateContextProvider focusedPaneId={() => undefined}>
+            <AppPage>
+              <Page />
+            </AppPage>
+          </CreateContextProvider>
+        </AppProviders>
       </Show>
     );
   };
@@ -70,6 +90,7 @@ export function withMeetingShell(Page: () => JSX.Element) {
     useDismissBootShell();
     return (
       <PageContent>
+        <ImperativeDialogHost />
         <Page />
       </PageContent>
     );
@@ -98,25 +119,19 @@ function warmRouteViews(views: readonly PreloadableView[]): void {
   let disposed = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
+  const preloadThenSchedule = async (view: PreloadableView) => {
+    try {
+      await view.preload();
+    } catch {
+      // Preloading is best effort; the view loads again when opened.
+    } finally {
+      schedule();
+    }
+  };
   const next = () => {
     const view = disposed ? undefined : queue.shift();
     if (!view) return;
-    const settlePreloadHandler0 = schedule;
-    const settlePreloadFinally = async () => {
-      return await settlePreloadHandler0();
-    };
-    const settlePreload = async () => {
-      try {
-        try {
-          return await view.preload();
-        } catch {
-          return;
-        }
-      } finally {
-        await settlePreloadFinally();
-      }
-    };
-    void settlePreload();
+    fireAndForget(preloadThenSchedule(view), 'route-preload');
   };
   function schedule() {
     if (disposed || queue.length === 0) return;
@@ -144,8 +159,12 @@ function warmRouteViews(views: readonly PreloadableView[]): void {
 export function AppShell(): JSX.Element {
   warmRouteViews(LIKELY_NEXT_VIEWS);
   return (
-    <AppPage>
-      <SplitLayout />
-    </AppPage>
+    <AppProviders>
+      <SplitLayoutProvider>
+        <AppPage>
+          <SplitLayout />
+        </AppPage>
+      </SplitLayoutProvider>
+    </AppProviders>
   );
 }

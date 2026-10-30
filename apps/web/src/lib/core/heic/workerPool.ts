@@ -3,6 +3,7 @@
  * Internal implementation detail, not exposed to consumers
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import shortUUID from 'short-uuid';
 import {
   ERROR_MESSAGES,
@@ -112,25 +113,23 @@ export class HeicWorkerPool {
     this.taskQueue = [];
     this.availableWorkers = [];
 
-    const settleCheckWebCodecsSupport = async () => {
-      await this.checkWebCodecsSupport();
-
-      const supported =
-        this.webCodecsSupportedMimeTypes &&
-        this.webCodecsSupportedMimeTypes.length > 0;
-      if (supported) {
-        HeicLogger.info(
-          'WebCodecs support detected:',
-          this.webCodecsSupportedMimeTypes
-        );
-      } else {
-        HeicLogger.info('WebCodecs support not available');
-      }
-
-      return;
-    };
-    settleCheckWebCodecsSupport();
+    fireAndForget(this.detectWebCodecsSupport(), 'heic-worker-pool');
     this.initialize();
+  }
+
+  private async detectWebCodecsSupport(): Promise<void> {
+    await this.checkWebCodecsSupport();
+    const supported =
+      this.webCodecsSupportedMimeTypes &&
+      this.webCodecsSupportedMimeTypes.length > 0;
+    if (supported) {
+      HeicLogger.info(
+        'WebCodecs support detected:',
+        this.webCodecsSupportedMimeTypes
+      );
+    } else {
+      HeicLogger.info('WebCodecs support not available');
+    }
   }
 
   private async checkWebCodecsSupport(): Promise<void> {

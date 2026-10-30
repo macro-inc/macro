@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   copyImageToClipboard,
   downloadImage as downloadImageAction,
@@ -56,29 +57,18 @@ export function createImageActions(input: ImageActionsInput) {
 
       setCachedBlob(undefined);
       setIsPrefetching(true);
-      const settleUntrackFinally = async () => {
-        if (!isStale && input.src() === currentSrc) setIsPrefetching(false);
-
-        return;
-      };
-      const settleUntrack = async () => {
+      const prefetch = async () => {
         try {
-          try {
-            const settleUntrackValue = await untrack(() => fetchBlob());
-            const blob = settleUntrackValue;
-
-            if (isStale || input.src() !== currentSrc) return;
-            if (blob) setCachedBlob(blob);
-
-            return;
-          } catch {
-            return;
-          }
+          const blob = await untrack(() => fetchBlob());
+          if (isStale || input.src() !== currentSrc) return;
+          if (blob) setCachedBlob(blob);
+        } catch {
+          // A tap without the cached blob fetches it on demand.
         } finally {
-          await settleUntrackFinally();
+          if (!isStale && input.src() === currentSrc) setIsPrefetching(false);
         }
       };
-      settleUntrack();
+      fireAndForget(prefetch(), 'image-actions');
     });
   }
   const fetchBlobCached = (): Promise<Blob | undefined> => {

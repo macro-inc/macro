@@ -38,6 +38,20 @@ impl S3UploadUrlAdapter {
 
 impl PresignedUploadUrlPort for S3UploadUrlAdapter {
     #[tracing::instrument(skip(self), err)]
+    async fn delete_object(&self, key: &str) -> anyhow::Result<()> {
+        if macro_aws_config::is_local_aws() {
+            return Ok(());
+        }
+        self.client
+            .delete_object()
+            .bucket(&self.document_storage_bucket)
+            .key(key)
+            .send()
+            .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn put_document_storage_presigned_url(
         &self,
         key: &str,

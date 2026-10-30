@@ -1,5 +1,6 @@
 import { createTauriCacheHost } from '@graphql-cache/host/tauri-host';
 import type { CacheHost } from '@graphql-cache/host/types';
+import { ignoreRejection } from '@graphql-cache/ignore-rejection';
 import { parseCacheRevision } from '@graphql-cache/protocol';
 import { describe, expect, it, vi } from 'vitest';
 import { createSharedMailBackfillFetcher } from './shared-mail-backfill';
@@ -131,14 +132,7 @@ describe('Shared Mail scope refresh', () => {
       const abort = new AbortController();
       if (mode === 'cancel') abort.abort();
 
-      const settleScan = async () => {
-        try {
-          return await scan(input, { signal: abort.signal });
-        } catch {
-          return await undefined;
-        }
-      };
-      await settleScan();
+      await ignoreRejection(scan(input, { signal: abort.signal }));
       expect(cache.invalidate).not.toHaveBeenCalled();
     }
   });

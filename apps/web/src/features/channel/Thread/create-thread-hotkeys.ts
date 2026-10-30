@@ -5,6 +5,7 @@ import {
 } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { HOTKEY_PRIORITY_HIGH } from '@core/hotkey/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type {
   Message as EntityMessage,
   MessageListItem,
@@ -182,10 +183,13 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
       if (event?.repeat) return true;
       const parentMsg = options.parentMessage();
       const actions = options.getMessageActions(parentMsg);
-      actions?.onReply?.({
-        message: parentMsg,
-        ...getMessageReplyPreviewTexts(parentMsg.id),
-      });
+      fireAndForget(
+        actions?.onReply?.({
+          message: parentMsg,
+          ...getMessageReplyPreviewTexts(parentMsg.id),
+        }),
+        'channel-thread-hotkeys'
+      );
       return true;
     },
   }).withGroup(group);
@@ -215,7 +219,10 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
       const reply = getReplyById(replyId);
       if (!reply) return false;
       const actions = options.getMessageActions(reply);
-      actions?.onEdit?.({ message: reply });
+      fireAndForget(
+        actions?.onEdit?.({ message: reply }),
+        'channel-thread-hotkeys'
+      );
       return true;
     },
   }).withGroup(group);
@@ -262,7 +269,10 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
       const reply = getReplyById(replyId);
       if (!reply) return false;
       const actions = options.getMessageActions(reply);
-      actions?.onDelete?.({ message: reply });
+      fireAndForget(
+        actions?.onDelete?.({ message: reply }),
+        'channel-thread-hotkeys'
+      );
       return true;
     },
   }).withGroup(group);

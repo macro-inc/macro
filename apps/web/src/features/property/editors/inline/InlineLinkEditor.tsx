@@ -1,7 +1,8 @@
 import { useUnfurl } from '@app/lib/queries/unfurl/unfurl';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
-import LinkIcon from '@phosphor/link.svg';
-import DeleteIcon from '@phosphor/x.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import DeleteIcon from '@icon/system/regular/x.svg';
 import { proxyResource } from '@service-unfurl/proxy-resource';
 import { type Component, createSignal, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -112,7 +113,7 @@ export function InlineLinkEditor() {
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      handleAddLink();
+      fireAndForget(handleAddLink(), 'property-editor');
     } else if (e.key === 'Escape') {
       e.preventDefault();
       cancelAdding();
@@ -155,9 +156,7 @@ export function InlineLinkEditor() {
             <Show when={property().isMultiSelect || links().length === 0}>
               <button
                 type="button"
-                class={
-                  'text-ink-muted hover:text-ink hover:bg-hover px-2 py-0.5 inline-block shrink-0 rounded-sm cursor-default'
-                }
+                class="text-ink-muted hover:text-ink hover:bg-hover px-2 py-0.5 inline-block shrink-0 rounded-sm cursor-default"
                 onClick={startAdding}
                 disabled={isSaving()}
               >
@@ -174,7 +173,8 @@ export function InlineLinkEditor() {
             onKeyDown={handleKeyDown}
             onBlur={() => {
               setTimeout(() => {
-                if (isAdding()) handleAddLink();
+                if (isAdding())
+                  fireAndForget(handleAddLink(), 'property-editor');
               }, 100);
             }}
             placeholder="Enter URL..."

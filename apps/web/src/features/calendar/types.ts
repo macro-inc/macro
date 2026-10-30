@@ -5,6 +5,8 @@ import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/
 import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
 import type { EventTransparency } from '@service-storage/generated/schemas/eventTransparency';
 import type { EventType } from '@service-storage/generated/schemas/eventType';
+import type { GuestPolicy } from '@service-storage/generated/schemas/guestPolicy';
+import type { ViewerCapabilities } from '@service-storage/generated/schemas/viewerCapabilities';
 import {
   isTimedPointEvent,
   multiDayTimedDisplayRange,
@@ -18,7 +20,7 @@ export type CalendarPeriodView =
   | 'timeGridDay';
 
 /** The conferencing system backing an event's join URL. */
-type ConferenceProvider = 'google_meet' | 'other';
+type ConferenceProvider = 'google_meet' | 'microsoft_teams' | 'other';
 
 /** Supported first day of the calendar week. */
 export type CalendarWeekStart = 0 | 1;
@@ -28,6 +30,8 @@ export type CalendarTimeFormat = '12-hour' | '24-hour';
 
 /** A calendar source used to group and style events. */
 export interface CalendarSource {
+  provider?: 'google' | 'outlook';
+  capabilities?: import('@service-calendar/generated/schemas/calendarCapabilities').CalendarCapabilities;
   /** Stable source identifier. */
   id: string;
   /** Human-readable source name. */
@@ -84,6 +88,19 @@ export interface CalendarEvent {
   creatorEmail?: string;
   /** Attendees and their RSVP metadata. */
   attendees: CalendarAttendee[];
+  /** What the organizer lets guests do. */
+  guestPolicy: GuestPolicy;
+  /**
+   * Whether the event is the viewer's snapshot of a meeting shared in one of
+   * their channels: a private copy the meeting's changes never reach and
+   * whose answers never reach the organizer. Absent on a regular event.
+   */
+  isSnapshot?: boolean;
+  /**
+   * What the viewer may do with the displayed copy. Nothing when that copy's
+   * calendar is read-only, even if another copy is writable.
+   */
+  viewerCan: ViewerCapabilities;
   /**
    * Reminder configuration of the primary copy, the one Macro's alerts
    * follow whichever copy a chip shows. Absent means the calendar default.
@@ -133,6 +150,26 @@ export interface CalendarEvent {
   /** Optional event description. */
   description?: string;
 }
+
+/** Source id every teammate out-of-office event carries; hiding it hides the overlay. */
+export const TEAM_OOO_SOURCE_ID = 'team-ooo';
+
+/** Google's default guest policy, for events Macro builds itself. */
+export const DEFAULT_GUEST_POLICY: GuestPolicy = {
+  canModify: false,
+  canInviteOthers: true,
+  canSeeOtherGuests: true,
+};
+
+/** No capability at all. */
+export const NO_VIEWER_CAPABILITIES: ViewerCapabilities = {
+  editDetails: false,
+  inviteGuests: false,
+  removeGuests: false,
+  setGuestPolicy: false,
+  rsvp: false,
+  organize: false,
+};
 
 /** Shared presentation source until calendar/account metadata is exposed. */
 export const DEFAULT_CALENDAR_SOURCE: CalendarSource = {
@@ -212,6 +249,50 @@ export function reminderCalendarIdOf(
   return event.reminderCalendarId ?? event.calendarId;
 }
 
+/** The span an occurrence renders over, and a timed one's time zone. */
+function occurrenceTiming(time: CalendarOccurrenceItem['occurrence']['time']) {
+  return time.kind === 'timed'
+    ? {
+        allDay: false,
+        start: time.startsAt,
+        end: time.endsAt,
+        timeZone: time.timeZone ?? undefined,
+      }
+    : {
+        allDay: true,
+        start: time.startDate,
+        end: time.endDate,
+        timeZone: undefined,
+      };
+}
+
+/**
+ * The copy an event displays and the calendar it shows under, with every
+ * shown calendar it is synced to (at least the displayed one).
+ */
+function displayedEventCopy(
+  event: CalendarOccurrenceItem['event'],
+  options: CalendarOccurrenceMappingOptions
+) {
+  const sources = event.sources ?? [];
+  const shown = shownEventCopies(sources, options);
+  const copy =
+    shown[0]?.copy ?? selectEventSource(sources, options.isSourceVisible);
+  const calendarId = copy?.calendarId ?? event.calendarId ?? undefined;
+  const source =
+    shown[0]?.calendar ??
+    (calendarId ? options.sourceById?.get(calendarId) : undefined) ??
+    DEFAULT_CALENDAR_SOURCE;
+  const visibleCalendars = shown.map(({ calendar }) => calendar);
+  return {
+    sources,
+    copy,
+    calendarId,
+    source,
+    visibleCalendars: visibleCalendars.length > 0 ? visibleCalendars : [source],
+  };
+}
+
 /**
  * Maps one backend occurrence projection into the single chip it renders as,
  * showing the first copy whose calendar the viewer has on and loaded, and
@@ -224,62 +305,45 @@ export function mapCalendarOccurrence(
   options: CalendarOccurrenceMappingOptions = {}
 ): CalendarEvent {
   const { event, occurrence } = item;
-  const time = occurrence.time;
-  const range =
-    time.kind === 'timed'
-      ? { allDay: false, start: time.startsAt, end: time.endsAt }
-      : { allDay: true, start: time.startDate, end: time.endDate };
-  const sources = event.sources ?? [];
-  const shown = shownEventCopies(sources, options);
-  const copy =
-    shown[0]?.copy ?? selectEventSource(sources, options.isSourceVisible);
+  const { sources, copy, calendarId, source, visibleCalendars } =
+    displayedEventCopy(event, options);
   const content = copy ?? event;
   const canonical = sources[0] ?? event;
-  const calendarId = copy?.calendarId ?? event.calendarId ?? undefined;
-  const source =
-    shown[0]?.calendar ??
-    (calendarId ? options.sourceById?.get(calendarId) : undefined) ??
-    DEFAULT_CALENDAR_SOURCE;
-  const visibleCalendars = shown.map(({ calendar }) => calendar);
 
-  return buildMapCalendarOccurrence();
-
-  function buildMapCalendarOccurrence(): CalendarEvent {
-    return {
-      ...range,
-      id: JSON.stringify([event.id, occurrence.occurrenceKey]),
-      eventId: event.id,
-      occurrenceKey: occurrence.occurrenceKey,
-      recurrenceId: occurrence.recurrenceId ?? undefined,
-      recurrenceLines: event.recurrenceLines ?? [],
-      isCancelled: occurrence.isCancelled,
-      isReadOnly: content.isReadOnly,
-      conferenceUrl: event.conferenceUrl ?? undefined,
-      conferenceProvider:
-        (event.conferenceProvider as ConferenceProvider | null | undefined) ??
-        undefined,
-      organizerName: event.organizerName ?? undefined,
-      organizerEmail: event.organizerEmail ?? undefined,
-      creatorName: optionalText(content.creatorName),
-      creatorEmail: optionalText(content.creatorEmail),
-      attendees: event.attendees ?? [],
-      reminders: canonical.reminders ?? undefined,
-      reminderCalendarId: canonical.calendarId ?? undefined,
-      reminderEventType: canonical.eventType ?? undefined,
-      eventType: content.eventType ?? undefined,
-      transparency: content.transparency,
-      calendarId,
-      sourceCalendarIds: sources.map((candidate) => candidate.calendarId),
-      timeZone:
-        time.kind === 'timed' ? (time.timeZone ?? undefined) : undefined,
-      title: content.title,
-      calendar: source,
-      visibleCalendars:
-        visibleCalendars.length > 0 ? visibleCalendars : [source],
-      location: content.location ?? undefined,
-      description: content.description ?? undefined,
-    };
-  }
+  return {
+    ...occurrenceTiming(occurrence.time),
+    id: JSON.stringify([event.id, occurrence.occurrenceKey]),
+    eventId: event.id,
+    occurrenceKey: occurrence.occurrenceKey,
+    recurrenceId: occurrence.recurrenceId ?? undefined,
+    recurrenceLines: event.recurrenceLines ?? [],
+    isCancelled: occurrence.isCancelled,
+    isReadOnly: content.isReadOnly,
+    conferenceUrl: event.conferenceUrl ?? undefined,
+    conferenceProvider:
+      (event.conferenceProvider as ConferenceProvider | null | undefined) ??
+      undefined,
+    organizerName: event.organizerName ?? undefined,
+    organizerEmail: event.organizerEmail ?? undefined,
+    creatorName: optionalText(content.creatorName),
+    creatorEmail: optionalText(content.creatorEmail),
+    attendees: event.attendees ?? [],
+    guestPolicy: event.guestPolicy,
+    isSnapshot: event.isSnapshot,
+    viewerCan: content.isReadOnly ? NO_VIEWER_CAPABILITIES : event.viewerCan,
+    reminders: canonical.reminders ?? undefined,
+    reminderCalendarId: canonical.calendarId ?? undefined,
+    reminderEventType: canonical.eventType ?? undefined,
+    eventType: content.eventType ?? undefined,
+    transparency: content.transparency,
+    calendarId,
+    sourceCalendarIds: sources.map((candidate) => candidate.calendarId),
+    title: content.title,
+    calendar: source,
+    visibleCalendars,
+    location: content.location ?? undefined,
+    description: content.description ?? undefined,
+  };
 }
 
 /** Maps calendar event data into FullCalendar's rendering contract. */

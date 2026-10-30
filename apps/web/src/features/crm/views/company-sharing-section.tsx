@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { CrmCompanyEntity } from '@entity';
 import { cn, InlineCheckbox } from '@ui';
 import { Show } from 'solid-js';
@@ -85,10 +86,13 @@ export function CompanySharingSection(props: {
                   role="checkbox"
                   aria-checked={isShared()}
                   disabled={shareDisabled()}
-                  onClick={() => void handleToggleShare(company(), !isShared())}
-                  class={cn(
-                    'inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none w-fit border border-ink-muted/[0.08] bg-ink-muted/[0.025] text-ink hover:bg-ink-muted/[0.06]'
-                  )}
+                  onClick={() =>
+                    fireAndForget(
+                      handleToggleShare(company(), !isShared()),
+                      'crm'
+                    )
+                  }
+                  class="inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none w-fit border border-ink-muted/[0.08] bg-ink-muted/[0.025] text-ink hover:bg-ink-muted/[0.06]"
                 >
                   <InlineCheckbox checked={isShared()} />
                   <span class="whitespace-nowrap">Visible in CRM</span>
@@ -107,7 +111,10 @@ export function CompanySharingSection(props: {
                 aria-checked={isSyncing()}
                 disabled={syncDisabled()}
                 onClick={() =>
-                  void handleToggleEmailSync(company(), !isSyncing())
+                  fireAndForget(
+                    handleToggleEmailSync(company(), !isSyncing()),
+                    'crm'
+                  )
                 }
                 class={cn(
                   'inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none w-fit border border-ink-muted/[0.08] bg-ink-muted/[0.025] text-ink hover:bg-ink-muted/[0.06]',

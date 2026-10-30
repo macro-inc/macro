@@ -3,6 +3,7 @@ import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { fileSelector } from '@core/directive/fileSelector';
 import { folderSelector } from '@core/directive/folderSelector';
 import { isMobile } from '@core/mobile/isMobile';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { handleFolderSelect } from '@core/util/upload';
 import { createMemo, Show } from 'solid-js';
 
@@ -32,7 +33,7 @@ export function FolderDropZone() {
             use:fileSelector={{
               multiple: true,
               onSelect: (files) => {
-                handleFileUpload(files);
+                fireAndForget(handleFileUpload(files), 'file-upload');
               },
             }}
             class="border-0 bg-transparent p-0 font-[inherit] text-inherit underline"

@@ -7,6 +7,7 @@
  * pasting back into a presentation restores the shapes rather than text.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { PresentationEngine } from '../context/pptx-editor-context';
 import type { EditorCommands } from './create-editor-commands';
 import type { PresentationSession } from './create-presentation-session';
@@ -95,20 +96,17 @@ export function createClipboard(options: ClipboardOptions) {
       pastes: 0,
       slide: s.id,
     };
-
-    const payload = current.payload;
-    const settlePayload = async () => {
-      try {
-        return await payload;
-      } catch {
-        options.notifyError('Those shapes could not be copied.');
-
-        return;
-      }
-    };
-    settlePayload();
+    fireAndForget(notifyIfCopyFails(current.payload), 'pptx-editor');
     write(data, token, shapesText());
     return true;
+  }
+
+  async function notifyIfCopyFails(payload: Promise<unknown>) {
+    try {
+      await payload;
+    } catch {
+      options.notifyError('Those shapes could not be copied.');
+    }
   }
 
   function write(
@@ -136,7 +134,7 @@ export function createClipboard(options: ClipboardOptions) {
         // The in-tab clipboard still works.
       }
     };
-    void writeSystemClipboard();
+    fireAndForget(writeSystemClipboard(), 'pptx-editor');
   }
 
   async function cut(data?: DataTransfer | null) {

@@ -2,7 +2,7 @@ import { isMacroId } from '@app/lib/identity/macro-id';
 import { formatCallDuration } from '@block-call/utils';
 import { UserIcon } from '@core/component/UserIcon';
 import { matches } from '@core/util/match';
-import UserCircleIcon from '@phosphor/user-circle.svg';
+import UserCircleIcon from '@icon/system/regular/user-circle.svg';
 import { UserGroup } from '@property/component/propertyValue/UserGroup';
 import { usePropertyEntityDisplay } from '@property/hooks';
 import type { EntityReference } from '@property/types';
@@ -82,7 +82,7 @@ export function CallParticipants(props: {
           />
         }
       >
-        <div class="flex items-center gap-1.5">
+        <div class="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
           <Show when={entities().length > 0}>
             <UserGroup entities={entities()} maxUsers={2} />
           </Show>

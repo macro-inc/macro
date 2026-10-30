@@ -280,17 +280,9 @@ async function main() {
   }
 }
 
-
-const settleMain = async () => {
 try {
-return await main();
-} catch (settleMainError) {
-const error = settleMainError;
-
+  await main();
+} catch (error) {
   console.error("Error:", error);
   process.exit(1);
-
-return;
 }
-};
-settleMain();

@@ -13,7 +13,12 @@ import {
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import type { Accessor } from 'solid-js';
 import { z } from 'zod';
-import { DEFAULT_EMAIL_TAB, EMAIL_TAB_IDS } from './constants';
+import {
+  DEFAULT_EMAIL_FOCUS_SORT,
+  DEFAULT_EMAIL_TAB,
+  EMAIL_FOCUS_SORT_IDS,
+  EMAIL_TAB_IDS,
+} from './constants';
 import { normalizeInboxSelection } from './inbox-selection';
 import type { EmailViewState } from './types';
 
@@ -29,11 +34,23 @@ const emailTabSchema = schemaWithFallback(
 );
 
 const emailFacetsSchema = z.record(z.string(), z.array(z.string()));
+const aliasFilterSchema = schemaWithFallback(
+  z
+    .object({ inboxId: z.string().min(1), emailAddress: z.string().email() })
+    .optional(),
+  undefined
+).optional();
+
+const emailFocusSortSchema = schemaWithFallback(
+  z.enum(EMAIL_FOCUS_SORT_IDS),
+  DEFAULT_EMAIL_FOCUS_SORT
+);
 
 const emailEntryStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
   tab: emailTabSchema.default(DEFAULT_EMAIL_TAB),
   search: z.string().default(''),
+  aliasFilter: aliasFilterSchema,
   facets: emailFacetsSchema.default({}),
 });
 
@@ -95,6 +112,7 @@ function createEmailEntryStorage(options: {
         ...current,
         tab: restored.tab,
         search: restored.search,
+        aliasFilter: restored.aliasFilter,
         facets: normalizeFacetSelection(restored.facets),
       };
     },
@@ -102,6 +120,7 @@ function createEmailEntryStorage(options: {
       version: 1,
       tab: state.tab,
       search: state.search,
+      aliasFilter: state.aliasFilter,
       facets: normalizeFacetSelection(state.facets),
     }),
   });
@@ -114,7 +133,9 @@ const emailLocalStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
   tab: emailTabSchema.default(DEFAULT_EMAIL_TAB),
   inboxIds: inboxIdsEntrySchema,
+  aliasFilter: aliasFilterSchema,
   facets: emailFacetsSchema.default({}),
+  focusSort: emailFocusSortSchema.default(DEFAULT_EMAIL_FOCUS_SORT),
 });
 
 type EmailLocalState = z.infer<typeof emailLocalStateSchemaWithDefaults>;
@@ -131,7 +152,9 @@ function selectLocalState(state: EmailViewState): EmailLocalState {
     version: 1,
     tab: state.tab,
     inboxIds: normalizeInboxSelection(state.inboxIds),
+    aliasFilter: state.aliasFilter,
     facets: normalizeFacetSelection(state.facets),
+    focusSort: state.focusSort,
   };
 }
 
@@ -158,8 +181,12 @@ function createEmailLocalStateStorage(options: {
         return {
           ...current,
           tab: restored.tab,
-          inboxIds: restored.inboxIds,
+          inboxIds: restored.aliasFilter
+            ? [restored.aliasFilter.inboxId]
+            : restored.inboxIds,
+          aliasFilter: restored.aliasFilter,
           facets: normalizeFacetSelection(restored.facets),
+          focusSort: restored.focusSort,
         };
       } catch {
         return undefined;
@@ -197,7 +224,17 @@ function createInboxIdsEntryStorage(options: {
     restore: (current, stored) => {
       if (!options.restore) return undefined;
 
-      return { ...current, inboxIds: inboxIdsEntrySchema.parse(stored) };
+      const inboxIds = inboxIdsEntrySchema.parse(stored);
+      return {
+        ...current,
+        inboxIds,
+        aliasFilter:
+          current.aliasFilter &&
+          inboxIds?.length === 1 &&
+          inboxIds[0] === current.aliasFilter.inboxId
+            ? current.aliasFilter
+            : undefined,
+      };
     },
     select: (state): string[] | undefined =>
       state.inboxIds === undefined ? undefined : [...state.inboxIds],

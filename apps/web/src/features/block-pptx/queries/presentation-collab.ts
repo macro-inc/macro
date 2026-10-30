@@ -5,6 +5,7 @@
  * The editor runs over it with `openCollaborativePresentation`.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import { schema } from '@loro-mirror/core';
 import { createAwareness } from '@macro-inc/collaboration/collab/awareness';
 import type { Chatter } from '@macro-inc/collaboration/collab/chatter';
@@ -227,7 +228,7 @@ export function createPresentationCollabSession(
       started = true;
     }
     setState({ t: 'ready', doc: manager.doc });
-    if (options.canEdit()) void wal.flush();
+    if (options.canEdit()) fireAndForget(wal.flush(), 'pptx-collab');
   }
 
   async function accept(initial: InitialSync) {
@@ -264,17 +265,30 @@ export function createPresentationCollabSession(
     return true;
   }
 
+  async function resync(
+    event: Extract<SyncSourceEvent, { type: 'reconnect' }>
+  ) {
+    try {
+      await accept(event);
+      await wal.flush();
+    } catch (cause) {
+      console.error('[pptx] collaboration failed to resync', cause);
+      if (!disposed)
+        setState({
+          t: 'error',
+          message: 'This presentation could not be opened.',
+        });
+    }
+  }
+
   async function hydrate() {
     await wal.ready();
-
-    const settleLoadCachedState = async () => {
-      try {
-        return await loadCachedState(manager, snapshots, walStore);
-      } catch {
-        return await false;
-      }
-    };
-    const cached = await settleLoadCachedState();
+    let cached = false;
+    try {
+      cached = await loadCachedState(manager, snapshots, walStore);
+    } catch {
+      // No usable local copy: load from the server.
+    }
     if (disposed) return;
     if (cached && presentationFormat(manager.doc) !== undefined) await start();
     else if (!(await options.exists()) && !(await seed())) return;
@@ -284,28 +298,8 @@ export function createPresentationCollabSession(
     setConnection(opened);
     opened.source.listen((event) => {
       for (const listener of liveListeners) listener(event);
-
-      const settleAccept = async (
-        event: Extract<SyncSourceEvent, { type: 'reconnect' }>
-      ) => {
-        try {
-          await accept(event);
-
-          return await wal.flush();
-        } catch (settleAcceptError) {
-          const cause: unknown = settleAcceptError;
-
-          console.error('[pptx] collaboration failed to resync', cause);
-          if (!disposed)
-            setState({
-              t: 'error',
-              message: 'This presentation could not be opened.',
-            });
-
-          return;
-        }
-      };
-      if (event.type === 'reconnect') settleAccept(event);
+      if (event.type === 'reconnect')
+        fireAndForget(resync(event), 'pptx-collab');
     });
     if (peerId !== undefined) opened.source.registerPeerId(peerId);
     const initial = await opened.doInitialSync();
@@ -321,20 +315,16 @@ export function createPresentationCollabSession(
     await accept(initial.value);
   }
 
-  const settleHydrate = async () => {
+  const open = async () => {
     try {
-      return await hydrate();
-    } catch (settleHydrateError) {
-      const cause: unknown = settleHydrateError;
-
+      await hydrate();
+    } catch (cause) {
       console.error('[pptx] collaboration failed to open', cause);
       if (!disposed)
         setState({ t: 'error', message: 'Unable to open this presentation.' });
-
-      return;
     }
   };
-  settleHydrate();
+  fireAndForget(open(), 'pptx-collab');
 
   onCleanup(() => {
     disposed = true;

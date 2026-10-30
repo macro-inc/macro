@@ -1,0 +1,98 @@
+---
+description: "State ownership, reactivity, and async error handling."
+paths:
+  - "apps/web/**"
+  - "packages/**"
+globs: "apps/web/**,packages/**"
+alwaysApply: false
+---
+
+# Solid reactivity and async
+
+State ownership, reactivity, and async error handling.
+
+- **FE-08** No ad-hoc global state modules — shared state for a subtree lives in
+  a Context scoped to a clear ownership boundary.
+- **FE-09** Derive, don't sync — an effect that only copies one signal into
+  another similarly-shaped signal should be a derived signal at the appropriate
+  level.
+- **FE-10** `createEffect` is for external/imperative systems only (DOM APIs,
+  third-party libs, navigation events) — never for deriving state; use `on()` to
+  make dependencies explicit when an effect is warranted. Prefer wrapping the
+  setter over `createEffect(() => { if (signal()) sideEffect() })` when setting
+  a value should also clear related UI, blur a control, or scroll.
+- **FE-11** Check `solid-primitives` before writing a custom reactive utility.
+- **FE-12** `async`/`await`, not `.then()`/`.catch()` chains; fallible calls
+  return `Result` (FE-36) rather than being wrapped in `try`/`catch`. Enforced
+  by oxlint `promise/prefer-await-to-then`, error — `bun run lint:oxlint` from
+  the repository root.
+- **FE-13** Extract multi-step async coordination into named helper functions,
+  keep each function at or below McCabe complexity 20 (oxlint `complexity`,
+  error), and never leave a promise floating: `await` or `return` it, or start a
+  deliberate fire-and-forget with `fireAndForget(promise, surface)` from
+  `@core/util/fireAndForget`, which reports a rejection through
+  `Telemetry.error`. When a failure needs recovery (reset state, show the
+  feature's existing toast), catch it where the work starts instead. `void`
+  never marks a promise as handled, because whether a promise can reject isn't
+  visible in its type. Call the TanStack `QueryClient` methods that can't reject
+  without `throwOnError` (`cancelQueries`, `invalidateQueries`,
+  `refetchQueries`, `resetQueries`, `prefetchQuery`, `prefetchInfiniteQuery`)
+  bare. Enforced as errors by type-aware oxlint
+  `typescript/no-floating-promises` with `ignoreVoid: false` (`bun run
+  lint:oxlint` from the repository root, `just check`, and CI) and by the
+  ast-grep rule `ts-no-expression-void`, which bans `void` outside a statement
+  (`() => void p()`), where the lint can't see the promise.
+- **FE-14** Keep neverthrow `Result`/`ResultAsync` intact end-to-end — use the
+  existing helpers (`ResultAsync`, `throwOnErr` in `queryFn`, `catchToResult`)
+  instead of ad hoc `Promise <-> Result` conversions.
+- **FE-15** Guard once, at the top — missing/invalid state gets an early return
+  at the start of the function or hook, not a repeated check in every branch or
+  a silent fall-through.
+
+## Solid patterns
+
+- Avoid createEffect. Legitimate uses: syncing with external/imperative systems
+  (DOM APIs, third-party libs). If you're using it to derive state or trigger
+  updates, use a derived signal or wrap the setter instead.
+- Prefer wrapping the setter over `createEffect(() => { if (signal())
+  sideEffect() })`. When setting focus/selection should also clear another stop,
+  blur a control, or scroll, put that work in the setter (or a named helper the
+  setter calls) so the action is explicit at the call site — not a distant
+  effect watching the signal.
+- Use createMemo only when you need referential stability or the derivation is
+  expensive. Cheap derivations (() => a() + b()) don't need it regardless of
+  subscriber count.
+- Before rolling your own reactive utility, check solid-primitives first.
+- Never read a solid-query `query.data` unguarded from a component body or an
+  eager `createMemo`. `data` is a resource read: while the query is pending it
+  suspends the caller's nearest `<Suspense>`, which detaches and re-attaches
+  that whole subtree — a blank flash, lost scroll position, remounted editors.
+  Gate the read on status (`query.isSuccess ? query.data : fallback`, or
+  `queryReadyGate` from `src/lib/queries/gate.ts`); an `isLoading` check is not
+  enough, because a disabled or paused query is pending without loading and its
+  data read still suspends. Every other field is a plain store read and is safe.
+  Remember `createMemo` runs immediately, so a guard inside a `<Show>`/`<Match>`
+  further down does not save you. This has blanked the calendar grid twice — see
+  `focusTarget` in `src/features/block-calendar/CalendarBlockAdapter.tsx` and
+  `useSystemSkillsQuery`.
+- **FE-52** Read reactive values (feature flags, `isEditable()`, the current
+  user) inside a reactive scope, never as a snapshot at mount. A flag that is
+  still loading is not "off".
+- **FE-58** A memo that builds an array or object must not recompute on
+  unrelated changes: read each input through its own memo first, so the result
+  keeps its identity while its contents do. A prop that looks like a plain
+  string often reaches you from an accessor that rereads the whole editor
+  state, and a fresh `options` array makes a Kobalte `Select` re-assert its
+  selection and call `onChange` again. Pair it with setters that write nothing
+  when nothing changed (`setReminderMinutes` and `setField` in
+  `create-calendar-event-form-controller.ts`): without both, the control's
+  answer edits the state that produced it and the loop only ends in a stack
+  overflow that takes the app down.
+- **FE-59** Browser callbacks (observers, timers, listeners) run without a
+  Solid owner: `onCleanup` there never runs, and computations created there,
+  including the memo behind a `cond && value` prop read, are never disposed.
+  Wait for an element to enter the document with `onElementConnect` from
+  `@core/util/onElementConnect`, which runs the callback under the caller's
+  owner, and register cleanup for setup-time resources (plugins, debounced
+  saves) at setup, not in that callback. Enforced by ast-grep
+  `ts-/tsx-no-ownerless-element-connect`, CI error.

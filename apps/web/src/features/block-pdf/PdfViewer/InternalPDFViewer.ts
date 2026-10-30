@@ -1,5 +1,6 @@
 import { ENABLE_SCRIPTING } from '@core/constant/featureFlags';
 import { showMessageBoxSync } from '@core/util/dialog';
+import { fireAndForget } from '@core/util/fireAndForget';
 import debounce from 'lodash/debounce';
 import { AnnotationMode, type PageViewport } from 'pdfjs-dist';
 import scriptingSandbox from 'pdfjs-dist/build/pdf.sandbox.js?url';
@@ -289,18 +290,15 @@ export class InternalPDFViewer {
       mountpoint.appendChild(this.#buildPopupOpenInNewTabButton());
     }
 
-    const settlePromise = async () => {
+    const scaleOnFirstPage = async () => {
       await this._viewer._firstPageCapability.promise;
-
       // if the page views aren't ready, then the zoom/scale value won't be calculated
       if (this._popupViewer != null) {
         this._viewer._setScale('auto', true);
         this.#scalePopupToRootScale();
       }
-
-      return;
     };
-    settlePromise();
+    fireAndForget(scaleOnFirstPage(), 'pdf-viewer');
   }
 
   unmount() {
@@ -497,15 +495,11 @@ export class InternalPDFViewer {
       scale = null;
     }
     const popupViewer = this._popupViewer;
-
-    const settlePromiseResult = async () => {
+    const applyScale = async () => {
       await popupViewer._viewer._pagesCapability.promise;
-
       popupViewer._viewer._setScale(scale || 'auto', false);
-
-      return;
     };
-    settlePromiseResult();
+    fireAndForget(applyScale(), 'pdf-viewer');
   }
 
   #showPopup(_target?: HTMLElement) {
@@ -574,10 +568,13 @@ export class InternalPDFViewer {
           const openPopup = async () => {
             if (!popupViewer) return;
             await popupViewer._viewer._pagesCapability.promise;
-            popupViewer._linkService.goToDestination(destination);
+            fireAndForget(
+              popupViewer._linkService.goToDestination(destination),
+              'pdf-viewer'
+            );
             this.showPopupAt(el);
           };
-          void openPopup();
+          fireAndForget(openPopup(), 'pdf-viewer');
         };
       });
   }

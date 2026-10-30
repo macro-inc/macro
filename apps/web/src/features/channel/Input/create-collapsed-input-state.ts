@@ -1,5 +1,6 @@
 import { isMobile } from '@core/mobile/isMobile';
 import { pickNativePhotoLibraryMedia } from '@core/mobile/nativePhotoLibrary';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import {
   type Accessor,
@@ -36,18 +37,15 @@ export function createCollapsedInputState(options: {
 
   const attach = () => {
     if (isPlatform('ios')) {
-      const settlePickNativePhotoLibraryMedia = async () => {
-        const settlePickNativePhotoLibraryMediaValue =
-          await pickNativePhotoLibraryMedia();
-        const files = settlePickNativePhotoLibraryMediaValue;
-
+      const attachPickedMedia = async () => {
+        const files = await pickNativePhotoLibraryMedia();
         if (files === null) {
           filePickerRef?.click();
           return;
         }
-        return await attachFiles(files);
+        await attachFiles(files);
       };
-      void settlePickNativePhotoLibraryMedia();
+      fireAndForget(attachPickedMedia(), 'channel-input');
       return;
     }
     filePickerRef?.click();
@@ -58,7 +56,7 @@ export function createCollapsedInputState(options: {
   ) => {
     const files = Array.from(event.currentTarget.files ?? []);
     event.currentTarget.value = '';
-    void attachFiles(files);
+    fireAndForget(attachFiles(files), 'channel-input');
   };
 
   return {

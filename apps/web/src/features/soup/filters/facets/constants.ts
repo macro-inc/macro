@@ -97,6 +97,22 @@ export const FILTER_TARGETS = {
       backend: 'Sender',
       formatValue: (value) => ({ Partial: value }),
     },
+    emailSenderAddress: {
+      backend: 'Sender',
+      formatValue: (value) => ({ Complete: value }),
+    },
+    emailRecipientAddress: {
+      backend: 'Recipient',
+      formatValue: (value) => ({ Complete: value }),
+    },
+    emailCcAddress: {
+      backend: 'Cc',
+      formatValue: (value) => ({ Complete: value }),
+    },
+    emailBccAddress: {
+      backend: 'Bcc',
+      formatValue: (value) => ({ Complete: value }),
+    },
     emailSeen: { backend: 'Read', domain: [true, false] },
     emailDone: {
       backend: 'InboxVisible',
@@ -225,6 +241,8 @@ export const FILTER_TARGETS = {
   asf: {
     agentSessionId: { backend: 'id' },
     agentSessionOwnerId: { backend: 'o' },
+    agentSessionSource: { backend: 'src' },
+    agentSessionVisibility: { backend: 'vis' },
     includeAgentSessions: { backend: 'inc', compile: 'unit' },
   },
 
@@ -264,6 +282,10 @@ type FilterTargetsMeta = {
     emailLinkId: string[];
     emailProjectId: string[];
     emailSender: string[];
+    emailSenderAddress: string[];
+    emailRecipientAddress: string[];
+    emailCcAddress: string[];
+    emailBccAddress: string[];
     emailSeen: boolean;
     emailDone: boolean;
     emailImportance: boolean;
@@ -369,6 +391,8 @@ type FilterTargetsMeta = {
   asf: {
     agentSessionId: string[];
     agentSessionOwnerId: string[];
+    agentSessionSource: ('user' | 'agent' | 'routine')[];
+    agentSessionVisibility: ('listed' | 'unlisted' | 'hidden')[];
     includeAgentSessions: boolean;
   };
 

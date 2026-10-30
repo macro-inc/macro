@@ -38,6 +38,7 @@ import type {
   EntryChange,
   FindOptions,
 } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type LoroDoc, UndoManager } from 'loro-crdt';
 import type {
   EditOutcome,
@@ -199,26 +200,11 @@ export async function openCollaborativePresentation(
 
   /** Runs worker calls and document writes strictly one after another. */
   function serial<T>(task: () => Promise<T>): Promise<T> {
-    const settleTailHandler0 = task;
-    const settleTailHandler1 = task;
-    const settleTail = async () => {
-      try {
-        await tail;
-      } catch {
-        return await settleTailHandler0();
-      }
-      return await settleTailHandler1();
-    };
-    const run = settleTail();
-
-    const settleRun = async () => {
-      try {
-        return await run;
-      } catch {
-        return;
-      }
-    };
-    tail = settleRun();
+    const run = (async () => {
+      await tail;
+      return task();
+    })();
+    tail = Promise.allSettled([run]);
     return run;
   }
 
@@ -255,22 +241,17 @@ export async function openCollaborativePresentation(
       });
     // Undo and redo flush their own changes and report the result.
     if (capturing) return;
-
-    const settleSerial = async () => {
+    const applyRemote = async () => {
       try {
-        return await serial(async () => {
+        await serial(async () => {
           const result = await flushPending();
           if (result) notify(result);
         });
-      } catch (settleSerialError) {
-        const error: unknown = settleSerialError;
-
+      } catch (error) {
         console.error('[pptx] remote change could not be applied', error);
-
-        return;
       }
     };
-    void settleSerial();
+    fireAndForget(applyRemote(), 'pptx-collab');
   });
 
   function closeGroup() {

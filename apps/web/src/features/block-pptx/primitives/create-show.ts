@@ -1,4 +1,3 @@
-import { match as matchBranch } from 'ts-pattern';
 /**
  * The state of a running slide show, shared by the audience view and the
  * presenter console: the current slide, blacked or whitened screens, the
@@ -15,6 +14,7 @@ import { match as matchBranch } from 'ts-pattern';
 
 import type { DeckOutline, SlideOutline } from '@core/pptx-engine/types';
 import { createSignal, onCleanup } from 'solid-js';
+import { match as matchBranch } from 'ts-pattern';
 import { buildTimeline, clickSteps } from '../core/animation-timeline';
 import { linkAction } from '../core/links';
 

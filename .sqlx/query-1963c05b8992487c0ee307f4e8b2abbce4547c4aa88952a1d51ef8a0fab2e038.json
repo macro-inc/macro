@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_attachments_sfs SET attachment_id = $1 WHERE attachment_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1963c05b8992487c0ee307f4e8b2abbce4547c4aa88952a1d51ef8a0fab2e038"
+}

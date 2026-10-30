@@ -7,7 +7,7 @@ import type {
   MessagePart,
 } from '@service-agent-fold/generated/types';
 import { cleanup, render } from '@solidjs/testing-library';
-import { createSignal, type JSX, onMount } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Message } from './AgentMessage';
@@ -23,6 +23,13 @@ vi.mock('../context/AgentSessionContext', () => ({
 // The layer under test is how a message lays its parts out — which calls fold
 // into a group and at what index — so every part renderer and ui primitive
 // is a marker. The per-part components have their own tests.
+const openedOrigins = vi.hoisted(() => [] as unknown[]);
+vi.mock('../open-prompt-origin', () => ({
+  useOpenPromptOrigin: () => (destination: unknown, options: unknown) => {
+    openedOrigins.push({ destination, options });
+  },
+}));
+
 vi.mock('@core/util/message-send-motion', () => ({
   messageSendMotion: () => {},
 }));
@@ -39,19 +46,16 @@ vi.mock('@ui', () => ({
     <div data-testid="bubble">{props.children}</div>
   ),
 }));
-vi.mock('./parts/TextPart', () => ({
-  TextPart: (props: {
-    text: string;
-    observeRender?: (element: HTMLElement) => void;
-  }) => {
-    let element!: HTMLParagraphElement;
-    onMount(() => props.observeRender?.(element));
-    return (
-      <p ref={element} data-testid="text">
-        {props.text}
-      </p>
-    );
-  },
+vi.mock(
+  '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
+  () => ({
+    StaticMarkdown: (props: { markdown: string }) => (
+      <p data-testid="text">{props.markdown}</p>
+    ),
+  })
+);
+vi.mock('@core/component/LexicalMarkdown/theme', () => ({
+  channelTheme: {},
 }));
 vi.mock('./parts/ToolCallPart', () => ({
   ToolCallPart: (props: {
@@ -161,10 +165,56 @@ const message = (
   agentSessionId: 'session',
   requestId: null,
   pending: false,
+  postedAt: null,
+  segments: [],
+  phase: null,
   turn: 0,
   author: { kind: 'agent' },
   parts,
   stop,
+});
+
+describe('Message incomplete mentions', () => {
+  const partial = 'See <m-document-mention>{"documentId":"unfinished';
+
+  it('keeps a cancelled reply clean when stopping and after remount', () => {
+    const [reply, setReply] = createSignal(message([text(partial)], null));
+    const [inFlight, setInFlight] = createSignal(true);
+    const view = render(() => (
+      <Message message={reply()} inFlight={inFlight()} />
+    ));
+    expect(view.getByTestId('text').textContent).toBe('See ');
+
+    setReply(message([text(partial)], { kind: 'cancelled' }));
+    setInFlight(false);
+    expect(view.getByTestId('text').textContent).toBe('See ');
+    view.unmount();
+
+    const restored = render(() => (
+      <Message message={reply()} inFlight={false} />
+    ));
+    expect(restored.getByTestId('text').textContent).toBe('See ');
+  });
+
+  it('hides an interrupted reply without a recorded stop reason', () => {
+    const view = render(() => (
+      <Message message={message([text(partial)], null)} inFlight={false} />
+    ));
+    expect(view.getByTestId('text').textContent).toBe('See ');
+  });
+
+  it('preserves unfinished markup in user prompts', () => {
+    const view = render(() => (
+      <Message
+        message={{
+          ...message([text(partial)]),
+          author: { kind: 'user', userId: null },
+        }}
+        inFlight={false}
+      />
+    ));
+    expect(view.getByTestId('text').textContent).toBe(partial);
+  });
 });
 
 describe('Message tool grouping', () => {
@@ -679,6 +729,24 @@ describe('Message thought shimmer', () => {
   });
 });
 
+describe('Message prompt context', () => {
+  it.each([true, false])(
+    'hides internal context when pending is %s',
+    (pending) => {
+      const raw =
+        '<m-agent-context>{"version":1,"text":"Private instructions"}</m-agent-context>\n\nOnly user text.';
+      const prompt: FoldedMessage = {
+        ...message([text(raw)]),
+        author: { kind: 'user', userId: null },
+        pending,
+      };
+      const view = render(() => <Message message={prompt} inFlight={false} />);
+      expect(view.getByTestId('bubble').textContent).toBe('Only user text.');
+      expect(prompt.parts).toEqual([text(raw)]);
+    }
+  );
+});
+
 describe('Message prompt attribution', () => {
   const prompt = (userId: string | null): FoldedMessage => ({
     ...message([text('Do the thing.')]),
@@ -805,5 +873,83 @@ describe('Message failed turns', () => {
       'https://www.cursor.com/dashboard?tab=settings'
     );
     expect(view.queryByTestId('action-line')).toBeNull();
+  });
+});
+
+describe('Message prompt footer', () => {
+  const context = (xml: string) =>
+    `<m-agent-context>${JSON.stringify({ version: 1, text: xml }).replace(/</g, '\\u003c')}</m-agent-context>\nWork on the assigned task.`;
+
+  it('says under the prompt what started it, and goes there on click', () => {
+    openedOrigins.length = 0;
+    const view = render(() => (
+      <Message
+        message={{
+          ...message([
+            text(
+              context(
+                '<trigger kind="task_assigned" discussion="d1"><assigned by="Julia" by_id="macro|julia@example.com"/><task id="task-1" title="Fix calendar popover scroll" status="Todo"/></trigger>'
+              )
+            ),
+          ]),
+          author: { kind: 'user', userId: 'macro|me@macro.com' },
+        }}
+        inFlight={false}
+      />
+    ));
+
+    const line = view.getByRole('button', {
+      name: 'via task Fix calendar popover scroll from Julia',
+    });
+    line.click();
+    line.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, shiftKey: true })
+    );
+    expect(openedOrigins).toEqual([
+      {
+        destination: { kind: 'task', taskId: 'task-1' },
+        options: { newSplit: false },
+      },
+      {
+        destination: { kind: 'task', taskId: 'task-1' },
+        options: { newSplit: true },
+      },
+    ]);
+  });
+
+  it('shows only when a prompt typed in the session was posted', () => {
+    const view = render(() => (
+      <Message
+        message={{
+          ...message([
+            text(
+              context('<session owner="Me" owner_id="macro|me@macro.com"/>')
+            ),
+          ]),
+          author: { kind: 'user', userId: 'macro|me@macro.com' },
+          postedAt: '2026-10-15T14:02:00+00:00',
+        }}
+        inFlight={false}
+      />
+    ));
+    const footer = view.getByTestId('prompt-footer');
+    expect(footer.querySelector('button')).toBeNull();
+    expect(footer.querySelector('time')?.dateTime).toBe(
+      '2026-10-15T14:02:00+00:00'
+    );
+  });
+
+  it('adds nothing under a prompt the log has not confirmed', () => {
+    const view = render(() => (
+      <Message
+        message={{
+          ...message([text('Do the thing.')]),
+          author: { kind: 'user', userId: 'macro|me@macro.com' },
+          pending: true,
+        }}
+        inFlight={false}
+      />
+    ));
+    expect(view.queryByTestId('prompt-footer')).toBeNull();
   });
 });

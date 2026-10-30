@@ -21,6 +21,8 @@ import type {
   Sizing,
   VectorNetwork,
 } from '@core/fig-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import { createSignal, onCleanup } from 'solid-js';
 import type { FigSharing } from '../context/fig-viewer-context';
 import { type Alignment, alignOffset, distributeOffsets } from '../core/align';
@@ -283,7 +285,7 @@ export function createFigEditor(options: FigEditorOptions) {
       // Unsupported permission queries leave the clipboard unreadable.
     }
   };
-  void watchClipboardPermission();
+  fireAndForget(watchClipboardPermission(), 'fig-editor');
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let saving: Promise<void> | undefined;
   let dirtySinceSave = false;
@@ -350,11 +352,15 @@ export function createFigEditor(options: FigEditorOptions) {
     // Shared live, so nothing is lost while someone else stores the file.
     if (!stores()) return;
     setSaveState('unsaved');
-    saveTimer = setTimeout(() => void saveNow(), SAVE_DELAY_MS);
+    saveTimer = setTimeout(
+      () => fireAndForget(saveNow(), 'fig-editor'),
+      SAVE_DELAY_MS
+    );
   };
 
   const onHidden = () => {
-    if (document.visibilityState === 'hidden') void saveNow();
+    if (document.visibilityState === 'hidden')
+      fireAndForget(saveNow(), 'fig-editor');
   };
   document.addEventListener('visibilitychange', onHidden);
   // Whoever stores the file now (the one who did may have left) stores
@@ -433,23 +439,32 @@ export function createFigEditor(options: FigEditorOptions) {
     pushTimer = undefined;
     await sharing?.push();
   };
+  /**
+   * Runs `work` after every edit queued before it, so edits apply one at a
+   * time and in order. A failure is reported and resolves to undefined.
+   */
+  const enqueue = <T>(work: () => Promise<T>): Promise<T | undefined> => {
+    const runAfterQueue = async () => {
+      await queue;
+      try {
+        return await work();
+      } catch (e) {
+        options.notifyError(e instanceof Error ? e.message : String(e));
+        return undefined;
+      }
+    };
+    const run = runAfterQueue();
+    queue = run;
+    return run;
+  };
   const pushSoon = () => {
     if (pushTimer) return;
     pushTimer = setTimeout(() => {
       pushTimer = undefined;
-
-      const settleQueue = async () => {
-        await queue;
-
-        try {
-          await sharing?.push();
-        } catch (e) {
-          options.notifyError(e instanceof Error ? e.message : String(e));
-        }
-
-        return;
+      const push = async () => {
+        await sharing?.push();
       };
-      queue = settleQueue();
+      fireAndForget(enqueue(push), 'fig-editor');
     }, GESTURE_PUSH_MS);
   };
   onCleanup(() => clearTimeout(pushTimer));
@@ -458,20 +473,11 @@ export function createFigEditor(options: FigEditorOptions) {
   const unsubscribeIncoming = sharing?.onIncoming(() => {
     if (pullQueued) return;
     pullQueued = true;
-
-    const settleQueueResult = async () => {
-      await queue;
-
+    const pull = async () => {
       pullQueued = false;
-      try {
-        await pullShared();
-      } catch (e) {
-        options.notifyError(e instanceof Error ? e.message : String(e));
-      }
-
-      return;
+      await pullShared();
     };
-    queue = settleQueueResult();
+    fireAndForget(enqueue(pull), 'fig-editor');
   });
   onCleanup(() => unsubscribeIncoming?.());
 
@@ -488,73 +494,50 @@ export function createFigEditor(options: FigEditorOptions) {
   ) => {
     if (!enabled() || (Array.isArray(ops) && ops.length === 0))
       return Promise.resolve(undefined);
-
-    const settleQueueResultResult = async () => {
-      await queue;
-
-      try {
-        // Other people's changes that arrived first apply first.
-        await pullShared();
-        const page = viewer.page();
-        const resolved = typeof ops === 'function' ? await ops(page) : ops;
-        if (resolved.length === 0) return await undefined;
-        const before = viewer.selected();
-        const result = await engine.apply(page, resolved, coalesce);
-        // A drag's later steps coalesce into its first: keep that one's.
-        if (result.undoStep !== null && !stepSelections.has(result.undoStep)) {
-          stepSelections.set(result.undoStep, { page, before });
-          // The engine keeps 200 steps; forget the oldest beyond that.
-          for (const id of stepSelections.keys()) {
-            if (stepSelections.size <= MAX_REMEMBERED_STEPS) break;
-            stepSelections.delete(id);
-          }
+    const applyStep = async () => {
+      // Other people's changes that arrived first apply first.
+      await pullShared();
+      const page = viewer.page();
+      const resolved = typeof ops === 'function' ? await ops(page) : ops;
+      if (resolved.length === 0) return undefined;
+      const before = viewer.selected();
+      const result = await engine.apply(page, resolved, coalesce);
+      // A drag's later steps coalesce into its first: keep that one's.
+      if (result.undoStep !== null && !stepSelections.has(result.undoStep)) {
+        stepSelections.set(result.undoStep, { page, before });
+        // The engine keeps 200 steps; forget the oldest beyond that.
+        for (const id of stepSelections.keys()) {
+          if (stepSelections.size <= MAX_REMEMBERED_STEPS) break;
+          stepSelections.delete(id);
         }
-        if (coalesce) pushSoon();
-        else await pushNow();
-        await settle(result, quiet);
-        return await result;
-      } catch (e) {
-        options.notifyError(e instanceof Error ? e.message : String(e));
-        return await undefined;
       }
+      if (coalesce) pushSoon();
+      else await pushNow();
+      await settle(result, quiet);
+      return result;
     };
-    const run = settleQueueResultResult();
-    queue = run;
-    return run;
+    return enqueue(applyStep);
   };
 
   const history = (action: 'undo' | 'redo'): Promise<unknown> => {
     if (!enabled()) return Promise.resolve();
-
-    const settleQueueResultResultResult = async () => {
-      await queue;
-
-      try {
-        await pullShared();
-        const step = action === 'undo' ? undoStep : redoStep;
-        const remembered = step === null ? undefined : stepSelections.get(step);
-        if (remembered && action === 'undo')
-          remembered.after = viewer.selected();
-        const result =
-          action === 'undo'
-            ? await engine.undo(viewer.page())
-            : await engine.redo(viewer.page());
-        // Undo is local: what it restores is shared as a new change.
-        await pushNow();
-        await settle(result);
-        const wanted =
-          action === 'undo' ? remembered?.before : remembered?.after;
-        if (remembered && wanted)
-          await restoreSelection(remembered.page, wanted);
-        else await viewer.pruneSelection();
-      } catch (e) {
-        options.notifyError(e instanceof Error ? e.message : String(e));
-      }
-
-      return;
+    const moveInHistory = async () => {
+      await pullShared();
+      const step = action === 'undo' ? undoStep : redoStep;
+      const remembered = step === null ? undefined : stepSelections.get(step);
+      if (remembered && action === 'undo') remembered.after = viewer.selected();
+      const result =
+        action === 'undo'
+          ? await engine.undo(viewer.page())
+          : await engine.redo(viewer.page());
+      // Undo is local: what it restores is shared as a new change.
+      await pushNow();
+      await settle(result);
+      const wanted = action === 'undo' ? remembered?.before : remembered?.after;
+      if (remembered && wanted) await restoreSelection(remembered.page, wanted);
+      else await viewer.pruneSelection();
     };
-    queue = settleQueueResultResultResult();
-    return queue;
+    return enqueue(moveInHistory);
   };
 
   /** Selects the layers a step created. */
@@ -664,24 +647,14 @@ export function createFigEditor(options: FigEditorOptions) {
    */
   const importLibrary = async (pkg: LibraryPackage, spec: LibrarySpec) => {
     if (!enabled()) return undefined;
-
-    const settleQueueResultResultResultResult = async () => {
-      await queue;
-
-      try {
-        await pullShared();
-        const result = await engine.importLibrary(viewer.page(), pkg, spec);
-        await pushNow();
-        await settle(result);
-        return await result;
-      } catch (e) {
-        options.notifyError(e instanceof Error ? e.message : String(e));
-        return await undefined;
-      }
+    const importStep = async () => {
+      await pullShared();
+      const result = await engine.importLibrary(viewer.page(), pkg, spec);
+      await pushNow();
+      await settle(result);
+      return result;
     };
-    const run = settleQueueResultResultResultResult();
-    queue = run;
-    const result = await run;
+    const result = await enqueue(importStep);
     await selectCreated(result);
     return result;
   };
@@ -785,30 +758,27 @@ export function createFigEditor(options: FigEditorOptions) {
       dataType: 'scene',
       ids,
     };
-
-    const settleCopy = async () => {
-      const settleCopyValue = await engine.copy(viewer.page(), ids);
-      const copied = settleCopyValue;
-      return await new Blob([encodeClipboard({ meta, copied })], {
+    const encode = async () => {
+      const copied = await engine.copy(viewer.page(), ids);
+      return new Blob([encodeClipboard({ meta, copied })], {
         type: 'text/html',
       });
     };
-    const html = settleCopy();
+    const html = encode();
     // The item is handed over now, inside the key press, and filled in
     // when the engine has written the layers.
     try {
       if (typeof ClipboardItem === 'undefined') return;
-
-      const settleWrite = async () => {
+      const write = async () => {
         try {
-          return await navigator.clipboard.write([
+          await navigator.clipboard.write([
             new ClipboardItem({ 'text/html': html }),
           ]);
         } catch {
-          return;
+          // A refused write leaves pasting here working.
         }
       };
-      void settleWrite();
+      fireAndForget(write(), 'fig-editor');
     } catch {
       // No clipboard access: pasting here still works.
     }
@@ -829,8 +799,10 @@ export function createFigEditor(options: FigEditorOptions) {
         if (status.state !== 'granted') return undefined;
       }
       for (const item of await navigator.clipboard.read()) {
-        if (item.types.includes('text/html'))
-          return await (await item.getType('text/html')).text();
+        if (item.types.includes('text/html')) {
+          const html = await item.getType('text/html');
+          return await html.text();
+        }
       }
     } catch {
       // No access: the layers copied here are pasted.
@@ -877,27 +849,16 @@ export function createFigEditor(options: FigEditorOptions) {
       ...(place && 'at' in place ? { at: place.at } : {}),
       ...(place && 'replace' in place ? { replace: place.replace } : {}),
     };
-
-    const settleQueueResultResultResultResultResult = async () => {
-      await queue;
-
-      try {
-        const copied =
-          payload?.copied ?? (await engine.copy(viewer.page(), own));
-        // As with other steps: others' changes first, then share this one.
-        await pullShared();
-        const result = await engine.paste(viewer.page(), copied, spec);
-        await pushNow();
-        await settle(result);
-        return await result;
-      } catch (e) {
-        options.notifyError(e instanceof Error ? e.message : String(e));
-        return await undefined;
-      }
+    const pasteStep = async () => {
+      const copied = payload?.copied ?? (await engine.copy(viewer.page(), own));
+      // As with other steps: others' changes first, then share this one.
+      await pullShared();
+      const result = await engine.paste(viewer.page(), copied, spec);
+      await pushNow();
+      await settle(result);
+      return result;
     };
-    const run = settleQueueResultResultResultResultResult();
-    queue = run;
-    await selectCreated(await run);
+    await selectCreated(await enqueue(pasteStep));
 
     function selectedPasteParent(
       selection: Selected[],
@@ -1050,7 +1011,7 @@ export function createFigEditor(options: FigEditorOptions) {
       to(network: VectorNetwork) {
         setVectorEdit((v) => v && { ...v, network });
         wanted = network;
-        void pump();
+        fireAndForget(pump(), 'fig-editor');
       },
       async end() {
         await pump();
@@ -1108,7 +1069,7 @@ export function createFigEditor(options: FigEditorOptions) {
       /** Total page-space offset from the drag's start. */
       to(dx: number, dy: number) {
         wanted = { x: dx, y: dy };
-        void pump();
+        fireAndForget(pump(), 'fig-editor');
       },
       async end(at?: Point) {
         await pump();
@@ -1160,7 +1121,7 @@ export function createFigEditor(options: FigEditorOptions) {
         if (!sharing || timer) return;
         timer = setTimeout(() => {
           timer = undefined;
-          void step(false);
+          fireAndForget(step(false), 'fig-editor');
         }, GESTURE_PUSH_MS);
       },
       async end(at?: Point) {
@@ -1182,10 +1143,19 @@ export function createFigEditor(options: FigEditorOptions) {
   const startResize = (ids: string[], start: Rect, known?: NodeInfo) => {
     const key = `resize-${++dragKey}`;
     const page = viewer.page();
-    const infos: Promise<NodeInfo[]> =
-      known && ids.length === 1 && ids[0] === known.id
-        ? Promise.resolve([known])
-        : Promise.all(ids.map((id) => engine.nodeInfo(page, id)));
+    const loadInfos = async (): Promise<NodeInfo[]> => {
+      if (known && ids.length === 1 && ids[0] === known.id) return [known];
+      try {
+        return await Promise.all(ids.map((id) => engine.nodeInfo(page, id)));
+      } catch (e) {
+        // Every step of the drag awaits this: rejecting would leave
+        // `running` set and the drag stuck.
+        Telemetry.error(e, { surface: 'fig-editor' });
+        options.notifyError(e instanceof Error ? e.message : String(e));
+        return [];
+      }
+    };
+    const infos = loadInfos();
     let wanted: Rect | undefined;
     let running = false;
     const pump = async () => {
@@ -1228,7 +1198,7 @@ export function createFigEditor(options: FigEditorOptions) {
     return {
       to(rect: Rect) {
         wanted = rect;
-        void pump();
+        fireAndForget(pump(), 'fig-editor');
       },
       async end() {
         await pump();
@@ -1255,7 +1225,7 @@ export function createFigEditor(options: FigEditorOptions) {
     return {
       to(degrees: number) {
         wanted = degrees;
-        void pump();
+        fireAndForget(pump(), 'fig-editor');
       },
       async end() {
         await pump();

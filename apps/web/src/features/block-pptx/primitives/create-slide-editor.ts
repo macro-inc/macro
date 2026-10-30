@@ -1,4 +1,3 @@
-import { match as matchBranch } from 'ts-pattern';
 /**
  * Interaction state for the slide on screen: rendering, shape selection,
  * move/resize/rotate drags, nudging, and in-place text editing.
@@ -16,6 +15,8 @@ import type {
   TextLayoutInfo,
   TextPos,
 } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import {
   type Accessor,
   batch,
@@ -25,6 +26,7 @@ import {
   onCleanup,
   untrack,
 } from 'solid-js';
+import { match as matchBranch } from 'ts-pattern';
 import type { PresentationEngine } from '../context/pptx-editor-context';
 import {
   lineEdge,
@@ -233,7 +235,7 @@ export function createSlideEditor(options: SlideEditorOptions) {
         if (id === undefined) return;
         // While typing, the stage shows layers; the base catches up afterwards.
         if (untrack(editing)) return;
-        void renderBase();
+        fireAndForget(renderBase(), 'pptx-editor');
       }
     )
   );
@@ -251,6 +253,24 @@ export function createSlideEditor(options: SlideEditorOptions) {
       queue.urgent(() => engine.renderLayer(s.index, width, 'only', shape)),
     ]);
     replaceImages(withBackdrop ? { backdrop, layer } : { layer });
+  }
+
+  /** Renders the edited shape's layers; on failure the stage keeps the base. */
+  async function renderEditLayers(shape: number) {
+    try {
+      await renderLayers(shape, true);
+    } catch (error) {
+      Telemetry.error(error, { surface: 'pptx-editor' });
+    }
+  }
+
+  /** A shape's text layout, or `null` when the engine can't read it. */
+  async function textLayoutOrNull(shape: number, cell?: CellRef) {
+    try {
+      return await engine.textLayout(index(), shape, cell);
+    } catch {
+      return null;
+    }
   }
 
   onCleanup(() =>
@@ -290,7 +310,10 @@ export function createSlideEditor(options: SlideEditorOptions) {
       return;
     if (editing()) stopEditing();
     setSelectedIds(ids);
-    void loadSelectedLayout(ids.length === 1 ? ids[0] : null);
+    fireAndForget(
+      loadSelectedLayout(ids.length === 1 ? ids[0] : null),
+      'pptx-editor'
+    );
   }
 
   /** Adds a shape to the selection, or takes it out. */
@@ -318,16 +341,8 @@ export function createSlideEditor(options: SlideEditorOptions) {
     if (!s || !edit) return;
     if (!result.structureChanged && !result.changedSlides.includes(s.id))
       return;
-
-    const settleRenderLayers = async () => {
-      try {
-        return await renderLayers(edit.shape, true);
-      } catch {
-        return;
-      }
-    };
-    void settleRenderLayers();
-    void refreshEditing();
+    fireAndForget(renderLayers(edit.shape, true), 'pptx-editor');
+    fireAndForget(refreshEditing(), 'pptx-editor');
   });
   onCleanup(() => unsubscribeRemote?.());
 
@@ -469,7 +484,7 @@ export function createSlideEditor(options: SlideEditorOptions) {
     const active = d.active || distance >= DRAG_THRESHOLD_PX;
     const layered = d.kind === 'move' && d.shape !== undefined;
     if (active && !d.active && layered) {
-      void renderLayers(d.shape!, true);
+      fireAndForget(renderLayers(d.shape!, true), 'pptx-editor');
     }
     let current = at;
     updateDy(d);
@@ -746,16 +761,10 @@ export function createSlideEditor(options: SlideEditorOptions) {
       });
     });
     editReady = (async () => {
-      const settleTextLayout = async () => {
-        try {
-          return await engine.textLayout(index(), shapeId, cell?.ref);
-        } catch {
-          return await null;
-        }
-      };
       const [layout] = await Promise.all([
-        settleTextLayout(),
-        renderLayers(shapeId, true),
+        textLayoutOrNull(shapeId, cell?.ref),
+        // Text commands wait on this; without layers the stage shows the base.
+        renderEditLayers(shapeId),
       ]);
       const pos = layout && at ? positionAt(layout, at) : null;
       const selection: TextSelection = pos
@@ -783,8 +792,8 @@ export function createSlideEditor(options: SlideEditorOptions) {
     textDragAnchor = null;
     session.breakGroup();
     // The base render drops the layers when it lands.
-    void renderBase();
-    void loadSelectedLayout(selected());
+    fireAndForget(renderBase(), 'pptx-editor');
+    fireAndForget(loadSelectedLayout(selected()), 'pptx-editor');
   }
 
   // Coalesced refresh of the edited shape's layout and layer after a change.
@@ -801,16 +810,8 @@ export function createSlideEditor(options: SlideEditorOptions) {
         refreshAgain = false;
         const edit = editing();
         if (!edit) break;
-
-        const settleTextLayoutResult = async () => {
-          try {
-            return await engine.textLayout(index(), edit.shape, edit.cell);
-          } catch {
-            return await null;
-          }
-        };
         const [layout] = await Promise.all([
-          settleTextLayoutResult(),
+          textLayoutOrNull(edit.shape, edit.cell),
           renderLayers(edit.shape, false),
         ]);
         // A layout fetched while later keystrokes are still in flight is
@@ -856,15 +857,8 @@ export function createSlideEditor(options: SlideEditorOptions) {
       }
       await refreshEditing();
     })();
-
-    const settleDone = async () => {
-      try {
-        return await done;
-      } catch {
-        return;
-      }
-    };
-    lastText = settleDone();
+    // Later commands wait for this batch whether or not it lands.
+    lastText = Promise.allSettled([done]);
     await done;
   }
 
@@ -1082,7 +1076,10 @@ export function createSlideEditor(options: SlideEditorOptions) {
         const edit = editing();
         if (edit && !kept.includes(edit.shape)) setEditing(null);
         setSelectedIds(kept);
-        void loadSelectedLayout(kept.length === 1 ? kept[0] : null);
+        fireAndForget(
+          loadSelectedLayout(kept.length === 1 ? kept[0] : null),
+          'pptx-editor'
+        );
       });
     })
   );

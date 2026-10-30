@@ -21,7 +21,9 @@ use crate::api::email::links::list::ListLinksResponse;
 use crate::api::email::links::resync::ResyncResponse;
 use crate::api::email::messages::labels::{UpdateLabelBatchRequest, UpdateLabelBatchResponse};
 use crate::api::email::settings::patch::{PatchSettingsRequest, PatchSettingsResponse};
-use crate::api::email::threads::archived::ArchiveThreadRequest;
+use crate::api::email::threads::archived::{
+    ArchiveThreadRequest, ArchiveThreadsRequest, ArchiveThreadsResponse,
+};
 use crate::api::{email, health};
 use ::email::inbound;
 use ::email::inbound::axum::api_types::{
@@ -62,6 +64,8 @@ use utoipa::OpenApi;
     ),
     paths(
         crate::api::calendar_invitations::handler,
+        crate::api::calendar_invitations::copy_handler,
+        crate::api::calendar_event_forward::handler,
         health::health_handler,
         email::attachments::get::handler,
         email::attachments::get_document_id::handler,
@@ -71,22 +75,31 @@ use utoipa::OpenApi;
         email::backfill::get::list_handler,
         email::init::handler,
         inbound::axum::draft_router::create_draft_handler,
+        inbound::axum::draft_router::resolve_message_operation_handler,
+        inbound::axum::draft_router::message_operation_status_handler,
         email::drafts::delete::handler,
         email::drafts::scheduled::list::handler,
         email::drafts::scheduled::remove::handler,
         email::drafts::scheduled::upsert::handler,
         email::drafts::add_attachment::handler,
+        email::drafts::complete_attachment::handler,
+        email::drafts::transfer::handler,
+        email::drafts::transfer::recover,
         email::drafts::remove_attachment::handler,
         email::drafts::add_forwarded_attachment::handler,
         email::drafts::remove_forwarded_attachment::handler,
         email::messages::get::handler,
+        email::messages::eml::handler,
         email::messages::get::batch_handler,
         email::messages::labels::handler,
         inbound::axum::send_router::send_message_handler,
         email::threads::seen::seen_handler,
         email::threads::get::get_thread_messages_handler,
         email::threads::archived::archived_handler,
+        email::threads::archived::archived_batch_handler,
         inbound::axum::thread_labels_router::update_thread_labels_handler,
+        inbound::axum::thread_labels_router::update_thread_state_handler,
+        inbound::axum::thread_labels_router::thread_operations_handler,
         inbound::axum::previews_router::cursor_handler,
         inbound::axum::get_thread_router::get_thread_handler,
         inbound::axum::thread_project_router::update_thread_project_handler,
@@ -107,6 +120,7 @@ use utoipa::OpenApi;
         email::contacts::list_blocked::handler,
         email::sync::disable::disable_handler,
         email::settings::patch::patch_settings_handler,
+        email::settings::operations::handler,
     ),
     components(
         schemas(
@@ -144,6 +158,8 @@ use utoipa::OpenApi;
             ParsedMessage,
             // Thread types
             ArchiveThreadRequest,
+            ArchiveThreadsRequest,
+            ArchiveThreadsResponse,
             UpdateThreadLabelRequest,
             UpdateThreadLabelsResponse,
             UpdateThreadProjectRequest,

@@ -1,5 +1,7 @@
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import XIcon from '@phosphor/x.svg';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
+import XIcon from '@icon/system/regular/x.svg';
+import { ButtonGroup } from '@ui';
 import { InputGroup } from '@ui/components/InputGroup';
 import {
   createMemo,
@@ -67,17 +69,20 @@ export function DatabaseSearch(props: {
     <Show
       when={props.isOpen}
       fallback={
-        <button
-          ref={searchButton}
-          type="button"
-          aria-label="Search"
-          aria-keyshortcuts="Control+F Meta+F"
-          title="Search every table"
-          onClick={() => props.onOpen()}
-          class="flex size-8 shrink-0 items-center justify-center rounded-md text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-ink/50"
-        >
-          <MagnifyingGlassIcon class="size-3.5" />
-        </button>
+        <HeaderActionGroup label="Search">
+          <ButtonGroup.Button
+            aria-label="Search"
+            ref={searchButton}
+            type="button"
+            variant="ghost"
+            size="icon-md"
+            aria-keyshortcuts="Control+F Meta+F"
+            tooltip="Search every table"
+            onClick={() => props.onOpen()}
+          >
+            <MagnifyingGlassIcon class="size-4 touch:size-3.5" />
+          </ButtonGroup.Button>
+        </HeaderActionGroup>
       }
     >
       <div
@@ -89,7 +94,7 @@ export function DatabaseSearch(props: {
           props.onClose(false);
         }}
       >
-        <InputGroup size="sm" class="w-40 @min-[640px]/view-toolbar:w-56">
+        <InputGroup size="md" class="w-40 @min-[640px]/view-toolbar:w-56">
           <InputGroup.Addon align="inline-start">
             <MagnifyingGlassIcon class="size-3.5" />
           </InputGroup.Addon>
@@ -132,9 +137,12 @@ export function DatabaseSearch(props: {
           />
           <InputGroup.Addon align="inline-end">
             <InputGroup.Button
+              aria-label={props.term ? 'Clear search' : 'Close search'}
+              tooltip={{
+                content: props.term ? 'Clear search' : 'Close search',
+                disabled: true,
+              }}
               size="icon-xs"
-              label={props.term ? 'Clear search' : 'Close search'}
-              tooltipDisabled
               onClick={() => {
                 if (props.term) changeTerm('');
                 else closeAndRestore();

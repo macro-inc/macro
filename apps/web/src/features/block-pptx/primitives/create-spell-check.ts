@@ -9,6 +9,7 @@
  */
 
 import type { CellRef, TextLayoutInfo } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
   createEffect,
@@ -48,26 +49,20 @@ let loading: Promise<Speller> | undefined;
 /** The en-US speller, loaded once per page. */
 export function loadSpeller(): Promise<Speller> {
   loading ??= (async () => {
-    const [aff, dic] = await Promise.all([
-      import('../core/dictionary/en_US.aff?raw'),
-      import('../core/dictionary/en_US.dic?raw'),
-    ]);
-    return createSpeller(
-      expandDictionary(dic.default, parseAffixes(aff.default))
-    );
-  })();
-  // A failed load (offline) may be retried.
-
-  const settleLoading = async () => {
     try {
-      return await loading;
-    } catch {
+      const [aff, dic] = await Promise.all([
+        import('../core/dictionary/en_US.aff?raw'),
+        import('../core/dictionary/en_US.dic?raw'),
+      ]);
+      return createSpeller(
+        expandDictionary(dic.default, parseAffixes(aff.default))
+      );
+    } catch (error) {
+      // A failed load (offline) may be retried.
       loading = undefined;
-
-      return;
+      throw error;
     }
-  };
-  settleLoading();
+  })();
   return loading;
 }
 
@@ -140,20 +135,17 @@ export function createSpellCheck(options: SpellCheckOptions) {
   }
 
   onMount(() => {
-    const timer = setTimeout(() => {
-      const settleReady = async () => {
-        try {
-          return await ready();
-        } catch (settleReadyError) {
-          const error: unknown = settleReadyError;
-          return await console.error(
-            '[pptx] the spelling dictionary did not load',
-            error
-          );
-        }
-      };
-      settleReady();
-    }, LOAD_DELAY_MS);
+    const preload = async () => {
+      try {
+        await ready();
+      } catch (error) {
+        console.error('[pptx] the spelling dictionary did not load', error);
+      }
+    };
+    const timer = setTimeout(
+      () => fireAndForget(preload(), 'pptx-spelling'),
+      LOAD_DELAY_MS
+    );
     onCleanup(() => clearTimeout(timer));
   });
 
@@ -187,15 +179,12 @@ export function createSpellCheck(options: SpellCheckOptions) {
     const version = session.slideVersion(slideId);
     const cached = layouts.get(key);
     if (cached && cached.version === version) return cached.layout;
-
-    const settleTextLayout = async () => {
-      try {
-        return await engine.textLayout(index, source.shape, source.cell);
-      } catch {
-        return await null;
-      }
-    };
-    const layout = await settleTextLayout();
+    let layout: TextLayoutInfo | null = null;
+    try {
+      layout = await engine.textLayout(index, source.shape, source.cell);
+    } catch {
+      // Cached as no layout until the slide changes.
+    }
     layouts.set(key, { version, layout });
     return layout;
   }
@@ -263,7 +252,10 @@ export function createSpellCheck(options: SpellCheckOptions) {
       setSquiggles([]);
     }
     clearTimeout(timer);
-    timer = setTimeout(() => void check(), RECHECK_MS);
+    timer = setTimeout(
+      () => fireAndForget(check(), 'pptx-spelling'),
+      RECHECK_MS
+    );
   };
   onCleanup(() => clearTimeout(timer));
   // Asking the engine for text layouts syncs with an external system.

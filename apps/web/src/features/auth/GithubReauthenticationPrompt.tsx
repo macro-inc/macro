@@ -2,9 +2,9 @@ import { authorizeGithub } from '@core/auth/authorize-github';
 import { toast } from '@core/component/Toast/Toast';
 import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useReauthenticateGithubMutation } from '@queries/auth';
 import { fetchGithubLinkStatus } from '@queries/auth/github-link';
-
 import { createSignal, onCleanup, onMount } from 'solid-js';
 
 async function checkGithubReauthenticationStatus(): Promise<boolean> {
@@ -38,16 +38,12 @@ export function GithubReauthenticationPrompt() {
     setReconnecting(false);
   }
 
+  async function refreshNeedsReauth() {
+    setNeedsReauth(await checkGithubReauthenticationStatus());
+  }
+
   onMount(() => {
-    const settleCheckGithubReauthenticationStatusHandler0 = setNeedsReauth;
-    const settleCheckGithubReauthenticationStatus = async () => {
-      const settleCheckGithubReauthenticationStatusValue =
-        await checkGithubReauthenticationStatus();
-      return await settleCheckGithubReauthenticationStatusHandler0(
-        settleCheckGithubReauthenticationStatusValue
-      );
-    };
-    void settleCheckGithubReauthenticationStatus();
+    fireAndForget(refreshNeedsReauth(), 'github-reauth');
     if (isNativeMobilePlatform()) return;
 
     async function onPageShow(event: PageTransitionEvent) {
@@ -78,7 +74,7 @@ export function GithubReauthenticationPrompt() {
         {
           label: 'Reconnect',
           onClick: () => {
-            void reconnect();
+            fireAndForget(reconnect(), 'github-reauth');
           },
         },
       ],

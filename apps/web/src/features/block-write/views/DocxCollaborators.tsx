@@ -1,4 +1,5 @@
 import type { CaretRect, Pos } from '@app/lib/docx/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
   createEffect,
@@ -27,32 +28,28 @@ export function DocxCollaboratorCarets(props: {
   createEffect(
     on([() => props.peers, props.revision], ([peers]) => {
       const current = ++generation;
-
-      const settleAll = async () => {
-        try {
-          const settleAllValue = await Promise.all(
-            peers.map(async (peer) => {
-              const caret = await props.caretAt({
-                block: peer.selection.block,
-                offset: peer.selection.offset,
-              });
-              return caret
-                ? [{ peer, name: props.displayName(peer.userId), caret }]
-                : [];
-            })
-          );
-          const found = settleAllValue;
-
-          if (current === generation) setCarets(found.flat());
-
-          return;
-        } catch {
-          return;
-        }
-      };
-      settleAll();
+      fireAndForget(locate(peers, current), 'docx-editor');
     })
   );
+
+  async function locate(peers: DocxPeer[], current: number) {
+    try {
+      const found = await Promise.all(
+        peers.map(async (peer) => {
+          const caret = await props.caretAt({
+            block: peer.selection.block,
+            offset: peer.selection.offset,
+          });
+          return caret
+            ? [{ peer, name: props.displayName(peer.userId), caret }]
+            : [];
+        })
+      );
+      if (current === generation) setCarets(found.flat());
+    } catch {
+      // The engine is reopening; the next revision places the carets.
+    }
+  }
 
   return (
     <For each={carets()}>

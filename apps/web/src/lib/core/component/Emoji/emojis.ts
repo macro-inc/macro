@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createMemo, createSignal } from 'solid-js';
 import type { SimpleEmoji } from './emoji-catalog';
 
@@ -8,25 +9,26 @@ type EmojiCatalog = typeof import('./emoji-catalog');
 // The emoji tables are several hundred KB, so they load as their own chunk the
 // first time a picker or the `:` menu reads them rather than at app start.
 const [catalog, setCatalog] = createSignal<EmojiCatalog>();
-let catalogLoad: Promise<EmojiCatalog> | undefined;
+let catalogRequested = false;
 
-function loadEmojiCatalog(): Promise<EmojiCatalog> {
-  const settleOperation = async () => {
-    const settleOperationValue = await import('./emoji-catalog');
-    const module = settleOperationValue;
+async function importEmojiCatalog(): Promise<void> {
+  const module = await import('./emoji-catalog');
+  setCatalog(() => module);
+}
 
-    setCatalog(() => module);
-    return await module;
-  };
-  catalogLoad ??= settleOperation();
-  return catalogLoad;
+// Every read starts the load, so the guard keeps a failed chunk to one report
+// rather than one per reader.
+function loadEmojiCatalog(): void {
+  if (catalogRequested) return;
+  catalogRequested = true;
+  fireAndForget(importEmojiCatalog(), 'emoji-catalog');
 }
 
 /** Resolves `:shortcode:` once the catalog has loaded; starts the load otherwise. */
 export function resolveEmoji(key: string): string | undefined {
   const loaded = catalog();
   if (!loaded) {
-    void loadEmojiCatalog();
+    loadEmojiCatalog();
     return undefined;
   }
   return loaded.resolveEmoji(key);
@@ -42,11 +44,11 @@ export const useEmojiData = () => {
 
   return {
     groups: () => {
-      void loadEmojiCatalog();
+      loadEmojiCatalog();
       return groups();
     },
     emojis: () => {
-      void loadEmojiCatalog();
+      loadEmojiCatalog();
       return emojis();
     },
     filter: (query: string) => {

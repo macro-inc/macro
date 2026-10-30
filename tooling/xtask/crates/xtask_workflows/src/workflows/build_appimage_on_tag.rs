@@ -52,7 +52,7 @@ pub fn build_appimage() -> Workflow {
 pub fn build_appimage_job(ref_expr: &str) -> Job {
     Job::default()
         .name("Build AppImage")
-        .runs_on(runners::Runner::RustCi.to_string())
+        .runs_on(runners::Runner::Mid.with_cache_tag("desktop-linux"))
         .add_step(steps::checkout_ref(ref_expr))
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix())

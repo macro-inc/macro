@@ -1,9 +1,6 @@
-import { canEditProject } from '@app/features/projects/core/project';
-import { createProjectDetailQuery } from '@app/features/projects/queries/project-identity';
-import { toProjectDetail } from '@app/features/projects/queries/project-model';
+import { createProjectIdentityQuery } from '@app/features/projects/queries/project-identity';
 import type { FacetSelection, SortSelection } from '@app/features/soup';
 import { sortItems } from '@app/features/soup/collection/transforms';
-import { throwOnErr } from '@core/util/result';
 import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
 import type { TaskEntityWithProperties } from '@entity/types/entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
@@ -11,8 +8,6 @@ import type { Property, PropertyApiValues } from '@property/types';
 import { toPropertyDefinitionDomain } from '@property/utils/transforms';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
-import { useDocumentAccessLevelsQuery } from '@queries/storage/document-metadata';
-import { initiativeClient } from '@service-storage/initiative';
 import type { Client } from '@urql/core';
 import { type Accessor, createMemo, createSignal, mapArray } from 'solid-js';
 import { TASK_SORT_DEFINITIONS } from '../constants';
@@ -39,9 +34,7 @@ export function createTaskBoardQueries(options: {
   facets?: Accessor<FacetSelection>;
   sort?: Accessor<SortSelection<TaskSortId>[]>;
 }) {
-  const [propertySaving, setPropertySaving] = createSignal<ReadonlySet<string>>(
-    new Set()
-  );
+  const [propertySaving, setPropertySaving] = createSignal<string[]>([]);
 
   const entities = createMemo(() => {
     const result = new Map<string, TaskEntityWithProperties>();
@@ -68,23 +61,6 @@ export function createTaskBoardQueries(options: {
         );
 
     return new Map(ordered.map((entity, index) => [entity.id, index]));
-  });
-
-  const ids = createMemo(() => [...entities().keys()]);
-  const permissions = useDocumentAccessLevelsQuery(ids);
-  const editableTasks = createMemo(() => {
-    const editableIds = permissions.flatMap((query) => {
-      if (!query.isSuccess) {
-        return [];
-      }
-
-      const { documentId, accessLevel } = query.data;
-      const canEdit = accessLevel === 'edit' || accessLevel === 'owner';
-
-      return canEdit ? [documentId] : [];
-    });
-
-    return new Set(editableIds);
   });
 
   const definitions = useListPropertiesQuery(() => ({
@@ -129,12 +105,12 @@ export function createTaskBoardQueries(options: {
   });
 
   const projects = mapArray(projectIds, (id) =>
-    createProjectDetailQuery(options.client, options.userId, () => id)
+    createProjectIdentityQuery(options.client, options.userId, () => id)
   );
 
   const projectMap = createMemo(() => {
     const entries = projects().flatMap((query) => {
-      const project = query.isSuccess ? query.data?.project : undefined;
+      const project = query.isSuccess ? query.data : undefined;
 
       return project ? [[project.id, project] as const] : [];
     });
@@ -165,11 +141,7 @@ export function createTaskBoardQueries(options: {
 
   const actions: TaskBoardActions = {
     canEditTask(id) {
-      if (!entities().has(id) || !editableTasks().has(id)) {
-        return false;
-      }
-
-      return !propertySaving().has(id);
+      return entities().has(id) && !propertySaving().includes(id);
     },
     canMoveTo(grouping, id) {
       const property = properties().get(taskBoardPropertyId(grouping));
@@ -186,21 +158,7 @@ export function createTaskBoardQueries(options: {
         return !id || !!property.options?.some((option) => option.id === id);
       }
 
-      if (grouping !== 'project') {
-        return true;
-      }
-
-      if (!options.projectsEnabled()) {
-        return false;
-      }
-
-      if (!id) {
-        return true;
-      }
-
-      const project = projectMap().get(id);
-
-      return !!project && canEditProject(project);
+      return grouping !== 'project' || options.projectsEnabled();
     },
     async save(move, grouping) {
       const entity = entities().get(move.id);
@@ -281,29 +239,16 @@ export function createTaskBoardQueries(options: {
       throw new Error('Task is no longer editable');
     }
 
-    setPropertySaving((ids) => new Set([...ids, id]));
+    setPropertySaving((ids) => [...ids, id]);
 
     try {
       if (definition.id === SYSTEM_PROPERTY_IDS.PROJECT) {
         if (!options.projectsEnabled() || apiValues.valueType !== 'ENTITY') {
           throw new Error('Project editing is unavailable');
         }
-
-        for (const ref of apiValues.refs ?? []) {
-          // A project column already holds this project's live detail.
-          const project =
-            projectMap().get(ref.entity_id) ??
-            toProjectDetail(
-              await throwOnErr(() => initiativeClient.get(ref.entity_id))
-            );
-
-          if (!canEditProject(project)) {
-            throw new Error('Project is not editable');
-          }
-        }
       }
 
-      if (!entities().has(id) || !editableTasks().has(id)) {
+      if (!entities().has(id)) {
         throw new Error('Task is no longer editable');
       }
 
@@ -313,9 +258,7 @@ export function createTaskBoardQueries(options: {
         ],
       });
     } finally {
-      setPropertySaving(
-        (ids) => new Set([...ids].filter((pendingId) => pendingId !== id))
-      );
+      setPropertySaving((ids) => ids.filter((pendingId) => pendingId !== id));
     }
   };
 

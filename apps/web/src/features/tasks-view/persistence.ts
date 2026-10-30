@@ -11,16 +11,14 @@ import {
 } from '@components/app/split-layout/entry-persistence';
 import type { Accessor } from 'solid-js';
 import { z } from 'zod';
+import { TASK_TAB_IDS } from './core/task-navigation';
 import { DEFAULT_TASK_FACET_SELECTION } from './filters/task-facets';
 import type { TasksViewState } from './types';
 
 export const TASKS_ENTRY_STATE_KEY = 'tasks.view';
 export const TASKS_LIST_ENTRY_STATE_KEY = 'tasks.listState';
 
-const taskTabSchema = schemaWithFallback(
-  z.enum(['my-tasks', 'created-by-me', 'team-tasks', 'projects']),
-  'my-tasks'
-);
+const taskTabSchema = schemaWithFallback(z.enum(TASK_TAB_IDS), 'my-tasks');
 
 const taskGroupBySchema = z.enum([
   'none',
@@ -42,7 +40,10 @@ const taskFacetsSchema = z.record(z.string(), z.array(z.string()));
 
 const tasksEntryStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
-  layout: schemaWithFallback(z.enum(['list', 'board']), 'list').default('list'),
+  layout: schemaWithFallback(
+    z.enum(['list', 'board', 'gantt']),
+    'list'
+  ).default('list'),
   tab: taskTabSchema.default('my-tasks'),
   search: z.string().default(''),
   groupBy: taskGroupBySchema.default('priority'),
@@ -88,11 +89,13 @@ function selectEntryState(state: TasksViewState): TasksEntryState {
   return {
     version: 1,
     layout: state.layout,
-    tab: state.tab,
-    search: state.search,
+    tab: state.savedViewActive ? 'my-tasks' : state.tab,
+    search: state.savedViewActive ? '' : state.search,
     groupBy: state.groupBy,
     sort: state.sort.map((item) => ({ ...item })),
-    facets: normalizeFacetSelection(state.facets),
+    facets: normalizeFacetSelection(
+      state.savedViewActive ? DEFAULT_TASK_FACET_SELECTION : state.facets
+    ),
     collapsedGroupIds: [...state.collapsedGroupIds],
   };
 }

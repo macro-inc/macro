@@ -11,6 +11,9 @@ use uuid::Uuid;
 mod test;
 mod timeline;
 
+/// Call-scoped guest conversation use cases.
+pub mod guest_chat;
+
 /// Minimum view permission for any supported message parent.
 #[derive(Debug, Clone, Copy)]
 pub struct MessageView;
@@ -207,6 +210,36 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         active: bool,
         nonce: Option<String>,
     ) -> Result<(), MessageError> {
+        self.publish_typing(access, root_id, active, nonce, None)
+            .await
+    }
+
+    /// Publish an agent session typing through the bot that speaks for it.
+    /// Only a bot capability may say a session is typing: a person's typing
+    /// never names one.
+    #[tracing::instrument(err, skip(self, access))]
+    pub async fn agent_typing(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        root_id: Option<Uuid>,
+        active: bool,
+        agent: AgentTyping,
+    ) -> Result<(), MessageError> {
+        if !matches!(access.auth(), EntityAccessAuth::Bot(_)) {
+            return Err(MessageError::Forbidden);
+        }
+        self.publish_typing(access, root_id, active, None, Some(agent))
+            .await
+    }
+
+    async fn publish_typing(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        root_id: Option<Uuid>,
+        active: bool,
+        nonce: Option<String>,
+        agent: Option<AgentTyping>,
+    ) -> Result<(), MessageError> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
@@ -220,6 +253,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             change: MessageChange::Typing {
                 thread_id: root_id,
                 active,
+                agent,
             },
         })
         .await;
@@ -345,13 +379,19 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 canonical_root_id,
                 parent: parent.clone(),
                 actor: actor.clone(),
+                guest_name: None,
                 triggered_by: access
                     .acting_user_id()
-                    .filter(|_| {
-                        actor.as_bot().is_some()
-                            && input.attribution == MessageAttribution::ActingUser
-                    })
+                    .filter(|_| actor.as_bot().is_some() && input.attribution.has_acting_user())
                     .map(ToString::to_string),
+                triggered_via: match &input.attribution {
+                    MessageAttribution::ActingUserVia { client } if actor.as_bot().is_some() => {
+                        Some(client.clone())
+                    }
+                    MessageAttribution::ActingUserVia { .. }
+                    | MessageAttribution::ActingUser
+                    | MessageAttribution::Unprompted => None,
+                },
                 input,
             })
             .await?;
@@ -438,6 +478,16 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             input.attachments.as_deref().unwrap_or_default(),
         )
         .await?;
+        // Reconciliation may repeat a bot's final reply after a process died
+        // between patching it and recording success. Identical content must
+        // not produce another edit event or completion notification.
+        if actor.as_bot().is_some()
+            && input.content == current.content
+            && input.mentions == current.mentions
+            && input.attachments.is_none()
+        {
+            return Ok(current);
+        }
         let notification_policy = input.notification_policy;
         let nonce = input.nonce.clone();
         let mentions = self.resolve_mentions(&parent, &input.mentions).await?;
@@ -774,6 +824,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 MessageReferenceKind::Project => EntityType::Project,
                 MessageReferenceKind::CrmCompany => EntityType::CrmCompany,
                 MessageReferenceKind::CrmContact => EntityType::CrmContact,
+                MessageReferenceKind::ExternalChat => EntityType::ExternalChat,
                 _ => return Err(MessageError::Invalid("unsupported message reference")),
             };
             if !self

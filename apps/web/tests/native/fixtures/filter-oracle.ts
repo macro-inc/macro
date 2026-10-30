@@ -14,7 +14,7 @@ export function emailMatchesSelection(
   tab: EmailTab,
   selection: Record<string, string[]>
 ): boolean {
-  if (tab === 'scheduled' || tab === 'reminders') {
+  if (tab === 'scheduled' || tab === 'reminders' || tab === 'focus') {
     throw new Error(`${tab} membership is not owned by the Soup query`);
   }
   if (row.kind !== 'email') return false;
@@ -34,7 +34,13 @@ export function emailMatchesSelection(
     .with('calendar', () => row.calendar === true)
     .with('shared', 'all', () => true)
     .exhaustive();
-  if (!matchesTab) return false;
+  return matchesTab && matchesFacets(row, selection);
+}
+
+function matchesFacets(
+  row: FixtureRow,
+  selection: Record<string, string[]>
+): boolean {
   if (
     (selection.inboxes[0] !== ALL_INBOXES &&
       !selection.inboxes.includes(row.linkId!)) ||

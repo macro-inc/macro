@@ -197,8 +197,8 @@ export function readBitmap(
     });
   }
   const height = Math.abs(rawHeight);
-  if (isReadBitmapAllowed()) return;
-  const paletteSize = buildPaletteSize();
+  if (unsupportedBitmap()) return;
+  const paletteSize = paletteEntries();
   const entry = headerSize === 12 ? 3 : 4;
   const palette: number[][] = [];
   for (let index = 0; index < paletteSize; index++) {
@@ -233,7 +233,7 @@ export function readBitmap(
       let g = 0;
       let b = 0;
       let a = 255;
-      ({ r, g, b, a } = updateReadBitmap(row, x, r, g, b, a));
+      ({ r, g, b, a } = pixelAt(row, x, r, g, b, a));
       rgba[out] = r;
       rgba[out + 1] = g;
       rgba[out + 2] = b;
@@ -242,11 +242,11 @@ export function readBitmap(
   }
   return { width, height, rgba };
 
-  function buildPaletteSize() {
+  function paletteEntries() {
     return depth <= 8 ? colorsUsed || 1 << depth : 0;
   }
 
-  function isReadBitmapAllowed() {
+  function unsupportedBitmap() {
     return (
       width <= 0 ||
       height <= 0 ||
@@ -257,7 +257,7 @@ export function readBitmap(
     );
   }
 
-  function updateReadBitmap(
+  function pixelAt(
     row: number,
     x: number,
     r: number,
@@ -716,7 +716,7 @@ export async function playEmf(
     device[0] / (millimeters[0] || 1),
     device[1] / (millimeters[1] || 1),
   ];
-  const box = buildBox();
+  const box = frameBox();
   const output: Matrix = [
     width / box[2],
     0,
@@ -799,7 +799,7 @@ export async function playEmf(
             f32(at + 20),
           ];
           const mode = u32(at + 24);
-          updateWorld(mode, s, matrix);
+          applyWorldTransform(mode, s, matrix);
           return;
         }
       })
@@ -1181,7 +1181,7 @@ export async function playEmf(
   }
   return player.drew;
 
-  function buildBox() {
+  function frameBox() {
     return frame[2] > frame[0] &&
       frame[3] > frame[1] &&
       device[0] > 0 &&
@@ -1200,7 +1200,7 @@ export async function playEmf(
         ];
   }
 
-  function updateWorld(mode: number, s: State, matrix: Matrix) {
+  function applyWorldTransform(mode: number, s: State, matrix: Matrix) {
     if (mode === 1) s.world = identity();
     else if (mode === 2) s.world = multiply(matrix, s.world);
     else if (mode === 3) s.world = multiply(s.world, matrix);
@@ -1284,7 +1284,7 @@ export async function playWmf(
     const at = offset + 6;
     const s = player.state;
     if (fn === 0x0000) break;
-    const matchRemainingPlayWmf2 = async () =>
+    const playPathTextOrImageRecord = async () =>
       matchBranch(fn)
         .with(0x0817, 0x081a, 0x0830, async (fn) => {
           player.arc(
@@ -1421,7 +1421,7 @@ export async function playWmf(
         .otherwise(async () => {
           return;
         });
-    const matchRemainingPlayWmf1 = async () =>
+    const playObjectOrShapeRecord = async () =>
       matchBranch(fn)
         .with(0x02fa, async () => {
           player.objects.set(slot(), {
@@ -1517,7 +1517,7 @@ export async function playWmf(
           player.ellipse(i16(at + 6), i16(at + 4), i16(at + 2), i16(at));
           return;
         })
-        .otherwise(matchRemainingPlayWmf2);
+        .otherwise(playPathTextOrImageRecord);
     await matchBranch(fn)
       .with(0x020b, async () => {
         s.windowOrigin = [i16(at + 2), i16(at)];
@@ -1566,7 +1566,7 @@ export async function playWmf(
         s.textAlign = u16(at);
         return;
       })
-      .otherwise(matchRemainingPlayWmf1);
+      .otherwise(playObjectOrShapeRecord);
     offset += words * 2;
   }
   return player.drew;

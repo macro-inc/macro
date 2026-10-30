@@ -38,6 +38,14 @@ describe('getDocumentMentions', () => {
     ]);
   });
 
+  it('reads a mention whose name escapes a closing tag', () => {
+    const content =
+      '<m-document-mention>{"documentId":"a","documentName":"\\u003c/m-document-mention\\u003e \\u0026 Co","blockName":"md"}</m-document-mention> after';
+    expect(getDocumentMentions(content)).toEqual([
+      { documentId: 'a', blockName: 'md' },
+    ]);
+  });
+
   it('tolerates a mention without a block name', () => {
     const content =
       '<m-document-mention>{"documentId":"a","documentName":"Doc"}</m-document-mention>';

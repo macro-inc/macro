@@ -70,6 +70,28 @@ const TAG_SETS = [
 ] as TagSetResponse[];
 
 describe('buildEmailQuery', () => {
+  it('scopes alias mail by inbox and exact address in every direction before pagination', () => {
+    const args = buildEmailQuery(
+      contextFor({
+        aliasFilter: {
+          inboxId: 'owner-inbox',
+          emailAddress: 'Resident@Example.com',
+        },
+      })
+    );
+    const tree = serialize(
+      makeGraphqlSoupInput(args).initial?.filters?.emailFilter
+    );
+    expect(tree).toContain(serialize({ literal: { owner: 'owner-inbox' } }));
+    for (const direction of ['sender', 'recipient', 'cc', 'bcc']) {
+      expect(tree).toContain(
+        serialize({
+          literal: { [direction]: { complete: 'resident@example.com' } },
+        })
+      );
+    }
+    expect(tree).not.toContain('partial');
+  });
   it('filters favorites on the server in both Soup transports, including inbox and read scope', () => {
     const args = buildEmailQuery(
       contextFor({
@@ -143,6 +165,7 @@ describe('buildEmailQuery', () => {
       ['shared', 'all'],
       ['archived', 'all'],
       ['all', 'all'],
+      ['focus', 'all'],
     ]);
 
     for (const tab of EMAIL_TAB_IDS) {

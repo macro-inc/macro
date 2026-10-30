@@ -44,6 +44,9 @@ vi.mock('./project-collection-persistence', () => ({}));
 vi.mock('./project-share', () => ({}));
 vi.mock('./views/project-assignment', () => ({}));
 vi.mock('./views/projects-collection', () => ({}));
+vi.mock('@app/features/tasks-view/tasks-create-action', () => ({
+  TasksCreateAction: () => null,
+}));
 vi.mock('@queries/activity/push-registry', () => ({
   registerActivityRevalidator: () => () => {},
   revalidateActivityQueries: async () => {},
@@ -132,7 +135,9 @@ function setupGraphql() {
     data: {
       user: {
         id: 'viewer',
-        ...(getOperationName(operation.query) === 'Initiative'
+        ...(['Initiative', 'InitiativeIdentity'].includes(
+          getOperationName(operation.query) ?? ''
+        )
           ? { initiative }
           : { soup: { nextCursor: 'next', items: [initiative] } }),
       },
@@ -246,9 +251,43 @@ import {
   CombinedError,
   type Operation,
   type OperationResult,
+  stringifyDocument,
 } from '@urql/core';
 import { makeSubject, takeUntil } from 'wonka';
-import { createProjectDetailQuery } from './queries/project-identity';
+import {
+  createProjectDetailQuery,
+  createProjectIdentityQuery,
+} from './queries/project-identity';
+
+it('reads chip identity without the fields that check every task', async () => {
+  setupGraphql();
+  const query = createRoot((dispose) => {
+    disposeSource = dispose;
+    return createProjectIdentityQuery(
+      () => mocks.graphql!,
+      () => 'viewer',
+      () => 'launch'
+    );
+  });
+  await vi.waitFor(() =>
+    expect(query.data).toEqual({
+      id: 'launch',
+      name: 'Launch',
+      access: 'owner',
+    })
+  );
+  expect(callsFor('Initiative')).toHaveLength(0);
+  const [[operation]] = callsFor('InitiativeIdentity');
+  const selection = stringifyDocument(operation.query);
+  for (const field of [
+    'taskCount',
+    'completedTaskCount',
+    'taskIds',
+    'memberIds',
+    'sharePermission',
+  ])
+    expect(selection).not.toContain(field);
+});
 
 function controlledClient() {
   const requests: {

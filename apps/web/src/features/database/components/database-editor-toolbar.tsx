@@ -1,8 +1,10 @@
-import CheckIcon from '@phosphor/check.svg';
-import FunnelIcon from '@phosphor/funnel.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SortAscendingIcon from '@phosphor/sort-ascending.svg';
-import StackIcon from '@phosphor/stack.svg';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
+import CheckIcon from '@icon/system/regular/check.svg';
+import FunnelIcon from '@icon/system/regular/funnel-simple.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import SortAscendingIcon from '@icon/system/regular/sort-ascending.svg';
+import StackIcon from '@icon/system/regular/stack.svg';
+import { ButtonGroup } from '@ui';
 import { Button } from '@ui/components/Button';
 import { Dropdown } from '@ui/components/Dropdown';
 import { For, type JSX, Show } from 'solid-js';
@@ -35,93 +37,101 @@ export function DatabaseEditorToolbar(props: {
   const groupColumns = () => boardGroupColumns(props.columns);
   return (
     <div
-      class="@container/view-toolbar shrink-0 bg-canvas-base [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-ink/50"
+      class="@container/view-toolbar shrink-0 bg-canvas-base"
       data-database-toolbar
     >
       <div class="flex items-center gap-2 px-4 py-1.5 @max-[520px]/view-toolbar:flex-wrap">
         <div class="flex min-w-0 flex-1 items-center gap-0.5 @max-[520px]/view-toolbar:basis-full">
           {props.selection}
         </div>
-        <div class="flex shrink-0 items-center gap-0.5 @max-[520px]/view-toolbar:w-full @max-[520px]/view-toolbar:justify-end">
+        <div class="flex shrink-0 items-center gap-2 @max-[520px]/view-toolbar:w-full @max-[520px]/view-toolbar:flex-wrap @max-[520px]/view-toolbar:justify-end">
           <Show when={props.canChangeView !== false}>
-            <Show when={board()}>
-              {(current) => (
-                <Dropdown placement="bottom-start">
-                  <Dropdown.Trigger
-                    aria-label="Group board by"
-                    title="Group by"
-                    size="icon-md"
-                    variant="ghost"
-                    class="h-8 w-auto rounded-md px-2 text-ink-muted hover:bg-hover data-expanded:bg-hover"
-                  >
-                    <StackIcon class="size-3.5" />
-                  </Dropdown.Trigger>
-                  <Dropdown.Content class="min-w-48">
-                    <Dropdown.RadioGroup
-                      value={current().groupBy}
-                      onChange={(columnId) => {
-                        if (columnId !== current().groupBy)
-                          props.onChangeView({
-                            layout: {
-                              ...current(),
-                              groupBy: columnId,
-                              lanes: [],
-                            },
-                          });
-                      }}
+            <HeaderActionGroup label="Table view options">
+              <Show when={board()}>
+                {(current) => (
+                  <Dropdown placement="bottom-start">
+                    <Dropdown.Trigger
+                      as={ButtonGroup.Button}
+                      aria-label="Group board by"
+                      tooltip="Group by"
+                      size="icon-md"
+                      variant="ghost"
                     >
-                      <For each={groupColumns()}>
-                        {(column) => (
-                          <Dropdown.RadioItem closeOnSelect value={column.id}>
-                            <span class="flex-1">{column.name}</span>
-                            <Dropdown.ItemIndicator>
-                              <CheckIcon class="size-3.5 text-accent" />
-                            </Dropdown.ItemIndicator>
-                          </Dropdown.RadioItem>
-                        )}
-                      </For>
-                    </Dropdown.RadioGroup>
-                  </Dropdown.Content>
-                </Dropdown>
-              )}
-            </Show>
+                      <StackIcon class="size-4 touch:size-3.5" />
+                    </Dropdown.Trigger>
+                    <Dropdown.Content class="min-w-48">
+                      <Dropdown.Group>
+                        <Dropdown.RadioGroup
+                          value={current().groupBy}
+                          onChange={(columnId) => {
+                            if (columnId !== current().groupBy)
+                              props.onChangeView({
+                                layout: {
+                                  ...current(),
+                                  groupBy: columnId,
+                                  lanes: [],
+                                },
+                              });
+                          }}
+                        >
+                          <For each={groupColumns()}>
+                            {(column) => (
+                              <Dropdown.RadioItem
+                                closeOnSelect
+                                value={column.id}
+                              >
+                                <span class="flex-1">{column.name}</span>
+                                <Dropdown.ItemIndicator>
+                                  <CheckIcon class="size-3.5 text-accent" />
+                                </Dropdown.ItemIndicator>
+                              </Dropdown.RadioItem>
+                            )}
+                          </For>
+                        </Dropdown.RadioGroup>
+                      </Dropdown.Group>
+                    </Dropdown.Content>
+                  </Dropdown>
+                )}
+              </Show>
 
-            <ToolbarPopover
-              label="Filter"
-              compact
-              count={filterConditionCount(props.view.query.filter)}
-              icon={<FunnelIcon class="size-3.5" />}
-            >
-              <FilterPanel
-                columns={props.columns}
-                filter={props.view.query.filter}
-                onChange={(filter) =>
-                  props.onChangeView({
-                    query: { ...props.view.query, filter },
-                  })
-                }
-              />
-            </ToolbarPopover>
-            <ToolbarPopover
-              label="Sort"
-              compact
-              count={sort().length}
-              icon={<SortAscendingIcon class="size-3.5" />}
-            >
-              <SortPanel
-                columns={props.columns}
-                view={props.view}
-                onChange={props.onChangeView}
-              />
-            </ToolbarPopover>
+              <ToolbarPopover
+                label="Filter"
+                compact
+                grouped
+                count={filterConditionCount(props.view.query.filter)}
+                icon={<FunnelIcon class="size-4 touch:size-3.5" />}
+              >
+                <FilterPanel
+                  columns={props.columns}
+                  filter={props.view.query.filter}
+                  onChange={(filter) =>
+                    props.onChangeView({
+                      query: { ...props.view.query, filter },
+                    })
+                  }
+                />
+              </ToolbarPopover>
+              <ToolbarPopover
+                label="Sort"
+                compact
+                grouped
+                count={sort().length}
+                icon={<SortAscendingIcon class="size-4 touch:size-3.5" />}
+              >
+                <SortPanel
+                  columns={props.columns}
+                  view={props.view}
+                  onChange={props.onChangeView}
+                />
+              </ToolbarPopover>
+            </HeaderActionGroup>
           </Show>
           {props.search}
-          <div class="ml-1 flex shrink-0 items-center">
+          <div class="flex shrink-0 items-center gap-2">
             <Show when={props.onCreateRecord}>
               <Button
-                size="sm"
-                variant="outline"
-                class="h-8 gap-1.5 px-2.5 text-xs"
+                size="md"
+                variant="secondary"
                 aria-label={
                   props.creating
                     ? 'Saving record'

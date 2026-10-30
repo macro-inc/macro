@@ -3,6 +3,7 @@ import {
   type ListController,
 } from '@app/components/list';
 import { isListViewID } from '@app/constants/list-views';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import type { SoupRow, SoupState } from '../create-soup-state';
 import { canExecuteMarkDoneOnView } from './make-mark-done-action';
@@ -62,19 +63,23 @@ type AdaptedRow = {
   entity: EntityData;
 };
 
+/** The Signal or Noise bucket an email is in, when the server said. */
+export function emailSenderBucket(
+  entity: EntityData | undefined
+): EntityActionSenderBucket | undefined {
+  if (entity?.type !== 'email' || entity.isSignal === undefined) return;
+  return entity.isSignal ? 'signal' : 'noise';
+}
+
+/**
+ * The sender bucket a view's tab shows. Views without a Signal or Noise tab
+ * (Search, folders, Recent) have none, so their rows offer no sender moves.
+ */
 function resolveSenderBucket(
   activeTab: string | undefined
 ): EntityActionSenderBucket | undefined {
   if (activeTab === 'noise') return 'noise';
-
-  if (
-    activeTab === undefined ||
-    activeTab === 'signal' ||
-    activeTab === 'important'
-  ) {
-    return 'signal';
-  }
-
+  if (activeTab === 'signal' || activeTab === 'important') return 'signal';
   return undefined;
 }
 
@@ -146,7 +151,7 @@ export function toEntityActionListState<TItem, TMetadata>(
   const setFocus = (id: string | undefined) => {
     if (id === undefined) {
       controller.focus.clear({ reason: 'programmatic' });
-      void options.onFocus?.(undefined);
+      fireAndForget(options.onFocus?.(undefined), 'next-soup');
       return;
     }
 
@@ -159,11 +164,14 @@ export function toEntityActionListState<TItem, TMetadata>(
     });
     if (!focused) return;
 
-    void options.onFocus?.({
-      key: focused.key,
-      index: target.controllerIndex,
-      entity: target.entity,
-    });
+    fireAndForget(
+      options.onFocus?.({
+        key: focused.key,
+        index: target.controllerIndex,
+        entity: target.entity,
+      }),
+      'next-soup'
+    );
   };
 
   const peekOffset: EntityActionListState['navigate']['peekOffset'] = (

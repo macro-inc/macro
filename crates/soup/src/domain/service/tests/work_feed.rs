@@ -213,3 +213,26 @@ async fn work_feed_rejects_calendar_filters_it_cannot_fold() {
         .unwrap_err();
     assert_matches!(error, SoupErr::NotifiedUnsupportedFilter("calendar_event"));
 }
+
+/// The work feed cannot resolve CRM associations, so a scoped request fails
+/// before reading candidates rather than returning an unscoped feed.
+#[tokio::test]
+async fn work_feed_rejects_crm_associations() {
+    use item_filters::ast::{crm_association::CrmAssociation, document::DocumentLiteral};
+    let company = CrmAssociation::Company(Uuid::from_u128(0xc0));
+    let mut scoped = work_feed_request(2);
+    scoped.filter.crm_association = Some(company);
+    let mut literal = work_feed_request(2);
+    literal.filter.document_filter =
+        Some(Arc::new(Expr::val(DocumentLiteral::CrmAssociated(company))));
+
+    for request in [scoped, literal] {
+        let mut soup_mock = MockSoupRepo::new();
+        soup_mock.expect_work_feed_soup_page().times(0);
+        let error = service(soup_mock)
+            .get_work_feed_page(request, None)
+            .await
+            .unwrap_err();
+        assert_matches!(error, SoupErr::AstErr(_));
+    }
+}

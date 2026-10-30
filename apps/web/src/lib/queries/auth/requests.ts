@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { authServiceClient } from '@service-auth/client';
 import { invalidateUserInfo } from './user-info';
 import { invalidateOwnUserName } from './user-name-self';
@@ -9,7 +10,7 @@ export const updateUserName: typeof authServiceClient.putUserName = async (
   ...args
 ) => {
   const result = await authServiceClient.putUserName(...args);
-  if (result.isOk()) void invalidateOwnUserName();
+  if (result.isOk()) fireAndForget(invalidateOwnUserName(), 'account-settings');
   return result;
 };
 

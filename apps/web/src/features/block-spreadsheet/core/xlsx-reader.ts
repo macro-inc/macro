@@ -3,6 +3,11 @@ import {
   MAX_NOTE_LENGTH,
   MAX_SHEET_NOTES,
 } from '@macro-inc/spreadsheet/sheet-rules';
+import {
+  displayStructuredReferences,
+  resolveStructuredReferences,
+  type WorkbookTable,
+} from '@macro-inc/spreadsheet/structured-references';
 import type { WorkbookSheetMetadata } from '@macro-inc/spreadsheet/workbook-metadata';
 import { match as matchBranch } from 'ts-pattern';
 import {
@@ -27,6 +32,7 @@ import {
   XLSX_MAX_SHEETS,
 } from './workbook-file-types';
 import type { XlsxArchive } from './xlsx-archive';
+import { readCheckboxComplements } from './xlsx-checkboxes';
 import {
   type DrawingImports,
   drawingImports,
@@ -40,16 +46,18 @@ import {
   markImplicitIntersections,
   normalizeReferences,
   pivotTableArguments,
-  resolveStructuredReferences,
   stripFunctionPrefixes,
   translateFormula,
-  type WorkbookTable,
 } from './xlsx-formula';
 import {
   type Attributes,
   attributes,
+  EXCEL_MAX_ROWS,
   parse,
+  parseExcelAddress,
+  rangeBounds,
   relationships,
+  unescapeText,
 } from './xlsx-parts';
 import {
   PIVOT_RECORDS_WARNING,
@@ -63,6 +71,7 @@ import {
   readXlsxTheme,
   type XlsxStylesheet,
 } from './xlsx-stylesheet';
+import { readXlsxTables, type XlsxTable } from './xlsx-tables';
 
 /** Elements of conditional formatting and data validation rules. */
 const RULE_ELEMENTS = new Set([
@@ -102,7 +111,6 @@ const MAIN_NAMESPACES = new Set([
   // ISO/IEC 29500 Strict uses different URIs for the same vocabulary.
   'http://purl.oclc.org/ooxml/spreadsheetml/main',
 ]);
-const EXCEL_MAX_ROWS = 1_048_576;
 /** A sheet-qualified range, capturing its two corners. */
 const MULTI_CELL_REFERENCE =
   /^(?:'(?:[^']|'')+'|[^'!:]+)!(\$?[A-Z]{0,3}\$?\d*):(\$?[A-Z]{0,3}\$?\d*)$/i;
@@ -136,14 +144,6 @@ const SPILL_FUNCTIONS = new Set([
 ]);
 
 /** OOXML escapes control characters in text as `_xHHHH_`. */
-function unescapeText(text: string) {
-  return text.includes('_x')
-    ? text.replace(/_x([0-9a-f]{4})_/gi, (_, code: string) =>
-        String.fromCharCode(Number.parseInt(code, 16))
-      )
-    : text;
-}
-
 /** Sheet metadata Macro stores, at most; parts that keep export fidelity
  * give way first. */
 const MAX_METADATA_LENGTH = 900_000;
@@ -313,32 +313,7 @@ function isDateFormat(code: string) {
   return /[dy]/i.test(tokens) || (/m/i.test(tokens) && !/[hs]/i.test(tokens));
 }
 
-function rangeBounds(reference: string) {
-  const [first, last = first] = reference.replaceAll('$', '').split(':');
-  const start = parseExcelAddress(first);
-  const end = parseExcelAddress(last);
-  if (!start || !end || start.row > end.row || start.column > end.column)
-    return;
-  return {
-    top: start.row,
-    left: start.column,
-    bottom: end.row,
-    right: end.column,
-  };
-}
-
 /** Any valid Excel address, including rows Macro cannot hold. */
-function parseExcelAddress(address: string) {
-  const match = /^([A-Z]{1,3})([1-9]\d{0,6})$/i.exec(address);
-  if (!match) return;
-  let column = 0;
-  for (const character of match[1].toUpperCase())
-    column = column * 26 + character.charCodeAt(0) - 64;
-  const row = Number(match[2]);
-  if (column > SPREADSHEET_MAX_COLUMNS || row > EXCEL_MAX_ROWS) return;
-  return { row: row - 1, column: column - 1 };
-}
-
 type SheetEntry = {
   name: string;
   path: string;
@@ -355,6 +330,10 @@ type WorkbookContext = {
   date1904: boolean;
   dynamicArrays: boolean;
   tables: WorkbookTable[];
+  /** The table parts, with the tables Macro keeps. */
+  importedTables: XlsxTable[];
+  /** Lowercase names of the tables Macro keeps. */
+  keptTables: ReadonlySet<string>;
   sheetNames: string[];
   /** Lowercase names defined as multi-cell references. */
   rangeNames: ReadonlySet<string>;
@@ -393,20 +372,29 @@ function importFormula(
   const stripped = normalizeReferences(
     stripFunctionPrefixes(importSingleFunction(source))
   );
+  // References to tables Macro keeps stay, shown as Excel shows them.
   const resolved = resolveStructuredReferences(
     stripped,
     context.tables,
     sheet,
     row,
-    column
+    column,
+    { resolves: (table) => !context.keptTables.has(table.name.toLowerCase()) }
   );
   if (resolved === undefined) return;
   if (resolved !== stripped)
     context.warnings.add(
-      'Excel table references are converted to cell ranges; tables are imported as ordinary cells.'
+      'Excel tables without a header row, or beyond Macro’s sheet size or table limit, are imported as ordinary cells; formulas refer to their cell ranges.'
     );
-  let formula = expandSheetRanges(resolved, context.sheetNames);
-  if (formula !== resolved)
+  const shown = displayStructuredReferences(
+    resolved,
+    context.tables,
+    sheet,
+    row,
+    column
+  );
+  let formula = expandSheetRanges(shown, context.sheetNames);
+  if (formula !== shown)
     context.warnings.add(
       'References spanning several sheets are expanded to list each sheet.'
     );
@@ -624,15 +612,15 @@ function readWorksheet(
           );
         }
       }
-      updateRow(source, formula);
-      updateValue(source, formula);
+      registerArrayFormula(source, formula);
+      importCellFormula(source, formula);
     } else value = literal();
     // A text format would show a formula as its source, whatever its result.
-    updateFinishCell();
+    resetTextFormat();
     if (value || Object.keys(style).length)
       place(current.row, current.column, { value, ...style });
 
-    function updateValue(
+    function importCellFormula(
       source: string,
       formulaInput: NonNullable<typeof formula>
     ) {
@@ -673,7 +661,7 @@ function readWorksheet(
       }
     }
 
-    function updateFinishCell() {
+    function resetTextFormat() {
       if (
         style.format === 'text' &&
         value &&
@@ -690,7 +678,7 @@ function readWorksheet(
       }
     }
 
-    function updateRow(
+    function registerArrayFormula(
       source: string,
       formulaInput: NonNullable<typeof formula>
     ) {
@@ -956,10 +944,10 @@ function readWorksheet(
   for (const pending of pendingShared) {
     const master = shared.get(pending.si);
     const address = formatCellAddress(pending.row, pending.column);
-    const value = buildValue(master, pending);
+    const value = sharedFormulaValue(master, pending);
     if (!master)
       warnings.add('Some shared formulas were missing their source formula.');
-    updateReadWorksheet(address, value, pending);
+    placeSharedCell(address, value, pending);
   }
   // Only a merge's top-left cell keeps a value; covered cells keep borders.
   for (const merge of merges) {
@@ -973,7 +961,7 @@ function readWorksheet(
     };
     const area =
       (range.bottom - range.top + 1) * (range.right - range.left + 1);
-    updateR(area, range, clear);
+    clearCoveredCells(area, range, clear);
   }
   if (droppedRows)
     warnings.add(
@@ -992,16 +980,16 @@ function readWorksheet(
     const definition = columns.findLast(
       (item) => column >= item.min && column <= item.max
     );
-    const pixels = buildPixels(definition);
+    const pixels = columnPixels(definition);
     // Excel's default is 64px; Macro's own default needs no stored width.
     if (pixels !== DEFAULT_COLUMN_WIDTH) columnWidths[column] = pixels;
-    updateReadWorksheet2(definition, column);
+    noteHiddenColumn(definition, column);
   }
   if (hiddenColumns.length >= columnCount) hiddenColumns.length = 0;
   if (merges.length) metadata.merges = merges;
   readWorksheetFeatures();
   fitMetadata(metadata, warnings);
-  updateHiddenRows();
+  keepHiddenRows();
   if (hiddenColumns.length) metadata.hiddenColumns = hiddenColumns;
   // Rows at the sheet's default height already look the same in Macro.
   const heights = Object.entries(rowHeights).filter(
@@ -1030,7 +1018,7 @@ function readWorksheet(
     );
   // Tall rows show Excel's bottom alignment; ordinary rows look the same either
   // way. Measure against Excel's standard 15pt row so a round trip agrees.
-  updateReadWorksheet3();
+  alignTallRows();
   return {
     name: entry.name,
     cells,
@@ -1091,9 +1079,13 @@ function readWorksheet(
       warnings,
     });
     if (pivotTables.length) metadata.pivotTables = pivotTables;
+    const sheetTables = context.importedTables.flatMap(({ layout, table }) =>
+      table && layout.sheet === entry.name ? [table] : []
+    );
+    if (sheetTables.length) metadata.tables = sheetTables;
   }
 
-  function updateReadWorksheet3() {
+  function alignTallRows() {
     if (metadata.rowHeights) {
       const applyDefaultVerticalAlign = (
         address: string,
@@ -1103,7 +1095,7 @@ function readWorksheet(
         if (value.verticalAlign) return;
         const row = parseCellAddress(address)?.row;
         const height = row === undefined ? undefined : rowHeights[row];
-        updateVerticalAlign(height, value);
+        alignTallRowToBottom(height, value);
       };
       for (const [address, value] of Object.entries(cells)) {
         applyDefaultVerticalAlign(address, value, metadata.rowHeights);
@@ -1111,7 +1103,7 @@ function readWorksheet(
     }
   }
 
-  function buildValue(
+  function sharedFormulaValue(
     master: { formula: string; row: number; column: number } | undefined,
     pending: PendingShared
   ) {
@@ -1133,19 +1125,19 @@ function readWorksheet(
       : '';
   }
 
-  function updateHiddenRows() {
+  function keepHiddenRows() {
     if (hiddenRows.length && hiddenRows.length < rowCount)
       metadata.hiddenRows = hiddenRows.filter((row) => row < rowCount);
   }
 
-  function updateVerticalAlign(
+  function alignTallRowToBottom(
     height: number | undefined,
     value: SpreadsheetCell
   ) {
     if (height !== undefined && height > 22.5) value.verticalAlign = 'bottom';
   }
 
-  function updateReadWorksheet2(
+  function noteHiddenColumn(
     definition:
       | { min: number; max: number; width?: number; hidden: boolean }
       | undefined,
@@ -1154,7 +1146,7 @@ function readWorksheet(
     if (definition?.hidden) hiddenColumns.push(column);
   }
 
-  function buildPixels(
+  function columnPixels(
     definition:
       | { min: number; max: number; width?: number; hidden: boolean }
       | undefined
@@ -1174,7 +1166,7 @@ function readWorksheet(
     );
   }
 
-  function updateReadWorksheet(
+  function placeSharedCell(
     address: string,
     value: string,
     pending: PendingShared
@@ -1183,7 +1175,7 @@ function readWorksheet(
       place(pending.row, pending.column, { value, ...pending.style });
   }
 
-  function updateR(
+  function clearCoveredCells(
     area: number,
     range: { top: number; left: number; bottom: number; right: number },
     clear: (address: string) => void
@@ -1235,41 +1227,6 @@ function readSharedStrings(archive: XlsxArchive, path: string | undefined) {
     });
   });
   return strings;
-}
-
-function readTables(
-  archive: XlsxArchive,
-  sheets: SheetEntry[]
-): WorkbookTable[] {
-  const tables: WorkbookTable[] = [];
-  for (const sheet of sheets) {
-    for (const relation of relationships(archive, sheet.path).values()) {
-      if (relation.type !== 'table' || relation.external) continue;
-      const bytes = archive.read(relation.target);
-      if (!bytes) continue;
-      let table: WorkbookTable | undefined;
-      parse(bytes, relation.target, (parser) => {
-        parser.on('opentag', (node) => {
-          const value = attributes(node);
-          if (node.local === 'table') {
-            const range = rangeBounds(value.ref ?? '');
-            if (!range || !(value.displayName ?? value.name)) return;
-            table = {
-              name: value.displayName ?? value.name,
-              sheet: sheet.name,
-              ...range,
-              headerRows: value.headerRowCount === '0' ? 0 : 1,
-              totalsRows: Number(value.totalsRowCount ?? 0) > 0 ? 1 : 0,
-              columns: [],
-            };
-          } else if (node.local === 'tableColumn' && table)
-            table.columns.push(unescapeText(value.name ?? ''));
-        });
-      });
-      if (table) tables.push(table);
-    }
-  }
-  return tables;
 }
 
 /** Decode a validated XLSX package into Macro sheets, without ExcelJS. */
@@ -1390,10 +1347,15 @@ export function readXlsxWorkbook(
   const themePath = [...rels.values()].find(
     (item) => item.type === 'theme'
   )?.target;
+  const checkboxPath = [...rels.values()].find(
+    (item) => item.type === 'FeaturePropertyBag'
+  )?.target;
+  const checkboxBytes = checkboxPath ? archive.read(checkboxPath) : undefined;
   const metadataBytes = archive.read('xl/metadata.xml');
-  const theme = readXlsxTheme(buildReadXlsxWorkbook(), themePath);
+  const theme = readXlsxTheme(themeParts(), themePath);
   const stylesBytes = stylesPath ? archive.read(stylesPath) : undefined;
-  const tables = readTables(archive, worksheets);
+  const importedTables = readXlsxTables(archive, worksheets, warnings);
+  const tables = importedTables.map(({ layout }) => layout);
   const rangeNames = new Set<string>();
   for (const entry of names) {
     const formula = resolveStructuredReferences(
@@ -1404,9 +1366,9 @@ export function readXlsxWorkbook(
       0
     );
     const range = formula && MULTI_CELL_REFERENCE.exec(formula);
-    updateReadXlsxWorkbook2(range, entry);
+    noteRangeName(range, entry);
   }
-  const context: WorkbookContext = buildContext();
+  const context: WorkbookContext = workbookContext();
   const result = worksheets.map((sheet) => readWorksheet(sheet, context));
   const total = result.reduce(
     (sum, sheet) =>
@@ -1456,7 +1418,7 @@ export function readXlsxWorkbook(
     warnings.add(
       `Macro cannot calculate these Excel functions yet, so their formulas show errors: ${[...context.unsupportedFunctions].sort().join(', ')}.`
     );
-  for (const sheet of result) updateReadXlsxWorkbook(sheet);
+  for (const sheet of result) dropEmptyMetadata(sheet);
   const images = context.drawings.images;
   return {
     sheets: result,
@@ -1464,7 +1426,7 @@ export function readXlsxWorkbook(
     ...(Object.keys(images).length && { images }),
   };
 
-  function buildContext(): WorkbookContext {
+  function workbookContext(): WorkbookContext {
     return {
       archive,
       theme,
@@ -1473,13 +1435,22 @@ export function readXlsxWorkbook(
       styles: readXlsxStylesheet(
         stylesBytes ? new TextDecoder().decode(stylesBytes) : '',
         theme,
-        warnings
+        warnings,
+        checkboxPath && checkboxBytes
+          ? readCheckboxComplements(checkboxBytes, checkboxPath)
+          : new Set()
       ),
       date1904,
       dynamicArrays:
         !!metadataBytes &&
         new TextDecoder().decode(metadataBytes).includes('XLDAPR'),
       tables,
+      importedTables,
+      keptTables: new Set(
+        importedTables.flatMap(({ table }) =>
+          table ? [table.name.toLowerCase()] : []
+        )
+      ),
       sheetNames: worksheets.map((sheet) => sheet.name),
       rangeNames,
       warnings,
@@ -1489,7 +1460,7 @@ export function readXlsxWorkbook(
     };
   }
 
-  function updateReadXlsxWorkbook2(
+  function noteRangeName(
     range: string | RegExpExecArray | null | undefined,
     entry: { name: string; formula: string; sheet?: number; hidden: boolean }
   ) {
@@ -1497,16 +1468,13 @@ export function readXlsxWorkbook(
       rangeNames.add(entry.name.toLowerCase());
   }
 
-  function buildReadXlsxWorkbook(): Record<
-    string,
-    Uint8Array<ArrayBufferLike>
-  > {
+  function themeParts(): Record<string, Uint8Array<ArrayBufferLike>> {
     return themePath
       ? { [themePath]: archive.read(themePath) ?? new Uint8Array() }
       : {};
   }
 
-  function updateReadXlsxWorkbook(sheet: WorkbookFileSheet) {
+  function dropEmptyMetadata(sheet: WorkbookFileSheet) {
     if (sheet.metadata && !Object.keys(sheet.metadata).length)
       delete sheet.metadata;
   }

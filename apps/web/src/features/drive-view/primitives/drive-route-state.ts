@@ -8,6 +8,7 @@ import {
   useNavigate,
   useParams,
 } from '@app/lib/split-router';
+import { fireAndForget } from '@core/util/fireAndForget';
 import deepEqual from 'fast-deep-equal';
 import {
   type Accessor,
@@ -61,14 +62,17 @@ export function createDriveRouteState(
       search: DriveSearchParams,
       options: NavigationOptions = {}
     ) {
-      navigate(driveDestination(location), {
-        ...options,
-        search: {
-          drive: driveSearch.serialize(search, {
-            defaults: driveSearch.defaults,
-          }),
-        },
-      });
+      fireAndForget(
+        navigate(driveDestination(location), {
+          ...options,
+          search: {
+            drive: driveSearch.serialize(search, {
+              defaults: driveSearch.defaults,
+            }),
+          },
+        }),
+        'drive-view'
+      );
     },
   };
 }

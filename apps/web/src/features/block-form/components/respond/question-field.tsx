@@ -1,7 +1,21 @@
-import Paperclip from '@phosphor/paperclip.svg';
-import Spinner from '@phosphor/spinner.svg';
-import UploadSimple from '@phosphor/upload-simple.svg';
-import X from '@phosphor/x.svg';
+import { DateTimeRangeFields } from '@app/components/date-time-range/date-time-range-fields';
+import {
+  type DateTimeRangeValue,
+  dateTimeRangeValue,
+  EMPTY_DATE_TIME_RANGE,
+  moveAllDayRange,
+  moveTimedRange,
+  timeRangeFromValue,
+  withAllDay,
+} from '@app/components/date-time-range/time-range';
+import {
+  timeRangeFromInstants,
+  timeRangeToInstants,
+} from '@app/features/database/core/cell-date-range';
+import Paperclip from '@icon/system/regular/paperclip.svg';
+import Spinner from '@icon/system/regular/spinner.svg';
+import UploadSimple from '@icon/system/regular/upload-simple.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button, Checkbox, cn, RadioGroup } from '@ui';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 import {
@@ -32,6 +46,63 @@ function optionIds(value: FormCellValue | undefined): string[] {
 
 function textOf(value: FormCellValue | undefined): string {
   return value?.type === 'text' ? value.value : '';
+}
+
+/**
+ * A start and an end, all day or with times, as a time-range cell holds
+ * them. The answer holds a range only once both ends are set; a backwards
+ * range is kept so its problem can be shown.
+ */
+function DateRangeField(props: {
+  id: string;
+  subject: string;
+  value: FormCellValue | undefined;
+  invalid: boolean;
+  disabled: boolean;
+  describedBy: string | undefined;
+  onChange: (value: FormCellValue | undefined) => void;
+}) {
+  const stored =
+    props.value?.type === 'date_range'
+      ? timeRangeFromInstants(props.value.value)
+      : undefined;
+  const [range, setRange] = createSignal<DateTimeRangeValue>(
+    stored ? dateTimeRangeValue(stored) : EMPTY_DATE_TIME_RANGE
+  );
+  const update = (next: DateTimeRangeValue) => {
+    setRange(next);
+    const answer = timeRangeFromValue(next);
+    props.onChange(
+      answer
+        ? { type: 'date_range', value: timeRangeToInstants(answer) }
+        : undefined
+    );
+  };
+  return (
+    <DateTimeRangeFields
+      id={props.id}
+      subject={props.subject}
+      start={range().start}
+      end={range().end}
+      allDay={range().allDay}
+      onStartChange={(start) =>
+        update(
+          range().allDay
+            ? moveAllDayRange(range(), start)
+            : moveTimedRange(range(), start)
+        )
+      }
+      onEndChange={(end) =>
+        update({ ...range(), start: range().start || end, end })
+      }
+      onAllDayChange={(allDay) => update(withAllDay(range(), allDay))}
+      startDisabled={props.disabled}
+      endDisabled={props.disabled}
+      allDayDisabled={props.disabled}
+      invalid={props.invalid}
+      describedBy={props.describedBy}
+    />
+  );
 }
 
 function ChoiceList(props: {
@@ -82,7 +153,7 @@ function ChoiceList(props: {
                   onChange={(checked) => toggle(option.id, checked)}
                   class="flex min-h-9 gap-3 rounded-lg px-2 text-sm text-ink hover:bg-hover"
                 >
-                  <Checkbox.Control class="border-ink-extra-muted" />
+                  <Checkbox.Control />
                   <Checkbox.Label class="flex min-h-9 flex-1 items-center wrap-anywhere">
                     {option.label}
                   </Checkbox.Label>
@@ -108,7 +179,7 @@ function ChoiceList(props: {
                 value={option.id}
                 class="min-h-9 gap-3 rounded-lg px-2 text-sm text-ink hover:bg-hover"
               >
-                <RadioGroup.ItemControl class="border-ink-extra-muted" />
+                <RadioGroup.ItemControl />
                 <RadioGroup.ItemLabel class="flex min-h-9 flex-1 items-center wrap-anywhere">
                   {option.label}
                 </RadioGroup.ItemLabel>
@@ -376,7 +447,7 @@ export function QuestionField(props: {
             type="number"
             inputmode="decimal"
             step="any"
-            value={getQuestionFieldValue()}
+            value={numberInputValue()}
             placeholder="Number"
             disabled={props.disabled}
             aria-describedby={describedBy()}
@@ -402,7 +473,7 @@ export function QuestionField(props: {
         <Match when={kind().type === 'boolean'}>
           <Checkbox
             id={id()}
-            checked={getQuestionFieldChecked()}
+            checked={checkedValue()}
             disabled={props.disabled}
             validationState={invalid() ? 'invalid' : 'valid'}
             class="flex min-h-9 gap-3 rounded-lg px-2 text-sm text-ink hover:bg-hover"
@@ -412,7 +483,7 @@ export function QuestionField(props: {
               props.onChange({ type: 'boolean', value: checked })
             }
           >
-            <Checkbox.Control class="border-ink-extra-muted" />
+            <Checkbox.Control />
             <Checkbox.Label class="flex min-h-9 flex-1 items-center">
               Yes
             </Checkbox.Label>
@@ -421,11 +492,22 @@ export function QuestionField(props: {
             </Checkbox.Description>
           </Checkbox>
         </Match>
+        <Match when={kind().type === 'date_range'}>
+          <DateRangeField
+            id={id()}
+            subject={props.column.name}
+            value={props.value}
+            invalid={invalid()}
+            disabled={props.disabled}
+            describedBy={describedBy()}
+            onChange={props.onChange}
+          />
+        </Match>
         <Match when={kind().type === 'date' && props.widget === 'date'}>
           <input
             id={id()}
             type="date"
-            value={getQuestionFieldValue3()}
+            value={dateInputValue()}
             disabled={props.disabled}
             aria-describedby={describedBy()}
             aria-invalid={invalid()}
@@ -447,7 +529,7 @@ export function QuestionField(props: {
           <input
             id={id()}
             type="datetime-local"
-            value={getQuestionFieldValue4()}
+            value={dateTimeInputValue()}
             disabled={props.disabled}
             aria-describedby={describedBy()}
             aria-invalid={invalid()}
@@ -482,7 +564,7 @@ export function QuestionField(props: {
             type="url"
             inputmode="url"
             placeholder="https://"
-            value={getQuestionFieldValue2()}
+            value={linkInputValue()}
             disabled={props.disabled}
             aria-describedby={describedBy()}
             aria-invalid={invalid()}
@@ -498,7 +580,7 @@ export function QuestionField(props: {
             }}
           />
         </Match>
-        <Match when={getQuestionFieldWhen()}>
+        <Match when={isDropdownChoice()}>
           <select
             id={id()}
             disabled={props.disabled}
@@ -579,34 +661,34 @@ export function QuestionField(props: {
     </div>
   );
 
-  function getQuestionFieldValue4(): string | number | string[] | undefined {
+  function dateTimeInputValue(): string | number | string[] | undefined {
     return props.value?.type === 'date'
       ? localInputFromInstant(props.value.value)
       : '';
   }
 
-  function getQuestionFieldValue3(): string | number | string[] | undefined {
+  function dateInputValue(): string | number | string[] | undefined {
     return props.value?.type === 'date'
       ? dateInputFromInstant(props.value.value)
       : '';
   }
 
-  function getQuestionFieldWhen(): boolean | null | undefined {
+  function isDropdownChoice(): boolean | null | undefined {
     return (
       (kind().type === 'select' || kind().type === 'select_number') &&
       props.widget === 'dropdown'
     );
   }
 
-  function getQuestionFieldChecked(): boolean | undefined {
+  function checkedValue(): boolean | undefined {
     return props.value?.type === 'boolean' && props.value.value;
   }
 
-  function getQuestionFieldValue2(): string | number | string[] | undefined {
+  function linkInputValue(): string | number | string[] | undefined {
     return props.value?.type === 'link' ? (props.value.value[0] ?? '') : '';
   }
 
-  function getQuestionFieldValue(): string | number | string[] | undefined {
+  function numberInputValue(): string | number | string[] | undefined {
     return (
       numberDraft() ??
       (props.value?.type === 'number' && Number.isFinite(props.value.value)

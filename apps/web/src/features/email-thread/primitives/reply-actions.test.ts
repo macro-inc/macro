@@ -19,8 +19,8 @@ function setup() {
 
 describe('openEmailReplyComposerForMessage', () => {
   // Tablets are touch at desktop widths. The inline reply input never renders
-  // on touch, so replying there must open the compose drawer.
-  it('opens the compose drawer on touch', () => {
+  // on touch, so replying there must open the full-screen composer.
+  it('opens the full-screen composer on touch', () => {
     const { ctx, state } = setup();
 
     openEmailReplyComposerForMessage({

@@ -33,6 +33,7 @@ import type {
   TileResult,
 } from '@core/fig-engine/client';
 import type { LiftPlan, Rect } from '@core/fig-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { Camera, Point, Size } from '../core/camera';
 import {
   liftParts,
@@ -218,7 +219,7 @@ export function createTileCompositor(options: TileCompositorOptions) {
     } finally {
       if (previewPending?.id === job.id) {
         previewPending = undefined;
-        if (previewDirty) void requestPreview();
+        if (previewDirty) fireAndForget(requestPreview(), 'fig-render');
       }
     }
   };
@@ -285,12 +286,9 @@ export function createTileCompositor(options: TileCompositorOptions) {
       if (!entry.bitmap && !entry.pending && home.get(id) === entry)
         home.delete(id);
     };
-    const settlePromiseHandler0 = settleEmpty;
-    const settlePromise = async () => {
+    const land = async () => {
       try {
-        const settlePromiseValue = await pending.promise;
-        const result: TileResult | null = settlePromiseValue;
-
+        const result: TileResult | null = await pending.promise;
         // Cancelled, or (when not current) superseded by an edit.
         const current = entry.pending?.id === pending.id;
         if (!result) {
@@ -321,13 +319,11 @@ export function createTileCompositor(options: TileCompositorOptions) {
         }
         if (!part) evict();
         options.onTile();
-
-        return;
       } catch {
-        return await settlePromiseHandler0();
+        settleEmpty();
       }
     };
-    settlePromise();
+    fireAndForget(land(), 'fig-render');
   };
 
   const request = (key: TileKey, priority: number, pinned = false) => {
@@ -417,7 +413,7 @@ export function createTileCompositor(options: TileCompositorOptions) {
   const afterEdit = () => {
     if (interactive) {
       previewDirty = true;
-      void requestPreview();
+      fireAndForget(requestPreview(), 'fig-render');
       return;
     }
     if (lastView) schedule(lastView, false);
@@ -663,7 +659,7 @@ export function createTileCompositor(options: TileCompositorOptions) {
       }
       engine.cancel(cancelled);
       previewDirty = true;
-      void requestPreview();
+      fireAndForget(requestPreview(), 'fig-render');
     },
 
     endInteractive() {
@@ -704,7 +700,7 @@ export function createTileCompositor(options: TileCompositorOptions) {
       lastView = view;
       if (interactive) {
         previewDirty = true;
-        void requestPreview();
+        fireAndForget(requestPreview(), 'fig-render');
         return;
       }
       requestLift();
@@ -720,7 +716,7 @@ export function createTileCompositor(options: TileCompositorOptions) {
 
     /** Draws available tiles; returns whether content (or an empty page) is ready. */
     draw(ctx: CanvasRenderingContext2D, view: ViewState) {
-      updateDraw();
+      dropPreviewWhenSharp();
       if (preview) {
         const { camera, viewport, dpr } = view;
         const old = preview.view;
@@ -771,13 +767,13 @@ export function createTileCompositor(options: TileCompositorOptions) {
       // only in the gaps.
       const present = new Map<number, Set<string>>();
       for (const e of cache.values()) {
-        const processE = () => {
+        const recordPresentTile = () => {
           if (!e.bitmap) return;
           const set = present.get(e.key.scale) ?? new Set<string>();
           present.set(e.key.scale, set);
           set.add(`${e.key.ix}:${e.key.iy}`);
         };
-        processE();
+        recordPresentTile();
       }
       const sharper: number[] = [];
       const draws: {
@@ -788,13 +784,13 @@ export function createTileCompositor(options: TileCompositorOptions) {
         size: number;
       }[] = [];
       for (let k = ordered.length - 1; k >= 0; k--) {
-        const processEntry = () => {
+        const collectScaleDraws = () => {
           const scale = ordered[k];
           const exact = scale === target;
           for (const e of cache.values()) {
             if (!e.bitmap || e.key.scale !== scale) continue;
             const r = tileRect(e.key);
-            if (hasX(r)) continue;
+            if (outsideView(r)) continue;
             e.lastUsed = ++clock;
             let x = (r.x - camera.x) * unit;
             let y = (r.y - camera.y) * unit;
@@ -821,7 +817,7 @@ export function createTileCompositor(options: TileCompositorOptions) {
           }
           sharper.push(scale);
         };
-        processEntry();
+        collectScaleDraws();
       }
       for (let k = draws.length - 1; k >= 0; k--) {
         const d = draws[k];
@@ -833,9 +829,9 @@ export function createTileCompositor(options: TileCompositorOptions) {
       }
       for (const l of landing) drawLift(ctx, view, l);
       if (lift) drawLift(ctx, view, lift);
-      return hasLength(page);
+      return paintedOrEmpty(page);
 
-      function hasX(r: Rect) {
+      function outsideView(r: Rect) {
         return (
           r.x > camera.x + viewW ||
           r.x + r.w < camera.x ||
@@ -844,7 +840,7 @@ export function createTileCompositor(options: TileCompositorOptions) {
         );
       }
 
-      function hasLength(pageInput: NonNullable<typeof page>) {
+      function paintedOrEmpty(pageInput: NonNullable<typeof page>) {
         return (
           draws.length > 0 ||
           !pageInput.content ||
@@ -853,7 +849,7 @@ export function createTileCompositor(options: TileCompositorOptions) {
         );
       }
 
-      function updateDraw() {
+      function dropPreviewWhenSharp() {
         if (!interactive && (preview || previewPending) && sharp(view))
           clearPreview();
       }

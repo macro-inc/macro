@@ -7,6 +7,7 @@
  */
 
 import type { DeckOutline, TextLayoutInfo } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createEffect,
   createMemo,
@@ -136,6 +137,21 @@ export function ShowCanvas(props: {
   );
 
   const cache = new Map<string, Promise<Prepared>>();
+  const textLayoutOrNull = async (i: number, shape: number) => {
+    try {
+      return await props.engine.textLayout(i, shape);
+    } catch {
+      return null;
+    }
+  };
+  /** Drops a slide that failed to prepare, so the next request tries again. */
+  const forgetIfFailed = async (key: string, pending: Promise<Prepared>) => {
+    try {
+      await pending;
+    } catch {
+      cache.delete(key);
+    }
+  };
   const prepare = (i: number, width: number, layers: boolean) => {
     const key = `${i}:${width}:${layers}`;
     let hit = cache.get(key);
@@ -152,14 +168,7 @@ export function ShowCanvas(props: {
             .map((a) => a.shapeId)
         );
         for (const id of built) {
-          const settleTextLayout = async () => {
-            try {
-              return await props.engine.textLayout(i, id);
-            } catch {
-              return await null;
-            }
-          };
-          const layout = await settleTextLayout();
+          const layout = await textLayoutOrNull(i, id);
           if (layout) boxes.set(id, paragraphBoxes(layout));
         }
         const timeline = buildTimeline(slide, boxes);
@@ -171,17 +180,16 @@ export function ShowCanvas(props: {
         return { kind: 'layered', timeline, bitmaps };
       })();
       cache.set(key, hit);
-
-      const settleHit = async () => {
-        try {
-          return await hit;
-        } catch {
-          return await cache.delete(key);
-        }
-      };
-      settleHit();
+      fireAndForget(forgetIfFailed(key, hit), 'pptx-slideshow');
     }
     return hit;
+  };
+  const preloadSlide = async (i: number, width: number, layers: boolean) => {
+    try {
+      await prepare(i, width, layers);
+    } catch {
+      // Not cached, so showing the slide prepares it again.
+    }
   };
 
   // Morph scenes, newest last; only a few are kept (each holds two slides).
@@ -189,29 +197,31 @@ export function ShowCanvas(props: {
   const morphInto = (i: number) =>
     props.transitions !== false &&
     props.deck.slides[i]?.transition?.kind === 'morph';
+  const prepareMorphOrNull = async (
+    from: number,
+    to: number,
+    width: number
+  ) => {
+    try {
+      return await prepareMorph(props.engine, props.deck, from, to, width);
+    } catch {
+      return null;
+    }
+  };
+  const closeScene = async (scene: Promise<MorphScene | null>) => {
+    const s = await scene;
+    if (s) closeMorph(s);
+  };
   const prepareMorphFor = (from: number, to: number, width: number) => {
     const key = `${from}:${to}:${width}`;
     let hit = morphs.get(key);
     if (hit) morphs.delete(key);
     else {
-      const settlePrepareMorph = async () => {
-        try {
-          return await prepareMorph(props.engine, props.deck, from, to, width);
-        } catch {
-          return await null;
-        }
-      };
-      hit = settlePrepareMorph();
+      hit = prepareMorphOrNull(from, to, width);
       while (morphs.size >= 3) {
         const [oldest, scene] = morphs.entries().next().value!;
         morphs.delete(oldest);
-
-        const settleScene = async () => {
-          const settleSceneValue = await scene;
-          const s = settleSceneValue;
-          return await (s && closeMorph(s));
-        };
-        void settleScene();
+        fireAndForget(closeScene(scene), 'pptx-slideshow');
       }
     }
     morphs.set(key, hit);
@@ -228,30 +238,22 @@ export function ShowCanvas(props: {
 
   onCleanup(() => {
     morphRun?.cancel();
-    for (const scene of morphs.values()) {
-      const settleSceneResult = async () => {
-        const settleSceneResultValue = await scene;
-        const s = settleSceneResultValue;
-        return await (s && closeMorph(s));
-      };
-      void settleSceneResult();
-    }
+    for (const scene of morphs.values())
+      fireAndForget(closeScene(scene), 'pptx-slideshow');
     for (const m of mounted) stop(m);
-    for (const p of cache.values()) {
-      const settleP = async () => {
-        try {
-          const settlePValue = await p;
-          const r = settlePValue;
-          return await (r.kind === 'flat'
-            ? r.bitmap.close()
-            : r.bitmaps.forEach((b) => b.close()));
-        } catch {
-          return;
-        }
-      };
-      void settleP();
-    }
+    for (const p of cache.values())
+      fireAndForget(closePrepared(p), 'pptx-slideshow');
   });
+
+  const closePrepared = async (pending: Promise<Prepared>) => {
+    try {
+      const r = await pending;
+      if (r.kind === 'flat') r.bitmap.close();
+      else for (const b of r.bitmaps) b.close();
+    } catch {
+      // A slide that failed to prepare holds no bitmaps.
+    }
+  };
 
   const canvasFor = (bitmap: ImageBitmap) => {
     const canvas = wrapper.ownerDocument.createElement('canvas');
@@ -339,22 +341,19 @@ export function ShowCanvas(props: {
       if (Number.isFinite(timed.iterations)) finite.push(anim.finished);
       else endless = true;
     }
-
-    const settleAll = async () => {
+    const afterAnimations = async () => {
       try {
         await Promise.all(finite);
-
-        if (m.token !== token) return;
-        // Endless repeats keep going until the next click.
-        if (endless) rest(m, group);
-        else settleAt(m, group);
-
-        return;
       } catch {
+        // Cancelled by `stop`.
         return;
       }
+      if (m.token !== token) return;
+      // Endless repeats keep going until the next click.
+      if (endless) rest(m, group);
+      else settleAt(m, group);
     };
-    void settleAll();
+    fireAndForget(afterAnimations(), 'pptx-slideshow');
   };
 
   /** Puts a prepared slide into a slot. */
@@ -442,17 +441,15 @@ export function ShowCanvas(props: {
       }
       updateZIndex();
       if (props.preload !== undefined) {
-        const preload = props.preload;
-        const settlePrepare = async () => {
-          try {
-            return await prepare(preload, pixelWidth(), layered());
-          } catch {
-            return;
-          }
-        };
-        void settlePrepare();
+        fireAndForget(
+          preloadSlide(props.preload, pixelWidth(), layered()),
+          'pptx-slideshow'
+        );
         if (props.preload !== value.i && morphInto(props.preload))
-          void prepareMorphFor(value.i, props.preload, pixelWidth());
+          fireAndForget(
+            prepareMorphFor(value.i, props.preload, pixelWidth()),
+            'pptx-slideshow'
+          );
       }
       props.onShown?.(value.i);
 

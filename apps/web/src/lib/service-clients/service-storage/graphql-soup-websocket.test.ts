@@ -1,10 +1,55 @@
-import { describe, expect, it, vi } from 'vitest';
+import { err, ok } from 'neverthrow';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const toastFailure = vi.hoisted(() => vi.fn());
-vi.mock('@core/component/Toast/Toast', () => ({
-  toast: { failure: toastFailure },
+const telemetryError = vi.hoisted(() => vi.fn());
+vi.mock('@macro-inc/observability', () => ({
+  Telemetry: { error: telemetryError },
 }));
 
+const nativeStatus = vi.hoisted(() => ({
+  listeners: new Set<(status: string) => void>(),
+}));
+vi.mock('@core/mobile/native-network-status', () => ({
+  subscribeNativeNetworkStatus: (listener: (status: string) => void) => {
+    nativeStatus.listeners.add(listener);
+    listener('online');
+    return () => nativeStatus.listeners.delete(listener);
+  },
+}));
+
+/** Settles to the promise's error, or its value when it does not reject. */
+async function rejectionOf(promise: Promise<unknown>): Promise<unknown> {
+  try {
+    return await promise;
+  } catch (error) {
+    return error;
+  }
+}
+
+/** Calls `onDone` once the retry wait for `attempt` ends. */
+async function waitThen(attempt: number, onDone: () => void): Promise<void> {
+  await waitToRetryGraphqlSoupWebSocket(attempt);
+  onDone();
+}
+
+function setNativeStatus(status: string) {
+  for (const listener of [...nativeStatus.listeners]) listener(status);
+}
+
+function setVisibility(state: DocumentVisibilityState) {
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    get: () => state,
+  });
+  document.dispatchEvent(new Event('visibilitychange'));
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+  setVisibility('visible');
+});
+
+import { registerActiveGraphqlSoupQuery } from '../../queries/soup/graphql/active-queries';
 import {
   ActivityUpdatesDocument,
   NotificationUpdatesDocument,
@@ -14,9 +59,12 @@ import {
   buildGraphqlSoupWebSocketUrl,
   createGraphqlSoupSubscriptionsLifecycle,
   createGraphqlSoupWebSocketUrlResolver,
+  GraphqlSoupWebSocketAuthUnavailableError,
+  publishNotificationPatch,
   SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
   shouldRetryGraphqlSoupWebSocket,
   subscribeToGraphqlNotificationPatches,
+  waitToRetryGraphqlSoupWebSocket,
 } from './graphql-soup-websocket';
 
 describe('GraphQL Soup websocket auth', () => {
@@ -32,7 +80,7 @@ describe('GraphQL Soup websocket auth', () => {
   });
 
   it('refreshes cookie auth before resolving each connection URL', async () => {
-    const refreshCookieAuth = vi.fn().mockResolvedValue(undefined);
+    const refreshCookieAuth = vi.fn().mockResolvedValue(ok(undefined));
     const getApiToken = vi.fn();
     const resolveUrl = createGraphqlSoupWebSocketUrlResolver({
       dssHost: 'https://gateway.macro.com/dss',
@@ -65,11 +113,33 @@ describe('GraphQL Soup websocket auth', () => {
     await expect(resolveUrl()).resolves.toContain('macro-api-token=second');
     expect(refreshCookieAuth).not.toHaveBeenCalled();
   });
+
+  it('retries a cookie refresh lost to an outage but not a rejected session', async () => {
+    const resolverFor = (code: string) =>
+      createGraphqlSoupWebSocketUrlResolver({
+        dssHost: 'https://gateway.macro.com/dss',
+        bearerTokenAuth: false,
+        getApiToken: vi.fn(),
+        refreshCookieAuth: vi.fn().mockResolvedValue(err([{ code }])),
+      });
+
+    for (const code of ['NETWORK_ERROR', 'UNKNOWN_ERROR', 'HTTP_ERROR']) {
+      const error = await rejectionOf(resolverFor(code)());
+      expect(error).toBeInstanceOf(GraphqlSoupWebSocketAuthUnavailableError);
+      expect(shouldRetryGraphqlSoupWebSocket(error)).toBe(true);
+    }
+
+    const rejected = await rejectionOf(resolverFor('UNAUTHORIZED')());
+    expect(rejected).toBeInstanceOf(Error);
+    expect(shouldRetryGraphqlSoupWebSocket(rejected)).toBe(false);
+  });
 });
 
 describe('GraphQL Soup websocket retry policy', () => {
-  it('bounds retries and accepts only transient failures', () => {
-    expect(SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS).toBe(5);
+  it('keeps retrying transient failures but not auth or protocol failures', () => {
+    expect(SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS).toBe(
+      Number.POSITIVE_INFINITY
+    );
     expect(shouldRetryGraphqlSoupWebSocket({ code: 1006 })).toBe(true);
     expect(shouldRetryGraphqlSoupWebSocket({ code: 1013 })).toBe(true);
     expect(shouldRetryGraphqlSoupWebSocket(new Event('error'))).toBe(true);
@@ -80,9 +150,80 @@ describe('GraphQL Soup websocket retry policy', () => {
       false
     );
   });
+
+  it('caps the wait between attempts', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(1);
+    const resolved = vi.fn();
+    const waiting = waitThen(30, resolved);
+
+    await vi.advanceTimersByTimeAsync(62_999);
+    expect(resolved).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(resolved).toHaveBeenCalledOnce();
+    await waiting;
+    vi.mocked(Math.random).mockRestore();
+  });
+
+  it.each([
+    ['the app returns to the foreground', () => setVisibility('visible')],
+    ['the browser comes online', () => dispatchEvent(new Event('online'))],
+    ['the native network path returns', () => setNativeStatus('online')],
+  ])('stops waiting when %s', async (_name, opportunity) => {
+    vi.useFakeTimers();
+    setVisibility('hidden');
+    setNativeStatus('offline');
+    const resolved = vi.fn();
+    const waiting = waitThen(10, resolved);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(resolved).not.toHaveBeenCalled();
+
+    opportunity();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(resolved).toHaveBeenCalledOnce();
+    await waiting;
+    expect(nativeStatus.listeners.size).toBe(0);
+  });
+
+  it('does not treat the current native status as a reconnect opportunity', async () => {
+    vi.useFakeTimers();
+    const resolved = vi.fn();
+    const waiting = waitThen(10, resolved);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(resolved).not.toHaveBeenCalled();
+
+    dispatchEvent(new Event('online'));
+    await waiting;
+  });
 });
 
 describe('GraphQL Soup subscription lifecycle', () => {
+  it('marks listener failures on the receipt span and continues delivery', () => {
+    const failure = new Error('notification listener failed');
+    const stopFailed = subscribeToGraphqlNotificationPatches(() => {
+      throw failure;
+    });
+    const received = vi.fn();
+    const stopReceived = subscribeToGraphqlNotificationPatches(received);
+    const span = { error: vi.fn() };
+    const patch = {
+      __typename: 'GraphqlCacheDeletion' as const,
+      graphqlTypeName: 'GraphqlNotification',
+      entityId: 'synthetic-notification',
+    };
+    try {
+      publishNotificationPatch(patch, span);
+      expect(span.error).toHaveBeenCalledExactlyOnceWith(failure);
+      expect(telemetryError).toHaveBeenCalledWith(failure, {
+        surface: 'graphql-notifications',
+      });
+      expect(received).toHaveBeenCalledExactlyOnceWith(patch);
+    } finally {
+      stopFailed();
+      stopReceived();
+    }
+  });
+
   it('keeps notification and activity updates active with or without a cache host', () => {
     const unsubscribes: Array<ReturnType<typeof vi.fn>> = [];
     const receive = new Map<unknown, (result: { data?: unknown }) => void>();
@@ -122,13 +263,53 @@ describe('GraphQL Soup subscription lifecycle', () => {
       receive.get(NotificationUpdatesDocument)?.({
         data: { notificationUpdates: patch },
       });
-      expect(listener).toHaveBeenLastCalledWith(patch);
+      // Network receipt owns alerts; cache catch-up must never replay them.
+      expect(listener).not.toHaveBeenCalled();
     }
     lifecycle.dispose();
     unregister();
     for (const unsubscribe of unsubscribes)
       expect(unsubscribe).toHaveBeenCalledOnce();
   });
+  it('refetches mounted call lists when a Soup update carries a call', async () => {
+    const receive = new Map<unknown, (result: { data?: unknown }) => void>();
+    const client = {
+      query: vi.fn(),
+      subscription: vi.fn((document) => ({
+        subscribe: (next: (result: { data?: unknown }) => void) => {
+          receive.set(document, next);
+          return { unsubscribe: vi.fn() };
+        },
+      })),
+    };
+    const refresh = vi.fn(async () => {});
+    const unregister = registerActiveGraphqlSoupQuery({
+      isEnabled: () => true,
+      refresh,
+      body: () => ({}),
+    });
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    lifecycle.replace(
+      client as never,
+      { disabled: false, onCacheGenerationChanged: () => () => {} } as never
+    );
+
+    receive.get(SoupUpdatesDocument)?.({
+      data: {
+        soupUpdates: [
+          {
+            __typename: 'SoupUpdated',
+            item: { __typename: 'GraphqlSoupCall', id: 'imported-call' },
+          },
+        ],
+      },
+    });
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+
+    lifecycle.dispose();
+    unregister();
+  });
+
   it('pauses subscriptions for navigation and reconnects in place exactly once per restore', () => {
     const unsubscribes: Array<ReturnType<typeof vi.fn>> = [];
     const client = {
@@ -187,7 +368,7 @@ describe('GraphQL Soup subscription lifecycle', () => {
   });
 
   it('signals a terminal subscription failure once across both subscriptions', () => {
-    toastFailure.mockClear();
+    telemetryError.mockClear();
     const receive: Array<(result: { error?: unknown }) => void> = [];
     const client = {
       subscription: vi.fn(() => ({
@@ -206,13 +387,86 @@ describe('GraphQL Soup subscription lifecycle', () => {
       } as never
     );
 
-    receive[0]?.({ error: new Error('retry budget exhausted') });
+    const firstError = new Error('retry budget exhausted');
+    receive[0]?.({ error: firstError });
     receive[1]?.({ error: new Error('duplicate terminal result') });
 
-    expect(toastFailure).toHaveBeenCalledOnce();
-    expect(toastFailure).toHaveBeenCalledWith('Live updates disconnected', {
-      subtext: 'Refresh to reconnect.',
+    expect(telemetryError).toHaveBeenCalledOnce();
+    expect(telemetryError).toHaveBeenCalledWith(firstError, {
+      'error.source': 'graphql-soup-websocket',
     });
+    lifecycle.dispose();
+  });
+
+  it('reattaches an ended subscription set on the next foreground or online signal', () => {
+    telemetryError.mockClear();
+    const receive: Array<
+      (result: { error?: unknown; hasNext?: boolean }) => void
+    > = [];
+    const unsubscribes: Array<ReturnType<typeof vi.fn>> = [];
+    const client = {
+      subscription: vi.fn(() => ({
+        subscribe: vi.fn((next) => {
+          receive.push(next);
+          const unsubscribe = vi.fn();
+          unsubscribes.push(unsubscribe);
+          return { unsubscribe };
+        }),
+      })),
+    };
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    lifecycle.replace(client as never);
+    expect(client.subscription).toHaveBeenCalledTimes(2);
+
+    // Results that keep the stream open never reattach it.
+    receive[0]?.({ hasNext: true });
+    setVisibility('visible');
+    expect(client.subscription).toHaveBeenCalledTimes(2);
+
+    // A terminal result waits for an opportunity rather than a timer.
+    const failed = receive[0];
+    failed?.({ error: new Error('session rejected'), hasNext: false });
+    receive[1]?.({ error: new Error('session rejected'), hasNext: false });
+    expect(client.subscription).toHaveBeenCalledTimes(2);
+
+    setVisibility('visible');
+    expect(client.subscription).toHaveBeenCalledTimes(4);
+    for (const unsubscribe of unsubscribes.slice(0, 2))
+      expect(unsubscribe).toHaveBeenCalledOnce();
+
+    // Late results from the replaced set and repeated signals do not
+    // duplicate the healthy replacement.
+    failed?.({ error: new Error('stale'), hasNext: false });
+    setVisibility('visible');
+    dispatchEvent(new Event('online'));
+    expect(client.subscription).toHaveBeenCalledTimes(4);
+    expect(telemetryError).toHaveBeenCalledOnce();
+
+    receive[2]?.({ error: new Error('again'), hasNext: false });
+    lifecycle.dispose();
+    dispatchEvent(new Event('online'));
+    expect(client.subscription).toHaveBeenCalledTimes(4);
+  });
+
+  it('signals a new outage after a successful reconnection', () => {
+    telemetryError.mockClear();
+    const receive: Array<(result: { error?: unknown }) => void> = [];
+    const client = {
+      subscription: vi.fn(() => ({
+        subscribe: vi.fn((next) => {
+          receive.push(next);
+          return { unsubscribe: vi.fn() };
+        }),
+      })),
+    };
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    lifecycle.replace(client as never);
+
+    receive[0]?.({ error: new Error('first outage') });
+    lifecycle.connected();
+    receive[0]?.({ error: new Error('second outage') });
+
+    expect(telemetryError).toHaveBeenCalledTimes(2);
     lifecycle.dispose();
   });
 });

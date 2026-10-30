@@ -3,7 +3,7 @@ import {
   isListViewID,
   type ListView,
 } from '@app/constants/list-views';
-import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
+import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import {
   createSoupState,
   type GroupMeta,
@@ -62,6 +62,7 @@ import {
   NATIVE_OFFLINE_ERROR_MESSAGE,
   nativeNetworkStatus,
 } from '@core/mobile/native-network-status';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type EntityData,
   getPropertyOptionLabel,
@@ -202,6 +203,7 @@ export interface SoupViewContextValues {
   fetchNextGroupPage: (groupKey: string) => Promise<void>;
   isFetchingGroupPage: (groupKey: string) => boolean;
   hasNextGroupPage: (groupKey: string) => boolean;
+  groupPageError: (groupKey: string) => unknown;
 }
 
 const SoupViewContext = createContext<SoupViewContextValues>();
@@ -496,7 +498,10 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   const filterByTag = (optionId: string) => tagFilter.onChange([optionId]);
 
   const [searchPaused, setSearchPaused] = createSignal(false);
-  const sourceSearchPaused = createMemo(() => searchPaused() || !enabled());
+  const sourceSearchPaused = createMemo(
+    () =>
+      searchPaused() || !enabled() || (isTouchDevice() && SearchState.isOpen())
+  );
   const [assigneeFilter, setAssigneeFilter] = makeFlaggedPersisted(
     useEntryState<string[]>('soup.assigneeFilter', { default: [] }),
     {
@@ -794,25 +799,14 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     default: props.initialSearchText ?? '',
   });
 
-  // The split's effective search text — derived, never synchronized: while
-  // the dock search session is open and this split is foregrounded, it IS the
-  // session's query (the dock input lives in the stable app chrome — see
-  // Layout — so navigation never remounts it, and the query never enters
-  // per-split state: nothing to clear on close, nothing to reapply on pill
-  // navigation). Otherwise it is the split's own persisted text, which only
-  // the desktop search bar writes.
-  const effectiveSearchText = useMobileSearchText(
-    searchText,
-    panel.handle.isActive
-  );
-
   const search = createSearchState({
+    surface: () => activeListView() ?? 'soup',
     soup,
     filters: () => applyViewFilters(queryFilters.state),
     assignees: assigneeFilter,
     disableLocalSearch: () => config().disableLocalSearch ?? false,
     searchPaused: sourceSearchPaused,
-    searchText: effectiveSearchText,
+    searchText,
     setSearchText,
   });
 
@@ -1151,6 +1145,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   };
 
   const groupQueries = createGroupedSoupQueries({
+    groupedPaging: () => itemsQuery.groupedPaging,
     initialPage: createMemo(() => {
       if (itemsSource().isPlaceholderData()) return;
 
@@ -1187,6 +1182,9 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
   const hasNextGroupPage = (groupKey: string) =>
     groupQueryFor(groupKey)?.hasNextPage() ?? false;
+
+  const groupPageError = (groupKey: string) =>
+    groupQueryFor(groupKey)?.error() ?? null;
 
   const resolveGroupLabel = (key: string): string | undefined => {
     const field = groupByField();
@@ -1596,26 +1594,8 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
         // query in the app — other mounted panels refetch their whole page
         // chain one request at a time — and would let an unrelated view's
         // failure report the visible refresh as failed.
-
-        const settleInvalidateQueries = async () => {
-          try {
-            return await queryClient.invalidateQueries({
-              queryKey: soupKeys._def,
-            });
-          } catch {
-            return await undefined;
-          }
-        };
-        void settleInvalidateQueries();
-
-        const settleInvalidateUserNotifications = async () => {
-          try {
-            return await invalidateUserNotifications();
-          } catch {
-            return await undefined;
-          }
-        };
-        void settleInvalidateUserNotifications();
+        queryClient.invalidateQueries({ queryKey: soupKeys._def });
+        fireAndForget(invalidateUserNotifications(), 'soup-view');
 
         // Only the visible list decides the outcome. It throws on refetch
         // failure, so pull-to-refresh can tell "nothing came back" apart from
@@ -1662,6 +1642,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     fetchNextGroupPage,
     isFetchingGroupPage,
     hasNextGroupPage,
+    groupPageError,
   };
 
   return { context, rows: builtRows };

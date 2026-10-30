@@ -5,6 +5,7 @@
 
 import { analytics } from '@app/lib/analytics';
 import { PsdEngine } from '@core/psd-engine/client';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { contentHash } from '@core/util/hash';
 import { invalidateUserQuota } from '@queries/auth';
 import { postNewHistoryItem } from '@queries/history/history';
@@ -36,7 +37,7 @@ export async function createPsdDocument(args: {
     sha,
     projectId: args.projectId,
   });
-  invalidateUserQuota();
+  fireAndForget(invalidateUserQuota(), 'create-psd-document');
   if (created.isErr()) return undefined;
   const doc = created.value;
   const upload = await uploadToPresignedUrl({
@@ -47,17 +48,23 @@ export async function createPsdDocument(args: {
   });
   if (upload.isErr()) return undefined;
   const documentId = doc.metadata.documentId;
-  postNewHistoryItem('document', documentId);
+  fireAndForget(
+    postNewHistoryItem('document', documentId),
+    'create-psd-document'
+  );
   setPreviewOnCreate({
     itemId: documentId,
     itemType: 'document',
     name: title,
     fileType: 'psd',
   });
-  refetchSoupEntity(documentId, 'document', {
-    ownTouch: true,
-    refreshGraphql: true,
-  });
+  fireAndForget(
+    refetchSoupEntity(documentId, 'document', {
+      ownTouch: true,
+      refreshGraphql: true,
+    }),
+    'create-psd-document'
+  );
   analytics.track('create_entity', {
     entityType: 'psd',
     entityId: documentId,

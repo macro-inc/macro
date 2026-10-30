@@ -1,17 +1,18 @@
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import ArrowUpIcon from '@icon/system/regular/arrow-up.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import ColumnsPlusLeftIcon from '@icon/system/regular/columns-plus-left.svg';
+import ColumnsPlusRightIcon from '@icon/system/regular/columns-plus-right.svg';
+import FunctionIcon from '@icon/system/regular/function.svg';
+import ListBulletsIcon from '@icon/system/regular/list-bullets.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { Popover } from '@kobalte/core/popover';
-import ArrowDownIcon from '@phosphor/arrow-down.svg';
-import ArrowLeftIcon from '@phosphor/arrow-left.svg';
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import ArrowUpIcon from '@phosphor/arrow-up.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import ColumnsPlusLeftIcon from '@phosphor/columns-plus-left.svg';
-import ColumnsPlusRightIcon from '@phosphor/columns-plus-right.svg';
-import FunctionIcon from '@phosphor/function.svg';
-import ListBulletsIcon from '@phosphor/list-bullets.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import XIcon from '@phosphor/x.svg';
 import { Key } from '@solid-primitives/keyed';
 import { ConfirmDialog } from '@ui/components/ConfirmDialog';
 import { DeleteDialog } from '@ui/components/DeleteDialog';
@@ -50,6 +51,8 @@ import { OptionPill } from './select-pill';
 export type DatabaseColumnHeaderProps = {
   column: DatabaseViewColumn;
   registerRename?: (rename: (() => void) | undefined) => void;
+  /** Enter accepts the name and starts editing this column's first cell. */
+  onEnter?: () => void;
   onChangeType?: (
     columnId: string,
     change: DatabaseColumnTypeChange
@@ -136,13 +139,24 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
   const error = columnRename.error;
   const setError = columnRename.setError;
   const pending = () => operating() || columnRename.pending();
+  const columnName = () =>
+    columnRename.pending() && !columnRename.target()
+      ? columnRename.draft().trim()
+      : props.column.name;
   const rename = () => {
     if (!canRename() || pending()) return;
     setMenuOpen(false);
     columnRename.begin({ id: props.column.id, name: props.column.name });
   };
   const save = (restoreFocus: boolean) => {
-    if (canRename()) void columnRename.save(restoreFocus);
+    if (canRename())
+      fireAndForget(
+        columnRename.save(
+          restoreFocus,
+          restoreFocus ? props.onEnter : undefined
+        ),
+        'database'
+      );
   };
   props.registerRename?.(rename);
   async function changeType(change: DatabaseColumnTypeChange) {
@@ -314,7 +328,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
             'opacity-40': props.dragging,
           }}
           role="columnheader"
-          aria-label={props.column.name}
+          aria-label={columnName()}
           aria-sort={match(props.sortDirection)
             .with('asc', () => 'ascending' as const)
             .with('desc', () => 'descending' as const)
@@ -323,7 +337,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
           aria-keyshortcuts={canRename() ? 'F2 Shift+F10' : 'Shift+F10'}
           tabIndex={columnRename.target() ? -1 : 0}
           disabled={!!columnRename.target()}
-          class="relative min-w-0 border-r border-edge-muted/50 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink/50 [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-ink/50"
+          class="relative min-w-0 border-r border-edge-muted/50 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink/50"
           onDblClick={(
             event: MouseEvent & { currentTarget: HTMLDivElement }
           ) => {
@@ -378,7 +392,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
                   type={props.column.dataType}
                   entityType={props.column.specificEntityType}
                 />
-                <span class="min-w-0 flex-1 truncate">{props.column.name}</span>
+                <span class="min-w-0 flex-1 truncate">{columnName()}</span>
                 <Show when={props.sortDirection}>
                   <Show
                     when={props.sortDirection === 'asc'}
@@ -393,7 +407,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
                   <Dropdown.Trigger
                     variant="ghost"
                     size="icon-sm"
-                    aria-label={`${props.column.name} column menu`}
+                    aria-label={`${columnName()} column menu`}
                   >
                     <CaretDownIcon class="size-3" />
                   </Dropdown.Trigger>
@@ -464,7 +478,9 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
                                 loadCasts={(open) =>
                                   props.columnCasts?.(props.column.id, open)
                                 }
-                                onChange={(change) => void changeType(change)}
+                                onChange={(change) =>
+                                  fireAndForget(changeType(change), 'database')
+                                }
                                 onFormula={
                                   formulas &&
                                   (() => {
@@ -714,7 +730,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
         confirmLabel="Convert into a new column"
         onConfirm={() => {
           const choice = converting();
-          if (choice) void convert(choice);
+          if (choice) fireAndForget(convert(choice), 'database');
         }}
         body={
           <>
@@ -738,7 +754,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
         title="Delete column?"
         deleteLabel="Delete column"
         pending={pending()}
-        onDelete={() => void remove()}
+        onDelete={() => fireAndForget(remove(), 'database')}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           restoreFocus();

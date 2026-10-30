@@ -16,6 +16,7 @@ import {
 import { useChatContext } from '@core/component/AI/context';
 import type { AssistantMessagePart } from '@core/component/AI/types';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { invalidateCalendarOccurrences } from '@queries/calendar/occurrences';
 import { useChatQuery } from '@queries/chat';
 
@@ -124,9 +125,8 @@ export function CalendarChatCompose(props: CalendarChatComposeProps) {
     if (snapshot === lastEnqueuedSnapshot) return persistenceQueue;
     lastEnqueuedSnapshot = snapshot;
 
-    const settlePersistenceQueue = async () => {
+    const persistAfterQueued = async () => {
       await persistenceQueue;
-
       if (finalized) return;
       try {
         const result = await updateChatToolCall<'CreateCalendarEvent'>({
@@ -146,13 +146,14 @@ export function CalendarChatCompose(props: CalendarChatComposeProps) {
         lastEnqueuedSnapshot = lastPersistedSnapshot;
       }
       toast.failure('Failed to save calendar event changes');
-
-      return;
     };
-    persistenceQueue = settlePersistenceQueue();
+    persistenceQueue = persistAfterQueued();
     return persistenceQueue;
   }
-  const debouncedUpdate = debounce(() => void enqueueUpdate(), 150);
+  const debouncedUpdate = debounce(
+    () => fireAndForget(enqueueUpdate(), 'ai-calendar-compose'),
+    150
+  );
 
   function updateLocalResponse(
     response: CreateCalendarEventResponse,
@@ -203,7 +204,7 @@ export function CalendarChatCompose(props: CalendarChatComposeProps) {
       }
       finalized = true;
       updateLocalResponse(result.value as CreateCalendarEventResponse, args);
-      void invalidateCalendarOccurrences();
+      fireAndForget(invalidateCalendarOccurrences(), 'ai-calendar-compose');
       toast.success('Calendar event created', {
         actions: [
           { label: 'Open', onClick: () => openToolCalendarEvent(event) },

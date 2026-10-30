@@ -1,3 +1,4 @@
+import { literalListItems } from '@macro-inc/spreadsheet/data-validation';
 import {
   CONDITIONAL_FORMAT_TYPES,
   type ComparisonOperator,
@@ -115,6 +116,52 @@ const THRESHOLD_TYPES: Record<string, ConditionalThreshold['type']> = {
   autoMax: 'max',
 };
 
+/** The text and fill of a rule shaped as export writes a choice's color. */
+function choiceFill(rule: ConditionalFormat) {
+  const quoted =
+    rule.type === 'cellIs' &&
+    rule.operator === 'equal' &&
+    rule.formulas?.length === 1 &&
+    !rule.stopIfTrue &&
+    /^"((?:[^"]|"")*)"$/.exec(rule.formulas[0]);
+  const fill = rule.style?.fillColor;
+  if (!quoted || !fill || Object.keys(rule.style ?? {}).length !== 1) return;
+  const item = quoted[1].replace(/""/g, '"').trim();
+  return item ? { item, color: fill.toLowerCase() } : undefined;
+}
+
+/**
+ * Takes the rules that color a dropdown's choices, as export writes them, back
+ * into the dropdown's colors: a fill when a cell of exactly the dropdown's
+ * range equals one of its choices.
+ */
+function foldChoiceColors(
+  rules: ConditionalFormat[],
+  validations: DataValidation[]
+): ConditionalFormat[] {
+  return rules.filter((rule) => {
+    const choice = choiceFill(rule);
+    const dropdown =
+      choice &&
+      validations.find(
+        (validation) =>
+          validation.type === 'list' &&
+          validation.dropdown !== false &&
+          validation.range === rule.range
+      );
+    if (!choice || !dropdown) return true;
+    const key = choice.item.toLowerCase();
+    const items = literalListItems(dropdown.formulas?.[0] ?? '');
+    if (
+      (items && !items.some((item) => item.toLowerCase() === key)) ||
+      dropdown.colors?.some((entry) => entry.item.toLowerCase() === key)
+    )
+      return true;
+    dropdown.colors = [...(dropdown.colors ?? []), choice];
+    return false;
+  });
+}
+
 type Pending = {
   attributes: Attributes;
   formulas: string[];
@@ -171,7 +218,7 @@ export function createSheetRulesReader(options: {
     let type = value.type as ConditionalFormat['type'];
     // Excel evaluates these rules' formulas. Some writers leave out the text
     // or period they were made from; the formula still defines the rule.
-    updateType();
+    fallBackToExpression();
     if (
       !range ||
       !(CONDITIONAL_FORMAT_TYPES as readonly string[]).includes(type)
@@ -207,8 +254,8 @@ export function createSheetRulesReader(options: {
       }
       result.period = value.timePeriod as ConditionalFormat['period'];
     }
-    updateRank();
-    updateBelow();
+    readRank();
+    readBelowAverage();
     if (['colorScale', 'dataBar', 'iconSet'].includes(type)) {
       if (!pending.thresholds.length) {
         skipped = true;
@@ -216,19 +263,19 @@ export function createSheetRulesReader(options: {
       }
       result.thresholds = pending.thresholds;
       if (pending.colors.length) result.colors = pending.colors;
-      updateIconSet();
+      readIconSet();
       if (!on(pending.attributes.showValue, true)) result.showValue = false;
     } else {
-      const style = buildStyle();
-      updateStyle(style);
+      const style = ruleStyle();
+      applyRuleStyle(style);
     }
     if (on(value.stopIfTrue, false)) result.stopIfTrue = true;
     conditional.push({
-      priority: buildPriority(),
+      priority: rulePriority(),
       rule: result,
     });
 
-    function buildStyle() {
+    function ruleStyle() {
       return (
         pending.style ??
         (value.dxfId === undefined
@@ -237,27 +284,27 @@ export function createSheetRulesReader(options: {
       );
     }
 
-    function updateBelow() {
+    function readBelowAverage() {
       if (type === 'aboveAverage' && !on(value.aboveAverage, true))
         result.below = true;
     }
 
-    function updateStyle(style: ConditionalStyle | undefined) {
+    function applyRuleStyle(style: ConditionalStyle | undefined) {
       if (style && Object.keys(style).length) result.style = style;
     }
 
-    function buildPriority(): number {
+    function rulePriority(): number {
       return Number(value.priority ?? 0) || 0;
     }
 
-    function updateIconSet() {
+    function readIconSet() {
       if (type === 'iconSet') {
         result.iconSet = pending.attributes.iconSet ?? '3TrafficLights1';
         if (on(pending.attributes.reverse, false)) result.reverse = true;
       }
     }
 
-    function updateType() {
+    function fallBackToExpression() {
       if (
         pending.formulas.length &&
         ((TEXT_RULES.has(type) && value.text === undefined) ||
@@ -267,7 +314,7 @@ export function createSheetRulesReader(options: {
         type = 'expression';
     }
 
-    function updateRank() {
+    function readRank() {
       if (type === 'top10') {
         result.rank = Math.max(1, Math.round(Number(value.rank ?? 10)) || 10);
         if (on(value.percent, false)) result.percent = true;
@@ -279,7 +326,7 @@ export function createSheetRulesReader(options: {
   function finishValidation(pending: Pending, range: string | undefined) {
     const value = pending.attributes;
     // Any value: only an input message makes it worth keeping.
-    const type = buildType();
+    const type = validationType();
     if (type === 'any' && !value.prompt) return;
     if (
       !range ||
@@ -304,7 +351,7 @@ export function createSheetRulesReader(options: {
     if (on(value.allowBlank, false)) result.allowBlank = true;
     // OOXML's showDropDown="1" hides the in-cell dropdown.
     if (on(value.showDropDown, false)) result.dropdown = false;
-    updateErrorStyle();
+    readErrorStyle();
     if (on(value.showErrorMessage, false)) result.showError = true;
     if (value.errorTitle) result.errorTitle = value.errorTitle.slice(0, 64);
     if (value.error) result.error = value.error.slice(0, 1024);
@@ -313,12 +360,12 @@ export function createSheetRulesReader(options: {
     if (value.prompt) result.prompt = value.prompt.slice(0, 1024);
     validations.push(result);
 
-    function updateErrorStyle() {
+    function readErrorStyle() {
       if (value.errorStyle === 'warning' || value.errorStyle === 'information')
         result.errorStyle = value.errorStyle;
     }
 
-    function buildType() {
+    function validationType() {
       return (value.type ?? 'none') === 'none' ? 'any' : (value.type as string);
     }
   }
@@ -331,7 +378,7 @@ export function createSheetRulesReader(options: {
         differential.stack.push(local);
         return true;
       }
-      const main = buildMain();
+      const main = inMainNamespace();
       if (openContainer() || openConditionalValue()) return true;
       return openValidation();
 
@@ -357,7 +404,7 @@ export function createSheetRulesReader(options: {
         if (uri === X14 && local === 'cfRule') {
           // A data bar here extends the main list's rule with the same id.
           if (value.type === 'dataBar') return true;
-          updateExtensionRule();
+          startExtensionRule();
           return true;
         }
         if (extensionRule && uri === X14 && local === 'dxf') {
@@ -380,7 +427,7 @@ export function createSheetRulesReader(options: {
 
       function openConditionalValue(): boolean {
         if (rule && (main || uri === X14) && local === 'cfvo') {
-          updateOpen(buildType2(), rule);
+          pushThreshold(thresholdType(), rule);
           return true;
         }
         if (!rule || !main) return false;
@@ -431,11 +478,11 @@ export function createSheetRulesReader(options: {
         return false;
       }
 
-      function buildType2() {
+      function thresholdType() {
         return THRESHOLD_TYPES[value.type ?? ''];
       }
 
-      function updateExtensionRule() {
+      function startExtensionRule() {
         if (FORMULA_RULES.has(value.type ?? ''))
           extensionRule = {
             attributes: value,
@@ -446,11 +493,11 @@ export function createSheetRulesReader(options: {
         else skipped = true;
       }
 
-      function buildMain() {
+      function inMainNamespace() {
         return uri === MAIN || uri === STRICT || uri === '';
       }
 
-      function updateOpen(
+      function pushThreshold(
         type: ConditionalThreshold['type'] | undefined,
         ruleInput: NonNullable<typeof rule>
       ) {
@@ -475,7 +522,7 @@ export function createSheetRulesReader(options: {
         return;
       }
       if (extensionRules) {
-        updateText2(extensionRules);
+        closeExtensionElement(extensionRules);
         return;
       }
       if (main && local === 'conditionalFormatting') sqref = undefined;
@@ -485,9 +532,9 @@ export function createSheetRulesReader(options: {
       } else if (rule && main && local === 'cfRule') {
         finishRule(rule, sqref);
         rule = undefined;
-      } else updateText();
+      } else closeValidationElement();
 
-      function updateText2(
+      function closeExtensionElement(
         extensionRulesValue: NonNullable<typeof extensionRules>
       ) {
         if (uri === XM && local === 'f') {
@@ -506,7 +553,7 @@ export function createSheetRulesReader(options: {
         }
       }
 
-      function updateText() {
+      function closeValidationElement() {
         if (
           validation &&
           main &&
@@ -538,9 +585,12 @@ export function createSheetRulesReader(options: {
         warnings.add(
           'Some conditional formatting and data validation rules could not be imported.'
         );
-      const rules = conditional
-        .sort((a, b) => a.priority - b.priority)
-        .map(({ rule: value }) => value);
+      const rules = foldChoiceColors(
+        conditional
+          .sort((a, b) => a.priority - b.priority)
+          .map(({ rule: value }) => value),
+        validations
+      );
       if (
         rules.length > MAX_SHEET_RULES ||
         validations.length > MAX_SHEET_RULES
@@ -664,7 +714,7 @@ export function conditionalFormattingXml(
           .map((threshold) => thresholdXml(threshold, formula))
           .join('');
         const colors = (rule.colors ?? []).map(colorXml).join('');
-        updateBody(thresholds, colors);
+        ruleBodyXml(thresholds, colors);
       } else {
         attributes += ` dxfId="${dxf(rule.style)}"`;
         if (rule.type === 'cellIs')
@@ -699,7 +749,7 @@ export function conditionalFormattingXml(
       if (rule.stopIfTrue) attributes += ' stopIfTrue="1"';
       return `<conditionalFormatting sqref="${rule.range}"><cfRule ${attributes}>${body}</cfRule></conditionalFormatting>`;
 
-      function updateBody(thresholds: string, colors: string) {
+      function ruleBodyXml(thresholds: string, colors: string) {
         if (rule.type === 'colorScale')
           body = `<colorScale>${thresholds}${colors}</colorScale>`;
         else if (rule.type === 'dataBar')
@@ -709,6 +759,24 @@ export function conditionalFormattingXml(
       }
     })
     .join('');
+}
+
+/**
+ * Dropdown choice colors as Excel can show them: a fill when a cell equals
+ * the choice. Import reads these rules back into the dropdown's colors.
+ */
+export function choiceColorFormats(
+  validations: DataValidation[] | undefined
+): ConditionalFormat[] {
+  return (validations ?? []).flatMap((rule) =>
+    (rule.colors ?? []).map(({ item, color }) => ({
+      range: rule.range,
+      type: 'cellIs' as const,
+      operator: 'equal' as const,
+      formulas: [`"${item.replace(/"/g, '""')}"`],
+      style: { fillColor: color },
+    }))
+  );
 }
 
 /** A sheet's `<dataValidations>` element, or nothing. */

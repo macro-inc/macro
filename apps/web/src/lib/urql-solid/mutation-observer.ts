@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type {
   AnyVariables,
   Client,
@@ -141,14 +142,14 @@ export class MutationObserver<
       OnMutateResult
     > = {}
   ): void => {
-    const settleMutateAsync = async () => {
+    const run = async () => {
       try {
-        return await this.mutateAsync(input, options);
+        await this.mutateAsync(input, options);
       } catch {
-        return await undefined;
+        // mutate reports failures through the observer state, not a rejection.
       }
     };
-    void settleMutateAsync();
+    fireAndForget(run(), 'urql-mutation');
   };
 
   readonly mutateAsync = async (

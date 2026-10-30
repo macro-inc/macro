@@ -439,16 +439,15 @@ const api = {
     if (!currentWorker) throw new Error('missing elected Cache engine worker');
     currentWorker.terminate();
 
-    const settleRead = async () => {
+    const readRejects = async () => {
       try {
         await read(host, 3, 'CacheLifecycleQuery');
+        return false;
       } catch {
-        return await true;
+        return true;
       }
-
-      return await false;
     };
-    const oldRequestRejected = await settleRead();
+    const oldRequestRejected = await readRejects();
     const deadline = performance.now() + 20_000;
     for (;;) {
       try {

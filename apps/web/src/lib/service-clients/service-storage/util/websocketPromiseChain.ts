@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { ResultError } from '@core/util/result';
 import type { MinimalWebSocket } from '@macro-inc/collaboration/websocket/platform/minimal-websocket';
 import { err, ok, type Result } from 'neverthrow';
@@ -70,19 +71,11 @@ export function createWebsocketPromiseChain<
         }
       }, timeoutMs);
     }) as PromiseHandler;
-    const settlePromiseFinally = async () => {
+    const markResolved = async () => {
+      await promise;
       promise.resolved = true;
-
-      return;
     };
-    const settlePromise = async () => {
-      try {
-        return await promise;
-      } finally {
-        await settlePromiseFinally();
-      }
-    };
-    settlePromise();
+    fireAndForget(markResolved(), 'docx-upload');
 
     return Object.assign(promise, {
       resolve: resolvePromise!,
@@ -143,25 +136,16 @@ export function createWebsocketPromiseChain<
 
     ws.addEventListener('message', messageHandler);
     ws.addEventListener('close', closeHandler);
-
-    const settleAllSettled = async () => {
+    const removeListenersWhenSettled = async () => {
       await Promise.allSettled(results);
-
       ws.removeEventListener('message', messageHandler);
       ws.removeEventListener('close', closeHandler);
-
-      return;
     };
-    settleAllSettled();
+    fireAndForget(removeListenersWhenSettled(), 'docx-upload');
 
-    let maybeInputData = getInputData(...args);
-    if (!(maybeInputData instanceof Promise)) {
-      maybeInputData = Promise.resolve(maybeInputData);
-    }
-
-    const settleMaybeInputData = async () => {
-      const settleMaybeInputDataValue = await maybeInputData;
-      const inputData: any = settleMaybeInputDataValue;
+    const maybeInputData = getInputData(...args);
+    const sendRequest = async () => {
+      const inputData = await maybeInputData;
 
       if (ws.readyState !== WebSocket.OPEN) {
         console.error(
@@ -180,10 +164,8 @@ export function createWebsocketPromiseChain<
           data: inputData,
         })
       );
-
-      return;
     };
-    settleMaybeInputData();
+    fireAndForget(sendRequest(), 'docx-upload');
 
     return results as Results;
   };

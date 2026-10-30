@@ -8,6 +8,7 @@
  */
 
 import { FigEngine } from '@core/fig-engine/client';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { noopChatter } from '@macro-inc/collaboration/collab/chatter';
 import type { SnapshotStore } from '@macro-inc/collaboration/collab/snapshot-store';
 import { InMemoryWALStore } from '@macro-inc/collaboration/collab/wal';
@@ -85,7 +86,7 @@ function Person(props: {
   const [failure, setFailure] = createSignal<string>();
   const [replaced, setReplaced] = createSignal(false);
   const opening = prepareFigEngine(props.server.stored());
-  onCleanup(() => void opening.dispose());
+  onCleanup(() => fireAndForget(opening.dispose(), 'fig-collab'));
   const session = createDesignCollabSession({
     documentId,
     userId: props.user,
@@ -149,7 +150,7 @@ function Person(props: {
         setFailure(String(e));
       }
     };
-    void open();
+    fireAndForget(open(), 'fig-viewer');
     onCleanup(() => {
       closed = true;
       sharedEngine?.close();
@@ -244,12 +245,16 @@ export function CollabFixture(props: { fileUrl: string; users: string[] }) {
   const server = new MemorySyncServer();
   const [stored, setStored] = createSignal(false);
   const load = async () => {
-    const r = await fetch(props.fileUrl);
-    if (!r.ok) throw new Error(`${props.fileUrl}: ${r.status}`);
-    server.store(new Uint8Array(await r.arrayBuffer()));
-    setStored(true);
+    try {
+      const r = await fetch(props.fileUrl);
+      if (!r.ok) throw new Error(`${props.fileUrl}: ${r.status}`);
+      server.store(new Uint8Array(await r.arrayBuffer()));
+      setStored(true);
+    } catch (e) {
+      console.error('[fig fixture] could not store the file', e);
+    }
   };
-  void load();
+  fireAndForget(load(), 'fig-viewer');
   const people = new Map<string, FixturePerson>();
   const [opened, setOpened] = createSignal<Record<string, number>>({});
   const reopen = (user: string) =>

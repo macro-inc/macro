@@ -17,7 +17,7 @@ export function createTasksViewSearch(options: {
   ) => void;
   tab: Accessor<TasksTab>;
   enabled: boolean;
-  boardEnabled?: Accessor<boolean>;
+  nonListLayoutsEnabled?: Accessor<boolean>;
 }) {
   const { state, search } = options;
   // Missing URL controls restore the entry snapshot, not the latest selection.
@@ -35,15 +35,25 @@ export function createTasksViewSearch(options: {
           search.sort,
           search.sortReversed,
           search.groupBy,
-          options.boardEnabled?.() ?? true,
+          options.nonListLayoutsEnabled?.() ?? true,
+          search.savedView,
+          state.savedViewActive,
         ] as const,
-      ([tab, layout, sort, sortReversed, groupBy, boardEnabled]) => {
+      ([tab, layout, sort, sortReversed, groupBy, nonListLayoutsEnabled]) => {
         if (!options.enabled) return;
-        const requestedLayout = layout ?? entryLayout;
+        const savedViewActive = Boolean(
+          search.savedView || state.savedViewActive
+        );
+        const requestedLayout =
+          layout ?? (savedViewActive ? state.layout : entryLayout);
 
         options.setState(
           produce((draft) => {
-            if (draft.tab !== tab) {
+            if (
+              !search.savedView &&
+              !draft.savedViewActive &&
+              draft.tab !== tab
+            ) {
               draft.tab = tab;
               draft.facets = normalizeFacetSelection(
                 DEFAULT_TASK_FACET_SELECTION
@@ -51,17 +61,36 @@ export function createTasksViewSearch(options: {
               draft.collapsedGroupIds = [];
             }
 
-            draft.layout = boardEnabled ? requestedLayout : 'list';
+            draft.layout =
+              savedViewActive || nonListLayoutsEnabled
+                ? requestedLayout
+                : 'list';
             draft.groupBy =
               groupBy ??
-              (tab === entryTab ? entryGroupBy : TASK_DEFAULT_GROUP_BY[tab]);
-            draft.sort = sort
-              ? [{ id: sort, reversed: sortReversed === 'true' }]
-              : entrySort.map((item) => ({ ...item }));
+              (draft.savedViewActive || search.savedView
+                ? draft.groupBy
+                : tab === entryTab
+                  ? entryGroupBy
+                  : TASK_DEFAULT_GROUP_BY[tab]);
+            if (!savedViewActive) {
+              draft.sort = sort
+                ? [{ id: sort, reversed: sortReversed === 'true' }]
+                : entrySort.map((item) => ({ ...item }));
+            } else if (
+              sort &&
+              (draft.sort[0]?.id !== sort ||
+                !!draft.sort[0]?.reversed !== (sortReversed === 'true'))
+            ) {
+              draft.sort = [{ id: sort, reversed: sortReversed === 'true' }];
+            }
           })
         );
 
-        if (!boardEnabled && requestedLayout === 'board') {
+        if (
+          !savedViewActive &&
+          !nonListLayoutsEnabled &&
+          requestedLayout !== 'list'
+        ) {
           options.setSearch({ layout: 'list' }, { history: 'replace' });
         }
       }
@@ -74,7 +103,7 @@ export function createTasksViewSearch(options: {
       if (!options.enabled) return;
 
       if (args[0] === 'layout') {
-        if (options.boardEnabled?.() === false) {
+        if (options.nonListLayoutsEnabled?.() === false) {
           options.setState('layout', 'list');
         }
         options.setSearch({ layout: state.layout });

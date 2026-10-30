@@ -2,7 +2,7 @@ import type { MessageEditor } from '@channel/Channel/create-message-editor';
 import type { NewMessageCheckable } from '@channel/Channel/util';
 import type { InputHandle, InputSnapshot } from '@channel/Input';
 import type { MessageListItem, MessageParent } from '@service-storage/messages';
-import type { Accessor, Setter } from 'solid-js';
+import type { Accessor, JSX, Setter } from 'solid-js';
 import type {
   ChannelMessageListMeta,
   MessageActions,
@@ -54,6 +54,12 @@ export type ThreadTargetNavigation = {
 };
 
 export type ThreadProps = {
+  /** Optional host-specific timeline decorations and live content. */
+  beforeMessage?: JSX.Element;
+  afterMessage?: JSX.Element;
+  renderMessageContent?: (content: JSX.Element) => JSX.Element;
+  /** See `hideTriggeredBy` on the channel message. */
+  hideTriggeredBy?: boolean;
   data: Accessor<MessageListItem>;
   parent: Accessor<MessageParent>;
   /** The enclosing view owns a floating input only in unified mode. */
@@ -84,4 +90,11 @@ export type ThreadProps = {
   monorail?: boolean;
   /** Flat chat surfaces do not draw thread connector rails. */
   hideRail?: boolean;
+  /**
+   * Replies live in the channel's thread panel: the row shows only a reply
+   * summary that opens it, and replying opens the panel's composer.
+   */
+  onOpenThread?: (options?: { reply?: boolean }) => void;
+  /** This thread is the one open in the thread panel. */
+  openInPanel?: boolean;
 } & ThreadState;

@@ -587,7 +587,7 @@ Headings are for convenience only and do not affect interpretation.
 
 ## 24. Partner Kickoff
 
-After acceptance into the Program, new Partners are encouraged to schedule a Macro Partnerships kickoff call: [cal.com/team/macro/partnerships-program](https://cal.com/team/macro/partnerships-program).
+After acceptance into the Program, new Partners are encouraged to schedule a Macro Partnerships kickoff call: [Partnerships Program booking page](https://macro.com/app/book/6de4003c-15e4-549f-b5a9-0e930bbf56e4/partnerships-program).
 
 The kickoff call may be used to discuss Partner's business, specialties, potential customer opportunities, implementation capabilities, product questions, and ways Macro and Partner can work together.
 

@@ -4,12 +4,13 @@ import { cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { usePropertyEntityDisplay } from '../hooks/usePropertyEntityDisplay';
 import { usePropertyUserDisplay } from '../hooks/usePropertyUserDisplay';
-import type { Property } from '../types';
+import type { EntityProperty, Property } from '../types';
 import {
   formatBoolean,
   formatDate,
   formatNumber,
   formatPropertyValue,
+  formatTimeRange,
 } from '../utils/formatting';
 import {
   getEntityValues,
@@ -18,6 +19,7 @@ import {
   hasValue,
   isBooleanProperty,
   isDateProperty,
+  isDateRangeProperty,
   isEntityProperty,
   isLinkProperty,
   isNumberProperty,
@@ -44,6 +46,7 @@ type Props = {
  * - NUMBER: formatted number
  * - BOOLEAN: "True"/"False"
  * - DATE: formatted date
+ * - DATE_RANGE: formatted range of days
  * - SELECT_*: first option's display label
  * - ENTITY+USER (single): user's first name
  * - ENTITY+USER (multi): "N people"
@@ -73,21 +76,28 @@ export function PropertyText(props: Props) {
   return (
     <Show
       keyed
-      when={singleEntity()}
+      when={singleEntity()?.entity_id}
       fallback={<PropertyTextValue {...props} userId={userId()} />}
     >
-      {(entity) => <EntityPropertyText entity={entity} class={props.class} />}
+      {(entityId) => (
+        <EntityPropertyText
+          entityId={entityId}
+          entityType={singleEntity()?.entity_type}
+          class={props.class}
+        />
+      )}
     </Show>
   );
 }
 
 function EntityPropertyText(props: {
-  entity: EntityReference;
+  entityId: string;
+  entityType: EntityReference['entity_type'] | undefined;
   class?: string;
 }) {
   const { name, icon } = usePropertyEntityDisplay(
-    () => props.entity.entity_id,
-    () => props.entity.entity_type
+    () => props.entityId,
+    () => props.entityType
   );
   return (
     <span class={cn('inline-flex min-w-0 items-center gap-1.5', props.class)}>
@@ -152,6 +162,19 @@ function UserPropertyText(props: {
   );
 }
 
+/** How many people (or bots) or items an entity property holds. */
+function entityCountText(property: EntityProperty): string {
+  const entities = getEntityValues(property);
+  if (entities.length === 0) return '';
+  if (property.specificEntityType === 'USER') {
+    if (entities.some((entity) => isBotPrincipalId(entity.entity_id))) {
+      return `${entities.length} assignees`;
+    }
+    return entities.length === 2 ? '2 people' : `${entities.length} people`;
+  }
+  return entities.length === 1 ? '1 item' : `${entities.length} items`;
+}
+
 function extractText(property: Property): string {
   if (!hasValue(property)) return '';
 
@@ -162,23 +185,15 @@ function extractText(property: Property): string {
     return property.value === null ? '' : formatBoolean(property.value);
   if (isDateProperty(property))
     return property.value === null ? '' : formatDate(property.value);
+  if (isDateRangeProperty(property))
+    return property.value === null ? '' : formatTimeRange(property.value);
 
   if (isSelectProperty(property)) {
     const first = getSelectValues(property)[0];
     return first ? formatPropertyValue(property, first) : '';
   }
 
-  if (isEntityProperty(property)) {
-    const entities = getEntityValues(property);
-    if (entities.length === 0) return '';
-    if (property.specificEntityType === 'USER') {
-      if (entities.some((entity) => isBotPrincipalId(entity.entity_id))) {
-        return `${entities.length} assignees`;
-      }
-      return entities.length === 2 ? '2 people' : `${entities.length} people`;
-    }
-    return entities.length === 1 ? '1 item' : `${entities.length} items`;
-  }
+  if (isEntityProperty(property)) return entityCountText(property);
 
   if (isLinkProperty(property)) {
     return getLinkValues(property)[0] ?? '';

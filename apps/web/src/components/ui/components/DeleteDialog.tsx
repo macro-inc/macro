@@ -1,4 +1,4 @@
-import SpinnerIcon from '@phosphor/spinner.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import type { JSX } from 'solid-js';
 import { createSignal, createUniqueId, Show } from 'solid-js';
 import { cn } from '../utils/classname';
@@ -94,7 +94,6 @@ export function DeleteDialog(props: DeleteDialogProps) {
           <Button
             type="button"
             variant="ghost"
-            depth={2}
             disabled={props.pending}
             onClick={close}
           >
@@ -102,8 +101,7 @@ export function DeleteDialog(props: DeleteDialogProps) {
           </Button>
           <Button
             type="button"
-            variant="strong"
-            depth={2}
+            variant="danger"
             disabled={!canDelete()}
             onClick={deleteItem}
           >

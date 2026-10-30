@@ -1,5 +1,6 @@
 import type { IHighlight } from '@block-pdf/model/Highlight';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { onThreadStateUpdated } from '@queries/messages/sync';
 import {
   createDocumentAnchor,
@@ -174,7 +175,7 @@ export function usePdfCommentRealtimeBehavior() {
     if (msg.type === 'message_update') {
       const event = parseWebsocketPayload<MessageEvent>(msg.type, msg.data);
       if (changesAnchors(event, documentId()))
-        void annotations.commands.refetchAnchors();
+        fireAndForget(annotations.commands.refetchAnchors(), 'pdf-comments');
       return;
     }
     if (msg.type === 'comment') {

@@ -4,6 +4,7 @@
 // generated service-storage primitives. (Previously generated as `@service-comms`'s
 // `ApiChannelWithLatest`; service-storage's generated `SoupChannel` nests these under
 // `.channel` and is therefore not interchangeable.)
+import type { AgentDmProfile } from './generated/schemas/agentDmProfile';
 import type { Channel } from './generated/schemas/channel';
 import type { ChannelParticipant } from './generated/schemas/channelParticipant';
 import type { LatestMessage } from './generated/schemas/latestMessage';
@@ -20,6 +21,7 @@ export type ChannelWithParticipants = Channel & {
 /** A channel-list item: channel + participants + latest message + the viewer's read state. */
 export type ApiChannelWithLatest = ChannelWithParticipants &
   LatestMessage & {
+    agent_dm?: AgentDmProfile;
     frecency_score?: number | null;
     interacted_at?: string | null;
     viewed_at?: string | null;

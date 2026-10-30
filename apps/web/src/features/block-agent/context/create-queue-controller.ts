@@ -13,6 +13,7 @@
  */
 
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   subscribeAgentSessionQueue,
   subscribeSocketSessionStarted,
@@ -35,6 +36,15 @@ import {
   untrack,
 } from 'solid-js';
 
+/** A request that throws instead of returning an error reads as `undefined`. */
+async function orUndefined<T>(request: Promise<T>): Promise<T | undefined> {
+  try {
+    return await request;
+  } catch {
+    return undefined;
+  }
+}
+
 export type QueueController = {
   /**
    * The actions still waiting, oldest first, minus any the fold already
@@ -43,6 +53,8 @@ export type QueueController = {
    * so the queue must not.
    */
   entries: Accessor<QueuedActionDto[]>;
+  /** Whether the server queue still holds this action, shown or not. */
+  waiting: (actionId: string) => boolean;
   /** Replace a queued prompt's text. A 404 means it already dispatched —
    *  the gateway's snapshot reconciles it, not an error. */
   edit: (actionId: string, prompt: string) => Promise<void>;
@@ -51,7 +63,7 @@ export type QueueController = {
   /**
    * Run this queued action next: the server moves it to the front and
    * cancels the turn in flight. `false` when it was not waiting anymore or
-   * the request failed.
+   * the request failed; the caller reports the failure.
    */
   steer: (actionId: string) => Promise<boolean>;
 };
@@ -77,15 +89,7 @@ export function createQueueController(options: {
   const baseline = async () => {
     const sessionId = untrack(options.sessionId);
     if (!sessionId) return;
-
-    const settleFetchAgentQueue = async () => {
-      try {
-        return await fetchAgentQueue(sessionId);
-      } catch {
-        return await undefined;
-      }
-    };
-    const result = await settleFetchAgentQueue();
+    const result = await orUndefined(fetchAgentQueue(sessionId));
     // Discarded when an event beat it here, or when it answers for a session
     // this block no longer shows. A failed baseline keeps the last known
     // entries; the next socket event or reconnect supersedes it anyway.
@@ -100,7 +104,7 @@ export function createQueueController(options: {
     on(options.sessionId, () => {
       socketAuthoritative = false;
       setQueued([]);
-      void baseline();
+      fireAndForget(baseline(), 'agent-queue');
     })
   );
 
@@ -119,12 +123,12 @@ export function createQueueController(options: {
   onCleanup(
     subscribeSocketSessionStarted(() => {
       socketAuthoritative = false;
-      baseline();
+      fireAndForget(baseline(), 'agent-queue');
     })
   );
 
-  // A pending message retires a row too. `sendNext` speculates the queue
-  // head under the id this list knows it by, and the whole point is that it
+  // A pending message retires a row too. A force-send speculates the entry
+  // under the id this list knows it by, and the whole point is that it
   // reads as sent; a prompt the server queued after the client speculated
   // it is retracted by the response, so its row comes back on its own.
   const dispatchedIds = createMemo(() => {
@@ -146,15 +150,9 @@ export function createQueueController(options: {
   const edit = async (actionId: string, prompt: string) => {
     const sessionId = untrack(options.sessionId);
     if (!sessionId) return;
-
-    const settleEditQueuedAgentAction = async () => {
-      try {
-        return await editQueuedAgentAction(sessionId, actionId, prompt);
-      } catch {
-        return await undefined;
-      }
-    };
-    const result = await settleEditQueuedAgentAction();
+    const result = await orUndefined(
+      editQueuedAgentAction(sessionId, actionId, prompt)
+    );
     if (result === undefined || (result.isErr() && !isDispatched(result))) {
       toast.failure('The queued message could not be edited');
     }
@@ -163,15 +161,9 @@ export function createQueueController(options: {
   const remove = async (actionId: string) => {
     const sessionId = untrack(options.sessionId);
     if (!sessionId) return;
-
-    const settleRemoveQueuedAgentAction = async () => {
-      try {
-        return await removeQueuedAgentAction(sessionId, actionId);
-      } catch {
-        return await undefined;
-      }
-    };
-    const result = await settleRemoveQueuedAgentAction();
+    const result = await orUndefined(
+      removeQueuedAgentAction(sessionId, actionId)
+    );
     if (result === undefined || (result.isErr() && !isDispatched(result))) {
       toast.failure('The queued message could not be removed');
     }
@@ -180,27 +172,17 @@ export function createQueueController(options: {
   const steer = async (actionId: string) => {
     const sessionId = untrack(options.sessionId);
     if (!sessionId) return false;
-
-    const settleSteerQueuedAgentAction = async () => {
-      try {
-        return await steerQueuedAgentAction(sessionId, actionId);
-      } catch {
-        return await undefined;
-      }
-    };
-    const result = await settleSteerQueuedAgentAction();
-    if (result === undefined || result.isErr()) {
-      if (result === undefined || !isDispatched(result)) {
-        toast.failure('The queued message could not be steered');
-      }
-      return false;
-    }
-    return true;
+    const result = await orUndefined(
+      steerQueuedAgentAction(sessionId, actionId)
+    );
+    return result !== undefined && result.isOk();
   };
 
   return {
     entries: () =>
       queued().filter((entry) => !dispatchedIds().has(entry.actionId)),
+    waiting: (actionId) =>
+      queued().some((entry) => entry.actionId === actionId),
     edit,
     remove,
     steer,

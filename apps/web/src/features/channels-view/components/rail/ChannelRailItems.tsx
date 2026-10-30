@@ -1,11 +1,9 @@
 import { dismissIncomingCallEverywhere } from '@app/features/block-call/sidebar/incoming-calls';
-import {
-  type EntityActionViewContext,
-  toEntityActionListState,
-} from '@app/features/next-soup/actions';
+import { toEntityActionListState } from '@app/features/next-soup/actions';
 import { SoupEntityContextMenu } from '@app/features/soup/SoupEntityContextMenu';
 import type { MacroId } from '@app/lib/identity/macro-id';
 import { joinChannelCall } from '@channel/Call/join-channel-call';
+import { CHANNEL_ACTION_VIEW_CONTEXT } from '@channel/Channel/channel-actions';
 import { ChannelMutedIndicator } from '@channel/components/ChannelMutedIndicator';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { inlineWrappingMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
@@ -13,12 +11,13 @@ import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type ChannelEntity, Entity } from '@entity';
-import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
-import AtIcon from '@phosphor/at.svg';
-import XIcon from '@phosphor/x.svg';
-import PhoneCallIcon from '@phosphor-fill/phone-call-fill.svg';
-import PhoneIncomingIcon from '@phosphor-fill/phone-incoming-fill.svg';
+import PhoneCallIcon from '@icon/system/fill/phone-call-fill.svg';
+import PhoneIncomingIcon from '@icon/system/fill/phone-incoming-fill.svg';
+import ReplyIcon from '@icon/system/regular/arrow-bend-up-left.svg';
+import AtIcon from '@icon/system/regular/at.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { getBotDisplayName } from '@queries/messages/message-sender';
 import { Button, cn, Tooltip } from '@ui';
 import { type JSX, Match, type ParentProps, Show, Switch } from 'solid-js';
@@ -43,12 +42,8 @@ export type ChannelRailItemProps = {
   selected: boolean;
   focused: boolean;
   onActivate: (event: MouseEvent) => void;
-};
-
-export const CHANNEL_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
-  supportsMarkDone: false,
-  supportsOpenInNewSplit: false,
-  senderBucket: undefined,
+  /** The press before activation, for warming what the row opens. */
+  onPress?: (event: PointerEvent) => void;
 };
 
 /**
@@ -140,6 +135,14 @@ export function IncomingCallActions(props: {
 }) {
   const userId = useUserId();
   const isWide = () => props.layout === 'wide';
+  const joinCall = async () => {
+    try {
+      await joinChannelCall(props.channelId);
+    } catch (error) {
+      console.error('Failed to join call', error);
+      toast.failure('Failed to join call');
+    }
+  };
 
   return (
     <Show when={props.callId}>
@@ -152,12 +155,12 @@ export function IncomingCallActions(props: {
           )}
         >
           <Button
+            aria-label="Decline incoming call"
+            tooltip={{ content: 'Decline incoming call', disabled: isWide() }}
             variant="danger"
             size={isWide() ? 'sm' : 'icon-xs'}
             fullWidth={isWide()}
             class={cn(isWide() && 'h-7 flex-1')}
-            label="Decline incoming call"
-            tooltipDisabled={isWide()}
             onPointerDown={(event) => event.stopPropagation()}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => {
@@ -170,31 +173,18 @@ export function IncomingCallActions(props: {
             <Show when={isWide()}>Decline</Show>
           </Button>
           <Button
+            aria-label="Accept incoming call"
+            tooltip={{ content: 'Accept incoming call', disabled: isWide() }}
             variant="success"
             size={isWide() ? 'sm' : 'icon-xs'}
             fullWidth={isWide()}
             class={cn(isWide() && 'h-7 flex-1')}
-            label="Accept incoming call"
-            tooltipDisabled={isWide()}
             onPointerDown={(event) => event.stopPropagation()}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
-
-              const settleJoinChannelCall = async () => {
-                try {
-                  return await joinChannelCall(props.channelId);
-                } catch (settleJoinChannelCallError) {
-                  const error = settleJoinChannelCallError;
-
-                  console.error('Failed to join call', error);
-                  toast.failure('Failed to join call');
-
-                  return;
-                }
-              };
-              void settleJoinChannelCall();
+              fireAndForget(joinCall(), 'channels-rail');
             }}
           >
             <PhoneIncomingIcon class="incoming-call-shake size-3" />
@@ -289,6 +279,7 @@ export function ConversationCard(props: ConversationCardProps) {
   return (
     <div
       id={props.id}
+      data-channel-conversation
       role="treeitem"
       tabIndex={-1}
       class={cn(
@@ -303,6 +294,7 @@ export function ConversationCard(props: ConversationCardProps) {
         props.class
       )}
       aria-current={props.selected ? 'page' : undefined}
+      onPointerDown={(event) => props.onPress?.(event)}
       onMouseDown={(event) => {
         if (isPrimaryMouseDown(event)) props.onActivate(event);
       }}

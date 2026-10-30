@@ -44,7 +44,7 @@ function mount() {
     descriptions,
     setName,
     setDescription,
-    nameField: screen.getByLabelText<HTMLInputElement>('Form name'),
+    nameField: screen.getByLabelText<HTMLTextAreaElement>('Form name'),
     descriptionField:
       screen.getByLabelText<HTMLTextAreaElement>('Form description'),
   };
@@ -71,7 +71,7 @@ describe('TitleCard', () => {
         onDescription={async () => true}
       />
     ));
-    const nameField = screen.getByLabelText<HTMLInputElement>('Form name');
+    const nameField = screen.getByLabelText<HTMLTextAreaElement>('Form name');
     const descriptionField =
       screen.getByLabelText<HTMLTextAreaElement>('Form description');
     nameField.focus();
@@ -135,15 +135,7 @@ describe('TitleCard', () => {
   it('keeps a rejected save as a visible, invalid draft without an unhandled rejection', async () => {
     const failure = Promise.reject(new Error('Connection lost'));
     // Observe the test-owned promise too; the field must handle its rejection.
-
-    const settleFailure = async () => {
-      try {
-        return await failure;
-      } catch {
-        return await undefined;
-      }
-    };
-    const settled = settleFailure();
+    const settled = expect(failure).rejects.toThrow('Connection lost');
     render(() => (
       <TitleCard
         name="Workshop ideas"

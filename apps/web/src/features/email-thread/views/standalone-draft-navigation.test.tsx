@@ -30,8 +30,8 @@ vi.mock('@core/component/CustomScrollbar', () => ({
 }));
 vi.mock('./message-list', () => ({ MessageList: () => null }));
 vi.mock('./bottom-reply-buttons', () => ({ BottomReplyButtons: () => null }));
-vi.mock('./mobile-email-compose-drawer', () => ({
-  MobileEmailComposeDrawer: () => null,
+vi.mock('./mobile-email-compose', () => ({
+  MobileEmailCompose: () => null,
 }));
 
 it.each(['accepted', 'rejected'] as const)(
@@ -85,14 +85,7 @@ it.each(['accepted', 'rejected'] as const)(
       } else {
         pending.reject(new Error('Deletion failed'));
 
-        const settlePromise = async () => {
-          try {
-            return await pending.promise;
-          } catch {
-            return;
-          }
-        };
-        await settlePromise();
+        await expect(pending.promise).rejects.toThrow('Deletion failed');
         expect(view.getByText('Delete draft')).toBeTruthy();
         expect(returnToList).not.toHaveBeenCalled();
       }

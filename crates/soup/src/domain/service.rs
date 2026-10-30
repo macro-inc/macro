@@ -67,6 +67,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 mod agent_metadata;
+mod crm_association;
 mod favorites;
 
 #[cfg(test)]
@@ -878,6 +879,13 @@ where
         if !calendar_filter_supported_by_notified(req.filter.calendar_event_filter.as_deref()) {
             return Err(SoupErr::NotifiedUnsupportedFilter("calendar_event"));
         }
+        // CRM associations resolve to complete entity sets only for timestamp
+        // sorts; the candidate query would otherwise ignore the scope.
+        if !req.filter.crm_associations().is_empty() {
+            return Err(SoupErr::AstErr(item_filters::ast::ExpandErr::ApiAst(
+                "CRM associations require a timestamp sort".into(),
+            )));
+        }
         let limit = req.limit.clamp(1, 500);
         let legs_request = SoupRequest {
             soup_type: SoupType::Expanded,
@@ -1660,6 +1668,39 @@ where
                 .cursor
                 .map(|ast| ast.map(|ast| favorites::apply(ast, entities)));
         }
+        // CRM associations resolve to complete entity sets, so they only
+        // compose with the timestamp-sorted sources that take those sets.
+        let crm_record = req.entity_ast().and_then(|ast| ast.crm_association);
+        // Read the filter of every query kind: `entity_ast` hides frecency
+        // filters, which must be rejected rather than silently unscoped.
+        let crm_associations = if req
+            .cursor
+            .filter()
+            .as_ref()
+            .is_some_and(|ast| !ast.crm_associations().is_empty())
+        {
+            if !matches!(&req.cursor, SoupQuery::Simple(_)) {
+                return Err(SoupErr::AstErr(item_filters::ast::ExpandErr::ApiAst(
+                    "CRM associations require a timestamp sort".into(),
+                )));
+            }
+            // Unexpanded candidate queries cannot apply filter trees, so the
+            // resolved entity sets would have nowhere to go.
+            if matches!(req.soup_type, SoupType::UnExpanded) {
+                return Err(SoupErr::AstErr(item_filters::ast::ExpandErr::ApiAst(
+                    "CRM associations require an expanded query".into(),
+                )));
+            }
+            let resolved = self
+                .resolve_crm_associations(&req.user, team_receipt.as_ref(), req.entity_ast())
+                .await?;
+            if let Some(resolved) = &resolved {
+                req.cursor = req.cursor.map(|ast| ast.map(|ast| resolved.apply(ast)));
+            }
+            resolved
+        } else {
+            None
+        };
         let limit = req.limit.clamp(1, 500);
 
         // CRM-scoped visibility (team-wide email scope or hidden CRM
@@ -1694,6 +1735,15 @@ where
                     favorites::ids(entities, EntityType::CrmCompany),
                 )
                 .then_some(request)
+            });
+        }
+        if let Some(entities) = crm_record.and_then(|record| {
+            crm_associations
+                .as_ref()
+                .and_then(|resolved| resolved.get(&record))
+        }) {
+            crm_company_request = crm_company_request.and_then(|mut request| {
+                crm_association::intersect_crm_companies(&mut request, entities).then_some(request)
             });
         }
         let sort_direction = req.sort_direction;
@@ -1987,6 +2037,14 @@ where
             req.cursor = req
                 .cursor
                 .map_filter(|ast| favorites::apply(ast, &entities));
+        }
+        // Grouped queries carry no team receipt, so associations resolve
+        // under the viewer's own CRM teams.
+        if let Some(resolved) = self
+            .resolve_crm_associations(&user_id, None, Some(req.cursor.filter()))
+            .await?
+        {
+            req.cursor = req.cursor.map_filter(|ast| resolved.apply(ast));
         }
         let items = self.handle_grouped_soup_request(req).await?;
         self.populate_grouped_items(user_id, items).await

@@ -268,7 +268,7 @@ export function presetOutline(
     [w, h],
     [0, h],
   ]);
-  const matchRemainingPresetOutline7 = (): ShapeOutline =>
+  const calloutOrBracketOutline = (): ShapeOutline =>
     matchBranch(name)
       .with(
         'wedgeRectCallout',
@@ -376,7 +376,7 @@ export function presetOutline(
           return { d: polygon(points) };
         }
       });
-  const matchRemainingPresetOutline6 = (): ShapeOutline =>
+  const curvedOutline = (): ShapeOutline =>
     matchBranch(name)
       .with('flowChartDelay', (): ShapeOutline => {
         return {
@@ -453,8 +453,8 @@ export function presetOutline(
           };
         }
       })
-      .otherwise(matchRemainingPresetOutline7);
-  const matchRemainingPresetOutline5 = (): ShapeOutline =>
+      .otherwise(calloutOrBracketOutline);
+  const frameOrSolidOutline = (): ShapeOutline =>
     matchBranch(name)
       .with('donut', 'noSmoking', (name): ShapeOutline => {
         {
@@ -578,8 +578,8 @@ export function presetOutline(
       .with('flowChartPunchedTape', (): ShapeOutline => {
         return { d: wave(w, h, 10_000, false) };
       })
-      .otherwise(matchRemainingPresetOutline6);
-  const matchRemainingPresetOutline4 = (): ShapeOutline =>
+      .otherwise(curvedOutline);
+  const connectorOrArcOutline = (): ShapeOutline =>
     matchBranch(name)
       .with('chevron', (): ShapeOutline => {
         {
@@ -771,8 +771,8 @@ export function presetOutline(
           };
         }
       })
-      .otherwise(matchRemainingPresetOutline5);
-  const matchRemainingPresetOutline3 = (): ShapeOutline =>
+      .otherwise(frameOrSolidOutline);
+  const arrowOutline = (): ShapeOutline =>
     matchBranch(name)
       .with('star8', (): ShapeOutline => {
         return { d: star(w, h, 8, a('adj', 38_250) / 50_000) };
@@ -870,8 +870,8 @@ export function presetOutline(
           };
         }
       })
-      .otherwise(matchRemainingPresetOutline4);
-  const matchRemainingPresetOutline2 = (): ShapeOutline =>
+      .otherwise(connectorOrArcOutline);
+  const starOrMathOutline = (): ShapeOutline =>
     matchBranch(name)
       .with('heptagon', (): ShapeOutline => {
         return { d: regular(w, h, 7) };
@@ -981,8 +981,8 @@ export function presetOutline(
       .with('star7', (): ShapeOutline => {
         return { d: star(w, h, 7, a('adj', 34_601) / 50_000) };
       })
-      .otherwise(matchRemainingPresetOutline3);
-  const matchRemainingPresetOutline1 = (): ShapeOutline =>
+      .otherwise(arrowOutline);
+  const polygonOutline = (): ShapeOutline =>
     matchBranch(name)
       .with('flowChartOr', 'flowChartSummingJunction', (name): ShapeOutline => {
         {
@@ -1139,7 +1139,7 @@ export function presetOutline(
           };
         }
       })
-      .otherwise(matchRemainingPresetOutline2);
+      .otherwise(starOrMathOutline);
   return matchBranch(name)
     .with(
       undefined,
@@ -1219,5 +1219,5 @@ export function presetOutline(
         return { d: ellipse(w / 2, h / 2, w / 2, h / 2) };
       }
     )
-    .otherwise(matchRemainingPresetOutline1);
+    .otherwise(polygonOutline);
 }

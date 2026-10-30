@@ -3,7 +3,9 @@
  * coordinator-routed RPCs, and fans out invalidations.
  */
 
+import { startDetached } from '@core/util/startDetached';
 import { match } from 'ts-pattern';
+import { ignoreRejection } from '../ignore-rejection';
 import type {
   AffectedOperationsResult,
   CachePush,
@@ -363,14 +365,7 @@ export class CacheWorkerCore {
       await new Promise<void>((resolve) => this.drainWaiters.add(resolve));
     }
 
-    const settleInitPromise = async () => {
-      try {
-        return await this.initPromise;
-      } catch {
-        return await undefined;
-      }
-    };
-    if (this.initPromise) await settleInitPromise();
+    if (this.initPromise) await ignoreRejection(this.initPromise);
     const engine = this.engine;
     if (!engine) return;
     this.recordCachedQueueDiagnostics();
@@ -459,39 +454,31 @@ export class CacheWorkerCore {
     const [queued] = this.queue.splice(index, 1);
     if (!queued) return;
     this.running = true;
-    const settleDispatchFinally = async () => {
-      this.running = false;
-      this.drainQueue();
-      this.resolveDrainWaitersIfIdle();
-
-      return;
-    };
-    const settleDispatch = async () => {
+    const run = async () => {
       try {
-        let settleDispatchValue;
+        let result: unknown;
         try {
-          settleDispatchValue = await this.dispatch(queued.request);
-        } catch (settleDispatchError) {
-          const error = settleDispatchError;
-
+          result = await this.dispatch(queued.request);
+        } catch (error) {
           for (const waiter of queued.waiters) waiter.reject(error);
-
           return;
         }
-        const result = settleDispatchValue;
-
         // Resolve the cache result before the bounded observation checkpoint.
         for (const waiter of queued.waiters) waiter.resolve(result);
         if (isStorageTransactionRequest(queued.request)) {
           await this.refreshQueueDiagnostics(false);
         }
-
-        return;
       } finally {
-        await settleDispatchFinally();
+        this.running = false;
+        this.drainQueue();
+        this.resolveDrainWaitersIfIdle();
       }
     };
-    void settleDispatch();
+    // Waiters always settle above; this reports a failed diagnostics
+    // checkpoint or queue bookkeeping.
+    startDetached(run(), (error) => {
+      console.error('[graphql-cache] cache request bookkeeping failed', error);
+    });
   }
 
   private async dispatch(request: CacheRequest): Promise<unknown> {
@@ -845,7 +832,9 @@ export class CacheWorkerCore {
         this.push({ kind: 'cache-changed', revision, reset: true });
         return revision;
       })
-      .exhaustive();
+      .exhaustive(() =>
+        Promise.reject(new Error('Unknown cache worker request'))
+      );
   }
 
   /** Emits the latest successful snapshot without touching storage. */

@@ -105,19 +105,14 @@ describe('createLatestAsyncRequestQueue', () => {
     let replacedSettled = false;
 
     const first = enqueue(1);
-    const settleEnqueueFinally = async () => {
-      replacedSettled = true;
-
-      return;
-    };
-    const settleEnqueue = async () => {
+    const enqueueReplaced = async () => {
       try {
         return await enqueue(2);
       } finally {
-        await settleEnqueueFinally();
+        replacedSettled = true;
       }
     };
-    const replaced = settleEnqueue();
+    const replaced = enqueueReplaced();
     const latest = enqueue(3);
 
     firstExecution.resolve();

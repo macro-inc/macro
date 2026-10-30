@@ -11,6 +11,7 @@ import type {
   PageLayout,
   Rect,
 } from '@core/fig-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { batch, createSignal, onCleanup } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import {
@@ -211,7 +212,7 @@ export function createFigViewer(options: FigViewerOptions) {
 
   const select = (next: Selected[]) => {
     setSelected(next);
-    void refreshGeometry(next.map((s) => s.id));
+    fireAndForget(refreshGeometry(next.map((s) => s.id)), 'fig-viewer');
     setRevealSignal((n) => n + 1);
   };
 
@@ -363,7 +364,7 @@ export function createFigViewer(options: FigViewerOptions) {
       setHoverBounds(undefined);
       return;
     }
-    void loadOutline(row.id, request);
+    fireAndForget(loadOutline(row.id, request), 'fig-viewer');
   };
 
   const marqueeSelect = async (rect: Rect, additive: boolean) => {
@@ -402,7 +403,7 @@ export function createFigViewer(options: FigViewerOptions) {
       select([]);
       return;
     }
-    void selectIds(parents);
+    fireAndForget(selectIds(parents), 'fig-viewer');
   };
 
   const selectChildren = async () => {
@@ -512,9 +513,8 @@ export function createFigViewer(options: FigViewerOptions) {
   };
 
   const revealLayer = (id: string) => {
-    const settleSelectIds = async () => {
+    const selectAndPanTo = async () => {
       await selectIds([id]);
-
       const g = selectionGeometry()[0];
       if (!g) return;
       const v = viewport();
@@ -532,10 +532,8 @@ export function createFigViewer(options: FigViewerOptions) {
         b.x + b.w <= visible.x + visible.w &&
         b.y + b.h <= visible.y + visible.h;
       if (!inView) setCamera(centerOn(c, b, v));
-
-      return;
     };
-    void settleSelectIds();
+    fireAndForget(selectAndPanTo(), 'fig-viewer');
   };
 
   return {

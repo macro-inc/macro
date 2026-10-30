@@ -3,8 +3,8 @@ import { isListViewID, type ListView } from '@app/constants/list-views';
 import { CommandState } from '@app/features/command/state';
 import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import {
-  markCalendarNotificationSeenOnOpen,
   markChannelNotificationsSeenOnOpen,
+  markRowNotificationsSeenOnOpen,
   openEntityInSplitFromUnifiedList,
 } from '@app/features/next-soup/utils';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
@@ -14,12 +14,14 @@ import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isScopeInActiveBranch } from '@core/hotkey/utils';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type EntityData,
   filterNotDoneNotifications,
   filterValidNotifications,
   isSearchEntity,
   isWithNotification,
+  type SearchLocation,
 } from '@entity';
 import { openSingleStackNotification } from '@notifications';
 import { type Accessor, onCleanup } from 'solid-js';
@@ -45,6 +47,58 @@ type UseSoupViewHotkeysOptions = {
   fetchNextGroupPage: (groupKey: string) => Promise<void>;
 };
 
+// Escape belongs to the split, not the mounted list. Do not capture view
+// props, virtualizers, or the other view hotkeys in its persistent callbacks.
+function registerSplitEscapeHotkey(
+  scopeId: string,
+  selection: SoupState['selection'],
+  splitHandle: SplitHandle
+) {
+  const splitIsUnifiedList = () => isListViewID(splitHandle.content().id);
+
+  // escape - Multi-purpose: Clear selection / Close spotlight
+  const clearMultiCondition = () =>
+    selection.count() > 0 && splitIsUnifiedList();
+  const closeSpotlightCondition = () => splitHandle.isSpotLight();
+
+  const escapeDescription = () => {
+    if (clearMultiCondition()) {
+      return 'Clear multi selection';
+    }
+    if (closeSpotlightCondition()) {
+      return 'Close spotlight';
+    }
+    return '';
+  };
+
+  // escape - Multi-purpose: Clear selection / Close spotlight
+  // Deliberately outside the group and kept past this view's unmount: the
+  // soup selection and split spotlight it acts on live at the split-panel
+  // level, so escape keeps working after a list entity is opened in place.
+  // The token is required for a persistent registration: same-token override
+  // replacement is what dedupes it when this view remounts on the same split.
+  registerHotkey({
+    hotkey: ['escape'],
+    scopeId,
+    hotkeyToken: TOKENS.soup.dismiss,
+    description: escapeDescription,
+    condition: () => clearMultiCondition() || closeSpotlightCondition(),
+    keyDownHandler: () => {
+      if (clearMultiCondition()) {
+        const length = selection.count();
+        selection.clear();
+        return length > 1;
+      }
+      if (closeSpotlightCondition()) {
+        splitHandle.toggleSpotlight();
+        return true;
+      }
+      return false;
+    },
+    disposeWithOwner: false,
+  });
+}
+
 export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
   const {
     scopeId,
@@ -59,29 +113,13 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
   const analytics = useAnalytics();
   const notificationSource = useGlobalNotificationSource();
-
-  const splitIsUnifiedList = () => isListViewID(splitHandle.content().id);
-
-  // escape - Multi-purpose: Clear selection / Close spotlight
-  const clearMultiCondition = () =>
-    soup.selection.count() > 0 && splitIsUnifiedList();
-  const closeSpotlightCondition = () => splitHandle.isSpotLight();
-
-  const escapeDescription = () => {
-    if (clearMultiCondition()) {
-      return 'Clear multi selection';
-    }
-    if (closeSpotlightCondition()) {
-      return 'Close spotlight';
-    }
-    return '';
-  };
+  registerSplitEscapeHotkey(scopeId, soup.selection, splitHandle);
 
   const group = createHotkeyGroup();
 
-  // home - Jump to top of list
+  // home, cmd+arrowup - Jump to top of list
   registerHotkey({
-    hotkey: ['home'],
+    hotkey: ['home', 'cmd+arrowup'],
     scopeId,
     hotkeyToken: TOKENS.entity.jump.home,
     description: 'Go to top of list',
@@ -112,9 +150,9 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     registrationType: 'add',
   }).withGroup(group);
 
-  // shift+g, end - Jump to bottom of list
+  // shift+g, end, cmd+arrowdown - Jump to bottom of list
   registerHotkey({
-    hotkey: ['shift+g', 'end'],
+    hotkey: ['shift+g', 'end', 'cmd+arrowdown'],
     scopeId,
     hotkeyToken: TOKENS.entity.jump.end,
     description: 'Go to bottom of list',
@@ -150,6 +188,25 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     return didOpen;
   };
 
+  const openEntityFromList = async (
+    entity: EntityData,
+    openOptions: { location?: SearchLocation; openInNewSplit?: boolean }
+  ) => {
+    markRowNotificationsSeenOnOpen(entity, notificationSource);
+    await openEntityInSplitFromUnifiedList(entity, {
+      ...openOptions,
+      splitHandle,
+      referredFrom: currentView(),
+      notificationSource,
+    });
+  };
+
+  const loadMoreInGroup = async (groupKey: string, index: number) => {
+    await fetchNextGroupPage(groupKey);
+    soup.navigate.toIndex(index);
+    virtualizerHandle()?.scrollToIndex(index, { align: 'nearest' });
+  };
+
   // enter - Open entity in split, toggle group, or load more
   registerHotkey({
     hotkey: ['enter'],
@@ -176,20 +233,10 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
       // If focused on a load more row, trigger load more and stay at same index
       if (focusedRow.getIsLoadMore() && focusedRow.group) {
-        const currentIndex = focusedRow.index;
-
-        const groupKey = focusedRow.group.key;
-        const settleFetchNextGroupPage = async () => {
-          await fetchNextGroupPage(groupKey);
-
-          soup.navigate.toIndex(currentIndex);
-          virtualizerHandle()?.scrollToIndex(currentIndex, {
-            align: 'nearest',
-          });
-
-          return;
-        };
-        settleFetchNextGroupPage();
+        fireAndForget(
+          loadMoreInGroup(focusedRow.group.key, focusedRow.index),
+          'soup-view'
+        );
         return true;
       }
 
@@ -211,13 +258,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       const location =
         contentHitData?.length === 1 ? contentHitData[0]?.location : undefined;
 
-      markCalendarNotificationSeenOnOpen(entity, notificationSource);
-      openEntityInSplitFromUnifiedList(entity, {
-        splitHandle,
-        location,
-        referredFrom: currentView(),
-        notificationSource,
-      });
+      fireAndForget(openEntityFromList(entity, { location }), 'soup-view');
       return true;
     },
     displayPriority: 4,
@@ -292,33 +333,6 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     runWithInputFocused: true,
   }).withGroup(group);
 
-  // escape - Multi-purpose: Clear selection / Close spotlight
-  // Deliberately outside the group and kept past this view's unmount: the
-  // soup selection and split spotlight it acts on live at the split-panel
-  // level, so escape keeps working after a list entity is opened in place.
-  // The token is required for a persistent registration: same-token override
-  // replacement is what dedupes it when this view remounts on the same split.
-  registerHotkey({
-    hotkey: ['escape'],
-    scopeId,
-    hotkeyToken: TOKENS.soup.dismiss,
-    description: escapeDescription,
-    condition: () => clearMultiCondition() || closeSpotlightCondition(),
-    keyDownHandler: () => {
-      if (clearMultiCondition()) {
-        const length = soup.selection.count();
-        soup.selection.clear();
-        return length > 1;
-      }
-      if (closeSpotlightCondition()) {
-        splitHandle.toggleSpotlight();
-        return true;
-      }
-      return false;
-    },
-    disposeWithOwner: false,
-  });
-
   // shift+enter - Open in new split
   registerHotkey({
     hotkey: ['shift+enter'],
@@ -330,13 +344,10 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
       const entity = soup.focus.item();
       if (!entity) return false;
-      markCalendarNotificationSeenOnOpen(entity, notificationSource);
-      openEntityInSplitFromUnifiedList(entity, {
-        splitHandle,
-        openInNewSplit: true,
-        referredFrom: currentView(),
-        notificationSource,
-      });
+      fireAndForget(
+        openEntityFromList(entity, { openInNewSplit: true }),
+        'soup-view'
+      );
       return true;
     },
     hide: true,

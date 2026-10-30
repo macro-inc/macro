@@ -1,8 +1,10 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { createSignal, onCleanup } from 'solid-js';
 import type {
   MeetingCredentials,
   MeetingLocalTracks,
+  MeetingMediaDiagnostics,
   MeetingMediaPreferences,
   MeetingSessionCapabilities,
 } from '../context/meeting-session';
@@ -15,6 +17,7 @@ type IssuedMeetingSession = {
 export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
   const [joining, setJoining] = createSignal(false);
   const [joinedCallId, setJoinedCallId] = createSignal<string>();
+  const [credentials, setCredentials] = createSignal<MeetingCredentials>();
   const [error, setError] = createSignal<string>();
   const [hasLeft, setHasLeft] = createSignal(false);
   let issuedSession: IssuedMeetingSession | undefined;
@@ -24,7 +27,10 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
 
   async function release(session: IssuedMeetingSession) {
     try {
-      await capabilities.release(session.shareToken, session.credentials.token);
+      return await capabilities.release(
+        session.shareToken,
+        session.credentials.token
+      );
     } catch (cause) {
       // LiveKit's participant-left webhook also cleans up the session.
       console.error('Failed to release meeting participant', cause);
@@ -34,15 +40,21 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
   /** Handed-off tracks go to `connect` or are stopped; they never leak. */
   async function join(
     displayName: string | undefined,
-    { localTracks, ...preferences }: MeetingMediaPreferences
+    { localTracks, ...preferences }: MeetingMediaPreferences,
+    mediaDiagnostics?: MeetingMediaDiagnostics
   ) {
     let unclaimed = localTracks;
     try {
-      await attemptJoin(displayName, preferences, () => {
-        const claimed = unclaimed;
-        unclaimed = undefined;
-        return claimed;
-      });
+      await attemptJoin(
+        displayName,
+        preferences,
+        () => {
+          const claimed = unclaimed;
+          unclaimed = undefined;
+          return claimed;
+        },
+        mediaDiagnostics
+      );
     } finally {
       unclaimed?.microphone?.stop();
       unclaimed?.camera?.stop();
@@ -52,7 +64,8 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
   async function attemptJoin(
     displayName: string | undefined,
     preferences: Omit<MeetingMediaPreferences, 'localTracks'>,
-    claimLocalTracks: () => MeetingLocalTracks | undefined
+    claimLocalTracks: () => MeetingLocalTracks | undefined,
+    mediaDiagnostics?: MeetingMediaDiagnostics
   ) {
     if (joining() || disposed) return;
     if (issuedSession && capabilities.isInCall()) {
@@ -86,6 +99,14 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
     joinTrace.setAttr('meeting.join.guest', displayName !== undefined);
     joinTrace.setAttr('meeting.join.microphone', preferences.microphoneEnabled);
     joinTrace.setAttr('meeting.join.camera', preferences.cameraEnabled);
+    if (mediaDiagnostics) {
+      joinTrace.setAttr('meeting.setup.id', mediaDiagnostics.setupId);
+      joinTrace.setAttr(
+        'meeting.join.microphone_access',
+        mediaDiagnostics.microphone
+      );
+      joinTrace.setAttr('meeting.join.camera_access', mediaDiagnostics.camera);
+    }
     joinTrace.setAttr('meeting.join.outcome', 'cancelled');
     try {
       await joinTrace.span('meeting.join.previous_session', async () => {
@@ -119,8 +140,17 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
         return;
       }
       issuedSession = issued;
+      setCredentials(issued.credentials);
       joinTrace.setAttr('call.id', issued.credentials.callId);
       const localTracks = claimLocalTracks();
+      joinTrace.setAttr(
+        'meeting.join.microphone_track',
+        Boolean(localTracks?.microphone)
+      );
+      joinTrace.setAttr(
+        'meeting.join.camera_track',
+        Boolean(localTracks?.camera)
+      );
       const credentials = issued.credentials;
       await joinTrace.span('meeting.join.connect', () =>
         capabilities.connect(
@@ -133,33 +163,34 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
       joinTrace.setAttr('meeting.join.outcome', 'connected');
     } catch (cause) {
       // Provider errors may include credentials or a capability URL.
-      updateAttemptJoin2();
-      await updateIssuedSession();
+      markJoinFailed();
+      await cleanUpIssuedSession();
       if (isStale()) return;
       issuedSession = undefined;
       setError('Could not join the call. Check your connection and try again.');
+      setCredentials(undefined);
       console.error('Failed to join meeting', cause);
     } finally {
       joinTrace.end();
       // Keep the signal abortable for connected actions such as retrying invites.
       // A failed attempt has no session left that can own those actions.
-      updateActiveAttempt();
+      abortUnownedAttempt();
       attemptLifecycle.complete();
-      updateAttemptJoin();
+      finishJoining();
     }
 
-    function updateAttemptJoin2() {
+    function markJoinFailed() {
       if (!disposed && attempt === generation) {
         joinTrace.error('Meeting join failed');
         joinTrace.setAttr('meeting.join.outcome', 'failed');
       }
     }
 
-    function updateAttemptJoin() {
+    function finishJoining() {
       if (!disposed && attempt === generation) setJoining(false);
     }
 
-    function updateActiveAttempt() {
+    function abortUnownedAttempt() {
       if (
         activeAttempt === controller &&
         (!issued || issuedSession !== issued)
@@ -169,7 +200,7 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
       }
     }
 
-    async function updateIssuedSession() {
+    async function cleanUpIssuedSession() {
       if (issued && issuedSession === issued) {
         issuedSession = undefined;
         try {
@@ -194,6 +225,7 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
     activeAttempt = undefined;
     const session = issuedSession;
     issuedSession = undefined;
+    setCredentials(undefined);
     const cleanupLifecycle = capabilities.lifecycle.begin();
     if (!disposed) {
       setJoining(false);
@@ -203,6 +235,7 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
     // Start the keepalive release before awaiting local RTC disconnection:
     // navigation or tab closure must not strand server-side participation.
     const releasing = session ? release(session) : undefined;
+    let result: { callEnded: boolean } | void;
     try {
       // Cancellation must not wait for the token request it is cancelling.
       // The shared lifecycle still retains that attempt independently.
@@ -217,17 +250,18 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
       console.error('Failed to disconnect meeting', cause);
     } finally {
       try {
-        await releasing;
+        result = await releasing;
       } finally {
         cleanupLifecycle.complete();
       }
     }
+    return result;
   }
 
   onCleanup(() => {
     disposed = true;
-    void leave();
+    fireAndForget(leave(), 'meetings');
   });
 
-  return { join, leave, joining, joinedCallId, error, hasLeft };
+  return { join, leave, joining, joinedCallId, credentials, error, hasLeft };
 }

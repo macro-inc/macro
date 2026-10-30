@@ -162,9 +162,9 @@ export function chartData(
           .join(' ') ||
         series.name ||
         `Series ${index + 1}`;
-      return buildMap();
+      return seriesValues();
 
-      function buildMap(): {
+      function seriesValues(): {
         sample?: string | undefined;
         noLine?: boolean | undefined;
         noFill?: boolean | undefined;

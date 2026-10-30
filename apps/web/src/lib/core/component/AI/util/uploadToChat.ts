@@ -10,6 +10,7 @@ import type {
   UploadResult,
 } from '@core/component/AI/types';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { chatRuleset, uploadFile } from '@core/util/upload';
 import {
   fileExtension,
@@ -151,55 +152,49 @@ export function useUploadAttachment(): UploadQueue {
     return d;
   };
 
+  const trackUpload = async (item: UploadingAttachment) => {
+    try {
+      const result = await item.upload;
+
+      // Remove from uploading
+      setUploading((prev) => prev.filter((u) => u !== item));
+
+      // Show error toast if the result indicates an error
+      if (result.type === 'error') {
+        const filename = getUploadFilename(result);
+
+        const errorMessage =
+          result.error === 'upload'
+            ? `Failed to upload ${filename}`
+            : `Failed to process ${filename} (extraction error)`;
+        toast.failure(errorMessage);
+        console.error('Upload result error:', result);
+      }
+
+      // Append to complete
+      setComplete((prev) => [...prev, result]);
+      setUpdate((p) => p + 1);
+    } catch (error) {
+      // Remove from uploading on error
+      setUploading((prev) => prev.filter((u) => u !== item));
+
+      const filename = getUploadFilename(item);
+
+      // Show error toast
+      toast.failure(
+        `Failed to upload ${filename}: ${error instanceof Error && error.message ? error.message : 'Unknown error'}`
+      );
+      console.error('Upload error:', error);
+    }
+  };
+
   const waitForUploads = (items: UploadingAttachment[]) => {
     // Add to uploading immediately for UI reactivity
     setUploading((prev) => [...prev, ...items]);
 
     // Wire up completions
     for (const item of items) {
-      const settleUpload = async () => {
-        try {
-          const settleUploadValue = await item.upload;
-          const result = settleUploadValue;
-
-          // Remove from uploading
-          setUploading((prev) => prev.filter((u) => u !== item));
-
-          // Show error toast if the result indicates an error
-          if (result.type === 'error') {
-            const filename = getUploadFilename(result);
-
-            const errorMessage =
-              result.error === 'upload'
-                ? `Failed to upload ${filename}`
-                : `Failed to process ${filename} (extraction error)`;
-            toast.failure(errorMessage);
-            console.error('Upload result error:', result);
-          }
-
-          // Append to complete
-          setComplete((prev) => [...prev, result]);
-          setUpdate((p) => p + 1);
-
-          return;
-        } catch (settleUploadError) {
-          const error = settleUploadError;
-
-          // Remove from uploading on error
-          setUploading((prev) => prev.filter((u) => u !== item));
-
-          const filename = getUploadFilename(item);
-
-          // Show error toast
-          toast.failure(
-            `Failed to upload ${filename}: ${error instanceof Error && error.message ? error.message : 'Unknown error'}`
-          );
-          console.error('Upload error:', error);
-
-          return;
-        }
-      };
-      settleUpload();
+      fireAndForget(trackUpload(item), 'chat-upload');
     }
   };
 

@@ -9,6 +9,7 @@ import type {
 } from '../routes/types';
 import { UNCANCELLABLE } from '../utils';
 import { createClaims } from './claims';
+import { createLayout } from './layout';
 import { createLeaveGuards } from './leave-guards';
 import { createPaneList } from './pane-list';
 import { createPaneNavigation } from './pane-navigation';
@@ -48,7 +49,8 @@ export function createSplitRouter(options: SplitRouterOptions) {
   };
 
   const runner = createRunner({
-    phases: (waiting) => createPhaseScopes(phaseOptions, waiting),
+    phases: (waiting, onCommit) =>
+      createPhaseScopes(phaseOptions, waiting, onCommit),
     live: () => untrack(panes.ids),
   });
 
@@ -87,6 +89,8 @@ export function createSplitRouter(options: SplitRouterOptions) {
     claims,
     navigation: paneNavigation,
   });
+
+  const layout = createLayout({ routes, panes, url, runner });
 
   const disconnect = urlNavigation.connect();
 
@@ -128,6 +132,12 @@ export function createSplitRouter(options: SplitRouterOptions) {
     panes: panes.ids,
     navigate: urlNavigation.navigate,
     navigatePane: paneNavigation.navigate,
+    /** Cancels pending navigation and new panes requested from this pane. */
+    cancelNavigation: (pane: PaneId) =>
+      runner.act(undefined, () => {
+        runner.abort(pane);
+        paneList.cancelOpeningFrom(pane);
+      }),
     updateSearch: paneNavigation.updateSearch,
     goBackTo: paneNavigation.goBackTo,
     removeEntries: paneNavigation.removeEntries,
@@ -144,6 +154,10 @@ export function createSplitRouter(options: SplitRouterOptions) {
     matches,
     preload,
     href: url.href,
+    layoutSnapshot: layout.snapshot,
+    restoreLayout: layout.restore,
+    layoutHref: layout.href,
+    createPaneId: panes.createPaneId,
     activatePane: panes.activate,
     registerGuard: guards.register,
     settled: runner.settled,

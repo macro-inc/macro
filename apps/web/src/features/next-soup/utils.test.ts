@@ -47,7 +47,12 @@ const operationMocks = vi.hoisted(() => {
   });
   return {
     graphql: false,
-    archive: vi.fn(async (): Promise<'committed' | 'queued'> => 'committed'),
+    archive: vi.fn(
+      async (_args: {
+        id: string;
+        value: boolean;
+      }): Promise<'committed' | 'queued'> => 'committed'
+    ),
     doneOverride: vi.fn((_ids: readonly string[], _done: boolean | undefined) =>
       Object.assign(vi.fn(), { release: vi.fn() })
     ),
@@ -89,6 +94,9 @@ vi.mock('@notifications', async (importOriginal) => ({
 vi.mock('@queries/email/integration', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@queries/email/integration')>()),
   archiveEmailThread: operationMocks.archive,
+  // Settle each thread through the per-thread mock, as the bulk request does.
+  archiveEmailThreads: (ids: string[], value: boolean) =>
+    Promise.allSettled(ids.map((id) => operationMocks.archive({ id, value }))),
 }));
 vi.mock('@core/util/url', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/util/url')>()),
@@ -1617,7 +1625,7 @@ describe('getChannelEntityTarget', () => {
     expect(getChannelEntityTarget(entity)).toEqual({
       kind: 'message',
       messageId: 'notif-msg',
-      threadId: undefined,
+      threadId: 'notif-msg',
     });
   });
 
@@ -2058,9 +2066,9 @@ describe('getChannelEntityTarget', () => {
       } else {
         expect(search).toMatchObject({
           messageId: ['message'],
+          threadId: ['message'],
           seek: [expect.any(String)],
         });
-        expect(search?.threadId).toBeUndefined();
       }
       expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([
         parentNotification,
@@ -2115,7 +2123,7 @@ describe('getChannelEntityTarget', () => {
     expect(getChannelEntityTarget(entity)).toEqual({
       kind: 'message',
       messageId: 'unread-older-msg',
-      threadId: undefined,
+      threadId: 'unread-older-msg',
     });
   });
 
@@ -2321,6 +2329,30 @@ describe('getDocumentCommentTarget', () => {
     });
   });
 
+  it('opens the document itself on touch, where the thread covers it', async () => {
+    vi.mocked(isTouchDevice).mockReturnValue(true);
+    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+    const goToLocationFromParams = vi.fn();
+    const getBlockHandle = vi.fn(async () => ({ goToLocationFromParams }));
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({ getBlockHandle })),
+      getSplitByContent: vi.fn(),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(
+      documentRow([commentNotification('n1', 'comment-1')]),
+      {}
+    );
+
+    expect(openWithSplit).toHaveBeenCalledWith(
+      { type: 'md', id: 'doc-1', params: undefined },
+      expect.objectContaining({ activate: true })
+    );
+    expect(goToLocationFromParams).not.toHaveBeenCalled();
+  });
+
   it('carries the comment through the Inbox preview route', () => {
     const result = homePreviewNavigation(
       documentRow([commentNotification('n1', 'comment-1')]) as never
@@ -2415,60 +2447,71 @@ describe('getRowClickFallbackLocation', () => {
 });
 
 describe('call navigation', () => {
-  it('opens calls in Drive without mounting a call block', async () => {
-    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
-    setGlobalSplitManager({
-      activeSplit: () => undefined,
-      getOrchestrator: () => ({}),
-      openWithSplit,
-    } as unknown as SplitManager);
+  it.each([false, true])(
+    'opens calls in Calls on touch=%s without mounting a call block',
+    async (touch) => {
+      vi.mocked(isTouchDevice).mockReturnValue(touch);
+      const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+      setGlobalSplitManager({
+        activeSplit: () => undefined,
+        getOrchestrator: () => ({}),
+        openWithSplit,
+      } as unknown as SplitManager);
 
-    await openEntityInSplitFromUnifiedList(searchEntity('call', null), {});
-    expect(openWithSplit).toHaveBeenCalledWith(
-      {
+      await openEntityInSplitFromUnifiedList(searchEntity('call', null), {});
+      expect(openWithSplit).toHaveBeenCalledWith(
+        {
+          type: 'component',
+          id: 'calls',
+          entryMetadata: {
+            route: paneRoute(
+              { id: 'view-calls', params: {} },
+              { id: 'calls-call', params: { callId: 'call-1' } }
+            ),
+          },
+        },
+        expect.objectContaining({ allowDuplicate: true })
+      );
+    }
+  );
+
+  it.each([false, true])(
+    'carries a transcript target into the Calls route with new split=%s',
+    async (openInNewSplit) => {
+      const openWithSplit = vi.fn((..._args: unknown[]) => ({
+        status: 'unavailable',
+      }));
+      setGlobalSplitManager({
+        activeSplit: () => undefined,
+        getOrchestrator: () => ({}),
+        openWithSplit,
+      } as unknown as SplitManager);
+
+      await openEntityInSplitFromUnifiedList(searchEntity('call', null), {
+        openInNewSplit,
+        location: {
+          type: 'call_record',
+          callId: 'call-1',
+          transcriptId: 'segment-1',
+        },
+      });
+      expect(openWithSplit.mock.calls[0]?.[0]).toMatchObject({
         type: 'component',
-        id: 'documents',
+        id: 'calls',
         entryMetadata: {
           route: paneRoute(
-            { id: 'drive', params: {} },
-            { id: 'drive-call', params: { callId: 'call-1' } }
+            { id: 'view-calls', params: {} },
+            { id: 'calls-call', params: { callId: 'call-1' } }
           ),
         },
-      },
-      expect.objectContaining({ allowDuplicate: true })
-    );
-  });
-
-  it('carries a transcript target into the Drive call route', async () => {
-    const openWithSplit = vi.fn((..._args: unknown[]) => ({
-      status: 'unavailable',
-    }));
-    setGlobalSplitManager({
-      activeSplit: () => undefined,
-      getOrchestrator: () => ({}),
-      openWithSplit,
-    } as unknown as SplitManager);
-
-    await openEntityInSplitFromUnifiedList(searchEntity('call', null), {
-      location: {
-        type: 'call_record',
-        callId: 'call-1',
-        transcriptId: 'segment-1',
-      },
-    });
-    expect(openWithSplit.mock.calls[0]?.[0]).toMatchObject({
-      type: 'component',
-      id: 'documents',
-      entryMetadata: {
-        route: paneRoute(
-          { id: 'drive', params: {} },
-          { id: 'drive-call', params: { callId: 'call-1' } }
-        ),
-      },
-    });
-    expect(targetSearch(openWithSplit, 'call-detail')).toMatchObject({
-      transcriptId: ['segment-1'],
-      seek: [expect.any(String)],
-    });
-  });
+      });
+      expect(openWithSplit.mock.calls[0]?.[1]).toMatchObject({
+        preferNewSplit: openInNewSplit,
+      });
+      expect(targetSearch(openWithSplit, 'call-detail')).toMatchObject({
+        transcriptId: ['segment-1'],
+        seek: [expect.any(String)],
+      });
+    }
+  );
 });

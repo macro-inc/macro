@@ -173,6 +173,21 @@ class PackagingTest(unittest.TestCase):
         relocate(self.appdir)
         self.assertEqual(bundled.read_bytes(), before)
 
+    def test_relocation_rejects_nix_only_proxy_schema_paths(self):
+        self.populate()
+        for name in ("libpxbackend-1.0.so", "libgiognomeproxy.so"):
+            with self.subTest(library=name):
+                source = self.compile(
+                    name,
+                    'const char schema_dir[] = "/nix/store/fixture-gsettings-desktop-schemas/share/glib-2.0/schemas";',
+                    [],
+                )
+                bundled = self.bundle_lib / name
+                shutil.copy2(source, bundled)
+                with self.assertRaisesRegex(RuntimeError, "Nix-only GSettings"):
+                    relocate(self.appdir)
+                bundled.unlink()
+
     def test_relocation_rejects_conflicting_sonames(self):
         self.populate()
         conflicting = self.bundle_lib / "conflicting.so"

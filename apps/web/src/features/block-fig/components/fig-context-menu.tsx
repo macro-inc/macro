@@ -5,8 +5,8 @@
  */
 
 import { ContextMenuContent, MenuSeparator } from '@core/component/ContextMenu';
+import Check from '@icon/system/regular/check.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import Check from '@phosphor/check.svg';
 import { For, Show } from 'solid-js';
 import {
   type MenuAction,

@@ -216,7 +216,7 @@ export function createBuilderDrag(options: BuilderDragOptions) {
         return;
       }
     }
-    const drop = buildDrop(active);
+    const drop = sectionDropUnderPointer(active);
     const layout = options.layout();
     if (active.target.kind === 'new-section' && drop && layout) {
       // Show and announce where it lands: before the booking step.
@@ -237,13 +237,13 @@ export function createBuilderDrag(options: BuilderDragOptions) {
       sectionSession(active.target, 'pointer', drop?.index, drop?.lineY)
     );
 
-    function buildDrop2(inside: boolean) {
+    function questionDropUnderPointer(inside: boolean) {
       return inside
         ? questionDropAt(y, options.measureQuestions(), '')
         : undefined;
     }
 
-    function buildPlacement(
+    function dropPlacement(
       drop: QuestionDrop | undefined
     ): { sectionId: string; index: number } | undefined {
       return drop && { sectionId: drop.sectionId, index: drop.index };
@@ -257,7 +257,7 @@ export function createBuilderDrag(options: BuilderDragOptions) {
       return options.canvas()?.getBoundingClientRect();
     }
 
-    function buildDrop(activeInput: NonNullable<typeof active>) {
+    function sectionDropUnderPointer(activeInput: NonNullable<typeof active>) {
       return sections.length === 0 &&
         activeInput.target.kind === 'new-section' &&
         canvas
@@ -265,7 +265,7 @@ export function createBuilderDrag(options: BuilderDragOptions) {
         : sectionDropAt(y, sections, activeInput.target.id);
     }
 
-    function buildLineY(
+    function insertionLineY(
       inside: boolean,
       drop: QuestionDrop | undefined,
       canvas: DOMRect | undefined
@@ -273,7 +273,7 @@ export function createBuilderDrag(options: BuilderDragOptions) {
       return inside && canvas ? (drop?.lineY ?? canvas.top + 8) : undefined;
     }
 
-    function buildInside(
+    function pointerOverCanvas(
       canvas: DOMRect | undefined,
       viewport: DOMRect | undefined
     ) {
@@ -295,14 +295,14 @@ export function createBuilderDrag(options: BuilderDragOptions) {
     ) {
       const canvas = canvasBounds();
       const viewport = viewportBounds();
-      const inside = buildInside(canvas, viewport);
-      const drop = buildDrop2(inside);
+      const inside = pointerOverCanvas(canvas, viewport);
+      const drop = questionDropUnderPointer(inside);
       setSession({
         target: target,
         mode: 'pointer',
-        placement: buildPlacement(drop),
+        placement: dropPlacement(drop),
         sectionIndex: undefined,
-        lineY: buildLineY(inside, drop, canvas),
+        lineY: insertionLineY(inside, drop, canvas),
         refusal: undefined,
         unchanged: !inside,
       });

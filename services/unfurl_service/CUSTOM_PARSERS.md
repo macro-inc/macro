@@ -1,10 +1,12 @@
 # Custom URL Parsers
 
-This document describes the custom URL parsing functionality added to the unfurl service to handle special cases where document titles are embedded in the URL structure rather than available in HTML metadata.
+This document describes the custom URL parsing functionality added to the unfurl service to handle special cases where document titles are embedded in the URL structure rather than available in HTML metadata, and to support embeddable content (video players, etc.).
 
 ## Supported Services
 
-### Notion
+### Title Parsing
+
+#### Notion
 - **Pattern**: `notion.so/[workspace]/[title-with-dashes]-[uuid]` or `notion.so/[title-with-dashes]-[uuid]`
 - **Examples**:
   - `https://www.notion.so/macrocom/Enterprise-Product-Bottlenecks-5acb869109a747c1a1a92bbf1891ff2d` → "Enterprise Product Bottlenecks"
@@ -12,19 +14,41 @@ This document describes the custom URL parsing functionality added to the unfurl
   - `https://www.notion.so/craft-ventures/Craft-Ventures-Operating-Playbooks-9db7bdccfc0f47be96076c122513691c` → "Craft Ventures Operating Playbooks"
 - **Fallback**: Returns "Notion" if URL parsing fails
 
-### Figma
+#### Figma
 - **Pattern**: `figma.com/design/[file-id]/[title-with-dashes]?...`
 - **Examples**:
   - `https://www.figma.com/design/Kf1Vep5riU3re2GO4E0q6b/Peter-Copy-of-Paper-Crowns?node-id=0-1&p=f&t=Z2dZh8AyxauKitCl-0` → "Peter Copy Of Paper Crowns"
   - `https://www.figma.com/design/VWgAP7zMauuWKkeS3CmWk3/AI-side-panel?node-id=0-1&p=f&t=SqdP6D2w2rZ5iSjV-0` → "AI Side Panel"
 - **Fallback**: Returns "Figma" if URL parsing fails
 
-### Linear
+#### Linear
 - **Pattern**: `linear.app/[team]/issue/[ticket-id]/[title-with-dashes]`
 - **Examples**:
   - `https://linear.app/macro-eng/issue/M-3586/ability-to-archive-emails` → "Ability To Archive Emails"
   - `https://linear.app/macro-eng/issue/M-3421/add-macro-permissions-to-jwt-token` → "Add Macro Permissions To Jwt Token"
 - **Fallback**: Returns "Linear" if URL parsing fails
+
+### Video Embed Support
+
+The unfurl service also supports embeddable video content for services like Loom and Supercut. When a share URL is detected, the response includes `embed_type: "Video"` and an `embed_url` that can be used in an iframe.
+
+#### Supercut
+- **Share URL Pattern**: `supercut.ai/share/[workspace]/[video-id]`
+- **Embed URL**: `supercut.ai/embed/[workspace]/[video-id]`
+- **Examples**:
+  - `https://supercut.ai/share/onsteroids/zvAqfSVFnB7vUh71Sfqhq4` → embed: `https://supercut.ai/embed/onsteroids/zvAqfSVFnB7vUh71Sfqhq4`
+- **Title Fallback**: Returns "Supercut" if URL parsing fails
+
+#### Loom
+- **Share URL Pattern**: `loom.com/share/[video-id]` or `www.loom.com/share/[video-id]`
+- **Embed URL**: `www.loom.com/embed/[video-id]`
+- **Examples**:
+  - `https://www.loom.com/share/e5b8c04bca094dd8a5507925ab887002` → embed: `https://www.loom.com/embed/e5b8c04bca094dd8a5507925ab887002`
+- **Title Fallback**: Returns "Loom" if URL parsing fails
+
+#### Frontend Rendering
+
+When the frontend receives an unfurl response with `embed_type: "Video"` and `embed_url`, it renders an embedded video player using an iframe instead of a standard link preview card. The video player is shown on hover in the `LinkHoverCard` component.
 
 ## Implementation Details
 
@@ -46,13 +70,17 @@ This document describes the custom URL parsing functionality added to the unfurl
 ### Function Hierarchy
 
 ```
-GetUnfurlResponse::get_title()
-├── parse_custom_title()
-│   ├── parse_notion_title() → Some("Parsed Title") | None
-│   ├── parse_figma_title() → Some("Parsed Title") | None  
-│   ├── parse_linear_title() → Some("Parsed Title") | None
-│   └── Fallback to service name (e.g., "Notion", "Figma", "Linear")
-└── Original metadata extraction (if custom parsing returns None)
+GetUnfurlResponse::new()
+├── get_title() → title string
+│   ├── parse_custom_title()
+│   │   ├── parse_notion_title() → Some("Parsed Title") | None
+│   │   ├── parse_figma_title() → Some("Parsed Title") | None  
+│   │   ├── parse_linear_title() → Some("Parsed Title") | None
+│   │   └── Fallback to service name (e.g., "Notion", "Figma", "Linear", "Supercut", "Loom")
+│   └── Original metadata extraction (if custom parsing returns None)
+└── parse_embed_info() → embed_type, embed_url
+    ├── parse_supercut_embed() → Some(EmbedInfo) | None
+    └── parse_loom_embed() → Some(EmbedInfo) | None
 ```
 
 ## Testing
@@ -81,6 +109,12 @@ curl 'http://localhost:8080/unfurl?url=https://www.figma.com/design/Kf1Vep5riU3r
 
 # Test Linear URL
 curl 'http://localhost:8080/unfurl?url=https://linear.app/macro-eng/issue/M-3586/ability-to-archive-emails'
+
+# Test Supercut URL (returns embed_type and embed_url)
+curl 'http://localhost:8080/unfurl?url=https://supercut.ai/share/onsteroids/zvAqfSVFnB7vUh71Sfqhq4'
+
+# Test Loom URL (returns embed_type and embed_url)
+curl 'http://localhost:8080/unfurl?url=https://www.loom.com/share/e5b8c04bca094dd8a5507925ab887002'
 
 # Test bulk processing
 just bulk-link-test

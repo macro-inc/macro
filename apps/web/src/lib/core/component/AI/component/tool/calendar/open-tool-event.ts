@@ -1,5 +1,6 @@
 import type { CalendarEventTime } from '@app/features/calendar-view/calendar-range';
 import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 
 /** The event shape the create and update calendar tools return. */
@@ -43,11 +44,14 @@ export function openToolCalendarEvent(
   options?: OpenToolCalendarEventOptions
 ) {
   const occurrenceKey = options?.occurrenceKey;
-  openCalendarEventSplit({
-    eventId: event.eventId,
-    occurrenceKey,
-    // An occurrence key anchors the locator range on its own, so the event's
-    // own timing only stands in for calls that were not occurrence-scoped.
-    time: options?.time ?? (occurrenceKey ? undefined : eventTime(event)),
-  });
+  fireAndForget(
+    openCalendarEventSplit({
+      eventId: event.eventId,
+      occurrenceKey,
+      // An occurrence key anchors the locator range on its own, so the event's
+      // own timing only stands in for calls that were not occurrence-scoped.
+      time: options?.time ?? (occurrenceKey ? undefined : eventTime(event)),
+    }),
+    'ai-calendar-tool'
+  );
 }

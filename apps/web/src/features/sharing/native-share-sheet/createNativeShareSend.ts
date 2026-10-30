@@ -8,38 +8,36 @@ export function createNativeShareSend<T>(options: {
   const [state, setState] = createSignal<'idle' | 'sending' | 'sent'>('idle');
   let pending: Promise<void> | undefined;
 
+  const deliver = async (snapshot: T) => {
+    try {
+      await options.send(snapshot);
+    } catch (error) {
+      setState('idle');
+      throw error;
+    }
+    // A failed acknowledgement must never make a delivered message sendable,
+    // nor report the delivered message as a failed send.
+    setState('sent');
+    try {
+      await options.clear();
+    } catch (error) {
+      console.error('Unable to acknowledge the shared batch', error);
+    }
+  };
+
+  const deliverOnce = async (snapshot: T) => {
+    try {
+      await deliver(snapshot);
+    } finally {
+      pending = undefined;
+    }
+  };
+
   const send = (snapshot: T): Promise<void> => {
     if (pending) return pending;
     if (state() === 'sent') return Promise.resolve();
     setState('sending');
-    const settleOperationFinally = async () => {
-      pending = undefined;
-
-      return;
-    };
-    const settleOperation = async () => {
-      try {
-        return await (async () => {
-          try {
-            await options.send(snapshot);
-          } catch (error) {
-            setState('idle');
-            throw error;
-          }
-          // A failed acknowledgement must never make a delivered message sendable,
-          // nor report the delivered message as a failed send.
-          setState('sent');
-          try {
-            await options.clear();
-          } catch (error) {
-            console.error('Unable to acknowledge the shared batch', error);
-          }
-        })();
-      } finally {
-        await settleOperationFinally();
-      }
-    };
-    pending = settleOperation();
+    pending = deliverOnce(snapshot);
     return pending;
   };
 

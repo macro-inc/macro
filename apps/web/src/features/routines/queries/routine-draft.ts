@@ -18,7 +18,7 @@ import type {
   UpdateScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
 import { z } from 'zod';
-import type { ScheduleDraft } from '../core/draft';
+import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from '../core/draft';
 import {
   type RoutineTarget,
   routineAgentIdSchema,
@@ -32,6 +32,9 @@ const agentTaskSchema = z
   .looseObject({
     agent: z.looseObject({ bot_id: routineAgentIdSchema }).nullish(),
     model: routineModelSchema.nullish(),
+    mcp_servers: z
+      .array(z.object({ app_slug: z.string(), server_name: z.string() }))
+      .optional(),
     prompt: z.string(),
     user_prompt: z.string(),
   })
@@ -43,6 +46,15 @@ function getAgentTask(schedule: ScheduledAction): RoutineTask | undefined {
   if (schedule.kind !== 'Agent') return undefined;
   const result = agentTaskSchema.safeParse(schedule.task);
   return result.success ? result.data : undefined;
+}
+
+/** Whether a routine runs an agent or a bare model; undefined when its task is unreadable. */
+export function routineTargetKind(
+  schedule: ScheduledAction
+): RoutineTarget['kind'] | undefined {
+  const task = getAgentTask(schedule);
+  if (!task) return undefined;
+  return task.agent ? 'agent' : 'model';
 }
 
 function targetFromTask(task: RoutineTask): RoutineTarget {
@@ -84,6 +96,8 @@ export function draftFromSchedule(
     daysOfWeek: parsed.daysOfWeek,
     dayOfMonth: parsed.dayOfMonth,
     target: targetFromTask(task),
+    runVisibility: schedule.run_visibility,
+    apps: task.mcp_servers ?? [],
     timezone: trigger?.timezone,
     triggers,
     ...(trigger ? onceFromCron(trigger.schedule, trigger.timezone) : {}),
@@ -108,7 +122,11 @@ function applyTarget(task: RoutineTask, target: RoutineTarget): void {
 
 function buildAgentTask(draft: ScheduleDraft): RoutineTask {
   const target = routineTargetSchema.parse(draft.target);
-  const task: RoutineTask = { prompt: '', user_prompt: draft.prompt.trim() };
+  const task: RoutineTask = {
+    prompt: '',
+    user_prompt: draft.prompt.trim(),
+    mcp_servers: draft.apps,
+  };
   applyTarget(task, target);
   return task;
 }
@@ -120,7 +138,30 @@ export function draftToCreateBody(draft: ScheduleDraft): CreateScheduledAction {
     kind: 'Agent',
     task: buildAgentTask(draft),
     enabled: draft.enabled ?? true,
+    run_visibility: draft.runVisibility ?? DEFAULT_RUN_VISIBILITY,
   };
+}
+
+/** The task with the draft's edits, or undefined when it has none. */
+function editTask(
+  draft: ScheduleDraft,
+  previousTask: RoutineTask,
+  target: RoutineTarget
+): RoutineTask | undefined {
+  const targetChanged = !routineTargetsEqual(
+    target,
+    targetFromTask(previousTask)
+  );
+  const promptChanged = draft.prompt !== previousTask.user_prompt;
+  const appsChanged =
+    draft.apps.map((app) => app.app_slug).join(',') !==
+    (previousTask.mcp_servers ?? []).map((app) => app.app_slug).join(',');
+  if (!targetChanged && !promptChanged && !appsChanged) return undefined;
+  const task = { ...previousTask };
+  if (targetChanged) applyTarget(task, target);
+  if (promptChanged) task.user_prompt = draft.prompt.trim();
+  if (appsChanged) task.mcp_servers = draft.apps;
+  return task;
 }
 
 export function draftToUpdateBody(
@@ -133,18 +174,8 @@ export function draftToUpdateBody(
   if ((!trigger && !draft.triggers) || !previousTask || !target.success)
     return undefined;
 
-  const targetChanged = !routineTargetsEqual(
-    target.data,
-    targetFromTask(previousTask)
-  );
-  const promptChanged = draft.prompt !== previousTask.user_prompt;
-  let task = previous.task;
-  if (targetChanged || promptChanged) {
-    const editedTask = { ...previousTask };
-    if (targetChanged) applyTarget(editedTask, target.data);
-    if (promptChanged) editedTask.user_prompt = draft.prompt.trim();
-    task = editedTask;
-  }
+  const task = editTask(draft, previousTask, target.data) ?? previous.task;
+  const runVisibility = draft.runVisibility ?? previous.run_visibility;
 
   // Preserve API-written cron expressions and raw task data when not edited.
   if (draft.triggers)
@@ -163,6 +194,7 @@ export function draftToUpdateBody(
           : serializeTriggers(draft.triggers),
       kind: previous.kind,
       task,
+      run_visibility: runVisibility,
     };
   if (!trigger) return;
   const parsed = parseCron(trigger.schedule);
@@ -177,6 +209,7 @@ export function draftToUpdateBody(
       : trigger,
     kind: previous.kind,
     task,
+    run_visibility: runVisibility,
   };
 
   function buildScheduleChanged(triggerValue: NonNullable<typeof trigger>) {
@@ -206,6 +239,7 @@ export function scheduleToDuplicateBody(
     name: `${schedule.name} copy`,
     trigger,
     task: schedule.task,
+    run_visibility: schedule.run_visibility,
   };
 }
 

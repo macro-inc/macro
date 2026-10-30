@@ -29,6 +29,7 @@ import type { DatabaseViewColumn } from '../core/database-view';
 import type { ViewChange } from '../core/view-state';
 import { allRecordsView } from '../core/views';
 import type { DatabaseWriteFailure } from '../core/write-failure';
+import { boardLane } from '../tests/board-layout';
 import { createFakeRowsSource, titleContains } from '../tests/fake-rows-source';
 import type { BoardPositions } from './database-board-view';
 import {
@@ -209,7 +210,10 @@ function columnOrderFixture() {
   };
 }
 
+let createdRecord: Promise<boolean> | undefined;
+
 beforeEach(() => {
+  createdRecord = undefined;
   const style = document.createElement('style');
   style.textContent =
     '[role="menu"], [role="dialog"] { animation-name: none; }';
@@ -309,7 +313,7 @@ describe('database table view', () => {
         boardPositions={unplacedCards}
       />
     ));
-    fireEvent.click(screen.getByRole('button', { name: /Name: Unnamed/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Name: Empty/ }));
     const input = screen.getByRole('textbox', { name: 'Edit Name' });
     fireEvent.input(input, { target: { value: 'Saved once' } });
     fireEvent.keyDown(input, { key: 'Enter' });
@@ -515,7 +519,7 @@ describe('database table view', () => {
         });
         fireEvent.input(input, { target: { value: 'Invalid number' } });
         fireEvent.keyDown(input, { key: 'Enter' });
-        expect(within(dialog).getByRole('alert').textContent).toBe(
+        expect(screen.getByRole('alert').textContent).toBe(
           'Enter a valid number'
         );
       }
@@ -529,7 +533,7 @@ describe('database table view', () => {
       expect(
         within(dialog).queryByRole('textbox', { name: 'Edit Amount' })
       ).toBeNull();
-      expect(within(dialog).queryByRole('alert')).toBeNull();
+      expect(screen.queryByRole('alert')).toBeNull();
       const title = within(dialog).getByRole('textbox', {
         name: 'Edit Name',
       }) as HTMLInputElement;
@@ -886,7 +890,7 @@ describe('database table view', () => {
           boardPositions={unplacedCards}
         />
       ));
-      fireEvent.click(screen.getByRole('button', { name: /Name: Unnamed/ }));
+      fireEvent.click(screen.getByRole('button', { name: /Name: Empty/ }));
       const name = screen.getByRole('textbox', { name: 'Edit Name' });
       fireEvent.input(name, { target: { value: 'Created from draft' } });
       fireEvent.keyDown(name, { key: 'Enter' });
@@ -981,7 +985,7 @@ describe('database table view', () => {
         boardPositions={unplacedCards}
       />
     ));
-    fireEvent.click(screen.getByRole('button', { name: /Name: Unnamed/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Name: Empty/ }));
     const name = screen.getByRole('textbox', { name: 'Edit Name' });
     fireEvent.input(name, { target: { value: 'Created from draft' } });
     fireEvent.keyDown(name, { key: 'Enter' });
@@ -1441,7 +1445,7 @@ describe('database table view', () => {
       />
     ));
     fireEvent.click(
-      screen.getByRole('button', { name: 'Name: Unnamed. Click to edit' })
+      screen.getByRole('button', { name: 'Name: Empty. Click to edit' })
     );
     const draft = await screen.findByRole('textbox', { name: 'Edit Name' });
     fireEvent.input(draft, { target: { value: 'Outside view' } });
@@ -1490,7 +1494,12 @@ describe('database table view', () => {
           stored={false}
           addColumn={() => null}
           renderToolbar={(actions) => (
-            <button type="button" onClick={() => void actions.createRecord()}>
+            <button
+              type="button"
+              onClick={() => {
+                createdRecord = actions.createRecord();
+              }}
+            >
               New record
             </button>
           )}
@@ -1526,6 +1535,7 @@ describe('database table view', () => {
           false
         )
       );
+      await createdRecord;
     }
   );
 
@@ -1719,15 +1729,22 @@ describe('database table view', () => {
         boardPositions={unplacedCards}
         addColumn={() => <button type="button">Add property</button>}
         renderToolbar={(actions) => (
-          <button type="button" onClick={() => void actions.createRecord()}>
+          <button
+            type="button"
+            onClick={() => {
+              createdRecord = actions.createRecord();
+            }}
+          >
             New record
           </button>
         )}
       />
     ));
-    await screen.findByRole('region', { name: 'Done lane' });
+    await waitFor(() => expect(boardLane('Done lane')).toBeTruthy());
     fireEvent.click(screen.getByText('New record', { selector: 'button' }));
-    const lanes = screen.getAllByRole('region');
+    const lanes = screen
+      .getAllByRole('region')
+      .filter((lane) => lane.hasAttribute('data-kanban-lane'));
     expect(lanes[0].getAttribute('aria-label')).toBe('Done lane');
     const draft = within(lanes[0]).getByRole('textbox', {
       name: 'New record title',
@@ -1748,6 +1765,7 @@ describe('database table view', () => {
       )
     );
     expect(screen.queryByRole('dialog')).toBeNull();
+    await createdRecord;
   });
 
   it('creates a card without writing a read-only string title', async () => {
@@ -1981,7 +1999,9 @@ describe('database table view', () => {
           <button
             type="button"
             disabled={actions.pending()}
-            onClick={() => void actions.createRecord()}
+            onClick={() => {
+              createdRecord = actions.createRecord();
+            }}
           >
             Create from toolbar
           </button>
@@ -2019,6 +2039,7 @@ describe('database table view', () => {
         false
       )
     );
+    await createdRecord;
   });
 
   it('persists menu moves past the neighboring column in both directions', async () => {
@@ -2419,7 +2440,12 @@ describe('database table view', () => {
         stored={false}
         addColumn={() => <button type="button">Add column</button>}
         renderToolbar={(actions) => (
-          <button type="button" onClick={() => void actions.createRecord()}>
+          <button
+            type="button"
+            onClick={() => {
+              createdRecord = actions.createRecord();
+            }}
+          >
             New record
           </button>
         )}
@@ -2436,7 +2462,7 @@ describe('database table view', () => {
     fireEvent.click(
       within(screen.getByRole('grid', { name: 'Playground' })).getByRole(
         'button',
-        { name: 'Name: Unnamed. Click to edit' }
+        { name: 'Name: Empty. Click to edit' }
       )
     );
     const name = await screen.findByRole('textbox', { name: 'Edit Name' });
@@ -2454,13 +2480,14 @@ describe('database table view', () => {
         screen.getAllByRole('button', { name: /Name: First record/ })
       ).toHaveLength(1)
     );
-    expect(
-      screen.getByRole('button', { name: 'Name: Unnamed. Click to edit' })
-    ).toBeTruthy();
+    const next = screen.getByRole('textbox', { name: 'Edit Name' });
+    expect(document.activeElement).toBe(next);
+    expect((next as HTMLInputElement).value).toBe('');
     expect(fixture.source.write).toHaveBeenCalledExactlyOnceWith(
       { kind: 'create', values: { title: 'First record' } },
       1,
       false
     );
+    await createdRecord;
   });
 });

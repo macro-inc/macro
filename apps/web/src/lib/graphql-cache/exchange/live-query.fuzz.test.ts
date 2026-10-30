@@ -131,7 +131,7 @@ describe('generated live query updates', () => {
                   [...first.reads].map(([id, counts]) => [id, { ...counts }])
                 );
                 let patches: QueryFieldPatch[] | undefined;
-                ({ patches, nextId } = updatePatches(
+                ({ patches, nextId } = applyAction(
                   action,
                   model,
                   patches,
@@ -211,7 +211,7 @@ describe('generated live query updates', () => {
               dispose();
             }
 
-            function updatePatches(
+            function applyAction(
               action:
                 | {
                     incremental: boolean;

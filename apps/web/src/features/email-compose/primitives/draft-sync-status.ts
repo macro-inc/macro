@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
   createEffect,
@@ -7,14 +8,17 @@ import {
   onCleanup,
 } from 'solid-js';
 import type { EmailDraftStorage } from '../context/compose-capabilities';
-import type { DraftSyncViewState } from '../core/local-draft';
+import type { DraftSyncViewState, LocalDraftStatus } from '../core/local-draft';
+
+type SyncAvailability = ReturnType<
+  NonNullable<EmailDraftStorage['syncAvailability']>
+>;
 
 /** Recovery reads only metadata; file blobs are restored once when opening a draft. */
 export function createDraftSyncStatus(options: {
   drafts: EmailDraftStorage;
   draftId: Accessor<string | undefined>;
   localSaveState: Accessor<'saving' | 'saved' | 'failed'>;
-  acknowledgeSaved: Accessor<boolean>;
   retry(): Promise<unknown>;
   discard(): Promise<unknown>;
 }) {
@@ -26,7 +30,7 @@ export function createDraftSyncStatus(options: {
   );
   createEffect(() => {
     const unsubscribe = options.drafts.watchDrafts?.(() => {
-      void refetch();
+      fireAndForget(refetch(), 'email-compose');
     });
     onCleanup(() => unsubscribe?.());
   });
@@ -39,7 +43,46 @@ export function createDraftSyncStatus(options: {
     (local()?.status === 'deleting' &&
       (!local()?.queuedAttemptId ||
         local()?.queuedAttemptId !== local()?.latestAttemptId));
-  const state = createMemo<DraftSyncViewState | undefined>((previous) => {
+  const unavailableState = (
+    hasLocalDraft: boolean,
+    availability: SyncAvailability
+  ): DraftSyncViewState => ({
+    message: hasLocalDraft
+      ? 'Saved on this device; waiting to sync'
+      : 'Draft synchronization unavailable',
+    detail:
+      availability === 'recovering'
+        ? 'Reconnecting to saved changes…'
+        : availability === 'recovery-required'
+          ? 'Queued changes are preserved. Update or reload Macro to recover local storage.'
+          : 'Reconnect or retry to resume draft synchronization.',
+    failed: true,
+    action: availability === 'unavailable' ? 'retry' : undefined,
+    canKeepEditing: false,
+  });
+  const failureState = (
+    disk: 'saving' | 'saved' | 'failed',
+    draftStatus: LocalDraftStatus | undefined
+  ): DraftSyncViewState => ({
+    message:
+      disk === 'failed'
+        ? 'Changes could not be saved on this device'
+        : 'Draft could not be synced',
+    detail:
+      disk === 'failed'
+        ? 'Keep this editor open until saving succeeds.'
+        : deletePending()
+          ? 'Discard could not be confirmed.'
+          : draftStatus === 'unconfirmed'
+            ? 'The last save could not be confirmed.'
+            : draftStatus === 'failed'
+              ? 'The server could not save this draft.'
+              : undefined,
+    failed: true,
+    action: deletePending() ? 'retry-discard' : 'retry',
+    canKeepEditing: deletePending(),
+  });
+  const state = createMemo<DraftSyncViewState | undefined>(() => {
     if (!options.drafts.saveLocalDraft || !options.draftId()) return;
     const disk = options.localSaveState();
     const draft = local();
@@ -57,56 +100,19 @@ export function createDraftSyncStatus(options: {
         draft?.status ?? ''
       ) ||
       deletePending();
-    // Only a newly persisted version restarts the brief acknowledgement.
-    // Queue notifications and identity adoption do not count as another save.
-    if (!failed) {
-      if (!draft && (disk === 'saving' || saved.loading))
-        return previous && { ...previous, savedVersion: undefined };
-      if (!draft && !saved.latest?.draft) return;
-      return {
-        message: 'Draft saved',
-        savedVersion: buildSavedVersion(),
-        failed: false,
-        canKeepEditing: false,
-      };
-    }
-    return buildCreateMemo();
-
-    function buildSavedVersion(): string | undefined {
-      return disk === 'saved' && options.acknowledgeSaved()
-        ? draft
-          ? `${draft.generation}:${draft.revision}`
-          : saved.latest?.draft?.updated_at
-        : undefined;
-    }
-
-    function buildCreateMemo(): DraftSyncViewState | undefined {
-      return {
-        message:
-          disk === 'failed'
-            ? 'Changes could not be saved on this device'
-            : 'Draft could not be synced',
-        detail:
-          disk === 'failed'
-            ? 'Keep this editor open until saving succeeds.'
-            : deletePending()
-              ? 'Discard could not be confirmed.'
-              : draft?.status === 'unconfirmed'
-                ? 'The last save could not be confirmed.'
-                : draft?.status === 'failed'
-                  ? 'The server could not save this draft.'
-                  : undefined,
-        failed,
-        action: deletePending() ? 'retry-discard' : 'retry',
-        canKeepEditing: deletePending(),
-      };
-    }
+    const availability = options.drafts.syncAvailability?.() ?? 'ready';
+    if (disk !== 'failed' && availability !== 'ready')
+      return unavailableState(!!draft, availability);
+    // Saving is silent; only failures that need the user surface here.
+    if (!failed) return;
+    return failureState(disk, draft?.status);
   });
   const run = async (action: () => Promise<unknown>) => {
     if (busy()) return;
     setBusy(true);
     setActionError(undefined);
     try {
+      await options.drafts.recoverSynchronization?.();
       await action();
       await refetch();
     } catch (error) {
@@ -124,18 +130,21 @@ export function createDraftSyncStatus(options: {
         ? 'Unable to read local draft status. Retry to check the saved draft.'
         : undefined),
     retry: () => {
-      void run(
-        saved.error
-          ? async () => {
-              await refetch();
-            }
-          : deletePending()
-            ? options.discard
-            : options.retry
+      fireAndForget(
+        run(
+          saved.error
+            ? async () => {
+                await refetch();
+              }
+            : deletePending()
+              ? options.discard
+              : options.retry
+        ),
+        'email-compose'
       );
     },
     keepEditing: () => {
-      void run(options.retry);
+      fireAndForget(run(options.retry), 'email-compose');
     },
   };
 }

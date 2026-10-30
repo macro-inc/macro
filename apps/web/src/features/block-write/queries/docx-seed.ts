@@ -25,13 +25,10 @@ export async function buildSeedSnapshot(
     writeCollabState(doc, state);
     return doc.export({ mode: 'snapshot' });
   } finally {
-    const settleCloseDocument = async () => {
-      try {
-        return await closeDocument(key);
-      } catch {
-        return;
-      }
-    };
-    await settleCloseDocument();
+    try {
+      await closeDocument(key);
+    } catch {
+      // The worker may already be gone; there is nothing left to release.
+    }
   }
 }

@@ -92,6 +92,9 @@ export function EmailParticipants() {
           <EmailUserTooltip
             recipient={{ email: participant().email, name: participant().name }}
             photoUrl={participant().photoUrl}
+            // A flex trigger keeps the pill off the text baseline, which an
+            // initials avatar would otherwise lower.
+            triggerClass="flex"
           >
             <Badge
               role="listitem"
@@ -115,9 +118,8 @@ export function EmailParticipants() {
       </Key>
       <Show when={hiddenCount() > 0}>
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
-          noTouchResize
           onClick={() => setExpanded((v) => !v)}
           class={badgeTriggerClasses({
             variant: 'outline',

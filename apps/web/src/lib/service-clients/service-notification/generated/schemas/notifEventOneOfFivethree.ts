@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { AgentSessionMentionedMetadata } from './agentSessionMentionedMetadata';
+import type { GithubPrReview } from './githubPrReview';
 import type { NotifEventOneOfFivethreeTag } from './notifEventOneOfFivethreeTag';
 
 /**
- * The user was named in a prompt to an agent session.
+ * A review was submitted on the user's GitHub pull request.
  */
 export type NotifEventOneOfFivethree = {
-  /** The user was named in a prompt to an agent session. */
-  content: AgentSessionMentionedMetadata;
+  /** A review was submitted on the user's GitHub pull request. */
+  content: GithubPrReview;
   tag: NotifEventOneOfFivethreeTag;
 };

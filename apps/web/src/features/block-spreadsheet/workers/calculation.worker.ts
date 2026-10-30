@@ -34,6 +34,7 @@ function sameResult(left: CalculatedCell, right: CalculatedCell) {
     left.number === right.number &&
     left.error === right.error &&
     left.warning === right.warning &&
+    left.date === right.date &&
     left.type === right.type &&
     left.value === right.value &&
     left.spill?.rows === right.spill?.rows &&
@@ -58,7 +59,7 @@ function updateWorkbook(
   let replacedInputs = false;
   for (const { changes: delta, cells, ...sheet } of sheets) {
     if (cells || !inputs.has(sheet.id)) replacedInputs = true;
-    const current = buildCurrent(cells, sheet);
+    const current = currentCells(cells, sheet);
     for (const [address, input] of Object.entries(delta ?? {})) {
       if (input) current[address] = input;
       else delete current[address];
@@ -68,13 +69,16 @@ function updateWorkbook(
   }
   inputs = next;
   const structure = JSON.stringify(
-    [...inputs.values()].map(({ id, name, rowCount, metadata, pivots }) => [
-      id,
-      name,
-      rowCount,
-      metadata ?? null,
-      pivots ?? null,
-    ])
+    [...inputs.values()].map(
+      ({ id, name, rowCount, metadata, pivots, tables }) => [
+        id,
+        name,
+        rowCount,
+        metadata ?? null,
+        pivots ?? null,
+        tables ?? null,
+      ]
+    )
   );
   session ??= engine.session();
   if (!replacedInputs && structure === loaded) {
@@ -97,6 +101,7 @@ function updateWorkbook(
       rowCount: sheet.rowCount,
       metadata: sheet.metadata,
       pivots: sheet.pivots,
+      tables: sheet.tables ?? [],
     })),
     { includeTypes: true }
   );
@@ -121,7 +126,7 @@ function updateWorkbook(
   previous = results;
   return { id, type: 'update-workbook', values, replaced };
 
-  function buildCurrent(
+  function currentCells(
     cells: CalculationCells | undefined,
     sheet: {
       id: string;
@@ -152,6 +157,11 @@ self.onmessage = async (event: MessageEvent<CalculationRequest>) => {
         id: operation.id,
         type: 'change-axis',
         sheets: engine.changeAxis(operation.sheets, operation.change),
+      }))
+      .with({ type: 'move-range' }, (operation) => ({
+        id: operation.id,
+        type: 'move-range',
+        sheets: engine.moveRange(operation.sheets, operation.move),
       }))
       .with({ type: 'calculate' }, (operation) => ({
         id: operation.id,
@@ -192,7 +202,14 @@ self.onmessage = async (event: MessageEvent<CalculationRequest>) => {
               message: 'Calculate the sheet before using Goal Seek.',
             }),
       }))
-      .exhaustive();
+      .exhaustive((unknown) => {
+        console.warn('calculation worker: unknown request', unknown);
+        return {
+          id: request.id,
+          type: 'error',
+          message: 'Unknown calculation request.',
+        };
+      });
   } catch (error) {
     response = {
       id: request.id,

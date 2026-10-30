@@ -6,14 +6,14 @@ mod test;
 use crate::domain::{
     auth::{CrmCompanyReceipt, CrmContactReceipt, CrmTeamReceipt},
     companies_repo::{CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor},
-    company_metadata_resolver::CompanyMetadataResolver,
+    company_metadata_resolver::{CompanyMetadataResolver, DomainResolution},
     generic_email_domains::is_generic_email_domain,
     model::{
         CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck,
         CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
     },
 };
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use entity_access::domain::models::{EditAccessLevel, MemberTeamRole, ViewAccessLevel};
 
 /// The CrmService exposes operations over CRM records (companies, their
@@ -27,6 +27,20 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         access: Option<&CrmTeamReceipt<MemberTeamRole>>,
         query: super::contact_listing::CrmContactListQuery,
     ) -> impl Future<Output = Result<Vec<super::contact_listing::CrmContactForSoup>, CrmError>> + Send;
+
+    /// Authorize `record` for the viewer and resolve the records whose
+    /// properties and references make an item associated with it: a company
+    /// with every contact the viewer may see, or a single contact. Scoped
+    /// like [`Self::list_contacts_for_soup`]; a record the viewer cannot see
+    /// is reported as not found. Activity resolves all visible records across
+    /// CRM-enabled teams without hidden rows or contact-email deduplication;
+    /// team-scoped bot receipts limit it to their verified team.
+    fn resolve_association(
+        &self,
+        user_id: &str,
+        access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        record: super::association::CrmAssociation,
+    ) -> impl Future<Output = Result<super::association::CrmRecordAssociation, CrmError>> + Send;
 
     /// Idempotently records that `email` was seen from the mailbox
     /// identified by `link_id`, for the team `team_id`. Upserts
@@ -53,10 +67,12 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// `crm_domain_directory` has an entry for the email's domain — if
     /// not, it invokes the
     /// [`crate::domain::company_metadata_resolver::CompanyMetadataResolver`]
-    /// and inserts the result (which may be all-NULL on resolver
-    /// failure — that's the negative cache). The directory write is its
-    /// own transaction so the populate tx never holds locks across an
-    /// HTTP fetch.
+    /// and inserts the result (which may be all-NULL when the provider
+    /// knows nothing about the domain — that's the negative cache), or a
+    /// pending entry for [`CrmServiceImpl::enrich_pending_domains`] when
+    /// the resolver is unavailable. The directory write is its own
+    /// transaction so the populate tx never holds locks across an HTTP
+    /// fetch.
     ///
     /// `first_at` / `last_at` are the contact's known activity range
     /// for this populate. Per-message paths pass the message's
@@ -173,7 +189,9 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// Like populate, ensures `crm_domain_directory` has an entry for
     /// the domain (resolving via the
     /// [`crate::domain::company_metadata_resolver::CompanyMetadataResolver`]
-    /// on a miss) so the company still picks up icon/description
+    /// on a miss, or leaving it pending for
+    /// [`CrmServiceImpl::enrich_pending_domains`] when the binary has no
+    /// resolver) so the company still picks up icon/description
     /// enrichment; the user's `name` is stored on `crm_companies.custom_name`
     /// (never in the shared directory — it's global across teams) and
     /// overrides the directory name on every read path.
@@ -398,6 +416,37 @@ const MAX_EMAIL_CHARS: usize = 320;
 /// enough for the Quick Access feed of a team's recent contacts.
 pub const MAX_CONTACT_SEARCH_LIMIT: u16 = 500;
 
+/// The records a viewer-scoped CRM read covers: every enabled team the
+/// viewer belongs to, or the single team of a verified team-scoped bot
+/// receipt. A receipt for another viewer is rejected.
+fn viewer_scope<'a>(
+    user_id: &'a str,
+    access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+) -> Result<super::contact_listing::CrmContactListScope<'a>, CrmError> {
+    use super::contact_listing::CrmContactListScope;
+    use entity_access::domain::models::{BotReceiptScope, EntityAccessAuth};
+    match access.map(|access| (access, access.receipt().auth())) {
+        Some((access, EntityAccessAuth::Bot(bot))) => match bot.scope() {
+            BotReceiptScope::Team { team_id } if *team_id == access.team_id() => {
+                Ok(CrmContactListScope::Team {
+                    team_id: *team_id,
+                    include_hidden: access.include_hidden(),
+                })
+            }
+            BotReceiptScope::User { acting_user } if acting_user.as_ref() == user_id => {
+                Ok(CrmContactListScope::Viewer(user_id))
+            }
+            _ => Err(CrmError::InvalidRequest(
+                "contact listing scope mismatch".into(),
+            )),
+        },
+        Some((_, EntityAccessAuth::Authenticated(user))) if user.as_ref() != user_id => Err(
+            CrmError::InvalidRequest("contact listing viewer mismatch".into()),
+        ),
+        _ => Ok(CrmContactListScope::Viewer(user_id)),
+    }
+}
+
 /// Validates a user-supplied display name: trims whitespace; must be
 /// non-blank and within [`MAX_DISPLAY_NAME_CHARS`].
 fn validate_display_name(raw: &str) -> Result<&str, CrmError> {
@@ -473,9 +522,10 @@ where
 {
     /// The underlying companies repository
     companies_repository: CR,
-    /// Resolver consulted only when `crm_domain_directory` has no entry
-    /// for a given domain. The resolver itself is best-effort — its
-    /// failures collapse to a negative-cache row in the directory.
+    /// Resolver consulted when `crm_domain_directory` has no entry for a
+    /// given domain, and for pending entries in
+    /// [`CrmServiceImpl::enrich_pending_domains`]. The resolver itself is
+    /// best-effort — when it is unavailable the entry stays pending.
     metadata_resolver: R,
 }
 
@@ -504,7 +554,100 @@ where
             metadata_resolver,
         }
     }
+
+    /// Resolves one batch of pending `crm_domain_directory` entries
+    /// whose domain some team still tracks, and returns how many were
+    /// claimed. Each entry gets at most [`MAX_ENRICHMENT_ATTEMPTS`]
+    /// attempts, spaced [`ENRICHMENT_RETRY_AFTER`] apart; an entry the
+    /// resolver keeps failing on stays pending (read paths show the
+    /// domain) and is not claimed again. Team-scoped
+    /// `crm_companies.custom_name` overrides are never touched — they win
+    /// over the directory name on every read path.
+    ///
+    /// Only meaningful with a real resolver: with
+    /// [`crate::outbound::no_op_resolver::NoOpCompanyMetadataResolver`]
+    /// every claim would burn an attempt.
+    #[tracing::instrument(
+        name = "crm.enrich_pending_domains",
+        skip(self),
+        fields(claimed, resolved),
+        err
+    )]
+    pub async fn enrich_pending_domains(&self) -> Result<usize, CrmError> {
+        let domains = self
+            .companies_repository
+            .claim_pending_domains(
+                ENRICHMENT_BATCH_SIZE,
+                MAX_ENRICHMENT_ATTEMPTS,
+                Utc::now() - ENRICHMENT_RETRY_AFTER,
+            )
+            .await?;
+
+        let mut resolved = 0;
+        for domain in &domains {
+            let DomainResolution::Resolved(metadata) = self.metadata_resolver.resolve(domain).await
+            else {
+                continue;
+            };
+            // One failed write leaves that entry pending for a later
+            // attempt; it must not drop the rest of the batch.
+            if self
+                .companies_repository
+                .upsert_domain_metadata(domain, &metadata)
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(?error, domain, "failed to store enriched domain metadata")
+                })
+                .is_ok()
+            {
+                resolved += 1;
+            }
+        }
+
+        let span = tracing::Span::current();
+        span.record("claimed", domains.len());
+        span.record("resolved", resolved);
+        Ok(domains.len())
+    }
+
+    /// Ensures `crm_domain_directory` has an entry for `domain`: resolves
+    /// it when the domain has none, storing a pending entry instead when
+    /// the resolver is unavailable.
+    async fn ensure_domain_directory_entry(&self, domain: &str) -> Result<(), CrmError> {
+        if self
+            .companies_repository
+            .lookup_domain_metadata(domain)
+            .await?
+            .is_some()
+        {
+            return Ok(());
+        }
+        match self.metadata_resolver.resolve(domain).await {
+            DomainResolution::Resolved(metadata) => {
+                self.companies_repository
+                    .upsert_domain_metadata(domain, &metadata)
+                    .await
+            }
+            DomainResolution::Unavailable => {
+                self.companies_repository
+                    .insert_pending_domain(domain)
+                    .await
+            }
+        }
+    }
 }
+
+/// Pending directory entries one [`CrmServiceImpl::enrich_pending_domains`]
+/// pass claims. Passes run on a fixed interval, so this caps the resolver
+/// (Apollo) call rate.
+const ENRICHMENT_BATCH_SIZE: i64 = 10;
+
+/// Enrichment attempts after which a pending directory entry is left alone.
+const MAX_ENRICHMENT_ATTEMPTS: i16 = 5;
+
+/// Minimum gap between enrichment attempts for one directory entry; also
+/// how long a claim by a worker that died mid-batch blocks other workers.
+const ENRICHMENT_RETRY_AFTER: TimeDelta = TimeDelta::hours(6);
 
 impl<CR, R> CrmService for CrmServiceImpl<CR, R>
 where
@@ -584,17 +727,8 @@ where
         // directory entry was written when its first sent message
         // populated; if it isn't tracked, this call will no-op in the
         // repo anyway.
-        if is_sent
-            && self
-                .companies_repository
-                .lookup_domain_metadata(domain)
-                .await?
-                .is_none()
-        {
-            let metadata = self.metadata_resolver.resolve(domain).await;
-            self.companies_repository
-                .upsert_domain_metadata(domain, &metadata)
-                .await?;
+        if is_sent {
+            self.ensure_domain_directory_entry(domain).await?;
         }
 
         self.companies_repository
@@ -682,17 +816,7 @@ where
         // domain so icon/description enrichment resolves. The user's
         // name never goes here — the directory is global across teams;
         // it lands on `crm_companies.custom_name` in the repo instead.
-        if self
-            .companies_repository
-            .lookup_domain_metadata(&domain)
-            .await?
-            .is_none()
-        {
-            let metadata = self.metadata_resolver.resolve(&domain).await;
-            self.companies_repository
-                .upsert_domain_metadata(&domain, &metadata)
-                .await?;
-        }
+        self.ensure_domain_directory_entry(&domain).await?;
 
         self.companies_repository
             .create_company_for_team(&access.team_id(), &domain, name, Utc::now())
@@ -819,36 +943,35 @@ where
         access: Option<&CrmTeamReceipt<MemberTeamRole>>,
         mut query: super::contact_listing::CrmContactListQuery,
     ) -> Result<Vec<super::contact_listing::CrmContactForSoup>, CrmError> {
-        use super::contact_listing::CrmContactListScope;
-        use entity_access::domain::models::{BotReceiptScope, EntityAccessAuth};
-        let scope = match access.map(|access| (access, access.receipt().auth())) {
-            Some((access, EntityAccessAuth::Bot(bot))) => match bot.scope() {
-                BotReceiptScope::Team { team_id } if *team_id == access.team_id() => {
-                    CrmContactListScope::Team {
-                        team_id: *team_id,
-                        include_hidden: access.include_hidden(),
-                    }
-                }
-                BotReceiptScope::User { acting_user } if acting_user.as_ref() == user_id => {
-                    CrmContactListScope::Viewer(user_id)
-                }
-                _ => {
-                    return Err(CrmError::InvalidRequest(
-                        "contact listing scope mismatch".into(),
-                    ));
-                }
-            },
-            Some((_, EntityAccessAuth::Authenticated(user))) if user.as_ref() != user_id => {
-                return Err(CrmError::InvalidRequest(
-                    "contact listing viewer mismatch".into(),
-                ));
-            }
-            _ => CrmContactListScope::Viewer(user_id),
-        };
+        let scope = viewer_scope(user_id, access)?;
         query.limit = query.limit.clamp(1, MAX_CONTACT_SEARCH_LIMIT);
         self.companies_repository
             .list_contacts_for_soup(scope, user_id, &query)
             .await
+    }
+
+    #[tracing::instrument(skip(self, access), err)]
+    async fn resolve_association(
+        &self,
+        user_id: &str,
+        access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        record: super::association::CrmAssociation,
+    ) -> Result<super::association::CrmRecordAssociation, CrmError> {
+        use super::association::CrmAssociation;
+        let scope = viewer_scope(user_id, access)?;
+        if record == CrmAssociation::Activity {
+            return self.companies_repository.resolve_activity(scope).await;
+        }
+        self.companies_repository
+            .resolve_association(scope, record)
+            .await?
+            .ok_or(match record {
+                CrmAssociation::Company(_) => CrmError::CompanyNotFoundForTeam,
+                CrmAssociation::Contact(_) => CrmError::ContactNotFoundForTeam,
+                CrmAssociation::Activity => {
+                    CrmError::InvalidRequest("activity scope unavailable".into())
+                }
+            })
     }
 
     #[tracing::instrument(skip(self, access), err)]
@@ -1013,6 +1136,22 @@ impl CrmService for NoOpCrmService {
         _query: super::contact_listing::CrmContactListQuery,
     ) -> Result<Vec<super::contact_listing::CrmContactForSoup>, CrmError> {
         Ok(vec![])
+    }
+
+    async fn resolve_association(
+        &self,
+        _user_id: &str,
+        _access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        record: super::association::CrmAssociation,
+    ) -> Result<super::association::CrmRecordAssociation, CrmError> {
+        use super::association::CrmAssociation;
+        Err(match record {
+            CrmAssociation::Company(_) => CrmError::CompanyNotFoundForTeam,
+            CrmAssociation::Contact(_) => CrmError::ContactNotFoundForTeam,
+            CrmAssociation::Activity => {
+                CrmError::InvalidRequest("activity scope unavailable".into())
+            }
+        })
     }
 
     async fn populate_contact(

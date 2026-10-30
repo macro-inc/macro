@@ -4,14 +4,14 @@ false && internalDrag;
 
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import Spinner from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
+import ExpandIcon from '@icon/system/regular/arrows-out-simple.svg';
+import ClipboardIcon from '@icon/system/regular/clipboard.svg';
+import ThreeDotsIcon from '@icon/system/regular/dots-three-vertical.svg';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { constrainImageDimensions } from '@macro-inc/lexical-core/utils/media';
-import ExpandIcon from '@phosphor/arrows-out-simple.svg';
-import ClipboardIcon from '@phosphor/clipboard.svg';
-import ThreeDotsIcon from '@phosphor/dots-three-vertical.svg';
-import DownloadIcon from '@phosphor/download-simple.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import { Button, cn, Dropdown } from '@ui';
 import { type Component, createSignal, For, Show } from 'solid-js';
 import { copyImageToClipboard, downloadImage } from '../util/imageActions';
@@ -47,6 +47,11 @@ const THEMES = {
 };
 
 /** Max dimensions for gallery image thumbnails */
+async function fetchImageBlob(url: string): Promise<Blob> {
+  const response = await platformFetch(url);
+  return response.blob();
+}
+
 const GALLERY_MAX_WIDTH = 200;
 const GALLERY_MAX_HEIGHT = 200;
 
@@ -104,27 +109,11 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
   // Thumbnail menu actions (operate on a specific image by ID)
   const copyToClipboardById = (id: string) => {
     const url = getImageUrl(id);
-    return copyImageToClipboard(() => {
-      const settlePlatformFetch = async () => {
-        const settlePlatformFetchValue = await platformFetch(url);
-        const r = settlePlatformFetchValue;
-        return await r.blob();
-      };
-      return settlePlatformFetch();
-    }, url);
+    return copyImageToClipboard(() => fetchImageBlob(url), url);
   };
 
   const downloadImageById = (id: string) =>
-    downloadImage(() => {
-      const settlePlatformFetchResult = async () => {
-        const settlePlatformFetchResultValue = await platformFetch(
-          getImageUrl(id)
-        );
-        const r = settlePlatformFetchResultValue;
-        return await r.blob();
-      };
-      return settlePlatformFetchResult();
-    }, id);
+    downloadImage(() => fetchImageBlob(getImageUrl(id)), id);
 
   return (
     <Dialog
@@ -146,7 +135,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                       disabled={props.isContext}
                     >
                       <Button variant="ghost" size="icon-md">
-                        <ExpandIcon />
+                        <ExpandIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                       </Button>
                     </Dialog.Trigger>
                     <Dropdown>
@@ -155,7 +144,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                         size="icon-md"
                         disabled={props.isContext}
                       >
-                        <ThreeDotsIcon />
+                        <ThreeDotsIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                       </Dropdown.Trigger>
                       <Dropdown.Content>
                         <Dropdown.Group>

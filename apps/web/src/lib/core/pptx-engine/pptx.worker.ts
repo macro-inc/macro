@@ -112,7 +112,9 @@ async function recover() {
           .with({ kind: 'applyCollab' }, ({ changes }) =>
             doc.applyCollab(changes)
           )
-          .exhaustive();
+          .exhaustive(() => {
+            throw new Error('Unknown change log entry');
+          });
       }
       open.doc = doc;
     } catch {
@@ -438,29 +440,28 @@ async function serve(
         Transferable[],
       ];
     })
-    .exhaustive();
+    .exhaustive((unknown): [PptxResponse, Transferable[]] => {
+      console.warn('pptx worker: unknown request', unknown);
+      return [{ id, ok: false, error: 'Unknown presentation request.' }, []];
+    });
 }
 
 scope.addEventListener('message', (event: MessageEvent<PptxRequest>) => {
   const request = event.data;
 
-  const settleQueue = async () => {
+  const serveAfterQueued = async () => {
     await queue;
-
     try {
       const [response, transfer] = await serve(request);
       scope.postMessage(response, transfer);
     } catch (error) {
       let message = error instanceof Error ? error.message : String(error);
       if (isWasmTrap(error)) {
-        const settleRecover = async () => {
-          try {
-            return await recover();
-          } catch {
-            return;
-          }
-        };
-        await settleRecover();
+        try {
+          await recover();
+        } catch {
+          // The message below still tells the caller what happened.
+        }
         message =
           'The presentation engine hit a problem with this request and was restarted. Your changes are kept.';
       }
@@ -471,8 +472,6 @@ scope.addEventListener('message', (event: MessageEvent<PptxRequest>) => {
       };
       scope.postMessage(response);
     }
-
-    return;
   };
-  queue = settleQueue();
+  queue = serveAfterQueued();
 });

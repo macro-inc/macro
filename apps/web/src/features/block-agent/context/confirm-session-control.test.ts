@@ -53,17 +53,10 @@ describe('confirmed session controls', () => {
   it('waits past HTTP acceptance and unrelated actions for the correlated runtime outcome', async () => {
     const test = session();
     const done = vi.fn();
-    const settleConfirmSessionControlHandler0 = done;
-    const settleConfirmSessionControl = async () => {
-      const settleConfirmSessionControlValue = await confirmSessionControl(
-        test.value,
-        action
-      );
-      return await settleConfirmSessionControlHandler0(
-        settleConfirmSessionControlValue
-      );
+    const confirm = async () => {
+      done(await confirmSessionControl(test.value, action));
     };
-    const result = settleConfirmSessionControl();
+    const result = confirm();
     await flush();
     expect(done).not.toHaveBeenCalled();
     test.outcome('accepted', 'another-action');

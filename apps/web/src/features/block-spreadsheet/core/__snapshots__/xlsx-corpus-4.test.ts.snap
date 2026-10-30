@@ -88,22 +88,18 @@ exports[`real-world XLSX corpus > gsa-per-diem-rates-fy2026-master.xlsx 1`] = `
 exports[`real-world XLSX corpus > ironcalc-tables-structured-references.x… 1`] = `
 {
   "calculation": {
-    "compared": 201,
-    "matched": 192,
-    "mismatchedFunctions": {
-      "SUBTOTAL": 9,
-    },
+    "compared": 208,
+    "matched": 208,
+    "mismatchedFunctions": {},
     "volatile": 4,
   },
   "cells": 831,
-  "formulas": 205,
+  "formulas": 212,
   "roundTrip": "identical",
   "sheets": 9,
   "styledCells": 327,
   "warnings": [
-    "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
-    "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
-    "Some table references could not be converted; those formulas show their last calculated values.",
+    "Excel tables without a header row, or beyond Macro’s sheet size or table limit, are imported as ordinary cells; formulas refer to their cell ranges.",
   ],
 }
 `;
@@ -142,8 +138,6 @@ exports[`real-world XLSX corpus > libreoffice-column-style-autofilter-lin… 1`]
   "sheets": 24,
   "styledCells": 3694,
   "warnings": [
-    "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
-    "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "Pivot tables over other workbooks or data connections show their last values in Macro; the download keeps them with the data Excel saved, to refresh in Excel.",
     "Some pivot tables over other workbooks or data connections are downloaded without the data Excel saved with them; Excel fills them again when they refresh.",
   ],
@@ -210,8 +204,6 @@ exports[`real-world XLSX corpus > packt365-dynamic-array-functions-workbo… 1`]
   "styledCells": 1411,
   "warnings": [
     "Dynamic array formulas are recalculated by Macro; cached spill values are discarded and their cell formatting is retained.",
-    "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
-    "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "External workbook links are not supported; formulas that use them keep their last calculated values.",
     "Linked data types and pictures in cells are imported as their displayed values.",
     "Names that refer to other workbooks are not imported.",
@@ -254,8 +246,7 @@ exports[`real-world XLSX corpus > poi-conditional-formatting-samples.xlsx 1`] = 
   "sheets": 18,
   "styledCells": 1838,
   "warnings": [
-    "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
-    "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
+    "Excel table filters other than lists of values and conditions are imported as hidden rows.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
     "Rich text is imported as plain text with the cell’s formatting.",
     "Text number formats on numeric, boolean, date or formula cells are reset to preserve the original value types.",
@@ -266,23 +257,21 @@ exports[`real-world XLSX corpus > poi-conditional-formatting-samples.xlsx 1`] = 
 exports[`real-world XLSX corpus > zenodo-offshore-wind-lcoe-dcf-model.xlsx 1`] = `
 {
   "calculation": {
-    "compared": 4000,
-    "matched": 4000,
+    "compared": 4006,
+    "matched": 4006,
     "mismatchedFunctions": {},
     "volatile": 0,
   },
   "cells": 5012,
-  "formulas": 4000,
+  "formulas": 4006,
   "roundTrip": "identical",
   "sheets": 9,
   "styledCells": 6665,
   "warnings": [
-    "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
     "Hyperlinks are imported as display text; link targets are not retained.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
     "Rich text is imported as plain text with the cell’s formatting.",
-    "Some table references could not be converted; those formulas show their last calculated values.",
   ],
 }
 `;

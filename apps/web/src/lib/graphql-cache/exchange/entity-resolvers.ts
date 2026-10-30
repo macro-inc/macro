@@ -150,7 +150,7 @@ export function compileEntityResolvers(
         throw configError(`${parentType}.${fieldName} must be a descriptor`);
       }
       const descriptorKeys = Object.keys(descriptor).sort();
-      updateCompileEntityResolvers(descriptorKeys, parentType, fieldName);
+      assertResolverDescriptorKeys(descriptorKeys, parentType, fieldName);
       if (descriptor.kind !== 'entity-from-argument') {
         throw configError(
           `${parentType}.${fieldName} has unsupported resolver kind`
@@ -201,7 +201,7 @@ export function compileEntityResolvers(
   }
   return Object.freeze(compiled);
 
-  function updateCompileEntityResolvers(
+  function assertResolverDescriptorKeys(
     descriptorKeys: string[],
     parentType: string,
     fieldName: string

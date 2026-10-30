@@ -167,7 +167,8 @@ fn archived_event() -> CallTopicEvent {
         started_at: Utc::now(),
         ended_at: Utc::now(),
         duration_ms: Some(1_000),
-        participant_count: 2,
+        participant_count: 1,
+        participants: vec![user_id()],
         has_recording: true,
         archive_reason: CallArchiveReason::LastParticipantLeft,
     })
@@ -1616,7 +1617,10 @@ fn email_envelope_decodes_round_trip() {
 
 #[test]
 fn agent_session_lifecycle_decodes_and_routes_by_session() {
-    use ::agent_session::domain::{events::*, model::AgentSessionId};
+    use ::agent_session::domain::{
+        events::*,
+        model::{AgentSessionId, SessionSource},
+    };
     use macro_event_topics::MacroAgentSessionLifecycleTopic;
 
     let id = AgentSessionId::new_from_uuid(Uuid::from_u128(10));
@@ -1628,6 +1632,7 @@ fn agent_session_lifecycle_decodes_and_routes_by_session() {
         owner_id: user_id(),
         origin: None,
         audience: vec![],
+        source: SessionSource::User,
     };
     for event in [
         AgentSessionLifecycleEvent::Renamed(SessionRenamedMetadata {

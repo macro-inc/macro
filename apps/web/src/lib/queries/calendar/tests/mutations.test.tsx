@@ -8,21 +8,34 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { invalidateInvitationScheduling } from '../invitations';
 import { calendarKeys } from '../keys';
 import {
+  isGuestInviteRefused,
   useDeleteCalendarEventMutation,
+  useInviteCalendarEventGuestsMutation,
   useRsvpCalendarEventMutation,
   useUpdateCalendarEventMutation,
 } from '../mutations';
 import type { CalendarOccurrencesData } from '../occurrences';
 
+/** Settles with `mutation`, ignoring a rejection the test does not assert on. */
+async function settled(mutation: Promise<unknown>): Promise<void> {
+  try {
+    await mutation;
+  } catch {
+    /* These tests assert the cache, not the earlier mutation's outcome. */
+  }
+}
+
 const rsvpCalendarEventMock = vi.hoisted(() => vi.fn());
 const deleteCalendarEventMock = vi.hoisted(() => vi.fn());
 const updateCalendarEventMock = vi.hoisted(() => vi.fn());
+const inviteCalendarEventGuestsMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@service-email/client', () => ({
   emailClient: {
     rsvpCalendarEvent: rsvpCalendarEventMock,
     deleteCalendarEvent: deleteCalendarEventMock,
     updateCalendarEvent: updateCalendarEventMock,
+    inviteCalendarEventGuests: inviteCalendarEventGuestsMock,
   },
 }));
 
@@ -388,17 +401,12 @@ describe('useRsvpCalendarEventMutation', () => {
       .mockReturnValueOnce(second.promise);
     const rsvp = renderHook(() => useRsvpCalendarEventMutation());
 
-    const settleMutateAsync = async () => {
-      try {
-        return await rsvp.mutateAsync({
-          eventId: 'event-1',
-          response: 'accepted',
-        });
-      } catch {
-        return;
-      }
-    };
-    const firstMutation = settleMutateAsync();
+    const firstMutation = settled(
+      rsvp.mutateAsync({
+        eventId: 'event-1',
+        response: 'accepted',
+      })
+    );
     await vi.waitFor(() => expect(selfStatus()).toBe('accepted'));
 
     const secondMutation = rsvp.mutateAsync({
@@ -424,17 +432,12 @@ describe('useRsvpCalendarEventMutation', () => {
       .mockReturnValueOnce(second.promise);
     const rsvp = renderHook(() => useRsvpCalendarEventMutation());
 
-    const settleMutateAsyncResult = async () => {
-      try {
-        return await rsvp.mutateAsync({
-          eventId: 'event-1',
-          response: 'accepted',
-        });
-      } catch {
-        return;
-      }
-    };
-    const firstMutation = settleMutateAsyncResult();
+    const firstMutation = settled(
+      rsvp.mutateAsync({
+        eventId: 'event-1',
+        response: 'accepted',
+      })
+    );
     await vi.waitFor(() => expect(selfStatus()).toBe('accepted'));
 
     // The second answer picks the same response, so equal cache values
@@ -466,18 +469,13 @@ describe('useRsvpCalendarEventMutation', () => {
       .mockReturnValueOnce(second.promise);
     const rsvp = renderHook(() => useRsvpCalendarEventMutation());
 
-    const settleMutateAsyncResultResult = async () => {
-      try {
-        return await rsvp.mutateAsync({
-          eventId: 'event-3',
-          response: 'tentative',
-          scope: 'all',
-        });
-      } catch {
-        return;
-      }
-    };
-    const firstMutation = settleMutateAsyncResultResult();
+    const firstMutation = settled(
+      rsvp.mutateAsync({
+        eventId: 'event-3',
+        response: 'tentative',
+        scope: 'all',
+      })
+    );
     await vi.waitFor(() => expect(responseAt(seriesKeys[0])).toBe('tentative'));
 
     const secondMutation = rsvp.mutateAsync({
@@ -731,6 +729,147 @@ describe('useUpdateCalendarEventMutation', () => {
   });
 });
 
+describe('useInviteCalendarEventGuestsMutation', () => {
+  const attendeesOf = (eventId: string, range = viewportA) =>
+    viewportData(range)?.items.find((item) => item.event.id === eventId)?.event
+      .attendees;
+
+  it('shows the new guests as unanswered on every viewport while the request is in flight', async () => {
+    const pending = deferredResult();
+    inviteCalendarEventGuestsMock.mockReturnValue(pending.promise);
+    const invite = renderHook(() => useInviteCalendarEventGuestsMutation());
+
+    const sent = invite.mutateAsync({
+      eventId: 'event-1',
+      guests: [
+        { email: 'dana@example.com', optional: true },
+        { email: 'Other@example.com' },
+      ],
+    });
+    await vi.waitFor(() =>
+      expect(inviteCalendarEventGuestsMock).toHaveBeenCalled()
+    );
+
+    for (const range of [viewportA, viewportB]) {
+      expect(attendeesOf('event-1', range)).toEqual([
+        {
+          email: 'self@example.com',
+          isSelf: true,
+          responseStatus: 'needs_action',
+        },
+        {
+          email: 'other@example.com',
+          isSelf: false,
+          responseStatus: 'declined',
+        },
+        {
+          email: 'dana@example.com',
+          responseStatus: 'needs_action',
+          isOrganizer: false,
+          isOptional: true,
+          isSelf: false,
+        },
+      ]);
+    }
+    expect(inviteCalendarEventGuestsMock).toHaveBeenCalledWith('event-1', {
+      calendarId: undefined,
+      guests: [
+        { email: 'dana@example.com', optional: true },
+        { email: 'Other@example.com' },
+      ],
+      scope: undefined,
+      recurrenceId: undefined,
+    });
+    pending.resolve(ok({ id: 'event-1' }));
+    expect(await sent).toBe('sent');
+  });
+
+  it('adds guests to the targeted occurrence alone', async () => {
+    const keys = ['2026-08-04T09:00:00Z', '2026-08-05T09:00:00Z'];
+    const occurrence = (key: string): CalendarOccurrenceItem =>
+      ({
+        event: {
+          id: 'event-4',
+          recurrenceLines: ['RRULE:FREQ=DAILY'],
+          time: { kind: 'timed', startsAt: key, endsAt: key },
+          attendees: [],
+        },
+        occurrence: {
+          eventId: 'event-4',
+          occurrenceKey: key,
+          recurrenceId: key,
+          time: { kind: 'timed', startsAt: key, endsAt: key },
+        },
+      }) as unknown as CalendarOccurrenceItem;
+    testQueryClient.setQueryData(
+      calendarKeys.occurrences('user', viewportA).queryKey,
+      { items: keys.map(occurrence), syncStatus: 'ready' }
+    );
+    inviteCalendarEventGuestsMock.mockResolvedValue(ok({ id: 'event-4' }));
+    const invite = renderHook(() => useInviteCalendarEventGuestsMutation());
+    const emailsAt = (key: string) =>
+      viewportData(viewportA)
+        ?.items.find((item) => item.occurrence.occurrenceKey === key)
+        ?.event.attendees.map((attendee) => attendee.email);
+
+    await invite.mutateAsync({
+      eventId: 'event-4',
+      guests: [{ email: 'dana@example.com' }],
+      scope: 'this_event',
+      recurrenceId: keys[1],
+      occurrenceKey: keys[1],
+    });
+
+    expect(emailsAt(keys[0])).toEqual([]);
+    expect(emailsAt(keys[1])).toEqual(['dana@example.com']);
+  });
+
+  it('removes the optimistic guests when the organizer does not allow inviting', async () => {
+    inviteCalendarEventGuestsMock.mockResolvedValue(
+      err([
+        {
+          code: 'guests_cannot_invite' as const,
+          message: 'Only the organizer can invite guests.',
+        },
+      ])
+    );
+    const invite = renderHook(() => useInviteCalendarEventGuestsMutation());
+
+    let error: unknown;
+    try {
+      await invite.mutateAsync({
+        eventId: 'event-1',
+        guests: [{ email: 'dana@example.com' }],
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(isGuestInviteRefused(error)).toBe(true);
+    expect(attendeesOf('event-1')?.map((attendee) => attendee.email)).toEqual([
+      'self@example.com',
+      'other@example.com',
+    ]);
+  });
+
+  it('does not read other failures as a refusal', async () => {
+    inviteCalendarEventGuestsMock.mockResolvedValue(failure());
+    const invite = renderHook(() => useInviteCalendarEventGuestsMutation());
+
+    let error: unknown;
+    try {
+      await invite.mutateAsync({
+        eventId: 'event-1',
+        guests: [{ email: 'dana@example.com' }],
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(isGuestInviteRefused(error)).toBe(false);
+  });
+});
+
 it('updates and rolls back invitation projections with no calendar viewport loaded', async () => {
   testQueryClient.removeQueries({ queryKey: calendarKeys.occurrences._def });
   const item = standaloneItem();
@@ -756,17 +895,12 @@ it('updates and rolls back invitation projections with no calendar viewport load
     .mockReturnValueOnce(second.promise);
   const rsvp = renderHook(() => useRsvpCalendarEventMutation());
 
-  const settleMutateAsyncResultResultResult = async () => {
-    try {
-      return await rsvp.mutateAsync({
-        eventId: 'event-1',
-        response: 'accepted',
-      });
-    } catch {
-      return;
-    }
-  };
-  const earlier = settleMutateAsyncResultResultResult();
+  const earlier = settled(
+    rsvp.mutateAsync({
+      eventId: 'event-1',
+      response: 'accepted',
+    })
+  );
   await vi.waitFor(() => expect(response()).toBe('accepted'));
   const later = rsvp.mutateAsync({ eventId: 'event-1', response: 'tentative' });
   await vi.waitFor(() => expect(response()).toBe('tentative'));
@@ -814,18 +948,13 @@ it('binds provider writes and optimistic rollback to one address across both hos
       ?.invite.event.attendees.find((attendee) => attendee.email === email)
       ?.responseStatus;
 
-  const settleMutateAsyncResultResultResultResult = async () => {
-    try {
-      return await mutation.mutateAsync({
-        eventId: 'event-1',
-        respondingEmail: 'other@example.com',
-        response: 'accepted',
-      });
-    } catch {
-      return;
-    }
-  };
-  const firstCall = settleMutateAsyncResultResultResultResult();
+  const firstCall = settled(
+    mutation.mutateAsync({
+      eventId: 'event-1',
+      respondingEmail: 'other@example.com',
+      response: 'accepted',
+    })
+  );
   await vi.waitFor(() =>
     expect(response('other@example.com')).toBe('accepted')
   );

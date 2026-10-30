@@ -102,6 +102,20 @@ pub trait MessageCommands: Send + Sync + 'static {
         active: bool,
         nonce: Option<String>,
     ) -> Result<(), MessageError>;
+    /// Publish an agent session typing through the bot that speaks for it.
+    ///
+    /// Defaults to plain typing, which drops the session: an adapter that
+    /// cannot carry it still shows the bot typing.
+    async fn agent_typing(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        root: Option<Uuid>,
+        active: bool,
+        agent: AgentTyping,
+    ) -> Result<(), MessageError> {
+        let _ = agent;
+        self.typing(access, root, active, None).await
+    }
     /// Update entity discussion state or detach removed document Markdown text.
     async fn patch_thread(
         &self,
@@ -226,6 +240,15 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageCommands for Message
         nonce: Option<String>,
     ) -> Result<(), MessageError> {
         MessageService::typing(self, access, root, active, nonce).await
+    }
+    async fn agent_typing(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        root: Option<Uuid>,
+        active: bool,
+        agent: AgentTyping,
+    ) -> Result<(), MessageError> {
+        MessageService::agent_typing(self, access, root, active, agent).await
     }
     async fn patch_thread(
         &self,

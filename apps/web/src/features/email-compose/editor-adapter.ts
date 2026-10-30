@@ -5,6 +5,7 @@ import {
   isInlineVideoFileName,
 } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   handleFileFolderDrop,
   isFileUploadEntry,
@@ -67,22 +68,25 @@ export function createComposeBodyActions(): ComposeBodyActions {
     },
     readDroppedFiles: readDroppedEmailFiles,
     insertFiles(editor, { files, directories, dropEvent, onVideos }) {
-      handleFileFolderDrop(
-        files,
-        directories,
-        withVideoAttachments(
-          createFilesReadyHandler(
-            editor,
-            undefined,
-            undefined,
-            dropEvent
-              ? () => getDragDropPosition(editor, dropEvent, true)
-              : undefined,
-            (ids) => ids.forEach(makeAttachmentPublic),
-            { width: 542, height: 542 }
-          ),
-          onVideos
-        )
+      fireAndForget(
+        handleFileFolderDrop(
+          files,
+          directories,
+          withVideoAttachments(
+            createFilesReadyHandler(
+              editor,
+              undefined,
+              undefined,
+              dropEvent
+                ? () => getDragDropPosition(editor, dropEvent, true)
+                : undefined,
+              (ids) => ids.forEach(makeAttachmentPublic),
+              { width: 542, height: 542 }
+            ),
+            onVideos
+          )
+        ),
+        'email-compose'
       );
     },
   };

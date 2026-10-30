@@ -4,13 +4,19 @@ import { useHasPaidAccess } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
 import { enableAiUsageBilling, LOCAL_ONLY } from '@core/constant/featureFlags';
 import { PERMISSION_IDS } from '@core/constant/permissions';
-import { usePermissions, useUserId } from '@core/context/user';
+import {
+  useLicenseStatus,
+  usePermissions,
+  useUserId,
+} from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
 import {
   useAiBillingSummaryQuery,
   useChangePlanMutation,
   useCreateCheckoutSessionMutation,
   useSubscriptionStatusQuery,
+  useTrialEligibilityQuery,
 } from '@queries/auth';
 import { createBillingPortalSession } from '@queries/auth/billing-portal';
 import { queryReadyGate } from '@queries/gate';
@@ -46,6 +52,7 @@ function LiveBilling(props: { controls?: JSX.Element }) {
   const permissions = usePermissions();
   const analytics = useAnalytics();
   const hasPaid = useHasPaidAccess();
+  const licenseStatus = useLicenseStatus();
   const userId = useUserId();
   const team = useCurrentTeamQuery();
   const summary = useAiBillingSummaryQuery();
@@ -54,6 +61,9 @@ function LiveBilling(props: { controls?: JSX.Element }) {
   const checkout = useCreateCheckoutSessionMutation();
   const effectiveHasPaid = () =>
     hasPaid() || (summary.isSuccess && summary.data.tier !== 'free');
+  const trialEligibility = useTrialEligibilityQuery({
+    enabled: () => !effectiveHasPaid(),
+  });
 
   const subscriptionStatus = useSubscriptionStatusQuery({
     enabled: effectiveHasPaid,
@@ -64,7 +74,7 @@ function LiveBilling(props: { controls?: JSX.Element }) {
   });
 
   const userTeam = createMemo(() => {
-    const currentTeam = team.isSuccess ? team.data : undefined;
+    const currentTeam = queryReadyGate(team) ? team.data : undefined;
     const uid = userId();
     if (!currentTeam || !uid) return;
 
@@ -83,7 +93,8 @@ function LiveBilling(props: { controls?: JSX.Element }) {
   const state = () =>
     getBillingState({
       hasPaid: effectiveHasPaid(),
-      canManageSubscription: team.isSuccess && canManageSubscription() === true,
+      canManageSubscription: canManageSubscription() === true,
+      teamReady: team.isSuccess,
       teamRole: teamRole(),
       teamPlans: team.isSuccess
         ? team.data?.members.map((member) =>
@@ -100,11 +111,24 @@ function LiveBilling(props: { controls?: JSX.Element }) {
         : undefined,
       aiUsageEnabled: aiUsageBilling().enabled,
       pending: checkout.isPending || changePlan.isPending,
+      existingSubscription: queryReadyGate(trialEligibility)
+        ? trialEligibility.data.existingSubscription
+        : false,
+      trialEligible:
+        trialEligibility.isSuccess && queryReadyGate(trialEligibility)
+          ? trialEligibility.data.eligible
+          : undefined,
+      trialing: licenseStatus() === 'trialing',
     });
 
   const handleCheckout = async (plan: PaidPlan) => {
+    if (state().existingSubscription) return;
+    const eligible = state().trialEligible;
+    if (plan === 'premium' && eligible === undefined) return;
     try {
-      const url = await checkout.mutateAsync(getFreePlanCheckoutRequest(plan));
+      const url = await checkout.mutateAsync(
+        getFreePlanCheckoutRequest(plan, eligible === true)
+      );
       analytics.track('subscription_start', { type: plan });
       window.location.href = url;
     } catch (error) {
@@ -143,6 +167,7 @@ function LiveBilling(props: { controls?: JSX.Element }) {
       window.location.href = url;
     } catch (error) {
       console.error(error);
+      toast.failure("Couldn't open billing management. Please try again.");
     }
   };
 
@@ -161,13 +186,22 @@ function LiveBilling(props: { controls?: JSX.Element }) {
           : undefined
       }
       subscriptionStatusFailed={subscriptionStatus.isError}
-      onRefreshStatus={() => void subscriptionStatus.refetch()}
-      onKeepPlan={(plan) => void handleChangePlan(plan)}
-      onManage={() => void handleManage()}
+      onRefreshStatus={() =>
+        fireAndForget(subscriptionStatus.refetch(), 'billing-settings')
+      }
+      trialEligibilityFailed={!effectiveHasPaid() && trialEligibility.isError}
+      onRefreshTrialEligibility={() =>
+        fireAndForget(trialEligibility.refetch(), 'billing-settings')
+      }
+      onKeepPlan={(plan) =>
+        fireAndForget(handleChangePlan(plan), 'billing-settings')
+      }
+      onManage={() => fireAndForget(handleManage(), 'billing-settings')}
       onSelectPlan={(plan) =>
-        void (effectiveHasPaid()
-          ? handleChangePlan(plan)
-          : handleCheckout(plan))
+        fireAndForget(
+          effectiveHasPaid() ? handleChangePlan(plan) : handleCheckout(plan),
+          'billing-settings'
+        )
       }
     />
   );

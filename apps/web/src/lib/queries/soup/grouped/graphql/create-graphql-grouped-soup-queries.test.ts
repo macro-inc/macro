@@ -29,13 +29,8 @@ vi.mock('@queries/soup/grouped/api', () => ({
   }),
 }));
 
-vi.mock('@queries/storage/instructions-md', () => ({
-  useInstructionsMdIdQuery: vi.fn(() => ({})),
-}));
-
 vi.mock('@queries/soup/transform-utils', () => ({
   isDisplayableSoupItem: () => true,
-  isInstructionsMdDoc: () => false,
   mapApiSoupItemToEntity: (item: unknown) => item,
   mapSoupPageToEntityList: (page: { items: unknown[] }) => page.items,
 }));
@@ -195,13 +190,8 @@ function setup() {
     });
 
     grouped = createGraphqlGroupedSoupQueries({
+      groupedPaging: () => parent.groupedPaging,
       initialPage,
-      groupByField: () => ({
-        type: 'property',
-        propertyDefinitionId: 'status-definition',
-      }),
-      soupParams: () => ({ limit: 2, sort_method: 'updated_at' }),
-      soupBody: () => ({}),
       enabled: () => true,
       itemFilter: () => undefined,
     });
@@ -341,15 +331,11 @@ describe('createGraphqlGroupedSoupQueries', () => {
       groupedSoupInputKey(initialInput)
     );
     let firstASettled = false;
-
-    const settleFirstA = async () => {
+    const markFirstASettled = async () => {
       await firstA;
-
       firstASettled = true;
-
-      return;
     };
-    void settleFirstA();
+    const firstASettledFlag = markFirstASettled();
     fake.executions[1]?.next(
       page([group('a', ['a-2'], 'a-cursor-2')], [item('a-2')]),
       { stale: true }
@@ -363,6 +349,7 @@ describe('createGraphqlGroupedSoupQueries', () => {
       page([group('a', ['a-2'], 'a-cursor-2')], [item('a-2')])
     );
     await firstA;
+    await firstASettledFlag;
     expect(a.isFetchingNextPage()).toBe(false);
     expect(entityIds(a)).toEqual(['a-1', 'a-2']);
 

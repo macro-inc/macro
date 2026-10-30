@@ -117,7 +117,7 @@ it('delegates keyboard mark done to host list navigation', () => {
 
   try {
     expect(state.handlers()?.markDone()).toBe(true);
-    expect(markDone).toHaveBeenCalledWith(state.context.archiveThread);
+    expect(markDone).toHaveBeenCalledOnce();
   } finally {
     state.dispose();
   }
@@ -171,6 +171,43 @@ it('retains Enter activation of the focused hidden-message button', () => {
     expect(state.navigation.showMiddleMessages()).toBe(true);
     expect(state.context.messages.focusedId()).toBe('second');
     expect(state.context.replyRequest.messageId()).toBeUndefined();
+  } finally {
+    state.dispose();
+  }
+});
+
+it('o toggles the focused message open and closed, defaulting to the latest', () => {
+  const state = navigationWithList(['first', 'last']);
+  const handlers = state.handlers();
+  const expanded = (id: string) => state.context.messages.expandedBodyIds[id];
+  try {
+    // The latest message starts open, so 'o' with nothing focused closes it.
+    expect(handlers?.expandFocusedMessage()).toBe(true);
+    expect(expanded('last')).toBe(false);
+
+    state.context.messages.setFocused('first');
+    expect(handlers?.expandFocusedMessage()).toBe(true);
+    expect(expanded('first')).toBe(true);
+    expect(handlers?.expandFocusedMessage()).toBe(true);
+    expect(expanded('first')).toBe(false);
+
+    state.setSnapshot(thread([]));
+    expect(handlers?.expandFocusedMessage()).toBe(false);
+  } finally {
+    state.dispose();
+  }
+});
+
+it('shift+o opens every message, including the collapsed middle run', () => {
+  const ids = ['a', 'b', 'c', 'd', 'e'];
+  const state = navigationWithList(ids);
+  try {
+    expect(state.navigation.showMiddleMessages()).toBe(false);
+    expect(state.handlers()?.expandAllMessages()).toBe(true);
+    expect(state.navigation.showMiddleMessages()).toBe(true);
+    for (const id of ids) {
+      expect(state.context.messages.expandedBodyIds[id]).toBe(true);
+    }
   } finally {
     state.dispose();
   }

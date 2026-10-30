@@ -1,97 +1,25 @@
+import {
+  CELL_REFERENCE,
+  columnLetters,
+  type FormulaPiece,
+  formulaPieces,
+  quotedSheet,
+} from '@macro-inc/spreadsheet/formula-pieces';
 import { parseColumnName } from './spreadsheet-document';
-
-/** A lexical piece of an Excel A1 formula, enough to find references safely. */
-type Piece =
-  | { kind: 'string' | 'quoted' | 'bracket' | 'other'; text: string }
-  | { kind: 'word'; text: string };
 
 const MAX_ROW = 1_048_576;
 const MAX_COLUMN = 16_384;
-
-/** Split formula text without ever looking inside string literals, quoted
- * sheet names or bracketed structured/external references. */
-function scan(formula: string): Piece[] {
-  const pieces: Piece[] = [];
-  let index = 0;
-  while (index < formula.length) {
-    const character = formula[index];
-    if (character === '"' || character === "'") {
-      let end = index + 1;
-      while (end < formula.length) {
-        if (formula[end] === character) {
-          if (formula[end + 1] === character) {
-            end += 2;
-            continue;
-          }
-          break;
-        }
-        end++;
-      }
-      pieces.push({
-        kind: character === '"' ? 'string' : 'quoted',
-        text: formula.slice(index, end + 1),
-      });
-      index = end + 1;
-    } else if (character === '[') {
-      let depth = 0;
-      let end = index;
-      for (; end < formula.length; end++) {
-        // An apostrophe escapes the next special character in a column name.
-        if (formula[end] === "'" && depth > 0) {
-          end++;
-          continue;
-        }
-        if (formula[end] === '[') depth++;
-        else if (formula[end] === ']' && --depth === 0) break;
-      }
-      pieces.push({ kind: 'bracket', text: formula.slice(index, end + 1) });
-      index = end + 1;
-    } else updateEnd(character);
-  }
-  return pieces;
-
-  function updateEnd(character: string) {
-    if (/[\p{L}\p{N}_$\\.]/u.test(character)) {
-      let end = index + 1;
-      while (end < formula.length && /[\p{L}\p{N}_$\\.?]/u.test(formula[end]))
-        end++;
-      // Keep a numeric literal's exponent (1.5E+10) in one piece.
-      if (
-        /^\d+(?:\.\d*)?E$/i.test(formula.slice(index, end)) &&
-        /[+-]/.test(formula[end] ?? '') &&
-        /\d/.test(formula[end + 1] ?? '')
-      ) {
-        end += 2;
-        while (end < formula.length && /\d/.test(formula[end])) end++;
-      }
-      pieces.push({ kind: 'word', text: formula.slice(index, end) });
-      index = end;
-    } else {
-      pieces.push({ kind: 'other', text: character });
-      index++;
-    }
-  }
-}
-
-const cellReference = /^(\$?)([A-Z]{1,3})(\$?)([1-9]\d{0,6})$/i;
 const columnReference = /^(\$?)([A-Z]{1,3})$/i;
 const rowReference = /^(\$?)([1-9]\d{0,6})$/;
 
 /** False for function calls, sheet names and structured-reference table names. */
-function referenceContext(pieces: Piece[], index: number) {
+function referenceContext(pieces: FormulaPiece[], index: number) {
   const next = pieces[index + 1];
   return !(
     next?.text === '(' ||
     next?.text === '!' ||
     next?.kind === 'bracket'
   );
-}
-
-function columnLetters(column: number) {
-  let name = '';
-  for (let index = column; index > 0; index = Math.floor((index - 1) / 26))
-    name = String.fromCharCode(65 + ((index - 1) % 26)) + name;
-  return name;
 }
 
 /** Shift relative references, as Excel does for shared formulas and copies.
@@ -102,7 +30,7 @@ export function translateFormula(
   columns: number
 ): string {
   if (!rows && !columns) return formula;
-  const pieces = scan(formula);
+  const pieces = formulaPieces(formula);
   const output = pieces.map((piece) => piece.text);
   const shiftColumn = (absolute: string, letters: string) => {
     const column = (parseColumnName(letters.toUpperCase()) ?? -1) + 1;
@@ -118,7 +46,7 @@ export function translateFormula(
   for (let index = 0; index < pieces.length; index++) {
     const piece = pieces[index];
     if (piece.kind !== 'word' || !referenceContext(pieces, index)) continue;
-    const cell = cellReference.exec(piece.text);
+    const cell = CELL_REFERENCE.exec(piece.text);
     if (cell && parseColumnName(cell[2].toUpperCase()) !== undefined) {
       const column = shiftColumn(cell[1], cell[2]);
       const row = shiftRow(cell[3], cell[4]);
@@ -139,33 +67,33 @@ export function translateFormula(
     ) {
       const left = shiftColumn(leftColumn[1], leftColumn[2]);
       const right = shiftColumn(rightColumn[1], rightColumn[2]);
-      output[index] = buildTranslateFormula2(left, right);
-      output[index + 2] = buildTranslateFormula(left, right);
+      output[index] = shiftedRangeStart(left, right);
+      output[index + 2] = shiftedRangeEnd(left, right);
       if (!left || !right) output[index + 1] = '';
       index += 2;
       continue;
     }
     const leftRow = rowReference.exec(piece.text);
     const rightRow = rowReference.exec(colon.text);
-    index = updateTranslateFormula(leftRow, rightRow, index);
+    index = shiftRowRange(leftRow, rightRow, index);
   }
   return output.join('');
 
-  function buildTranslateFormula2(
+  function shiftedRangeStart(
     left: string | undefined,
     right: string | undefined
   ): string {
     return left && right ? left : '#REF!';
   }
 
-  function buildTranslateFormula(
+  function shiftedRangeEnd(
     left: string | undefined,
     right: string | undefined
   ): string {
     return left && right ? right : '';
   }
 
-  function updateTranslateFormula(
+  function shiftRowRange(
     leftRow: RegExpExecArray | null,
     rightRow: RegExpExecArray | null,
     index: number
@@ -185,7 +113,7 @@ export function translateFormula(
 /** Excel stores post-2007 functions with `_xlfn.` (and `_xlws.`) prefixes. */
 export function stripFunctionPrefixes(formula: string): string {
   if (!/_xl(?:fn|ws)\./i.test(formula)) return formula;
-  return scan(formula)
+  return formulaPieces(formula)
     .map((piece) =>
       piece.kind === 'word'
         ? piece.text.replace(/^_xlfn\.(?:_xlws\.)?/i, '')
@@ -221,7 +149,7 @@ const WORKSHEET_FUNCTIONS = new Set(['FILTER', 'SORT']);
 
 /** Restore the prefixes Excel requires for newer functions. */
 export function addFunctionPrefixes(formula: string): string {
-  const pieces = scan(formula);
+  const pieces = formulaPieces(formula);
   let changed = false;
   const output = pieces.map((piece, index) => {
     if (piece.kind !== 'word' || pieces[index + 1]?.text !== '(')
@@ -239,7 +167,10 @@ export function addFunctionPrefixes(formula: string): string {
 }
 
 /** The reference that follows a sheet prefix: `A1`, `$A$1:$B$2`, `A:C` or `1:3`. */
-function referenceEnd(pieces: Piece[], index: number): number | undefined {
+function referenceEnd(
+  pieces: FormulaPiece[],
+  index: number
+): number | undefined {
   const reference = /^\$?[A-Z]{1,3}\$?\d+$|^\$?[A-Z]{1,3}$|^\$?\d+$/i;
   if (pieces[index]?.kind !== 'word' || !reference.test(pieces[index].text))
     return;
@@ -260,7 +191,7 @@ export function expandSheetRanges(
   sheetNames: string[]
 ): string {
   if (!formula.includes(':') || !formula.includes('!')) return formula;
-  const pieces = scan(formula);
+  const pieces = formulaPieces(formula);
   const output = pieces.map((piece) => piece.text);
   const indexOf = (name: string) =>
     sheetNames.findIndex((sheet) => sheet.toLowerCase() === name.toLowerCase());
@@ -404,7 +335,10 @@ type Operand = {
   intersects: boolean;
 };
 
-function rangeOperands(pieces: Piece[], rangeNames: ReadonlySet<string>) {
+function rangeOperands(
+  pieces: FormulaPiece[],
+  rangeNames: ReadonlySet<string>
+) {
   const operands: Operand[] = [];
   const frames: { name?: string; argument: number; brace?: boolean }[] = [];
   const nonBlank = (index: number, step: 1 | -1) => {
@@ -412,7 +346,7 @@ function rangeOperands(pieces: Piece[], rangeNames: ReadonlySet<string>) {
     while (at >= 0 && at < pieces.length && !pieces[at].text.trim()) at += step;
     return {
       at,
-      piece: pieces[at] as Piece | undefined,
+      piece: pieces[at] as FormulaPiece | undefined,
       spaced: at !== index + step,
     };
   };
@@ -420,17 +354,17 @@ function rangeOperands(pieces: Piece[], rangeNames: ReadonlySet<string>) {
     const piece = pieces[index];
     if (piece.kind === 'other') {
       const top = frames.at(-1);
-      updateArgument(piece, index, top);
+      trackCallFrame(piece, index, top);
       continue;
     }
     if (frames.at(-1)?.brace) continue;
     // A sheet-qualified reference starts at its sheet name.
     let start = index;
     let referenceIndex = index;
-    referenceIndex = updateReferenceIndex(piece, index, referenceIndex);
+    referenceIndex = referenceStart(piece, index, referenceIndex);
     let end: number | undefined;
     let range = false;
-    const name = buildName(referenceIndex, index, piece);
+    const name = isRangeName(referenceIndex, index, piece);
     if (name) {
       end = index;
       range = true;
@@ -446,7 +380,7 @@ function rangeOperands(pieces: Piece[], rangeNames: ReadonlySet<string>) {
       const last = pieces[end].text.replaceAll('$', '').toUpperCase();
       // A1:A1 is one cell; A:A and 1:1 are whole columns and rows. A function
       // named like a cell (LOG10) is not a reference.
-      range = isRangeOperandsAllowed(end, referenceIndex, first, last);
+      range = isRangeOperand(end, referenceIndex, first, last);
       if (!referenceContext(pieces, end)) range = false;
     }
     if (!range) {
@@ -470,16 +404,16 @@ function rangeOperands(pieces: Piece[], rangeNames: ReadonlySet<string>) {
     let intersects: boolean;
     if (arrayContext || combines(before, 'left') || combines(after, 'right'))
       intersects = false;
-    else intersects = updateIntersects(before, after, top, named);
+    else intersects = intersectsImplicitly(before, after, top, named);
     operands.push({ start, end, marked, intersects });
     // ROW(A1:A3) and COLUMN(A1:A3) return arrays; outside an array argument
     // a legacy formula reads their first value, as `@ROW(A1:A3)` does.
-    updateRangeOperands(marked, top, before, after, arrayContext);
+    markArrayResultArgument(marked, top, before, after, arrayContext);
     index = end;
   }
   return operands;
 
-  function isRangeOperandsAllowed(
+  function isRangeOperand(
     end: number,
     referenceIndex: number,
     first: string,
@@ -493,8 +427,8 @@ function rangeOperands(pieces: Piece[], rangeNames: ReadonlySet<string>) {
     );
   }
 
-  function updateReferenceIndex(
-    piece: Piece,
+  function referenceStart(
+    piece: FormulaPiece,
     index: number,
     referenceIndex: number
   ) {
@@ -506,7 +440,7 @@ function rangeOperands(pieces: Piece[], rangeNames: ReadonlySet<string>) {
     return referenceIndex;
   }
 
-  function updateArgument(
+  function trackCallFrame(
     piece: { kind: 'string' | 'quoted' | 'bracket' | 'other'; text: string },
     index: number,
     top: { name?: string; argument: number; brace?: boolean } | undefined
@@ -524,7 +458,11 @@ function rangeOperands(pieces: Piece[], rangeNames: ReadonlySet<string>) {
     else if (piece.text === ',' && top) top.argument++;
   }
 
-  function buildName(referenceIndex: number, index: number, piece: Piece) {
+  function isRangeName(
+    referenceIndex: number,
+    index: number,
+    piece: FormulaPiece
+  ) {
     return (
       referenceIndex === index &&
       piece.kind === 'word' &&
@@ -535,11 +473,11 @@ function rangeOperands(pieces: Piece[], rangeNames: ReadonlySet<string>) {
     );
   }
 
-  function updateRangeOperands(
+  function markArrayResultArgument(
     marked: boolean,
     top: { name?: string; argument: number; brace?: boolean } | undefined,
-    before: { at: number; piece: Piece | undefined; spaced: boolean },
-    after: { at: number; piece: Piece | undefined; spaced: boolean },
+    before: { at: number; piece: FormulaPiece | undefined; spaced: boolean },
+    after: { at: number; piece: FormulaPiece | undefined; spaced: boolean },
     arrayContext: boolean
   ) {
     if (
@@ -559,9 +497,9 @@ function rangeOperands(pieces: Piece[], rangeNames: ReadonlySet<string>) {
     }
   }
 
-  function updateIntersects(
-    before: { at: number; piece: Piece | undefined; spaced: boolean },
-    after: { at: number; piece: Piece | undefined; spaced: boolean },
+  function intersectsImplicitly(
+    before: { at: number; piece: FormulaPiece | undefined; spaced: boolean },
+    after: { at: number; piece: FormulaPiece | undefined; spaced: boolean },
     top: { name?: string; argument: number; brace?: boolean } | undefined,
     named: { name?: string; argument: number; brace?: boolean } | undefined
   ) {
@@ -590,7 +528,7 @@ export function markImplicitIntersections(
   rangeNames: ReadonlySet<string>
 ): string {
   if (!formula.includes(':') && !rangeNames.size) return formula;
-  const pieces = scan(formula);
+  const pieces = formulaPieces(formula);
   const output = pieces.map((piece) => piece.text);
   let changed = false;
   for (const operand of rangeOperands(pieces, rangeNames)) {
@@ -603,7 +541,7 @@ export function markImplicitIntersections(
 
 /** The end of the primary expression starting at `index`: a parenthesized
  * group, a function call, or a single piece. */
-function primaryEnd(pieces: Piece[], index: number) {
+function primaryEnd(pieces: FormulaPiece[], index: number) {
   let at = index;
   if (pieces[at]?.kind === 'word' && pieces[at + 1]?.text === '(') at++;
   if (pieces[at]?.text !== '(') return index;
@@ -625,7 +563,7 @@ export function exportImplicitIntersections(
   legacy: boolean
 ): string {
   if (!formula.includes('@')) return formula;
-  const pieces = scan(formula);
+  const pieces = formulaPieces(formula);
   const output = pieces.map((piece) => piece.text);
   const implicit = new Set(
     legacy
@@ -652,7 +590,7 @@ export function exportImplicitIntersections(
 /** Read Excel's `_xlfn.SINGLE(range)` back as `@range`. */
 export function importSingleFunction(formula: string): string {
   if (!/_xlfn\.single\(/i.test(formula)) return formula;
-  const pieces = scan(formula);
+  const pieces = formulaPieces(formula);
   const output = pieces.map((piece) => piece.text);
   for (let index = 0; index < pieces.length; index++) {
     if (
@@ -681,7 +619,7 @@ export function importSingleFunction(formula: string): string {
 }
 
 /** A sheet prefix's name: `'My sheet'` or `Data`. */
-function prefixName(piece: Piece) {
+function prefixName(piece: FormulaPiece) {
   return (
     piece.kind === 'quoted'
       ? piece.text.slice(1, -1).replaceAll("''", "'")
@@ -696,7 +634,7 @@ function prefixName(piece: Piece) {
  */
 export function normalizeReferences(formula: string): string {
   if (!formula.includes('!')) return formula;
-  const pieces = scan(formula);
+  const pieces = formulaPieces(formula);
   const output = pieces.map((piece) => piece.text);
   const prefix = (index: number) =>
     (pieces[index]?.kind === 'quoted' || pieces[index]?.kind === 'word') &&
@@ -730,7 +668,7 @@ export function normalizeReferences(formula: string): string {
 
 /** Function names used by a formula, uppercase and without Excel prefixes. */
 export function formulaFunctionNames(formula: string): string[] {
-  const pieces = scan(formula);
+  const pieces = formulaPieces(formula);
   const names = new Set<string>();
   pieces.forEach((piece, index) => {
     if (piece.kind === 'word' && pieces[index + 1]?.text === '(')
@@ -743,7 +681,7 @@ export function formulaFunctionNames(formula: string): string[] {
 export type NamedCell = { sheet?: string; row: number; column: number };
 
 /** The cell a reference argument starts at, if it is a plain reference. */
-function argumentCell(pieces: Piece[]): NamedCell | undefined {
+function argumentCell(pieces: FormulaPiece[]): NamedCell | undefined {
   let sheet: string | undefined;
   let rest = pieces;
   if (
@@ -757,7 +695,7 @@ function argumentCell(pieces: Piece[]): NamedCell | undefined {
     rest = pieces.slice(2);
   }
   if (rest.length !== 1 && !(rest.length === 3 && rest[1].text === ':')) return;
-  const match = cellReference.exec(rest[0].text);
+  const match = CELL_REFERENCE.exec(rest[0].text);
   if (!match) return;
   const column = parseColumnName(match[2].toUpperCase());
   if (column === undefined) return;
@@ -775,7 +713,7 @@ function argumentCell(pieces: Piece[]): NamedCell | undefined {
 export function pivotTableArguments(
   formula: string
 ): (NamedCell | undefined)[] {
-  const pieces = scan(formula).filter(
+  const pieces = formulaPieces(formula).filter(
     (piece) => !(piece.kind === 'other' && /\s/.test(piece.text))
   );
   const cells: (NamedCell | undefined)[] = [];
@@ -787,7 +725,7 @@ export function pivotTableArguments(
     )
       continue;
     // The pieces of its second argument.
-    const second: Piece[] = [];
+    const second: FormulaPiece[] = [];
     let depth = 0;
     let argument = 0;
     for (let at = index + 2; at < pieces.length && argument < 2; at++) {
@@ -809,7 +747,7 @@ export function pivotTableArguments(
 
 /** References into another workbook, such as `[1]Sheet1!A1` or `'[2]Q1'!B2`. */
 export function hasExternalReference(formula: string): boolean {
-  return scan(formula).some(
+  return formulaPieces(formula).some(
     (piece, index, pieces) =>
       (piece.kind === 'bracket' &&
         /^\[\d+\]$/.test(piece.text) &&
@@ -819,184 +757,8 @@ export function hasExternalReference(formula: string): boolean {
   );
 }
 
-export type WorkbookTable = {
-  name: string;
-  sheet: string;
-  top: number;
-  left: number;
-  bottom: number;
-  right: number;
-  headerRows: number;
-  totalsRows: number;
-  columns: string[];
-};
-
-function quotedSheet(name: string) {
-  return /^[A-Za-z_][A-Za-z0-9_.]*$/.test(name) &&
-    !cellReference.test(name) &&
-    !/^R\d*C\d*$/i.test(name)
-    ? name
-    : `'${name.replaceAll("'", "''")}'`;
-}
-
-/** Column names inside a structured reference unescape `'`-prefixed characters. */
-function columnSpecifier(text: string) {
-  return text.replace(/'(.)/g, '$1').trim().toLowerCase();
-}
-
-/** Convert one structured reference (`Table1[Amount]`, `[@Qty]`,
- * `Table1[[#This Row],[Price]:[Tax]]`) to an A1 range. */
-function structuredRange(
-  table: WorkbookTable,
-  specifier: string,
-  sheet: string,
-  row: number
-): string | undefined {
-  // `Table1[...]` brackets wrap either one item or a list of bracketed items.
-  const inner = specifier.slice(1, -1).trim();
-  const items: string[] = [];
-  updateStructuredRange();
-  const area = new Set<string>();
-  const columnNames: string[] = [];
-  let span = false;
-  for (const item of items) {
-    if (item === ',') continue;
-    if (item === ':') {
-      span = true;
-      continue;
-    }
-    const lower = item.trim().toLowerCase();
-    if (lower.startsWith('#')) area.add(lower);
-    else if (lower === '@') area.add('#this row');
-    else columnNames.push(columnSpecifier(item));
-  }
-  const rows = resolveRows();
-  const firstData = table.top + table.headerRows;
-  const lastData = table.bottom - table.totalsRows;
-  const [top, bottom] = {
-    all: [table.top, table.bottom],
-    data: [firstData, lastData],
-    headers: [table.top, table.top],
-    totals: [table.bottom, table.bottom],
-    'headers-data': [table.top, lastData],
-    'data-totals': [firstData, table.bottom],
-    this: [row, row],
-  }[rows];
-  if (isStructuredRangeAllowed()) return;
-  const index = (name: string) =>
-    table.columns.findIndex((column) => column.toLowerCase() === name);
-  let left = table.left;
-  let right = table.right;
-  if (columnNames.length) {
-    const first = index(columnNames[0]);
-    const last = index(columnNames[span ? columnNames.length - 1 : 0]);
-    if (first < 0 || last < 0 || (!span && columnNames.length > 1)) return;
-    left = table.left + Math.min(first, last);
-    right = table.left + Math.max(first, last);
-  }
-  const prefix = table.sheet === sheet ? '' : `${quotedSheet(table.sheet)}!`;
-  const rowText = (value: number) =>
-    rows === 'this' ? `${value + 1}` : `$${value + 1}`;
-  const start = `$${columnLetters(left + 1)}${rowText(top)}`;
-  const end = `$${columnLetters(right + 1)}${rowText(bottom)}`;
-  return `${prefix}${start === end ? start : `${start}:${end}`}`;
-
-  function isStructuredRangeAllowed() {
-    return (
-      (rows === 'headers' && !table.headerRows) ||
-      (rows === 'totals' && !table.totalsRows) ||
-      (rows === 'this' && (row < firstData || row > lastData)) ||
-      top > bottom
-    );
-  }
-
-  function updateStructuredRange() {
-    if (inner.startsWith('[')) {
-      for (const match of inner.matchAll(/\[((?:'.|[^\]])*)\]|(:)|,/g))
-        items.push(match[2] ?? match[1] ?? ',');
-    } else if (inner.startsWith('@')) {
-      items.push('#This Row');
-      const rest = inner.slice(1).trim();
-      if (rest) items.push(rest.replace(/^\[(.*)\]$/, '$1'));
-    } else if (inner) items.push(inner);
-  }
-
-  function resolveRows():
-    | 'all'
-    | 'data'
-    | 'this'
-    | 'headers-data'
-    | 'data-totals'
-    | 'headers'
-    | 'totals' {
-    if (area.has('#all')) return 'all';
-    if (area.has('#this row')) return 'this';
-    if (area.has('#headers') && area.has('#data')) return 'headers-data';
-    if (area.has('#data') && area.has('#totals')) return 'data-totals';
-    if (area.has('#headers')) return 'headers';
-    if (area.has('#totals')) return 'totals';
-    return 'data';
-  }
-}
-
-/** Replace structured table references with equivalent A1 references.
- * Returns undefined if a reference cannot be resolved. */
-export function resolveStructuredReferences(
-  formula: string,
-  tables: WorkbookTable[],
-  sheet: string,
-  row: number,
-  column: number
-): string | undefined {
-  if (!formula.includes('[') || !tables.length) return formula;
-  const pieces = scan(formula);
-  const output: string[] = [];
-  for (let index = 0; index < pieces.length; index++) {
-    const piece = pieces[index];
-    const next = pieces[index + 1];
-    if (
-      piece.kind === 'word' &&
-      next?.kind === 'bracket' &&
-      pieces[index - 1]?.text !== '!'
-    ) {
-      const table = tables.find(
-        (item) => item.name.toLowerCase() === piece.text.toLowerCase()
-      );
-      if (table) {
-        const range = structuredRange(table, next.text, sheet, row);
-        if (!range) return;
-        output.push(range);
-        index++;
-        continue;
-      }
-    }
-    if (
-      piece.kind === 'bracket' &&
-      !/^\[\d+\]$/.test(piece.text) &&
-      pieces[index - 1]?.kind !== 'word'
-    ) {
-      // `[@Qty]` inside a table refers to the table containing the formula.
-      const table = tables.find(
-        (item) =>
-          item.sheet === sheet &&
-          row >= item.top &&
-          row <= item.bottom &&
-          column >= item.left &&
-          column <= item.right
-      );
-      if (!table) return;
-      const range = structuredRange(table, piece.text, sheet, row);
-      if (!range) return;
-      output.push(range);
-      continue;
-    }
-    output.push(piece.text);
-  }
-  return output.join('');
-}
-
 function isUnquotedSheetRangeStart(
-  pieces: ReturnType<typeof scan>,
+  pieces: FormulaPiece[],
   index: number
 ): boolean {
   return (

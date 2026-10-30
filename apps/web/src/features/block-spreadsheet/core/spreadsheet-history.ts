@@ -199,7 +199,7 @@ export function createSpreadsheetHistory(doc: LoroDoc, onChange: () => void) {
     const action = direction === 'undo' ? 'Undo' : 'Redo';
     if (item?.kind === 'unavailable')
       return `${action} is unavailable because this sheet change could not be checked safely.`;
-    if (hasAxisWorkbook(item))
+    if (workbookChangedSince(item))
       return `${action} is blocked because the workbook changed after moving rows or columns. Newer changes have been kept.`;
     if (
       item?.changes.some(
@@ -247,11 +247,11 @@ export function createSpreadsheetHistory(doc: LoroDoc, onChange: () => void) {
     }
     // onPop is called after Loro applies the inverse. Capture the current
     // values here instead so the next stack item describes the actual redo.
-    reversing = buildApply(item);
+    reversing = withCurrentValues(item);
     history[direction]();
     reversing = undefined;
 
-    function buildApply(
+    function withCurrentValues(
       itemInput:
         | {
             kind: 'structural' | 'edit';
@@ -274,7 +274,7 @@ export function createSpreadsheetHistory(doc: LoroDoc, onChange: () => void) {
         : itemInput;
     }
 
-    function hasAxisWorkbook(
+    function workbookChangedSince(
       itemInput:
         | {
             kind: 'structural' | 'edit';

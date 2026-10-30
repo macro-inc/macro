@@ -3,6 +3,7 @@ mod send;
 
 pub use draft::{
     ApiDraftContactInfo, ApiDraftInput, ApiDraftOutput, CreateDraftRequest, CreateDraftResponse,
+    DraftEditPrecondition,
 };
 pub use send::{SendMessageRequest, SendMessageResponse};
 mod label;
@@ -21,3 +22,8 @@ pub use preview::{
 };
 pub use sort::ApiSortMethod;
 pub use thread::{ApiThread, GetThreadParams, GetThreadResponse};
+
+mod operation;
+pub use operation::{
+    ApiMessageOperation, MessageOperationResponse, ResolveMessageOperationRequest,
+};

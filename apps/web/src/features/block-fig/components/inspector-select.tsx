@@ -1,7 +1,8 @@
 /** Compact, keyboard-accessible choices shared by the inspector's fields. */
+
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Check from '@icon/system/regular/check.svg';
 import { Select } from '@kobalte/core/select';
-import CaretDown from '@phosphor/caret-down.svg';
-import Check from '@phosphor/check.svg';
 
 type Option<T extends string> = { value: T; label: string; disabled?: boolean };
 
@@ -13,6 +14,8 @@ export function InspectorSelect<T extends string>(props: {
   testId?: string;
   disabled?: boolean;
   class?: string;
+  /** A narrow trigger: tighter padding and no caret. */
+  compact?: boolean;
 }) {
   return (
     <Select<Option<T>>
@@ -51,18 +54,22 @@ export function InspectorSelect<T extends string>(props: {
         title={
           props.options.find((option) => option.value === props.value)?.label
         }
-        class="disabled:opacity-50 flex h-6 w-full min-w-0 items-center justify-between gap-1 rounded-md bg-inset px-2 text-left text-ink outline-none hover:shadow-[inset_0_0_0_1px_var(--color-edge)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent"
+        class="disabled:opacity-50 flex h-6 w-full min-w-0 items-center justify-between gap-1 rounded-md bg-inset text-left text-ink outline-none hover:shadow-[inset_0_0_0_1px_var(--color-edge)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent"
+        classList={{ 'px-1': props.compact, 'px-2': !props.compact }}
       >
         <Select.Value<Option<T>> class="truncate">
           {(state) => state.selectedOption().label}
         </Select.Value>
         <Select.Icon>
-          <CaretDown class="size-3 shrink-0" />
+          <CaretDown
+            class="size-3 shrink-0"
+            classList={{ hidden: props.compact }}
+          />
         </Select.Icon>
       </Select.Trigger>
       <Select.Portal>
         <Select.Content
-          class="fig-editor-theme z-modal min-w-32 max-w-72 rounded-xl border border-edge-muted bg-menu p-1.5 text-xs text-ink shadow-xl outline-none"
+          class="menu-surface fig-editor-theme z-modal min-w-32 max-w-72 p-1.5 text-xs outline-none"
           onKeyDown={(event) => event.stopPropagation()}
           onPointerDown={(event) => event.stopPropagation()}
           onPointerUp={(event) => event.stopPropagation()}

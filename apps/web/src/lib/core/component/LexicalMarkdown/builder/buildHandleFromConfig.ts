@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { handleFileFolderDrop } from '@core/util/upload';
 import type { EditorType } from '@macro-inc/lexical-core';
 import type { SerializedEditorState } from 'lexical';
@@ -319,17 +320,20 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
       plugins.use(
         filePastePlugin({
           onPasteFilesAndDirs: (fileEntries, directories) => {
-            handleFileFolderDrop(
-              fileEntries,
-              directories,
-              createFilesReadyHandler(
-                editor,
-                undefined,
-                undefined,
-                undefined,
-                undefined,
-                fileDropConfig.constrainedMediaDimensions
-              )
+            fireAndForget(
+              handleFileFolderDrop(
+                fileEntries,
+                directories,
+                createFilesReadyHandler(
+                  editor,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  fileDropConfig.constrainedMediaDimensions
+                )
+              ),
+              'markdown-file-paste'
             );
           },
         })

@@ -6,6 +6,7 @@
  * the shared document to tests.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import { noopChatter } from '@macro-inc/collaboration/collab/chatter';
 import type { SnapshotStore } from '@macro-inc/collaboration/collab/snapshot-store';
 import { InMemoryWALStore } from '@macro-inc/collaboration/collab/wal';
@@ -62,12 +63,11 @@ export function CollabFixture(props: {
   const [engine, setEngine] = createSignal<PresentationEngine>();
   const [errors, setErrors] = createSignal<string[]>([]);
 
-  const settleFetch = async () => {
-    const settleFetchValue = await fetch(props.deckUrl);
-    const r = settleFetchValue;
-    return await r.arrayBuffer();
+  const fetchDeck = async () => {
+    const response = await fetch(props.deckUrl);
+    return response.arrayBuffer();
   };
-  const deckBytes = settleFetch();
+  const deckBytes = fetchDeck();
 
   const session = createPresentationCollabSession({
     documentId,
@@ -153,22 +153,20 @@ export function CollabFixture(props: {
           <Match when={doc()} keyed>
             {(ready) => {
               let closed = false;
-
-              const settleOpenCollaborativePresentation = async () => {
-                let settleOpenCollaborativePresentationValue;
+              const openEngine = async () => {
+                let e: PresentationEngine;
                 try {
-                  settleOpenCollaborativePresentationValue =
-                    await openCollaborativePresentation(ready, {
-                      storedFile: new ArrayBuffer(0),
-                    });
-                } catch (settleOpenCollaborativePresentationError) {
-                  const e: unknown = settleOpenCollaborativePresentationError;
-                  return await setErrors((list) => [...list, String(e)]);
+                  e = await openCollaborativePresentation(ready, {
+                    storedFile: new ArrayBuffer(0),
+                  });
+                } catch (error) {
+                  setErrors((list) => [...list, String(error)]);
+                  return;
                 }
-                const e = settleOpenCollaborativePresentationValue;
-                return await (closed ? e.close() : setEngine(e));
+                if (closed) e.close();
+                else setEngine(e);
               };
-              void settleOpenCollaborativePresentation();
+              fireAndForget(openEngine(), 'pptx-fixture');
               onCleanup(() => {
                 closed = true;
                 engine()?.close();

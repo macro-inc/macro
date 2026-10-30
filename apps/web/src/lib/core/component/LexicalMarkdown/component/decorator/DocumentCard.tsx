@@ -11,8 +11,17 @@ import { canNestBlock, createBlockInstance } from '@core/orchestrator';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { matches } from '@core/util/match';
+import Minimize from '@icon/system/regular/arrows-in.svg';
+import ColumnsPlusRight from '@icon/system/regular/columns-plus-right.svg';
+import DotsThree from '@icon/system/regular/dots-three.svg';
+import GitBranch from '@icon/system/regular/git-branch.svg';
+import Link from '@icon/system/regular/link.svg';
+import Sparkle from '@icon/system/regular/sparkle.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
+import TrashSimple from '@icon/system/regular/trash-simple.svg';
 import {
   $convertCardToMention,
   $getId,
@@ -24,14 +33,6 @@ import {
   setDocumentCardPreviewComponent,
   unsetDocumentCardPreviewCache,
 } from '@macro-inc/lexical-core';
-import Minimize from '@phosphor/arrows-in.svg';
-import ColumnsPlusRight from '@phosphor/columns-plus-right.svg';
-import DotsThree from '@phosphor/dots-three.svg';
-import GitBranch from '@phosphor/git-branch.svg';
-import Link from '@phosphor/link.svg';
-import Sparkle from '@phosphor/sparkle.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
-import TrashSimple from '@phosphor/trash-simple.svg';
 import {
   type AccessiblePreviewItem,
   isAccessiblePreviewItem,
@@ -366,14 +367,17 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
 
   const handleOpenInChat = () => {
     const preview = item();
-    void openChatWithAgent({
-      type: 'document',
-      id: props.documentId,
-      name: isAccessiblePreviewItem(preview)
-        ? preview.name
-        : props.documentName,
-      fileType: verifyBlockName(props.blockName),
-    });
+    fireAndForget(
+      openChatWithAgent({
+        type: 'document',
+        id: props.documentId,
+        name: isAccessiblePreviewItem(preview)
+          ? preview.name
+          : props.documentName,
+        fileType: verifyBlockName(props.blockName),
+      }),
+      'document-card'
+    );
   };
 
   const isSplitAlreadyOpen = () =>
@@ -386,7 +390,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     openDocument(props.blockName, props.documentId, props.blockParams, true);
   });
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     try {
       let hostname = window.location.hostname.replace('www.', '').toLowerCase();
       if (hostname === 'localhost') {
@@ -398,10 +402,11 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
         const queryParams = new URLSearchParams(props.blockParams).toString();
         link += `?${queryParams}`;
       }
-      navigator.clipboard.writeText(link);
+      await navigator.clipboard.writeText(link);
       toast.success('Copied document link to clipboard');
     } catch (e) {
       console.error(e);
+      toast.failure('Could not copy link');
     }
   };
 
@@ -540,7 +545,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                 variant="ghost"
                 aria-label="Document card actions"
               >
-                <DotsThree />
+                <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               </Dropdown.Trigger>
               <Dropdown.Content mount={portalMount()}>
                 <Dropdown.Group>
@@ -565,7 +570,10 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                   <Show when={props.blockName === 'task'}>
                     <Dropdown.Item
                       onSelect={() =>
-                        void copyBranchNameToClipboard(props.item.id)
+                        fireAndForget(
+                          copyBranchNameToClipboard(props.item.id),
+                          'document-card'
+                        )
                       }
                     >
                       <GitBranch class="size-4 shrink-0" />

@@ -7,12 +7,13 @@
  */
 
 import type { DeckOutline, ShapeOutline } from '@core/pptx-engine/types';
-import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
-import CaretLeft from '@phosphor/caret-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import Pause from '@phosphor/pause.svg';
-import Play from '@phosphor/play.svg';
-import SquaresFour from '@phosphor/squares-four.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import CaretLeft from '@icon/system/regular/caret-left.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Pause from '@icon/system/regular/pause.svg';
+import Play from '@icon/system/regular/play.svg';
+import SquaresFour from '@icon/system/regular/squares-four.svg';
 import { Button } from '@ui/components/Button';
 import {
   createSignal,
@@ -27,7 +28,7 @@ import type { PresentationEngine } from '../context/pptx-editor-context';
 import { mediaShapes } from '../core/media';
 import { createMediaUrls } from '../primitives/create-media-urls';
 import { createShow } from '../primitives/create-show';
-import { AudienceClip, ConsoleClip } from './presenter-media';
+import { AudienceClip, ConsoleClip, playIfAllowed } from './presenter-media';
 import { ShowCanvas } from './show-canvas';
 
 /** `h:mm:ss`, or `mm:ss` under an hour. */
@@ -158,16 +159,8 @@ export function PresenterView(props: {
   /** A click on a clip in the audience window plays or pauses it. */
   const toggleClip = (id: number) => {
     const el = audienceClip();
-
-    const settlePlay = async (el: HTMLMediaElement) => {
-      try {
-        return await el.play();
-      } catch {
-        return;
-      }
-    };
     if (!isPlaying(id)) setPlaying(id);
-    else if (el?.paused) void settlePlay(el);
+    else if (el?.paused) fireAndForget(playIfAllowed(el), 'pptx-slideshow');
     else el?.pause();
   };
   const boxIn = (shape: ShapeOutline, s: number) => ({
@@ -268,24 +261,29 @@ export function PresenterView(props: {
           {formatElapsed(elapsed())}
         </span>
         <Button
+          aria-label={pausedAt() === null ? 'Pause timer' : 'Resume timer'}
           variant="ghost"
           size="icon-sm"
-          label={pausedAt() === null ? 'Pause timer' : 'Resume timer'}
           tooltip={pausedAt() === null ? 'Pause timer' : 'Resume timer'}
           onClick={togglePause}
         >
-          <Show when={pausedAt() === null} fallback={<Play />}>
-            <Pause />
+          <Show
+            when={pausedAt() === null}
+            fallback={
+              <Play class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+            }
+          >
+            <Pause class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Show>
         </Button>
         <Button
+          aria-label="Restart timer"
           variant="ghost"
           size="icon-sm"
-          label="Restart timer"
           tooltip="Restart timer"
           onClick={resetTimer}
         >
-          <ArrowCounterClockwise />
+          <ArrowCounterClockwise class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
         <span class="text-ink-muted tabular-nums">
           {new Date(now()).toLocaleTimeString([], {
@@ -302,7 +300,7 @@ export function PresenterView(props: {
               data-testid="pptx-presenter-audience-closed"
             >
               The audience window is closed.
-              <Button variant="outline" size="sm" onClick={attach}>
+              <Button variant="secondary" size="sm" onClick={attach}>
                 Open audience window
               </Button>
             </span>
@@ -314,7 +312,7 @@ export function PresenterView(props: {
           </span>
         </Show>
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           data-testid="pptx-presenter-end"
           onClick={show.exit}
@@ -375,13 +373,13 @@ export function PresenterView(props: {
           </Panel>
           <div class="flex items-center justify-center gap-2">
             <Button
+              aria-label="Previous slide"
               variant="ghost"
               size="icon-sm"
-              label="Previous slide"
               tooltip="Previous slide (←)"
               onClick={() => show.go(-1)}
             >
-              <CaretLeft />
+              <CaretLeft class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
             <span
               class="min-w-24 text-center text-sm tabular-nums"
@@ -390,27 +388,27 @@ export function PresenterView(props: {
               Slide {show.index() + 1} of {show.slides().length}
             </span>
             <Button
+              aria-label="Next slide"
               variant="ghost"
               size="icon-sm"
-              label="Next slide"
               tooltip="Next slide (→)"
               data-testid="pptx-presenter-next-button"
               onClick={() => show.go(1)}
             >
-              <CaretRight />
+              <CaretRight class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
             <Button
-              variant={grid() ? 'accent' : 'ghost'}
+              variant={grid() ? 'primary' : 'ghost'}
               size="sm"
               tooltip="See all slides (G)"
               data-testid="pptx-presenter-grid-toggle"
               onClick={() => setGrid((v) => !v)}
             >
-              <SquaresFour />
+              <SquaresFour class="size-3 touch:size-6 shrink-0 pointer-events-none" />
               All slides
             </Button>
             <Button
-              variant={show.screen() === 'black' ? 'accent' : 'ghost'}
+              variant={show.screen() === 'black' ? 'primary' : 'ghost'}
               size="sm"
               tooltip="Black or unblack the screen (B)"
               onClick={() => show.toggleScreen('black')}
@@ -483,7 +481,11 @@ export function PresenterView(props: {
         >
           <div class="mb-3 flex items-center justify-between">
             <h2 class="font-medium">All slides</h2>
-            <Button variant="outline" size="sm" onClick={() => setGrid(false)}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setGrid(false)}
+            >
               Back
             </Button>
           </div>

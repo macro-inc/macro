@@ -22,6 +22,7 @@ export const CACHE_TELEMETRY_EVENT_NAMES = [
   'graphql_cache.schema_init',
   'graphql_cache.db_ready',
   'graphql_cache.host_ready',
+  'graphql_cache.registration_retry',
   'graphql_cache.host_request',
   'graphql_cache.coordinator_request',
   'graphql_cache.engine_request',
@@ -34,6 +35,7 @@ export const CACHE_TELEMETRY_EVENT_NAMES = [
   'graphql_cache.storage_reset_required',
   'graphql_cache.logical_reset',
   'graphql_cache.revision_advance',
+  'graphql_cache.change_batch',
   'graphql_cache.reset_wipe',
   'graphql_cache.origin_storage_pressure',
   'graphql_cache.linear_memory',
@@ -142,7 +144,15 @@ export const CACHE_OWNER_EVENTS = [
   'activated',
   'graceful-drain-started',
   'graceful-drain-completed',
+  'visibility-handoff-started',
+  'visibility-handoff-blocked',
+  'visibility-handoff-completed',
+  'park-started',
+  'parked',
+  'unpark-started',
+  'unpark-completed',
   'navigation-departure',
+  'coordinator-restarted',
   'abrupt-loss',
   'replacement',
   'multiple-owner-detected',
@@ -233,6 +243,29 @@ const boundedNumber = (
     ? Math.min(value, maximum)
     : undefined;
 
+/** `{ [key]: value }` when `value` is one of `allowed`, otherwise nothing. */
+function allowedField<K extends keyof CacheTelemetryObservation>(
+  key: K,
+  value: CacheTelemetryObservation[K],
+  allowed: readonly unknown[]
+): Partial<CacheTelemetryObservation> {
+  return value !== undefined && allowed.includes(value)
+    ? ({ [key]: value } as Partial<CacheTelemetryObservation>)
+    : {};
+}
+
+/** `{ [key]: value }` for a non-negative finite `value`, capped at `maximum`. */
+function boundedField<K extends keyof CacheTelemetryObservation>(
+  key: K,
+  value: number | undefined,
+  maximum?: number
+): Partial<CacheTelemetryObservation> {
+  const bounded = boundedNumber(value, maximum);
+  return bounded === undefined
+    ? {}
+    : ({ [key]: bounded } as Partial<CacheTelemetryObservation>);
+}
+
 function sanitizeObservation(
   input: CacheTelemetryObservation
 ): CacheTelemetryObservation | undefined {
@@ -241,116 +274,49 @@ function sanitizeObservation(
 
   return {
     name: input.name,
-    ...buildSanitizeObservation3(),
-    operationCategory: input.operationCategory,
-    ...buildSanitizeObservation4(),
-    ...buildSanitizeObservation5(),
-    ...buildSanitizeObservation7(),
-    ...buildSanitizeObservation6(),
-    ...buildSanitizeObservation(),
-    ...(input.openOutcome !== undefined &&
-    CACHE_OPEN_OUTCOMES.includes(input.openOutcome)
-      ? { openOutcome: input.openOutcome }
-      : {}),
-    ...(input.queueDiagnosticsAvailability !== undefined &&
-    CACHE_QUEUE_DIAGNOSTICS_AVAILABILITY.includes(
-      input.queueDiagnosticsAvailability
-    )
-      ? {
-          queueDiagnosticsAvailability: input.queueDiagnosticsAvailability,
-        }
-      : {}),
-    ...(input.revisionCategory !== undefined &&
-    CACHE_REVISION_CATEGORIES.includes(input.revisionCategory)
-      ? { revisionCategory: input.revisionCategory }
-      : {}),
-    ...(input.resetAttempt === 'wipe-before-open'
-      ? { resetAttempt: input.resetAttempt }
-      : {}),
-    ...(boundedNumber(input.durationMs, 3_600_000) !== undefined
-      ? { durationMs: boundedNumber(input.durationMs, 3_600_000) }
-      : {}),
-    ...buildSanitizeObservation2(),
-    ...(boundedNumber(input.bytes) !== undefined
-      ? { bytes: boundedNumber(input.bytes) }
-      : {}),
-    ...(boundedNumber(input.highWaterBytes) !== undefined
-      ? { highWaterBytes: boundedNumber(input.highWaterBytes) }
-      : {}),
-    ...(boundedNumber(input.usageBytes) !== undefined
-      ? { usageBytes: boundedNumber(input.usageBytes) }
-      : {}),
-    ...(boundedNumber(input.quotaBytes) !== undefined
-      ? { quotaBytes: boundedNumber(input.quotaBytes) }
-      : {}),
-    ...(boundedNumber(input.ratio, 1) !== undefined
-      ? { ratio: boundedNumber(input.ratio, 1) }
-      : {}),
-    ...(boundedNumber(input.count) !== undefined
-      ? { count: boundedNumber(input.count) }
-      : {}),
-    ...(boundedNumber(input.sampleRate) !== undefined
-      ? { sampleRate: boundedNumber(input.sampleRate) }
-      : {}),
-    ...(boundedNumber(input.queueDepth) !== undefined
-      ? { queueDepth: boundedNumber(input.queueDepth) }
-      : {}),
-    ...(boundedNumber(input.oldestAgeMs, 31_536_000_000) !== undefined
-      ? { oldestAgeMs: boundedNumber(input.oldestAgeMs, 31_536_000_000) }
-      : {}),
-  };
-
-  function buildSanitizeObservation7(): Partial<CacheTelemetryObservation> {
-    return input.resetReason !== undefined &&
-      CACHE_RESET_REASONS.includes(input.resetReason)
-      ? { resetReason: input.resetReason }
-      : {};
-  }
-
-  function buildSanitizeObservation6(): Partial<CacheTelemetryObservation> {
-    return input.ownerEvent !== undefined &&
-      CACHE_OWNER_EVENTS.includes(input.ownerEvent)
-      ? { ownerEvent: input.ownerEvent }
-      : {};
-  }
-
-  function buildSanitizeObservation5(): Partial<CacheTelemetryObservation> {
-    return input.errorCode !== undefined &&
-      CACHE_ERROR_CODES.includes(input.errorCode)
-      ? { errorCode: input.errorCode }
-      : {};
-  }
-
-  function buildSanitizeObservation4(): Partial<CacheTelemetryObservation> {
-    return input.outcome !== undefined &&
-      CACHE_TELEMETRY_OUTCOMES.includes(input.outcome)
-      ? { outcome: input.outcome }
-      : {};
-  }
-
-  function buildSanitizeObservation3(): Partial<CacheTelemetryObservation> {
-    return input.name === 'graphql_cache.aggregate' &&
-      input.aggregatedEventName !== undefined &&
-      HIGH_VOLUME_NAMES.has(input.aggregatedEventName)
+    ...(input.name === 'graphql_cache.aggregate' &&
+    input.aggregatedEventName !== undefined &&
+    HIGH_VOLUME_NAMES.has(input.aggregatedEventName)
       ? { aggregatedEventName: input.aggregatedEventName }
-      : {};
-  }
-
-  function buildSanitizeObservation2(): Partial<CacheTelemetryObservation> {
-    return input.name === 'graphql_cache.slow_query' &&
-      typeof input.queryFingerprint === 'string' &&
-      /^[0-9a-f]{16}$/.test(input.queryFingerprint)
+      : {}),
+    operationCategory: input.operationCategory,
+    ...allowedField('outcome', input.outcome, CACHE_TELEMETRY_OUTCOMES),
+    ...allowedField('errorCode', input.errorCode, CACHE_ERROR_CODES),
+    ...allowedField('resetReason', input.resetReason, CACHE_RESET_REASONS),
+    ...allowedField('ownerEvent', input.ownerEvent, CACHE_OWNER_EVENTS),
+    ...allowedField('persistence', input.persistence, [
+      'granted',
+      'denied',
+      'unknown',
+    ]),
+    ...allowedField('openOutcome', input.openOutcome, CACHE_OPEN_OUTCOMES),
+    ...allowedField(
+      'queueDiagnosticsAvailability',
+      input.queueDiagnosticsAvailability,
+      CACHE_QUEUE_DIAGNOSTICS_AVAILABILITY
+    ),
+    ...allowedField(
+      'revisionCategory',
+      input.revisionCategory,
+      CACHE_REVISION_CATEGORIES
+    ),
+    ...allowedField('resetAttempt', input.resetAttempt, ['wipe-before-open']),
+    ...boundedField('durationMs', input.durationMs, 3_600_000),
+    ...(input.name === 'graphql_cache.slow_query' &&
+    typeof input.queryFingerprint === 'string' &&
+    /^[0-9a-f]{16}$/.test(input.queryFingerprint)
       ? { queryFingerprint: input.queryFingerprint }
-      : {};
-  }
-
-  function buildSanitizeObservation(): Partial<CacheTelemetryObservation> {
-    return input.persistence === 'granted' ||
-      input.persistence === 'denied' ||
-      input.persistence === 'unknown'
-      ? { persistence: input.persistence }
-      : {};
-  }
+      : {}),
+    ...boundedField('bytes', input.bytes),
+    ...boundedField('highWaterBytes', input.highWaterBytes),
+    ...boundedField('usageBytes', input.usageBytes),
+    ...boundedField('quotaBytes', input.quotaBytes),
+    ...boundedField('ratio', input.ratio, 1),
+    ...boundedField('count', input.count),
+    ...boundedField('sampleRate', input.sampleRate),
+    ...boundedField('queueDepth', input.queueDepth),
+    ...boundedField('oldestAgeMs', input.oldestAgeMs, 31_536_000_000),
+  };
 }
 
 type Aggregate = {
@@ -571,7 +537,7 @@ export function operationCategoryForRequest(
       'inspect-mutations',
       () => 'lifecycle' as const
     )
-    .exhaustive();
+    .exhaustive(() => 'lifecycle' as const);
 }
 
 export function isStorageTransactionRequest(

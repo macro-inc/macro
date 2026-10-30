@@ -1,7 +1,7 @@
-import { isTabFocused } from '@core/signal/tabFocus';
+import { isTabVisible } from '@core/signal/tabFocus';
 import type { EntityId } from '@core/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ok } from 'neverthrow';
-
 import type { TrackEntityMessage } from './generated/schemas/trackEntityMessage';
 import { reportHeartbeatLapse, reportTrack } from './presence-telemetry';
 import { clearStream } from './stream';
@@ -38,12 +38,17 @@ export const connectionGatewayClient = {
         trackedEntities.set(args.entity_id, {
           entityType: args.entity_type,
           count: 1,
+          // Visible, not focused: someone reading beside the window they are
+          // typing in is still looking, and should keep their presence dot.
           heartbeat: setInterval(() => {
-            if (isTabFocused())
-              void connectionGatewayClient.trackEntity({
-                ...args,
-                action: 'ping',
-              });
+            if (isTabVisible())
+              fireAndForget(
+                connectionGatewayClient.trackEntity({
+                  ...args,
+                  action: 'ping',
+                }),
+                'connection-gateway'
+              );
             else reportLapseOnce(args);
           }, 20_000),
           lastSeen: Date.now(),

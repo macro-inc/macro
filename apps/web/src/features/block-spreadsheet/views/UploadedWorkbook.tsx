@@ -3,6 +3,7 @@ import { useBlockId } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import { createQuery } from '@tanstack/solid-query';
 import { Button } from '@ui';
@@ -54,7 +55,13 @@ export default function UploadedWorkbook() {
                 ? query.error.message
                 : 'Unable to open this workbook.'}
             </span>
-            <Button size="sm" onClick={() => void query.refetch()}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                fireAndForget(query.refetch(), 'uploaded-workbook')
+              }
+            >
               Try again
             </Button>
           </div>
@@ -94,25 +101,21 @@ function UploadedWorkbookImport(props: { workbook: WorkbookFileData }) {
     registerSpreadsheetImport(doc, plan, formulas);
   };
 
-  const settleWrite = async () => {
+  const open = async () => {
     try {
       await write();
-    } catch (settleWriteError) {
-      const reason: unknown = settleWriteError;
-
+    } catch (reason: unknown) {
       if (!disposed)
         setError(
           reason instanceof Error
             ? reason.message
             : 'Unable to open this workbook.'
         );
-
       return;
     }
-
-    return await setReady(true);
+    setReady(true);
   };
-  settleWrite();
+  fireAndForget(open(), 'uploaded-workbook');
   return (
     <Show
       when={ready()}
@@ -170,9 +173,9 @@ function UploadedWorkbookPreview(props: {
         </span>
         <Button
           size="sm"
-          variant="accent"
+          variant="primary"
           disabled={!!actions.pending()}
-          onClick={() => void actions.edit()}
+          onClick={() => fireAndForget(actions.edit(), 'uploaded-workbook')}
         >
           {actions.pending() ? 'Saving…' : 'Edit in Macro'}
         </Button>

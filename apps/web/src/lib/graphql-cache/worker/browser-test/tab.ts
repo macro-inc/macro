@@ -1,3 +1,4 @@
+import { startDetached } from '@core/util/startDetached';
 import { match } from 'ts-pattern';
 import type { CacheRequest, CacheResponse } from '../../protocol';
 import {
@@ -23,6 +24,23 @@ const report = (
     tabId,
     event,
   } satisfies BrowserHarnessEnvelope);
+};
+
+const errorText = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+/** Starts a command's work, reporting a failure as the command's result. */
+const runCommand = (commandId: string, work: () => Promise<void>): void => {
+  startDetached(work(), (error) => {
+    report({
+      kind: 'command-result',
+      commandId,
+      ok: false,
+      error: errorText(error),
+    });
+  });
+};
+const reportProtocolError = (error: unknown): void => {
+  report({ kind: 'protocol-error', error: errorText(error) });
 };
 
 let releaseLivenessLock!: () => void;
@@ -134,38 +152,40 @@ const sendRequest = async (
 const handleCommand = (command: BrowserHarnessCommand): void => {
   match(command)
     .with({ kind: 'write' }, (value) => {
-      void sendRequest(value.commandId, {
-        kind: 'write',
-        query: 'query Value { value }',
-        data: { value: value.value },
-      });
+      runCommand(value.commandId, () =>
+        sendRequest(value.commandId, {
+          kind: 'write',
+          query: 'query Value { value }',
+          data: { value: value.value },
+        })
+      );
     })
     .with({ kind: 'read' }, (value) => {
-      void sendRequest(value.commandId, {
-        kind: 'read',
-        query: 'query Value { value }',
-      });
+      runCommand(value.commandId, () =>
+        sendRequest(value.commandId, {
+          kind: 'read',
+          query: 'query Value { value }',
+        })
+      );
     })
     .with({ kind: 'slow-read' }, (value) => {
-      void sendRequest(value.commandId, {
-        kind: 'read',
-        query: 'query Slow { value }',
-      });
+      runCommand(value.commandId, () =>
+        sendRequest(value.commandId, {
+          kind: 'read',
+          query: 'query Slow { value }',
+        })
+      );
     })
     .with({ kind: 'graceful-close' }, (value) => {
-      const settleDispose = async () => {
+      runCommand(value.commandId, async () => {
         await adapter.dispose({ graceful: true });
-
         report({
           kind: 'command-result',
           commandId: value.commandId,
           ok: true,
         });
         setTimeout(() => window.close());
-
-        return;
-      };
-      void settleDispose();
+      });
     })
     .with({ kind: 'crash-worker' }, (value) => {
       if (!currentWorker) {
@@ -217,10 +237,8 @@ channel.onmessage = (event: MessageEvent<BrowserHarnessEnvelope>) => {
 // First cache use starts liveness registration. Every page deliberately uses
 // request id 1, proving the coordinator must rewrite ids before engine routing.
 adapter.postMessage({ id: nextRequestId++, kind: 'init', scope });
-
-const settleStart = async () => {
+const register = async () => {
   await adapter.start();
-
-  return await report({ kind: 'registered' });
+  report({ kind: 'registered' });
 };
-void settleStart();
+startDetached(register(), reportProtocolError);

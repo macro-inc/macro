@@ -1,0 +1,151 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/android_release_drift.rs
+name: Android Release Drift
+'on':
+  pull_request:
+    types:
+    - synchronize
+jobs:
+  drift:
+    if: contains(github.event.pull_request.labels.*.name, 'android-update') && github.event.pull_request.head.repo.full_name == github.repository
+    name: Android Release Drift
+    runs-on: namespace-profile-linux-tiny-no-cache
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: write
+      id-token: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    timeout-minutes: 15
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      with:
+        bun-version: '1.3.13'
+    - id: detect
+      name: Detect Android native changes in this push
+      run: |
+        # --- authenticated fetch ------------------------------------------------------
+        # gh_fetch <sha|ref>: make a commit that is not in this checkout (the base
+        # commit, a moved PR head, GitHub's test merge commit) available. Checkouts
+        # here don't persist credentials, so authenticate the way actions/checkout
+        # does. Fails if the commit is unreachable (a force-pushed-away head).
+        gh_fetch() {
+          local auth
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+            fetch -q --depth=1 origin "$1"
+        }
+        # ------------------------------------------------------------------------------
+        set -euo pipefail
+        # A push landed on a PR that carries android-update. Compare the Android native
+        # code before and after the push. Only native changes matter — web-only
+        # commits ship over the air after the merge. A force-push that discarded the
+        # old head counts as changed: nothing proves the released bundle still matches.
+        if gh_fetch "$BEFORE_SHA" && before=$(bun scripts/android-native.mjs hash "$BEFORE_SHA"); then :; else
+          before=unknown
+        fi
+        gh_fetch "$AFTER_SHA"
+        after=$(bun scripts/android-native.mjs hash "$AFTER_SHA")
+        echo "native hash before: ${before}"
+        echo "native hash after:  ${after}"
+        if [[ "$before" == "$after" ]]; then
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+          echo "No Android native changes in this push; the release stays valid."
+        else
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          # The version code that may already be on Play is the old head's. After a
+          # force-push the old head is gone; the new head's code is the best guess (a
+          # push rarely changes it), and it keeps the Play check running — that
+          # check is what tells the author a stale bundle is already in production.
+          if [[ "$before" != unknown ]]; then
+            released=$BEFORE_SHA
+          else
+            released=$AFTER_SHA
+            echo "The previous head is unreachable (force-push); checking Play for the current head's version code instead."
+          fi
+          echo "version_code=$(bun scripts/android-native.mjs version-code "$released")" >> "$GITHUB_OUTPUT"
+          echo "Android native code changed; the released bundle is stale."
+        fi
+      shell: bash
+      env:
+        BEFORE_SHA: ${{ github.event.before }}
+        AFTER_SHA: ${{ github.event.after }}
+      working-directory: apps/web
+    - name: Cancel in-progress release runs for this PR
+      if: steps.detect.outputs.changed == 'true'
+      run: |
+        set -euo pipefail
+        runs=$(gh run list --repo "$GH_REPO" --workflow android-play-release.yml \
+          --branch "$HEAD_REF" --json databaseId,status \
+          --jq '.[] | select(.status == "queued" or .status == "in_progress" or .status == "waiting") | .databaseId')
+        if [[ -z "$runs" ]]; then
+          echo "No release run in progress."
+          exit 0
+        fi
+        for run_id in $runs; do
+          echo "Cancelling release run ${run_id} (it would upload a bundle of the old head)."
+          gh run cancel "$run_id" --repo "$GH_REPO" || true
+        done
+        deadline=$(( $(date +%s) + 180 ))
+        for run_id in $runs; do
+          while [[ "$(gh run view "$run_id" --repo "$GH_REPO" --json status --jq .status)" != "completed" ]]; do
+            if (( $(date +%s) > deadline )); then
+              echo "::warning::Release run ${run_id} is still not completed."
+              break
+            fi
+            sleep 10
+          done
+        done
+      shell: bash
+      env:
+        HEAD_REF: ${{ github.event.pull_request.head.ref }}
+    - id: auth
+      name: Authenticate to Google Play
+      if: steps.detect.outputs.changed == 'true' && steps.detect.outputs.version_code != ''
+      uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+      with:
+        workload_identity_provider: ${{ vars.GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT }}
+        token_format: access_token
+        access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+        create_credentials_file: 'false'
+        export_environment_variables: 'false'
+    - id: status
+      name: Check whether the stale version code is already on Play
+      if: steps.detect.outputs.changed == 'true' && steps.detect.outputs.version_code != ''
+      run: |
+        set -euo pipefail
+        bun scripts/android-play-status.mjs --version-code "$VERSION_CODE" || true
+      shell: bash
+      env:
+        VERSION_CODE: ${{ steps.detect.outputs.version_code }}
+        GOOGLE_PLAY_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+      working-directory: apps/web
+    - name: Remove the android-update label
+      if: always() && steps.detect.outputs.changed == 'true'
+      run: gh pr edit "$PR_NUMBER" --repo "$GH_REPO" --remove-label android-update
+      shell: bash
+    - name: Comment on the PR
+      if: always() && steps.detect.outputs.changed == 'true'
+      run: |
+        set -euo pipefail
+        bump='cd apps/web && just android-bump'
+        if [[ "$PROMOTED" == "true" ]]; then
+          body="🚨 Android native changes were pushed to this PR after version code ${VERSION_CODE} had already been promoted to Google Play production, so that bundle is (or is about to be) live with native code this PR no longer matches. A Play release cannot be withdrawn: bump (\`${bump}\`), commit, re-add the \`android-update\` label, and ship the follow-up as soon as possible. The label was removed."
+        else
+          body="🤖 Android native code changed after this PR's Play release started, so the release was stopped: any in-progress build was cancelled and the \`android-update\` label removed. If a bundle already reached the internal track it stays there (internal testers only). When the PR is ready again, bump (\`${bump}\`), commit, push, and re-add \`android-update\`."
+        fi
+        gh pr comment "$PR_NUMBER" --repo "$GH_REPO" --body "$body"
+      shell: bash
+      env:
+        PROMOTED: ${{ steps.status.outputs.promoted }}
+        VERSION_CODE: ${{ steps.detect.outputs.version_code }}

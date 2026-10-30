@@ -1,3 +1,5 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { enableDatabases } from '@core/constant/featureFlags';
 import type { ComponentProps } from 'solid-js';
 import { RecordTabs } from './components/record-tabs';
 import { CrmProvider } from './context/crm-context';
@@ -21,5 +23,12 @@ export function CompanyTabs(props: {
   onChange: (section: CompanySection) => void;
   compact?: boolean;
 }) {
-  return <RecordTabs sections={COMPANY_SECTIONS} {...props} />;
+  const databasesFlag = useFeatureFlag(enableDatabases);
+  return (
+    <RecordTabs
+      sections={COMPANY_SECTIONS}
+      databasesEnabled={databasesFlag().enabled}
+      {...props}
+    />
+  );
 }

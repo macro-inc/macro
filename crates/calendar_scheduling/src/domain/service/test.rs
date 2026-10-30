@@ -344,7 +344,7 @@ async fn team_permissions_and_host_membership_are_server_enforced() {
     let team = Some(Uuid::new_v4());
     let p = profile(team);
     assert!(matches!(
-        service.save("member", team, p.clone()).await,
+        service.save("stranger", team, p.clone()).await,
         Err(Error::Forbidden)
     ));
     assert!(matches!(
@@ -357,8 +357,8 @@ async fn team_permissions_and_host_membership_are_server_enforced() {
         service.save("admin", team, bad).await,
         Err(Error::Invalid(_))
     ));
-    assert!(service.save("admin", team, p).await.is_ok());
-    assert!(service.settings("member", team).await.is_ok());
+    assert!(service.save("member", team, p).await.is_ok());
+    assert!(service.settings("admin", team).await.is_ok());
 }
 #[tokio::test]
 async fn personal_calendar_cannot_impersonate_another_host() {
@@ -642,6 +642,45 @@ async fn approval_rechecks_assigned_hosts_even_after_link_removal() {
         service.approve("admin", b.booking.id).await,
         Err(Error::Forbidden)
     ));
+}
+
+#[tokio::test]
+async fn hosts_manage_the_team_meetings_they_host() {
+    let store = Arc::new(Memory::default());
+    let service = TestService::new(store.clone(), Arc::new(Calendar::default()), Members);
+    let team = Some(Uuid::new_v4());
+    let mut p = profile(team);
+    p.event_types[0].hosts = vec!["member".into()];
+    let p = service.save("admin", team, p).await.unwrap();
+    let r = service
+        .book(p.id, p.event_types[0].id, request())
+        .await
+        .unwrap();
+    let set_hosts = |hosts: &[&str]| {
+        let mut data = store.bookings.lock().unwrap();
+        data.get_mut(&r.booking.id).unwrap().booking.hosts =
+            hosts.iter().map(|host| host.to_string()).collect();
+    };
+    set_hosts(&["admin"]);
+    assert!(matches!(
+        service.manage("member", r.booking.id).await,
+        Err(Error::Forbidden)
+    ));
+    assert!(matches!(
+        service.cancel(r.booking.id, None, Some("member")).await,
+        Err(Error::Forbidden)
+    ));
+    set_hosts(&["member"]);
+    assert!(service.manage("admin", r.booking.id).await.is_ok());
+    assert!(service.manage("member", r.booking.id).await.is_ok());
+    assert_eq!(
+        service
+            .cancel(r.booking.id, None, Some("member"))
+            .await
+            .unwrap()
+            .status,
+        BookingStatus::Cancelled
+    );
 }
 
 #[tokio::test]
@@ -1224,6 +1263,7 @@ impl AttachmentReadiness for Arc<Calendar> {
 mod booking_links;
 
 mod management;
+mod replacement;
 
 #[cfg(all(feature = "client", feature = "inbound"))]
 mod http_administration;

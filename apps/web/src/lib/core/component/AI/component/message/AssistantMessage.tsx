@@ -3,11 +3,13 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { replaceCitations } from '@core/component/LexicalMarkdown/citationsUtils';
 import { ENABLE_TTFT } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { PulsingStar } from '@entity/components/PulsingStar';
-import WideFileMd from '@phosphor/file.svg';
-import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
-import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
-import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
+import CheckIcon from '@icon/system/bold/check-bold.svg?component-solid';
+import ClipboardIcon from '@icon/system/bold/clipboard-bold.svg?component-solid';
+import LoadingIcon from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
+import WideFileMd from '@icon/system/regular/file.svg';
+import { Telemetry } from '@macro-inc/observability';
 import { generateTitle } from '@queries/cognition/title';
 import type { ChatMessageContent } from '@service-cognition/generated/schemas/chatMessageContent';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
@@ -125,6 +127,15 @@ export function AssistantMessage(props: {
     setIsLoading(false);
   });
 
+  const editInMarkdown = async () => {
+    try {
+      await handleEditInMarkdown();
+    } catch (error) {
+      setIsLoading(false);
+      Telemetry.error(error, { surface: 'assistant-message-edit-in-notes' });
+    }
+  };
+
   return (
     <div
       class="max-w-full flex flex-col justify-start items-start min-w-0 w-full"
@@ -177,7 +188,6 @@ export function AssistantMessage(props: {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  noTouchResize
                   class="p-1 text-ink-extra-muted hover:text-ink-muted"
                   tooltip={
                     isLoading()
@@ -185,20 +195,25 @@ export function AssistantMessage(props: {
                       : 'Edit assistant response in Notes'
                   }
                   onClick={() => {
-                    !isLoading() && handleEditInMarkdown();
+                    if (isLoading()) return;
+                    fireAndForget(
+                      editInMarkdown(),
+                      'assistant-message-edit-in-notes'
+                    );
                   }}
                 >
                   <Show
                     when={!isLoading()}
-                    fallback={<LoadingIcon class="animate-spin" />}
+                    fallback={
+                      <LoadingIcon class="animate-spin size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+                    }
                   >
-                    <WideFileMd />
+                    <WideFileMd class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                   </Show>
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  noTouchResize
                   class="p-1 text-ink-extra-muted hover:text-ink-muted"
                   tooltip={
                     copied()
@@ -207,8 +222,13 @@ export function AssistantMessage(props: {
                   }
                   onClick={handleCopy}
                 >
-                  <Show when={!copied()} fallback={<CheckIcon />}>
-                    <ClipboardIcon />
+                  <Show
+                    when={!copied()}
+                    fallback={
+                      <CheckIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+                    }
+                  >
+                    <ClipboardIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                   </Show>
                 </Button>
                 <Show when={props.ttft && ENABLE_TTFT}>

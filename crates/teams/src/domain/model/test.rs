@@ -135,3 +135,15 @@ fn is_generic_email_domain_allows_company_domains() {
     assert!(!is_generic_email_domain("example.org"));
     assert!(!is_generic_email_domain("gmail.com.evil.com"));
 }
+
+#[test]
+fn invite_link_tokens_never_print_their_secret() {
+    let secret = uuid::Uuid::from_u128(0x1234_5678_9abc_def0_1234_5678_9abc_def0);
+    let token = TeamInviteLinkToken::from_uuid(secret);
+
+    let printed = format!("{token:?} {:?}", Some(token));
+
+    assert!(!printed.contains(&secret.to_string()));
+    assert!(!printed.contains(&secret.simple().to_string()));
+    assert!(printed.contains("<redacted>"));
+}

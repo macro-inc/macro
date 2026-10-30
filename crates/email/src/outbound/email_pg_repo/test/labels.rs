@@ -218,3 +218,248 @@ async fn test_labels_by_thread_ids_different_label_types(
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_labels", "email_labels_pending_tags")
+    )
+)]
+async fn test_labels_by_thread_ids_overlays_pending_tags(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+    let first = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let second = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
+
+    let mut labels: Vec<(Uuid, String)> = repo
+        .labels_by_thread_ids(&[first, second])
+        .await?
+        .into_iter()
+        .map(|label| (label.thread_id, label.provider_label_id))
+        .collect();
+    labels.sort();
+
+    assert_eq!(
+        labels,
+        vec![
+            (first, "IMPORTANT".to_owned()),
+            (first, "INBOX".to_owned()),
+            (first, "Label_123".to_owned()),
+            (second, "INBOX".to_owned()),
+        ]
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_labels", "email_labels_pending_tags")
+    )
+)]
+async fn test_labels_by_message_ids_overlays_pending_tags(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+    let first = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-111111111111")?;
+    let second = Uuid::parse_str("22222222-aaaa-aaaa-aaaa-222222222222")?;
+
+    let labels = repo.labels_by_message_ids(&[first, second]).await?;
+    let provider_ids = |message_id: Uuid| -> Vec<String> {
+        labels[&message_id]
+            .iter()
+            .map(|label| label.provider_label_id.clone())
+            .collect()
+    };
+
+    assert_eq!(provider_ids(first), vec!["IMPORTANT", "INBOX", "Label_123"]);
+    assert_eq!(provider_ids(second), vec!["INBOX"]);
+
+    Ok(())
+}
+
+async fn user_label_thread_ids(
+    pool: &Pool<Postgres>,
+    label_name: &str,
+) -> anyhow::Result<Vec<Uuid>> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let mut thread_ids: Vec<Uuid> = preview_views::user_label::user_label_preview_cursor(
+        pool,
+        &[link_id],
+        50,
+        &Query::Sort(SimpleSortMethod::UpdatedAt, ()),
+        label_name,
+    )
+    .await?
+    .into_iter()
+    .map(|row| row.id)
+    .collect();
+    thread_ids.sort();
+    Ok(thread_ids)
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_labels", "email_labels_pending_tags")
+    )
+)]
+async fn test_user_label_preview_includes_pending_tags(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    assert_eq!(
+        user_label_thread_ids(&pool, "MyCustomLabel").await?,
+        vec![
+            Uuid::parse_str("11111111-1111-1111-1111-111111111111")?,
+            Uuid::parse_str("55555555-5555-5555-5555-555555555555")?,
+        ]
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_labels", "email_labels_queued_deletes")
+    )
+)]
+async fn test_labels_by_thread_ids_hides_queued_label_deletes(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+    let first = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let second = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
+    let fifth = Uuid::parse_str("55555555-5555-5555-5555-555555555555")?;
+
+    let mut labels: Vec<(Uuid, String)> = repo
+        .labels_by_thread_ids(&[first, second, fifth])
+        .await?
+        .into_iter()
+        .map(|label| (label.thread_id, label.provider_label_id))
+        .collect();
+    labels.sort();
+
+    assert_eq!(
+        labels,
+        vec![
+            (first, "IMPORTANT".to_owned()),
+            (first, "INBOX".to_owned()),
+            (second, "INBOX".to_owned()),
+            (second, "SENT".to_owned()),
+            (fifth, "INBOX".to_owned()),
+        ]
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_labels", "email_labels_queued_deletes")
+    )
+)]
+async fn test_labels_by_message_ids_hides_queued_label_deletes(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+    let first = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-111111111111")?;
+    let second = Uuid::parse_str("22222222-aaaa-aaaa-aaaa-222222222222")?;
+    let fifth = Uuid::parse_str("55555555-aaaa-aaaa-aaaa-555555555555")?;
+
+    let labels = repo.labels_by_message_ids(&[first, second, fifth]).await?;
+    let provider_ids = |message_id: Uuid| -> Vec<String> {
+        labels[&message_id]
+            .iter()
+            .map(|label| label.provider_label_id.clone())
+            .collect()
+    };
+
+    assert_eq!(provider_ids(first), vec!["IMPORTANT", "INBOX"]);
+    assert_eq!(provider_ids(second), vec!["INBOX", "SENT"]);
+    assert_eq!(provider_ids(fifth), vec!["INBOX"]);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_labels", "email_labels_queued_deletes")
+    )
+)]
+async fn test_user_label_preview_hides_queued_label_deletes(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    assert!(
+        user_label_thread_ids(&pool, "MyCustomLabel")
+            .await?
+            .is_empty()
+    );
+
+    Ok(())
+}
+
+fn relation_scans<'a>(
+    node: &'a serde_json::Value,
+    relation: &str,
+    scans: &mut Vec<&'a serde_json::Value>,
+) {
+    if node["Relation Name"] == relation {
+        scans.push(node);
+    }
+    for child in node["Plans"].as_array().into_iter().flatten() {
+        relation_scans(child, relation, scans);
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_labels", "email_labels_bulk")
+    )
+)]
+async fn test_labels_by_thread_ids_reads_labels_by_message_index(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let thread_ids = vec![Uuid::parse_str("11111111-1111-1111-1111-111111111111")?];
+
+    let plan = sqlx::query_scalar!(
+        r#"EXPLAIN (FORMAT JSON)
+        SELECT DISTINCT ON (l.id, m.thread_id) l.id, m.thread_id
+        FROM email_messages m
+        JOIN email_effective_message_labels ml ON m.id = ml.message_id
+        JOIN email_labels l ON ml.label_id = l.id
+        WHERE m.thread_id = ANY($1)"#,
+        &thread_ids,
+    )
+    .fetch_one(&pool)
+    .await?
+    .expect("EXPLAIN returns a JSON plan");
+
+    let mut scans = Vec::new();
+    relation_scans(&plan[0]["Plan"], "email_message_labels", &mut scans);
+    assert!(
+        !scans.is_empty(),
+        "plan must read email_message_labels: {plan}"
+    );
+    for scan in scans {
+        let condition = scan["Index Cond"]
+            .as_str()
+            .or(scan["Recheck Cond"].as_str());
+        assert!(
+            condition.is_some_and(|cond| cond.contains("message_id")),
+            "thread label lookups must probe email_message_labels by message_id: {plan}"
+        );
+    }
+
+    Ok(())
+}

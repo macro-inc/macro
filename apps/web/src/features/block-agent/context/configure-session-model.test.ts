@@ -129,18 +129,14 @@ it('confirms speed independently of reasoning effort before the caller sends a p
     options: [{ value: 'standard' }, { value: 'ultrafast' }],
   });
   let finished = false;
-
-  const settleConfigureSessionModel = async () => {
+  const configure = async () => {
     await configureSessionModel(f.session, undefined, {
       configId: 'speed',
       value: 'ultrafast',
     });
-
     finished = true;
-
-    return;
   };
-  const result = settleConfigureSessionModel();
+  const result = configure();
   await flush();
   expect(f.issue.mock.calls).toEqual([
     [{ type: 'setConfigOption', configId: 'speed', value: 'ultrafast' }],

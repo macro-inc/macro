@@ -1,8 +1,9 @@
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import TrashIcon from '@phosphor/trash.svg';
 import { Key } from '@solid-primitives/keyed';
 import { DragDropProvider, DragOverlay } from '@thisbeyond/solid-dnd';
 import { getHashedPaletteColor } from '@ui/utils/palette';
@@ -163,7 +164,10 @@ export function DatabaseTable(props: DatabaseTableProps) {
     indicatorLeft: (boundary) =>
       boundary - gridElement.getBoundingClientRect().left,
     onDrop: (columnId, targetId, edge) =>
-      void props.onReorderColumn?.(columnId, targetId, edge),
+      fireAndForget(
+        props.onReorderColumn?.(columnId, targetId, edge),
+        'database'
+      ),
   });
   const headerRenames = new Map<string, () => void>();
   let requestedHeader: string | undefined;
@@ -177,15 +181,18 @@ export function DatabaseTable(props: DatabaseTableProps) {
     }
   };
   const controls = new Map<string, Map<string, GridCellControl>>();
-  let pendingEdit: { rowId: string; columnId: string } | undefined;
+  let pendingEdit:
+    | { rowId: string; columnId: string; selectAll?: boolean }
+    | undefined;
   const control = (rowId: string, columnId: string) =>
     controls.get(rowId)?.get(columnId);
   const editRequestedCell = () => {
     if (!pendingEdit || !props.canEdit) return;
     const editor = control(pendingEdit.rowId, pendingEdit.columnId);
     if (!editor) return;
+    const { selectAll } = pendingEdit;
     pendingEdit = undefined;
-    editor.edit();
+    editor.edit(undefined, { selectAll });
   };
   props.controlsRef?.({
     editCell: (rowId, columnId) => {
@@ -241,7 +248,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
     const rowIndex = rows().findIndex((row) => row.id === rowId);
     const row = rows()[rowIndex + direction];
     if (rowIndex < 0 || !row || !column || !canEditCell(column)) return false;
-    pendingEdit = { rowId: row.id, columnId };
+    pendingEdit = { rowId: row.id, columnId, selectAll: false };
     editRequestedCell();
     return true;
   };
@@ -342,6 +349,43 @@ export function DatabaseTable(props: DatabaseTableProps) {
         })
         .join(' ')} ${hasAddColumn() ? '8.75rem' : ''}`
   );
+  /** Delete and Backspace clear the focused cell; returns whether the key was the grid's. */
+  function clearCell(event: KeyboardEvent, cell: HTMLElement) {
+    if (
+      (event.key !== 'Delete' && event.key !== 'Backspace') ||
+      !props.canEdit ||
+      !props.onClearCells
+    )
+      return false;
+    const row = rows()[Number(cell.dataset.gridRow)];
+    const column = columns()[Number(cell.dataset.gridColumn) - 1];
+    if (!row || !column || !canEditCell(column)) return true;
+    event.preventDefault();
+    event.stopPropagation();
+    fireAndForget(props.onClearCells([row.id], [column.id]), 'database');
+    return true;
+  }
+  /** The context-menu key opens the cell's menu below it. */
+  function openCellMenu(
+    event: KeyboardEvent,
+    cell: HTMLElement,
+    target: HTMLElement
+  ) {
+    if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10'))
+      return false;
+    event.preventDefault();
+    event.stopPropagation();
+    const bounds = cell.getBoundingClientRect();
+    target.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: bounds.left + 8,
+        clientY: bounds.bottom,
+      })
+    );
+    return true;
+  }
   function moveFocus(event: KeyboardEvent) {
     if (
       event.defaultPrevented ||
@@ -363,23 +407,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
     const cell = target.closest<HTMLElement>('[data-grid-cell]');
     const grid = cell?.closest<HTMLElement>('[data-grid]');
     if (!cell || !grid) return;
-    if (
-      event.key === 'ContextMenu' ||
-      (event.shiftKey && event.key === 'F10')
-    ) {
-      event.preventDefault();
-      event.stopPropagation();
-      const bounds = cell.getBoundingClientRect();
-      target.dispatchEvent(
-        new MouseEvent('contextmenu', {
-          bubbles: true,
-          cancelable: true,
-          clientX: bounds.left + 8,
-          clientY: bounds.bottom,
-        })
-      );
-      return;
-    }
+    if (clearCell(event, cell) || openCellMenu(event, cell, target)) return;
     const deltas: Record<string, [number, number]> = {
       ArrowUp: [-1, 0],
       ArrowDown: [1, 0],
@@ -549,6 +577,16 @@ export function DatabaseTable(props: DatabaseTableProps) {
                 const column = () => header().column.columnDef.meta!;
                 return (
                   <DraggableColumnHeader
+                    onEnter={() => {
+                      const row = rows()[0];
+                      if (!row || !canEditCell(column())) return;
+                      pendingEdit = {
+                        rowId: row.id,
+                        columnId: column().id,
+                        selectAll: false,
+                      };
+                      editRequestedCell();
+                    }}
                     registerRename={(rename) => {
                       if (rename) headerRenames.set(column().id, rename);
                       else headerRenames.delete(column().id);
@@ -700,7 +738,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
                                 )}
                                 aria-colindex={columnIndex() + 2}
                                 tabindex={-1}
-                                class="relative min-w-0 border-r border-edge-muted/40 px-0.5 py-0.5 outline-none focus-within:ring-1 focus-within:ring-inset focus-within:ring-ink/40 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ink/50"
+                                class="relative grid min-w-0 border-r border-edge-muted/40 px-0.5 py-0.5 outline-none focus-within:ring-1 focus-within:ring-inset focus-within:ring-ink/30 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ink/30"
                                 classList={{
                                   'bg-accent/15 ring-1 ring-inset ring-accent/50':
                                     selection.contains(index(), columnIndex()),
@@ -857,7 +895,10 @@ export function DatabaseTable(props: DatabaseTableProps) {
                       disabled={props.pending}
                       onClick={() =>
                         deferAction(() => {
-                          void props.onDuplicate?.(contextRowId());
+                          fireAndForget(
+                            props.onDuplicate?.(contextRowId()),
+                            'database'
+                          );
                         })
                       }
                     />

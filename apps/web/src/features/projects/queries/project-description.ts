@@ -1,5 +1,6 @@
 import { ingestLocalSnapshot } from '@core/collab-surface/createCollabSurface';
 import type { CollabMarkdownSession } from '@core/collab-surface/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createLoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { RawUpdate } from '@macro-inc/collaboration/collab/shared';
 import {
@@ -44,24 +45,23 @@ export function createProjectDescriptionSession<Access>(
   const [connectionError, setConnectionError] = createSignal<string>();
   let disposed = false;
   const authorization = new AbortController();
+  const ingestCachedSnapshot = async () => {
+    try {
+      await ingestLocalSnapshot(
+        loroManager,
+        new IDBSnapshotStore<RawUpdate>(LORO_SNAPSHOT_DB_NAME, surfaceId),
+        new BrowserWALStore<RawUpdate>(LORO_WAL_DB_NAME, surfaceId)
+      );
+    } catch {
+      // The server snapshot loads regardless.
+    }
+  };
   const loaded = (async () => {
     try {
       const access = await transport.authorize(surfaceId, authorization.signal);
       if (disposed) return;
       // Local cache failures must not prevent a fresh server snapshot.
-
-      const settleIngestLocalSnapshot = async () => {
-        try {
-          return await ingestLocalSnapshot(
-            loroManager,
-            new IDBSnapshotStore<RawUpdate>(LORO_SNAPSHOT_DB_NAME, surfaceId),
-            new BrowserWALStore<RawUpdate>(LORO_WAL_DB_NAME, surfaceId)
-          );
-        } catch {
-          return;
-        }
-      };
-      void settleIngestLocalSnapshot();
+      fireAndForget(ingestCachedSnapshot(), 'project-description');
       const connection = runWithOwner(owner, () =>
         transport.connect(surfaceId, access)
       );

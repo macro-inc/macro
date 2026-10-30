@@ -1,9 +1,14 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type {
   GoalSeekRequest,
   GoalSeekResult,
 } from '@macro-inc/spreadsheet/goal-seek';
 import { sheetPivotLayouts } from '@macro-inc/spreadsheet/pivot-layout';
-import type { AxisChange } from '@macro-inc/spreadsheet/workbook-structure';
+import { sheetTableLayouts } from '@macro-inc/spreadsheet/sheet-tables';
+import type {
+  AxisChange,
+  RangeMove,
+} from '@macro-inc/spreadsheet/workbook-structure';
 import {
   type Accessor,
   createEffect,
@@ -177,7 +182,9 @@ export function createCalculation(
       let changed = false;
       const patches: CalculationSheetPatch[] = sheets.map((sheet) => {
         const pivots = sheetPivotLayouts(sheet.metadata?.pivotTables);
-        const descriptor = buildDescriptor();
+        // Column names come from header cells, so a header edit changes them.
+        const tables = sheetTableLayouts(sheet);
+        const descriptor = sheetDescriptor();
         const previous = sent.get(sheet.id);
         if (
           !previous ||
@@ -212,7 +219,7 @@ export function createCalculation(
         }
         return { ...descriptor, changes: delta };
 
-        function buildDescriptor() {
+        function sheetDescriptor() {
           return {
             id: sheet.id,
             name: sheet.name,
@@ -227,6 +234,7 @@ export function createCalculation(
             // Where pivot tables show their values, for GETPIVOTDATA; the
             // tables themselves are too large to send with every edit.
             ...(pivots.length && { pivots }),
+            ...(tables.length && { tables }),
           };
         }
       });
@@ -236,12 +244,13 @@ export function createCalculation(
           clockCells.delete(id);
         }
       const layout = JSON.stringify(
-        patches.map(({ id, name, rowCount, metadata, pivots }) => [
+        patches.map(({ id, name, rowCount, metadata, pivots, tables }) => [
           id,
           name,
           rowCount,
           metadata,
           pivots,
+          tables,
         ])
       );
       if (layout !== sentSheets) changed = true;
@@ -287,67 +296,55 @@ export function createCalculation(
       let cells = 0;
       for (const keys of sent.values()) cells += keys.size;
       const current = ++generation;
-      const settleRunFinally = async () => {
+      const finishRun = () => {
         if (current !== generation) return;
         running = false;
         if (queued) {
           queued = false;
           run();
         } else setBusy(false);
-
-        return;
       };
-      const settleRun = async () => {
+      const recalculate = async () => {
         try {
-          try {
-            const settleRunValue = await calculator.run(
-              { type: 'update-workbook', sheets: patches },
-              // Entering a large workbook takes longer than recalculating it
-              // after an edit, which still reevaluates every formula.
-              CALCULATION_TIMEOUT_MS +
-                Math.min(60_000, entered / 20) +
-                Math.min(30_000, cells / 100)
-            );
-            const response = settleRunValue;
-
-            if (current !== generation || response.type !== 'update-workbook')
-              return;
-            for (const id of response.replaced) results[id] = {};
-            for (const [id, delta] of Object.entries(response.values)) {
-              results[id] ??= {};
-              const target = results[id];
-              for (const [address, value] of Object.entries(delta)) {
-                if (value) target[address] = value;
-                else delete target[address];
-              }
+          const response = await calculator.run(
+            { type: 'update-workbook', sheets: patches },
+            // Entering a large workbook takes longer than recalculating it
+            // after an edit, which still reevaluates every formula.
+            CALCULATION_TIMEOUT_MS +
+              Math.min(60_000, entered / 20) +
+              Math.min(30_000, cells / 100)
+          );
+          if (current !== generation || response.type !== 'update-workbook')
+            return;
+          for (const id of response.replaced) results[id] = {};
+          for (const [id, delta] of Object.entries(response.values)) {
+            results[id] ??= {};
+            const target = results[id];
+            for (const [address, value] of Object.entries(delta)) {
+              if (value) target[address] = value;
+              else delete target[address];
             }
-            for (const id of Object.keys(results))
-              if (!workbookOptions.workbook().some((sheet) => sheet.id === id))
-                delete results[id];
-            setWorkbookValues(results);
-            scheduleMidnight();
-
-            return;
-          } catch (settleRunError) {
-            const cause: unknown = settleRunError;
-
-            if (current !== generation) return;
-            // A failed revision must not present old values as current after
-            // the pending indicator disappears.
-            for (const id of Object.keys(results)) delete results[id];
-            setWorkbookValues(results);
-            sent.clear();
-            setError(
-              cause instanceof Error ? cause.message : 'Unable to calculate.'
-            );
-
-            return;
           }
+          for (const id of Object.keys(results))
+            if (!workbookOptions.workbook().some((sheet) => sheet.id === id))
+              delete results[id];
+          setWorkbookValues(results);
+          scheduleMidnight();
+        } catch (cause: unknown) {
+          if (current !== generation) return;
+          // A failed revision must not present old values as current after
+          // the pending indicator disappears.
+          for (const id of Object.keys(results)) delete results[id];
+          setWorkbookValues(results);
+          sent.clear();
+          setError(
+            cause instanceof Error ? cause.message : 'Unable to calculate.'
+          );
         } finally {
-          await settleRunFinally();
+          finishRun();
         }
       };
-      void settleRun();
+      fireAndForget(recalculate(), 'spreadsheet-calculation');
     };
     goalSeek = async (request) => {
       // Share the calculator worker, which already holds the workbook, and
@@ -465,6 +462,12 @@ export function createCalculation(
       const result = await copier.run({ type: 'change-axis', sheets, change });
       if (result.type !== 'change-axis')
         throw new Error('Unable to change sheet structure.');
+      return result.sheets;
+    },
+    async moveRange(sheets: SpreadsheetWorkbookSheet[], move: RangeMove) {
+      const result = await copier.run({ type: 'move-range', sheets, move });
+      if (result.type !== 'move-range')
+        throw new Error('Unable to move cells.');
       return result.sheets;
     },
     async copy(copies: CellCopy[]) {

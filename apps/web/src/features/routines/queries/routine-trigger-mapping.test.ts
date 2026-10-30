@@ -132,6 +132,33 @@ describe('routine trigger mapping', () => {
   });
 });
 
+describe('call triggers', () => {
+  it('fire on every call the owner starts or joins, without choosing items', async () => {
+    const { callEventScopeLabel, eventScopeKind, isGlobalEvent } = await import(
+      '../core/routine-triggers'
+    );
+    for (const event of ['call.started', 'call.ended'] as const) {
+      const trigger = {
+        id: 'call',
+        kind: 'event' as const,
+        events: [event],
+      };
+      expect(isGlobalEvent(trigger.events)).toBe(true);
+      expect(eventScopeKind(trigger)).toBe('CALL_RECORD');
+      expect(validateTriggers([trigger], true)).toBeNull();
+      expect(serializeTriggers([trigger])).toEqual({
+        type: 'events',
+        filters: [{ events: [event] }],
+      });
+    }
+    expect(callEventScopeLabel(['call.started'])).toBe('Calls you start');
+    expect(callEventScopeLabel(['call.ended'])).toBe('Calls you join');
+    expect(callEventScopeLabel(['call.started', 'call.ended'])).toBe(
+      'Your calls'
+    );
+  });
+});
+
 describe('trigger conditions', () => {
   it('round trips a condition with its filter', () => {
     const config = {

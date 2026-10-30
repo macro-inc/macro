@@ -294,6 +294,7 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             Self::CalendarEvent(_) => {}
             Self::AgentSession(entity) => entity.2 = score,
             Self::DatabaseRow(entity) => entity.2 = score,
+            Self::Reminder(entity) => match entity.0 {},
         }
         self
     }
@@ -315,6 +316,7 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             | Self::ForeignEntity(_)
             | Self::AgentSession(_)
             | Self::DatabaseRow(_) => {}
+            Self::Reminder(entity) => match entity.0 {},
         }
         self
     }
@@ -446,6 +448,8 @@ pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
     AgentSession(GraphqlSoupAgentSession<E>),
     /// Database row entity.
     DatabaseRow(GraphqlSoupDatabaseRow<E>),
+    /// Removed reminder entity, never constructed.
+    Reminder(GraphqlSoupReminder<E>),
 }
 
 impl<E> GraphqlSoupEntity<E>
@@ -1029,6 +1033,15 @@ impl<E: SoupEntityEdges> GraphqlSoupInitiative<E> {
         }
     }
 
+    /// Always null: project descriptions are collaborative surfaces (#7193),
+    /// keyed by the initiative id.
+    #[graphql(
+        deprecation = "Use ensureInitiativeDescriptionSurface; the description surface id is the initiative id. Remove after 2026-11-30."
+    )]
+    async fn description_document_id(&self) -> Option<ID> {
+        None
+    }
+
     /// Common entity edges, including properties and viewer permissions.
     #[graphql(flatten)]
     async fn edges(&self) -> E {
@@ -1281,6 +1294,16 @@ where
         self.0.thread_id.map(|id| ID(id.to_string()))
     }
 
+    /// Who started the session.
+    async fn source(&self) -> graphql_soup_filter_input::GraphqlAgentSessionSource {
+        self.0.source.into()
+    }
+
+    /// Where the session is shown.
+    async fn visibility(&self) -> graphql_soup_filter_input::GraphqlAgentSessionVisibility {
+        self.0.visibility.into()
+    }
+
     /// The session's last known status: `no_messages`, `disconnected`, or the
     /// wire name of the most recent system event (for example `session/end`).
     async fn status(&self) -> &str {
@@ -1411,11 +1434,34 @@ where
     }
 }
 
-/// GraphQL representation of the soup email participant.
+/// Legacy contact-keyed participant, retained for older clients during rollout.
 #[derive(SimpleObject)]
 pub struct GraphqlSoupEmailParticipant {
-    /// The unique identifier.
+    /// The referenced address-book contact's identifier.
     id: ID,
+    /// The message-specific sender fields exposed by the legacy participant.
+    #[graphql(flatten)]
+    sender: GraphqlSoupEmailSender,
+}
+
+impl GraphqlSoupEmailParticipant {
+    /// Construct the legacy participant representation.
+    pub fn new(value: &SoupContact) -> Self {
+        Self {
+            id: ID(value.id.to_string()),
+            sender: GraphqlSoupEmailSender::new(value),
+        }
+    }
+}
+
+/// A thread-local sender with the display name from their message.
+///
+/// This is an embedded value: different messages from one contact can carry
+/// different names, so the contact ID must not normalize them into one record.
+#[derive(SimpleObject)]
+pub struct GraphqlSoupEmailSender {
+    /// The referenced address-book contact's identifier.
+    contact_id: ID,
     /// The identifier of the link.
     link_id: ID,
     /// The name.
@@ -1426,11 +1472,11 @@ pub struct GraphqlSoupEmailParticipant {
     sfs_photo_url: Option<String>,
 }
 
-impl GraphqlSoupEmailParticipant {
-    /// Construct a GraphQL email participant from the Soup model.
+impl GraphqlSoupEmailSender {
+    /// Construct a thread-local sender from the Soup model.
     pub fn new(value: &SoupContact) -> Self {
         Self {
-            id: ID(value.id.to_string()),
+            contact_id: ID(value.id.to_string()),
             link_id: ID(value.link_id.to_string()),
             name: value.name.clone(),
             email: value.email_address.clone(),
@@ -1631,12 +1677,22 @@ where
         self.0.participants.len()
     }
 
-    /// The participants.
+    /// Legacy contact-keyed participants. Use senders for message-specific names.
+    #[graphql(deprecation = "Use senders to preserve message-specific display names.")]
     async fn participants(&self) -> Vec<GraphqlSoupEmailParticipant> {
         self.0
             .participants
             .iter()
             .map(GraphqlSoupEmailParticipant::new)
+            .collect()
+    }
+
+    /// Senders with message-specific display names, embedded in this thread.
+    async fn senders(&self) -> Vec<GraphqlSoupEmailSender> {
+        self.0
+            .participants
+            .iter()
+            .map(GraphqlSoupEmailSender::new)
             .collect()
     }
 
@@ -2286,6 +2342,10 @@ where
 
 pub use crm_contact::GraphqlSoupCrmContact;
 mod crm_contact;
+pub use reminder::{
+    GraphqlReminderScheduleType, GraphqlSoupReminder, GraphqlSoupReminderReference,
+};
+mod reminder;
 
 /// GraphQL CRM company entity.
 pub struct GraphqlSoupCrmCompany<E: SoupEntityEdges>(SoupCrmCompany<()>, E, Option<f64>);
@@ -2559,6 +2619,7 @@ impl_common_interface_edges!(
     GraphqlSoupForeignEntity,
     GraphqlSoupAgentSession,
     GraphqlSoupDatabaseRow,
+    GraphqlSoupReminder,
 );
 
 /// Realtime Soup patch represented as exactly one update or cache deletion.

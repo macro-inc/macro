@@ -57,15 +57,8 @@ describe('database deep-link rollout readiness', () => {
     'waits for the remote %s decision instead of prematurely rejecting a fresh link',
     async (enabled) => {
       const resolved = vi.fn();
-      const settleWaitForDatabaseRolloutHandler0 = resolved;
-      const settleWaitForDatabaseRollout = async () => {
-        const settleWaitForDatabaseRolloutValue =
-          await waitForDatabaseRollout();
-        return await settleWaitForDatabaseRolloutHandler0(
-          settleWaitForDatabaseRolloutValue
-        );
-      };
-      const result = settleWaitForDatabaseRollout();
+      const wait = async () => resolved(await waitForDatabaseRollout());
+      const result = wait();
       await Promise.resolve();
       expect(resolved).not.toHaveBeenCalled();
       state.current = enabled;

@@ -1,4 +1,3 @@
-import { match as matchBranch } from 'ts-pattern';
 /**
  * SmartArt logic without UI: the text pane's lines and what its keys do,
  * finding nodes on the stage, and how the galleries group layouts and
@@ -15,6 +14,7 @@ import type {
   SmartArtNodeOutline,
   SmartArtOutline,
 } from '@core/pptx-engine/types';
+import { match as matchBranch } from 'ts-pattern';
 
 /** PowerPoint's prompt in empty SmartArt nodes. */
 export const PROMPT = '[Text]';

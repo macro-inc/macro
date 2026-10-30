@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 
+import { startDetached } from '@core/util/startDetached';
 import * as Cause from 'effect/Cause';
 import * as Effect from 'effect/Effect';
 import * as Exit from 'effect/Exit';
@@ -440,14 +441,7 @@ async function activate(
             )
           );
           drainFiber.addObserver(() => {
-            const settleCloseLifecycle = async () => {
-              try {
-                return await closeLifecycle();
-              } catch {
-                return await undefined;
-              }
-            };
-            void settleCloseLifecycle();
+            startDetached(closeLifecycle(), () => {});
           });
         })
         .with({ kind: 'heartbeat' }, ({ heartbeatId }) => {
@@ -461,7 +455,9 @@ async function activate(
             })
           );
         })
-        .exhaustive();
+        .exhaustive((unknown) =>
+          console.warn('cache engine: unknown coordinator envelope', unknown)
+        );
     },
     onError: (error) => {
       runnerFailed = true;
@@ -594,6 +590,11 @@ async function removeStaleDatabases(
   }
 }
 
+// The dedicated worker has no app Telemetry; its console is the error channel.
+function reportEngineTaskFailure(error: unknown): void {
+  console.error('[graphql-cache] cache engine task failed', error);
+}
+
 /** Installs the production dedicated-worker transport around CacheWorkerCore. */
 export function installCacheEngineWorker(
   options: CacheEngineRuntimeOptions = {}
@@ -610,11 +611,9 @@ export function installCacheEngineWorker(
     const cleanup = validatePageToCleanupEnvelope(event.data);
     if (cleanup.ok) {
       activated = true;
-      void removeStaleDatabases(
-        cleanup.value,
-        directPort,
-        workerScope,
-        options
+      startDetached(
+        removeStaleDatabases(cleanup.value, directPort, workerScope, options),
+        reportEngineTaskFailure
       );
       return;
     }
@@ -624,6 +623,9 @@ export function installCacheEngineWorker(
       return;
     }
     activated = true;
-    void activate(parsed.value, directPort, workerScope, options);
+    startDetached(
+      activate(parsed.value, directPort, workerScope, options),
+      reportEngineTaskFailure
+    );
   };
 }

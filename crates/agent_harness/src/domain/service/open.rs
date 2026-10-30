@@ -2,7 +2,7 @@
 //! external runtime that dials in. Each creates the row, provisions egress
 //! where there is a sandbox to give it to, and attaches the runtime.
 
-use crate::domain::model::{is_coding_agent, with_coding_preferences};
+use crate::domain::model::{ReplyPlacement, is_coding_agent, with_coding_preferences};
 use agent_session::domain::model::session_owner_user;
 use agent_session::domain::repository_branch::RepositoryBranch;
 use model_owner::Owner;
@@ -65,6 +65,7 @@ where
                 .authorize_origin(
                     &owner_user,
                     &AnnounceOrigin {
+                        reply_placement: Default::default(),
                         reuse_origin_message: thread.reuse_origin_message,
                         parent: thread.parent.clone(),
                         thread_id: thread.thread_id,
@@ -82,13 +83,19 @@ where
                 })?;
         }
         let defaults = self.inner.defaults.for_bot(request.bot_id);
-        let (model, harness, profile_instructions) = match request.profile {
+        let (model, harness, profile_instructions, mcp_servers) = match request.profile {
             Some(profile) => (
                 profile.model,
                 profile.harness,
                 Some(profile.instructions).filter(|value| !value.trim().is_empty()),
+                profile.mcp_servers,
             ),
-            None => (defaults.model.clone(), defaults.harness.clone(), None),
+            None => (
+                defaults.model.clone(),
+                defaults.harness.clone(),
+                None,
+                AgentMcpServers::OwnerConnections,
+            ),
         };
         let instructions = self
             .inner
@@ -99,11 +106,11 @@ where
                 request.instructions.or(profile_instructions),
             )
             .await?;
-        let session = self
+        let created = self
             .inner
             .sessions
             .create_session(CreateAgentSessionParams {
-                warm: false,
+                purpose: agent_session::domain::model::SessionPurpose::Standalone,
                 repo_branch: None,
                 id: request.id.unwrap_or_else(AgentSessionId::new),
                 owner_id: request.owner,
@@ -116,21 +123,92 @@ where
                 workspace: request.workspace,
                 sandbox_size: SandboxSize::Default,
                 instructions,
-                // No egress, so no MCP servers of ours to select from.
-                mcp_servers: AgentMcpServers::OwnerConnections,
-                // Mint the internal-tool credential when an authenticated
+                mcp_servers,
+                // Mint the session MCP credential when an authenticated
                 // runtime binds, and rotate it on each subsequent binding.
                 egress_token_hash: None,
                 // The thread linkage is the caller's claim, not an observed
                 // mention; it must not grant the channel anything.
             })
-            .await?;
-        self.inner.publish_opened(&session).await;
+            .await;
+        let (session, existing) = match created {
+            Ok(session) => (session, false),
+            Err(AgentSessionError::SessionIdTaken(id))
+                if self.inner.external_replies.is_some() && request.thread.is_some() =>
+            {
+                let session = self.inner.sessions.get_session(id).await?;
+                if session.bot_id != request.bot_id
+                    || session.thread_id != request.thread.as_ref().map(|thread| thread.thread_id)
+                    || session.owner_user()? != &owner_user
+                {
+                    return Err(AgentSessionError::SessionIdTaken(id));
+                }
+                (session, true)
+            }
+            Err(AgentSessionError::ThreadSessionExists)
+                if self.inner.external_replies.is_some() =>
+            {
+                let thread = request
+                    .thread
+                    .as_ref()
+                    .ok_or(AgentSessionError::ThreadSessionExists)?;
+                match self
+                    .inner
+                    .sessions
+                    .find_for_thread(Some(thread.thread_id), Some(request.bot_id))
+                    .await?
+                {
+                    agent_session::domain::model::ThreadSession::CreatedFromThread(session) => {
+                        (session, true)
+                    }
+                    agent_session::domain::model::ThreadSession::None => {
+                        return Err(AgentSessionError::ThreadSessionExists);
+                    }
+                }
+            }
+            Err(error) => return Err(error),
+        };
+        if !existing {
+            self.inner.publish_opened(&session).await;
+        }
 
         if let Some(thread) = request.thread {
+            let persona = self
+                .inner
+                .reply_persona(&session)
+                .await
+                .map_err(into_session_error)?;
+            if !persona.is_coding
+                && !thread.reuse_origin_message
+                && self.inner.external_replies.is_some()
+            {
+                self.inner
+                    .announce_external_reply(
+                        session.id,
+                        AnnounceOrigin {
+                            reply_placement: Default::default(),
+                            reuse_origin_message: false,
+                            parent: thread.parent,
+                            thread_id: thread.thread_id,
+                            message_id: thread.message_id,
+                        },
+                        owner_user,
+                    )
+                    .await
+                    .map_err(into_session_error)?;
+                return if existing {
+                    Err(AgentSessionError::ThreadSessionExists)
+                } else {
+                    Ok(session)
+                };
+            }
+            if existing {
+                return Err(AgentSessionError::ThreadSessionExists);
+            }
             let announce = async {
-                let persona = self.inner.reply_persona(&session).await?;
                 let announcement = SessionAnnouncement {
+                    reply_message_id: None,
+                    reply_placement: Default::default(),
                     reuse_origin_message: thread.reuse_origin_message,
                     session_id: session.id,
                     bot_id: request.bot_id,
@@ -142,7 +220,7 @@ where
                     prompted_content: thread.content,
                     triggered_by: owner_user,
                 };
-                self.inner.announcer.announce(announcement).await
+                self.inner.announcer.announce(announcement).await.map(drop)
             };
             if let Err(error) = announce.await {
                 tracing::warn!(
@@ -153,6 +231,9 @@ where
             }
         }
 
+        if existing {
+            return Err(AgentSessionError::ThreadSessionExists);
+        }
         Ok(session)
     }
 
@@ -293,6 +374,33 @@ where
             .authorize_origin(&actor, &announcement)
             .await?;
 
+        let runtime = if announcement.reply_placement
+            == crate::domain::model::ReplyPlacement::Timeline
+            && let Some(store) = &self.conversation_turns
+        {
+            if let Some(settings) = store.settings(session_id).await? {
+                settings.runtime
+            } else {
+                let permissions = self
+                    .permission_policies
+                    .permission_policy(bot_id)
+                    .await
+                    .map_err(AgentSessionError::from)?;
+                store
+                    .pin_settings(
+                        session_id,
+                        crate::domain::conversation_turns::ConversationSettings {
+                            runtime,
+                            permissions,
+                        },
+                    )
+                    .await?
+                    .runtime
+            }
+        } else {
+            runtime
+        };
+
         self.admit_open(
             bot_id,
             runtime.kind.harness_slug().unwrap_or(&runtime.harness),
@@ -311,6 +419,36 @@ where
                 ?blocker,
                 "declining a session its owner is not set up for"
             );
+            if announcement.reply_placement == crate::domain::model::ReplyPlacement::Timeline
+                && let Some(store) = &self.conversation_turns
+                && let Some(record) = store.get(announcement.message_id, bot_id).await?
+            {
+                let flight = InFlightTurn {
+                    action_id: record.action_id,
+                    turn: agent_fold::domain::model::TurnId(0),
+                    actor: Some(actor.clone()),
+                    announce: None,
+                    announcement_message_id: None,
+                    dispatched_at: chrono::Utc::now(),
+                    bot_id: Some(bot_id),
+                    speaks_as_chip: false,
+                    presented: Vec::new(),
+                    held_tool_calls: Vec::new(),
+                };
+                if !store.claim(record.action_id, &flight).await? {
+                    return Ok(());
+                }
+                store
+                    .finish(
+                        record.action_id,
+                        crate::domain::conversation_turns::ConversationTurnState::Failed,
+                        ReplyOutcome::Failed,
+                    )
+                    .await?;
+                store
+                    .finalize_reply(record.action_id, &ReplyOutcome::Failed)
+                    .await?;
+            }
             self.announcer
                 .decline(DeclinedMention {
                     bot_id,
@@ -348,12 +486,18 @@ where
         let session = self
             .sessions
             .create_session(CreateAgentSessionParams {
-                warm: false,
+                purpose: if announcement.reply_placement == ReplyPlacement::Timeline {
+                    agent_session::domain::model::SessionPurpose::AgentDm
+                } else {
+                    agent_session::domain::model::SessionPurpose::Standalone
+                },
                 repo_branch: None,
                 id: session_id,
                 owner_id: Owner::User(actor.clone()),
                 bot_id,
-                thread_id: Some(announcement.thread_id),
+                thread_id: announcement
+                    .reply_placement
+                    .thread_id(announcement.thread_id),
                 originating_message_id: Some(announcement.message_id),
                 model: runtime.model.clone(),
                 harness: runtime
@@ -378,55 +522,80 @@ where
             .await?;
         self.publish_opened(&session).await;
 
-        let mcp_servers = if runtime.kind.takes_egress_mcp_servers() {
-            egress.sandbox.acp_servers()
-        } else {
-            Vec::new()
-        };
-        let container = match self
-            .containers
-            .spawn(SpawnContainer {
-                session_id,
-                kind: runtime.kind,
-                size: sandbox_size,
-                egress: egress.sandbox,
-            })
-            .await
-        {
-            Ok(container) => container,
-            Err(error) => {
-                let _ = self
-                    .sessions
-                    .mark_disconnected(session_id)
-                    .await
-                    .inspect_err(|status_error| {
-                        tracing::error!(
-                            error = ?status_error,
-                            %session_id,
-                            "failed to mark an unprovisioned session disconnected"
-                        );
-                    });
-                return Err(error);
-            }
-        };
-        let permission_policy = self.permission_policy_for(bot_id).await;
-        self.sessions
-            .attach_session(
-                session_id,
-                container
-                    .mcp_servers(mcp_servers)
-                    .permission_policy(permission_policy),
-            )
-            .await?;
+        // External runtimes bind on first delivery. Their operator owns the
+        // process; opening a conversation must never provision a managed sandbox for it.
+        if runtime.kind.is_managed() {
+            let mcp_servers = if runtime.kind.takes_egress_mcp_servers() {
+                egress.sandbox.acp_servers()
+            } else {
+                Vec::new()
+            };
+            let container = match self
+                .containers
+                .spawn(SpawnContainer {
+                    session_id,
+                    kind: runtime.kind,
+                    size: sandbox_size,
+                    egress: egress.sandbox,
+                })
+                .await
+            {
+                Ok(container) => container,
+                Err(error) => {
+                    let _ = self
+                        .sessions
+                        .mark_disconnected(session_id)
+                        .await
+                        .inspect_err(|status_error| {
+                            tracing::error!(
+                                error = ?status_error,
+                                %session_id,
+                                "failed to mark an unprovisioned session disconnected"
+                            );
+                        });
+                    return Err(error);
+                }
+            };
+            let permission_policy = self
+                .permission_policy_for_session(session_id, bot_id)
+                .await?;
+            self.sessions
+                .attach_session(
+                    session_id,
+                    container
+                        .mcp_servers(mcp_servers)
+                        .permission_policy(permission_policy),
+                )
+                .await?;
+        }
         // The first prompt goes through the same door as every later one:
         // queued raw, then dispatched - which is where it is composed with
         // channel context and announced as the chip the replies render into.
         // One door is what holds the one-turn-in-flight invariant from the
         // session's very first action.
+        let conversation_action =
+            if announcement.reply_placement == crate::domain::model::ReplyPlacement::Timeline {
+                match &self.conversation_turns {
+                    Some(store) => store
+                        .get(announcement.message_id, bot_id)
+                        .await?
+                        .map(|turn| turn.action_id),
+                    None => None,
+                }
+            } else {
+                None
+            };
         self.enqueue_then_dispatch(
             session_id,
             DeliverAction {
-                id: AgentActionId::mint(),
+                id: if announcement.reply_placement
+                    == crate::domain::model::ReplyPlacement::Timeline
+                {
+                    conversation_action
+                        .unwrap_or_else(|| AgentActionId::from_uuid(announcement.message_id))
+                } else {
+                    AgentActionId::mint()
+                },
                 context: origin.context().cloned(),
                 action: origin.into_action(),
                 actor: Some(actor),

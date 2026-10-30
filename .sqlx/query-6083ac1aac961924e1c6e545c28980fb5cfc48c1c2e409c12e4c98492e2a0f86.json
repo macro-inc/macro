@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH updated AS (\n            UPDATE email_messages\n            SET\n                replying_to_id = $1,\n                updated_at = NOW()\n            WHERE\n                id = $2\n                AND link_id = $3\n                AND replying_to_id IS DISTINCT FROM $1\n        )\n        SELECT EXISTS (\n            SELECT 1 FROM email_messages WHERE id = $2 AND link_id = $3\n        ) AS \"found!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "found!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6083ac1aac961924e1c6e545c28980fb5cfc48c1c2e409c12e4c98492e2a0f86"
+}

@@ -13,6 +13,7 @@ import type {
   ShapeOutline,
   SlideOutline,
 } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { PresentationEngine } from '../context/pptx-editor-context';
 import type { Point } from '../core/geometry';
 import {
@@ -110,6 +111,19 @@ const placeOf = (r: Rect): Place => ({
  * pixels, or `null` when the engine cannot draw layers (or there is too
  * much to animate) and a fade should play instead.
  */
+/** A shape's text layout, or `null` when the engine can't read it. */
+async function textLayoutOrNull(
+  engine: PresentationEngine,
+  index: number,
+  shape: number
+) {
+  try {
+    return await engine.textLayout(index, shape);
+  } catch {
+    return null;
+  }
+}
+
 export async function prepareMorph(
   engine: PresentationEngine,
   deck: DeckOutline,
@@ -199,25 +213,9 @@ export async function prepareMorph(
       !upright(pair.to)
     )
       return undefined;
-
-    const settleTextLayout = async () => {
-      try {
-        return await engine.textLayout(from, pair.from.id);
-      } catch {
-        return await null;
-      }
-    };
-
-    const settleTextLayoutResult = async () => {
-      try {
-        return await engine.textLayout(to, pair.to.id);
-      } catch {
-        return await null;
-      }
-    };
     const [la, lb] = await Promise.all([
-      settleTextLayout(),
-      settleTextLayoutResult(),
+      textLayoutOrNull(engine, from, pair.from.id),
+      textLayoutOrNull(engine, to, pair.to.id),
     ]);
     if (!la || !lb) return undefined;
     const ua = textUnits(la, by);
@@ -433,15 +431,15 @@ export function playMorph(
     overlay.remove();
   };
 
-  const settleAll = async () => {
+  const endWhenFinished = async () => {
     try {
       await Promise.all(running.map((a) => a.finished));
-
-      return await end(true);
     } catch {
+      // Cancelled by `end`.
       return;
     }
+    end(true);
   };
-  void settleAll();
+  fireAndForget(endWhenFinished(), 'pptx-slideshow');
   return { finish: () => end(true), cancel: () => end(false) };
 }

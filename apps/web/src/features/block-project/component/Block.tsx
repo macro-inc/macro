@@ -18,6 +18,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   handleFileFolderDrop,
   type UploadInput,
@@ -63,7 +64,10 @@ const Block: Component = () => {
       const successfulUploads = uploads.filter((result) => !result.pending);
       for (const upload of successfulUploads) {
         if (upload.type === 'document') {
-          refetchSoupEntity(upload.documentId, 'document');
+          fireAndForget(
+            refetchSoupEntity(upload.documentId, 'document'),
+            'project-upload'
+          );
         }
       }
       if (successfulUploads.length > 0) {
@@ -79,7 +83,10 @@ const Block: Component = () => {
         const resolved = await Promise.all(pendingFolderUploads);
         for (const projectId of resolved) {
           if (projectId) {
-            refetchSoupEntity(projectId, 'project');
+            fireAndForget(
+              refetchSoupEntity(projectId, 'project'),
+              'project-upload'
+            );
           }
         }
         refetchResources();
@@ -109,7 +116,14 @@ const Block: Component = () => {
           onDragStart: () => setIsDragging(true),
           onDragEnd: () => setIsDragging(false),
           onDrop: (fileEntries, folderEntries) => {
-            handleFileFolderDrop(fileEntries, folderEntries, handleFileUpload);
+            fireAndForget(
+              handleFileFolderDrop(
+                fileEntries,
+                folderEntries,
+                handleFileUpload
+              ),
+              'project-upload'
+            );
           },
           disabled: isSpecialProject,
         }}

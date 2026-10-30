@@ -5,6 +5,7 @@ import {
   fileTypeToBlockName,
 } from '@core/constant/allBlocks';
 import { HEIC_EXTENSIONS } from '@core/heic';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   forceDssRuleset,
   isFileUploadEntry,
@@ -12,7 +13,6 @@ import {
   uploadFiles,
 } from '@core/util/upload';
 import { Telemetry } from '@macro-inc/observability';
-
 import { fileExtension } from '@service-storage/util/filename';
 import type { LexicalEditor } from 'lexical';
 import {
@@ -50,6 +50,7 @@ async function processInlineMediaFiles(
   const IMAGE_EXTENSIONS_HEIC = getImageExtensionsHeic();
   const VIDEO_EXTENSIONS = getVideoExtensions();
   for (const file of files) {
+    if (!editor.isEditable()) return;
     const ext = fileExtension(file.name);
     if (ext != null && IMAGE_EXTENSIONS_HEIC.includes(ext)) {
       const res = await addMediaFromFile(
@@ -58,7 +59,7 @@ async function processInlineMediaFiles(
         'image',
         constrainedMediaDimensions
       );
-      if (!res.success) {
+      if (!res.success && editor.isEditable()) {
         toast.failure('Invalid media attachment file(s)');
       }
     } else if (ext != null && VIDEO_EXTENSIONS.includes(ext)) {
@@ -68,7 +69,7 @@ async function processInlineMediaFiles(
         'video',
         constrainedMediaDimensions
       );
-      if (!res.success) {
+      if (!res.success && editor.isEditable()) {
         toast.failure('Invalid media attachment file(s)');
       }
     }
@@ -89,15 +90,8 @@ export const getDragDropPosition = (
   return { key, position };
 };
 
-async function onFilesReady(
-  editor: LexicalEditor,
-  uploadEntries: UploadInput[],
-  blockId?: string,
-  parentBlockName?: BlockName,
-  position?: ReturnType<typeof getDragDropPosition>,
-  afterFileUpload?: (uploadedItemIds: string[]) => void,
-  constrainedMediaDimensions?: { width: number; height: number }
-): Promise<void> {
+/** Inline media goes into the editor; everything else, folders included, uploads. */
+function partitionUploadEntries(uploadEntries: UploadInput[]) {
   const mediaFiles: File[] = [];
   const filesToUpload: UploadInput[] = [];
 
@@ -113,19 +107,38 @@ async function onFilesReady(
       }
     }
   }
+  return { mediaFiles, filesToUpload };
+}
 
-  if (position) {
-    const { key, position: position_ } = position;
-    if (key !== null && position_ !== null) {
-      editor.dispatchCommand(SET_SELECTION_AT_INSERTION, [key, position_]);
-    }
+function selectInsertionPoint(
+  editor: LexicalEditor,
+  { key, position }: ReturnType<typeof getDragDropPosition>
+) {
+  if (key !== null && position !== null) {
+    editor.dispatchCommand(SET_SELECTION_AT_INSERTION, [key, position]);
   }
+}
+
+async function onFilesReady(
+  editor: LexicalEditor,
+  uploadEntries: UploadInput[],
+  blockId?: string,
+  parentBlockName?: BlockName,
+  position?: ReturnType<typeof getDragDropPosition>,
+  afterFileUpload?: (uploadedItemIds: string[]) => void,
+  constrainedMediaDimensions?: { width: number; height: number }
+): Promise<void> {
+  if (!editor.isEditable()) return;
+  const { mediaFiles, filesToUpload } = partitionUploadEntries(uploadEntries);
+
+  if (position) selectInsertionPoint(editor, position);
 
   await processInlineMediaFiles(editor, mediaFiles, constrainedMediaDimensions);
 
-  if (filesToUpload.length === 0) return;
+  if (!editor.isEditable() || filesToUpload.length === 0) return;
 
   const results = await uploadFiles(filesToUpload, forceDssRuleset);
+  if (!editor.isEditable()) return;
 
   let uploadedItemIds: string[] = [];
 
@@ -138,35 +151,43 @@ async function onFilesReady(
       const blockName = fileTypeToBlockName(result.fileType, true);
       if (blockName) {
         const item = await documentUploadToItem(result);
+        if (!editor.isEditable()) return;
         if (!item) {
           toast.failure('Document upload failed or timed out');
           Telemetry.error(new Error('Document upload failed or timed out'));
           continue;
         }
         uploadedItemIds.push(item.id);
-        handleBasicMention(item, {
-          editor,
-          blockName: parentBlockName,
-          blockId,
-          onDocumentMention: () => {},
-          disableMentionTracking: false,
-        });
+        fireAndForget(
+          handleBasicMention(item, {
+            editor,
+            blockName: parentBlockName,
+            blockId,
+            onDocumentMention: () => {},
+            disableMentionTracking: false,
+          }),
+          'file-upload'
+        );
       }
     } else if (result.type === 'folder') {
       const item = await documentUploadToItem(result);
+      if (!editor.isEditable()) return;
       if (!item) {
         toast.failure('Folder upload failed or timed out');
         Telemetry.error(new Error('Folder upload failed or timed out'));
         continue;
       }
       uploadedItemIds.push(item.id);
-      handleBasicMention(item, {
-        editor,
-        blockName: parentBlockName,
-        blockId,
-        onDocumentMention: () => {},
-        disableMentionTracking: false,
-      });
+      fireAndForget(
+        handleBasicMention(item, {
+          editor,
+          blockName: parentBlockName,
+          blockId,
+          onDocumentMention: () => {},
+          disableMentionTracking: false,
+        }),
+        'file-upload'
+      );
     }
   }
 

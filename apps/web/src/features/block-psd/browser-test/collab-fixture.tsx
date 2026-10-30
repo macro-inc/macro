@@ -10,6 +10,7 @@
 
 import { MemorySyncServer } from '@app/features/block-fig/browser-test/memory-sync';
 import { PsdEngine } from '@core/psd-engine/client';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { noopChatter } from '@macro-inc/collaboration/collab/chatter';
 import type { SnapshotStore } from '@macro-inc/collaboration/collab/snapshot-store';
 import { InMemoryWALStore } from '@macro-inc/collaboration/collab/wal';
@@ -129,29 +130,32 @@ function Person(props: {
     let opened: PsdEngine | undefined;
     let sharedEngine: PsdSharing | undefined;
     const open = async () => {
-      try {
-        const bytes = props.server.stored();
-        const fingerprint = await fileFingerprint(bytes);
-        opened = await PsdEngine.open(bytes);
+      const bytes = props.server.stored();
+      const fingerprint = await fileFingerprint(bytes);
+      opened = await PsdEngine.open(bytes);
+      if (closed) return;
+      if (shared) {
+        sharedEngine = await sharePsdEngine(opened, shared, {
+          fingerprint,
+          sessionsTaken: session.collaboration
+            .peers()
+            .map((p) => p.presence.session),
+          delivered: session.delivered,
+        });
         if (closed) return;
-        if (shared) {
-          sharedEngine = await sharePsdEngine(opened, shared, {
-            fingerprint,
-            sessionsTaken: session.collaboration
-              .peers()
-              .map((p) => p.presence.session),
-            delivered: session.delivered,
-          });
-          if (closed) return;
-          sharedEngine.onReplaced(() => setReplaced(true));
-          setSharing(sharedEngine);
-        }
-        setEngine(opened);
+        sharedEngine.onReplaced(() => setReplaced(true));
+        setSharing(sharedEngine);
+      }
+      setEngine(opened);
+    };
+    const start = async () => {
+      try {
+        await open();
       } catch (e) {
         setFailure(String(e));
       }
     };
-    void open();
+    fireAndForget(start(), 'psd-fixture');
     onCleanup(() => {
       closed = true;
       sharedEngine?.close();
@@ -270,14 +274,14 @@ export function CollabFixture(props: {
     }
     setStored(true);
   };
-  const load = async () => {
+  const storeOrFail = async () => {
     try {
       await store();
     } catch (e) {
       setError(String(e));
     }
   };
-  void load();
+  fireAndForget(storeOrFail(), 'psd-fixture');
   const people = new Map<string, FixturePerson>();
   const [opened, setOpened] = createSignal<Record<string, number>>({});
   const reopen = (user: string) =>

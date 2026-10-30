@@ -1,4 +1,8 @@
-import { getDefaultTimezone } from '@app/lib/utils/cron';
+import {
+  describeCron,
+  formatTimeLabel,
+  getDefaultTimezone,
+} from '@app/lib/utils/cron';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
 
@@ -34,6 +38,8 @@ export const routineTriggerSchema = z.discriminatedUnion('kind', [
           'channel.mentioned',
           'channel.message_patched',
           'channel.message_attachment_created',
+          'call.started',
+          'call.ended',
         ])
       )
       .min(1),
@@ -51,6 +57,7 @@ export const routineEventGroups = [
   'Documents',
   'Tasks',
   'Email',
+  'Calls',
 ] as const;
 export type RoutineEventGroup = (typeof routineEventGroups)[number];
 export const routineEvents: {
@@ -122,6 +129,20 @@ export const routineEvents: {
     description:
       'New mail arrives in your inbox. Excludes spam, trash, drafts and historical imports.',
   },
+  {
+    value: 'call.started',
+    label: 'Call started',
+    group: 'Calls',
+    description:
+      'A call you start begins. The routine gets the call and who has joined so far.',
+  },
+  {
+    value: 'call.ended',
+    label: 'Call ended',
+    group: 'Calls',
+    description:
+      'A call you joined ends. The routine gets the call’s participants and transcript.',
+  },
 ];
 
 // Preserve saved selectors while keeping the creation menu focused on the
@@ -138,6 +159,8 @@ export function eventScopeKind(trigger: EventTriggerDraft) {
     return 'DOCUMENT';
   if (trigger.events.every((event) => event.startsWith('email.')))
     return 'THREAD';
+  if (trigger.events.every((event) => event.startsWith('call.')))
+    return 'CALL_RECORD';
   return 'CHANNEL';
 }
 
@@ -149,13 +172,27 @@ export function conditionPlaceholder(trigger: EventTriggerDraft) {
     .with('TASK', () => 'Is this task a bug report?')
     .with('DOCUMENT', () => 'Is this document meeting notes?')
     .with('CHANNEL', () => 'Is someone asking for help?')
+    .with('CALL_RECORD', () => 'Was this a call with a customer?')
     .exhaustive();
 }
 
 export function isGlobalEvent(events: readonly RoutineEventName[]) {
   return events.every(
-    (event) => event.endsWith('.created') || event === 'email.message_received'
+    (event) =>
+      event.endsWith('.created') ||
+      event === 'email.message_received' ||
+      event === 'call.started' ||
+      event === 'call.ended'
   );
+}
+
+/** Chip label for a call trigger's global scope. */
+export function callEventScopeLabel(events: readonly RoutineEventName[]) {
+  const started = events.includes('call.started');
+  const ended = events.includes('call.ended');
+  if (started && ended) return 'Your calls';
+  if (started) return 'Calls you start';
+  return 'Calls you join';
 }
 
 export function eventTriggerLabel(trigger: EventTriggerDraft) {
@@ -240,7 +277,7 @@ export function validateTriggers(
       return 'Choose a valid time.';
     if (trigger.frequency === 'week' && !trigger.daysOfWeek.length)
       return 'Select at least one day for the weekly trigger.';
-    if (hasFrequency(trigger)) return 'Choose a day between 1 and 31.';
+    if (hasInvalidMonthDay(trigger)) return 'Choose a day between 1 and 31.';
     try {
       new Intl.DateTimeFormat(undefined, { timeZone: trigger.timezone });
     } catch {
@@ -248,34 +285,44 @@ export function validateTriggers(
     }
   }
   return null;
-
-  function isInvalidCron(parts: string[]) {
-    return (
-      parts.length < 6 ||
-      parts.length > 7 ||
-      parts.some((part) => !/^[-\w*/?,]+$/.test(part))
-    );
-  }
-
-  function hasFrequency(trigger: {
-    id: string;
-    kind: 'schedule';
-    frequency: 'hour' | 'day' | 'week' | 'month' | 'once' | 'custom';
-    time: string;
-    daysOfWeek: string[];
-    dayOfMonth: string;
-    timezone: string;
-    onceAt: string;
-    cron: string;
-  }) {
-    return (
-      trigger.frequency === 'month' &&
-      (!/^\d+$/.test(trigger.dayOfMonth) ||
-        Number(trigger.dayOfMonth) < 1 ||
-        Number(trigger.dayOfMonth) > 31)
-    );
-  }
 }
+
+function isInvalidCron(parts: string[]) {
+  return (
+    parts.length < 6 ||
+    parts.length > 7 ||
+    parts.some((part) => !/^[-\w*/?,]+$/.test(part))
+  );
+}
+
+function hasInvalidMonthDay(trigger: ScheduleTriggerDraft) {
+  return (
+    trigger.frequency === 'month' &&
+    (!/^\d+$/.test(trigger.dayOfMonth) ||
+      Number(trigger.dayOfMonth) < 1 ||
+      Number(trigger.dayOfMonth) > 31)
+  );
+}
+/** One trigger as a sentence, such as "Every Monday at 9:00 AM", without its time zone. */
+export function describeTrigger(trigger: RoutineTriggerDraft): string {
+  if (trigger.kind === 'event') return `When: ${eventTriggerLabel(trigger)}`;
+  return match(trigger.frequency)
+    .with('week', 'month', (frequency) => {
+      const text = describeCron({
+        frequency,
+        time: trigger.time,
+        daysOfWeek: trigger.daysOfWeek,
+        dayOfMonth: trigger.dayOfMonth,
+      });
+      return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+    })
+    .with('day', () => `Every day at ${formatTimeLabel(trigger.time)}`)
+    .with('hour', () => 'Every hour')
+    .with('once', () => 'Once')
+    .with('custom', () => `Custom schedule (${trigger.cron})`)
+    .exhaustive();
+}
+
 export function describeTriggers(triggers: RoutineTriggerDraft[]): string {
   return triggers
     .map((trigger) =>

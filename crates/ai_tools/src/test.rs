@@ -122,8 +122,10 @@ fn project_workflows_are_available_in_every_host_alongside_folder_and_property_t
         "UpdateInitiativeSharing",
         "ReadInitiativeActivity",
         "SetEntityProperty",
-        "CommentOnDocument",
-        "ResolveDocumentComment",
+        "ReadDiscussion",
+        "Comment",
+        "CommentOnText",
+        "ResolveComment",
         "CreateProject",
         "ReadProject",
     ];
@@ -160,8 +162,8 @@ fn app_item_actions_are_available_in_every_host() {
         "DeleteChannelMessage",
         "ReactToChannelMessage",
         "OpenDirectMessage",
-        "EditDocumentComment",
-        "DeleteDocumentComment",
+        "EditComment",
+        "DeleteComment",
         "CreateSkill",
         "MoveToTrash",
         "DuplicateItem",
@@ -483,6 +485,27 @@ fn the_mcp_host_defers_nothing() {
     assert!(!tools.prompt.to_string().contains("LoadTools"));
 }
 
+/// Only an MCP client can PUT bytes to the upload URL, so the tool is not
+/// offered to in-app hosts, which would call it and then have no way to use it.
+#[test]
+fn channel_media_uploads_are_mcp_only() {
+    assert!(
+        tools_for(AiHost::Mcp)
+            .toolset
+            .tools
+            .contains_key("CreateChannelMediaUpload")
+    );
+    for host in [AiHost::Chat, AiHost::AgentSession, AiHost::ChannelBot] {
+        assert!(
+            !tools_for(host)
+                .toolset
+                .tools
+                .contains_key("CreateChannelMediaUpload"),
+            "{host:?}"
+        );
+    }
+}
+
 #[test]
 fn every_eager_tool_exists() {
     let tools = tools_for(AiHost::AgentSession);
@@ -567,4 +590,183 @@ fn booking_management_has_mcp_and_chat_parity() {
             );
         }
     }
+}
+
+#[test]
+fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery() {
+    let standard = tools_for(AiHost::AgentSession);
+    let direct = tools_for_agent_code_mode();
+    let sdk = code_mode_tools();
+    assert!(direct.toolset.tools.len() < standard.toolset.tools.len());
+    for name in ["ReadContent"] {
+        assert!(standard.toolset.tools.contains_key(name), "{name}");
+        assert!(sdk.tools.contains_key(name), "{name}");
+        assert!(!direct.toolset.tools.contains_key(name), "{name}");
+        assert!(!direct.deferred.iter().any(|t| t.name == name), "{name}");
+    }
+    for name in [
+        "DisplayResults",
+        "NameSearch",
+        "ListEntities",
+        "ContentSearch",
+        "CreateDocument",
+        "ListSkills",
+        "SearchSkills",
+        "ReadSkill",
+        "GenerateImage",
+        "CreateRoutine",
+        "EditSpreadsheet",
+        "ReadCanvas",
+        "RenderCanvas",
+        "ApplyCanvasEdits",
+        "EditCanvas",
+        "EditPresentation",
+        "EditDocument",
+        "Subagent",
+        "DispatchCodingAgent",
+        "SearchTools",
+        "LoadTools",
+        "DiscoverConnectors",
+        "BashCodeExecution",
+        "TextEditorCodeExecution",
+    ] {
+        assert!(direct.toolset.tools.contains_key(name), "{name}");
+    }
+    for name in standard.toolset.user_tools.keys() {
+        assert!(direct.toolset.user_tools.contains_key(name), "{name}");
+        if matches!(name.as_str(), "SendEmail" | "CreateCalendarEvent") {
+            assert!(!direct.toolset.tools.contains_key(name), "{name}");
+            assert!(
+                !direct.deferred.iter().any(|tool| tool.name == *name),
+                "{name}"
+            );
+        } else {
+            assert!(direct.toolset.tools.contains_key(name), "{name}");
+        }
+    }
+    let standard_deferred =
+        DeferredToolSet::new(standard.toolset.clone(), standard.deferred.clone());
+    assert!(
+        standard_deferred
+            .request_schemas()
+            .unwrap()
+            .iter()
+            .any(|schema| schema.name == "ListEntities")
+    );
+    let deferred = DeferredToolSet::new(direct.toolset.clone(), direct.deferred.clone());
+    let eager = deferred.request_schemas().unwrap();
+    for name in [
+        "ListEntities",
+        "NameSearch",
+        "ContentSearch",
+        "EditDocument",
+    ] {
+        assert!(eager.iter().any(|schema| schema.name == name), "{name}");
+    }
+    for name in ["SendEmail", "CreateCalendarEvent"] {
+        assert!(standard.toolset.tools.contains_key(name));
+        assert!(sdk.tools.contains_key(name));
+        assert!(!eager.iter().any(|tool| tool.name == name));
+        assert!(deferred.routing_description(name).is_none());
+    }
+    let prompt = direct.prompt.to_string();
+    assert!(!prompt.contains("the turn waits while the user"));
+    assert!(!prompt.contains("you MUST use the `SendEmail` tool"));
+    assert!(prompt.contains("Do not wait for the user to act on a saved review"));
+    assert!(!prompt.contains("- ReadMetadata:"));
+    let routing = prompt::tool_usage::CODE_MODE_ROUTING.to_string();
+    assert!(prompt.contains(&routing));
+    assert!(!standard.prompt.to_string().contains(&routing));
+    for host in [AiHost::Chat, AiHost::ChannelBot, AiHost::Mcp] {
+        assert!(!tools_for(host).prompt.to_string().contains(&routing));
+    }
+}
+
+#[test]
+fn session_reader_is_available_to_every_conversation_host_and_mcp() {
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host);
+        assert!(tools.toolset.tools.contains_key("ReadAgentSession"));
+        assert!(
+            !tools
+                .deferred
+                .iter()
+                .any(|tool| tool.name == "ReadAgentSession")
+        );
+    }
+    assert!(subagent_toolset().tools.contains_key("ReadAgentSession"));
+    let code_mode = tools_for_agent_code_mode();
+    assert!(code_mode.toolset.tools.contains_key("ReadAgentSession"));
+    assert!(
+        !code_mode
+            .deferred
+            .iter()
+            .any(|tool| tool.name == "ReadAgentSession")
+    );
+}
+
+#[test]
+fn conversation_tools_only_advertise_new_sessions() {
+    for tools in [
+        tools_for(AiHost::Chat),
+        tools_for(AiHost::AgentSession),
+        tools_for(AiHost::ChannelBot),
+        tools_for(AiHost::Mcp),
+        tools_for_agent_code_mode(),
+    ] {
+        assert!(!tools.toolset.tools.contains_key("ReadChat"));
+        assert!(!tools.prompt.to_string().contains("ReadChat"));
+        for name in [
+            "ReadAgentSession",
+            "ReadAgentSessionSharing",
+            "UpdateAgentSessionSharing",
+            "CreateAgentSession",
+            "ManageAgentSession",
+        ] {
+            assert!(tools.toolset.tools.contains_key(name), "missing {name}");
+        }
+        for schema in tools.toolset.request_schemas().unwrap() {
+            let json = serde_json::to_string(&schema.schema).unwrap();
+            if [
+                "NameSearch",
+                "ContentSearch",
+                "ListEntities",
+                "RenameItem",
+                "MoveToTrash",
+                "MoveToProject",
+                "DuplicateItem",
+                "UpdateSharing",
+                "ShareWithChannel",
+                "SetFavorite",
+                "GetEntityProperties",
+                "SetEntityProperty",
+                "BulkSetEntityPropertyOptions",
+                "ListNotifications",
+            ]
+            .contains(&schema.name.as_str())
+            {
+                assert!(
+                    !json.contains("\"chat\""),
+                    "{} advertises legacy chats",
+                    schema.name
+                );
+                assert!(
+                    !json.contains("\"chats\""),
+                    "{} advertises legacy chat search",
+                    schema.name
+                );
+                assert!(
+                    !json.contains("\"ai_chat\""),
+                    "{} advertises legacy chat listing",
+                    schema.name
+                );
+            }
+        }
+    }
+    assert!(!subagent_toolset().tools.contains_key("ReadChat"));
 }

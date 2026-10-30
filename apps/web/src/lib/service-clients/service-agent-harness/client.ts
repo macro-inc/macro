@@ -6,6 +6,7 @@ import {
   readAiUsageLimitError,
 } from '../ai-usage-limit';
 import type {
+  AgentModeChoiceResponse,
   AgentRepositoriesResponse,
   AgentRepositoryBranchesResponse,
   AgentSessionChangesPatchResponse,
@@ -14,6 +15,7 @@ import type {
   AgentSessionQueueResponse,
   AgentSessionResponse,
   AnswerToolApprovalResponse,
+  AppConnectedRequest,
   CodingPreferencesBody,
   ControlRequest,
   ControlResponse,
@@ -21,6 +23,7 @@ import type {
   CreateAgentSessionResponse,
   DiscoverAgentCapabilitiesRequest,
   DiscoverAgentCapabilitiesResponse,
+  ExecutionRecord,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
   PreviewAgentSessionsResponse,
@@ -123,6 +126,18 @@ export const agentHarnessServiceClient = {
     });
   },
 
+  /** Whether the composer's Auto mode sends `prompt` to a chat or a coding agent. */
+  chooseMode(prompt: string) {
+    return fetchWithToken<AgentModeChoiceResponse>(
+      `${agentHarnessHost}/agent-mode-choice`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      }
+    );
+  },
+
   /**
    * The GitHub repositories the caller can select for a coding session, with
    * the branch each one's sessions start on by default.
@@ -183,35 +198,29 @@ export const agentHarnessServiceClient = {
     );
   },
 
-  rename(sessionId: string, name: string) {
-    const settleFetchWithToken = async () => {
-      const settleFetchWithTokenValue = await fetchWithToken<
-        Record<string, never>
-      >(`${agentHarnessHost}/agent-sessions/${sessionId}/name`, {
+  async rename(sessionId: string, name: string) {
+    const result = await fetchWithToken<Record<string, never>>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/name`,
+      {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
-      });
-      const result = settleFetchWithTokenValue;
-      return await result.map(() => undefined);
-    };
-    return settleFetchWithToken();
+      }
+    );
+    return result.map(() => undefined);
   },
 
-  setArchived(sessionId: string, isArchived: boolean) {
-    const settleFetchWithTokenResult = async () => {
-      const settleFetchWithTokenResultValue = await fetchWithToken<
-        Record<string, never>
-      >(`${agentHarnessHost}/agent-sessions/${sessionId}/archived`, {
+  async setArchived(sessionId: string, isArchived: boolean) {
+    const result = await fetchWithToken<Record<string, never>>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/archived`,
+      {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isArchived }),
         errorResponseHandler: sessionError,
-      });
-      const result = settleFetchWithTokenResultValue;
-      return await result.map(() => undefined);
-    };
-    return settleFetchWithTokenResult();
+      }
+    );
+    return result.map(() => undefined);
   },
 
   /**
@@ -244,36 +253,30 @@ export const agentHarnessServiceClient = {
    * (`NOT_FOUND`) once the action has dispatched, 422 if the queued action
    * is not a prompt.
    */
-  editQueued(sessionId: string, actionId: string, prompt: string) {
-    const settleFetchWithTokenResultResult = async () => {
-      const settleFetchWithTokenResultResultValue = await fetchWithToken<
-        Record<string, never>
-      >(`${agentHarnessHost}/agent-sessions/${sessionId}/queue/${actionId}`, {
+  async editQueued(sessionId: string, actionId: string, prompt: string) {
+    const result = await fetchWithToken<Record<string, never>>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/queue/${actionId}`,
+      {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt }),
-      });
-      const result = settleFetchWithTokenResultResultValue;
-      return await result.map(() => undefined);
-    };
-    return settleFetchWithTokenResultResult();
+      }
+    );
+    return result.map(() => undefined);
   },
 
   /**
    * Remove a queued action before it dispatches. Answers 404 (`NOT_FOUND`)
    * once the action has dispatched — there is no un-sending.
    */
-  removeQueued(sessionId: string, actionId: string) {
-    const settleFetchWithTokenResultResultResult = async () => {
-      const settleFetchWithTokenResultResultResultValue = await fetchWithToken<
-        Record<string, never>
-      >(`${agentHarnessHost}/agent-sessions/${sessionId}/queue/${actionId}`, {
+  async removeQueued(sessionId: string, actionId: string) {
+    const result = await fetchWithToken<Record<string, never>>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/queue/${actionId}`,
+      {
         method: 'DELETE',
-      });
-      const result = settleFetchWithTokenResultResultResultValue;
-      return await result.map(() => undefined);
-    };
-    return settleFetchWithTokenResultResultResult();
+      }
+    );
+    return result.map(() => undefined);
   },
 
   /**
@@ -281,30 +284,20 @@ export const agentHarnessServiceClient = {
    * flight so it dispatches ahead of anything queued before it. Answers 404
    * (`NOT_FOUND`) once the action has dispatched.
    */
-  steerQueued(sessionId: string, actionId: string) {
-    const settleFetchWithTokenResultResultResultResult = async () => {
-      const settleFetchWithTokenResultResultResultResultValue =
-        await fetchWithToken<Record<string, never>>(
-          `${agentHarnessHost}/agent-sessions/${sessionId}/queue/${actionId}/steer`,
-          { method: 'POST' }
-        );
-      const result = settleFetchWithTokenResultResultResultResultValue;
-      return await result.map(() => undefined);
-    };
-    return settleFetchWithTokenResultResultResultResult();
+  async steerQueued(sessionId: string, actionId: string) {
+    const result = await fetchWithToken<Record<string, never>>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/queue/${actionId}/steer`,
+      { method: 'POST' }
+    );
+    return result.map(() => undefined);
   },
 
-  delete(sessionId: string) {
-    const settleFetchWithTokenResultResultResultResultResult = async () => {
-      const settleFetchWithTokenResultResultResultResultResultValue =
-        await fetchWithToken<Record<string, never>>(
-          `${agentHarnessHost}/agent-sessions/${sessionId}`,
-          { method: 'DELETE' }
-        );
-      const result = settleFetchWithTokenResultResultResultResultResultValue;
-      return await result.map(() => undefined);
-    };
-    return settleFetchWithTokenResultResultResultResultResult();
+  async delete(sessionId: string) {
+    const result = await fetchWithToken<Record<string, never>>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}`,
+      { method: 'DELETE' }
+    );
+    return result.map(() => undefined);
   },
 
   getSandboxSize() {
@@ -351,6 +344,13 @@ export const agentHarnessServiceClient = {
    * The session's latest captured changes: changed files with statuses and
    * line counts, plus how the latest capture attempt went.
    */
+  getCodeExecution(sessionId: string, executionId: string) {
+    return fetchWithToken<ExecutionRecord>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/code-executions/${executionId}`,
+      { method: 'GET', errorResponseHandler: sessionError }
+    );
+  },
+
   getChanges(sessionId: string) {
     return fetchWithToken<AgentSessionChangesResponse>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/changes`,
@@ -387,40 +387,26 @@ export const agentHarnessServiceClient = {
   },
 
   /** Link the pull request at `url` to a session the caller can edit. */
-  linkPullRequest(sessionId: string, url: string) {
-    const settleFetchWithTokenResultResultResultResultResultResult =
-      async () => {
-        const settleFetchWithTokenResultResultResultResultResultResultValue =
-          await fetchWithToken<Record<string, never>>(
-            `${agentHarnessHost}/agent-sessions/${sessionId}/pull-requests`,
-            {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ url }),
-              errorResponseHandler: sessionError,
-            }
-          );
-        const result =
-          settleFetchWithTokenResultResultResultResultResultResultValue;
-        return await result.map(() => undefined);
-      };
-    return settleFetchWithTokenResultResultResultResultResultResult();
+  async linkPullRequest(sessionId: string, url: string) {
+    const result = await fetchWithToken<Record<string, never>>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/pull-requests`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+        errorResponseHandler: sessionError,
+      }
+    );
+    return result.map(() => undefined);
   },
 
   /** Unlink a pull request a person linked; the agent's own stays linked. */
-  unlinkPullRequest(sessionId: string, url: string) {
-    const settleFetchWithTokenResultResultResultResultResultResultResult =
-      async () => {
-        const settleFetchWithTokenResultResultResultResultResultResultResultValue =
-          await fetchWithToken<Record<string, never>>(
-            `${agentHarnessHost}/agent-sessions/${sessionId}/pull-requests?${new URLSearchParams({ url })}`,
-            { method: 'DELETE', errorResponseHandler: sessionError }
-          );
-        const result =
-          settleFetchWithTokenResultResultResultResultResultResultResultValue;
-        return await result.map(() => undefined);
-      };
-    return settleFetchWithTokenResultResultResultResultResultResultResult();
+  async unlinkPullRequest(sessionId: string, url: string) {
+    const result = await fetchWithToken<Record<string, never>>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/pull-requests?${new URLSearchParams({ url })}`,
+      { method: 'DELETE', errorResponseHandler: sessionError }
+    );
+    return result.map(() => undefined);
   },
 
   /**
@@ -466,6 +452,23 @@ export const agentHarnessServiceClient = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ answer }),
+      }
+    );
+  },
+
+  /**
+   * Continue the session now that its owner connected `appSlug`. The
+   * harness wakes it with an `app.connected` system event, so the transcript
+   * shows no prompt. 422 when the app is not actually connected.
+   */
+  reportAppConnected(sessionId: string, appSlug: string) {
+    return fetchWithToken<Record<string, never>, typeof AI_USAGE_LIMIT_ERROR>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/app-connections`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appSlug } satisfies AppConnectedRequest),
+        errorResponseHandler: sessionAiError,
       }
     );
   },

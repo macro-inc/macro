@@ -19,6 +19,7 @@
  * rows the socket delivers after it are appended to the cached copy here.
  */
 
+import { analytics } from '@app/lib/analytics';
 import {
   AgentFoldWorkerUnavailable,
   closeSession,
@@ -27,6 +28,8 @@ import {
   readSession,
   type SessionFoldSnapshot,
 } from '@core/agent-fold/client';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { startDetached } from '@core/util/startDetached';
 import {
   AgentSessionLogUnavailable,
   canFollowAgentSessionLog,
@@ -204,8 +207,11 @@ export class AgentSession {
   static ingest(event: AgentSessionLogEvent): void {
     const session = AgentSession.open.get(event.agentSessionId);
     if (!session || session.followed) return;
-    void session.enqueueAll(
-      event.entries.map((row) => ({ kind: 'confirmed', row }))
+    fireAndForget(
+      session.enqueueAll(
+        event.entries.map((row) => ({ kind: 'confirmed', row }))
+      ),
+      'agent-session'
     );
   }
 
@@ -276,15 +282,18 @@ export class AgentSession {
     // Subscribed before the fetch so no row between the two is lost: rows
     // that arrive during the load are buffered and folded after the snapshot.
     this.unsubscribeSocket = subscribeSocketSessionStarted(() => {
-      void this.resync();
+      fireAndForget(this.resync(), 'agent-session');
     });
     this.unsubscribeUpdated = subscribeAgentSessionUpdated((event) => {
-      if (event.agentSessionId === this.id) void this.resync();
+      if (event.agentSessionId === this.id)
+        fireAndForget(this.resync(), 'agent-session');
     });
     // The subscription survives a reconnect, but not the rows published
     // while the socket was down.
     this.unsubscribeReconnected = this.followed
-      ? subscribeGraphqlSoupReconnected(() => void this.resync())
+      ? subscribeGraphqlSoupReconnected(() =>
+          fireAndForget(this.resync(), 'agent-session')
+        )
       : () => undefined;
     this.trace = new SessionLoadTrace(id);
     this.watch = this.openWatch();
@@ -294,15 +303,7 @@ export class AgentSession {
     // A surface rendering the cached log has not called `load` yet when a
     // fast failure lands, and an unobserved rejection is reported as
     // unhandled. The failure still reaches every caller of `load`.
-
-    const settleLoading = async () => {
-      try {
-        return await this.loading;
-      } catch {
-        return await undefined;
-      }
-    };
-    settleLoading();
+    startDetached(this.loading, () => {});
   }
 
   /**
@@ -317,11 +318,14 @@ export class AgentSession {
       this.followed
         ? {
             rows: (rows) => {
-              void this.enqueueAll(
-                rows.map((row) => ({ kind: 'confirmed', row }))
+              fireAndForget(
+                this.enqueueAll(
+                  rows.map((row) => ({ kind: 'confirmed', row }))
+                ),
+                'agent-session'
               );
             },
-            gap: () => void this.resync(),
+            gap: () => fireAndForget(this.resync(), 'agent-session'),
           }
         : undefined
     );
@@ -396,12 +400,15 @@ export class AgentSession {
       // window would both speculate - the second one showing a bubble the
       // server's `queued` then takes away again.
       if (occupiesTurn(action)) this.setTurn('starting');
-      void this.enqueue({
-        kind: 'speculated',
-        actionId,
-        action,
-        userId: options.userId,
-      });
+      fireAndForget(
+        this.enqueue({
+          kind: 'speculated',
+          actionId,
+          action,
+          userId: options.userId,
+        }),
+        'agent-session'
+      );
     }
 
     // The harness adopts the id the client speculated under; the response
@@ -413,29 +420,38 @@ export class AgentSession {
 
     if (!speculated) return result;
     if (result.isErr()) {
-      void this.enqueue({ kind: 'retracted', actionId });
+      fireAndForget(
+        this.enqueue({ kind: 'retracted', actionId }),
+        'agent-session'
+      );
       return result;
     }
     // Queued after all: the turn opened between the check and the POST. The
     // harness logs the row only when the queue dispatches it, so holding the
     // speculation would show an open turn for the whole wait.
     if (result.value.status === 'queued') {
-      void this.enqueue({ kind: 'retracted', actionId });
+      fireAndForget(
+        this.enqueue({ kind: 'retracted', actionId }),
+        'agent-session'
+      );
       return result;
     }
     // A stop is a notification and carries no id on the wire, so the log
     // confirms it by content whatever id the harness accepted it under.
     const accepted = result.value.actionId;
     if (accepted !== actionId && action.type !== 'stop') {
-      void this.enqueueAll([
-        { kind: 'retracted', actionId },
-        {
-          kind: 'speculated',
-          actionId: accepted,
-          action,
-          userId: options.userId,
-        },
-      ]);
+      fireAndForget(
+        this.enqueueAll([
+          { kind: 'retracted', actionId },
+          {
+            kind: 'speculated',
+            actionId: accepted,
+            action,
+            userId: options.userId,
+          },
+        ]),
+        'agent-session'
+      );
     }
     return result;
   }
@@ -462,7 +478,14 @@ export class AgentSession {
           new Error(result.error.map((error) => error.message).join(' '))
         );
       } else {
-        trace.accepted(result.value.actionId, result.value.status === 'queued');
+        const queued = result.value.status === 'queued';
+        trace.accepted(result.value.actionId, queued);
+        const attachments =
+          request.type === 'prompt' ? (request.attachments?.length ?? 0) : 0;
+        fireAndForget(
+          this.trackPromptSent(trace, queued, attachments),
+          'agent-session'
+        );
       }
       return result;
     } catch (error) {
@@ -473,6 +496,28 @@ export class AgentSession {
       if (this.closed) trace.end('released');
       if (trace.ended) this.prompts.delete(trace);
     }
+  }
+
+  /**
+   * Count an accepted prompt as an AI message, with the files it carries as
+   * `attachmentCount`, as the retired AI chat reported its messages, so AI
+   * engagement keeps one definition across both.
+   */
+  private async trackPromptSent(
+    trace: PromptTrace,
+    queued: boolean,
+    attachmentCount: number
+  ): Promise<void> {
+    const row = await this.sessionRow;
+    analytics.track('ai_message_sent', {
+      surface: 'agent',
+      agentSessionId: this.id,
+      agentId: row.isOk() ? row.value.botId : undefined,
+      newSession: trace.newSession,
+      submitSurface: trace.submitSurface,
+      queued,
+      attachmentCount,
+    });
   }
 
   /**
@@ -489,17 +534,23 @@ export class AgentSession {
     options: { userId?: string } = {}
   ): void {
     if (occupiesTurn(action)) this.setTurn('starting');
-    void this.enqueue({
-      kind: 'speculated',
-      actionId,
-      action,
-      userId: options.userId,
-    });
+    fireAndForget(
+      this.enqueue({
+        kind: 'speculated',
+        actionId,
+        action,
+        userId: options.userId,
+      }),
+      'agent-session'
+    );
   }
 
   /** Take back a speculation the log will not confirm. Unknown ids are a no-op. */
   retract(actionId: string): void {
-    void this.enqueue({ kind: 'retracted', actionId });
+    fireAndForget(
+      this.enqueue({ kind: 'retracted', actionId }),
+      'agent-session'
+    );
   }
 
   /**
@@ -552,13 +603,9 @@ export class AgentSession {
    * first and reads second misses nothing and double-applies nothing worse
    * than a message it already holds.
    */
-  snapshot(): Promise<SessionFoldSnapshot> {
-    const settleChain = async () => {
-      await this.chain;
-
-      return await readSession(this.id);
-    };
-    return settleChain();
+  async snapshot(): Promise<SessionFoldSnapshot> {
+    await this.chain;
+    return await readSession(this.id);
   }
 
   /** Observe mounted answer DOM only while this tab awaits that prompt's paint. */
@@ -600,20 +647,8 @@ export class AgentSession {
     const readStartedAt = performance.now();
     // The cached log carries no session row, so the (small) row fetch is
     // part of warming: the transcript can show only inside a session.
-
-    const settleCached = async () => {
-      const settleCachedValue = await this.watch.cached;
-      const cached = settleCachedValue;
-
-      this.trace.cacheRead(
-        readStartedAt,
-        cached && { rows: cached.rows.length },
-        this.watch.cacheMiss()
-      );
-      return await cached;
-    };
     const [cached, session] = await Promise.all([
-      settleCached(),
+      this.readCached(readStartedAt),
       this.sessionRow,
     ]);
     // `settled` is set in the same tick as the fetched snapshot's push, so
@@ -631,6 +666,16 @@ export class AgentSession {
     return { session: session.value, bot: cached.bot };
   }
 
+  private async readCached(readStartedAt: number) {
+    const cached = await this.watch.cached;
+    this.trace.cacheRead(
+      readStartedAt,
+      cached && { rows: cached.rows.length },
+      this.watch.cacheMiss()
+    );
+    return cached;
+  }
+
   /** A surface put this session's transcript on screen. */
   rendered(
     kind: 'cached' | 'fetched',
@@ -639,27 +684,20 @@ export class AgentSession {
     this.trace.rendered(kind, transcriptSize(messages));
   }
 
-  private startLoad(): Promise<AgentSessionRecord> {
-    const settleFetchFoldAndSettle = async () => {
-      let settleFetchFoldAndSettleValue;
-      try {
-        settleFetchFoldAndSettleValue = await this.fetchFoldAndSettle();
-      } catch (settleFetchFoldAndSettleError) {
-        const error: unknown = settleFetchFoldAndSettleError;
-
-        this.loadFailed = true;
-        this.trace.end(
-          error instanceof AgentSessionReleased ? 'released' : 'failed',
-          error
-        );
-        throw error;
-      }
-      const record = settleFetchFoldAndSettleValue;
-
-      this.trace.end('loaded');
-      return await record;
-    };
-    return settleFetchFoldAndSettle();
+  private async startLoad(): Promise<AgentSessionRecord> {
+    let record: AgentSessionRecord;
+    try {
+      record = await this.fetchFoldAndSettle();
+    } catch (error) {
+      this.loadFailed = true;
+      this.trace.end(
+        error instanceof AgentSessionReleased ? 'released' : 'failed',
+        error
+      );
+      throw error;
+    }
+    this.trace.end('loaded');
+    return record;
   }
 
   /**
@@ -713,29 +751,9 @@ export class AgentSession {
 
   private async fetchAndFold(): Promise<AgentSessionRecord> {
     const fetchStartedAt = performance.now();
-
-    const settleSessionRow = async () => {
-      const settleSessionRowValue = await this.sessionRow;
-      const session = settleSessionRowValue;
-
-      this.trace.stage('session_fetch', fetchStartedAt);
-      return await session;
-    };
-
-    const settleFetched = async () => {
-      let settleFetchedValue;
-      try {
-        settleFetchedValue = await this.watch.fetched;
-      } catch (settleFetchedError) {
-        const error: unknown = settleFetchedError;
-        return await { ok: false as const, error };
-      }
-      const log = settleFetchedValue;
-      return await { ok: true as const, log };
-    };
     const [session, log] = await Promise.all([
-      settleSessionRow(),
-      settleFetched(),
+      this.fetchSessionRow(fetchStartedAt),
+      this.fetchLog(),
     ]);
     // Released mid-fetch: the stopped watch answers with a failure that is
     // not one.
@@ -779,26 +797,36 @@ export class AgentSession {
       );
       throw error;
     }
-    if (this.resyncRequested) void this.resync();
+    if (this.resyncRequested) fireAndForget(this.resync(), 'agent-session');
     return { session: session.value, bot: log.log.bot };
+  }
+
+  private async fetchSessionRow(fetchStartedAt: number) {
+    const session = await this.sessionRow;
+    this.trace.stage('session_fetch', fetchStartedAt);
+    return session;
+  }
+
+  private async fetchLog() {
+    try {
+      return { ok: true as const, log: await this.watch.fetched };
+    } catch (error: unknown) {
+      return { ok: false as const, error };
+    }
   }
 
   /** The viewer was refused: nothing cached may render for them again. */
   private forgetCached(): void {
     this.warming = Promise.resolve(undefined);
+    fireAndForget(this.forgetCachedLog(), 'agent-session');
+  }
 
-    const settleForgetAgentSessionLog = async () => {
-      try {
-        return await forgetAgentSessionLog(this.id);
-      } catch (settleForgetAgentSessionLogError) {
-        const error: unknown = settleForgetAgentSessionLogError;
-
-        console.warn('[agent-session] cached log could not be removed', error);
-
-        return;
-      }
-    };
-    void settleForgetAgentSessionLog();
+  private async forgetCachedLog(): Promise<void> {
+    try {
+      await forgetAgentSessionLog(this.id);
+    } catch (error) {
+      console.warn('[agent-session] cached log could not be removed', error);
+    }
   }
 
   /**
@@ -841,11 +869,14 @@ export class AgentSession {
       await this.drainBuffered();
       this.syncing = false;
       if (!this.closed && this.resyncRequested) {
-        void this.resync(true);
+        fireAndForget(this.resync(true), 'agent-session');
       } else if (!this.closed && failed) {
         const delay = RESYNC_RETRY_DELAYS_MS[this.resyncRetry++];
         if (delay !== undefined)
-          this.resyncTimer = setTimeout(() => void this.resync(true), delay);
+          this.resyncTimer = setTimeout(
+            () => fireAndForget(this.resync(true), 'agent-session'),
+            delay
+          );
       }
     }
   }
@@ -884,10 +915,18 @@ export class AgentSession {
       pushed.length > 0
         ? frameDelivery('socket', pushed)
         : snapshot && frameDelivery('snapshot', snapshot.rows);
+    this.chain = this.pushAfter(this.chain, inputs, delivery);
+    return this.chain;
+  }
 
-    const settleChainResult = async () => {
-      await this.chain;
-
+  /** Pushes after every earlier input. A failed push must not poison the chain for every input after it. */
+  private async pushAfter(
+    previous: Promise<void>,
+    inputs: FoldInput[],
+    delivery: ReturnType<typeof frameDelivery> | undefined
+  ): Promise<void> {
+    try {
+      await previous;
       if (this.closed) return;
       const events = await pushSession(this.id, inputs);
       if (this.closed || events.length === 0) return;
@@ -898,24 +937,8 @@ export class AgentSession {
         if (prompt.ended) this.prompts.delete(prompt);
       }
       for (const listener of this.listeners) listener(events);
-
-      return;
-    };
-    const run = settleChainResult();
-    // A failed push must not poison the chain for every input after it.
-
-    const settleRun = async () => {
-      try {
-        return await run;
-      } catch (settleRunError) {
-        const error: unknown = settleRunError;
-
-        console.error('[agent-session] fold input could not be applied', error);
-
-        return;
-      }
-    };
-    this.chain = settleRun();
-    return this.chain;
+    } catch (error) {
+      console.error('[agent-session] fold input could not be applied', error);
+    }
   }
 }

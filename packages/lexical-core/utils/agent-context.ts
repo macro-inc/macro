@@ -20,6 +20,7 @@ import { markdownToEmbeddingText } from './parsers';
 export type TriggerContext =
   | ({ kind: 'mentioned' } & DiscussionContext)
   | ({ kind: 'follow_up' } & FollowUpContext)
+  | ({ kind: 'conversation' } & DiscussionContext)
   | ({ kind: 'task_assigned' } & TaskAssignedContext)
   | ({ kind: 'requested' } & RequestedContext)
   | ({ kind: 'dispatched' } & DispatchedContext)
@@ -34,6 +35,16 @@ export type ContextPerson = {
   email?: string;
 };
 
+/** A file attached to a context message. */
+export type ContextAttachment = {
+  /** What was attached, such as `static/image`, `static/video`, or `document`. */
+  entity_type: string;
+  /** Its id. For a static file, the file id used in `/file/{id}`. */
+  entity_id: string;
+  /** Where the agent can fetch it; only static files have one. */
+  url?: string;
+};
+
 /** A message the agent may read. */
 export type ContextMessage = {
   id: string;
@@ -41,6 +52,8 @@ export type ContextMessage = {
   /** Internal markdown. */
   content: string;
   posted_at: string;
+  /** Absent when empty. */
+  attachments?: ContextAttachment[];
 };
 
 /** Messages of one discussion, oldest first. */
@@ -220,7 +233,44 @@ export type RoutineEvent =
       discussion: DiscussionContext;
       entity_type: string;
       entity_id: string;
-    };
+    }
+  | { event: 'call_started'; call: CallStartedSnapshot }
+  | { event: 'call_ended'; call: CallSnapshot };
+
+/** A call that just started, read under the routine owner's access. */
+export type CallStartedSnapshot = {
+  id: string;
+  title?: string;
+  /** Absent for meetings outside a channel. */
+  channel_id?: string;
+  channel_name?: string;
+  started_at: string;
+  started_by: ContextPerson;
+  /** People and guests who have joined so far. */
+  participants: ContextPerson[];
+};
+
+/** An ended call, read under the routine owner's access. */
+export type CallSnapshot = {
+  id: string;
+  title?: string;
+  /** Absent for meetings outside a channel. */
+  channel_id?: string;
+  channel_name?: string;
+  started_at: string;
+  ended_at: string;
+  /** People and guests who joined. */
+  participants: ContextPerson[];
+  /** Absent until an AI summary has been written. */
+  summary?: string;
+  /** Oldest first; absent when empty. */
+  transcript?: TranscriptLine[];
+  /** Whether the end of the transcript was left out. */
+  transcript_omitted: boolean;
+};
+
+/** One stretch of speech in a call transcript. */
+export type TranscriptLine = { speaker: string; text: string; at: string };
 
 /** A document, read under the routine owner's access. */
 export type DocumentSnapshot = {
@@ -665,9 +715,27 @@ type DiscussionReading = {
   subject: 'prompt' | 'triggering message';
   /** Whether the agent's reply is posted back into the discussion. */
   repliesHere: boolean;
+  /** Where the reply goes, when it is not back into a thread. */
+  origin?: string;
 };
 
 type MessageMarker = { attribute: string; messageId: string };
+
+function attachmentNodes(
+  attachments: ContextAttachment[] | undefined
+): FxpNode[] {
+  return (attachments ?? []).map((attachment) =>
+    el(
+      'attachment',
+      [],
+      present({
+        type: attachment.entity_type,
+        id: attachment.entity_id,
+        url: attachment.url,
+      })
+    )
+  );
+}
 
 function contextMessageNode(
   message: ContextMessage,
@@ -675,13 +743,30 @@ function contextMessageNode(
 ): FxpNode {
   return el(
     'message',
-    [text(readable(message.content))],
+    [text(readable(message.content)), ...attachmentNodes(message.attachments)],
     present({
       id: message.id,
       ...personAttributes(message.author, 'author'),
       at: message.posted_at,
       [marker.attribute]: message.id === marker.messageId ? 'true' : undefined,
     })
+  );
+}
+
+function discussionHasAttachments(discussion: DiscussionContext): boolean {
+  const quoted =
+    discussion.reply_target.kind === 'quote'
+      ? discussion.reply_target.message
+      : undefined;
+  const threads = [
+    ...(discussion.thread ? [discussion.thread] : []),
+    ...(discussion.channel ?? []),
+  ];
+  return (
+    (quoted?.attachments?.length ?? 0) > 0 ||
+    threads.some((thread) =>
+      thread.messages.some((message) => (message.attachments?.length ?? 0) > 0)
+    )
   );
 }
 
@@ -903,13 +988,21 @@ function discussionNode(
       ? [
           el('origin', [
             text(
-              `This ${reading.subject} was posted in ${surfaceDescription(discussion.surface)}, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.`
+              reading.origin ??
+                `This ${reading.subject} was posted in ${surfaceDescription(discussion.surface)}, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.`
             ),
           ]),
         ]
       : []),
     personNode('sender', discussion.sender),
     contextReplyTargetNode(discussion.reply_target, marker, reading.subject),
+    ...(discussionHasAttachments(discussion)
+      ? [
+          note(
+            'Attachments are listed on each message and can be fetched by their url.'
+          ),
+        ]
+      : []),
     ...(discussion.thread
       ? [contextThreadNode(discussion.thread, marker)]
       : []),
@@ -963,6 +1056,75 @@ function documentNode(document: DocumentSnapshot): FxpNode {
   );
 }
 
+function transcriptNode(call: CallSnapshot): FxpNode {
+  const lines = call.transcript ?? [];
+  return el(
+    'transcript',
+    [
+      note(
+        lines.length === 0 && !call.transcript_omitted
+          ? 'Nothing was transcribed.'
+          : 'Speakers are named by audio track, so people sharing a device share a speaker.'
+      ),
+      ...lines.map((line) =>
+        el('line', [text(line.text)], { speaker: line.speaker, at: line.at })
+      ),
+      ...(call.transcript_omitted
+        ? [
+            note(
+              'The rest of the transcript is not shown. ReadCallRecord with this call id returns all of it.'
+            ),
+          ]
+        : []),
+    ],
+    present({ omitted: call.transcript_omitted ? 'true' : undefined })
+  );
+}
+
+function callStartedNode(call: CallStartedSnapshot): FxpNode {
+  return el(
+    'call',
+    [
+      personNode('started_by', call.started_by),
+      el(
+        'participants',
+        call.participants.map((person) => personNode('participant', person))
+      ),
+    ],
+    present({
+      id: call.id,
+      title: call.title,
+      channel: call.channel_name,
+      channel_id: call.channel_id,
+      started_at: call.started_at,
+    })
+  );
+}
+
+function callNode(call: CallSnapshot): FxpNode {
+  return el(
+    'call',
+    [
+      el(
+        'participants',
+        call.participants.map((person) => personNode('participant', person))
+      ),
+      ...(call.summary === undefined
+        ? []
+        : [el('summary', [text(call.summary)])]),
+      transcriptNode(call),
+    ],
+    present({
+      id: call.id,
+      title: call.title,
+      channel: call.channel_name,
+      channel_id: call.channel_id,
+      started_at: call.started_at,
+      ended_at: call.ended_at,
+    })
+  );
+}
+
 function mentionedNode(discussion: DiscussionContext): FxpNode {
   return el(
     'trigger',
@@ -1010,6 +1172,25 @@ function followUpNode({ addressed_by, discussion }: FollowUpContext): FxpNode {
       }),
     ],
     { kind: 'follow_up', addressed_by }
+  );
+}
+
+function conversationNode(discussion: DiscussionContext): FxpNode {
+  return el(
+    'trigger',
+    [
+      note(
+        `${discussion.sender.name} wrote to you in your private conversation with them. Their message is the prompt; the conversation before it is this session's history.`
+      ),
+      discussionNode(discussion, {
+        marker: 'wrote_to_you',
+        subject: 'prompt',
+        repliesHere: true,
+        origin:
+          'This prompt was posted in your private conversation with the user, not the agent session view. They read it as you work: your reply is posted there, and a question you ask with AskUser or a draft you open for review appears there for them to answer.',
+      }),
+    ],
+    { kind: 'conversation' }
   );
 }
 
@@ -1140,6 +1321,8 @@ function routineEventChildren(event: RoutineEvent): FxpNode[] {
         discussionNode(discussion, routineDiscussion),
       ]
     )
+    .with({ event: 'call_started' }, ({ call }) => [callStartedNode(call)])
+    .with({ event: 'call_ended' }, ({ call }) => [callNode(call)])
     .exhaustive();
 }
 
@@ -1223,6 +1406,7 @@ function triggerNode(trigger: TriggerContext): FxpNode {
   return match(trigger)
     .with({ kind: 'mentioned' }, mentionedNode)
     .with({ kind: 'follow_up' }, followUpNode)
+    .with({ kind: 'conversation' }, conversationNode)
     .with({ kind: 'task_assigned' }, taskAssignedNode)
     .with({ kind: 'requested' }, requestedNode)
     .with({ kind: 'dispatched' }, dispatchedNode)
@@ -1241,9 +1425,7 @@ function sessionNode(
 ): FxpNode {
   const isOwner = sender?.id === owner.id;
   const prompter = sender?.name ?? 'A bot acting for nobody';
-  const policy = isOwner
-    ? `${owner.name} owns this session and sent this prompt.`
-    : `${prompter} sent this prompt, but ${owner.name} owns this session. You act with the access of ${owner.name} - their email, calendar, documents, and connected apps. Every tool call that uses that access waits for ${owner.name} to approve it, so use the tools the request needs and let ${owner.name} decide. Do not refuse on ${owner.name}'s behalf: the approval request is how they say yes or no. Looking things up on the public web needs no approval. Do not repeat anything private to ${owner.name} that you saw in earlier turns. If a call is declined or not approved, say so and do not look for another way to do it.`;
+  const policy = `${prompter} sent this prompt. ${owner.name} owns this session. Choose acting_as explicitly on each tool that accepts it. Prefer requester: this uses the access and connected apps of the person who sent this prompt, without an extra account approval. Choose owner only when the request calls for ${owner.name}'s access; when someone else prompted this turn, those calls wait for ${owner.name}'s approval. Public web lookups need no account selection. A bot or system event with no authenticated acting user has no requester account. If the selected account lacks a connection, offer the connect action returned by the tool; never silently switch accounts. Do not repeat private information from another person's earlier tool results. If a call is declined or not approved, say so and do not try another way to perform it. Existing email/calendar draft confirmations still apply.`;
   return el(
     'session',
     [

@@ -29,16 +29,10 @@ const { result } = concurrently([
   },
 ]);
 
-
-const settleResult = async () => {
-
-try { await result; } catch (settleResultError) { const e = settleResultError;
-
-    console.error(e);
-    process.exit(1);
-
-return; }
-
-return await (console.log('done'));
-};
-settleResult();
+try {
+  await result;
+  console.log('done');
+} catch (e) {
+  console.error(e);
+  process.exit(1);
+}

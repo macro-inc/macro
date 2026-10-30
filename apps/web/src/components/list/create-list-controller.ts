@@ -136,6 +136,19 @@ export function createListController<TItem, TMetadata = unknown>(
     return result && canNavigateTo(result, forcedFocus()) ? result : undefined;
   });
 
+  // Where the focused item last sat: the list it sat in and its index. Only
+  // the reference is kept, so lists pay nothing per change; neighbours are
+  // read when a removed item needs a successor.
+  const focusedPlace = createMemo<
+    { key: ListKey; index: number; all: readonly TItem[] } | undefined
+  >((previous) => {
+    const focused = focusedResult();
+    if (!focused) {
+      return previous?.key === requestedFocusKey() ? previous : undefined;
+    }
+    return { key: focused.key, index: focused.index, all: snapshot().all };
+  });
+
   const commitFocus = (
     nextKey: ListKey | undefined,
     reason: NonNullable<ListFocusOptions['reason']>,
@@ -278,10 +291,29 @@ export function createListController<TItem, TMetadata = unknown>(
     });
   };
 
+  /** The first navigable row after the focused one `key` names, wrapping to those before it. */
+  const successorOf = (
+    key: ListKey,
+    navigationOptions: ListNavigationOptions<TItem>
+  ) => {
+    const place = focusedPlace();
+    if (place?.key !== key) return undefined;
+    const { all, index } = place;
+    const neighbours = [
+      ...all.slice(index + 1),
+      ...all.slice(0, index).reverse(),
+    ];
+    for (const neighbour of neighbours) {
+      const result = itemResultFor(options.getKey(neighbour));
+      if (result && matchesNavigation(result, navigationOptions)) return result;
+    }
+    return undefined;
+  };
+
   const restoreFocus = (
     key: ListKey | undefined,
-    restoreOptions: ListRestoreFocusOptions = {}
-  ) => {
+    restoreOptions: ListRestoreFocusOptions<TItem> = {}
+  ): ListItemResult<TItem> | undefined => {
     const reason = restoreOptions.reason ?? 'restore';
     if (key !== undefined) {
       const restored = focusResult(itemResultFor(key), {
@@ -301,6 +333,13 @@ export function createListController<TItem, TMetadata = unknown>(
           restoreOptions.nearestIndex ?? focusedResult()?.index ?? 0,
           { ...restoreOptions, reason }
         );
+      case 'successor': {
+        const successor =
+          key === undefined ? undefined : successorOf(key, restoreOptions);
+        return successor
+          ? focusResult(successor, { ...restoreOptions, reason })
+          : restoreFocus(key, { ...restoreOptions, fallback: 'none' });
+      }
       case 'none':
         commitFocus(
           restoreOptions.retainUnavailable !== false &&

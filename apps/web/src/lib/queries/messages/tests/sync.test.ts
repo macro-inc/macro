@@ -537,15 +537,11 @@ describe.each([
         },
       ],
     });
-
-    const settleFetching = async () => {
-      try {
-        return await fetching;
-      } catch {
-        return await undefined;
-      }
-    };
-    await settleFetching();
+    try {
+      await fetching;
+    } catch {
+      /* The invalidation below is the outcome under test. */
+    }
     await vi.waitFor(() =>
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: timelineKey(),
@@ -582,15 +578,11 @@ describe.each([
       pageParams: [null],
       pages: [{ entries: [], next_cursor: null, previous_cursor: null }],
     });
-
-    const settleFetchingResult = async () => {
-      try {
-        return await fetching;
-      } catch {
-        return await undefined;
-      }
-    };
-    await settleFetchingResult();
+    try {
+      await fetching;
+    } catch {
+      /* The invalidation below is the outcome under test. */
+    }
     await vi.waitFor(() =>
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: timelineKey(),
@@ -803,15 +795,11 @@ describe('live timeline activity', () => {
       pageParams: [null],
       pages: [{ entries: [], next_cursor: null, previous_cursor: null }],
     });
-
-    const settleFetchingResultResult = async () => {
-      try {
-        return await fetching;
-      } catch {
-        return await undefined;
-      }
-    };
-    await settleFetchingResultResult();
+    try {
+      await fetching;
+    } catch {
+      /* The invalidation below is the outcome under test. */
+    }
     await vi.waitFor(() =>
       expect(invalidate).toHaveBeenCalledWith({ queryKey: latest, exact: true })
     );

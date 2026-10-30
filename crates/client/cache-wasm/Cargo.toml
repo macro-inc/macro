@@ -2,8 +2,8 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-# Rebuild for patched structural query changes and checked patch integers.
-version = "0.6.47"
+# Rebuild with draft link patches and compressed normalized records.
+version = "0.6.52"
 
 [features]
 default = []

@@ -1,6 +1,6 @@
 import { BookingPicker } from '@app/features/scheduling/views/booking-picker';
-import Check from '@phosphor/check-circle.svg';
-import Eye from '@phosphor/eye.svg';
+import Check from '@icon/system/regular/check-circle.svg';
+import Eye from '@icon/system/regular/eye.svg';
 import { Match, Show, Switch } from 'solid-js';
 import { SectionHeading } from '../components/respond/respond-screens';
 import { useFormContext } from '../context/form-context';
@@ -47,7 +47,7 @@ export function BookingStepView(props: {
       <Switch
         fallback={
           <div
-            class="h-80 animate-pulse rounded-2xl bg-hover"
+            class="skeleton-shimmer h-80 rounded-2xl bg-skeleton"
             aria-busy="true"
             aria-label="Loading the calendar"
           />

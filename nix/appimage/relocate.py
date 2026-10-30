@@ -22,6 +22,20 @@ def elf_files(root):
                 yield path
 
 
+def check_schema_paths(appdir):
+    for relative in (
+        "usr/lib/libpxbackend-1.0.so",
+        "usr/lib/libgiognomeproxy.so",
+        "usr/lib/gio/modules/libgiognomeproxy.so",
+    ):
+        path = Path(appdir) / relative
+        if path.is_file() and re.search(
+            rb"/nix/store/[^\x00\n]*gsettings-desktop-schemas[^\x00\n]*/glib-2\.0/schemas",
+            path.read_bytes(),
+        ):
+            raise RuntimeError(f"Nix-only GSettings lookup in {path}")
+
+
 def relocate(appdir):
     appdir = Path(appdir).resolve()
     libdir = appdir / "usr/lib"
@@ -116,6 +130,7 @@ def relocate(appdir):
         for field in ("needed", "rpath"):
             if "/nix/store/" in patchelf(path, f"--print-{field}"):
                 raise RuntimeError(f"unrelocated {field}: {path}")
+    check_schema_paths(appdir)
     print(f"Relocated {len(dynamic)} ELF files in {appdir}")
 
 

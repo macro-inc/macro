@@ -21,11 +21,12 @@ import {
   VIEW_TAB_PRESETS,
 } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
+import { t } from '@app/lib/i18n';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserContext, useUserId } from '@core/context/user';
 import { deepEqual } from '@core/util/compareUtils';
-import CircleDashedIcon from '@phosphor/circle-dashed.svg';
+import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useContacts } from '@queries/contacts/contacts';
 import { batch, createMemo, createSignal, type JSX } from 'solid-js';
@@ -33,11 +34,11 @@ import type {
   ConsolidatedFilter,
   FilterValue,
 } from './consolidated-filter-chip';
+import type { FilterCategory } from './filter-categories';
 import type { SearchableOption } from './searchable-multi-select';
 import { useTagFilter } from './tag-filter';
 import {
   buildContactLabel,
-  type FilterCategory,
   VIEW_FILTER_CATEGORIES,
 } from './unified-filter-dropdown';
 
@@ -70,6 +71,15 @@ const hasFilterCategoryRefinement = (
  * Hook that provides detection of active filter refinements beyond tab defaults,
  * and a function to reset filters to the current tab's default state.
  */
+type CategoryGroup = {
+  category: FilterCategory;
+  allOptions: FilterValue[];
+  multiple: boolean;
+  showTabDefaults: boolean;
+  presetAndOptionIds: FilterID[];
+  presetOrOptionIds: FilterID[];
+};
+
 export function useFilterRefinements() {
   const {
     soup,
@@ -157,7 +167,7 @@ export function useFilterRefinements() {
         { label: string; icon?: () => JSX.Element }
       >();
       map.set(NO_ASSIGNEE, {
-        label: 'Unassigned',
+        label: t('viewMenus.unassigned'),
         icon: () => <CircleDashedIcon class="size-3 text-ink-muted" />,
       });
       for (const contact of contacts()) {
@@ -184,7 +194,7 @@ export function useFilterRefinements() {
     const uid = currentUserId();
     const noAssigneeOption: SearchableOption = {
       id: NO_ASSIGNEE,
-      label: 'Unassigned',
+      label: t('viewMenus.unassigned'),
       icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
     };
     let meOption: SearchableOption | undefined;
@@ -353,6 +363,68 @@ export function useFilterRefinements() {
   };
 
   /**
+   * View category filters grouped by category. A category is a refinement only
+   * when its effective selection differs from the current tab's baseline.
+   */
+  const refinedCategoryGroups = (
+    isMyTasksTab: boolean,
+    presetAndFilterIds: ReadonlySet<FilterID>,
+    presetOrFilterIds: ReadonlySet<FilterID>
+  ): Map<string, CategoryGroup> => {
+    const categoryGroups = new Map<string, CategoryGroup>();
+    for (const category of viewCategories()) {
+      const activeValues: FilterValue[] = [];
+      const allOptions: FilterValue[] = [];
+      const presetAndOptionIds: FilterID[] = [];
+      const presetOrOptionIds: FilterID[] = [];
+
+      for (const option of category.options) {
+        // Read the label through a getter so cached chips follow the
+        // interface language.
+        const value = {
+          id: option.id,
+          get label() {
+            return option.label;
+          },
+          icon: option.icon,
+        };
+        allOptions.push(value);
+
+        if (TAB_ONLY_FILTERS.has(option.id)) continue;
+
+        if (soup.predicates.isActive(option.id)) activeValues.push(value);
+        if (presetAndFilterIds.has(option.id as FilterID)) {
+          presetAndOptionIds.push(option.id as FilterID);
+        }
+        if (presetOrFilterIds.has(option.id as FilterID)) {
+          presetOrOptionIds.push(option.id as FilterID);
+        }
+      }
+
+      const presetOptionIds = [...presetAndOptionIds, ...presetOrOptionIds];
+      const isMyTasksDefaultStatus = isMyTasksTab && category.id === 'status';
+      if (
+        activeValues.length > 0 &&
+        (isMyTasksDefaultStatus ||
+          hasFilterCategoryRefinement(
+            activeValues.map((value) => value.id),
+            presetOptionIds
+          ))
+      ) {
+        categoryGroups.set(category.id, {
+          category,
+          allOptions,
+          multiple: category.multiple ?? true,
+          showTabDefaults: isMyTasksDefaultStatus,
+          presetAndOptionIds,
+          presetOrOptionIds,
+        });
+      }
+    }
+    return categoryGroups;
+  };
+
+  /**
    * Returns consolidated filters grouped by category.
    * Multiple values in the same category are shown in a single chip.
    */
@@ -375,59 +447,11 @@ export function useFilterRefinements() {
     const filters: ConsolidatedFilter[] = [];
     const seenKeys = new Set<string>();
 
-    // Group view category filters by category. A category is a refinement only
-    // when its effective selection differs from the current tab's baseline.
-    const categoryGroups = new Map<
-      string,
-      {
-        label: string;
-        labelPlural?: string;
-        allOptions: FilterValue[];
-        multiple: boolean;
-        showTabDefaults: boolean;
-        presetAndOptionIds: FilterID[];
-        presetOrOptionIds: FilterID[];
-      }
-    >();
-
-    for (const category of viewCategories()) {
-      const activeValues: FilterValue[] = [];
-      const allOptions: FilterValue[] = [];
-      const presetAndOptionIds: FilterID[] = [];
-      const presetOrOptionIds: FilterID[] = [];
-
-      for (const option of category.options) {
-        const value = {
-          id: option.id,
-          label: option.label,
-          icon: option.icon,
-        };
-        allOptions.push(value);
-
-        if (TAB_ONLY_FILTERS.has(option.id)) continue;
-
-        if (soup.predicates.isActive(option.id)) activeValues.push(value);
-        if (presetAndFilterIds.has(option.id as FilterID)) {
-          presetAndOptionIds.push(option.id as FilterID);
-        }
-        if (presetOrFilterIds.has(option.id as FilterID)) {
-          presetOrOptionIds.push(option.id as FilterID);
-        }
-      }
-
-      const presetOptionIds = [...presetAndOptionIds, ...presetOrOptionIds];
-      const isMyTasksDefaultStatus =
-        view === 'tasks' && tab === 'my-tasks' && category.id === 'status';
-      updateCreateMemo(
-        activeValues,
-        isMyTasksDefaultStatus,
-        presetOptionIds,
-        category,
-        allOptions,
-        presetAndOptionIds,
-        presetOrOptionIds
-      );
-    }
+    const categoryGroups = refinedCategoryGroups(
+      view === 'tasks' && tab === 'my-tasks',
+      presetAndFilterIds,
+      presetOrFilterIds
+    );
 
     // Build consolidated chips for each category group
     for (const [categoryId, group] of categoryGroups) {
@@ -461,8 +485,12 @@ export function useFilterRefinements() {
       filters.push(
         getOrCreateConsolidatedChip(key, () => ({
           key,
-          categoryLabel: group.label,
-          categoryLabelPlural: group.labelPlural,
+          get categoryLabel() {
+            return group.category.label;
+          },
+          get categoryLabelPlural() {
+            return group.category.labelPlural;
+          },
           values: getActiveValues, // Accessor - computed fresh each render
           availableOptions: group.allOptions,
           multiple: group.multiple,
@@ -625,12 +653,16 @@ export function useFilterRefinements() {
           };
           return {
             key,
-            categoryLabel: 'Assignee',
+            get categoryLabel() {
+              return t('viewMenus.assignee');
+            },
             values: getValues,
             searchableOptions: assigneeSearchableOptions,
             activeSearchableIds: assigneeFilter,
             onSearchableChange: handleAssigneeChange,
-            searchPlaceholder: 'Search assignees...',
+            get searchPlaceholder() {
+              return t('viewMenus.searchAssignees');
+            },
             isPopupOpen,
             setPopupOpen,
             onRemoveAll: () => handleAssigneeChange([]),
@@ -669,12 +701,16 @@ export function useFilterRefinements() {
           };
           return {
             key,
-            categoryLabel: 'Created by',
+            get categoryLabel() {
+              return t('viewMenus.createdBy');
+            },
             values: getValues,
             searchableOptions: createdBySearchableOptions,
             activeSearchableIds: createdByIds,
             onSearchableChange: handleCreatedByChange,
-            searchPlaceholder: 'Search creators...',
+            get searchPlaceholder() {
+              return t('viewMenus.searchCreators');
+            },
             isPopupOpen,
             setPopupOpen,
             onRemoveAll: () => handleCreatedByChange([]),
@@ -714,12 +750,16 @@ export function useFilterRefinements() {
           };
           return {
             key,
-            categoryLabel: 'Tags',
+            get categoryLabel() {
+              return t('viewMenus.tags');
+            },
             values: getValues,
             searchableOptions: tagFilter.options,
             activeSearchableIds: tagFilter.activeIds,
             onSearchableChange: tagFilter.onChange,
-            searchPlaceholder: 'Filter by tag...',
+            get searchPlaceholder() {
+              return t('viewMenus.filterByTag');
+            },
             isPopupOpen,
             setPopupOpen,
             onRemoveAll: () => tagFilter.onChange([]),
@@ -774,35 +814,6 @@ export function useFilterRefinements() {
     }
 
     return filters;
-
-    function updateCreateMemo(
-      activeValues: FilterValue[],
-      isMyTasksDefaultStatus: boolean,
-      presetOptionIds: FilterID[],
-      category: FilterCategory,
-      allOptions: FilterValue[],
-      presetAndOptionIds: FilterID[],
-      presetOrOptionIds: FilterID[]
-    ) {
-      if (
-        activeValues.length > 0 &&
-        (isMyTasksDefaultStatus ||
-          hasFilterCategoryRefinement(
-            activeValues.map((value) => value.id),
-            presetOptionIds
-          ))
-      ) {
-        categoryGroups.set(category.id, {
-          label: category.label,
-          labelPlural: category.labelPlural,
-          allOptions,
-          multiple: category.multiple ?? true,
-          showTabDefaults: isMyTasksDefaultStatus,
-          presetAndOptionIds,
-          presetOrOptionIds,
-        });
-      }
-    }
   });
 
   const getFilterContext = (): FilterContext => ({

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { WithRequired } from '@core/util/withRequired';
 import { debounce } from '@solid-primitives/scheduled';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
@@ -45,7 +46,7 @@ export class PDFViewer extends InternalPDFViewer {
   }
 
   async destroy() {
-    super.destroy();
+    fireAndForget(super.destroy(), 'pdf-viewer');
   }
 
   load(pdfDocument: PDFDocumentProxy) {
@@ -275,10 +276,8 @@ export class PDFViewer extends InternalPDFViewer {
     this._viewer._setScale(scale, true);
 
     const hash = this.#savedPosition;
-
-    const settlePromise = async () => {
+    const restorePosition = async () => {
       await this._viewer._pagesCapability.promise;
-
       if (hash) {
         const hashNoNull = hash.includes('zoom=null')
           ? hash.replace('zoom=null', 'zoom=auto')
@@ -287,10 +286,8 @@ export class PDFViewer extends InternalPDFViewer {
       }
       this.#savedScale = undefined;
       this.#savedPosition = undefined;
-
-      return;
     };
-    settlePromise();
+    fireAndForget(restorePosition(), 'pdf-viewer');
   }
 
   // The page width/height is used for a lot of calculations, for things like placeables,
@@ -369,6 +366,6 @@ export class PDFViewer extends InternalPDFViewer {
   }
 
   goToDestination(dest: TDestArray) {
-    this._linkService.goToDestination(dest);
+    fireAndForget(this._linkService.goToDestination(dest), 'pdf-viewer');
   }
 }

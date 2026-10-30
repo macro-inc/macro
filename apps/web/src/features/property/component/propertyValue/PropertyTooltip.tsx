@@ -1,13 +1,15 @@
 import { useUnfurl } from '@app/lib/queries/unfurl/unfurl';
 import { UserIcon } from '@core/component/UserIcon';
-import LinkIcon from '@phosphor/link.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
 import { usePropertyEntityDisplay } from '@property/hooks';
-import type { Property } from '@property/types';
+import type { DateRangeProperty, Property } from '@property/types';
 import {
   extractDomain,
   formatPropertyValue,
+  formatTimeRange,
   isBooleanProperty,
   isDateProperty,
+  isDateRangeProperty,
   isEntityProperty,
   isLinkProperty,
   isNumberProperty,
@@ -19,6 +21,7 @@ import {
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import { proxyResource } from '@service-unfurl/proxy-resource';
 import {
+  children,
   createSignal,
   For,
   type JSX,
@@ -31,6 +34,7 @@ import { PropertyValueIcon } from './PropertyValueIcon';
 
 type PropertyTooltipProps = ParentProps<{
   property: Property;
+  trailingAction?: JSX.Element;
 }>;
 
 /**
@@ -39,45 +43,56 @@ type PropertyTooltipProps = ParentProps<{
  */
 export const PropertyTooltip = (props: PropertyTooltipProps): JSX.Element => {
   return (
-    <Switch>
-      <Match when={isStringProperty(props.property) && props.property}>
-        {(property) => <StringTooltipContent property={property()} />}
-      </Match>
-      <Match when={isNumberProperty(props.property) && props.property}>
-        {(property) => <NumberTooltipContent property={property()} />}
-      </Match>
-      <Match when={isBooleanProperty(props.property) && props.property}>
-        {(property) => <BooleanTooltipContent property={property()} />}
-      </Match>
-      <Match when={isDateProperty(props.property) && props.property}>
-        {(property) => <DateTooltipContent property={property()} />}
-      </Match>
-      <Match when={isSelectProperty(props.property) && props.property}>
-        {(property) => <SelectTooltipContent property={property()} />}
-      </Match>
-      <Match when={isEntityProperty(props.property) && props.property}>
-        {(property) => <EntityTooltipContent property={property()} />}
-      </Match>
-      <Match when={isLinkProperty(props.property) && props.property}>
-        {(property) => <LinkTooltipContent property={property()} />}
-      </Match>
-    </Switch>
+    <TooltipWrapper
+      property={props.property}
+      trailingAction={props.trailingAction}
+    >
+      <Switch>
+        <Match when={isStringProperty(props.property) && props.property}>
+          {(property) => <StringTooltipContent property={property()} />}
+        </Match>
+        <Match when={isNumberProperty(props.property) && props.property}>
+          {(property) => <NumberTooltipContent property={property()} />}
+        </Match>
+        <Match when={isBooleanProperty(props.property) && props.property}>
+          {(property) => <BooleanTooltipContent property={property()} />}
+        </Match>
+        <Match when={isDateProperty(props.property) && props.property}>
+          {(property) => <DateTooltipContent property={property()} />}
+        </Match>
+        <Match when={isDateRangeProperty(props.property) && props.property}>
+          {(property) => <DateRangeTooltipContent property={property()} />}
+        </Match>
+        <Match when={isSelectProperty(props.property) && props.property}>
+          {(property) => <SelectTooltipContent property={property()} />}
+        </Match>
+        <Match when={isEntityProperty(props.property) && props.property}>
+          {(property) => <EntityTooltipContent property={property()} />}
+        </Match>
+        <Match when={isLinkProperty(props.property) && props.property}>
+          {(property) => <LinkTooltipContent property={property()} />}
+        </Match>
+      </Switch>
+    </TooltipWrapper>
   );
 };
 
 /**
  * Shared tooltip wrapper with consistent header styling
  */
-const TooltipWrapper = (props: {
-  property: Property;
-  children: JSX.Element;
-}) => {
+const TooltipWrapper = (props: PropertyTooltipProps) => {
   const singleSelect = () => !props.property.isMultiSelect;
   const hasValue = () => propertyHasValue(props.property);
+  const trailingAction = children(() => props.trailingAction);
   return (
     <Show
       when={hasValue()}
-      fallback={<div class="text-xs">No {props.property.displayName} set</div>}
+      fallback={
+        <div class="flex min-w-0 items-center gap-4">
+          <div class="text-xs">No {props.property.displayName} set</div>
+          {trailingAction()}
+        </div>
+      }
     >
       <div
         classList={{
@@ -86,18 +101,26 @@ const TooltipWrapper = (props: {
         }}
       >
         <div
-          class="flex items-center gap-2 text-ink-muted"
+          class="flex min-w-0 items-center gap-4"
           classList={{
             'border-b border-edge pb-1.5 mb-1.5': !singleSelect(),
           }}
         >
-          <PropertyDataTypeIcon
-            property={props.property}
-            class="size-3.5 text-ink-muted"
-          />
-          <span class="text-xs">{props.property.displayName}</span>
+          <div class="flex min-w-0 items-center gap-2 text-ink-muted">
+            <PropertyDataTypeIcon
+              property={props.property}
+              class="size-3.5 shrink-0 text-ink-muted"
+            />
+            <span class="min-w-0 text-xs">{props.property.displayName}</span>
+          </div>
+          <Show when={!singleSelect() && trailingAction.toArray().length > 0}>
+            <div class="ml-auto shrink-0">{trailingAction()}</div>
+          </Show>
         </div>
         {props.children}
+        <Show when={singleSelect() && trailingAction.toArray().length > 0}>
+          <div class="ml-2 shrink-0">{trailingAction()}</div>
+        </Show>
       </div>
     </Show>
   );
@@ -113,13 +136,11 @@ const StringTooltipContent = (props: {
   property: Property & { valueType: 'STRING' };
 }) => {
   return (
-    <TooltipWrapper property={props.property}>
-      <div class="flex items-center gap-1.5 flex-wrap">
-        <ValueContainer>
-          <span class="truncate max-w-37.5">{props.property.value}</span>
-        </ValueContainer>
-      </div>
-    </TooltipWrapper>
+    <div class="flex items-center gap-1.5 flex-wrap">
+      <ValueContainer>
+        <span class="truncate max-w-37.5">{props.property.value}</span>
+      </ValueContainer>
+    </div>
   );
 };
 
@@ -130,13 +151,11 @@ const NumberTooltipContent = (props: {
     formatPropertyValue(props.property, props.property.value);
 
   return (
-    <TooltipWrapper property={props.property}>
-      <div class="flex items-center gap-1.5 flex-wrap">
-        <ValueContainer>
-          <span class="truncate max-w-37.5">{displayValue()}</span>
-        </ValueContainer>
-      </div>
-    </TooltipWrapper>
+    <div class="flex items-center gap-1.5 flex-wrap">
+      <ValueContainer>
+        <span class="truncate max-w-37.5">{displayValue()}</span>
+      </ValueContainer>
+    </div>
   );
 };
 
@@ -147,13 +166,11 @@ const BooleanTooltipContent = (props: {
     formatPropertyValue(props.property, props.property.value);
 
   return (
-    <TooltipWrapper property={props.property}>
-      <div class="flex items-center gap-1.5 flex-wrap">
-        <ValueContainer>
-          <span>{displayValue()}</span>
-        </ValueContainer>
-      </div>
-    </TooltipWrapper>
+    <div class="flex items-center gap-1.5 flex-wrap">
+      <ValueContainer>
+        <span>{displayValue()}</span>
+      </ValueContainer>
+    </div>
   );
 };
 
@@ -164,35 +181,43 @@ const DateTooltipContent = (props: {
     formatPropertyValue(props.property, props.property.value);
 
   return (
-    <TooltipWrapper property={props.property}>
-      <div class="flex items-center gap-1.5 flex-wrap">
-        <ValueContainer>
-          <span class="truncate max-w-37.5">{displayValue()}</span>
-        </ValueContainer>
-      </div>
-    </TooltipWrapper>
+    <div class="flex items-center gap-1.5 flex-wrap">
+      <ValueContainer>
+        <span class="truncate max-w-37.5">{displayValue()}</span>
+      </ValueContainer>
+    </div>
   );
 };
+
+const DateRangeTooltipContent = (props: { property: DateRangeProperty }) => (
+  <TooltipWrapper property={props.property}>
+    <div class="flex items-center gap-1.5 flex-wrap">
+      <ValueContainer>
+        <span class="truncate max-w-37.5">
+          {props.property.value ? formatTimeRange(props.property.value) : ''}
+        </span>
+      </ValueContainer>
+    </div>
+  </TooltipWrapper>
+);
 
 const SelectTooltipContent = (props: {
   property: Property & { valueType: 'SELECT_STRING' | 'SELECT_NUMBER' };
 }) => {
   const values = () => props.property.value ?? [];
   return (
-    <TooltipWrapper property={props.property}>
-      <div class="flex items-center gap-1.5 flex-wrap">
-        <For each={values()}>
-          {(optionId, index) => (
-            <ValueContainer>
-              <SelectValueIcon property={props.property} valueIndex={index()} />
-              <span class="truncate max-w-37.5">
-                {formatPropertyValue(props.property, optionId)}
-              </span>
-            </ValueContainer>
-          )}
-        </For>
-      </div>
-    </TooltipWrapper>
+    <div class="flex items-center gap-1.5 flex-wrap">
+      <For each={values()}>
+        {(optionId, index) => (
+          <ValueContainer>
+            <SelectValueIcon property={props.property} valueIndex={index()} />
+            <span class="truncate max-w-37.5">
+              {formatPropertyValue(props.property, optionId)}
+            </span>
+          </ValueContainer>
+        )}
+      </For>
+    </div>
   );
 };
 
@@ -215,24 +240,22 @@ const EntityTooltipContent = (props: {
   const isUserType = () => props.property.specificEntityType === 'USER';
 
   return (
-    <TooltipWrapper property={props.property}>
-      <div class="flex items-center gap-1.5 flex-wrap">
-        <Switch>
-          <Match when={isUserType()}>
-            <div class="flex flex-col gap-1.5">
-              <For each={entities()}>
-                {(entity) => <UserEntityItem entity={entity} />}
-              </For>
-            </div>
-          </Match>
-          <Match when={!isUserType()}>
+    <div class="flex items-center gap-1.5 flex-wrap">
+      <Switch>
+        <Match when={isUserType()}>
+          <div class="flex flex-col gap-1.5">
             <For each={entities()}>
-              {(entity) => <EntityValuePill entity={entity} />}
+              {(entity) => <UserEntityItem entity={entity} />}
             </For>
-          </Match>
-        </Switch>
-      </div>
-    </TooltipWrapper>
+          </div>
+        </Match>
+        <Match when={!isUserType()}>
+          <For each={entities()}>
+            {(entity) => <EntityValuePill entity={entity} />}
+          </For>
+        </Match>
+      </Switch>
+    </div>
   );
 };
 
@@ -274,11 +297,9 @@ const LinkTooltipContent = (props: {
   const links = () => props.property.value ?? [];
 
   return (
-    <TooltipWrapper property={props.property}>
-      <div class="flex items-center gap-1.5 flex-wrap">
-        <For each={links()}>{(url) => <LinkValuePill url={url} />}</For>
-      </div>
-    </TooltipWrapper>
+    <div class="flex items-center gap-1.5 flex-wrap">
+      <For each={links()}>{(url) => <LinkValuePill url={url} />}</For>
+    </div>
   );
 };
 

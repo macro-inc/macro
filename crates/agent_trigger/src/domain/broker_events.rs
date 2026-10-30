@@ -112,11 +112,30 @@ pub struct AgentSessionRequestedEvent {
     pub context: Option<TriggerContext>,
 }
 
+/// A message in a channel where an agent persona converses. The session
+/// identity is reserved durably before publication, so concurrent first
+/// messages agree on it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentConversationMessageEvent {
+    /// Persona the conversation is with.
+    pub bot_id: BotId,
+    /// The conversation's current session, whether its runtime is running yet or not.
+    pub session_id: AgentSessionId,
+    /// Committed user message.
+    pub message: MessagePostedMetadata,
+    /// Why the agent was called, read under the sender's access. Absent when
+    /// the read failed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<TriggerContext>,
+}
+
 /// Events that open a new session.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "source", rename_all = "snake_case")]
 pub enum NewAgentSessionEvent {
+    /// Open or continue the reserved session of an agent's channel conversation.
+    ConversationMessage(AgentConversationMessageEvent),
     /// Opened by a bot mention in a top-level channel message.
     TopLevelMentioned(AgentBotMentionedEvent),
     /// Opened by a bot mention on a message parent other than a channel.
@@ -155,7 +174,7 @@ impl NewAgentSessionEvent {
                 message: mentioned.message.clone(),
                 context: mentioned.context.clone(),
             }),
-            Self::AssignedToTask(_) | Self::Requested(_) => None,
+            Self::AssignedToTask(_) | Self::Requested(_) | Self::ConversationMessage(_) => None,
         }
     }
 
@@ -164,7 +183,10 @@ impl NewAgentSessionEvent {
     pub fn requested(&self) -> Option<&AgentSessionRequestedEvent> {
         match self {
             Self::Requested(requested) => Some(requested),
-            Self::TopLevelMentioned(_) | Self::Mentioned(_) | Self::AssignedToTask(_) => None,
+            Self::TopLevelMentioned(_)
+            | Self::Mentioned(_)
+            | Self::AssignedToTask(_)
+            | Self::ConversationMessage(_) => None,
         }
     }
 }
@@ -285,6 +307,7 @@ impl AgentTriggerTopicEvent {
     #[must_use]
     pub fn bot_id(&self) -> Option<BotId> {
         match self {
+            Self::New(NewAgentSessionEvent::ConversationMessage(event)) => Some(event.bot_id),
             Self::New(NewAgentSessionEvent::AssignedToTask(assigned)) => Some(assigned.bot_id),
             Self::New(event) => event
                 .mention()
@@ -312,6 +335,16 @@ impl TopicEvent for AgentTriggerTopicEvent {
     reason = "both variants carry a whole message; boxing would only move the size"
 )]
 pub enum TriggerDecision {
+    /// Deliver a message to the reserved current session of an agent's
+    /// channel conversation.
+    ConversationMessage {
+        /// Persona the conversation is with.
+        bot_id: BotId,
+        /// Durable current conversation identity.
+        session_id: AgentSessionId,
+        /// The committed user message.
+        message: MessagePostedMetadata,
+    },
     /// Open a session for a mentioned bot.
     Open {
         /// The bot that was mentioned.
@@ -337,7 +370,9 @@ impl TriggerDecision {
     #[must_use]
     pub fn bot_id(&self) -> BotId {
         match self {
-            Self::Open { bot_id, .. } | Self::Existing { bot_id, .. } => *bot_id,
+            Self::Open { bot_id, .. }
+            | Self::Existing { bot_id, .. }
+            | Self::ConversationMessage { bot_id, .. } => *bot_id,
         }
     }
 
@@ -345,7 +380,9 @@ impl TriggerDecision {
     #[must_use]
     pub fn message(&self) -> &MessagePostedMetadata {
         match self {
-            Self::Open { message, .. } | Self::Existing { message, .. } => message,
+            Self::Open { message, .. }
+            | Self::Existing { message, .. }
+            | Self::ConversationMessage { message, .. } => message,
         }
     }
 }
@@ -397,6 +434,18 @@ impl AgentSessionMacroEvent {
             | MessageParent::CrmContact(_) => None,
         };
         Ok(match decision {
+            TriggerDecision::ConversationMessage {
+                bot_id,
+                session_id,
+                message,
+            } => Self::new_session(NewAgentSessionEvent::ConversationMessage(
+                AgentConversationMessageEvent {
+                    bot_id,
+                    session_id,
+                    message,
+                    context,
+                },
+            )),
             TriggerDecision::Open { bot_id, message } => match channel {
                 Some((channel_id, channel_type)) => Self::new_session(
                     NewAgentSessionEvent::TopLevelMentioned(AgentBotMentionedEvent {
@@ -445,6 +494,7 @@ impl AgentSessionMacroEvent {
     #[must_use]
     pub fn new_session(event: NewAgentSessionEvent) -> Self {
         let bot_id = match &event {
+            NewAgentSessionEvent::ConversationMessage(message) => message.bot_id,
             NewAgentSessionEvent::TopLevelMentioned(mentioned) => mentioned.bot_id,
             NewAgentSessionEvent::Mentioned(mentioned) => mentioned.bot_id,
             NewAgentSessionEvent::AssignedToTask(assigned) => assigned.bot_id,

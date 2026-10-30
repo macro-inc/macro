@@ -6,6 +6,7 @@ import { DriveCreateMenu } from './drive-create-menu';
 const host = vi.hoisted(() => ({
   runCreateAction: vi.fn(),
   selectFolder: vi.fn(),
+  openCreated: vi.fn(),
 }));
 
 const [projectId, setProjectId] = createSignal<string | undefined>('child');
@@ -40,7 +41,11 @@ vi.mock('./context/drive-context', () => ({
         { id: 'child', name: 'Wireframes', parentId: 'root', userId: 'user' },
       ],
     },
-    actions: { uploadFiles: vi.fn(), uploadFolder: vi.fn() },
+    actions: {
+      uploadFiles: vi.fn(),
+      uploadFolder: vi.fn(),
+      openCreated: host.openCreated,
+    },
   }),
 }));
 
@@ -69,7 +74,7 @@ it('names the open folder as the destination', async () => {
   expect(menu.textContent).toContain('Wireframes');
 });
 
-it('creates files inside the open folder', async () => {
+it('creates files inside the open folder and opens them there', async () => {
   await openMenu();
   fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Document' }), {
     key: 'Enter',
@@ -79,6 +84,7 @@ it('creates files inside the open folder', async () => {
     projectId: 'child',
     source: 'drive',
     destination: 'Wireframes',
+    openCreated: host.openCreated,
   });
 });
 
@@ -91,6 +97,28 @@ it('opens a folder composer inside the current folder', async () => {
     projectId: 'child',
     source: 'drive',
     destination: 'Wireframes',
+    openCreated: host.openCreated,
+  });
+});
+
+it('offers the same menu from the list header toolbar', async () => {
+  render(() => <DriveCreateMenu presentation="toolbar" />);
+  const trigger = screen.getByRole('button', {
+    name: 'New file or folder in Wireframes',
+  });
+  expect(trigger.textContent).toContain('New');
+  fireEvent.keyDown(trigger, { key: 'Enter' });
+  const menu = await screen.findByRole('menu');
+  expect(menu.textContent).toContain('Wireframes');
+  fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Document' }), {
+    key: 'Enter',
+  });
+
+  expect(host.runCreateAction).toHaveBeenCalledWith('md', {
+    projectId: 'child',
+    source: 'drive',
+    destination: 'Wireframes',
+    openCreated: host.openCreated,
   });
 });
 
@@ -109,5 +137,6 @@ it('opens a folder composer at the Drive root outside a folder', async () => {
     projectId: undefined,
     source: 'drive',
     destination: 'Drive',
+    openCreated: host.openCreated,
   });
 });

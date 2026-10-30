@@ -33,19 +33,11 @@ export function SessionExpiredRedirect() {
       );
       if (!stillUnauthorized) return false;
     }
-
-    const settleClearLocalAuthSession = async () => {
-      try {
-        return await clearLocalAuthSession();
-      } catch (settleClearLocalAuthSessionError) {
-        const error = settleClearLocalAuthSessionError;
-
-        console.error('Failed to clear local auth session', error);
-
-        return;
-      }
-    };
-    await settleClearLocalAuthSession();
+    try {
+      await clearLocalAuthSession('session-expired');
+    } catch (error) {
+      console.error('Failed to clear local auth session', error);
+    }
     return true;
   });
 

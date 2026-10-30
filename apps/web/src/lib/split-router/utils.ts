@@ -44,6 +44,24 @@ export function isPromise<T>(value: MaybePromise<T>): value is Promise<T> {
   return value instanceof Promise;
 }
 
+async function mapSettled<T, R>(
+  value: Promise<T>,
+  fn: (value: T) => MaybePromise<R>
+): Promise<R> {
+  return fn(await value);
+}
+
+async function recoverSettled<T>(
+  value: Promise<T>,
+  onError: (error: unknown) => T
+): Promise<T> {
+  try {
+    return await value;
+  } catch (error) {
+    return onError(error);
+  }
+}
+
 /** Applies `fn` now, or once `value` settles. */
 export function mapMaybe<T, R>(
   value: MaybePromise<T>,
@@ -51,12 +69,7 @@ export function mapMaybe<T, R>(
 ): MaybePromise<R> {
   if (!isPromise(value)) return fn(value);
 
-  const settleValueHandler0 = fn;
-  const settleValue = async () => {
-    const settleValueValue = await value;
-    return await settleValueHandler0(settleValueValue);
-  };
-  return settleValue();
+  return mapSettled(value, fn);
 }
 
 /** Runs `run`, turning a synchronous throw or a rejection into `onError`'s result. */
@@ -74,15 +87,7 @@ export function settleMaybe<T>(
 
   if (!isPromise(value)) return value;
 
-  const settleValueResultHandler0 = onError;
-  const settleValueResult = async () => {
-    try {
-      return await value;
-    } catch (settleValueResultError) {
-      return await settleValueResultHandler0(settleValueResultError);
-    }
-  };
-  return settleValueResult();
+  return recoverSettled(value, onError);
 }
 
 export const CANCELLED: unique symbol = Symbol('split-router.cancelled');

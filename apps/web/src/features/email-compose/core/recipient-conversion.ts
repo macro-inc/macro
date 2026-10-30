@@ -29,15 +29,23 @@ export const convertContactInfoToEmailRecipient = (
 // Note: because of the logic, this works with a reference message that is either the message being replied to, or the draft.
 export const getReplyAllRecipients = (
   referenceMessage: EmailMessage | undefined,
-  userEmail: string
+  userEmail: string,
+  ownAddresses: readonly string[] = []
 ): EmailFormRecipients => {
   if (!referenceMessage) return { to: [], cc: [], bcc: [] };
+  const self = new Set(
+    [userEmail, ...ownAddresses].map((email) => email.toLowerCase())
+  );
+  const isSelf = (email: string | undefined) =>
+    !!email && self.has(email.toLowerCase());
   let to: EmailRecipient[] = [];
 
   // If last message was from user - reply to the to recipients (cc is handled separately below)
-  if (referenceMessage?.from?.email === userEmail) {
+  if (isSelf(referenceMessage.from?.email)) {
     if (referenceMessage.to && referenceMessage.to.length > 0) {
-      to = referenceMessage.to.map(convertContactInfoToEmailRecipient);
+      to = referenceMessage.to
+        .filter((recipient) => !isSelf(recipient.email))
+        .map(convertContactInfoToEmailRecipient);
     }
     // Otherwise keep existing recipients
   } else {
@@ -48,24 +56,30 @@ export const getReplyAllRecipients = (
     };
     const otherRecipients = referenceMessage.to.filter(
       (recipient) =>
-        recipient.email !== userEmail && recipient.email !== sender.email
+        !isSelf(recipient.email) &&
+        recipient.email.toLowerCase() !== sender.email.toLowerCase()
     );
     to = [sender, ...otherRecipients].map(convertContactInfoToEmailRecipient);
   }
   const cc = (referenceMessage.cc ?? [])
-    .filter((recipient) => recipient.email !== userEmail)
+    .filter((recipient) => !isSelf(recipient.email))
     .map(convertContactInfoToEmailRecipient);
   return { to, cc, bcc: [] };
 };
 
 export const getReplyRecipientsFromParent = (
   replyingTo: EmailMessage | undefined,
-  userEmail: string
+  userEmail: string,
+  ownAddresses: readonly string[] = []
 ): EmailFormRecipients => {
   if (!replyingTo) return { to: [], cc: [], bcc: [] };
-  // If last message was from user, reply === replyAll
-  if (replyingTo?.from?.email === userEmail) {
-    return getReplyAllRecipients(replyingTo, userEmail);
+  // If last message was from any identity on this inbox, reply === replyAll.
+  if (
+    [userEmail, ...ownAddresses].some(
+      (email) => email.toLowerCase() === replyingTo.from?.email.toLowerCase()
+    )
+  ) {
+    return getReplyAllRecipients(replyingTo, userEmail, ownAddresses);
   } else {
     // Last message was NOT the user - reply to the sender
     const sender: ContactInfo = replyingTo.from ?? { email: '' };

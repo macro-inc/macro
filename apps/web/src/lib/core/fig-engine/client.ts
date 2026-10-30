@@ -8,6 +8,7 @@
  * memory never shrinks while a worker lives).
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import { compiledFigModule } from './compiled-module';
 import type { CollectionInfo, DesignInfo, StyleInfo } from './design-types';
 import type {
@@ -162,6 +163,21 @@ class EngineWorker {
   }
 }
 
+/**
+ * Sends a helper a request the primary also gets. Only the primary's answer
+ * is read, so a helper's failure is dropped here.
+ */
+function mirror(h: EngineWorker, body: Body, transfer?: Transferable[]) {
+  const send = async () => {
+    try {
+      await h.request(body, transfer);
+    } catch {
+      // The primary's answer is the one that counts.
+    }
+  };
+  fireAndForget(send(), 'fig-engine');
+}
+
 /** Files larger than this get one raster helper (each helper holds a copy). */
 const LARGE_FILE_BYTES = 48 * 1024 * 1024;
 
@@ -239,23 +255,18 @@ export class FigEngine {
     this.starting.add(helper);
     const copy = bytes.slice(0);
 
-    const settleRequest = async () => {
+    const open = async () => {
       try {
         await helper.request({ kind: 'open', bytes: copy, module }, [copy]);
-
         this.starting.delete(helper);
         if (this.closed) helper.terminate();
         else this.helpers.push(helper);
-
-        return;
       } catch {
         this.starting.delete(helper);
         helper.terminate();
-
-        return;
       }
     };
-    settleRequest();
+    fireAndForget(open(), 'fig-engine');
   }
 
   private async query<T>(
@@ -285,31 +296,17 @@ export class FigEngine {
     const id = nextId++;
     worker.renders++;
     this.placed.set(id, worker);
-    const settleRequestWithIdFinally = async () => {
-      worker.renders--;
-      this.placed.delete(id);
-
-      return;
-    };
-    const settleRequestWithId = async () => {
+    const render = async () => {
       try {
-        const settleRequestWithIdValue = await worker.requestWithId(id, {
-          kind: 'render',
-          ...tile,
-        });
-        const r = settleRequestWithIdValue;
-
-        if (r.kind === 'render')
-          return await ({
-            bitmap: r.bitmap,
-            millis: r.millis,
-          } satisfies TileResult);
-        return await null;
+        const r = await worker.requestWithId(id, { kind: 'render', ...tile });
+        if (r.kind !== 'render') return null;
+        return { bitmap: r.bitmap, millis: r.millis } satisfies TileResult;
       } finally {
-        await settleRequestWithIdFinally();
+        worker.renders--;
+        this.placed.delete(id);
       }
     };
-    const promise = settleRequestWithId();
+    const promise = render();
     return { id, promise };
   }
 
@@ -490,17 +487,9 @@ export class FigEngine {
     for (const h of [...this.helpers, ...this.starting]) {
       const copy = bytes.slice(0);
 
-      const settleRequestResult = async () => {
-        try {
-          return await h.request(
-            { kind: 'registerFont', bytes: copy, family: family ?? null },
-            [copy]
-          );
-        } catch {
-          return;
-        }
-      };
-      settleRequestResult();
+      mirror(h, { kind: 'registerFont', bytes: copy, family: family ?? null }, [
+        copy,
+      ]);
     }
     const copy = bytes.slice(0);
     const r = await this.primary.request(
@@ -578,48 +567,42 @@ export class FigEngine {
     // Every worker holds the same document, so an edit the engine rejects
     // fails in all of them; a helper is dropped only when its result
     // differs from the primary's.
-    const fanned = [...this.helpers, ...this.starting].map((h) => {
-      const settleRequestResultResultResult = async () => {
-        try {
-          await request(h);
-        } catch {
-          return await false;
-        }
-
-        return await true;
-      };
-      return {
-        h,
-        done: settleRequestResultResultResult(),
-      };
-    });
+    const succeeds = async (w: EngineWorker) => {
+      try {
+        await request(w);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const fanned = [...this.helpers, ...this.starting].map((h) => ({
+      h,
+      done: succeeds(h),
+    }));
     const drop = (h: EngineWorker) => {
       const at = this.helpers.indexOf(h);
       if (at >= 0) this.helpers.splice(at, 1);
       h.terminate();
     };
+    const dropIfDiverged = async (
+      h: EngineWorker,
+      done: Promise<boolean>,
+      primaryOk: boolean
+    ) => {
+      if ((await done) !== primaryOk) drop(h);
+    };
+    const dropDiverged = (primaryOk: boolean) => {
+      for (const { h, done } of fanned)
+        fireAndForget(dropIfDiverged(h, done, primaryOk), 'fig-engine');
+    };
     let r: Ok;
     try {
       r = await request(this.primary);
     } catch (error) {
-      for (const { h, done } of fanned) {
-        const settleDone = async () => {
-          const settleDoneValue = await done;
-          const ok = settleDoneValue;
-          return await (ok && drop(h));
-        };
-        void settleDone();
-      }
+      dropDiverged(false);
       throw error;
     }
-    for (const { h, done } of fanned) {
-      const settleDoneResult = async () => {
-        const settleDoneResultValue = await done;
-        const ok = settleDoneResultValue;
-        return await (!ok && drop(h));
-      };
-      void settleDoneResult();
-    }
+    dropDiverged(true);
     if (r.kind !== 'edit') throw new Error('unexpected response');
     return JSON.parse(r.json) as EditResult;
   }
@@ -714,14 +697,7 @@ export class FigEngine {
     baseBlobs: number | null
   ): Promise<EntryChange[]> {
     for (const h of [...this.helpers, ...this.starting]) {
-      const settleRequestResultResultResultResult = async () => {
-        try {
-          return await h.request({ kind: 'enableCollab', session, baseBlobs });
-        } catch {
-          return;
-        }
-      };
-      settleRequestResultResultResultResult();
+      mirror(h, { kind: 'enableCollab', session, baseBlobs });
     }
     const r = await this.primary.request({
       kind: 'enableCollab',
@@ -763,16 +739,7 @@ export class FigEngine {
     for (const h of [...this.helpers, ...this.starting]) {
       const copy = bytes.slice(0);
 
-      const settleRequestResultResult = async () => {
-        try {
-          return await h.request({ kind: 'addImage', hash, bytes: copy }, [
-            copy,
-          ]);
-        } catch {
-          return;
-        }
-      };
-      settleRequestResultResult();
+      mirror(h, { kind: 'addImage', hash, bytes: copy }, [copy]);
     }
     const copy = bytes.slice(0);
     const r = await this.primary.request(
@@ -808,30 +775,28 @@ export class FigEngine {
    */
   retain(work: Promise<unknown>) {
     this.holds.add(work);
-    const settleWorkFinally = async () => {
-      return await this.holds.delete(work);
-    };
-    const settleWork = async () => {
+    const release = async () => {
       try {
-        return await work;
+        await work;
+      } catch {
+        // Its own caller reports failures.
       } finally {
-        await settleWorkFinally();
+        this.holds.delete(work);
       }
     };
-    void settleWork();
+    fireAndForget(release(), 'fig-engine');
   }
 
   close() {
     this.closed = true;
     const primary = this.primary;
 
-    const settleAllSettled = async () => {
+    const terminateAfterHolds = async () => {
       await Promise.allSettled([...this.holds]);
-
-      return await primary.terminate();
+      primary.terminate();
     };
     if (this.holds.size === 0) primary.terminate();
-    else void settleAllSettled();
+    else fireAndForget(terminateAfterHolds(), 'fig-engine');
     for (const h of this.helpers) h.terminate();
     for (const h of this.starting) h.terminate();
     this.helpers.length = 0;

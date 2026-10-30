@@ -12,6 +12,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { enableReminders } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type EmailEntity, isEmailEntity } from '@entity';
 import { queryReadyGate } from '@queries/gate';
 import { useEmailReminderCollection } from '@queries/reminders/email-collection';
@@ -28,6 +29,7 @@ import {
   untrack,
 } from 'solid-js';
 import { EMAIL_FACETS } from '../filters/email-facets';
+import { advanceEmptyAliasPages } from './advance-empty-alias-pages';
 import { buildEmailQuery } from './email-query';
 import type {
   EmailDataSource,
@@ -88,6 +90,7 @@ export function useReminderEmailSource(
           {
             tab: 'reminders',
             inboxIds: state.inboxIds,
+            aliasFilter: state.aliasFilter,
             facets: state.facets,
             facetContext: tagContext(),
           },
@@ -97,7 +100,7 @@ export function useReminderEmailSource(
     );
   });
   const scope = createMemo(() =>
-    JSON.stringify([userId(), active(), filters()])
+    JSON.stringify([userId(), active(), filters(), state.aliasFilter])
   );
   const [disposed, setDisposed] = createSignal(false);
   onCleanup(() => setDisposed(true));
@@ -163,30 +166,6 @@ export function useReminderEmailSource(
   });
   const [loadingMore, setLoadingMore] = createSignal(false);
   const [loadError, setLoadError] = createSignal<Error>();
-  const error = () =>
-    failed()[0]?.error ??
-    loadError() ??
-    (entities().length === 0 ? (collection.error ?? undefined) : undefined);
-  const hasMore = () =>
-    Boolean(
-      collection.hasNextPage || loadingMore() || pending() || failed().length
-    );
-  const built = createMemo((): EmailDataSourceItem[] => {
-    const rows: EmailDataSourceItem[] = buildFlatSoupRows(entities());
-    // A sparse page or an unhydrated final page still has reachable work.
-    if (hasMore())
-      rows.push(
-        createSoupLoadMoreRow({
-          scopeId: 'email:reminders',
-          label: error() ? 'Couldn’t load more email. Try again' : 'Load More',
-          isLoading:
-            loadingMore() || collection.isFetchingNextPage || pending(),
-        })
-      );
-    return rows;
-  });
-  const items = createSoupRowStore(built);
-
   // Every caller waits for the same operation, including native row publication.
   // Returning a resolved no-op while a fetch is pending makes detail navigation
   // spin its hasMore loop and can starve the network task itself.
@@ -206,55 +185,83 @@ export function useReminderEmailSource(
         });
       });
     });
+  const loadNextPage = async (requestScope: ReturnType<typeof scope>) => {
+    // Yield first so loadMore publishes inFlight before any work starts.
+    await Promise.resolve();
+    const retries = failed();
+    if (retries.length) {
+      await Promise.all(retries.map((query) => query.refresh()));
+    } else if (
+      !pending() &&
+      collection.hasNextPage &&
+      !collection.isFetchingNextPage
+    ) {
+      const result = await collection.fetchNextPage();
+      if (result?.error) setLoadError(result.error);
+    }
+    await waitForHydration(requestScope);
+  };
   const loadMore = (): Promise<void> => {
     if (inFlight) return inFlight;
     const requestScope = scope();
     setLoadingMore(true);
     setLoadError(undefined);
-    const settleResolveFinally = async () => {
-      inFlight = undefined;
-      setLoadingMore(false);
-
-      return;
-    };
-    const settleResolve = async () => {
+    const run = async () => {
       try {
-        try {
-          await Promise.resolve();
-
-          const retries = failed();
-          if (retries.length) {
-            await Promise.all(retries.map((query) => query.refresh()));
-          } else if (
-            !pending() &&
-            collection.hasNextPage &&
-            !collection.isFetchingNextPage
-          ) {
-            const result = await collection.fetchNextPage();
-            if (result?.error) setLoadError(result.error);
-          }
-          await waitForHydration(requestScope);
-
-          return;
-        } catch (settleResolveError) {
-          const cause = settleResolveError;
-
-          if (scope() !== requestScope || disposed()) throw cause;
-          setLoadError(
-            cause instanceof Error
-              ? cause
-              : new Error('Email couldn’t be loaded')
-          );
-
-          return;
-        }
+        await loadNextPage(requestScope);
+      } catch (cause) {
+        if (scope() !== requestScope || disposed()) throw cause;
+        setLoadError(
+          cause instanceof Error ? cause : new Error('Email couldn’t be loaded')
+        );
       } finally {
-        await settleResolveFinally();
+        inFlight = undefined;
+        setLoadingMore(false);
       }
     };
-    inFlight = settleResolve();
+    inFlight = run();
     return inFlight;
   };
+
+  const aliasAdvance = advanceEmptyAliasPages({
+    scope,
+    enabled: () => active() && !!state.aliasFilter,
+    ready: () =>
+      queryReadyGate(collection) &&
+      !collection.isFetching &&
+      !loadingMore() &&
+      !pending() &&
+      !hydration().some((query) => query.isFetching) &&
+      !failed().length &&
+      !loadError() &&
+      !collection.error,
+    hasItems: () => entities().length > 0,
+    hasNextPage: () => !!collection.hasNextPage,
+    loadMore,
+  });
+  const error = () =>
+    failed()[0]?.error ??
+    loadError() ??
+    aliasAdvance.error() ??
+    (entities().length === 0 ? (collection.error ?? undefined) : undefined);
+  const hasMore = () =>
+    Boolean(
+      collection.hasNextPage || loadingMore() || pending() || failed().length
+    );
+  const built = createMemo((): EmailDataSourceItem[] => {
+    const rows: EmailDataSourceItem[] = buildFlatSoupRows(entities());
+    if (hasMore())
+      rows.push(
+        createSoupLoadMoreRow({
+          scopeId: 'email:reminders',
+          label: error() ? 'Couldn’t load more email. Try again' : 'Load More',
+          isLoading:
+            loadingMore() || collection.isFetchingNextPage || pending(),
+        })
+      );
+    return rows;
+  });
+  const items = createSoupRowStore(built);
 
   // Optimistic archive/tag changes must remove stale membership immediately.
   // Refill from the authoritative collection once per changed membership, not
@@ -262,6 +269,9 @@ export function useReminderEmailSource(
   let reconciled = '';
   createEffect(() => {
     const currentScope = scope();
+    // The collection is not alias-filtered. Missing alias members are expected,
+    // not stale collection membership; refetching would revisit sparse pages.
+    if (state.aliasFilter) return;
     // An intermediate fetch is not evidence that a mismatch disappeared.
     // Retain the reconciliation signature while any admitted page refreshes.
     if (
@@ -287,7 +297,8 @@ export function useReminderEmailSource(
     const signature = JSON.stringify([currentScope, missing]);
     if (signature === reconciled) return;
     reconciled = signature;
-    if (missing.length && active()) untrack(() => void collection.refetch());
+    if (missing.length && active())
+      untrack(() => fireAndForget(collection.refetch(), 'email-view'));
   });
   createEffect(() => {
     scope();
@@ -301,15 +312,19 @@ export function useReminderEmailSource(
       (state.tab === 'reminders' && enabled().loading) ||
       !ready() ||
       collection.isLoading ||
-      (entities().length === 0 && pending()),
+      (entities().length === 0 && (pending() || aliasAdvance.isFetching())),
     isFetching: () =>
       collection.isFetching || hydration().some((query) => query.isFetching),
     error,
     hasMore,
     isLoadingMore: () =>
       loadingMore() || collection.isFetchingNextPage || pending(),
-    loadMore,
+    loadMore: () => {
+      aliasAdvance.resetError();
+      return loadMore();
+    },
     refresh: async () => {
+      aliasAdvance.resetError();
       setLoadError(undefined);
       await Promise.all([
         collection.refetch(),

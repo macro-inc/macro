@@ -1,4 +1,5 @@
 import type { EditOp, PageRect, Pos } from '@app/lib/docx/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { MessageListItem } from '@service-storage/messages';
 import type { LoroDoc } from 'loro-crdt';
 import {
@@ -72,14 +73,24 @@ export type DocxEditorViewProps = {
   margin?: (context: DocxMarginContext) => JSX.Element;
   /** Content below the page (discussion, detached comments). */
   footer?: (comments: DocxComments) => JSX.Element;
+  actions?: (download: () => void) => JSX.Element;
   onDownload: (bytes: Uint8Array) => void;
   onError?: (error: unknown) => void;
-  /** Test hook: the mounted editor. */
+  /** The mounted editor, for actions outside its toolbar (file menu Download). */
   onReady?: (editor: DocxEditor) => void;
 };
 
 /** The collaborative DOCX editor: toolbar, pages, collaborators and comments. */
 export function DocxEditorView(props: DocxEditorViewProps) {
+  const saveForDownload = async () => {
+    try {
+      await editor.idle();
+      props.onDownload(await editor.save());
+    } catch (error) {
+      props.onError?.(error);
+    }
+  };
+  const download = () => fireAndForget(saveForDownload(), 'docx-editor');
   const [scroller, setScroller] = createSignal<HTMLDivElement>();
   let input: HTMLTextAreaElement | undefined;
   let selectionTimer: ReturnType<typeof setTimeout> | undefined;
@@ -328,6 +339,7 @@ export function DocxEditorView(props: DocxEditorViewProps) {
 .docx-find-current { background-color: oklch(from var(--color-orange) l c h / 0.6); box-shadow: 0 0 0 1px oklch(from var(--color-orange) l c h / 0.9); }
 .docx-veil { background: rgb(255 255 255 / 0.55); }
 .docx-story-edge { border-color: oklch(from var(--color-accent, #3b82f6) l c h / 0.8); }`}</style>
+      {props.actions?.(download)}
       <DocxToolbar
         canEdit={props.canEdit}
         canComment={getDocxEditorViewCanComment()}
@@ -375,15 +387,17 @@ export function DocxEditorView(props: DocxEditorViewProps) {
           editor.run([{ op: 'setParagraph', align: alignment }]);
           input?.focus();
         }}
-        onUndo={() => void editor.undo()}
-        onRedo={() => void editor.redo()}
+        onUndo={() => fireAndForget(editor.undo(), 'docx-editor')}
+        onRedo={() => fireAndForget(editor.redo(), 'docx-editor')}
         onInsertTable={() => {
           editor.run([{ op: 'insertTable', rows: 3, cols: 3 }]);
           input?.focus();
         }}
         onInsertNote={(endnote) => command([{ op: 'insertNote', endnote }])}
         inBody={editor.state()?.story.kind === 'body'}
-        onToggleMarkup={() => void editor.setMarkup(!editor.markup())}
+        onToggleMarkup={() =>
+          fireAndForget(editor.setMarkup(!editor.markup()), 'docx-editor')
+        }
         onToggleTracking={() =>
           editor.run([{ op: 'setTracking', on: !format()?.tracking }])
         }
@@ -391,14 +405,6 @@ export function DocxEditorView(props: DocxEditorViewProps) {
         onReject={(all) => editor.run([{ op: 'rejectChanges', all }])}
         onComment={beginComment}
         onFind={() => find.show(false)}
-        onDownload={async () => {
-          try {
-            await editor.idle();
-            await props.onDownload(await editor.save());
-          } catch (error) {
-            props.onError?.(error);
-          }
-        }}
       />
       <div class="relative flex min-h-0 flex-1 flex-col">
         <div

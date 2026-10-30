@@ -10,8 +10,13 @@ fn grouped_access_shape() {
         group_key: None,
         per_group_limit: None,
     };
-    let (builder, _) =
-        build_grouped_query(&filter, false, &grouping, SimpleSortMethod::ViewedUpdated);
+    let (builder, _) = build_grouped_query(
+        &filter,
+        false,
+        &grouping,
+        SimpleSortMethod::ViewedUpdated,
+        &mut DocumentIdArrays::starting_at(11),
+    );
     let candidates = builder.sql().split("GroupedItems AS").next().unwrap();
     assert!(!candidates.contains("AccessibleItems"));
     for (id, entity_type) in [("d.id", "document"), ("c.id", "chat"), ("p.id", "project")] {
@@ -42,7 +47,13 @@ fn grouped_candidate_sort_shape() {
                 group_key,
                 per_group_limit: None,
             };
-            let (builder, entity_type) = build_grouped_query(&filter, true, &grouping, sort);
+            let (builder, entity_type) = build_grouped_query(
+                &filter,
+                true,
+                &grouping,
+                sort,
+                &mut DocumentIdArrays::starting_at(11),
+            );
             let sql = builder.sql();
             let (candidates, rest) = sql.split_once("GroupedItems AS").unwrap();
             assert_eq!(entity_type.as_deref(), Some("TASK"));
@@ -166,7 +177,13 @@ async fn grouped_query_explain_local(pool: PgPool) -> anyhow::Result<()> {
                 .as_ref()
                 .map(|_| "2026-01-02T00:00:00Z".parse::<DateTime<Utc>>().unwrap());
             let cursor_id = grouping.group_key.as_ref().map(|_| ids[60].clone());
-            let (builder, entity_type) = build_grouped_query(&filter, false, &grouping, sort);
+            let (builder, entity_type) = build_grouped_query(
+                &filter,
+                false,
+                &grouping,
+                sort,
+                &mut DocumentIdArrays::starting_at(11),
+            );
             // Dynamic AST/grouping SQL cannot use a compile-time macro. Mirror
             // production's positional binds, including unused reserved slots.
             let sql = format!(
@@ -174,7 +191,11 @@ async fn grouped_query_explain_local(pool: PgPool) -> anyhow::Result<()> {
                 builder.sql()
             );
             for repetition in 1..=3 {
-                let mut query = sqlx::query_scalar::<_, serde_json::Value>(&sql)
+                #[expect(
+                    clippy::disallowed_methods,
+                    reason = "explains SQL generated from the AST and grouping"
+                )]
+                let query = sqlx::query_scalar::<_, serde_json::Value>(&sql)
                     .bind("macro|user-1@test.com")
                     .bind(sort.to_string())
                     .bind(50_i64)
@@ -183,10 +204,8 @@ async fn grouped_query_explain_local(pool: PgPool) -> anyhow::Result<()> {
                     .bind(StatusOption::COMPLETED_UUID.to_string())
                     .bind(SystemPropertyKey::STATUS_UUID)
                     .bind(SystemPropertyKey::ASSIGNEES_UUID)
-                    .bind(grouping.group_key.clone());
-                if let Some(ref entity_type) = entity_type {
-                    query = query.bind(entity_type);
-                }
+                    .bind(grouping.group_key.clone())
+                    .bind(entity_type.clone());
                 let plan = query.persistent(false).fetch_one(&pool).await?;
                 println!("EXPLAIN {label} {sort} repetition={repetition}: {plan}");
             }
@@ -199,20 +218,35 @@ async fn grouped_query_explain_local(pool: PgPool) -> anyhow::Result<()> {
 fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
     let mut filter = EntityFilterAst::default();
     assert!(
-        !build_query(&filter, false, SimpleSortMethod::UpdatedAt)
-            .sql()
-            .contains("FROM initiative")
+        !build_query(
+            &filter,
+            false,
+            SimpleSortMethod::UpdatedAt,
+            &mut DocumentIdArrays::starting_at(9),
+        )
+        .sql()
+        .contains("FROM initiative")
     );
     filter.initiative_filter = Some(Arc::new(Expr::is_not(Expr::val(
         InitiativeLiteral::Include,
     ))));
     assert!(
-        !build_query(&filter, false, SimpleSortMethod::UpdatedAt)
-            .sql()
-            .contains("FROM initiative")
+        !build_query(
+            &filter,
+            false,
+            SimpleSortMethod::UpdatedAt,
+            &mut DocumentIdArrays::starting_at(9),
+        )
+        .sql()
+        .contains("FROM initiative")
     );
     filter.initiative_filter = Some(Arc::new(Expr::val(InitiativeLiteral::Include)));
-    let query = build_query(&filter, false, SimpleSortMethod::UpdatedAt);
+    let query = build_query(
+        &filter,
+        false,
+        SimpleSortMethod::UpdatedAt,
+        &mut DocumentIdArrays::starting_at(9),
+    );
     let (candidates, details) = query.sql().split_once("Combined AS").unwrap();
     assert!(candidates.contains("FROM initiative i"));
     assert!(candidates.contains("LIMIT $3"));
@@ -227,4 +261,37 @@ fn initiative_name_literals_are_escaped_and_not_like_patterns() {
     let sql = build_initiative_filter(Some(&expr));
     assert!(sql.contains("'O''Reilly_%'"));
     assert!(sql.contains("strpos("));
+}
+
+#[test]
+fn notification_conjunction_folds_to_the_side_that_implies_the_other() {
+    use item_filters::NotificationState::{Done, Seen, Unseen};
+    let state = |state| Expr::val(DocumentLiteral::NotificationState(state));
+    let inbox = || Expr::or(state(Unseen), state(Seen));
+    let strip = |expr: &Expr<DocumentLiteral>| {
+        strip_notification_conjunction(expr, |literal| match literal {
+            DocumentLiteral::NotificationState(state) => Some(NotificationPredicate::state(*state)),
+            _ => None,
+        })
+    };
+
+    // The unread feed: `(unseen OR seen) AND unseen` needs only the unseen witness.
+    let (predicate, rest) = strip(&Expr::and(inbox(), state(Unseen))).unwrap();
+    assert_eq!(predicate, NotificationPredicate::state(Unseen));
+    assert!(rest.is_none());
+
+    let (predicate, rest) = strip(&Expr::and(
+        Expr::and(state(Unseen), Expr::val(DocumentLiteral::Importance(true))),
+        inbox(),
+    ))
+    .unwrap();
+    assert_eq!(predicate, NotificationPredicate::state(Unseen));
+    assert!(matches!(
+        rest,
+        Some(Expr::Literal(DocumentLiteral::Importance(true)))
+    ));
+
+    // Neither side implies the other: different rows may witness each.
+    assert!(strip(&Expr::and(state(Unseen), state(Seen))).is_none());
+    assert!(strip(&Expr::and(inbox(), state(Done))).is_none());
 }

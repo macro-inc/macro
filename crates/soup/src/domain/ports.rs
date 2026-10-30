@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use crate::domain::models::{
-    AdvancedSortParams, EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst, NotifiedEntity,
-    NotifiedSoupRequest, SimpleSortRequest, SoupErr, SoupProjectionHydration, SoupPropertiesField,
-    SoupRequest, TouchedEntity, TouchedSoupRequest, WorkFeedCandidate, WorkFeedCandidateRequest,
-    WorkFeedSoupPage, WorkFeedSoupRequest, grouping::ItemGroupingInfo,
+    AdvancedSortParams, CrmPropertyEdge, EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst,
+    NotifiedEntity, NotifiedSoupRequest, SimpleSortRequest, SoupErr, SoupProjectionHydration,
+    SoupPropertiesField, SoupRequest, TouchedEntity, TouchedSoupRequest, WorkFeedCandidate,
+    WorkFeedCandidateRequest, WorkFeedSoupPage, WorkFeedSoupRequest, grouping::ItemGroupingInfo,
 };
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -96,6 +96,15 @@ pub trait SoupRepo: Send + Sync + 'static {
         &self,
         req: TouchedSoupRequest<'a>,
     ) -> impl Future<Output = Result<Vec<TouchedEntity>, Self::Err>> + Send;
+
+    /// Every entity whose Companies property names one of `company_ids` or
+    /// whose Contacts property names one of `contact_ids`. Not authorized:
+    /// each entity reaches the caller only through its own source query.
+    fn crm_property_edges<'a>(
+        &self,
+        company_ids: &'a [uuid::Uuid],
+        contact_ids: &'a [uuid::Uuid],
+    ) -> impl Future<Output = Result<Vec<CrmPropertyEdge>, Self::Err>> + Send;
 
     /// Fetch one page of notified-at candidates: entities the user holds a
     /// live notification for, newest notification first, already gated on

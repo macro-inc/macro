@@ -1,9 +1,10 @@
 use cool_asserts::assert_matches;
 
 use crate::parse::{
-    NullXmlFormatter, ParsedAgentSessionMention, ParsedContactMention, ParsedDateMention,
-    ParsedDocumentMention, ParsedGroupMention, ParsedLink, ParsedPullRequestMention,
-    ParsedUserMention, ParsedXmlText, PlainTextFormatter, TextSegment, XmlFormatter, XmlTag,
+    NullXmlFormatter, ParsedAgentSessionMention, ParsedBookingLinkMention, ParsedContactMention,
+    ParsedDateMention, ParsedDocumentMention, ParsedGroupMention, ParsedLink,
+    ParsedPullRequestMention, ParsedUserMention, ParsedXmlText, PlainTextFormatter, TextSegment,
+    XmlFormatter, XmlTag,
 };
 
 // =============================================================================
@@ -844,6 +845,27 @@ fn pull_request_github_ref_ignores_non_pull_urls() {
         r#"<m-pr-mention>{"url":"https://www.github.com/a/b/pull/12/files#x"}</m-pr-mention>"#;
     let rendered = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(input).unwrap()).0;
     assert_eq!(rendered, "a/b#12");
+}
+
+#[test]
+fn parse_booking_link_mention() {
+    let input = r#"Book here: <m-booking-link-mention>{"profileId":"profile-1","slug":"intro","url":"https://macro.com/app/book/profile-1/intro","label":""}</m-booking-link-mention>"#;
+    let rendered = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(input).unwrap()).0;
+    assert_eq!(rendered, "Book here: intro");
+    let out = ParsedXmlText::parse(input).unwrap();
+    assert_matches!(&out.0[..], [
+        TextSegment::Plain("Book here: "),
+        TextSegment::Xml(XmlTag::BookingLink(ParsedBookingLinkMention {
+            profile_id,
+            slug,
+            url,
+            ..
+        })),
+    ] => {
+        assert_eq!(profile_id.as_ref(), "profile-1");
+        assert_eq!(slug.as_deref(), Some("intro"));
+        assert_eq!(url.as_ref(), "https://macro.com/app/book/profile-1/intro");
+    });
 }
 
 // =============================================================================

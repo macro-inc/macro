@@ -11,6 +11,7 @@ import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import { waitForDocumentContentReady } from '@queries/storage/document-location';
 import { fetchDocumentMetadata } from '@queries/storage/document-metadata';
@@ -72,7 +73,7 @@ function BlockUnknownContent() {
   const downloadDocument = createCallback(async () => {
     try {
       const blob = await getBlob();
-      downloadFile(blob, downloadName());
+      await downloadFile(blob, downloadName());
     } catch (error) {
       console.error('error downloading file', error);
       toast.failure('Error downloading file');
@@ -94,7 +95,9 @@ function BlockUnknownContent() {
                 fileName={fileName()}
                 convertingTo={convertingTo()}
                 onShare={openShare}
-                onDownload={() => void downloadDocument()}
+                onDownload={() =>
+                  fireAndForget(downloadDocument(), 'unknown-file')
+                }
               />
             }
           >
@@ -126,7 +129,7 @@ function useLegacyOfficeUpgrade(documentId: string) {
     const controller = new AbortController();
     onCleanup(() => controller.abort());
 
-    void (async () => {
+    const reopenWhenUpgraded = async () => {
       const upgraded = await pollForLegacyUpgrade({
         target,
         fetchMetadata: () => fetchDocumentMetadata(documentId),
@@ -141,17 +144,14 @@ function useLegacyOfficeUpgrade(documentId: string) {
       }
       // Word content becomes readable once the DOCX pipeline processes it.
       if (target === 'docx') {
-        const settleWaitForDocumentContentReady = async () => {
-          try {
-            return await waitForDocumentContentReady({
-              documentId,
-              timeoutMs: 60_000,
-            });
-          } catch {
-            return await undefined;
-          }
-        };
-        await settleWaitForDocumentContentReady();
+        try {
+          await waitForDocumentContentReady({
+            documentId,
+            timeoutMs: 60_000,
+          });
+        } catch {
+          // Reopen it anyway when the content is not ready in time.
+        }
         if (controller.signal.aborted) return;
       }
       const blockName = fileTypeToBlockName(upgraded.fileType);
@@ -162,7 +162,8 @@ function useLegacyOfficeUpgrade(documentId: string) {
         return;
       }
       replaceSplit({ content: { type: blockName, id: documentId } });
-    })();
+    };
+    fireAndForget(reopenWhenUpgraded(), 'legacy-office-upgrade');
   });
 
   return () => (waiting() && target ? upgradedOfficeLabel(target) : undefined);

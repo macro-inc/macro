@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FoldRequest, FoldResponse } from './protocol';
 
+/** What a promise settles with: its value, or its rejection reason. */
+async function settledValue(promise: Promise<unknown>): Promise<unknown> {
+  try {
+    return await promise;
+  } catch (reason) {
+    return reason;
+  }
+}
+
 const workers: FakeWorker[] = [];
 
 class FakeWorker extends EventTarget {
@@ -100,16 +109,7 @@ describe('agent fold preloading', () => {
     const pushed = pushSession('session', [{ kind: 'snapshot', rows: [] }]);
 
     workers[0]!.dispatchEvent(new ErrorEvent('error', { message: '' }));
-
-    const settlePushed = async () => {
-      try {
-        return await pushed;
-      } catch (settlePushedError) {
-        const reason: unknown = settlePushedError;
-        return await reason;
-      }
-    };
-    const error = await settlePushed();
+    const error = await settledValue(pushed);
     expect(error).toBeInstanceOf(AgentFoldWorkerUnavailable);
     expect((error as Error).message).not.toContain('no longer served');
     expect((error as Error).message).toContain('fold.worker');
@@ -124,16 +124,7 @@ describe('agent fold preloading', () => {
     workers[0]!.dispatchEvent(
       new ErrorEvent('error', { message: 'Uncaught Error: wasm exploded' })
     );
-
-    const settlePushedResult = async () => {
-      try {
-        return await pushed;
-      } catch (settlePushedResultError) {
-        const reason: unknown = settlePushedResultError;
-        return await reason;
-      }
-    };
-    const error = await settlePushedResult();
+    const error = await settledValue(pushed);
     expect(error).not.toBeInstanceOf(AgentFoldWorkerUnavailable);
     expect((error as Error).message).toContain('wasm exploded');
   });
@@ -146,25 +137,10 @@ describe('agent fold preloading', () => {
     workers[0]!.dispatchEvent(new ErrorEvent('error', { message: '' }));
 
     // One cause, two reports: why a single failure looks like many in Datadog.
-
-    const settleFirst = async () => {
-      try {
-        return await first;
-      } catch (settleFirstError) {
-        const reason: unknown = settleFirstError;
-        return await reason;
-      }
-    };
-
-    const settleSecond = async () => {
-      try {
-        return await second;
-      } catch (settleSecondError) {
-        const reason: unknown = settleSecondError;
-        return await reason;
-      }
-    };
-    const [a, b] = await Promise.all([settleFirst(), settleSecond()]);
+    const [a, b] = await Promise.all([
+      settledValue(first),
+      settledValue(second),
+    ]);
     expect((a as Error).name).toBe('AgentFoldWorkerUnavailable');
     expect((b as Error).name).toBe('AgentFoldWorkerUnavailable');
   });

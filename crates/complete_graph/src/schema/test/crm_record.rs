@@ -6,6 +6,7 @@ use databases::domain::{
 use entity_access::domain::models::{
     EditAccessLevel, MemberTeamRole, OwnerAccessLevel, ViewAccessLevel,
 };
+use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 use models_soup::crm_company::SoupCrmCompany;
 
 use super::*;
@@ -102,6 +103,19 @@ impl PipelineService for RecordingPipelines {
         _: EntityAccessReceipt<OwnerAccessLevel>,
         _: PipelineSharing,
     ) -> Result<(), PipelineError> {
+        unimplemented!()
+    }
+    async fn share_permissions(
+        &self,
+        _: EntityAccessReceipt<EditAccessLevel>,
+    ) -> Result<SharePermissionV2, PipelineError> {
+        unimplemented!()
+    }
+    async fn update_share_permissions(
+        &self,
+        _: EntityAccessReceipt<EditAccessLevel>,
+        _: UpdateSharePermissionRequestV2,
+    ) -> Result<SharePermissionV2, PipelineError> {
         unimplemented!()
     }
     async fn set_trashed(

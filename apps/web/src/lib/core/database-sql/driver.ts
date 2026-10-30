@@ -147,7 +147,7 @@ async function steps(
   source: RowSource,
   trace: DatabaseSqlRunTrace
 ): Promise<Result<Outcome, DatabaseSqlFailure>> {
-  let step = feed(() => query.start());
+  let step = trace.start(() => feed(() => query.start()));
   while (step.isOk()) {
     const current = step.value;
     if (current.step === 'done') {
@@ -159,24 +159,26 @@ async function steps(
   return err(step.error);
 }
 
+async function stepsThenFree(
+  query: DatabaseSqlQuery,
+  source: RowSource,
+  trace: DatabaseSqlRunTrace
+): Promise<Result<Outcome, DatabaseSqlFailure>> {
+  try {
+    return await steps(query, source, trace);
+  } finally {
+    query.free();
+  }
+}
+
 function drive(
   opened: () => Promise<DatabaseSqlQuery>,
   source: RowSource,
   trace: DatabaseSqlRunTrace
 ): ResultAsync<Outcome, DatabaseSqlFailure> {
-  return ResultAsync.fromPromise(opened(), engineFailure).andThen((query) => {
-    const settleStepsFinally = async () => {
-      return await query.free();
-    };
-    const settleSteps = async () => {
-      try {
-        return await steps(query, source, trace);
-      } finally {
-        await settleStepsFinally();
-      }
-    };
-    return new ResultAsync(settleSteps());
-  });
+  return ResultAsync.fromPromise(trace.open(opened), engineFailure).andThen(
+    (query) => new ResultAsync(stepsThenFree(query, source, trace))
+  );
 }
 
 /** Run a read-only statement to its outcome; a write is refused. */

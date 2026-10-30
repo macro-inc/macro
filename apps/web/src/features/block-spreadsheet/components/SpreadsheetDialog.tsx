@@ -12,7 +12,7 @@ export function SpreadsheetDialog(
     <Dialog
       {...props}
       class={cn(
-        'max-h-[calc(100dvh-2rem)] overflow-y-auto touch:[&_button]:min-h-[44px] touch:[&_button]:min-w-[44px] touch:[&_button]:text-[max(14px,0.875rem)] touch:[&_p]:text-[max(14px,0.875rem)] touch:[&_label]:text-[max(14px,0.875rem)]',
+        'max-h-[calc(100dvh-2rem)] overflow-y-auto touch:[&_p]:text-[max(14px,0.875rem)] touch:[&_label]:text-[max(14px,0.875rem)]',
         props.class
       )}
       onOpenAutoFocus={() => {

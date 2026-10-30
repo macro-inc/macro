@@ -9,7 +9,7 @@ import {
   select,
   update,
 } from '@graphql-cache/exchange/optimistic';
-import { getActiveGraphqlSoupRevalidations } from '@queries/soup/graphql/active-queries';
+import { getUnmaintainedGraphqlSoupRevalidations } from '@queries/soup/graphql/active-queries';
 import {
   DeleteEmailDraftDocument,
   type DeleteEmailDraftMutation,
@@ -29,7 +29,6 @@ import {
   CombinedError,
   type OperationResult,
 } from '@urql/core';
-import { match as matchBranch } from 'ts-pattern';
 import {
   createDraftThread,
   type DraftThread,
@@ -46,8 +45,8 @@ import {
  * becoming a primary key. `threadDbId` is a stable local handle for new
  * standalone drafts, or the existing conversation ID for replies.
  *
- * The `sender*` and `optimistic*` fields are client-only — they feed the
- * optimistic draft entity and are stripped from the mutation variables.
+ * Sender email is persisted on the wire as well as the optimistic entity.
+ * Sender metadata and optimistic-only fields are stripped from the variables.
  */
 export type GraphqlSaveEmailDraftArgs = Omit<
   SaveEmailDraftInput,
@@ -57,7 +56,7 @@ export type GraphqlSaveEmailDraftArgs = Omit<
   /** Sending inbox id for the optimistic entity's `linkId` — the input's
    * `linkId` is deliberately absent when sending from the primary inbox. */
   senderLinkId: string;
-  /** Sending address for the optimistic entity's `from`. */
+  /** Verified sending address, persisted and used by the optimistic entity. */
   senderEmail: string;
   /** Plain (non-base64) editor HTML for the optimistic entity's
    * `bodyHtmlSanitized` — responses carry that field unencoded. Unsanitized
@@ -97,6 +96,9 @@ export type SaveEmailDraftFailureCode =
   | 'INBOX_NOT_FOUND'
   | 'UNAUTHORIZED'
   | 'INVALID'
+  | 'INVALID_SENDER'
+  | 'NEEDS_REAUTH'
+  | 'SEND_AS_UNAVAILABLE'
   | 'INTERNAL'
   | 'NETWORK';
 
@@ -114,20 +116,19 @@ export type SaveEmailDraftOutcome =
 export function draftFailureCode(
   code: unknown
 ): Exclude<SaveEmailDraftFailureCode, 'NETWORK'> {
-  return matchBranch(code)
-    .with(
-      'DRAFT_ALREADY_SENT',
-      'NOT_FOUND',
-      'INBOX_NOT_FOUND',
-      'UNAUTHORIZED',
-      'INVALID',
-      (code): Exclude<SaveEmailDraftFailureCode, 'NETWORK'> => {
-        return code;
-      }
-    )
-    .otherwise((): Exclude<SaveEmailDraftFailureCode, 'NETWORK'> => {
+  switch (code) {
+    case 'DRAFT_ALREADY_SENT':
+    case 'NOT_FOUND':
+    case 'INBOX_NOT_FOUND':
+    case 'UNAUTHORIZED':
+    case 'INVALID':
+    case 'INVALID_SENDER':
+    case 'NEEDS_REAUTH':
+    case 'SEND_AS_UNAVAILABLE':
+      return code;
+    default:
       return 'INTERNAL';
-    });
+  }
 }
 
 /**
@@ -192,81 +193,64 @@ function optimisticContact(
  * The cache binds the handle to the server identity atomically at settlement,
  * rebasing later queued edits and preserving reads through the old handle.
  */
-function optimisticDraftEntity(
+export function optimisticDraftEntity(
   args: GraphqlSaveEmailDraftArgs
 ): OptimisticDraftEntity {
   const now = new Date().toISOString();
   const existing = args.existingDraft;
   return {
     __typename: 'GraphqlSoupEmailMessage',
+    ...retainedDeliveryFields(existing, now),
+    ...retainedContentFields(existing),
     id: String(args.draftId),
-    providerId: buildProviderId(),
+    providerId: args.providerId ?? existing?.providerId ?? null,
     threadId: args.threadDbId,
     replyingToId: args.replyingToId != null ? String(args.replyingToId) : null,
     linkId: args.senderLinkId,
     subject: args.subject,
-    snippet: buildSnippet(),
-    internalDateTs: existing?.internalDateTs ?? null,
-    sentAt: buildSentAt(),
+    snippet: args.bodyText?.trim().slice(0, 200) ?? existing?.snippet ?? null,
     isRead: true,
-    isStarred: existing?.isStarred ?? false,
     isSent: false,
     isDraft: true,
-    hasAttachments: existing?.hasAttachments ?? false,
-    scheduledSendTime: buildScheduledSendTime(),
+    draftGeneration: args.draftGeneration ?? 0,
+    scheduledSendTime: args.sendTime ?? existing?.scheduledSendTime ?? null,
     bodyText: args.bodyText ?? null,
     bodyHtmlSanitized: args.optimisticBodyHtml,
     bodyMacro: args.bodyMacro ?? null,
     bodyReplyless: null,
-    calendarInvitations: existing?.calendarInvitations ?? [],
-    createdAt: buildCreatedAt(),
     updatedAt: now,
     from: { email: args.senderEmail, name: null, photoUrl: null },
     to: (args.to ?? []).map(optimisticContact),
     cc: (args.cc ?? []).map(optimisticContact),
     bcc: (args.bcc ?? []).map(optimisticContact),
-    labels: buildLabels(),
-    attachments: buildAttachments(),
+  };
+}
+
+/** Delivery state a body/envelope save leaves as the cached draft has it. */
+function retainedDeliveryFields(
+  existing: OptimisticDraftEntity | undefined,
+  now: string
+) {
+  return {
+    operationStatus: existing?.operationStatus ?? null,
+    internalDateTs: existing?.internalDateTs ?? null,
+    sentAt: existing?.sentAt ?? null,
+    isStarred: existing?.isStarred ?? false,
+    hasAttachments: existing?.hasAttachments ?? false,
+    scheduledSendStatus: existing?.scheduledSendStatus ?? null,
+    createdAt: existing?.createdAt ?? now,
+  };
+}
+
+/** Labels, invitations, and attachments a body/envelope save does not modify. */
+function retainedContentFields(existing: OptimisticDraftEntity | undefined) {
+  return {
+    calendarInvitations: existing?.calendarInvitations ?? [],
+    labels: existing?.labels ?? [],
+    attachments: existing?.attachments ?? [],
     attachmentsDraft: existing?.attachmentsDraft ?? [],
     attachmentsForwarded: existing?.attachmentsForwarded ?? [],
   };
-
-  function buildAttachments(): {
-    __typename: 'GraphqlSoupEmailMessageAttachment';
-    id: string;
-    providerId: string | null;
-    filename: string | null;
-    mimeType: string | null;
-    sizeBytes: number | null;
-    sfsId: string | null;
-    contentId: string | null;
-  }[] {
-    return existing?.attachments ?? [];
-  }
-
-  function buildCreatedAt(): string {
-    return existing?.createdAt ?? now;
-  }
-
-  function buildSentAt(): string | null {
-    return existing?.sentAt ?? null;
-  }
-
-  function buildLabels(): { providerLabelId: string; name: string }[] {
-    return existing?.labels ?? [];
-  }
-
-  function buildScheduledSendTime(): string | null {
-    return args.sendTime ?? existing?.scheduledSendTime ?? null;
-  }
-
-  function buildProviderId(): string | null {
-    return args.providerId ?? existing?.providerId ?? null;
-  }
-
-  function buildSnippet(): string | null {
-    return args.bodyText?.trim().slice(0, 200) ?? existing?.snippet ?? null;
-  }
 }
 
 /**
@@ -276,8 +260,8 @@ function optimisticDraftEntity(
  * full message entity spliced into the thread page's message list — so a
  * reopened composer (or a relaunched app) sees the draft through the
  * ordinary thread read. On commit the layer is replaced by the server's
- * records, and the persisted thread-page revalidation reconciles list
- * membership and any attachment state this record cannot know.
+ * records. Soup revalidation reconciles list membership; the thread page
+ * only needs a separate read when its message list cannot be patched.
  */
 export async function executeGraphqlSaveEmailDraft(
   client: Client,
@@ -286,7 +270,6 @@ export async function executeGraphqlSaveEmailDraft(
   // Strip the client-only fields; only schema fields may reach the wire.
   const {
     senderLinkId: _senderLinkId,
-    senderEmail: _senderEmail,
     optimisticBodyHtml: _optimisticBodyHtml,
     existingDraft: _existingDraft,
     existingThread: _existingThread,
@@ -385,12 +368,20 @@ export async function executeGraphqlSaveEmailDraft(
             ),
           ]
         : [],
+      // The returned draft and thread records update every list the cache
+      // maintains; the rest are read again. Refetch the thread page only
+      // when a missing snapshot or an inbox move prevents the message-list
+      // patch; otherwise a save can reset the open thread.
       revalidations: [
-        ...getActiveGraphqlSoupRevalidations(),
-        {
-          document: EmailThreadPageDocument,
-          variables: threadPageVariables,
-        },
+        ...getUnmaintainedGraphqlSoupRevalidations(),
+        ...(canPatchThread
+          ? []
+          : [
+              {
+                document: EmailThreadPageDocument,
+                variables: threadPageVariables,
+              },
+            ]),
       ],
     }
   ).toPromise();
@@ -410,6 +401,7 @@ export async function executeGraphqlSaveEmailDraft(
 
 /** Input for a durable GraphQL draft delete. */
 export type GraphqlDeleteEmailDraftArgs = {
+  draftGeneration?: number;
   /** The draft to delete, by its client-generated id. */
   draftId: string;
   /** Thread the draft lives in — targets the optimistic removal from the
@@ -444,7 +436,10 @@ export async function executeGraphqlDeleteEmailDraft(
   args: GraphqlDeleteEmailDraftArgs
 ): Promise<DeleteEmailDraftOutcome> {
   const variables: DeleteEmailDraftMutationVariables = {
-    input: { draftId: args.draftId },
+    input: {
+      draftId: args.draftId,
+      draftGeneration: args.draftGeneration ?? 0,
+    },
   };
   const threadPageVariables: EmailThreadPageQueryVariables = {
     threadId: args.threadDbId,
@@ -511,7 +506,7 @@ export async function executeGraphqlDeleteEmailDraft(
         ),
       ],
       revalidations: [
-        ...getActiveGraphqlSoupRevalidations(),
+        ...getUnmaintainedGraphqlSoupRevalidations(),
         {
           document: EmailThreadPageDocument,
           variables: threadPageVariables,

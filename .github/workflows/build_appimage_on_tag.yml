@@ -15,7 +15,7 @@ name: Build AppImage
 jobs:
   build-appimage:
     name: Build AppImage
-    runs-on: namespace-profile-linux-rust-ci
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=desktop-linux
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10

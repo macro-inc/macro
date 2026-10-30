@@ -5,6 +5,8 @@
  * Background jobs that are no longer wanted when their turn comes are dropped.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
+
 export interface RenderQueue {
   /** Runs now. */
   urgent: <T>(task: () => Promise<T>) => Promise<T>;
@@ -51,28 +53,17 @@ export function createRenderQueue(): RenderQueue {
             return;
           }
           backgroundInFlight++;
-          const settleTaskHandler0 = reject;
-          const settleTaskHandler1 = resolve;
-          const settleTaskFinally = async () => {
-            backgroundInFlight--;
-            pump();
-
-            return;
-          };
-          const settleTask = async () => {
+          const run = async () => {
             try {
-              let settleTaskValue;
-              try {
-                settleTaskValue = await task();
-              } catch (settleTaskError) {
-                return await settleTaskHandler0(settleTaskError);
-              }
-              return await settleTaskHandler1(settleTaskValue);
+              resolve(await task());
+            } catch (error) {
+              reject(error);
             } finally {
-              await settleTaskFinally();
+              backgroundInFlight--;
+              pump();
             }
           };
-          settleTask();
+          fireAndForget(run(), 'pptx-editor');
         });
         pump();
       });

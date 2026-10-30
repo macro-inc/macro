@@ -7,6 +7,8 @@ import { PLAN_COMPARISON } from '../core/plan-comparison';
 export function PlanComparison(props: {
   catalog: Loadable<AiPlanCatalog>;
   disabled: boolean;
+  trialEligible: boolean;
+  existingSubscription: boolean;
   onRetry: () => void;
   onContinueFree: () => void;
   onBackToPro: () => void;
@@ -65,7 +67,11 @@ export function PlanComparison(props: {
                         '$0'
                       ) : (
                         <>
-                          <Show when={plan.tier === 'premium'}>
+                          <Show
+                            when={
+                              plan.tier === 'premium' && props.trialEligible
+                            }
+                          >
                             30 days free, then{' '}
                           </Show>
                           <span class="block whitespace-nowrap max-[375px]:text-[10px]">
@@ -113,6 +119,7 @@ export function PlanComparison(props: {
                     type="button"
                     disabled={
                       props.disabled ||
+                      (plan.tier !== 'free' && props.existingSubscription) ||
                       (plan.tier === 'max' &&
                         !entries().find((item) => item.tier === 'max')
                           ?.purchasable)

@@ -45,7 +45,7 @@ export function createOtelCacheTelemetrySink(): CacheTelemetrySink {
           if (value !== undefined) span.setAttr(name, value);
         }
         try {
-          updateEmit(span);
+          recordSlowQuery(span);
         } finally {
           span.end();
         }
@@ -53,7 +53,9 @@ export function createOtelCacheTelemetrySink(): CacheTelemetrySink {
         // OTel availability and exporter failures never affect cache behavior.
       }
 
-      function updateEmit(span: ReturnType<typeof Telemetry.anonymousSpan>) {
+      function recordSlowQuery(
+        span: ReturnType<typeof Telemetry.anonymousSpan>
+      ) {
         if (event.name === 'graphql_cache.slow_query') {
           const attributes = {
             'db.system.name': 'sqlite',

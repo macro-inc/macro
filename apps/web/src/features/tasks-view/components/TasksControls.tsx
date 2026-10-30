@@ -3,15 +3,21 @@ import {
   ListGroupDropdown,
   ListSortDropdown,
   useViewControlHotkeys,
-  ViewLayoutDropdown,
 } from '@app/components/view-shell';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import GanttIcon from '@icon/system/regular/chart-gantt.svg';
+import BoardIcon from '@icon/system/regular/kanban.svg';
+import ListIcon from '@icon/system/regular/list-bullets.svg';
+import { ButtonGroup } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import { createSignal, Show } from 'solid-js';
 import { TASK_GROUP_OPTIONS, TASK_SORT_OPTIONS } from '../constants';
 import { TASK_BOARD_GROUP_OPTIONS } from '../core/task-board';
 import { useTaskFilters } from '../filters/use-task-filters';
 import { useTasksView } from '../tasks-view-context';
+import { TASKS_TOUR } from '../tour';
 import { TasksFilterDrawer } from './TasksFilterDrawer';
 
 export function TasksControls() {
@@ -24,7 +30,8 @@ export function TasksControls() {
 
 function DesktopTasksControls() {
   const panel = useSplitPanelOrThrow();
-  const { state, setPrimarySort, setState, projectsEnabled } = useTasksView();
+  const { state, setPrimarySort, setState, projectsEnabled, ganttEnabled } =
+    useTasksView();
   const filters = useTaskFilters();
   const [openMenu, setOpenMenu] = createSignal<'filters' | 'sort'>();
   let filterTrigger: HTMLButtonElement | undefined;
@@ -75,60 +82,96 @@ function DesktopTasksControls() {
   };
 
   return (
-    <div class="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-2 @max-[720px]/view-shell:gap-1">
-      <ViewLayoutDropdown
-        label="Task layout"
-        value={state.layout}
-        onChange={(layout) => setState('layout', layout)}
-      />
-      <Show
-        when={!isBoardSearch()}
-        fallback={
-          <span
-            class="text-xs text-ink-muted"
-            title="Search results are ranked by relevance. Clear search to sort the board."
+    <>
+      <HeaderActionGroup label="Task filters" size="md">
+        <div class="shrink-0" ref={tourTarget(TASKS_TOUR.filter)}>
+          <ListFilterDropdown
+            grouped
+            size={filters.activeCount() ? 'md' : 'icon-md'}
+            label="Filter tasks"
+            activeCount={filters.activeCount()}
+            groups={filters.groups()}
+            open={openMenu() === 'filters'}
+            onOpenChange={handleMenuOpenChange('filters')}
+            triggerRef={(element) => (filterTrigger = element)}
+            isSelected={filters.isSelected}
+            selectedIds={filters.selectedIds}
+            onSelectionChange={filters.setSelected}
+            onClear={filters.clear}
+            aiFilter={{
+              placeholder: 'Filter with AI…',
+              onSubmit: filters.applyDescription,
+            }}
+          />
+        </div>
+      </HeaderActionGroup>
+      <HeaderActionGroup label="Task layout" size="md">
+        <ButtonGroup.Button
+          aria-label="List"
+          tooltip="List"
+          variant="ghost"
+          size="icon-md"
+          aria-pressed={state.layout === 'list'}
+          onClick={() => setState('layout', 'list')}
+        >
+          <ListIcon class="size-4" />
+        </ButtonGroup.Button>
+        <ButtonGroup.Button
+          aria-label="Board"
+          tooltip="Board"
+          variant="ghost"
+          size="icon-md"
+          aria-pressed={state.layout === 'board'}
+          onClick={() => setState('layout', 'board')}
+        >
+          <BoardIcon class="size-4" />
+        </ButtonGroup.Button>
+        <Show when={ganttEnabled()}>
+          <ButtonGroup.Button
+            aria-label="Gantt"
+            tooltip="Gantt"
+            variant="ghost"
+            size="icon-md"
+            aria-pressed={state.layout === 'gantt'}
+            onClick={() => setState('layout', 'gantt')}
           >
-            Relevance
-          </span>
-        }
-      >
-        <ListSortDropdown
-          label="Sort tasks"
-          value={primarySort()}
-          options={TASK_SORT_OPTIONS}
-          open={openMenu() === 'sort'}
-          onChange={setPrimarySort}
-          onOpenChange={handleMenuOpenChange('sort')}
-          triggerRef={(element) => (sortTrigger = element)}
-        />
-      </Show>
-      <ListGroupDropdown
-        label="Group by"
-        value={state.groupBy}
-        options={groupOptions()}
-        onChange={(groupBy) => setState('groupBy', groupBy)}
-      />
-      <div class="relative shrink-0">
-        <ListFilterDropdown
-          label="Filter tasks"
-          groups={filters.groups()}
-          open={openMenu() === 'filters'}
-          onOpenChange={handleMenuOpenChange('filters')}
-          triggerRef={(element) => (filterTrigger = element)}
-          isSelected={filters.isSelected}
-          onSelectionChange={filters.setSelected}
-          onClear={filters.clear}
-          aiFilter={{
-            placeholder: 'Filter with AI…',
-            onSubmit: filters.applyDescription,
-          }}
-        />
-        <Show when={filters.activeCount() > 0}>
-          <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-4 translate-x-1/2 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
-            {filters.activeCount()}
-          </span>
+            <GanttIcon class="size-4" />
+          </ButtonGroup.Button>
         </Show>
-      </div>
-    </div>
+      </HeaderActionGroup>
+      <HeaderActionGroup label="Task view options" size="md">
+        <Show
+          when={!isBoardSearch()}
+          fallback={
+            <span
+              class="text-xs text-ink-muted"
+              title="Search results are ranked by relevance. Clear search to sort the board."
+            >
+              Relevance
+            </span>
+          }
+        >
+          <ListSortDropdown
+            grouped
+            size="icon-md"
+            label="Sort tasks"
+            value={primarySort()}
+            options={TASK_SORT_OPTIONS}
+            open={openMenu() === 'sort'}
+            onChange={setPrimarySort}
+            onOpenChange={handleMenuOpenChange('sort')}
+            triggerRef={(element) => (sortTrigger = element)}
+          />
+        </Show>
+        <ListGroupDropdown
+          grouped
+          size="icon-md"
+          label="Group by"
+          value={state.groupBy}
+          options={groupOptions()}
+          onChange={(groupBy) => setState('groupBy', groupBy)}
+        />
+      </HeaderActionGroup>
+    </>
   );
 }

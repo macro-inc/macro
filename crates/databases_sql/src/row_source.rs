@@ -30,7 +30,7 @@ use item_filters::ast::properties::{
 use item_filters::ast::{EmailFilterAst, EntityFilterAst};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_databases::position::PositionError;
-use models_databases::{OptionId, RowId, TableId};
+use models_databases::{DateRange, OptionId, RowId, TableId};
 use models_grouping::{GroupByField, GroupingConfig};
 use models_pagination::{
     Base64SerdeErr, Base64Str, CursorWithValAndFilter, Query, SimpleSortMethod, TypeEraseCursor,
@@ -366,6 +366,7 @@ fn rows_filter(
     }
     EntityFilterAst {
         favorites_only: None,
+        crm_association: None,
         calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::Id(Uuid::nil())))),
         document_filter: Some(Arc::new(Expr::val(DocumentLiteral::Id(Uuid::nil())))),
         project_filter: Some(Arc::new(Expr::val(ProjectLiteral::ProjectIdSelf(
@@ -502,6 +503,10 @@ fn cell(value: PropertyValue) -> Cell {
         PropertyValue::Num(value) => Cell::Number(value),
         PropertyValue::Str(value) => Cell::Text(value),
         PropertyValue::Date(value) => Cell::Date(value),
+        PropertyValue::DateRange(range) => Cell::DateRange(DateRange {
+            start: range.start(),
+            end: range.end(),
+        }),
         PropertyValue::SelectOption(ids) => {
             Cell::Options(ids.into_iter().map(OptionId::from_uuid).collect())
         }

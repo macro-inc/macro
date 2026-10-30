@@ -10,7 +10,9 @@ import { usePersonalCrmViews, useTeamCrmViews } from './use-crm';
  * state. One-shot: later refetches never re-apply, so a default set while
  * the view is open doesn't yank the user's state out from under them.
  */
-export function CrmDefaultViewLoader() {
+export function CrmDefaultViewLoader(props: {
+  withReplaceHistory(apply: () => void): void;
+}) {
   const personal = usePersonalCrmViews();
   const team = useTeamCrmViews();
   const applyView = useApplyCrmView();
@@ -20,7 +22,7 @@ export function CrmDefaultViewLoader() {
     teamLoading: team.isLoading,
     personal: () => personal.defaultView()?.config,
     team: () => team.defaultView()?.config as CrmViewConfig | undefined,
-    apply: applyView,
+    apply: (config) => props.withReplaceHistory(() => applyView(config)),
   });
 
   return null;

@@ -5,6 +5,7 @@ import type {
   FindResult,
   Pos,
 } from '@app/lib/docx/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
   batch,
@@ -80,36 +81,52 @@ export function createDocxFind(deps: DocxFindDeps) {
       return;
     }
     timer = setTimeout(() => {
-      const previous = currentMatch();
-
-      const settleSearch = async () => {
-        try {
-          const settleSearchValue = await deps.search(query(), options());
-          const next = settleSearchValue;
-
-          if (mine !== token) return;
-          // Stay on the match being looked at while the document changes,
-          // unless a replace moved the selection on.
-          const kept =
-            previous && !followSelection
-              ? next.matches.findIndex((m) => samePlace(m.from, previous.from))
-              : -1;
-          followSelection = false;
-          const index = kept >= 0 ? kept : next.current;
-          batch(() => {
-            setResult(next);
-            setCurrent(index);
-          });
-          const match = index === undefined ? undefined : next.matches[index];
-          if (reveal && match) deps.reveal(match);
-
-          return;
-        } catch {
-          return;
-        }
-      };
-      settleSearch();
+      fireAndForget(runSearch(mine, currentMatch(), reveal), 'docx-find');
     }, delay);
+  }
+
+  async function runSearch(
+    mine: number,
+    previous: FindMatch | undefined,
+    reveal: boolean
+  ) {
+    let next: FindResult;
+    try {
+      next = await deps.search(query(), options());
+    } catch {
+      // The engine is reopening; the next change searches again.
+      return;
+    }
+    if (mine !== token) return;
+    // Stay on the match being looked at while the document changes,
+    // unless a replace moved the selection on.
+    const kept =
+      previous && !followSelection
+        ? next.matches.findIndex((m) => samePlace(m.from, previous.from))
+        : -1;
+    followSelection = false;
+    const index = kept >= 0 ? kept : next.current;
+    batch(() => {
+      setResult(next);
+      setCurrent(index);
+    });
+    const match = index === undefined ? undefined : next.matches[index];
+    if (reveal && match) deps.reveal(match);
+  }
+
+  /** Searches for the selected text when it is a short single line. */
+  async function searchSelection(wasOpen: boolean) {
+    let text: string | undefined;
+    try {
+      text = await deps.selectedText();
+    } catch {
+      return;
+    }
+    if (text && text.length <= 200 && !/[\n\r]/.test(text)) {
+      setReplaced(undefined);
+      setQuerySignal(text);
+      search(0, true);
+    } else if (!wasOpen) search(0, true);
   }
 
   // The engine holds the text: search it again after every change, from
@@ -156,23 +173,7 @@ export function createDocxFind(deps: DocxFindDeps) {
         setFocusRequest((n) => n + 1);
       });
 
-      const settleSelectedText = async () => {
-        try {
-          const settleSelectedTextValue = await deps.selectedText();
-          const text = settleSelectedTextValue;
-
-          if (text && text.length <= 200 && !/[\n\r]/.test(text)) {
-            setReplaced(undefined);
-            setQuerySignal(text);
-            search(0, true);
-          } else if (!wasOpen) search(0, true);
-
-          return;
-        } catch {
-          return;
-        }
-      };
-      settleSelectedText();
+      fireAndForget(searchSelection(wasOpen), 'docx-find');
     },
     /** Closes the bar; the current match stays selected. */
     close() {

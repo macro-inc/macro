@@ -5,15 +5,16 @@ import { editorStateAsMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { toast } from '@core/component/Toast/Toast';
 import { macroIdToEmail, tryMacroId } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
+import { fireAndForget } from '@core/util/fireAndForget';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import GitBranch from '@icon/system/regular/git-branch.svg';
+import PlugIcon from '@icon/system/regular/plug.svg';
+import TerminalWindowIcon from '@icon/system/regular/terminal-window.svg';
 import ClaudeIcon from '@icon/wide-claude.svg';
 import CodexIcon from '@icon/wide-codex-ide.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import ZedIcon from '@icon/wide-zed-ide.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import GitBranch from '@phosphor/git-branch.svg';
-import PlugIcon from '@phosphor/plug.svg';
-import TerminalWindowIcon from '@phosphor/terminal-window.svg';
 import { fetchDocumentThreads } from '@queries/messages/document-messages';
 import {
   fetchDocumentBranchName,
@@ -23,7 +24,7 @@ import {
 import type { MessageThread } from '@service-storage/messages';
 import { createCallback } from '@solid-primitives/rootless';
 import { makePersisted } from '@solid-primitives/storage';
-import { Button, ButtonGroup, CopyButton, Dropdown } from '@ui';
+import { ButtonGroup, CopyButton, Dropdown } from '@ui';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useMarkdownDocument } from '../context/markdown-document-context';
@@ -301,7 +302,7 @@ export function useDispatchAgentSplitFileActions(): {
     label: COPY_ACTION.name,
     icon: COPY_ACTION.icon,
     action: () => {
-      void executeAction(COPY_ACTION);
+      fireAndForget(executeAction(COPY_ACTION), 'dispatch-agent');
     },
   };
 
@@ -313,7 +314,7 @@ export function useDispatchAgentSplitFileActions(): {
         label: action.name,
         icon: action.icon,
         action: () => {
-          void executeAction(action);
+          fireAndForget(executeAction(action), 'dispatch-agent');
         },
       })),
       {
@@ -335,16 +336,19 @@ export function DispatchAgentButton(
   return (
     <Dropdown open={open()} onOpenChange={setOpen}>
       <ButtonGroup
-        variant="outline"
-        size={props.showPrimaryLabel ? 'md' : 'icon-sm'}
-        depth={2}
-        class={props.showPrimaryLabel ? 'h-8' : undefined}
+        finish="raised"
+        variant="secondary"
+        size={props.showPrimaryLabel ? 'sm' : 'icon-sm'}
+        class="border-0"
       >
         <Dynamic
-          component={lastUsed().key === 'copy' ? CopyButton : Button}
+          component={
+            lastUsed().key === 'copy' ? CopyButton : ButtonGroup.Button
+          }
+          {...(lastUsed().key === 'copy' ? { as: ButtonGroup.Button } : {})}
           onClick={executeLastUsed}
           tooltip={lastUsed().name}
-          class="@max-[600px]/split-header:w-8 @max-[600px]/split-header:p-0"
+          class="@max-[600px]/split-header:w-7 @max-[600px]/split-header:p-0"
         >
           <Dynamic
             component={lastUsed().buttonIcon ?? lastUsed().icon}
@@ -358,10 +362,11 @@ export function DispatchAgentButton(
         </Dynamic>
         <ButtonGroup.Divider />
         <Dropdown.Trigger
-          variant="outline"
-          size={props.showPrimaryLabel ? 'md' : 'icon-sm'}
-          class="px-2"
-          label="Agent options"
+          as={ButtonGroup.Button}
+          aria-label="Agent options"
+          tooltip="Agent options"
+          variant="secondary"
+          size="icon-sm"
         >
           <CaretDown class="size-3.5!" />
         </Dropdown.Trigger>
@@ -370,7 +375,7 @@ export function DispatchAgentButton(
         <Dropdown.Group>
           <Dropdown.Item
             onSelect={() => {
-              executeAction(COPY_ACTION);
+              fireAndForget(executeAction(COPY_ACTION), 'dispatch-agent');
               setOpen(false);
             }}
           >
@@ -380,7 +385,10 @@ export function DispatchAgentButton(
           <Show when={isTask()}>
             <Dropdown.Item
               onSelect={() => {
-                copyBranchNameToClipboard(blockId);
+                fireAndForget(
+                  copyBranchNameToClipboard(blockId),
+                  'dispatch-agent'
+                );
                 setOpen(false);
               }}
             >
@@ -404,7 +412,7 @@ export function DispatchAgentButton(
             {(action) => (
               <Dropdown.Item
                 onSelect={() => {
-                  executeAction(action);
+                  fireAndForget(executeAction(action), 'dispatch-agent');
                   setOpen(false);
                 }}
               >

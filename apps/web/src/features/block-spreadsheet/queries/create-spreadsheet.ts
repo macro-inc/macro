@@ -1,4 +1,5 @@
 import { analytics } from '@app/lib/analytics';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { contentHash } from '@core/util/hash';
 import { invalidateUserQuota } from '@queries/auth';
 import { setPreviewOnCreate } from '@queries/preview/preview';
@@ -18,7 +19,7 @@ export async function createSpreadsheetDocument(args?: {
     projectId: args?.projectId,
     sha: await contentHash(new Uint8Array()),
   });
-  invalidateUserQuota();
+  fireAndForget(invalidateUserQuota(), 'create-spreadsheet-document');
   if (created.isErr()) return;
 
   const documentId = created.value.metadata.documentId;
@@ -28,10 +29,13 @@ export async function createSpreadsheetDocument(args?: {
     name: title,
     fileType: 'spreadsheet',
   });
-  refetchSoupEntity(documentId, 'document', {
-    ownTouch: true,
-    refreshGraphql: true,
-  });
+  fireAndForget(
+    refetchSoupEntity(documentId, 'document', {
+      ownTouch: true,
+      refreshGraphql: true,
+    }),
+    'create-spreadsheet-document'
+  );
   analytics.track('create_entity', {
     entityType: 'spreadsheet',
     entityId: documentId,

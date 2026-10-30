@@ -1,4 +1,5 @@
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { handleFileFolderDrop } from '@core/util/upload';
 import type { ParentProps } from 'solid-js';
 import type { ChannelDragState } from './create-channel-drag-state';
@@ -18,11 +19,12 @@ export function ChannelDropZone(props: ChannelDropZoneProps) {
       class="relative h-full flex flex-col mobile:px-0 mobile:pb-0"
       use:fileFolderDrop={{
         onDrop: (files, folders) => {
-          handleFileFolderDrop(files, folders, (entries) => {
-            void props.dragState.attachFilesToChannel?.(
-              entries.map((e) => e.file)
-            );
-          });
+          fireAndForget(
+            handleFileFolderDrop(files, folders, (entries) =>
+              props.dragState.attachFilesToChannel?.(entries.map((e) => e.file))
+            ),
+            'channel-input'
+          );
         },
       }}
     >

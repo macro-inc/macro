@@ -1,12 +1,13 @@
 import { toast } from '@core/component/Toast/Toast';
 import { useReferralCode } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { getWebOrigin } from '@core/util/webOrigin';
-import ClipboardIcon from '@phosphor/clipboard.svg';
-import CloseIcon from '@phosphor/x.svg';
+import ClipboardIcon from '@icon/system/regular/clipboard.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
+import { Telemetry } from '@macro-inc/observability';
 import { sendReferralInvite } from '@queries/auth/requests';
 import { addContact } from '@queries/contacts/requests';
-
-import { Button, Dialog, Panel } from '@ui';
+import { Button, Dialog, Input, Panel } from '@ui';
 import { createSignal, Show } from 'solid-js';
 
 function parseEmails(raw: string): string[] {
@@ -14,6 +15,13 @@ function parseEmails(raw: string): string[] {
     .split(/[,\n\s]/)
     .map((s) => s.trim())
     .filter((s) => s.includes('@'));
+}
+
+async function addInvitedContact(email: string) {
+  const result = await addContact(`macro|${email.toLowerCase()}`);
+  if (result.isErr()) {
+    Telemetry.error(result.error, { surface: 'team-invitations' });
+  }
 }
 
 const [inviteModalOpen, setInviteModalOpen] = createSignal(false);
@@ -32,12 +40,22 @@ export const InviteModal = () => {
     return `${getWebOrigin()}/app/signup?referral_code=${code}`;
   };
 
+  const copyReferralUrl = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch (error) {
+      Telemetry.error(error, { surface: 'team-invitations' });
+      toast.failure('Failed to copy link');
+      return;
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const handleCopy = () => {
     const url = referralUrl();
     if (!url) return;
-    navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    fireAndForget(copyReferralUrl(url), 'team-invitations');
   };
 
   const handleSend = async () => {
@@ -47,7 +65,7 @@ export const InviteModal = () => {
     for (const email of emails) {
       const result = await sendReferralInvite(email);
       if (result.isOk()) {
-        addContact(`macro|${email.toLowerCase()}`);
+        fireAndForget(addInvitedContact(email), 'team-invitations');
       }
     }
     setValue('');
@@ -70,7 +88,7 @@ export const InviteModal = () => {
       <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
         <Panel.Header class="px-2 gap-1">
           <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-            <CloseIcon />
+            <CloseIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
           <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
             Invite
@@ -89,7 +107,7 @@ export const InviteModal = () => {
                   requestAnimationFrame(() => el.focus())
                 );
               }}
-              placeholder={'name@company.com\ncolleague@company.com'}
+              placeholder="name@company.com&#10;colleague@company.com"
               value={value()}
               onInput={(e) => setValue(e.currentTarget.value)}
               rows={4}
@@ -103,7 +121,7 @@ export const InviteModal = () => {
             </Button>
             <Button
               onClick={handleSend}
-              variant="strong"
+              variant="primary"
               disabled={sending() || !parseEmails(value()).length}
               class="font-semibold"
             >
@@ -118,18 +136,19 @@ export const InviteModal = () => {
                   Or share your personal referral link:
                 </p>
                 <div class="flex items-stretch gap-2">
-                  <input
+                  <Input
+                    size="sm"
                     type="text"
                     readOnly
                     value={url()}
-                    class="flex-1 px-3 py-1.5 text-xs border border-edge-muted rounded-xs bg-surface text-ink/70 outline-none select-all"
+                    class="flex-1 select-all text-ink-muted"
                     onClick={(e) => e.currentTarget.select()}
                   />
                   <Button
                     type="button"
                     onClick={handleCopy}
                     size="md"
-                    variant="outline"
+                    variant="secondary"
                     class="font-medium border px-2"
                   >
                     <ClipboardIcon class="size-3" />

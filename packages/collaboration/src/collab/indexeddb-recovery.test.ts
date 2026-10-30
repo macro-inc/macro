@@ -107,6 +107,26 @@ describe('collaboration IndexedDB recovery', () => {
     expect(connections).toHaveLength(2);
   });
 
+  it('reopens after a failed open instead of keeping the failure', async () => {
+    const newer = indexedDB.open('newer', 2);
+    await new Promise<void>((resolve, reject) => {
+      newer.onsuccess = () => resolve();
+      newer.onerror = () => reject(newer.error);
+    });
+    const open = vi.mocked(indexedDB.open);
+    const openAndTrack = open.getMockImplementation()!;
+    // Opening below the stored version fails the request asynchronously.
+    open.mockImplementationOnce(() => openAndTrack('newer', 1));
+    const store = new BrowserWALStore<number>('wal', 'doc');
+
+    await expect(store.append(1)).rejects.toMatchObject({
+      name: 'VersionError',
+    });
+    await store.append(2);
+
+    expect((await store.getAll()).map((entry) => entry.update)).toEqual([2]);
+  });
+
   it('recovers snapshot reads and writes while keeping document scopes separate', async () => {
     const first = new IDBSnapshotStore<number>('snapshots', 'first');
     const second = new IDBSnapshotStore<number>('snapshots', 'second');

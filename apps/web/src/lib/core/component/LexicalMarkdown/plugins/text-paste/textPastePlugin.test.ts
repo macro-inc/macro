@@ -30,7 +30,7 @@ describe('parseMacroAppUrl', () => {
     }
   );
 
-  it.each(['md', 'channel', 'task', 'pr', 'initiative'])(
+  it.each(['md', 'channel', 'task', 'pr', 'initiative', 'pipeline'])(
     'preserves existing %s links',
     (block) => {
       expect(

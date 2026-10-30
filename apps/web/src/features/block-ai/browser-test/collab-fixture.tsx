@@ -10,6 +10,7 @@
 
 import { MemorySyncServer } from '@app/features/block-fig/browser-test/memory-sync';
 import { AiEngine } from '@core/ai-engine/client';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { noopChatter } from '@macro-inc/collaboration/collab/chatter';
 import type { SnapshotStore } from '@macro-inc/collaboration/collab/snapshot-store';
 import { InMemoryWALStore } from '@macro-inc/collaboration/collab/wal';
@@ -142,11 +143,11 @@ function Person(props: {
           setSharing(sharedEngine);
         }
         setEngine(opened);
-      } catch (e) {
+      } catch (e: unknown) {
         setFailure(String(e));
       }
     };
-    void open();
+    fireAndForget(open(), 'ai-fixture');
     onCleanup(() => {
       closed = true;
       sharedEngine?.close();
@@ -243,11 +244,16 @@ export function CollabFixture(props: {
 }) {
   const server = new MemorySyncServer();
   const [stored, setStored] = createSignal(false);
+  const [loadFailure, setLoadFailure] = createSignal<string>();
   const load = async () => {
-    server.store(await props.load());
-    setStored(true);
+    try {
+      server.store(await props.load());
+      setStored(true);
+    } catch (e: unknown) {
+      setLoadFailure(String(e));
+    }
   };
-  void load();
+  fireAndForget(load(), 'ai-fixture');
   const people = new Map<string, FixturePerson>();
   const [opened, setOpened] = createSignal<Record<string, number>>({});
   const reopen = (user: string) =>
@@ -273,6 +279,9 @@ export function CollabFixture(props: {
   window.aiFixture.collab = controls;
   return (
     <div class="flex min-h-0 flex-1">
+      <Show when={loadFailure()}>
+        {(message) => <div class="p-4 text-failure">{message()}</div>}
+      </Show>
       <Show when={stored()}>
         <For each={props.users}>
           {(user) => (

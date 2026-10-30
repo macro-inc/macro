@@ -42,7 +42,7 @@ export CARGO_TARGET_DIR="$out/cargo"
 # production optimization. The unoptimized recursive parser has large stack
 # frames that exhaust a Tokio worker stack on valid compound filter queries.
 # Exhaustive matrices execute hundreds of thousands of real indexed queries.
-cargo build --locked -p app --no-default-features \
+cargo build --locked -p app --no-default-features --bin app --example notification-test-daemon \
   --config 'profile.dev.package.turso_core.opt-level=3' \
   --config 'profile.dev.package.turso_parser.opt-level=3'
 # Publish atomically so an existing isolated run can finish on its old inode.

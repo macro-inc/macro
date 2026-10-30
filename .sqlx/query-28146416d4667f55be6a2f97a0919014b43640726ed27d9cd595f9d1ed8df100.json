@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM email_labels WHERE link_id=$1 AND provider_label_id=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "28146416d4667f55be6a2f97a0919014b43640726ed27d9cd595f9d1ed8df100"
+}

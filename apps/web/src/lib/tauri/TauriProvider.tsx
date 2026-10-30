@@ -3,11 +3,12 @@ import { useCallKitSetup } from '@channel/Call/use-callkit';
 import { useAndroidBack } from '@core/mobile/androidBack';
 import { useAndroidWindowInsets } from '@core/mobile/androidWindowInsets';
 import { NativeAppUpdateRequiredDialog } from '@core/mobile/NativeAppUpdateRequiredDialog';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform, isTauri } from '@core/util/platform';
 import { PlatformNotificationProvider } from '@notifications';
 import { queryPersistence } from '@queries/client';
 import type { RouteSectionProps } from '@solidjs/router';
-import { invoke } from '@tauri-apps/api/core';
+import { type InvokeArgs, invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { type OsType, type as osType } from '@tauri-apps/plugin-os';
 import { Dialog, Surface } from '@ui';
@@ -29,6 +30,7 @@ import {
 import { useTauriNavigationEffect } from './navigation';
 import { MaybePushNotificationRegistration } from './PushNotification';
 import { ShareTargetProvider } from './ShareTargetProvider';
+import { unlistenWhenReady } from './unlisten';
 
 export type BundleUpdateStatus =
   | { status: 'Idle' }
@@ -76,6 +78,14 @@ function shouldShowNativeAppUpdateRequiredDialog(status: BundleUpdateStatus) {
   );
 }
 
+async function invokeBundleUpdateCommand(command: string, args?: InvokeArgs) {
+  try {
+    await invoke<boolean>(command, args);
+  } catch (e) {
+    console.error(`[bundle-update] ${command} failed`, e);
+  }
+}
+
 function TauriProvider(props: { children: JSX.Element }) {
   const nativeUpdates = createNativeUpdates(queryPersistence.flush);
   useAndroidWindowInsets();
@@ -89,15 +99,7 @@ function TauriProvider(props: { children: JSX.Element }) {
   let hasShownNativeAppUpdateRequiredDialog = false;
 
   function performBundleUpdate() {
-    const settleInvoke = async () => {
-      try {
-        return await invoke<boolean>('perform_update');
-      } catch (settleInvokeError) {
-        const e = settleInvokeError;
-        return await console.error('[bundle-update] perform_update failed', e);
-      }
-    };
-    settleInvoke();
+    fireAndForget(invokeBundleUpdateCommand('perform_update'), 'bundle-update');
   }
 
   createEffect(() => {
@@ -112,7 +114,7 @@ function TauriProvider(props: { children: JSX.Element }) {
     setNativeAppUpdateRequiredDialogOpen(true);
   });
 
-  if (isTauri() && isPlatform('ios')) useCallKitSetup();
+  useCallKitSetup();
 
   const value: TauriContextValue = {
     os: osType(),
@@ -131,42 +133,23 @@ function TauriProvider(props: { children: JSX.Element }) {
       }
     );
     if (LOADED_BUNDLE_BUILD !== undefined) {
-      const settleInvokeResult = async () => {
-        try {
-          return await invoke<boolean>('ack_bundle_update_reload', {
-            loadedBundleBuild: LOADED_BUNDLE_BUILD,
-          });
-        } catch (settleInvokeResultError) {
-          const e = settleInvokeResultError;
-          return await console.error(
-            '[bundle-update] ack_bundle_update_reload failed',
-            e
-          );
-        }
-      };
-      settleInvokeResult();
+      fireAndForget(
+        invokeBundleUpdateCommand('ack_bundle_update_reload', {
+          loadedBundleBuild: LOADED_BUNDLE_BUILD,
+        }),
+        'bundle-update'
+      );
     }
     // Fetch current status since events emitted before the listener registered are missed
-
-    const settleInvokeResultResult = async () => {
-      const settleInvokeResultResultValue = await invoke<BundleUpdateStatus>(
-        'get_bundle_update_status'
+    const loadBundleUpdateStatus = async () => {
+      setBundleUpdateStatus(
+        await invoke<BundleUpdateStatus>('get_bundle_update_status')
       );
-      const status = settleInvokeResultResultValue;
-
-      setBundleUpdateStatus(status);
-
-      return;
     };
-    settleInvokeResultResult();
-    onCleanup(() => {
-      const settleUnlistenPromise = async () => {
-        const settleUnlistenPromiseValue = await unlistenPromise;
-        const unlisten = settleUnlistenPromiseValue;
-        return await unlisten();
-      };
-      settleUnlistenPromise();
-    });
+    fireAndForget(loadBundleUpdateStatus(), 'bundle-update');
+    onCleanup(() =>
+      fireAndForget(unlistenWhenReady(unlistenPromise), 'bundle-update')
+    );
 
     document.body.classList.add('tauri');
     document.body.classList.add(`tauri-${value.os}`);
@@ -221,7 +204,7 @@ function TauriProvider(props: { children: JSX.Element }) {
         }
         onRestart={
           nativeUpdates.status().status === 'Ready'
-            ? () => void nativeUpdates.restart()
+            ? () => fireAndForget(nativeUpdates.restart(), 'native-updates')
             : undefined
         }
       />

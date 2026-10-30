@@ -13,11 +13,9 @@ import type { GroupByField, GroupMeta } from '@queries/soup/grouped/types';
 import { soupKeys } from '@queries/soup/keys';
 import {
   isDisplayableSoupItem,
-  isInstructionsMdDoc,
   mapApiSoupItemToEntity,
   mapSoupPageToEntityList,
 } from '@queries/soup/transform-utils';
-import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { storageServiceClient } from '@service-storage/client';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import type { ApiEntityFilterAst } from '@service-storage/generated/schemas/apiEntityFilterAst';
@@ -126,7 +124,6 @@ function soupItemsQueryOptions(
   args: SoupItemsQueryArgs,
   enabled: boolean | undefined,
   staleTime: StaleTime | undefined,
-  instructionsId: string | null | undefined,
   showSupportedForeignEntities: boolean | undefined
 ) {
   const { params, body } = args;
@@ -143,10 +140,7 @@ function soupItemsQueryOptions(
     getNextPageParam: (lastPage) => lastPage.next_cursor,
     select: (data) =>
       data.pages.flatMap((page) =>
-        mapSoupPageToEntityList(page, {
-          instructionsIdQuery: { isSuccess: true, data: instructionsId },
-          showSupportedForeignEntities,
-        })
+        mapSoupPageToEntityList(page, { showSupportedForeignEntities })
       ),
     enabled,
     staleTime,
@@ -163,13 +157,11 @@ export const useSoupItemsQuery = (
   args: Accessor<SoupItemsQueryArgs>,
   options?: Accessor<SoupItemsQueryOptions>
 ) => {
-  const instructionsIdQuery = useInstructionsMdIdQuery();
   return useInfiniteQuery(() =>
     soupItemsQueryOptions(
       args(),
       options?.().enabled,
       options?.().staleTime,
-      instructionsIdQuery.isSuccess ? instructionsIdQuery.data : undefined,
       options?.().showSupportedForeignEntities
     )
   );
@@ -245,11 +237,9 @@ function restSoupAstItemsQueryOptions(
   enabled: boolean | undefined,
   staleTime: StaleTime | undefined,
   meta: RestSoupAstItemsMeta,
-  instructionsId: string | null | undefined,
   showSupportedForeignEntities: boolean | undefined
 ) {
   const { params, body, groupBy, transport } = args;
-  const instructionsIdQuery = { isSuccess: true, data: instructionsId };
 
   return infiniteQueryOptions({
     queryKey: soupKeys.astItems({ params, body, groupBy, transport }).queryKey,
@@ -272,16 +262,10 @@ function restSoupAstItemsQueryOptions(
           for (const id of g.itemIds) {
             const item = itemsById[id];
 
-            let displayable = false;
-
-            if (item.tag === 'foreignEntity') {
-              displayable =
-                showSupportedForeignEntities === true &&
-                item.data.foreignEntitySource === 'github_pull_request';
-            } else {
-              displayable =
-                item && !isInstructionsMdDoc(item, instructionsIdQuery);
-            }
+            const displayable =
+              item.tag !== 'foreignEntity' ||
+              (showSupportedForeignEntities === true &&
+                item.data.foreignEntitySource === 'github_pull_request');
             if (displayable && isDisplayableSoupItem(item)) {
               const mapped = mapApiSoupItemToEntity(item);
               entities.push(mapped);
@@ -297,7 +281,7 @@ function restSoupAstItemsQueryOptions(
 
         return mapSoupPageToEntityList(
           { items: page.items, next_cursor: null },
-          { instructionsIdQuery, showSupportedForeignEntities }
+          { showSupportedForeignEntities }
         );
       });
 
@@ -348,15 +332,12 @@ const useRestSoupAstItemsQuery = (
   args: Accessor<SoupAstItemsQueryArgs>,
   options?: Accessor<SoupItemsQueryOptions>
 ) => {
-  const instructionsIdQuery = useInstructionsMdIdQuery();
-
   return useInfiniteQuery(() =>
     restSoupAstItemsQueryOptions(
       args(),
       options?.().enabled !== false && !options?.().networkPaused,
       options?.().staleTime,
       options?.().meta,
-      instructionsIdQuery.isSuccess ? instructionsIdQuery.data : undefined,
       options?.().showSupportedForeignEntities
     )
   );
@@ -367,6 +348,7 @@ export type SoupAstItemsQueryTransport = 'rest' | 'graphql';
 
 /** Stable query surface shared by the REST and urql-solid implementations. */
 export type SoupAstItemsQuery = {
+  readonly groupedPaging?: import('./graphql/create-grouped-soup-live-query').GroupedSoupPaging;
   readonly data: SoupAstItemsData | undefined;
   readonly error: Error | null;
   /** Includes paused initial requests, whose data resource is not readable yet. */
@@ -375,6 +357,11 @@ export type SoupAstItemsQuery = {
   readonly isFetching: boolean;
   readonly isPlaceholderData: boolean;
   readonly isFetchingNextPage: boolean;
+  /**
+   * The current error came from loading a continuation page; the loaded pages
+   * are still current. Any other error means the query itself failed.
+   */
+  readonly isFetchNextPageError: boolean;
   readonly isEnabled: boolean;
   readonly hasNextPage: boolean;
   readonly transport: SoupAstItemsQueryTransport;
@@ -452,11 +439,17 @@ export function useSoupAstItemsQuery(
         usesGraphql() &&
         activeGraphqlQuery().isEnabled() &&
         !options?.().networkPaused,
+      // The refresh refetches every loaded page in cursor order and keeps the
+      // old pages on screen until their replacements arrive, so a mutation
+      // never collapses a scrolled list to its first page.
       refresh: async () => {
-        activeGraphqlQuery().resetToInitialPage();
-        options?.().onBeforeGraphqlRefresh?.();
+        if (args().groupBy === undefined)
+          options?.().onBeforeGraphqlRefresh?.();
         await activeGraphqlQuery().refresh();
       },
+      body: () => args().body,
+      // Grouped lists don't report it yet, so writes still read them again.
+      cacheMaintained: () => activeGraphqlQuery().cacheMaintained?.() ?? false,
     })
   );
 
@@ -476,6 +469,9 @@ export function useSoupAstItemsQuery(
   };
 
   return {
+    get groupedPaging() {
+      return usesGraphql() ? activeGraphqlQuery().groupedPaging : undefined;
+    },
     get data() {
       return usesGraphql() ? activeGraphqlQuery().data() : restQuery.data;
     },
@@ -511,6 +507,11 @@ export function useSoupAstItemsQuery(
       return usesGraphql()
         ? activeGraphqlQuery().isFetchingNextPage()
         : restQuery.isFetchingNextPage;
+    },
+    get isFetchNextPageError() {
+      return usesGraphql()
+        ? activeGraphqlQuery().isFetchNextPageError()
+        : restQuery.isFetchNextPageError;
     },
     get isEnabled() {
       return usesGraphql()

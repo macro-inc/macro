@@ -1,7 +1,6 @@
-import CircleHalf from '@phosphor/circle-half.svg';
-import CornersOut from '@phosphor/corners-out.svg';
-import List from '@phosphor/list.svg';
-import type { Accessor } from 'solid-js';
+import CircleHalf from '@icon/system/regular/circle-half.svg';
+import CornersOut from '@icon/system/regular/corners-out.svg';
+import List from '@icon/system/regular/list.svg';
 import { InspectorSelect } from './inspector-select';
 /**
  * The right panel: the selected layer's properties as Figma's design panel
@@ -16,12 +15,12 @@ import type {
   PaintInfo,
   TextInfo,
 } from '@core/fig-engine/types';
+import Copy from '@icon/system/regular/copy.svg';
+import DiamondsFour from '@icon/system/regular/diamonds-four.svg';
+import Eye from '@icon/system/regular/eye.svg';
+import EyeSlash from '@icon/system/regular/eye-slash.svg';
 import { Tabs } from '@kobalte/core/tabs';
-import Copy from '@phosphor/copy.svg';
-import DiamondsFour from '@phosphor/diamonds-four.svg';
-import Eye from '@phosphor/eye.svg';
-import EyeSlash from '@phosphor/eye-slash.svg';
-import { createSignal, For, type JSX, Show } from 'solid-js';
+import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
 import type { Alignment } from '../core/align';
 import type { BooleanOperation } from '../core/boolean';
 import { cssFor } from '../core/css';
@@ -555,7 +554,7 @@ export function DesignPanel(props: {
                       <NumberField
                         label={<CornersOut class="size-3.5" />}
                         ariaLabel="Corner radius"
-                        value={getDesignPanelValue(info)}
+                        value={topLeftRadius(info)}
                         min={0}
                         mixed={
                           !!info().cornerRadius &&
@@ -828,7 +827,7 @@ export function DesignPanel(props: {
     </Tabs>
   );
 
-  function getDesignPanelValue(info: Accessor<NodeInfo>): number {
+  function topLeftRadius(info: Accessor<NodeInfo>): number {
     return info().cornerRadius?.top_left ?? 0;
   }
 }

@@ -77,3 +77,6 @@ export const fetchCompany: typeof storageServiceClient.getCompany = (...args) =>
   storageServiceClient.getCompany(...args);
 export const fetchContact: typeof storageServiceClient.getContact = (...args) =>
   storageServiceClient.getContact(...args);
+export const fetchCrmPipeline: typeof storageServiceClient.getCrmPipeline = (
+  ...args
+) => storageServiceClient.getCrmPipeline(...args);

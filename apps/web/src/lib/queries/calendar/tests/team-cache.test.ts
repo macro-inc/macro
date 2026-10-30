@@ -5,7 +5,7 @@ import { calendarKeys } from '../keys';
 import {
   clearTeamCalendarQueries,
   ensureTeamCalendarExpiry,
-  resetTeamCalendarQueries,
+  refreshTeamCalendarQueries,
   resetTeamCalendarSession,
   subscribeToTeamCalendarReset,
   TEAM_CALENDAR_MAX_DATA_AGE_MS,
@@ -24,12 +24,13 @@ describe('team authorization invalidation', () => {
     vi.useRealTimers();
   });
 
-  it('removes already rendered data before a failing refetch settles', async () => {
-    const queryKey = calendarTeamKeys.sharing({
-      userId: 'alice',
-      teamId: 'team',
-    }).queryKey;
-    queryClient.setQueryData(queryKey, { sharing: 'all' });
+  it('removes teammate data before a failing refetch settles', async () => {
+    const queryKey = calendarKeys.teamOutOfOffice(
+      'alice',
+      undefined,
+      'team'
+    ).queryKey;
+    queryClient.setQueryData(queryKey, { items: [{ title: 'Private' }] });
     const observer = new QueryObserver(queryClient, {
       queryKey,
       queryFn: async () => {
@@ -38,12 +39,83 @@ describe('team authorization invalidation', () => {
       staleTime: Infinity,
     });
     const unsubscribe = observer.subscribe(() => {});
-    const reset = resetTeamCalendarQueries();
+    const refresh = refreshTeamCalendarQueries();
     expect(observer.getCurrentResult().data).toBeUndefined();
-    await reset;
+    await refresh;
     expect(observer.getCurrentResult().isError).toBe(true);
     expect(observer.getCurrentResult().data).toBeUndefined();
     unsubscribe();
+  });
+
+  it('keeps OOO rows and their selection during an unrelated calendar refresh', async () => {
+    const queryKey = calendarKeys.teamOutOfOffice(
+      'alice',
+      undefined,
+      'team'
+    ).queryKey;
+    const cached = [{ title: 'Vacation' }];
+    queryClient.setQueryData(queryKey, cached);
+    let finish!: (rows: typeof cached) => void;
+    const observer = new QueryObserver(queryClient, {
+      queryKey,
+      queryFn: () =>
+        new Promise<typeof cached>((resolve) => {
+          finish = resolve;
+        }),
+      staleTime: Infinity,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    const closeSelection = vi.fn();
+    const unsubscribeReset = subscribeToTeamCalendarReset(closeSelection);
+    const refresh = refreshTeamCalendarQueries({ outOfOfficeChanged: false });
+    expect(observer.getCurrentResult().data).toEqual(cached);
+    expect(observer.getCurrentResult().isPending).toBe(false);
+    expect(observer.getCurrentResult().isFetching).toBe(true);
+    expect(closeSelection).not.toHaveBeenCalled();
+    finish([{ title: 'Updated vacation' }]);
+    await refresh;
+    expect(observer.getCurrentResult().data).toEqual([
+      { title: 'Updated vacation' },
+    ]);
+    expect(closeSelection).not.toHaveBeenCalled();
+    unsubscribeReset();
+    unsubscribe();
+  });
+
+  it("keeps the viewer's own team and settings visible while they refetch", async () => {
+    const identity = { userId: 'alice', teamId: 'team' };
+    const keys = [
+      calendarTeamKeys.identity('alice').queryKey,
+      calendarTeamKeys.sharing(identity).queryKey,
+      calendarTeamKeys.availabilityCalendars(identity).queryKey,
+    ];
+    let finish!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const observers = keys.map((queryKey) => {
+      queryClient.setQueryData(queryKey, 'cached');
+      const observer = new QueryObserver(queryClient, {
+        queryKey,
+        queryFn: async () => {
+          await pending;
+          return 'fresh';
+        },
+        staleTime: Infinity,
+      });
+      return { observer, unsubscribe: observer.subscribe(() => {}) };
+    });
+    const refresh = refreshTeamCalendarQueries();
+    for (const { observer } of observers) {
+      expect(observer.getCurrentResult().data).toBe('cached');
+      expect(observer.getCurrentResult().isFetching).toBe(true);
+    }
+    finish();
+    await refresh;
+    for (const { observer, unsubscribe } of observers) {
+      expect(observer.getCurrentResult().data).toBe('fresh');
+      unsubscribe();
+    }
   });
 
   it('purges all team scopes on logout while preserving own occurrences', () => {
@@ -159,17 +231,18 @@ describe('team authorization invalidation', () => {
   it('clears detached selections on authorization reset, not ordinary cache writes', async () => {
     const onReset = vi.fn();
     const unsubscribe = subscribeToTeamCalendarReset(onReset);
-    const team = calendarTeamKeys.sharing({
-      userId: 'alice',
-      teamId: 'team',
-    }).queryKey;
+    const team = calendarKeys.teamOutOfOffice(
+      'alice',
+      undefined,
+      'team'
+    ).queryKey;
     const own = calendarKeys.occurrences('alice', undefined).queryKey;
-    queryClient.setQueryData(team, { sharing: 'all' });
+    queryClient.setQueryData(team, { items: [] });
     queryClient.setQueryData(own, []);
     expect(onReset).not.toHaveBeenCalled();
     await queryClient.resetQueries({ queryKey: own });
     expect(onReset).not.toHaveBeenCalled();
-    await resetTeamCalendarQueries();
+    await refreshTeamCalendarQueries();
     expect(onReset).toHaveBeenCalledOnce();
     unsubscribe();
   });

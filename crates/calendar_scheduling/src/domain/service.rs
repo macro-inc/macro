@@ -71,11 +71,13 @@ impl<R: Repository, C, D: Directory> Service<R, C, D> {
         );
         Uuid::new_v5(&Uuid::NAMESPACE_URL, scope.as_bytes())
     }
+    /// Any team member may read and edit their team's profile; `admin` limits
+    /// the action to the team's administrators.
     pub(super) async fn authorize(
         &self,
         user: &str,
         owner: &OwnedProfile,
-        write: bool,
+        admin: bool,
     ) -> Result<(), Error> {
         if let Some(team) = owner.team_id {
             if self
@@ -83,7 +85,7 @@ impl<R: Repository, C, D: Directory> Service<R, C, D> {
                 .members(team)
                 .await?
                 .iter()
-                .any(|m| m.user_id == user && (!write || m.admin))
+                .any(|m| m.user_id == user && (!admin || m.admin))
             {
                 return Ok(());
             }
@@ -135,7 +137,7 @@ impl<R: Repository, C, D: Directory> Service<R, C, D> {
         self.authorize(user, &owner, false).await?;
         Ok(owner.profile)
     }
-    /// Save a validated, revision-protected profile. Only team admins may edit team links.
+    /// Save a validated, revision-protected profile. Any team member may edit team links.
     pub async fn save(
         &self,
         user: &str,
@@ -151,7 +153,7 @@ impl<R: Repository, C, D: Directory> Service<R, C, D> {
             team_id: team,
             profile,
         };
-        self.authorize(user, &owner, true).await?;
+        self.authorize(user, &owner, false).await?;
         let previous = self.repository.profile(owner.profile.id).await?;
         self.validate_hosts(&owner, previous.as_ref()).await?;
         self.repository.save_profile(owner).await
@@ -611,11 +613,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             .profile(record.profile_id)
             .await?
             .ok_or(Error::NotFound)?;
-        if record.booking.hosts.iter().any(|host| host == user) {
-            self.authorize(user, &owner, false).await?;
-        } else {
-            self.authorize(user, &owner, true).await?;
-        }
+        self.authorize_booking(user, &owner, &record).await?;
         if record.booking.status != BookingStatus::Confirmed || record.booking.ends_at > Utc::now()
         {
             return Err(Error::Invalid(
@@ -688,8 +686,18 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             .profile(record.profile_id)
             .await?
             .ok_or(Error::NotFound)?;
-        self.authorize(user, &owner, true).await?;
+        self.authorize_booking(user, &owner, &record).await?;
         Ok(record)
+    }
+    /// Hosts may manage the meetings they host; anyone else needs admin rights.
+    async fn authorize_booking(
+        &self,
+        user: &str,
+        owner: &OwnedProfile,
+        record: &BookingRecord,
+    ) -> Result<(), Error> {
+        let hosts = record.booking.hosts.iter().any(|host| host == user);
+        self.authorize(user, owner, !hosts).await
     }
     /// Read a booking using its unguessable booker capability.
     pub async fn receipt(&self, id: Uuid, token: Uuid) -> Result<BookingRecord, Error> {
@@ -699,12 +707,15 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         }
         Ok(record)
     }
-    /// Return replacement slots while excluding this booking's own reservation and calendar event.
+    /// Return slots on the visitor's date, excluding this booking's reservation and calendar event.
+    /// Omitting the visitor zone preserves host-date semantics for existing clients.
+    #[tracing::instrument(skip_all, fields(booking_id = %id, %date, time_zone = ?zone), err)]
     pub async fn replacement_slots(
         &self,
         id: Uuid,
         token: Uuid,
         date: NaiveDate,
+        zone: Option<chrono_tz::Tz>,
     ) -> Result<Vec<Slot>, Error> {
         let record = self.receipt(id, token).await?;
         self.repository
@@ -730,14 +741,20 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         };
         // Current membership is authoritative even when the original link was removed.
         self.validate_booking_hosts(&owner, &event.hosts).await?;
-        let (start, end) = day_bounds(&record.schedule, date)?;
+        let viewer_schedule = Schedule {
+            time_zone: zone.unwrap_or(record.schedule.time_zone),
+            ..record.schedule.clone()
+        };
+        let (start, end) = day_bounds(&viewer_schedule, date)?;
         if start > Utc::now() + Duration::days(i64::from(event.horizon_days) + 1)
             || end < Utc::now()
         {
             return Ok(vec![]);
         }
         let occupied_start = start - Duration::minutes(i64::from(event.before_minutes));
-        let occupied_end = end + Duration::minutes(i64::from(event.after_minutes));
+        // A slot starting before visitor midnight may finish on their next day.
+        let occupied_end = end
+            + Duration::minutes(i64::from(event.duration_minutes) + i64::from(event.after_minutes));
         let mut busy = self
             .calendars
             .busy(
@@ -752,12 +769,22 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
                 .busy(&event.hosts, occupied_start, occupied_end, Some(id))
                 .await?,
         );
-        self.respect_host_hours(
-            &owner,
-            &event,
-            slots_for_date(&event, &record.schedule, date, Utc::now(), &busy)?,
-        )
-        .await
+        let mut host_date = start.with_timezone(&record.schedule.time_zone).date_naive();
+        let last = (end - Duration::seconds(1))
+            .with_timezone(&record.schedule.time_zone)
+            .date_naive();
+        let mut slots = vec![];
+        let now = Utc::now();
+        while host_date <= last {
+            slots.extend(
+                slots_for_date(&event, &record.schedule, host_date, now, &busy)?
+                    .into_iter()
+                    .filter(|s| s.starts_at >= start && s.starts_at < end),
+            );
+            host_date = host_date.succ_opt().ok_or(Error::Conflict)?;
+        }
+        slots.sort_by_key(|s| s.starts_at);
+        self.respect_host_hours(&owner, &event, slots).await
     }
     /// Move a booking while retaining both reservations until the calendar accepts the change.
     pub async fn reschedule(
@@ -772,7 +799,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             .with_timezone(&record.schedule.time_zone)
             .date_naive();
         let slot = self
-            .replacement_slots(id, token, date)
+            .replacement_slots(id, token, date, None)
             .await?
             .into_iter()
             .find(|s| s.starts_at == starts_at)
@@ -809,7 +836,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
                 .profile(record.profile_id)
                 .await?
                 .ok_or(Error::NotFound)?;
-            self.authorize(user.ok_or(Error::Forbidden)?, &owner, true)
+            self.authorize_booking(user.ok_or(Error::Forbidden)?, &owner, &record)
                 .await?;
         }
         if record.booking.status == BookingStatus::Cancelled {

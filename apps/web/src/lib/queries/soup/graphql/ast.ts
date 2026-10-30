@@ -7,6 +7,7 @@ import type {
   GraphqlChannelLiteral as GraphqlChannelLiteralInput,
   GraphqlChannelThreadLiteral as GraphqlChannelThreadLiteralInput,
   GraphqlChatLiteral as GraphqlChatLiteralInput,
+  GraphqlCrmAssociation,
   GraphqlCrmCompanyLiteral as GraphqlCrmCompanyLiteralInput,
   GraphqlCrmContactLiteral,
   GraphqlDateLiteral as GraphqlDateLiteralInput,
@@ -71,6 +72,7 @@ type TargetAstKey =
 
 type AstBody = Partial<Record<TargetAstKey, RestAst>> & {
   favorites_only?: SoupAstBody['favorites_only'];
+  crma?: SoupAstBody['crma'];
   /** CRM-address and CRM-domain filters are REST-only today. */
   eca?: string[];
   ecd?: string[];
@@ -106,26 +108,105 @@ function compileExpr<TLiteral>(
   }));
 }
 
+/**
+ * The server rejects a `filters` value nested deeper than 64 JSON levels
+ * (`graphql_soup_filter_input::MAX_FILTER_DEPTH`), and `filters` wraps an
+ * expression in at most two of them (`emailFilter.tree`).
+ */
+const MAX_EXPR_DEPTH = 62;
+
+/**
+ * Filter builders chain clauses one-sidedly and each and/or adds two JSON
+ * levels, so about thirty clauses (the Channels view looking up labelled
+ * channels by id) exceed the server's depth limit. Those expressions are
+ * regrouped into balanced trees; expressions that already fit keep their
+ * shape, so their variables and normalized-cache entries stay the same.
+ */
 function compileExprWithLeaf<TLiteral>(
+  ast: RestAst,
+  mapLeaf: (literal: unknown) => GraphqlExprInput<TLiteral>
+): GraphqlExprInput<TLiteral> {
+  const compiled = compileExprNode(ast, mapLeaf);
+  return jsonDepth(compiled) > MAX_EXPR_DEPTH
+    ? compileExprNode(balanceOperatorRuns(ast), mapLeaf)
+    : compiled;
+}
+
+function compileExprNode<TLiteral>(
   ast: RestAst,
   mapLeaf: (literal: unknown) => GraphqlExprInput<TLiteral>
 ): GraphqlExprInput<TLiteral> {
   if ('&' in ast)
     return {
       and: {
-        left: compileExprWithLeaf(ast['&'][0], mapLeaf),
-        right: compileExprWithLeaf(ast['&'][1], mapLeaf),
+        left: compileExprNode(ast['&'][0], mapLeaf),
+        right: compileExprNode(ast['&'][1], mapLeaf),
       },
     };
   if ('|' in ast)
     return {
       or: {
-        left: compileExprWithLeaf(ast['|'][0], mapLeaf),
-        right: compileExprWithLeaf(ast['|'][1], mapLeaf),
+        left: compileExprNode(ast['|'][0], mapLeaf),
+        right: compileExprNode(ast['|'][1], mapLeaf),
       },
     };
-  if ('!' in ast) return { not: compileExprWithLeaf(ast['!'], mapLeaf) };
+  if ('!' in ast) return { not: compileExprNode(ast['!'], mapLeaf) };
   return mapLeaf(ast.l);
+}
+
+function jsonDepth(value: unknown): number {
+  if (typeof value !== 'object' || value === null) return 1;
+  let deepest = 0;
+  for (const child of Object.values(value))
+    deepest = Math.max(deepest, jsonDepth(child));
+  return 1 + deepest;
+}
+
+type AssociativeOperator = '&' | '|';
+
+function operatorPair(
+  ast: RestAst,
+  operator: AssociativeOperator
+): [RestAst, RestAst] | undefined {
+  if (operator === '&') return '&' in ast ? ast['&'] : undefined;
+  return '|' in ast ? ast['|'] : undefined;
+}
+
+/** Flattens nested uses of one operator into its operands, in order. */
+function collectOperands(
+  ast: RestAst,
+  operator: AssociativeOperator,
+  operands: RestAst[]
+): RestAst[] {
+  const pair = operatorPair(ast, operator);
+  if (!pair) {
+    operands.push(ast);
+    return operands;
+  }
+  collectOperands(pair[0], operator, operands);
+  return collectOperands(pair[1], operator, operands);
+}
+
+function joinBalanced(
+  operator: AssociativeOperator,
+  operands: readonly RestAst[]
+): RestAst {
+  if (operands.length === 1) return operands[0];
+  const middle = Math.ceil(operands.length / 2);
+  const left = joinBalanced(operator, operands.slice(0, middle));
+  const right = joinBalanced(operator, operands.slice(middle));
+  return operator === '&' ? { '&': [left, right] } : { '|': [left, right] };
+}
+
+function balanceOperatorRuns(ast: RestAst): RestAst {
+  if ('!' in ast) return { '!': balanceOperatorRuns(ast['!']) };
+  const operator: AssociativeOperator | undefined =
+    '&' in ast ? '&' : '|' in ast ? '|' : undefined;
+  if (!operator) return ast;
+  return joinBalanced(
+    operator,
+    collectOperands(ast, operator, []).map(balanceOperatorRuns)
+  );
 }
 
 function mapDocumentPredicate(
@@ -307,9 +388,21 @@ function mapDocumentLiteral(literal: unknown): GraphqlDocumentLiteralInput {
       return { property: mapPropertiesLiteral(value) };
     case 'eap':
       return { emailAttachmentParticipant: mapEmailValue(value) };
+    case 'crm':
+      return { crmAssociated: mapCrmAssociation(value) };
+    case 'nc':
+      return { nameContains: mapString(value, 'nameContains') };
     default:
       unsupported(`document literal ${field}`);
   }
+}
+
+function mapCrmAssociation(value: unknown): GraphqlCrmAssociation {
+  if (value === 'activity') return { activity: true };
+  const [field, id] = singleLiteralField(value);
+  if (field === 'company') return { company: mapString(id, 'company') };
+  if (field === 'contact') return { contact: mapString(id, 'contact') };
+  unsupported(`CRM association ${field}`);
 }
 
 function mapProjectLiteral(literal: unknown): GraphqlProjectLiteralInput {
@@ -369,6 +462,12 @@ function mapEmailLiteral(literal: unknown): GraphqlEmailLiteralInput {
   switch (field) {
     case 'Sender':
       return { sender: mapEmailValue(value) };
+    case 'Recipient':
+      return { recipient: mapEmailValue(value) };
+    case 'Cc':
+      return { cc: mapEmailValue(value) };
+    case 'Bcc':
+      return { bcc: mapEmailValue(value) };
     case 'ThreadId':
       return { threadId: mapString(value, 'threadId') };
     case 'Owner':
@@ -468,7 +567,7 @@ function mapChannelThreadLiteral(
     .with('NotificationState', () => ({
       notificationState: mapNotificationState(value),
     }))
-    .exhaustive();
+    .exhaustive(() => ({ threadId: '00000000-0000-0000-0000-000000000000' }));
 }
 
 function mapCallLiteral(literal: unknown): GraphqlCallLiteralInput {
@@ -690,6 +789,7 @@ function makeGraphqlFilters(body: AstBody): GraphqlEntityFilterAstInput {
   const filters: GraphqlEntityFilterAstInput = {};
   if (body.favorites_only !== undefined)
     filters.favoritesOnly = body.favorites_only;
+  if (body.crma) filters.crmAssociation = mapCrmAssociation(body.crma);
 
   if (body.calf) {
     filters.calendarEventFilter = compileExpr(
@@ -738,6 +838,16 @@ function makeGraphqlFilters(body: AstBody): GraphqlEntityFilterAstInput {
         if (field === 'inc' && value === true) return { include: true };
         if (field === 'id' && typeof value === 'string') return { id: value };
         if (field === 'o' && typeof value === 'string') return { owner: value };
+        if (field === 'src' && value === 'user') return { source: 'USER' };
+        if (field === 'src' && value === 'agent') return { source: 'AGENT' };
+        if (field === 'src' && value === 'routine')
+          return { source: 'ROUTINE' };
+        if (field === 'vis' && value === 'listed')
+          return { visibility: 'LISTED' };
+        if (field === 'vis' && value === 'unlisted')
+          return { visibility: 'UNLISTED' };
+        if (field === 'vis' && value === 'hidden')
+          return { visibility: 'HIDDEN' };
         return unsupported(`agent session literal ${field}`);
       }
     );
@@ -797,7 +907,7 @@ function makeGraphqlGroupByInput(groupBy: GroupByField): GraphqlGroupByInput {
       propertyDefinitionId: field.propertyDefinitionId,
       entityType: field.entityType,
     }))
-    .exhaustive();
+    .exhaustive(() => ({ field: 'ENTITY_TYPE' as const }));
 }
 
 /** Maps the existing grouped Soup request shape to its GraphQL input. */

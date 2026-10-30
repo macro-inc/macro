@@ -15,6 +15,9 @@ pub mod notification_notifier;
 /// PostgreSQL calendar repository.
 #[cfg(feature = "postgres")]
 pub mod pg;
+/// PostgreSQL meeting-note links and audience facts.
+#[cfg(all(feature = "postgres", feature = "notes"))]
+pub mod pg_notes;
 /// PostgreSQL facts for team-calendar sharing.
 #[cfg(feature = "postgres")]
 pub mod pg_team;

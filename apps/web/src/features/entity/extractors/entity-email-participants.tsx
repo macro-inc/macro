@@ -5,11 +5,13 @@ import { toast } from '@core/component/Toast/Toast';
 import { UserTooltip } from '@core/component/UserTooltip';
 import { useEmail } from '@core/context/user';
 import { emailToMacroId, getDisplayName } from '@core/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   highlightTermsInText,
   mergeAdjacentMacroEmTags,
 } from '@core/util/searchHighlight';
-import CopyIcon from '@phosphor/copy.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import { Telemetry } from '@macro-inc/observability';
 import { Surface } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { EmailEntity, EmailThreadParticipants } from '../types/entity';
@@ -147,10 +149,19 @@ function abbreviateParticipants(
   return [abbreviated[0], abbreviated[1]];
 }
 
+async function writeEmailToClipboard(email: string) {
+  try {
+    await navigator.clipboard.writeText(email);
+    toast.success('Email copied');
+  } catch (error) {
+    Telemetry.error(error, { surface: 'email-participants' });
+    toast.failure('Failed to copy email');
+  }
+}
+
 function copyEmail(email: string, e: MouseEvent) {
   e.stopPropagation();
-  navigator.clipboard.writeText(email);
-  toast.success('Email copied');
+  fireAndForget(writeEmailToClipboard(email), 'email-participants');
 }
 
 function HiddenParticipantsTooltip(props: { hidden: ResolvedParticipant[] }) {

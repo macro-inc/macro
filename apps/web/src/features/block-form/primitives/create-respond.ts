@@ -196,7 +196,7 @@ export function createRespond(options: RespondOptions) {
         kind: 'confirmation',
         answers: answersOf(previous.answers),
         fresh: false,
-        alreadyResponded: buildAlreadyResponded(),
+        alreadyResponded: respondedBefore(),
         canEdit: canEdit(),
         submittedAt: previous.submittedAt,
         booking: previous.booking,
@@ -213,20 +213,20 @@ export function createRespond(options: RespondOptions) {
     if (interrupted) return interrupted;
     const sectionIndex = currentIndex();
     const indices = questionSectionIndices(layout());
-    const section = buildSection();
+    const section = currentSection();
     if (sectionIndex === undefined) {
       const first = nextStep(layout(), -1, answers());
       if (first.kind === 'stop')
         return { kind: 'stopped', message: first.message };
       if (first.kind === 'updating') return { kind: 'updating' };
     }
-    const position = buildPosition();
+    const position = sectionPosition();
     return {
       kind: 'answering',
       section,
       position,
       total: indices.length,
-      isFirst: buildIsFirst(),
+      isFirst: isFirstSection(),
       // Structural: a gate that would stop someone still shows "Next".
       isLast: position === indices.length,
       submitting: submitting(),
@@ -261,24 +261,24 @@ export function createRespond(options: RespondOptions) {
       return undefined;
     }
 
-    function buildIsFirst(): boolean {
+    function isFirstSection(): boolean {
       return (
         sectionIndex === undefined ||
         previousSectionIndex(layout(), sectionIndex) === undefined
       );
     }
 
-    function buildSection() {
+    function currentSection() {
       return sectionIndex === undefined
         ? undefined
         : layout().sections[sectionIndex];
     }
 
-    function buildPosition() {
+    function sectionPosition() {
       return sectionIndex === undefined ? 0 : indices.indexOf(sectionIndex) + 1;
     }
 
-    function buildAlreadyResponded(): boolean {
+    function respondedBefore(): boolean {
       return current?.kind === 'already-responded';
     }
   });

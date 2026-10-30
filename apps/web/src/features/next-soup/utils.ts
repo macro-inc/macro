@@ -1,5 +1,7 @@
 import { isListViewID } from '@app/constants/list-views';
+import { markAgentSessionNotificationsSeenOnOpen } from '@app/features/block-agent/mark-session-notifications-seen';
 import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
+import { markCalendarNotificationSeenOnOpen } from '@app/features/calendar/mark-event-notifications-seen';
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
 import {
   type CalendarEventTime,
@@ -13,6 +15,7 @@ import {
   CALENDAR_VIEW_ID,
   type CalendarViewTarget,
 } from '@app/features/calendar-view/types';
+import { callsHostedContent } from '@app/features/calls-view/calls-hosted-content';
 import { driveHostedContent } from '@app/features/drive-view/drive-hosted-content';
 import { projectRouteId } from '@app/features/projects/core/route';
 import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
@@ -52,6 +55,7 @@ import {
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import type { DateValue } from '@core/util/date';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { waitForFrames } from '@core/util/sleep';
 import { openExternalUrl } from '@core/util/url';
@@ -65,6 +69,7 @@ import {
   type DocumentEntity,
   type EntityData,
   emailQueryKeyExcludesDone,
+  type GithubPullRequestEntity,
   getSnippetHit,
   isEmailEntity,
   isGithubPrEntity,
@@ -78,13 +83,13 @@ import {
   type WithNotification,
   type WithSearch,
 } from '@entity';
+import { Telemetry } from '@macro-inc/observability';
 import {
   compositeEntity,
   documentCommentLocation,
   getChannelNotificationParams,
   getDocumentCommentLocation,
   getDocumentCommentNotification,
-  markNotificationsForEntityAsReadInBackground,
   type NotificationSource,
   notificationIsRead,
   setDoneOverride,
@@ -93,14 +98,13 @@ import {
 import { isTopLevelChannelNotification } from '@notifications/top-level-channel-notification';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { queryClient } from '@queries/client';
-import { updateEmailThreadLabel } from '@queries/email/cache-cleanup';
+import { updateEmailThreadState } from '@queries/email/cache-cleanup';
 import {
   archiveEmailThread,
+  archiveEmailThreads,
   type EmailArchiveDisposition,
 } from '@queries/email/integration';
 import { emailKeys } from '@queries/email/keys';
-import { fetchEmailLabels } from '@queries/email/link-requests';
-import { fetchAndCacheThread } from '@queries/email/thread';
 import {
   type NotificationEntityRef,
   updateNotificationsForEntities,
@@ -120,7 +124,6 @@ import {
   removeSoupEntitiesFromDoneFilteredQueries,
 } from '@queries/soup/cache';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
-
 import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
 import { applyGraphqlDoneOptimistic } from './actions/graphql-done-optimism';
@@ -261,9 +264,7 @@ export const openEntityInNewTab = ({
   location ??= getRowClickFallbackLocation(entity);
   // Build URL for the entity
   let entityPath: string;
-  if (entity.type === 'initiative') {
-    entityPath = `/app/component/${projectRouteId({ id: entity.id, section: 'overview' })}`;
-  } else if (entity.type === 'calendar_event') {
+  if (entity.type === 'calendar_event') {
     entityPath = `/app${calendarPath(getPreferredCalendarPeriodView())}`;
   } else if (entity.type === 'document') {
     const { fileType, subType } = entity;
@@ -618,6 +619,190 @@ export const getRowClickFallbackLocation = (
       ? getSnippetHit(entity)?.location
       : undefined;
 
+type SplitManager = NonNullable<ReturnType<typeof globalSplitManager>>;
+
+function alertIfOpenElsewhere(
+  result: ReturnType<SplitManager['openWithSplit']>
+) {
+  if (result.status === 'reused' && result.owner !== result.sourceOwner) {
+    toast.alert('Content already open');
+  }
+}
+
+function openGithubPullRequest(
+  entity: GithubPullRequestEntity,
+  splitManager: SplitManager,
+  options: OpenEntityOptions
+) {
+  if (!USE_MACRO_PR_SUMMARY_BLOCK) {
+    openExternalUrl(entity.metadata.url);
+    return;
+  }
+  const content = { type: 'pr' as const, id: entity.id };
+  alertIfOpenElsewhere(
+    splitManager.openWithSplit(reviewsHostedContent(content) ?? content, {
+      referredFrom: options.referredFrom,
+      activate: true,
+      preferNewSplit: options.openInNewSplit,
+      handle: options.splitHandle,
+      mergeHistory: options.mergeHistory,
+      allowDuplicate: true,
+    })
+  );
+}
+
+function openCalendarEventEntity(
+  entity: CalendarEventEntity,
+  splitManager: SplitManager,
+  options: OpenEntityOptions
+) {
+  if (!isFeatureEnabled(enableCalendarUi)) return;
+  openCalendarView(calendarViewTargetForEntity(entity), {
+    manager: splitManager,
+    handle: options.splitHandle,
+    openInNewSplit: options.openInNewSplit,
+    mergeHistory: options.mergeHistory,
+    referredFrom: options.referredFrom,
+  });
+}
+
+/**
+ * Latest opens do not need notifications to choose their destination. Snapshot
+ * the list row before navigation can dispose its Solid store, and hydrate only
+ * after the open is accepted. Inbox notification-targeted opens still wait.
+ */
+function deferredChannelSnapshot(
+  entity: EntityData,
+  options: OpenEntityOptions
+): ChannelEntity | undefined {
+  return entity.type === 'channel' &&
+    entity.unreadNotifications !== undefined &&
+    options.channelNavigation === 'latest'
+    ? { ...entity }
+    : undefined;
+}
+
+/** Resolves undefined, after telling the user, when the notifications the open waits on fail to load. */
+async function hydrateChannelForOpen(
+  entity: ChannelEntity,
+  options: OpenEntityOptions
+): Promise<EntityData | undefined> {
+  try {
+    return await hydrateChannelNotificationSelection(
+      entity,
+      options.notificationSource?.withLocalOverrides
+    );
+  } catch (error) {
+    console.error('Failed to load conversation notifications', error);
+    toast.failure('Unable to open conversation. Please try again.');
+    return undefined;
+  }
+}
+
+/** Where the open lands: the explicit location, else a channel row's target message. */
+function entityOpenTarget(
+  entity: EntityData,
+  location: SearchLocation | undefined,
+  channelNavigation: OpenEntityOptions['channelNavigation']
+) {
+  const channelTarget = getChannelEntityTarget(entity, { channelNavigation });
+  const channelMessageTarget =
+    channelTarget?.kind === 'message' ? channelTarget : undefined;
+  const target =
+    location ??
+    (channelMessageTarget
+      ? {
+          type: 'channel' as const,
+          messageId: channelMessageTarget.messageId,
+          threadId: channelMessageTarget.threadId,
+        }
+      : undefined);
+  return { target, openChannelAtLatest: channelTarget?.kind === 'latest' };
+}
+
+// A row keeps pointing at its comment notification until that notification is
+// done, so on touch — where the thread is a drawer over the whole page, not a
+// margin card beside the text — the row would cover the document with the
+// same comment on every open. A tap on a document row asks for the document;
+// the notification list still opens the comment itself.
+function documentCommentParams(entity: EntityData, hasTarget: boolean) {
+  return !hasTarget && entity.type === 'document' && !isTouchDevice()
+    ? getDocumentCommentTarget(entity)?.params
+    : undefined;
+}
+
+/** The list view the open starts from, when it starts from one. */
+function sourceListViewOf(
+  splitManager: SplitManager,
+  splitHandle: SplitHandle | undefined
+) {
+  const sourceContent =
+    splitHandle?.content() ?? splitManager.activeSplit()?.content();
+  return sourceContent?.type === 'component' && isListViewID(sourceContent.id)
+    ? sourceContent.id
+    : undefined;
+}
+
+function entitySplitContent(
+  content: ReturnType<typeof getEntitySplitContent>,
+  commentParams: ReturnType<typeof documentCommentParams>,
+  navigation: { splitHandle?: SplitHandle; referredFrom?: ReferredFrom }
+): { splitContent: SplitContent; hosted: boolean } {
+  // Construct hosted content before opening the split so details do not mount
+  // legacy blocks. Comment targets keep their document block.
+  const hostedContent =
+    reviewsHostedContent(content) ??
+    callsHostedContent(content) ??
+    driveHostedContent(content, {
+      allowDocuments: !isTouchDevice() && !commentParams,
+    });
+  const splitContent: SplitContent = hostedContent ?? {
+    ...content,
+    params: commentParams,
+  };
+  const { splitHandle, referredFrom } = navigation;
+  return {
+    hosted: hostedContent !== undefined,
+    splitContent:
+      splitHandle && referredFrom && isListViewID(referredFrom)
+        ? withListNavigationSource(splitContent, splitHandle)
+        : splitContent,
+  };
+}
+
+/**
+ * Moves an opened entity to its comment or latest message. The split is
+ * already open; a failed in-block navigation leaves it at its default
+ * position, so report it rather than rejecting every caller.
+ */
+async function navigateOpenedEntity(
+  entity: EntityData,
+  blockOrchestrator: BlockOrchestrator,
+  {
+    contentId,
+    hasCommentTarget,
+    openChannelAtLatest,
+  }: {
+    contentId: string;
+    hasCommentTarget: boolean;
+    openChannelAtLatest: boolean;
+  }
+) {
+  try {
+    if (hasCommentTarget && entity.type === 'document') {
+      // An already-open document ignores new split params.
+      await navigateDocumentEntityToComment(entity, blockOrchestrator);
+    } else if (openChannelAtLatest) {
+      // Force the scroll-to-bottom even when the channel is already open in a
+      // (preview) split, where reopen: 'latest' only reactivates the parked
+      // split without re-pinning it to the newest message.
+      await goToChannelLatest(blockOrchestrator, contentId);
+    }
+  } catch (error) {
+    Telemetry.error(error, { surface: 'open-entity-in-split' });
+  }
+}
+
 /**
  * Opens an entity in a split, handling navigation to specific locations within the entity.
  * Supports both regular entities (channel, email, etc.) and document entities.
@@ -630,11 +815,7 @@ export const openEntityInSplitFromUnifiedList = async (
   options: OpenEntityOptions
 ): Promise<void> => {
   const { allowDuplicate, openInNewSplit, splitHandle, mergeHistory } = options;
-  let { location } = options;
-
-  if (!location) {
-    location = getRowClickFallbackLocation(entity);
-  }
+  const location = options.location ?? getRowClickFallbackLocation(entity);
 
   // Get dependencies internally
   const splitManager = globalSplitManager();
@@ -649,82 +830,42 @@ export const openEntityInSplitFromUnifiedList = async (
   }
 
   if (isGithubPrEntity(entity)) {
-    updateOpenEntityInSplitFromUnifiedList2(splitManager, entity.metadata.url);
+    openGithubPullRequest(entity, splitManager, options);
     return;
   }
   if (entity.type === 'foreign') return;
 
   if (entity.type === 'calendar_event') {
-    if (!isFeatureEnabled(enableCalendarUi)) return;
-    openCalendarView(calendarViewTargetForEntity(entity), {
-      manager: splitManager,
-      handle: splitHandle,
-      openInNewSplit,
-      mergeHistory,
-      referredFrom: options.referredFrom,
-    });
+    openCalendarEventEntity(entity, splitManager, options);
     return;
   }
 
   const blockOrchestrator = splitManager.getOrchestrator();
 
-  // Latest opens do not need notifications to choose their destination. Snapshot
-  // the list row before navigation can dispose its Solid store, and hydrate only
-  // after the open is accepted. Inbox notification-targeted opens still wait.
-  const deferredChannel = buildDeferredChannel();
+  const deferredChannel = deferredChannelSnapshot(entity, options);
   if (
     entity.type === 'channel' &&
     entity.unreadNotifications !== undefined &&
     !deferredChannel
   ) {
-    try {
-      entity = await hydrateChannelNotificationSelection(
-        entity,
-        options.notificationSource?.withLocalOverrides
-      );
-    } catch (error) {
-      console.error('Failed to load conversation notifications', error);
-      toast.failure('Unable to open conversation. Please try again.');
-      return;
-    }
+    const hydrated = await hydrateChannelForOpen(entity, options);
+    if (!hydrated) return;
+    entity = hydrated;
   }
 
   const content = getEntitySplitContent(entity);
-
-  const channelTarget = getChannelEntityTarget(entity, {
-    channelNavigation: options.channelNavigation,
+  const { target, openChannelAtLatest } = entityOpenTarget(
+    entity,
+    location,
+    options.channelNavigation
+  );
+  const commentParams = documentCommentParams(entity, !!target);
+  const referredFrom =
+    options.referredFrom ?? sourceListViewOf(splitManager, splitHandle);
+  const { splitContent, hosted } = entitySplitContent(content, commentParams, {
+    splitHandle,
+    referredFrom,
   });
-  const channelMessageTarget = buildChannelMessageTarget();
-  const openChannelAtLatest = channelTarget?.kind === 'latest';
-
-  const target =
-    location ??
-    (channelMessageTarget
-      ? {
-          type: 'channel' as const,
-          messageId: channelMessageTarget.messageId,
-          threadId: channelMessageTarget.threadId,
-        }
-      : undefined);
-  const commentParams = buildCommentParams();
-
-  const sourceContent = buildSourceContent(splitManager);
-
-  const sourceListView = buildSourceListView();
-  const referredFrom = options.referredFrom ?? sourceListView;
-
-  // Construct hosted content before opening the split so details do not mount
-  // legacy blocks. Comment targets keep their document block.
-  const hostedContent =
-    reviewsHostedContent(content) ??
-    driveHostedContent(content, {
-      allowDocuments: !isTouchDevice() && !commentParams,
-    });
-  let splitContent: SplitContent = hostedContent ?? {
-    ...content,
-    params: commentParams,
-  };
-  updateSplitContent();
 
   const hydrateNotificationsAndMarkSeen = async (
     channel: ChannelEntity,
@@ -756,9 +897,12 @@ export const openEntityInSplitFromUnifiedList = async (
     markedNotifications = true;
     if (!options.notificationSource) return;
     if (deferredChannel) {
-      void hydrateNotificationsAndMarkSeen(
-        deferredChannel,
-        options.notificationSource
+      fireAndForget(
+        hydrateNotificationsAndMarkSeen(
+          deferredChannel,
+          options.notificationSource
+        ),
+        'open-entity-in-split'
       );
       return;
     }
@@ -766,115 +910,32 @@ export const openEntityInSplitFromUnifiedList = async (
       channelReadScope: options.channelReadScope,
     });
   };
-  const result = buildResult(splitManager);
-  updateOpenEntityInSplitFromUnifiedList4();
+  const result = splitManager.openWithSplit(splitContent, {
+    search: target ? searchLocationUpdates(content.id, target) : undefined,
+    onApplied: markNotificationsSeen,
+    referredFrom,
+    activate: true,
+    preferNewSplit: openInNewSplit,
+    handle: splitHandle,
+    mergeHistory,
+    // Hosted details have distinct routes even when they share a component identity.
+    allowDuplicate: allowDuplicate || hosted,
+    reopen:
+      entity.type === 'channel' && !location && openChannelAtLatest
+        ? 'latest'
+        : undefined,
+  });
+  alertIfOpenElsewhere(result);
 
-  updateOpenEntityInSplitFromUnifiedList3();
-
-  await updateOpenEntityInSplitFromUnifiedList();
-
-  function updateOpenEntityInSplitFromUnifiedList4() {
-    if (result.status === 'reused' && result.owner !== result.sourceOwner) {
-      toast.alert('Content already open');
-    }
+  if (result.status === 'opened' || result.status === 'reused') {
+    markNotificationsSeen();
   }
 
-  function updateOpenEntityInSplitFromUnifiedList3() {
-    if (result.status === 'opened' || result.status === 'reused') {
-      markNotificationsSeen();
-    }
-  }
-
-  function buildChannelMessageTarget() {
-    return channelTarget?.kind === 'message' ? channelTarget : undefined;
-  }
-
-  function buildDeferredChannel() {
-    return entity.type === 'channel' &&
-      entity.unreadNotifications !== undefined &&
-      options.channelNavigation === 'latest'
-      ? { ...entity }
-      : undefined;
-  }
-
-  function updateSplitContent() {
-    if (splitHandle && referredFrom && isListViewID(referredFrom)) {
-      splitContent = withListNavigationSource(splitContent, splitHandle);
-    }
-  }
-
-  function buildSourceListView() {
-    return sourceContent?.type === 'component' && isListViewID(sourceContent.id)
-      ? sourceContent.id
-      : undefined;
-  }
-
-  function buildCommentParams() {
-    return !target && entity.type === 'document'
-      ? getDocumentCommentTarget(entity)?.params
-      : undefined;
-  }
-
-  function buildSourceContent(
-    splitManagerInput: NonNullable<typeof splitManager>
-  ) {
-    return splitHandle?.content() ?? splitManagerInput.activeSplit()?.content();
-  }
-
-  function updateOpenEntityInSplitFromUnifiedList2(
-    splitManagerValue: NonNullable<typeof splitManager>,
-    url: string
-  ) {
-    if (USE_MACRO_PR_SUMMARY_BLOCK) {
-      const content = { type: 'pr' as const, id: entity.id };
-      const result = splitManagerValue.openWithSplit(
-        reviewsHostedContent(content) ?? content,
-        {
-          referredFrom: options.referredFrom,
-          activate: true,
-          preferNewSplit: openInNewSplit,
-          handle: splitHandle,
-          mergeHistory,
-          allowDuplicate: true,
-        }
-      );
-      if (result.status === 'reused' && result.owner !== result.sourceOwner) {
-        toast.alert('Content already open');
-      }
-    } else {
-      openExternalUrl(url);
-    }
-  }
-
-  async function updateOpenEntityInSplitFromUnifiedList() {
-    if (commentParams && entity.type === 'document') {
-      // An already-open document ignores new split params.
-      await navigateDocumentEntityToComment(entity, blockOrchestrator);
-    } else if (!target && openChannelAtLatest) {
-      // Force the scroll-to-bottom even when the channel is already open in a
-      // (preview) split, where reopen: 'latest' only reactivates the parked
-      // split without re-pinning it to the newest message.
-      await goToChannelLatest(blockOrchestrator, content.id);
-    }
-  }
-
-  function buildResult(splitManagerValue: NonNullable<typeof splitManager>) {
-    return splitManagerValue.openWithSplit(splitContent, {
-      search: target ? searchLocationUpdates(content.id, target) : undefined,
-      onApplied: markNotificationsSeen,
-      referredFrom,
-      activate: true,
-      preferNewSplit: openInNewSplit,
-      handle: splitHandle,
-      mergeHistory,
-      // Hosted details have distinct routes even when they share a component identity.
-      allowDuplicate: allowDuplicate || hostedContent !== undefined,
-      reopen:
-        entity.type === 'channel' && !location && openChannelAtLatest
-          ? 'latest'
-          : undefined,
-    });
-  }
+  await navigateOpenedEntity(entity, blockOrchestrator, {
+    contentId: content.id,
+    hasCommentTarget: !!commentParams,
+    openChannelAtLatest: !target && openChannelAtLatest,
+  });
 };
 
 /**
@@ -912,31 +973,33 @@ export function markChannelNotificationsSeenOnOpen(
   );
   if (notifications.length === 0) return;
 
-  const settleBulkMarkAsRead = async () => {
-    try {
-      return await notificationSource.bulkMarkAsRead(notifications);
-    } catch (settleBulkMarkAsReadError) {
-      const error = settleBulkMarkAsReadError;
-
-      console.error('Failed to mark channel notifications as read', error);
-
-      return;
-    }
-  };
-  void settleBulkMarkAsRead();
+  fireAndForget(
+    markChannelNotificationsRead(notificationSource, notifications),
+    'open-entity-in-split'
+  );
 }
 
-/** Mark calendar-event notifications seen when opening their occurrence. */
-export function markCalendarNotificationSeenOnOpen(
-  entity: EntityData,
+async function markChannelNotificationsRead(
+  notificationSource: NotificationSource,
+  notifications: Parameters<NotificationSource['bulkMarkAsRead']>[0]
+) {
+  try {
+    await notificationSource.bulkMarkAsRead(notifications);
+  } catch (error) {
+    console.error('Failed to mark channel notifications as read', error);
+  }
+}
+
+/**
+ * Clear the dots of rows whose opened view has no block that marks the row's
+ * loaded notifications read: calendar events and agent sessions.
+ */
+export function markRowNotificationsSeenOnOpen(
+  entity: EntityWithRawNotifications<EntityData>,
   notificationSource: NotificationSource
 ) {
-  // Calendar events open a component split without a block to clear notifications.
-  if (entity.type !== 'calendar_event') return;
-  void markNotificationsForEntityAsReadInBackground(notificationSource, {
-    type: entity.type,
-    id: entity.id,
-  });
+  markCalendarNotificationSeenOnOpen(entity, notificationSource);
+  markAgentSessionNotificationsSeenOnOpen(entity, notificationSource);
 }
 
 /**
@@ -1090,7 +1153,7 @@ async function _archiveEmail(
   let disposition: EmailArchiveDisposition | undefined;
   try {
     disposition = await archiveEmailThread({ value: options.archive, id });
-  } catch {
+  } catch (_err) {
     soupTxn.rollback();
     for (const [key, data] of previousEmail) {
       queryClient.setQueryData(key, data);
@@ -1108,19 +1171,17 @@ async function _archiveEmail(
 type TrashEmailsHandle = {
   /** Fire-and-forget promise for the API calls. Rejects on failure (rolls back optimistic update). */
   done: Promise<void>;
-  /** Optimistically restores all entities and calls the API to remove the TRASH label. */
+  /** Optimistically restores all entities and asks the API to restore them from trash. */
   undo: () => Promise<void>;
 };
 
 export type TrashEmailTarget = { id: string; linkId?: string };
 
-type TrashLabel = { id: string; linkId?: string };
-
 /**
  * Trash one or more email threads.
  *
  * Optimistically removes them from the soup and from all email queries,
- * then resolves the TRASH label and calls the API. If anything fails, rolls
+ * then sends the desired trash state to the API. If anything fails, rolls
  * back the optimistic update.
  *
  * Returns synchronously so the caller can show the undo toast immediately.
@@ -1157,105 +1218,15 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
     }
   };
 
-  // Map each thread id to the TRASH label used to trash it, so undo can remove
-  // the same label. Populated only once every thread has trashed successfully.
-  const threadTrashLabelIds = new Map<string, string>();
-
-  // Seed known linkIds from the explicit targets and the cached email lists.
-  const threadLinkIds = new Map<string, string>();
-  for (const target of targets) {
-    if (target.linkId) {
-      threadLinkIds.set(target.id, target.linkId);
-    }
-  }
-  for (const [, data] of previousEmail) {
-    if (!data?.pages) continue;
-    for (const page of data.pages) {
-      if (!page?.items) continue;
-      for (const item of page.items) {
-        if (
-          item?.id &&
-          idSet.has(item.id) &&
-          !threadLinkIds.has(item.id) &&
-          'linkId' in item &&
-          item.linkId
-        ) {
-          threadLinkIds.set(item.id, item.linkId);
-        }
-      }
-    }
-  }
-
-  // Resolve the TRASH label belonging to a thread's own inbox. The labels
-  // endpoint returns every inbox's labels, so a multi-inbox user must trash
-  // with the label whose linkId matches the thread. The single-label fallback
-  // applies only when the inbox is unknown — a known inbox with no matching
-  // label fails rather than trashing into the wrong one.
-  const resolveTrashLabelId = async (
-    id: string,
-    trashLabels: TrashLabel[]
-  ): Promise<string> => {
-    let linkId = threadLinkIds.get(id);
-    if (!linkId) {
-      const threadData = queryClient.getQueryData<{
-        link_id?: string;
-        pages?: Array<{ link_id?: string }>;
-      }>(emailKeys.threadMessages(id).queryKey);
-      linkId = threadData?.link_id ?? threadData?.pages?.[0]?.link_id;
-    }
-    if (!linkId && trashLabels.length > 1) {
-      const fetched = await fetchAndCacheThread(id);
-      if (!fetched.isErr()) {
-        linkId = fetched.value.thread.link_id;
-      }
-    }
-
-    const matchedLabelId = linkId
-      ? trashLabels.find((label) => label.linkId === linkId)?.id
-      : undefined;
-    const labelId =
-      matchedLabelId ??
-      (linkId
-        ? undefined
-        : trashLabels.length === 1
-          ? trashLabels[0]?.id
-          : undefined);
-    if (!labelId) {
-      throw new Error('TRASH label not found');
-    }
-    return labelId;
-  };
-
   const done = (async () => {
     try {
-      const labelsData = await queryClient.fetchQuery({
-        queryKey: emailKeys.labels.queryKey,
-        queryFn: async () => throwOnErr(async () => await fetchEmailLabels()),
-        staleTime: 5 * 60 * 1000,
-      });
-      const trashLabels =
-        labelsData?.labels.filter((l) => l.providerLabelId === 'TRASH') ?? [];
-      if (trashLabels.length === 0) {
-        throw new Error('TRASH label not found');
-      }
-
-      // Resolve every thread's label before trashing any of them, so a lookup
-      // failure can't leave part of the batch trashed on the server while the
-      // rest is rolled back locally.
-      const labelIds = await Promise.all(
-        ids.map((id) => resolveTrashLabelId(id, trashLabels))
-      );
-
-      // updateThreadLabel resolves an Err on HTTP failure rather than
-      // rejecting, so throwOnErr turns a failed trash into a real rejection.
-      // Settle every call so a partial failure can be compensated instead of
-      // leaving the server disagreeing with the rolled-back UI.
+      // Settle every request so a partial failure can be compensated.
       const outcomes = await Promise.allSettled(
-        ids.map((id, i) =>
+        ids.map((id) =>
           throwOnErr(() =>
-            updateEmailThreadLabel({
+            updateEmailThreadState({
               thread_id: id,
-              label_id: labelIds[i]!,
+              field: 'trashed',
               value: true,
             })
           )
@@ -1271,9 +1242,9 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
             outcomes[i]?.status === 'fulfilled'
               ? [
                   throwOnErr(() =>
-                    updateEmailThreadLabel({
+                    updateEmailThreadState({
                       thread_id: id,
-                      label_id: labelIds[i]!,
+                      field: 'trashed',
                       value: false,
                     })
                   ),
@@ -1283,9 +1254,6 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
         );
         throw (failure as PromiseRejectedResult).reason;
       }
-
-      // Every thread trashed — remember the labels so undo can remove them.
-      ids.forEach((id, i) => threadTrashLabelIds.set(id, labelIds[i]!));
     } catch (err) {
       rollback();
       throw err;
@@ -1303,7 +1271,7 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
   return {
     done,
     undo: async () => {
-      // Wait for the trash calls to finish so we know the label IDs. On any
+      // Wait for the trash calls to finish before restoring the threads. On any
       // failure `done` has already rolled back and reverted the server, so
       // there is nothing left to undo.
       try {
@@ -1317,12 +1285,10 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
       try {
         await Promise.all(
           ids.map((id) => {
-            const labelId = threadTrashLabelIds.get(id);
-            if (!labelId) return Promise.resolve();
             return throwOnErr(() =>
-              updateEmailThreadLabel({
+              updateEmailThreadState({
                 thread_id: id,
-                label_id: labelId,
+                field: 'trashed',
                 value: false,
               })
             );
@@ -1664,9 +1630,7 @@ export async function executeMarkEntitiesDone(args: {
   };
   const [emailResults, [notificationResult], [entityResult]] =
     await Promise.all([
-      Promise.allSettled(
-        emailIds.map((id) => archiveEmailThread({ value: true, id }))
-      ),
+      archiveEmailThreads(emailIds, true),
       Promise.allSettled([writeNotificationIds()]),
       Promise.allSettled([writeNotificationEntities()]),
     ]);
@@ -1763,9 +1727,7 @@ export async function executeMarkEntitiesUndone(args: {
     return notificationIds;
   };
   const [emailResults, [notificationResult]] = await Promise.all([
-    Promise.allSettled(
-      emailIds.map((id) => archiveEmailThread({ value: false, id }))
-    ),
+    archiveEmailThreads(emailIds, false),
     Promise.allSettled([writeNotificationIds()]),
   ]);
   for (const [index, result] of emailResults.entries()) {

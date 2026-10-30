@@ -29,7 +29,9 @@ const TIERS: readonly { id: SalesTier; label: string }[] = [
 ];
 
 /** Thumb-sized version of the pricing calculator for the ad landing page. */
-export function SalesCalculator(props: { onBook: () => void }) {
+export function SalesCalculator(props: {
+  onBook: (event: MouseEvent) => void;
+}) {
   const [seats, setSeats] = createSignal(SALES_DEFAULT_SEATS);
   const [tier, setTier] = createSignal<SalesTier>(SALES_DEFAULT_TIER);
   const [selected, setSelected] =
@@ -160,7 +162,7 @@ export function SalesCalculator(props: { onBook: () => void }) {
           <a
             class="site-nav-start homepage-hero-cta tour-cta"
             href={demoHref()}
-            onClick={() => props.onBook()}
+            onClick={(event) => props.onBook(event)}
           >
             Book a demo
           </a>

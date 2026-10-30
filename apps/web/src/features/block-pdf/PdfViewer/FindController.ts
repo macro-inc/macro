@@ -157,7 +157,7 @@ export class FindController extends PDFFindController {
       const extractTextCapability = createPromiseCapability<number>();
       this._extractTextPromises[i] = extractTextCapability.promise;
 
-      const settlePromise = async () => {
+      const extractPage = async () => {
         await promise;
 
         // Skip if this page was already extracted via warmSearchTextForPage
@@ -172,10 +172,8 @@ export class FindController extends PDFFindController {
         } catch {
           extractTextCapability.resolve(i);
         }
-
-        return;
       };
-      promise = settlePromise();
+      promise = extractPage();
     }
   }
 

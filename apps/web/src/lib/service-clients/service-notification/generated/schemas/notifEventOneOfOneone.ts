@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { InitiativeDiscussionMetadata } from './initiativeDiscussionMetadata';
+import type { EntityAccessRequestedMetadata } from './entityAccessRequestedMetadata';
 import type { NotifEventOneOfOneoneTag } from './notifEventOneOfOneoneTag';
 
 /**
- * Someone commented, replied, or mentioned the recipient on a project.
+ * Someone requested more access to a shared entity.
  */
 export type NotifEventOneOfOneone = {
-  /** Someone commented, replied, or mentioned the recipient on a project. */
-  content: InitiativeDiscussionMetadata;
+  /** Someone requested more access to a shared entity. */
+  content: EntityAccessRequestedMetadata;
   tag: NotifEventOneOfOneoneTag;
 };

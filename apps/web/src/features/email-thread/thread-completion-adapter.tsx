@@ -13,8 +13,9 @@ import { toast } from '@core/component/Toast/Toast';
 import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
 import { compositeEntity, setDoneOverride } from '@notifications';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import {
   trackExternalThreadArchive,
   useUndoableArchiveThreadMutation,
@@ -34,11 +35,19 @@ import {
   mapApiSoupItemToEntity,
 } from '@queries/soup/transform-utils';
 import type { Accessor } from 'solid-js';
-
 import type {
   ArchiveThreadOptions,
   EmailThreadCommands,
 } from './context/email-thread-context';
+
+async function fetchDoneNotificationIdsOrNone(threadId: string) {
+  try {
+    return await fetchDoneNotificationIdsByEventItemIds([threadId]);
+  } catch {
+    return [];
+  }
+}
+
 export function createThreadCompletionAdapter(
   threadSource: Accessor<EmailThread | undefined>,
   toHeaderLinkId: (linkId: string | null | undefined) => string | undefined
@@ -85,9 +94,12 @@ export function createThreadCompletionAdapter(
               label: 'Undo',
               icon: ArrowCounterClockwise,
               onClick: () => {
-                handle.undo({
-                  onError: () => toast.failure('Failed to undo'),
-                });
+                fireAndForget(
+                  handle.undo({
+                    onError: () => toast.failure('Failed to undo'),
+                  }),
+                  'email-thread'
+                );
               },
             },
           ],
@@ -99,27 +111,36 @@ export function createThreadCompletionAdapter(
 
       showToast();
 
+      const syncNotificationsDone = async (
+        ids: string[],
+        nowArchived: boolean
+      ) => {
+        try {
+          await (nowArchived
+            ? bulkMarkNotificationsAsDone(ids)
+            : bulkMarkNotificationsAsUndone(ids));
+        } catch {
+          setDoneOverride(ids, undefined);
+        }
+      };
+
       // Undo/redo replay only the /archived flip; mirror the fallback's
       // notification and soup-list side effects for the resulting state.
       const syncSideEffects = (nowArchived: boolean) => {
         const ids = restoredNotificationIds.get(params.threadId) ?? [];
         if (ids.length > 0) {
           setDoneOverride(ids, nowArchived);
-
-          const settleOperation = async () => {
-            try {
-              return await (nowArchived
-                ? bulkMarkNotificationsAsDone(ids)
-                : bulkMarkNotificationsAsUndone(ids));
-            } catch {
-              return await setDoneOverride(ids, undefined);
-            }
-          };
-          void settleOperation();
+          fireAndForget(
+            syncNotificationsDone(ids, nowArchived),
+            'email-thread'
+          );
         }
         if (!graphqlSoup().enabled && disposition() !== 'queued') {
           if (!nowArchived) {
-            void refetchSoupEntity(params.threadId, 'emailThread');
+            fireAndForget(
+              refetchSoupEntity(params.threadId, 'emailThread'),
+              'email-thread'
+            );
           }
           invalidateAllSoup();
         }
@@ -189,10 +210,13 @@ export function createThreadCompletionAdapter(
         : undefined);
 
     if (entity && markNotDoneAction.canExecute(entity)) {
-      void trackExternalThreadArchive(
-        thread.db_id,
-        markNotDoneAction.execute([entity]),
-        false
+      fireAndForget(
+        trackExternalThreadArchive(
+          thread.db_id,
+          markNotDoneAction.execute([entity]),
+          false
+        ),
+        'email-thread'
       );
     } else {
       // No soup entity to drive the action from — the mark-done removal
@@ -220,16 +244,7 @@ export function createThreadCompletionAdapter(
             // notifications, so the thread's done ids may have aged out of
             // the local cache — merge the server's view (best effort: the
             // unarchive itself already succeeded).
-
-            const settleFetchDoneNotificationIdsByEventItemIds = async () => {
-              try {
-                return await fetchDoneNotificationIdsByEventItemIds([threadId]);
-              } catch {
-                return await [];
-              }
-            };
-            const serverIds =
-              await settleFetchDoneNotificationIdsByEventItemIds();
+            const serverIds = await fetchDoneNotificationIdsOrNone(threadId);
             const allIds = [...new Set([...notificationIds, ...serverIds])];
             // Record for the undo/redo hooks, which re-mark these when the
             // archive flip is replayed.
@@ -248,7 +263,10 @@ export function createThreadCompletionAdapter(
             // GraphQL owns its normalized write and durable revalidation;
             // keep the legacy REST Soup reconciliation on the REST path only.
             if (!graphqlSoup().enabled && disposition !== 'queued') {
-              void refetchSoupEntity(threadId, 'emailThread');
+              fireAndForget(
+                refetchSoupEntity(threadId, 'emailThread'),
+                'email-thread'
+              );
               invalidateAllSoup();
             }
           },
@@ -281,31 +299,40 @@ export function createThreadCompletionAdapter(
     if (!entity) return false;
 
     if (opts?.navigate !== false && soup && selectedRow) {
-      void trackExternalThreadArchive(
-        thread.db_id,
-        markAsDoneAction.executeWithSoup(
-          [entity],
-          soup,
-          ({ entity: nextEntity }) => {
-            const splitHandle = splitPanel?.handle;
-            if (!splitHandle) return;
-            if (!nextEntity) {
-              return;
-            }
+      fireAndForget(
+        trackExternalThreadArchive(
+          thread.db_id,
+          markAsDoneAction.executeWithSoup(
+            [entity],
+            soup,
+            ({ entity: nextEntity }) => {
+              const splitHandle = splitPanel?.handle;
+              if (!splitHandle) return;
+              if (!nextEntity) {
+                return;
+              }
 
-            void openEntityInSplitFromUnifiedList(nextEntity, {
-              splitHandle,
-              mergeHistory: !isTouchDevice(),
-              referredFrom: splitHandle.referredFrom(),
-            });
-          },
-          markDoneOpts
-        )
+              fireAndForget(
+                openEntityInSplitFromUnifiedList(nextEntity, {
+                  splitHandle,
+                  mergeHistory: !isTouchDevice(),
+                  referredFrom: splitHandle.referredFrom(),
+                }),
+                'email-thread'
+              );
+            },
+            markDoneOpts
+          )
+        ),
+        'email-thread'
       );
     } else {
-      void trackExternalThreadArchive(
-        thread.db_id,
-        markAsDoneAction.execute([entity], undefined, markDoneOpts)
+      fireAndForget(
+        trackExternalThreadArchive(
+          thread.db_id,
+          markAsDoneAction.execute([entity], undefined, markDoneOpts)
+        ),
+        'email-thread'
       );
     }
 

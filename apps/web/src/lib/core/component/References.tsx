@@ -1,11 +1,19 @@
+import { documentCommentLocation } from '@app/features/notifications/document-comment-location';
+import { openProject } from '@app/features/projects/open-project';
+import {
+  callDetailSearch,
+  callDetailSearchCodec,
+} from '@block-call/call-route';
 import { navigateToChannelMessage } from '@block-channel/utils/link';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
 import { getDisplayNameParts, tryMacroId } from '@core/user';
 import { compareDateDesc, type DateValue } from '@core/util/date';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { formatRelativeTimestamp } from '@entity';
 import {
@@ -15,11 +23,15 @@ import {
 } from '@queries/preview';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import type { ItemType } from '@service-storage/client';
+import type { ApiAttachmentCommentReference as CommentReference } from '@service-storage/generated/schemas/apiAttachmentCommentReference';
 import type { ApiAttachmentEntityReference as EntityReference } from '@service-storage/generated/schemas/apiAttachmentEntityReference';
 import type { ApiAttachmentGenericReference as GenericReference } from '@service-storage/generated/schemas/apiAttachmentGenericReference';
 import { stringToItemType } from '@service-storage/itemType';
+import { createCallback } from '@solid-primitives/rootless';
 import { createMemo, For, type JSX, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import { InlineItemPreview } from './ItemPreview';
+import { openDocument } from './LexicalMarkdown/component/core/BlockLink';
 import { StaticMarkdown } from './LexicalMarkdown/component/core/StaticMarkdown';
 import { twoLineClampMarkdownTheme } from './LexicalMarkdown/theme';
 import { UserIcon } from './UserIcon';
@@ -38,12 +50,25 @@ type ChannelRef = EntityReference & {
   message_content?: string;
 };
 
+type CommentRef = EntityReference &
+  CommentReference & { reference_type: 'comment' };
+
 type GenericRef = EntityReference &
   GenericReference & { reference_type: 'generic' };
 
 function isChannelReference(ref: EntityReference): ref is ChannelRef {
   return (
     'channel_id' in ref &&
+    'message_id' in ref &&
+    'sender_id' in ref &&
+    'attachment_created_at' in ref
+  );
+}
+
+function isCommentReference(ref: EntityReference): ref is CommentRef {
+  return (
+    'parent_entity_type' in ref &&
+    'parent_entity_id' in ref &&
     'message_id' in ref &&
     'sender_id' in ref &&
     'attachment_created_at' in ref
@@ -61,7 +86,7 @@ function isGenericReference(ref: EntityReference): ref is GenericRef {
 }
 
 const getReferenceCreatedAt = (ref: EntityReference) => {
-  if (isChannelReference(ref)) {
+  if (isChannelReference(ref) || isCommentReference(ref)) {
     return ref.attachment_created_at;
   } else if (isGenericReference(ref)) {
     return ref.created_at;
@@ -72,19 +97,25 @@ interface ReferenceRowProps {
   source: JSX.Element;
   senderAvatar?: JSX.Element;
   senderName?: string;
-  timestamp: DateValue;
+  timestamp?: DateValue;
+  timestampLabel?: string;
+  ariaLabel?: string;
   body?: JSX.Element;
   onClick?: (e: KeyboardEvent | MouseEvent) => void;
 }
 
-function ReferenceRow(props: ReferenceRowProps) {
+export function ReferenceRow(props: ReferenceRowProps) {
   const navHandlers = useSplitNavigationHandler<HTMLDivElement>((e) => {
     props.onClick?.(e);
   });
+  const timestamp = () =>
+    props.timestampLabel ??
+    (props.timestamp ? formatRelativeTimestamp(props.timestamp) : undefined);
 
   return (
     <div
       role="button"
+      aria-label={props.ariaLabel}
       tabIndex={0}
       class="group/ref-row flex min-w-0 flex-col overflow-hidden rounded-lg py-1 hover:bg-hover/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
       onMouseDown={navHandlers.onMouseDown}
@@ -109,12 +140,18 @@ function ReferenceRow(props: ReferenceRowProps) {
             {props.source}
           </div>
         </div>
-        <span aria-hidden class="shrink-0 text-ink-extra-muted">
-          ·
-        </span>
-        <span class="shrink-0 text-ink-extra-muted tabular-nums">
-          {formatRelativeTimestamp(props.timestamp)}
-        </span>
+        <Show when={timestamp()}>
+          {(label) => (
+            <>
+              <span aria-hidden class="shrink-0 text-ink-extra-muted">
+                ·
+              </span>
+              <span class="shrink-0 text-ink-extra-muted tabular-nums">
+                {label()}
+              </span>
+            </>
+          )}
+        </Show>
       </div>
 
       <Show when={props.body}>
@@ -133,30 +170,32 @@ function isOnlyMentions(markdown: string): boolean {
   return markdown.replace(MENTION_TAG_RE, '').trim().length === 0;
 }
 
-function ChannelReferenceRow(props: {
-  reference: ChannelRef;
+/** A channel message or a comment: the sender, where it was said, and its text. */
+function MessageReferenceRow(props: {
+  source: JSX.Element;
+  senderId: string;
+  createdAt: string;
+  content?: string;
   onOpen: (e: KeyboardEvent | MouseEvent) => void;
 }) {
   const senderName = () => {
-    const parts = getDisplayNameParts(tryMacroId(props.reference.sender_id), {
+    const parts = getDisplayNameParts(tryMacroId(props.senderId), {
       emailFallback: 'local-part',
     });
     return parts.firstName || parts.fullName;
   };
   const hasContent = () => {
-    const content = props.reference.message_content?.trim();
+    const content = props.content?.trim();
     if (!content) return false;
     return !isOnlyMentions(content);
   };
 
   return (
     <ReferenceRow
-      source={
-        <InlineItemPreview id={props.reference.channel_id} type="channel" />
-      }
+      source={props.source}
       senderAvatar={
         <UserIcon
-          id={props.reference.sender_id}
+          id={props.senderId}
           size="sm"
           isDeleted={false}
           suppressClick
@@ -164,16 +203,59 @@ function ChannelReferenceRow(props: {
         />
       }
       senderName={senderName()}
-      timestamp={props.reference.attachment_created_at}
+      timestamp={props.createdAt}
       onClick={props.onOpen}
       body={
         hasContent() ? (
           <StaticMarkdown
-            markdown={props.reference.message_content || ''}
+            markdown={props.content || ''}
             theme={twoLineClampMarkdownTheme}
           />
         ) : undefined
       }
+    />
+  );
+}
+
+function ChannelReferenceRow(props: {
+  reference: ChannelRef;
+  onOpen: (e: KeyboardEvent | MouseEvent) => void;
+}) {
+  return (
+    <MessageReferenceRow
+      source={
+        <InlineItemPreview id={props.reference.channel_id} type="channel" />
+      }
+      senderId={props.reference.sender_id}
+      createdAt={props.reference.attachment_created_at}
+      content={props.reference.message_content}
+      onOpen={props.onOpen}
+    />
+  );
+}
+
+function CommentReferenceRow(props: {
+  reference: CommentRef;
+  onOpen: (parent: PreviewItem, e: KeyboardEvent | MouseEvent) => void;
+}) {
+  const parentType = () => stringToItemType(props.reference.parent_entity_type);
+  const [parent] = useItemPreview(() => ({
+    id: props.reference.parent_entity_id,
+    type: parentType(),
+  }));
+
+  return (
+    <MessageReferenceRow
+      source={
+        <InlineItemPreview
+          id={props.reference.parent_entity_id}
+          type={parentType()}
+        />
+      }
+      senderId={props.reference.sender_id}
+      createdAt={props.reference.attachment_created_at}
+      content={props.reference.message_content}
+      onOpen={(e) => props.onOpen(parent(), e)}
     />
   );
 }
@@ -225,7 +307,7 @@ export function References(props: ReferenceProps) {
     () => props.documentId,
     () => props.entityType ?? 'document'
   );
-  const { openWithSplit } = useSplitLayout();
+  const layout = useSplitLayout();
   const blockOrchestrator = useGlobalBlockOrchestrator();
 
   const navigateToItem = ({
@@ -236,8 +318,62 @@ export function References(props: ReferenceProps) {
     blockName: BlockName | BlockAlias;
     blockId: string;
   }) => {
-    openWithSplit({ type: blockName, id: blockId }, { preferNewSplit: true });
+    layout.openWithSplit(
+      { type: blockName, id: blockId },
+      { preferNewSplit: true }
+    );
   };
+
+  // Opens the commented entity at the comment, the same way a reply target or
+  // a comment notification does for each parent kind.
+  const navigateToComment = createCallback(
+    (reference: CommentRef, parent: PreviewItem) => {
+      const parentId = reference.parent_entity_id;
+      const messageId = reference.message_id;
+      match(reference.parent_entity_type)
+        .with('initiative', () =>
+          openProject(layout, parentId, {
+            discussionId: messageId,
+            newSplit: true,
+          })
+        )
+        .with('document', () => {
+          if (!isAccessiblePreviewItem(parent) || parent.type !== 'document') {
+            toast.failure('Failed to open reference');
+            return;
+          }
+          const location = documentCommentLocation(messageId, {
+            fileType: parent.fileType,
+            subType: parent.subType,
+          });
+          openDocument(location.blockName, parentId, location.params, true);
+        })
+        .with('crm_company', 'crm_contact', (type) =>
+          openDocument(
+            type === 'crm_company' ? 'company' : 'contact',
+            parentId,
+            { [COMMENT_LINK_PARAM]: messageId },
+            true
+          )
+        )
+        .with('call', () =>
+          layout.openWithSplit(
+            { type: 'call', id: parentId },
+            {
+              preferNewSplit: true,
+              search: {
+                [callDetailSearch.namespace]: callDetailSearchCodec.serialize({
+                  ...callDetailSearch.defaults,
+                  messageId,
+                  seek: crypto.randomUUID(),
+                }),
+              },
+            }
+          )
+        )
+        .otherwise(() => toast.failure('Failed to open reference'));
+    }
+  );
 
   const navigateToMessage = ({
     channelId,
@@ -249,14 +385,17 @@ export function References(props: ReferenceProps) {
     messageId: string;
     threadId?: string;
   }) => {
-    navigateToChannelMessage(
-      blockOrchestrator,
-      channelId,
-      messageId,
-      threadId,
-      {
-        preferNewSplit: true,
-      }
+    fireAndForget(
+      navigateToChannelMessage(
+        blockOrchestrator,
+        channelId,
+        messageId,
+        threadId,
+        {
+          preferNewSplit: true,
+        }
+      ),
+      'references'
     );
   };
 
@@ -308,6 +447,14 @@ export function References(props: ReferenceProps) {
                       threadId: ref.thread_id,
                     })
                   }
+                />
+              );
+            }
+            if (isCommentReference(ref)) {
+              return (
+                <CommentReferenceRow
+                  reference={ref}
+                  onOpen={(parent) => navigateToComment(ref, parent)}
                 />
               );
             }

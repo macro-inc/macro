@@ -1,7 +1,8 @@
-import { ToggleSwitch } from '@ui';
-import { For, Show } from 'solid-js';
+import { Show } from 'solid-js';
+import { SourceControls } from '../../calendar/components/SourceControls';
+import type { CalendarSource } from '../../calendar/types';
+import { SettingsSelect } from '../../settings/components/settings-select';
 import {
-  ChoiceRow,
   SettingsCard,
   SettingsRow,
   SettingsSection,
@@ -9,59 +10,46 @@ import {
 import type { CalendarSharing } from '../core/model';
 
 const choices: {
-  value: CalendarSharing;
-  title: string;
+  id: CalendarSharing;
+  name: string;
   description: string;
 }[] = [
   {
-    value: 'busy_only',
-    title: 'Busy blocks',
-    description:
-      'Share time blocks from all synced calendars without event details. Calendars you follow are distinguished from your own availability. This is the default.',
+    id: 'busy_only',
+    name: 'Busy blocks',
+    description: 'Teammates see when you are busy, not what.',
   },
   {
-    value: 'all',
-    title: 'Event details',
-    description:
-      'Share details from every calendar synced to Macro, including subscribed or delegated calendars, birthdays and holidays. Calendars unchecked in Google Calendar are included if synced. Private and confidential events share only busy blocks when they block time. This does not change Google Calendar permissions.',
+    id: 'all',
+    name: 'Event details',
+    description: 'Teammates see your events. Private events stay busy blocks.',
   },
   {
-    value: 'none',
-    title: 'Nothing',
-    description:
-      'Hide your calendar and availability from teammates in Macro, including team out of office.',
+    id: 'none',
+    name: 'Nothing',
+    description: 'Teammates cannot see your calendar or availability.',
   },
 ];
-
-export interface AvailabilityCalendarDisplay {
-  calendarId: string;
-  name: string;
-  contributesToAvailability: boolean;
-  isPrimary: boolean;
-}
 
 export function TeamSharingSettings(props: {
   hasTeam: boolean;
   teamLoading: boolean;
   sharing: CalendarSharing | undefined;
-  saving: boolean;
   error: boolean;
   onChange: (sharing: CalendarSharing) => void;
   onRetry: () => void;
-  calendars: AvailabilityCalendarDisplay[];
+  calendars: CalendarSource[];
   calendarsLoading: boolean;
   calendarsError: boolean;
-  calendarSaving: boolean;
-  onCalendarChange: (
-    calendarId: string,
-    contributesToAvailability: boolean
-  ) => void;
+  isCounted: (calendarId: string) => boolean;
+  onCountedChange: (calendarIds: string[], counted: boolean) => void;
 }) {
+  const choice = () => choices.find((option) => option.id === props.sharing);
   return (
     <>
       <SettingsSection
         title="Team sharing"
-        description="Choose what teammates can read in Macro. Hiding a calendar in your Macro view does not change sharing. Sharing does not invite them to events or give them Google Calendar access."
+        description="What teammates can see in Macro. Google Calendar permissions stay the same."
       >
         <SettingsCard>
           <Show
@@ -88,69 +76,79 @@ export function TeamSharingSettings(props: {
               </SettingsRow>
             }
           >
-            <div class="flex flex-col gap-2 px-6 py-4">
-              <For each={choices}>
-                {(choice) => (
-                  <ChoiceRow
-                    name="calendar-team-sharing"
-                    value={choice.value}
-                    title={choice.title}
-                    description={choice.description}
-                    checked={props.sharing === choice.value}
-                    disabled={props.sharing === undefined || props.saving}
-                    onChange={() => props.onChange(choice.value)}
-                  />
-                )}
-              </For>
-              <Show when={props.error}>
-                <p role="status" class="text-xs text-failure">
-                  Could not load your sharing setting.{' '}
+            <SettingsRow
+              label="Share with teammates"
+              description={
+                props.error
+                  ? 'Could not load your sharing setting.'
+                  : choice()?.description
+              }
+              stackOnNarrow
+            >
+              <Show
+                when={!props.error}
+                fallback={
                   <button
                     type="button"
-                    class="underline"
+                    class="text-xs underline"
                     onClick={props.onRetry}
                   >
                     Retry
                   </button>
-                </p>
+                }
+              >
+                <SettingsSelect
+                  label="Share with teammates"
+                  class="w-44 min-w-0"
+                  options={choices}
+                  value={props.sharing}
+                  placeholder="Loading…"
+                  disabled={props.sharing === undefined}
+                  onChange={(id) => {
+                    const next = choices.find((option) => option.id === id);
+                    if (next) props.onChange(next.id);
+                  }}
+                />
               </Show>
-            </div>
+            </SettingsRow>
           </Show>
         </SettingsCard>
       </SettingsSection>
-      <Show when={props.hasTeam}>
+      <Show
+        when={
+          props.hasTeam &&
+          (props.calendarsLoading ||
+            props.calendarsError ||
+            props.calendars.length > 0)
+        }
+      >
         <SettingsSection
           title="Calendars that count as busy"
-          description="By default, your primary calendars and meetings you attend count toward your availability. Following someone else's calendar does not make their meetings block your time. Choose any additional calendars that represent your schedule."
+          description="Checked calendars block your time when teammates or agents check your availability."
         >
-          <SettingsCard>
-            <Show when={props.calendarsLoading}>
-              <SettingsRow label="Loading calendars…" />
-            </Show>
-            <Show when={props.calendarsError}>
-              <SettingsRow label="Could not load availability calendars" />
-            </Show>
-            <For each={props.calendars}>
-              {(calendar) => (
-                <SettingsRow
-                  label={calendar.name}
-                  description={
-                    calendar.isPrimary ? 'Primary calendar' : undefined
-                  }
-                >
-                  <ToggleSwitch
-                    checked={calendar.contributesToAvailability}
-                    disabled={props.calendarSaving}
-                    onChange={(included) =>
-                      props.onCalendarChange(calendar.calendarId, included)
-                    }
-                    label={`Count ${calendar.name} toward my availability`}
-                    labelClass="sr-only"
-                  />
-                </SettingsRow>
-              )}
-            </For>
-          </SettingsCard>
+          <Show when={props.calendarsLoading}>
+            <p role="status" class="text-sm text-ink-muted">
+              Loading calendars…
+            </p>
+          </Show>
+          <Show when={props.calendarsError}>
+            <p role="status" class="text-sm text-ink-muted">
+              Could not load your calendars.{' '}
+              <button type="button" class="underline" onClick={props.onRetry}>
+                Retry
+              </button>
+            </p>
+          </Show>
+          <div class="-mx-2">
+            <SourceControls
+              sources={props.calendars}
+              isVisible={props.isCounted}
+              onVisibilityChange={(calendarId, counted) =>
+                props.onCountedChange([calendarId], counted)
+              }
+              onGroupVisibilityChange={props.onCountedChange}
+            />
+          </div>
         </SettingsSection>
       </Show>
     </>

@@ -303,7 +303,7 @@ pub struct Slot {
 pub struct TeamMember {
     /// Macro user identity.
     pub user_id: String,
-    /// Whether this member administers scheduling.
+    /// Whether this member is a team owner or admin, who may manage any host's bookings.
     pub admin: bool,
 }
 /// Use-case failures mapped by transport adapters.

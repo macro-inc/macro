@@ -1,12 +1,41 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type UploadInput, uploadFiles } from '@core/util/upload';
 import { refetchHistory } from '@queries/history/history';
 import { refetchSoupEntity } from '@queries/soup/cache';
 
 export function useHandleFileUpload(options: { projectId?: string } = {}) {
   const { replaceOrInsertSplit, openWithSplit } = useSplitLayout();
+
+  async function announceUploadedFolder(upload: {
+    name: string;
+    projectId: Promise<string | undefined>;
+  }) {
+    const createdProjectId = await upload.projectId;
+    if (!createdProjectId) return;
+
+    fireAndForget(
+      refetchSoupEntity(createdProjectId, 'project', { includeRoot: true }),
+      'file-upload'
+    );
+    fireAndForget(refetchHistory(), 'file-upload');
+
+    toast.success(`Uploaded ${upload.name}`, {
+      actions: [
+        {
+          label: 'Open folder',
+          onClick: () => {
+            openWithSplit(
+              { type: 'project', id: createdProjectId },
+              { referredFrom: 'file-upload', activate: true }
+            );
+          },
+        },
+      ],
+    });
+  }
 
   return async (files: UploadInput[], withOpen = true) => {
     const results = await uploadFiles(files, 'dss', {
@@ -27,38 +56,16 @@ export function useHandleFileUpload(options: { projectId?: string } = {}) {
     // Refetch soup for folders once pending uploads are done, and show a success
     // toast with an action to open the created folder/project.
     for (const upload of pendingUploads) {
-      const settleProjectId = async () => {
-        const settleProjectIdValue = await upload.projectId;
-        const createdProjectId = settleProjectIdValue;
-
-        if (!createdProjectId) return;
-
-        refetchSoupEntity(createdProjectId, 'project', { includeRoot: true });
-        refetchHistory();
-
-        toast.success(`Uploaded ${upload.name}`, {
-          actions: [
-            {
-              label: 'Open folder',
-              onClick: () => {
-                openWithSplit(
-                  { type: 'project', id: createdProjectId },
-                  { referredFrom: 'file-upload', activate: true }
-                );
-              },
-            },
-          ],
-        });
-
-        return;
-      };
-      settleProjectId();
+      fireAndForget(announceUploadedFolder(upload), 'file-upload');
     }
 
     // refetch soup for uploaded docs
     for (const upload of successfulUploads) {
       if (upload.type === 'document') {
-        refetchSoupEntity(upload.documentId, 'document');
+        fireAndForget(
+          refetchSoupEntity(upload.documentId, 'document'),
+          'file-upload'
+        );
       }
     }
 

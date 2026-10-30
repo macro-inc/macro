@@ -134,7 +134,11 @@ function writeBlock(doc: LoroDoc, record: BlockRecord) {
   }
 }
 
-/** Writes a document's whole state (seeding or migrating) in one commit. */
+/**
+ * Writes a document's whole state (seeding or migrating) in one commit. The
+ * backend seeds documents nobody has opened the same way
+ * (`crates/documents/src/domain/word_document/seed.rs`); keep them in step.
+ */
 export function writeCollabState(
   doc: LoroDoc,
   state: CollabState,

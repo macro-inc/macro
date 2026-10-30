@@ -157,14 +157,12 @@ export async function requestAiEdit(args: {
         return { kind: 'usage-limit', error };
       }
 
-      const settleText = async () => {
-        try {
-          return await res.text();
-        } catch {
-          return await '';
-        }
-      };
-      const body = await settleText();
+      let body = '';
+      try {
+        body = await res.text();
+      } catch {
+        // The status alone still identifies the failure.
+      }
       console.error('ai edit request failed', res.status, body);
       const message = `HTTP ${res.status} for POST /edit`;
       span.error({

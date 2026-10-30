@@ -73,15 +73,17 @@ async function serve(request: FoldRequest): Promise<FoldResponse> {
       streams.delete(sessionId);
       return { id, kind, ok: true as const };
     })
-    .exhaustive();
+    .exhaustive((unknown) => {
+      console.warn('fold worker: unknown request', unknown);
+      return { id: request.id, ok: false as const, error: 'unknown request' };
+    });
 }
 
 scope.addEventListener('message', (event: MessageEvent<FoldRequest>) => {
   const request = event.data;
 
-  const settleQueue = async () => {
+  const serveAfterQueued = async () => {
     await queue;
-
     let response: FoldResponse;
     try {
       response = await serve(request);
@@ -95,8 +97,6 @@ scope.addEventListener('message', (event: MessageEvent<FoldRequest>) => {
       };
     }
     scope.postMessage(response);
-
-    return;
   };
-  queue = settleQueue();
+  queue = serveAfterQueued();
 });

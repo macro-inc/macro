@@ -92,7 +92,9 @@ function openSource(wasm: WasmModule, source: Source): WasmDocxDocument {
       wasm.DocxDocument.fromCollab(state, seed)
     )
     .with({ kind: 'v1' }, ({ state }) => wasm.DocxDocument.fromV1(state))
-    .exhaustive();
+    .exhaustive(() => {
+      throw new Error('Unknown document source');
+    });
 }
 
 /**
@@ -121,7 +123,9 @@ async function recover() {
             doc.setExternalUndo(external)
           )
           .with({ kind: 'setAuthor' }, ({ author }) => doc.setAuthor(author))
-          .exhaustive();
+          .exhaustive(() => {
+            throw new Error('Unknown change log entry');
+          });
       }
       open.doc = doc;
     } catch {
@@ -421,29 +425,28 @@ async function serve(request: DocxRequest): Promise<Served> {
       ) as ArrayBuffer;
       return [{ id, ok: true, kind: 'save', bytes }, [bytes]];
     })
-    .exhaustive();
+    .exhaustive((unknown): Served => {
+      console.warn('docx worker: unknown request', unknown);
+      return [{ id, ok: false, error: 'Unknown document request.' }, []];
+    });
 }
 
 scope.addEventListener('message', (event: MessageEvent<DocxRequest>) => {
   const request = event.data;
 
-  const settleQueue = async () => {
+  const serveAfterQueued = async () => {
     await queue;
-
     try {
       const [response, transfer] = await serve(request);
       scope.postMessage(response, transfer);
     } catch (error) {
       let message = error instanceof Error ? error.message : String(error);
       if (isWasmTrap(error)) {
-        const settleRecover = async () => {
-          try {
-            return await recover();
-          } catch {
-            return;
-          }
-        };
-        await settleRecover();
+        try {
+          await recover();
+        } catch {
+          // The message below still tells the caller what happened.
+        }
         message =
           'The document engine hit a problem with this request and was restarted. Your changes are kept.';
       }
@@ -454,8 +457,6 @@ scope.addEventListener('message', (event: MessageEvent<DocxRequest>) => {
       };
       scope.postMessage(response);
     }
-
-    return;
   };
-  queue = settleQueue();
+  queue = serveAfterQueued();
 });

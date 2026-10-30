@@ -1,4 +1,5 @@
 import { LOCAL_ONLY } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { ObjectLike, ResultError } from '@core/util/result';
 import {
   type BaseFetchErrorCode,
@@ -17,34 +18,30 @@ function isExpired(token: string) {
 
 let macroApiTokenPromise: Promise<string> | null = null;
 
+async function fetchMacroApiToken(): Promise<string> {
+  const result = await authServiceClient.macroApiToken();
+  if (result.isErr()) {
+    throw result.error;
+  }
+  return result.value.macro_api_token;
+}
+
+async function forgetFailedRequest(promise: Promise<string>): Promise<void> {
+  try {
+    await promise;
+  } catch {
+    // A failed request must not poison the cache permanently. Keep the
+    // identity check so an older rejection cannot clear a newer request.
+    if (macroApiTokenPromise === promise) {
+      macroApiTokenPromise = null;
+    }
+  }
+}
+
 function requestMacroApiToken() {
-  const settleMacroApiToken = async () => {
-    const settleMacroApiTokenValue = await authServiceClient.macroApiToken();
-    const result = settleMacroApiTokenValue;
-
-    if (result.isErr()) {
-      throw result.error;
-    }
-    return await result.value.macro_api_token;
-  };
-  const promise = settleMacroApiToken();
-
+  const promise = fetchMacroApiToken();
   macroApiTokenPromise = promise;
-
-  const settlePromise = async () => {
-    try {
-      return await promise;
-    } catch {
-      // A failed request must not poison the cache permanently. Keep the
-      // identity check so an older rejection cannot clear a newer request.
-      if (macroApiTokenPromise === promise) {
-        macroApiTokenPromise = null;
-      }
-
-      return;
-    }
-  };
-  void settlePromise();
+  fireAndForget(forgetFailedRequest(promise), 'auth-token');
   return promise;
 }
 

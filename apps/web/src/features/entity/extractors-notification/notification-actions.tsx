@@ -2,13 +2,14 @@ import { useMaybeSoup } from '@app/features/next-soup/soup-context';
 import { restoreSoupFocus } from '@app/features/next-soup/utils';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
 import type { NotificationStack, UnifiedNotification } from '@notifications';
 import {
   executeMarkNotificationsDone,
   executeMarkNotificationsUndone,
   getAllNotificationsFromGroup,
 } from '@notifications';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { useUndoableMutation } from '@queries/undo';
 
 interface NotificationActionsProps {
@@ -49,11 +50,17 @@ export function useNotificationStackActions(props: NotificationActionsProps) {
                 label: 'Undo',
                 icon: ArrowCounterClockwise,
                 onClick: () => {
-                  handle.undo({
-                    onError: () => toast.failure('Failed to undo'),
-                  });
+                  fireAndForget(
+                    handle.undo({
+                      onError: () => toast.failure('Failed to undo'),
+                    }),
+                    'notifications'
+                  );
                   if (props.entityId) soup?.focus.set(props.entityId);
-                  restoreSoupFocus(props.entityId);
+                  fireAndForget(
+                    restoreSoupFocus(props.entityId),
+                    'notifications'
+                  );
                 },
               },
             ],

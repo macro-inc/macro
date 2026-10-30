@@ -89,4 +89,5 @@ const _fileTypeColors: Record<BlockName | BlockAlias | 'default', string> = {
   pr: defaultFileColor,
   agent: defaultFileColor,
   initiative: defaultFileColor,
+  pipeline: defaultFileColor,
 };

@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 
 mod call_retries;
 mod event_posts;
+mod guest_chat;
 mod initiative;
 
 #[derive(Clone)]
@@ -149,6 +150,7 @@ impl MessageRepository for Repo {
         message.id = command.input.id.unwrap_or(message.id);
         message.parent = command.parent.clone();
         message.sender_id = command.actor.clone();
+        message.guest_name = command.guest_name.clone();
         message.content = command.input.content.clone();
         message.mentions = command.input.mentions.clone();
         message.triggered_by = command.triggered_by.clone();
@@ -248,9 +250,11 @@ fn fixture() -> Repo {
             sender_id: ChannelSender::try_from(user.to_owned()).unwrap(),
             bot_profile: None,
             mentions: vec![],
+            guest_name: None,
             imported_author: Some(ImportedAuthor {
                 name: "External PDF author".into(),
             }),
+            triggered_via: None,
             triggered_by: None,
             content: "root".into(),
             created_at: Utc::now(),
@@ -290,6 +294,7 @@ fn reply_from(root: &Message, id: u128, sender: &str) -> Message {
         id: Uuid::from_u128(id),
         thread_id: Some(root.id),
         sender_id: ChannelSender::try_from(sender.to_owned()).unwrap(),
+        guest_name: None,
         imported_author: None,
         content: "reply".into(),
         ..root.clone()
@@ -1136,12 +1141,26 @@ async fn bot_posts_and_edits_extract_mentions_and_preserve_trusted_attribution_a
         input.attribution = MessageAttribution::Unprompted;
         assert!(
             service
-                .post(receipt(), input)
+                .post(receipt(), input.clone())
                 .await
                 .unwrap()
                 .triggered_by
                 .is_none()
         );
+        input.attribution = MessageAttribution::ActingUserVia {
+            client: "Claude Code".into(),
+        };
+        service.post(receipt(), input).await.unwrap();
+        {
+            let creates = repo.creates.lock().unwrap();
+            let via = creates.last().unwrap();
+            assert_eq!(
+                via.triggered_by.as_deref(),
+                Some("macro|author@example.com")
+            );
+            assert_eq!(via.triggered_via.as_deref(), Some("Claude Code"));
+            assert!(creates[0].triggered_via.is_none());
+        }
         service
             .patch(
                 receipt(),
@@ -1165,13 +1184,113 @@ async fn bot_posts_and_edits_extract_mentions_and_preserve_trusted_attribution_a
             }
         ));
         assert!(matches!(
-            events[2].change,
+            events[3].change,
             MessageChange::Edited {
                 notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
                 ..
             }
         ));
     }
+}
+
+#[tokio::test]
+async fn reconciling_an_unchanged_bot_reply_does_not_publish_a_second_completion() {
+    let mut repo = fixture();
+    let bot = bot_id::MACRO_AI_BOT_ID;
+    repo.message.sender_id = ChannelSender::new_from_bot(bot);
+    let receipt = EntityAccessReceipt::try_new_bot(
+        bot.into_storage_id(),
+        entity_access::domain::models::BotReceiptScope::User {
+            acting_user: "macro|author@example.com".to_string().try_into().unwrap(),
+        },
+        access("macro|author@example.com", "doc", AccessLevel::Comment)
+            .entity()
+            .clone(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Comment,
+        },
+    )
+    .unwrap();
+    let events = Events::default();
+    let service = MessageService::new(repo.clone(), events.clone());
+    let result = service
+        .patch(
+            receipt,
+            repo.message.id,
+            MessagePatch {
+                content: Some(repo.message.content.clone()),
+                notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(result.id, repo.message.id);
+    assert!(repo.edits.lock().unwrap().is_empty());
+    assert!(events.0.lock().unwrap().is_empty());
+}
+
+fn bot_receipt() -> EntityAccessReceipt<MessageWrite> {
+    EntityAccessReceipt::try_new_bot(
+        bot_id::MACRO_AI_BOT_ID.into_storage_id(),
+        entity_access::domain::models::BotReceiptScope::User {
+            acting_user: "macro|author@example.com".to_string().try_into().unwrap(),
+        },
+        access("macro|author@example.com", "doc", AccessLevel::Comment)
+            .entity()
+            .clone(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Comment,
+        },
+    )
+    .unwrap()
+}
+
+#[tokio::test]
+async fn an_agent_types_through_its_bot_naming_the_session() {
+    let repo = fixture();
+    let events = Events::default();
+    let service = MessageService::new(repo, events.clone());
+    let agent = AgentTyping {
+        session_id: Uuid::from_u128(77),
+        phase: AgentTypingPhase::Working,
+    };
+    service
+        .agent_typing(bot_receipt(), None, true, agent)
+        .await
+        .unwrap();
+    let published = events.0.lock().unwrap();
+    assert!(
+        matches!(
+            published.as_slice(),
+            [MessageEvent {
+                actor,
+                change: MessageChange::Typing { thread_id: None, active: true, agent: Some(sent) },
+                ..
+            }] if actor.starts_with("bot|") && *sent == agent
+        ),
+        "{published:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_person_cannot_say_an_agent_session_is_typing() {
+    let repo = fixture();
+    let events = Events::default();
+    let service = MessageService::new(repo, events.clone());
+    let result = service
+        .agent_typing(
+            access("macro|author@example.com", "doc", AccessLevel::Comment),
+            None,
+            true,
+            AgentTyping {
+                session_id: Uuid::from_u128(77),
+                phase: AgentTypingPhase::Thinking,
+            },
+        )
+        .await;
+    assert!(matches!(result, Err(MessageError::Forbidden)));
+    assert!(events.0.lock().unwrap().is_empty());
 }
 
 #[derive(Clone)]

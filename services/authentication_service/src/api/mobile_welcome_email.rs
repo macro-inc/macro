@@ -22,6 +22,9 @@ pub enum SendMobileWelcomeEmailError {
     #[error("Email is blocked")]
     EmailBlocked,
 
+    #[error("Please use your work email or Gmail")]
+    PersonalEmail,
+
     #[error("Internal error")]
     InternalError(#[from] anyhow::Error),
 }
@@ -30,7 +33,8 @@ impl IntoResponse for SendMobileWelcomeEmailError {
     fn into_response(self) -> Response {
         let status_code = match &self {
             SendMobileWelcomeEmailError::InvalidEmail
-            | SendMobileWelcomeEmailError::EmailBlocked => StatusCode::BAD_REQUEST,
+            | SendMobileWelcomeEmailError::EmailBlocked
+            | SendMobileWelcomeEmailError::PersonalEmail => StatusCode::BAD_REQUEST,
             SendMobileWelcomeEmailError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
@@ -89,6 +93,10 @@ pub async fn handler(
 ) -> Result<Json<SendMobileWelcomeEmailResponse>, SendMobileWelcomeEmailError> {
     if !email_validator::is_valid_email(&req.email) {
         return Err(SendMobileWelcomeEmailError::InvalidEmail);
+    }
+
+    if is_personal_email(&req.email) {
+        return Err(SendMobileWelcomeEmailError::PersonalEmail);
     }
 
     let lowercase_email = loops_client::normalize_email(&req.email);
@@ -164,6 +172,19 @@ pub async fn handler(
     Ok(Json(SendMobileWelcomeEmailResponse { sent: true }))
 }
 
+/// Gmail domains accepted despite being generic: Macro connects Gmail inboxes,
+/// so a Gmail lead can finish signing up on desktop.
+const ALLOWED_PERSONAL_DOMAINS: &[&str] = &["gmail.com", "googlemail.com"];
+
+fn is_personal_email(email: &str) -> bool {
+    email.trim().rsplit_once('@').is_some_and(|(_, domain)| {
+        generic_email_domains::is_generic_email_domain(domain)
+            && !ALLOWED_PERSONAL_DOMAINS
+                .iter()
+                .any(|allowed| domain.eq_ignore_ascii_case(allowed))
+    })
+}
+
 /// Desktop signup page. The local frontend origin has no `/app` prefix.
 fn desktop_signup_url(base: &url::Url) -> String {
     let mut url = base.clone();
@@ -197,7 +218,7 @@ fn desktop_email_html(url: &str) -> String {
             <tr>
               <td bgcolor="#ffffff" style="padding:36px 40px 40px;border:1px solid #e7e7e5;border-radius:12px;">
                 <a href="https://macro.com" style="text-decoration:none;">
-                  <img src="https://macro.com/app/macro-email-logo.png" width="36" height="36" alt="Macro" style="display:block;border:0;background-color:#ffffff;" />
+                  <img src="https://macro.com/app/macro-email-icon.png" width="48" height="48" alt="Macro" style="display:block;border:0;" />
                 </a>
                 <h1 style="margin:36px 0 16px;font-size:28px;line-height:36px;font-weight:600;letter-spacing:-0.5px;color:#222222;">{DESKTOP_EMAIL_SUBJECT}</h1>
                 <p style="margin:0 0 20px;font-size:16px;line-height:26px;color:#525252;">Macro is a better experience on desktop. Open this link to finish signing up — it only takes a minute.</p>
@@ -242,5 +263,16 @@ mod tests {
         let html = desktop_email_html("https://macro.com/app/signup");
         assert!(html.contains(r#"href="https://macro.com/app/signup""#));
         assert!(html.contains(DESKTOP_EMAIL_SUBJECT));
+    }
+
+    #[test]
+    fn personal_email_providers_other_than_gmail_are_rejected() {
+        assert!(!is_personal_email("someone@gmail.com"));
+        assert!(!is_personal_email(" Someone@GMAIL.com "));
+        assert!(!is_personal_email("someone@googlemail.com"));
+        assert!(is_personal_email("someone@icloud.com"));
+        assert!(is_personal_email(" Someone@Yahoo.com "));
+        assert!(!is_personal_email("someone@macro.com"));
+        assert!(!is_personal_email("someone@acme.co"));
     }
 }

@@ -22,10 +22,12 @@ import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media'
 import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import { toast } from '@core/component/Toast/Toast';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
-import PaperclipIcon from '@phosphor/paperclip.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import PaperclipIcon from '@icon/system/regular/paperclip.svg';
 import { isIOS } from '@solid-primitives/platform';
 import { CollapsedInput, ComposerSurface } from '@ui';
 import {
@@ -50,6 +52,8 @@ export type DiscussionInputProps = InputCallbacks & {
   collapsible?: boolean;
   /** Blur and collapse after onSend completes; other inputs retain focus. */
   blurOnSend?: boolean;
+  /** Dismiss the host after Escape has closed inline menus. */
+  onEscape?: () => void;
 };
 
 function AttachImagesAction() {
@@ -62,7 +66,7 @@ function AttachImagesAction() {
     const files = Array.from(event.currentTarget.files ?? []);
     event.currentTarget.value = '';
     if (files.length === 0) return;
-    void commands.attachFiles(files);
+    fireAndForget(commands.attachFiles(files), 'discussion-input');
   };
 
   return (
@@ -81,7 +85,7 @@ function AttachImagesAction() {
         label="Attach images"
         onClick={() => fileInputRef?.click()}
       >
-        <PaperclipIcon />
+        <PaperclipIcon class="size-5 touch:size-6 shrink-0 pointer-events-none" />
       </InputActionButton>
     </>
   );
@@ -149,11 +153,11 @@ export function DiscussionInput(props: DiscussionInputProps) {
     },
     onChange: (markdown) => {
       setValue(markdown);
-      props.onChange?.(createSnapshot());
+      fireAndForget(props.onChange?.(createSnapshot()), 'discussion-input');
     },
     onEnter: () => {
       if (isMobile()) return false;
-      void commands.send();
+      fireAndForget(commands.send(), 'discussion-input');
       return true;
     },
   });
@@ -193,11 +197,14 @@ export function DiscussionInput(props: DiscussionInputProps) {
       }
     },
     close: () => {
-      props.onClose?.(createSnapshot());
+      fireAndForget(props.onClose?.(createSnapshot()), 'discussion-input');
     },
     toggleFormatRibbon: () => {
       setShowFormatRibbon(!showFormatRibbon());
-      props.onToggleFormatRibbon?.(!showFormatRibbon());
+      fireAndForget(
+        props.onToggleFormatRibbon?.(!showFormatRibbon()),
+        'discussion-input'
+      );
     },
     attachFiles: async (files: File[]) => {
       // Insert images into the editor
@@ -260,6 +267,21 @@ export function DiscussionInput(props: DiscussionInputProps) {
     },
   });
 
+  const [attach, scopeId] = useHotkeyDOMScope('discussion-input-intercept');
+  registerHotkey({
+    scopeId,
+    description: 'block escape from moving up scope',
+    hotkey: ['escape'],
+    runWithInputFocused: true,
+    hide: true,
+    keyDownHandler: () => {
+      if (markdownEditor.controls.isInlineMenuOpen()) return true;
+      if (!props.onEscape) return false;
+      props.onEscape();
+      return true;
+    },
+  });
+
   return (
     <Input.Root input={inputView()} commands={commands}>
       <Show when={isCollapsed()}>
@@ -291,7 +313,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
           }}
           onAttach={collapsedInput.attach}
           onOpen={collapsedInput.expand}
-          onSend={() => void commands.send()}
+          onSend={() => fireAndForget(commands.send(), 'discussion-input')}
         />
       </Show>
       <ComposerSurface
@@ -332,6 +354,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
                   initialValue={inputView().value}
                   autofocus={!isMobile() && (props.autofocus ?? true)}
                   class="text-base"
+                  refFn={attach}
                 />
               </Input.Editor>
             </Input.Layout.Editor>

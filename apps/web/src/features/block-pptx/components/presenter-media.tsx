@@ -6,9 +6,10 @@
  */
 
 import type { MediaOutline } from '@core/pptx-engine/types';
-import Pause from '@phosphor-fill/pause-fill.svg';
-import Play from '@phosphor-fill/play-fill.svg';
-import Stop from '@phosphor-fill/stop-fill.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import Pause from '@icon/system/fill/pause-fill.svg';
+import Play from '@icon/system/fill/play-fill.svg';
+import Stop from '@icon/system/fill/stop-fill.svg';
 import {
   createEffect,
   createResource,
@@ -20,6 +21,15 @@ import {
 import { formatTime } from '../core/media';
 import type { MediaUrls } from '../primitives/create-media-urls';
 import type { MediaBox } from './media-player';
+
+/** Plays a clip; when the browser refuses, it stays paused. */
+export async function playIfAllowed(el: HTMLMediaElement) {
+  try {
+    await el.play();
+  } catch {
+    // Refused (autoplay policy, or the source went away): it stays paused.
+  }
+}
 
 const boxStyle = (box: MediaBox): JSX.CSSProperties => ({
   position: 'absolute',
@@ -48,30 +58,19 @@ export function AudienceClip(props: {
     () => props.media,
     (media) => props.urls.urlOf(media)
   );
+  const playOrMute = async (el: HTMLMediaElement) => {
+    try {
+      await el.play();
+    } catch {
+      el.muted = true;
+      props.onMuted();
+      await playIfAllowed(el);
+    }
+  };
   const start = (el: HTMLMediaElement) => {
     props.onElement(el);
     // This window never saw a click, so a browser may refuse sound.
-
-    const settlePlayResult = async () => {
-      try {
-        return await el.play();
-      } catch {
-        el.muted = true;
-        props.onMuted();
-
-        const settlePlay = async () => {
-          try {
-            return await el.play();
-          } catch {
-            return;
-          }
-        };
-        void settlePlay();
-
-        return;
-      }
-    };
-    void settlePlayResult();
+    fireAndForget(playOrMute(el), 'pptx-slideshow');
   };
   onCleanup(() => props.onElement(undefined));
   return (
@@ -148,16 +147,9 @@ export function ConsoleClip(props: {
       if (!mirror) return;
       if (Math.abs(mirror.currentTime - el.currentTime) > 0.3)
         mirror.currentTime = el.currentTime;
-
-      const settlePlayResultResult = async () => {
-        try {
-          return await mirror.play();
-        } catch {
-          return;
-        }
-      };
       if (el.paused && !mirror.paused) mirror.pause();
-      else if (!el.paused && mirror.paused) void settlePlayResultResult();
+      else if (!el.paused && mirror.paused)
+        fireAndForget(playIfAllowed(mirror), 'pptx-slideshow');
     };
     const events = [
       'play',
@@ -177,15 +169,7 @@ export function ConsoleClip(props: {
   const toggle = () => {
     const el = primary();
     if (!el) return;
-
-    const settlePlayResultResultResult = async () => {
-      try {
-        return await el.play();
-      } catch {
-        return;
-      }
-    };
-    if (el.paused) void settlePlayResultResultResult();
+    if (el.paused) fireAndForget(playIfAllowed(el), 'pptx-slideshow');
     else el.pause();
   };
   const stop = (e: Event) => e.stopPropagation();

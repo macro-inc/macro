@@ -43,14 +43,12 @@
 .email-desktop-content .dummy-workspace[data-embedded=true] { height: 100%; border: 0; border-radius: 0; box-shadow: none; }
 .email-desktop-content .dummy-banner { display: none; }
 .email-desktop-loading { display: grid; place-items: center; height: 100%; color: #888; font-size: 14px; }
-.email-desktop-demo .email-desktop-caption { margin-top: 20px; color: #777; font-size: 13px; line-height: 1.5; text-align: center; }
 @media (max-width: 699px) {
   .email-desktop-demo { --desktop-stage-width: calc(100vw - 24px); margin-bottom: 52px; }
   .email-desktop-wallpaper { padding: 28px 12px; border-radius: 8px; }
   .email-desktop-window { border-radius: 9px; }
   .email-desktop-content { height: 510px; }
   .email-desktop-content .dummy-sidebar { top: 42px; }
-  .email-desktop-demo .email-desktop-caption { max-width: 290px; margin: 16px auto 0; font-size: 12px; }
 }
 
 .email-desktop-canvas,
@@ -71,6 +69,7 @@
 /* Opt-in hero frame: lower-page demos keep their own layout. */
 :root body .email-desktop-demo[data-hero-frame=true] {
   --desktop-stage-width: min(1200px, calc(100vw - 48px));
+  --hero-content-height: 640px;
 }
 :root body .email-desktop-demo[data-hero-frame=true] .email-desktop-wallpaper {
   position: relative;
@@ -97,7 +96,10 @@
   background: #171717;
 }
 :root body .email-desktop-demo[data-hero-frame=true] .email-desktop-content {
-  height: 640px;
+  height: var(--hero-content-height);
+}
+:root body .email-desktop-demo[data-hero-frame=true][data-window-chrome=false] .email-desktop-content {
+  height: calc(var(--hero-content-height) + 36px);
 }
 :root body .email-desktop-demo[data-hero-frame=true] .email-desktop-content .product-demo {
   height: 100%;
@@ -114,6 +116,7 @@
 @media (max-width: 699px) {
   :root body .email-desktop-demo[data-hero-frame=true] {
     --desktop-stage-width: calc(100vw - 24px);
+    --hero-content-height: 580px;
   }
   :root body .email-desktop-demo[data-hero-frame=true] .email-desktop-wallpaper {
     padding: 16px;
@@ -121,8 +124,5 @@
   }
   :root body .email-desktop-demo[data-hero-frame=true] .email-desktop-window {
     border-radius: 12px;
-  }
-  :root body .email-desktop-demo[data-hero-frame=true] .email-desktop-content {
-    height: 580px;
   }
 }

@@ -4,11 +4,12 @@ import type { CalendarEventFormController } from '@app/features/calendar/compone
 import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import { useCalendarSources } from '@app/features/calendar/hooks/use-calendar-sources';
 import type { CalendarPeriodView } from '@app/features/calendar/types';
-import { formatLocalDate } from '@app/features/calendar/utils/calendar-date';
 import { getDefaultCalendarTimeFormat } from '@app/features/calendar/utils/time-format';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
+import { lazyNamed } from '@core/util/lazyNamed';
+import { formatLocalDate } from '@core/util/local-date';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import { createCalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
 import { Button, cn } from '@ui';
 import {
@@ -16,7 +17,6 @@ import {
   createMemo,
   createSignal,
   type JSX,
-  lazy,
   onCleanup,
   Show,
   Suspense,
@@ -31,18 +31,10 @@ import {
   expandCalendarToolPreviewEvents,
 } from './event-preview-model';
 
-const CalendarEmbed = lazy(() => {
-  const settleOperation = async () => {
-    const settleOperationValue = await import(
-      '@app/features/calendar/components/CalendarEmbed'
-    );
-    const module = settleOperationValue;
-    return await {
-      default: module.CalendarEmbed,
-    };
-  };
-  return settleOperation();
-});
+const CalendarEmbed = lazyNamed(
+  () => import('@app/features/calendar/components/CalendarEmbed'),
+  'CalendarEmbed'
+);
 
 const MAX_EXISTING_PREVIEW_EVENTS = 50;
 const PREVIEW_MONTH_YEAR_FORMAT = new Intl.DateTimeFormat(undefined, {
@@ -321,17 +313,19 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
                       </Button>
                     </Show>
                     <Button
+                      aria-label={`Previous ${previewView() === 'dayGridMonth' ? 'month' : 'week'}`}
+                      tooltip={`Previous ${previewView() === 'dayGridMonth' ? 'month' : 'week'}`}
                       variant="ghost"
                       size="icon-sm"
-                      label={`Previous ${previewView() === 'dayGridMonth' ? 'month' : 'week'}`}
                       onClick={() => navigate('previous')}
                     >
                       <CaretLeftIcon class="size-4" />
                     </Button>
                     <Button
+                      aria-label={`Next ${previewView() === 'dayGridMonth' ? 'month' : 'week'}`}
+                      tooltip={`Next ${previewView() === 'dayGridMonth' ? 'month' : 'week'}`}
                       variant="ghost"
                       size="icon-sm"
-                      label={`Next ${previewView() === 'dayGridMonth' ? 'month' : 'week'}`}
                       onClick={() => navigate('next')}
                     >
                       <CaretRightIcon class="size-4" />

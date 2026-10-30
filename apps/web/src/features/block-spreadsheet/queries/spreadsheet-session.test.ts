@@ -118,12 +118,7 @@ describe('spreadsheet session', () => {
       (snapshot) =>
         new Promise<void>((resolve) => {
           finishWrite = () => {
-            const settleOriginalSaveHandler0 = resolve;
-            const settleOriginalSave = async () => {
-              const settleOriginalSaveValue = await originalSave(snapshot);
-              return await settleOriginalSaveHandler0(settleOriginalSaveValue);
-            };
-            void settleOriginalSave();
+            resolve(originalSave(snapshot));
           };
         })
     );

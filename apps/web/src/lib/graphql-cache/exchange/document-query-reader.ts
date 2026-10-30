@@ -66,9 +66,9 @@ export function createDocumentQueryReader(
           isOlderThanLatest(revision, state.accepted, state.latest)
         )
           return state.latest.result;
-        updateRead2(revision);
-        const data = buildData(update, fallback);
-        updateRead(update);
+        assertRevisionNotBehindBase(revision);
+        const data = resultData(update, fallback);
+        assertPatchHasSnapshot(update);
         const result: ReadResult =
           update?.kind === 'miss' || fallback?.kind === 'miss'
             ? { kind: 'miss' }
@@ -81,16 +81,20 @@ export function createDocumentQueryReader(
         state.latest = { revision, result };
         return result;
       } catch (error) {
-        updateSnapshot(state);
+        forgetSnapshotAfterFailure(state);
         throw error;
       }
 
-      function updateSnapshot(stateInput: NonNullable<typeof state>) {
+      function forgetSnapshotAfterFailure(
+        stateInput: NonNullable<typeof state>
+      ) {
         if (states.get(key) === stateInput && sequence >= stateInput.accepted)
           stateInput.snapshot = undefined;
       }
 
-      function updateRead2(revision: CacheRevision | undefined) {
+      function assertRevisionNotBehindBase(
+        revision: CacheRevision | undefined
+      ) {
         if (
           base &&
           revision !== undefined &&
@@ -110,12 +114,12 @@ export function createDocumentQueryReader(
           : sequence < accepted;
       }
 
-      function updateRead(update: QueryUpdate | undefined) {
+      function assertPatchHasSnapshot(update: QueryUpdate | undefined) {
         if (update?.kind === 'patch' && !base)
           throw new Error('query patch has no snapshot');
       }
 
-      function buildData(
+      function resultData(
         update: QueryUpdate | undefined,
         fallback: ReadResult | undefined
       ) {

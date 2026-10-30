@@ -61,7 +61,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "$WIF_PROVIDER" || -z "$PLAY_ACCOUNT" ]]; then
-            echo "Configure the Google Play repository variables; see docs/ANDROID_DEVELOPMENT.md" >&2
+            echo "Configure the Google Play repository variables; see docs/development/android.md" >&2
             exit 1
           fi
       - name: Download verified release bundle
@@ -139,7 +139,7 @@ jobs:
             exit 1
           fi
           if [[ -z "$WIF_PROVIDER" || -z "$PLAY_ACCOUNT" ]]; then
-            echo "Configure the Google Play repository variables; see docs/ANDROID_DEVELOPMENT.md" >&2
+            echo "Configure the Google Play repository variables; see docs/development/android.md" >&2
             exit 1
           fi
       - name: Authenticate to Google Play

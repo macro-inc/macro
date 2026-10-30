@@ -1,21 +1,34 @@
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import type { JSX } from 'solid-js';
-import { CRM_RECORDS } from '../core/navigation';
+import {
+  CRM_ACTIVITY_TABS,
+  CRM_RECORDS,
+  pipelineTab,
+} from '../core/navigation';
 
 export function CrmMobileTabs(props: {
   active: string;
   pipelines: readonly { id: string; name: string }[];
   lists: readonly { id: string; name: string }[];
   leading?: JSX.Element;
+  activityEnabled?: boolean;
+  databasesEnabled?: boolean;
   onNavigate(id: string): void;
 }) {
   const items = (): PillTabItem[] => [
-    ...CRM_RECORDS.map((record) => ({
+    ...[
+      ...CRM_RECORDS,
+      ...(props.activityEnabled
+        ? CRM_ACTIVITY_TABS.filter(
+            (tab) => tab.id !== 'databases' || props.databasesEnabled
+          )
+        : []),
+    ].map((record) => ({
       value: record.id,
       label: record.label,
     })),
     ...props.pipelines.map((pipeline) => ({
-      value: `pipeline:${pipeline.id}`,
+      value: pipelineTab(pipeline.id),
       label: pipeline.name,
     })),
     ...props.lists.map((list) => ({

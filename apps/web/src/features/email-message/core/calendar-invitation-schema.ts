@@ -42,6 +42,7 @@ export const invitationSnapshotSchema = z.object({
   description: text,
   start: invitationTimeSchema.nullish(),
   end: invitationTimeSchema.nullish(),
+  recurrence: z.array(z.string()).nullish(),
   conference_url: text,
 });
 const invitationListSchema = z.array(invitationSnapshotSchema);

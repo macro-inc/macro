@@ -3,6 +3,7 @@
  * shared session when one is already open or a live frame just arrived.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { TurnState } from '@service-agent-fold/generated/types';
 import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
 import { AgentSession } from '../../queries/agent-session/agent-session';
@@ -40,15 +41,14 @@ export function useSessionTurn(
     // A row follows a session to show its turn and renders nothing from the
     // load, so a load it abandons by unmounting is not this caller's problem.
     // Left floating it surfaced as an unhandled rejection on every scroll.
-
-    const settleLoad = async () => {
+    const load = async () => {
       try {
-        return await session.load();
+        await session.load();
       } catch {
-        return await undefined;
+        // Abandoned with the row; nothing here reads the load.
       }
     };
-    void settleLoad();
+    fireAndForget(load(), 'session-turn');
     onCleanup(() => session.release());
   });
 

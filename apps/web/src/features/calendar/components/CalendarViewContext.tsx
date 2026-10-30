@@ -24,7 +24,6 @@ interface CalendarDisplaySettings {
   readonly showWeekends: boolean;
   readonly weekStartsOn: CalendarWeekStart;
   readonly timeFormat: CalendarTimeFormat;
-  readonly showTeamCalendars: boolean;
 }
 
 type CalendarViewContextProps = ParentProps<{
@@ -140,9 +139,6 @@ export const [CalendarViewContextProvider, useCalendarView] =
         get timeFormat() {
           return preferences.timeFormat;
         },
-        get showTeamCalendars() {
-          return preferences.showTeamCalendars;
-        },
       };
 
       const closeEventDetails = () => selection.close();
@@ -216,11 +212,6 @@ export const [CalendarViewContextProvider, useCalendarView] =
           setPreferences('weekStartsOn', weekStartsOn),
         setTimeFormat: (timeFormat: CalendarTimeFormat) =>
           setPreferences('timeFormat', timeFormat),
-        setShowTeamCalendars: (visible: boolean) => {
-          setPreferences('showTeamCalendars', visible);
-          if (!visible && selection.event()?.teamProjection)
-            closeEventDetails();
-        },
         closeEventDetails,
         selectEvent: selection.select,
         refreshSelectedEvent: selection.refresh,

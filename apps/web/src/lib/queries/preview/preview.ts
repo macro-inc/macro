@@ -4,6 +4,7 @@ import {
   isFeatureEnabled,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { authKeys } from '@queries/auth/keys';
 import type { UserInfoData } from '@queries/auth/user-info';
 import { queryReadyGate } from '@queries/gate';
@@ -48,11 +49,19 @@ const PREVIEW_STALE_TIME = 60 * 1000 * 60 * 24; // 24 hours
  * stale on the mention-preview cadence rather than the 24h default. */
 const CALENDAR_EVENT_PREVIEW_STALE_TIME = 60 * 1000;
 
+// Callers may pass component props; the cached queryFn keeps only a plain copy.
+function itemRequest(entity: ItemEntity): ItemEntity {
+  return entity.type === 'channel'
+    ? { id: entity.id, type: 'channel', messageId: entity.messageId }
+    : { id: entity.id, type: entity.type };
+}
+
 function itemPreviewQueryOptions(
-  item: ItemEntity,
+  entity: ItemEntity,
   enabled = true,
   staleTime = PREVIEW_STALE_TIME
 ) {
+  const item = itemRequest(entity);
   if (item.type === 'agent_session') staleTime = Math.min(staleTime, 30_000);
   if (item.type === 'calendar_event') {
     staleTime = Math.min(staleTime, CALENDAR_EVENT_PREVIEW_STALE_TIME);
@@ -125,30 +134,39 @@ function useItemPreviewQuery(
     graphqlRequested,
     includeProperties
   );
-  const usesGraphql = () =>
-    graphqlRequested() &&
-    isGraphqlPreviewItem(item()) &&
-    !graphqlQuery.shouldFallback();
+  const usesGraphql = createMemo(
+    () =>
+      graphqlRequested() &&
+      isGraphqlPreviewItem(item()) &&
+      !graphqlQuery.shouldFallback()
+  );
 
-  const restQuery = useQuery(() =>
-    itemPreviewQueryOptions(item(), !usesGraphql(), restStaleTime)
+  // Previews render in every message row and building an observer costs more
+  // than the GraphQL read itself, so the REST one exists only while it serves.
+  const restQuery = createMemo(() =>
+    usesGraphql()
+      ? undefined
+      : useQuery(() => itemPreviewQueryOptions(item(), true, restStaleTime))
   );
 
   return {
-    data: () =>
-      usesGraphql()
-        ? graphqlQuery.data()
-        : queryReadyGate(restQuery)
-          ? restQuery.data
-          : undefined,
+    data: () => {
+      if (usesGraphql()) return graphqlQuery.data();
+      const rest = restQuery();
+      return rest && queryReadyGate(rest) ? rest.data : undefined;
+    },
     isLoading: () =>
-      usesGraphql() ? graphqlQuery.isLoading() : restQuery.isPending,
+      usesGraphql()
+        ? graphqlQuery.isLoading()
+        : (restQuery()?.isPending ?? true),
     isSuccess: () =>
-      usesGraphql() ? graphqlQuery.data() !== undefined : restQuery.isSuccess,
+      usesGraphql()
+        ? graphqlQuery.data() !== undefined
+        : (restQuery()?.isSuccess ?? false),
     usesGraphql,
     refetch: async () => {
       if (usesGraphql()) await graphqlQuery.refetch();
-      else await restQuery.refetch();
+      else await restQuery()?.refetch();
     },
   };
 }
@@ -172,28 +190,40 @@ function channelMessagePreviewQueryOptions(
 export function useItemPreview(item: Accessor<ItemEntity>) {
   const previewQuery = useItemPreviewQuery(item);
 
-  const maybeMessageQuery = useQuery(() => {
+  // Only a REST preview of a message link loads its message separately.
+  const loadsMessageContext = createMemo(() => {
     const item_ = item();
-    const channelId = item_.type === 'channel' ? item_.id : '';
-    const messageId = item_.type === 'channel' ? (item_.messageId ?? '') : '';
-    return channelMessagePreviewQueryOptions(
-      item_.id,
-      channelId,
-      messageId,
-      !previewQuery.usesGraphql() &&
-        !!channelId &&
-        !!messageId &&
-        previewQuery.isSuccess()
+    return (
+      item_.type === 'channel' &&
+      !!item_.messageId &&
+      !previewQuery.usesGraphql()
     );
   });
+  const maybeMessageQuery = createMemo(() =>
+    loadsMessageContext()
+      ? useQuery(() => {
+          const item_ = item();
+          const channelId = item_.type === 'channel' ? item_.id : '';
+          const messageId =
+            item_.type === 'channel' ? (item_.messageId ?? '') : '';
+          return channelMessagePreviewQueryOptions(
+            item_.id,
+            channelId,
+            messageId,
+            !!channelId && !!messageId && previewQuery.isSuccess()
+          );
+        })
+      : undefined
+  );
 
   const preview = createMemo(() => {
     const data = previewQuery.data();
     // Disabled message queries are pending but not loading. Reading their
     // data still suspends briefly whenever a preview row mounts.
+    const messageQuery = maybeMessageQuery();
     const channelMessageData =
-      !maybeMessageQuery.isPending && queryReadyGate(maybeMessageQuery)
-        ? maybeMessageQuery.data
+      messageQuery && !messageQuery.isPending && queryReadyGate(messageQuery)
+        ? messageQuery.data
         : undefined;
 
     if (!data) {
@@ -287,21 +317,15 @@ function cachedUserId(): string | undefined {
 }
 
 function runGraphqlPreviewWrite(write: Promise<void>) {
-  const settleWrite = async () => {
-    try {
-      return await write;
-    } catch (settleWriteError) {
-      const error = settleWriteError;
+  fireAndForget(logGraphqlPreviewWriteFailure(write), 'graphql-preview');
+}
 
-      console.error(
-        '[graphql-preview] failed to update normalized cache',
-        error
-      );
-
-      return;
-    }
-  };
-  void settleWrite();
+async function logGraphqlPreviewWriteFailure(write: Promise<void>) {
+  try {
+    await write;
+  } catch (error) {
+    console.error('[graphql-preview] failed to update normalized cache', error);
+  }
 }
 
 function getPreviewData(itemId: string): PreviewItem | undefined {

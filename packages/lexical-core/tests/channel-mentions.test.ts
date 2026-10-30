@@ -59,6 +59,14 @@ describe('extractChannelMentionsFromMarkdown', () => {
     ).toEqual([{ entityType: 'document', entityId: 'doc-1' }]);
   });
 
+  it('never sends a pipeline mention as a channel reference', () => {
+    expect(
+      extractChannelMentionsFromMarkdown(
+        `${documentMention('pipeline-1', 'pipeline')} ${documentMention('doc-1', 'md')}`
+      )
+    ).toEqual([{ entityType: 'document', entityId: 'doc-1' }]);
+  });
+
   it('extracts user mentions and re-tags bot principals', () => {
     const markdown =
       '<m-user-mention>{"userId":"macro|a@b.com","email":"a@b.com"}</m-user-mention> and ' +

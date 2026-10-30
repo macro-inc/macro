@@ -1,5 +1,9 @@
-//! Warm sessions use list_hidden without a thread; hidden mentions always have a thread.
+//! Warm lifecycle is independent of list visibility. Conversation reservations
+//! are excluded defensively, including contexts reserved before runtime startup.
 use super::*;
+
+#[cfg(test)]
+mod test;
 use crate::domain::warm::{WarmClaim, WarmMissReason, WarmSessionLifecycle};
 use std::{future::Future, pin::Pin};
 
@@ -21,7 +25,9 @@ impl<B: BotFacts + 'static> WarmSessionLifecycle for PgAgentSessionRepo<B> {
                 WITH candidate AS (
                     SELECT
                         true AS found,
-                        list_hidden AND thread_id IS NULL AS warm,
+                        for_warming AND visibility = 'hidden' AND thread_id IS NULL AND NOT EXISTS (
+                            SELECT 1 FROM agent_conversation_sessions c WHERE c.session_id = agent_session.id
+                        ) AS warm,
                         owner_id = $2 AS owner_matches,
                         bot_id = $3 AS bot_matches,
                         model = $4 AS model_matches,
@@ -31,10 +37,11 @@ impl<B: BotFacts + 'static> WarmSessionLifecycle for PgAgentSessionRepo<B> {
                         created_at > NOW() - INTERVAL '10 minutes' AS fresh
                     FROM agent_session WHERE id = $1
                 ), claimed AS (
-                    UPDATE agent_session SET list_hidden = false
+                    UPDATE agent_session SET visibility = 'listed', for_warming = false
                     WHERE id = $1 AND owner_id = $2 AND bot_id = $3 AND model = $4
                       AND instructions IS NOT DISTINCT FROM $5
-                      AND list_hidden AND thread_id IS NULL
+                      AND for_warming AND visibility = 'hidden' AND thread_id IS NULL
+                      AND NOT EXISTS (SELECT 1 FROM agent_conversation_sessions c WHERE c.session_id = agent_session.id)
                       AND status != 'disconnected'
                       AND NOT (status = 'event' AND status_event_name = 'disconnected')
                       AND created_at > NOW() - INTERVAL '10 minutes'
@@ -100,7 +107,8 @@ impl<B: BotFacts + 'static> WarmSessionLifecycle for PgAgentSessionRepo<B> {
                 UPDATE agent_session SET status = 'disconnected'
                 WHERE id IN (
                     SELECT id FROM agent_session
-                    WHERE list_hidden AND thread_id IS NULL
+                    WHERE for_warming AND visibility = 'hidden' AND thread_id IS NULL
+                      AND NOT EXISTS (SELECT 1 FROM agent_conversation_sessions c WHERE c.session_id = agent_session.id)
                       AND created_at <= NOW() - INTERVAL '10 minutes'
                     ORDER BY created_at LIMIT 64 FOR UPDATE SKIP LOCKED
                 ) RETURNING id

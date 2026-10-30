@@ -3,6 +3,7 @@ import type { FilterID } from '@app/features/next-soup/filters';
 import type { FilterContext } from '@app/features/next-soup/filters/configs';
 import {
   type Query,
+  type QueryState,
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
 import { mergeQuery } from '@app/features/next-soup/filters/filter-store/query-store';
@@ -21,13 +22,12 @@ import {
 } from '@app/features/next-soup/soup-view/tab-lists';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import type { TabItem } from '@core/component/Tabs';
-import { TabsInset } from '@core/component/TabsInset';
-import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import { useUserContext } from '@core/context/user';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { useIsTeamAdmin } from '@queries/team/teams';
-import type { Params } from '@service-storage/generated/schemas';
-import { batch, createMemo, For, Match, Switch } from 'solid-js';
+import { Dropdown, type TabOption, Tabs } from '@ui';
+import { batch, createMemo, For, Match, Show, Switch } from 'solid-js';
 
 const useCurrentListView = () => {
   const panel = useSplitPanelOrThrow();
@@ -47,7 +47,7 @@ const useCurrentListView = () => {
  * pills, and the number/cycle hotkeys — agrees on which tabs exist.
  */
 export const useVisibleViewTabs = () => {
-  return (view: TabbedListView): TabItem[] => VIEW_TAB_LISTS[view];
+  return (view: TabbedListView): TabOption<string>[] => VIEW_TAB_LISTS[view];
 };
 
 const PRESERVE_FILTERS_ON_TAB_CHANGE: ListView[] = [
@@ -60,6 +60,8 @@ const VIEW_SCOPED_REFINEMENTS: ListView[] = ['calls'];
 
 export const shouldPreserveFiltersOnTabChange = (view: ListView) =>
   PRESERVE_FILTERS_ON_TAB_CHANGE.includes(view);
+
+type ViewPreset = NonNullable<ReturnType<typeof getViewPreset>>;
 
 export const useApplyPreset = () => {
   const soup = useSoup();
@@ -88,6 +90,104 @@ export const useApplyPreset = () => {
       : (filter.query as Query);
   };
 
+  /**
+   * The next tab's preset with the current refinements layered on: active
+   * predicates beyond the current tab's own, plus the query-only refinements
+   * no predicate backs.
+   */
+  const withPreservedRefinements = (
+    view: ListView,
+    preset: ViewPreset,
+    presetContext: PresetContext,
+    filterContext: FilterContext
+  ) => {
+    const currentPreset = getViewPreset(
+      view,
+      activeTab() ?? VIEW_TAB_PRESETS[view]?.default,
+      presetContext
+    );
+
+    const currentFilterIds: FilterID[] = [
+      ...(currentPreset?.clientFilters.and ?? []),
+      ...(currentPreset?.clientFilters.or ?? []),
+    ];
+
+    const nextAndIds = (soup.predicates.andIds() as FilterID[]).filter(
+      (id) => !currentFilterIds.includes(id)
+    );
+
+    const nextOrIds = (soup.predicates.orIds() as FilterID[]).filter(
+      (id) => !currentFilterIds.includes(id)
+    );
+
+    const refinementIds = [...nextAndIds, ...nextOrIds];
+
+    let mergedFilters = queryStateFrom(preset.filters);
+    for (const id of refinementIds) {
+      const query = getFilterQuery(id, filterContext);
+
+      if (!query) continue;
+
+      mergedFilters = mergeQuery(mergedFilters, query);
+    }
+
+    return {
+      filters: withQueryOnlyRefinements(mergedFilters, currentPreset),
+      clientFilters: {
+        and: [...new Set([...(preset.clientFilters.and ?? []), ...nextAndIds])],
+        or: [...new Set([...(preset.clientFilters.or ?? []), ...nextOrIds])],
+      },
+    };
+  };
+
+  const withQueryOnlyRefinements = (
+    filters: QueryState,
+    currentPreset: ViewPreset | undefined
+  ): QueryState => {
+    let mergedFilters = filters;
+
+    // Tags are a query-only refinement with no backing predicate, so the
+    // predicate-driven reconstruction above never carries them. Preserve the
+    // active selection (and its combine mode) explicitly like any other
+    // refinement.
+    const activeTagFilters = queryFilters.state.include.tagFilters;
+    if (activeTagFilters?.length) {
+      mergedFilters = mergeQuery(mergedFilters, {
+        include: {
+          tagFilters: activeTagFilters.map((t) => ({ ...t })),
+          tagFilterMode: queryFilters.state.include.tagFilterMode,
+        },
+      });
+    }
+
+    // Created by is a direct server-side document-owner refinement rather
+    // than a client predicate, so retain an explicit choice across the
+    // Tasks and Files tabs just as we do tags above. Do not carry a tab's
+    // own owner scope (e.g. Files → Owned) into another tab.
+    const currentCreatorIds = queryFilters.state.include.documentOwnerId ?? [];
+    const presetCreatorIds =
+      currentPreset?.filters.include?.documentOwnerId ?? [];
+    const isExplicitCreatorFilter =
+      currentCreatorIds.length !== presetCreatorIds.length ||
+      currentCreatorIds.some((id) => !presetCreatorIds.includes(id));
+    if (isExplicitCreatorFilter) {
+      mergedFilters.include.documentOwnerId = currentCreatorIds.length
+        ? [...currentCreatorIds]
+        : undefined;
+    }
+
+    // A channel chosen in the Calls sidebar is a direct server refinement,
+    // and no tab scopes by channel, so it carries over unchanged.
+    const channelIds = queryFilters.state.include.callChannelId;
+    if (channelIds?.length) {
+      mergedFilters = mergeQuery(mergedFilters, {
+        include: { callChannelId: [...channelIds] },
+      });
+    }
+
+    return mergedFilters;
+  };
+
   const applyTabPreset = (view: ListView, tabId: string) => {
     const presetContext = getPresetContext();
     const preset = getViewPreset(view, tabId, presetContext);
@@ -102,78 +202,14 @@ export const useApplyPreset = () => {
     let nextClientFilters = preset.clientFilters;
 
     if (shouldPreserveFiltersOnTabChange(view)) {
-      const currentPreset = getViewPreset(
+      const preserved = withPreservedRefinements(
         view,
-        activeTab() ?? VIEW_TAB_PRESETS[view]?.default,
-        presetContext
+        preset,
+        presetContext,
+        filterContext
       );
-
-      const currentFilterIds: FilterID[] = buildCurrentFilterIds(currentPreset);
-
-      const nextAndIds = (soup.predicates.andIds() as FilterID[]).filter(
-        (id) => !currentFilterIds.includes(id)
-      );
-
-      const nextOrIds = (soup.predicates.orIds() as FilterID[]).filter(
-        (id) => !currentFilterIds.includes(id)
-      );
-
-      const refinementIds = [...nextAndIds, ...nextOrIds];
-
-      let mergedFilters = queryStateFrom(preset.filters);
-      for (const id of refinementIds) {
-        const query = getFilterQuery(id, filterContext);
-
-        if (!query) continue;
-
-        mergedFilters = mergeQuery(mergedFilters, query);
-      }
-
-      // Tags are a query-only refinement with no backing predicate, so the
-      // predicate-driven reconstruction above never carries them. Preserve the
-      // active selection (and its combine mode) explicitly like any other
-      // refinement.
-      const activeTagFilters = queryFilters.state.include.tagFilters;
-      if (activeTagFilters?.length) {
-        mergedFilters = mergeQuery(mergedFilters, {
-          include: {
-            tagFilters: activeTagFilters.map((t) => ({ ...t })),
-            tagFilterMode: queryFilters.state.include.tagFilterMode,
-          },
-        });
-      }
-
-      // Created by is a direct server-side document-owner refinement rather
-      // than a client predicate, so retain an explicit choice across the
-      // Tasks and Files tabs just as we do tags above. Do not carry a tab's
-      // own owner scope (e.g. Files → Owned) into another tab.
-      const currentCreatorIds =
-        queryFilters.state.include.documentOwnerId ?? [];
-      const presetCreatorIds = buildPresetCreatorIds(currentPreset);
-      const isExplicitCreatorFilter =
-        currentCreatorIds.length !== presetCreatorIds.length ||
-        currentCreatorIds.some((id) => !presetCreatorIds.includes(id));
-      if (isExplicitCreatorFilter) {
-        mergedFilters.include.documentOwnerId = currentCreatorIds.length
-          ? [...currentCreatorIds]
-          : undefined;
-      }
-
-      // A channel chosen in the Calls sidebar is a direct server refinement,
-      // and no tab scopes by channel, so it carries over unchanged.
-      const channelIds = queryFilters.state.include.callChannelId;
-      if (channelIds?.length) {
-        mergedFilters = mergeQuery(mergedFilters, {
-          include: { callChannelId: [...channelIds] },
-        });
-      }
-
-      nextFilters = mergedFilters;
-
-      nextClientFilters = {
-        and: [...new Set([...(preset.clientFilters.and ?? []), ...nextAndIds])],
-        or: [...new Set([...(preset.clientFilters.or ?? []), ...nextOrIds])],
-      };
+      nextFilters = preserved.filters;
+      nextClientFilters = preserved.clientFilters;
     }
 
     // Calls sidebar refinements belong to the view, not to one tab, so a
@@ -199,115 +235,6 @@ export const useApplyPreset = () => {
     ) {
     }
     return true;
-
-    function buildPresetCreatorIds(
-      currentPreset:
-        | {
-            filters: Query;
-            clientFilters: { and?: FilterID[]; or?: FilterID[] };
-            groupBy?: string;
-            sortDirection?: 'asc' | 'desc';
-            sortMethod?: Exclude<
-              NonNullable<Params['sort_method']>,
-              'frecency'
-            >;
-          }
-        | undefined
-    ) {
-      return currentPreset?.filters.include?.documentOwnerId ?? [];
-    }
-
-    function buildCurrentFilterIds(
-      currentPreset:
-        | {
-            filters: Query;
-            clientFilters: { and?: FilterID[]; or?: FilterID[] };
-            groupBy?: string;
-            sortDirection?: 'asc' | 'desc';
-            sortMethod?: Exclude<
-              NonNullable<Params['sort_method']>,
-              'frecency'
-            >;
-          }
-        | undefined
-    ): (
-      | 'inbox'
-      | 'done'
-      | 'email'
-      | 'document'
-      | 'routine'
-      | 'noise'
-      | 'explicit-noise'
-      | 'unread'
-      | 'read'
-      | 'not-done'
-      | 'channels'
-      | 'file-folder'
-      | 'folders'
-      | 'active-agent'
-      | 'email-drafts'
-      | 'no-drafts'
-      | 'has-calendar-invite'
-      | 'has-attachment'
-      | 'attachment-pdf'
-      | 'attachment-image'
-      | 'attachment-document'
-      | 'shared-entity'
-      | 'owned-entity'
-      | 'assigned-to'
-      | 'assignee'
-      | 'task'
-      | 'my-tasks'
-      | 'not-task'
-      | 'document-or-file'
-      | 'active-task'
-      | 'calendar'
-      | 'calls'
-      | 'call-external'
-      | 'call-internal'
-      | 'crm-company'
-      | 'crm-company-active'
-      | 'crm-company-hidden'
-      | 'crm-contact-active'
-      | 'company-owner'
-      | 'company-needs-follow-up'
-      | 'company-recently-active'
-      | 'company-stage'
-      | 'email-attachments'
-      | 'in-folder'
-      | 'search-supported'
-      | 'agent'
-      | 'people'
-      | 'teams'
-      | 'file'
-      | 'github-pr'
-      | 'task-not-started'
-      | 'task-in-progress'
-      | 'task-in-review'
-      | 'task-completed'
-      | 'task-canceled'
-      | 'task-urgent'
-      | 'task-high-priority'
-      | 'task-medium-priority'
-      | 'task-low-priority'
-      | 'task-no-priority'
-      | 'doc-markdown'
-      | 'doc-snippet'
-      | 'doc-skill'
-      | 'doc-canvas'
-      | 'doc-spreadsheet'
-      | 'file-code'
-      | 'file-image'
-      | 'file-pdf'
-      | 'file-docx'
-      | 'file-video'
-      | 'file-other'
-    )[] {
-      return [
-        ...(currentPreset?.clientFilters.and ?? []),
-        ...(currentPreset?.clientFilters.or ?? []),
-      ];
-    }
   };
 
   return { applyTabPreset };
@@ -335,16 +262,17 @@ const ViewTabs = (props: { view: TabbedListView }) => {
   const visibleViewTabs = useVisibleViewTabs();
 
   return (
-    <TabsInset
-      list={visibleViewTabs(props.view)}
-      value={activeTab()}
-      defaultValue={VIEW_TAB_PRESETS[props.view].default}
+    <Tabs
+      aria-label="View tabs"
+      class="shrink-0"
+      options={visibleViewTabs(props.view)}
+      value={activeTab() ?? VIEW_TAB_PRESETS[props.view].default}
       onChange={(value) => applyTabPreset(props.view, value)}
     />
   );
 };
 
-/** Compact dropdown variant of tabs, used when the header is too narrow for the full segmented control. */
+/** The selected tab as a menu, for a header too narrow for every tab. */
 export const CollapsedSoupViewTabs = () => {
   const listView = useCurrentListView();
   const { applyTabPreset } = useApplyPreset();
@@ -356,28 +284,43 @@ export const CollapsedSoupViewTabs = () => {
     return v && v in VIEW_TAB_LISTS ? (v as TabbedListView) : undefined;
   });
 
-  const list = createMemo(() => {
+  const options = () => {
     const v = view();
     return v ? visibleViewTabs(v) : [];
-  });
+  };
 
-  const defaultValue = createMemo(() => {
+  const selected = () => {
     const v = view();
-    return v ? VIEW_TAB_PRESETS[v].default : undefined;
-  });
+    const value = activeTab() ?? (v ? VIEW_TAB_PRESETS[v].default : undefined);
+    return options().find((option) => option.value === value) ?? options()[0];
+  };
 
   return (
-    <TabsInsetDropdown
-      list={list()}
-      value={activeTab()}
-      defaultValue={defaultValue()}
-      onChange={(value) => {
-        const v = view();
-        if (v) {
-          applyTabPreset(v, value);
-        }
-      }}
-    />
+    <Dropdown placement="bottom-start">
+      <Dropdown.Trigger variant="secondary" size="md">
+        {selected()?.label}
+        <CaretDownIcon class="size-3 text-ink-extra-muted" />
+      </Dropdown.Trigger>
+      <Dropdown.Content>
+        <Dropdown.Group>
+          <For each={options()}>
+            {(option) => (
+              <Dropdown.Item
+                onSelect={() => {
+                  const v = view();
+                  if (v) applyTabPreset(v, option.value);
+                }}
+              >
+                <span class="flex-1 truncate">{option.label}</span>
+                <Show when={selected()?.value === option.value}>
+                  <CheckIcon class="size-3.5 text-accent" />
+                </Show>
+              </Dropdown.Item>
+            )}
+          </For>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
   );
 };
 
@@ -429,8 +372,8 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
   return (
     <PillTabs
       scrollable
-      class={'-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none'}
-      contentClass={'px-(--mobile-chrome-gutter)'}
+      class="-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none"
+      contentClass="px-(--mobile-chrome-gutter)"
       leading={<MobileFilterDrawer />}
       items={visibleViewTabs(props.view)}
       value={activeValue()}

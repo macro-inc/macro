@@ -5,7 +5,8 @@ import {
 } from '@property/constants';
 import type { Property, PropertyOption, ValueType } from '@property/types';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
-import { match as matchBranch } from 'ts-pattern';
+import { match } from 'ts-pattern';
+import { timeRangeFromInstants } from '../../database/core/cell-date-range';
 import {
   COMPANY_STAGE_OPTIONS,
   TASK_STATUS_OPTIONS,
@@ -177,7 +178,7 @@ export function soupPropertyToProperty(soupProperty: SoupProperty): Property {
   ) as ValueType;
 
   // Handle each value type with proper type checking
-  return matchBranch(valueType)
+  return match(valueType)
     .with('STRING', (): Property => {
       if (hasPropertyValueType(propertyValue, 'String')) {
         const stringVal = propertyValue.value;
@@ -229,6 +230,17 @@ export function soupPropertyToProperty(soupProperty: SoupProperty): Property {
       }
       return { ...baseProperty, valueType: 'DATE', value: null };
     })
+    .with(
+      'DATE_RANGE',
+      (): Property => ({
+        ...baseProperty,
+        valueType: 'DATE_RANGE',
+        value:
+          (propertyValue?.type === 'DateRange' &&
+            timeRangeFromInstants(propertyValue.value)) ||
+          null,
+      })
+    )
     .with('SELECT_STRING', 'SELECT_NUMBER', (valueType): Property => {
       if (hasPropertyValueType(propertyValue, 'SelectOption')) {
         const selectVal = propertyValue.value;
@@ -264,12 +276,7 @@ export function soupPropertyToProperty(soupProperty: SoupProperty): Property {
       }
       return { ...baseProperty, valueType: 'LINK', value: null };
     })
-    .otherwise((valueType): Property => {
-      {
-        const exhaustiveCheck: never = valueType;
-        throw new Error(`Unsupported value type: ${String(exhaustiveCheck)}`);
-      }
-    });
+    .exhaustive();
 }
 
 /**

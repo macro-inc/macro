@@ -1,4 +1,4 @@
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 import {
   ArchiveError,
   DEFAULT_ARCHIVE_LIMITS,
@@ -158,13 +158,21 @@ export function installArchiveWorker(port: ArchiveWorkerPort): void {
     else port.postMessage({ type: 'complete', sessionId: current.id });
   }
 
-  port.onmessage = ({ data }) => {
-    match(data)
-      .with({ type: 'discover' }, (request) => {
-        void discover(request);
+  port.onmessage = async ({ data }) => {
+    await match(data)
+      .with({ type: 'discover' }, async (request) => {
+        try {
+          await discover(request);
+        } catch (error: unknown) {
+          reportError(request.sessionId, error);
+        }
       })
-      .with({ type: 'read_history' }, (request) => {
-        void readHistory(request);
+      .with({ type: 'read_history' }, async (request) => {
+        try {
+          await readHistory(request);
+        } catch (error: unknown) {
+          reportError(request.sessionId, error);
+        }
       })
       .with({ type: 'ack_part' }, (request) => {
         if (
@@ -181,7 +189,15 @@ export function installArchiveWorker(port: ArchiveWorkerPort): void {
           port.postMessage({ type: 'cancelled', sessionId: request.sessionId });
         }
       })
-      .exhaustive();
+      .exhaustive((unknown) =>
+        match(unknown)
+          .with({ sessionId: P.string }, ({ sessionId }) =>
+            reportError(sessionId, new ArchiveError('invalid_state'))
+          )
+          .otherwise(() =>
+            console.warn('slack import worker: unknown request', unknown)
+          )
+      );
   };
 }
 

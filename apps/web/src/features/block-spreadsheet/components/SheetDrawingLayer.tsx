@@ -1,9 +1,9 @@
+import ImageIcon from '@icon/system/regular/image.svg';
+import PencilSimple from '@icon/system/regular/pencil-simple.svg';
 import type {
   SheetChart,
   SheetDrawing,
 } from '@macro-inc/spreadsheet/sheet-drawings';
-import ImageIcon from '@phosphor/image.svg';
-import PencilSimple from '@phosphor/pencil-simple.svg';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import type { ChartData } from '../core/chart-data';
 import { chartScene } from '../core/chart-scene';
@@ -188,7 +188,7 @@ export function SheetDrawingLayer(props: {
                   'ring-2 ring-accent': selected(),
                   'touch-none': selected() && editable(),
                 }}
-                style={getSheetDrawingLayerStyle(box)}
+                style={drawingFrameStyle(box)}
                 onPointerDown={(event) => {
                   if (event.button !== 0) return;
                   event.stopPropagation();
@@ -410,7 +410,7 @@ export function SheetDrawingLayer(props: {
           </Show>
         );
 
-        function getSheetDrawingLayerStyle(box: () => DrawingRect) {
+        function drawingFrameStyle(box: () => DrawingRect) {
           return {
             left: `${box().left - (target()?.x ?? 0)}px`,
             top: `${box().top - (target()?.y ?? 0)}px`,

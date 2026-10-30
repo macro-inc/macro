@@ -172,7 +172,7 @@ function readColor(
     number(attribute(entry, 'val')),
   ]);
   const alphaModifier = modifiers.find(([name]) => name === 'alpha');
-  const alpha = buildAlpha();
+  const alpha = alphaOf();
   const pending: PendingColor = {
     modifiers: modifiers.filter(([name]) => name !== 'alpha'),
   };
@@ -203,23 +203,23 @@ function readColor(
     } else {
       // The theme's text color follows the app's theme, unless modified.
       if ((scheme === 'tx1' || scheme === 'dk1') && !pending.modifiers.length)
-        return buildReadColor2();
+        return themeTextColor();
       pending.hex = schemeColor(theme, scheme ?? '') ?? DEFAULT_THEME[1];
     }
   } else return;
   if (!pending.hex || !/^[0-9a-f]{6}$/i.test(pending.hex)) return;
   const hex = finishColor(pending);
-  return buildReadColor();
+  return finishedColor();
 
-  function buildAlpha() {
+  function alphaOf() {
     return alphaModifier ? alphaModifier[1] / 100000 : undefined;
   }
 
-  function buildReadColor2(): Color | undefined {
+  function themeTextColor(): Color | undefined {
     return { ...(alpha !== undefined && { alpha }) };
   }
 
-  function buildReadColor(): Color | undefined {
+  function finishedColor(): Color | undefined {
     return hex ? { hex, ...(alpha !== undefined && { alpha }) } : undefined;
   }
 }
@@ -340,7 +340,7 @@ function customPaths(geometry: XmlElement): ShapePart['paths'] {
       const points = elements(command)
         .filter((entry) => entry.local === 'pt')
         .map(point);
-      ({ current, start } = updateCurrent(
+      ({ current, start } = followPathCommand(
         command,
         points,
         current,
@@ -362,7 +362,7 @@ function customPaths(geometry: XmlElement): ShapePart['paths'] {
   }
   return result.length ? result : undefined;
 
-  function updateCurrent(
+  function followPathCommand(
     command: XmlElement,
     points: [number, number][],
     current: [number, number],
@@ -606,7 +606,7 @@ function readText(
     for (const run of elements(paragraph)) {
       if (runs.length >= 1_000) break;
       let text: string | undefined;
-      text = updateText(run, text);
+      text = runText(run, text);
       if (text === undefined) continue;
       text = text.slice(0, Math.max(0, 32_767 - characters));
       characters += text.length;
@@ -626,7 +626,7 @@ function readText(
       paragraphDefaults,
       theme
     );
-    paragraphs.push(buildReadText2(align, runs, end));
+    paragraphs.push(paragraphOf(align, runs, end));
   }
   // Trailing empty paragraphs take no room in Excel's text boxes either way.
   while (paragraphs.length > 1 && !paragraphs.at(-1)?.runs.length && !link)
@@ -644,9 +644,9 @@ function readText(
     inset('rIns', 91_440),
     inset('bIns', 45_720),
   ];
-  return buildReadText();
+  return textBody();
 
-  function buildReadText2(
+  function paragraphOf(
     align: ShapeParagraph['align'],
     runs: ShapeRun[],
     end: RunDefaults
@@ -658,7 +658,7 @@ function readText(
     };
   }
 
-  function updateText(run: XmlElement, text: string | undefined) {
+  function runText(run: XmlElement, text: string | undefined) {
     if (run.local === 'r' || run.local === 'fld') {
       const characters = child(run, 't');
       text = characters ? textOf(characters) : '';
@@ -666,7 +666,7 @@ function readText(
     return text;
   }
 
-  function buildReadText(): ShapeText | undefined {
+  function textBody(): ShapeText | undefined {
     return {
       paragraphs,
       ...(anchor === 'ctr' && { anchor: 'middle' as const }),
@@ -746,14 +746,14 @@ function readParts(
   const style = readStyle(child(element, 'style'), theme);
   const preset = child(properties, 'prstGeom');
   const custom = child(properties, 'custGeom');
-  const geometry = buildGeometry();
+  const geometry = geometryName();
   const adjust: Record<string, number> = {};
   for (const guide of elements(child(preset, 'avLst'))) {
     const name = attribute(guide, 'name') ?? '';
     const value = /^val\s+(-?\d+(?:\.\d+)?)$/.exec(
       attribute(guide, 'fmla') ?? ''
     );
-    updateReadParts(guide, value, name);
+    readAdjustGuide(guide, value, name);
   }
   const paths = custom ? customPaths(custom) : undefined;
   // Pictures in groups are drawn as their frames.
@@ -772,13 +772,13 @@ function readParts(
     link || undefined
   );
   const placed = place(frame);
-  parts.push(buildReadParts(frame));
+  parts.push(shapePart(frame));
   // SmartArt places some text apart from its shape.
   const textFrame = readFrame(child(element, 'txXfrm'));
   const last = parts.at(-1);
-  updateReadParts2();
+  splitSmartArtText();
 
-  function buildReadParts(frameInput: NonNullable<typeof frame>): ReadPart {
+  function shapePart(frameInput: NonNullable<typeof frame>): ReadPart {
     return {
       frame: placed,
       ...(geometry !== 'rect' &&
@@ -801,7 +801,7 @@ function readParts(
     };
   }
 
-  function updateReadParts2() {
+  function splitSmartArtText() {
     if (textFrame && last?.text) {
       const { text: shapeText, ...shape } = last;
       parts[parts.length - 1] = shape;
@@ -809,7 +809,7 @@ function readParts(
     }
   }
 
-  function updateReadParts(
+  function readAdjustGuide(
     guide: XmlElement,
     value: RegExpExecArray | null,
     name: string
@@ -823,7 +823,7 @@ function readParts(
       adjust[name] = Math.max(-10000000, Math.min(10000000, Number(value[1])));
   }
 
-  function buildGeometry() {
+  function geometryName() {
     return preset
       ? (attribute(preset, 'prst') ?? 'rect')
       : custom
@@ -1269,7 +1269,7 @@ function partXml(part: ShapePart, box: Box, id: number, name: string): string {
   const fill = part.fill
     ? `<a:solidFill><a:srgbClr val="${hex(part.fill)}">${part.opacity !== undefined ? `<a:alpha val="${Math.round(part.opacity * 100_000)}"/>` : ''}</a:srgbClr></a:solidFill>`
     : '<a:noFill/>';
-  const line = buildLine();
+  const line = lineXml();
   const properties = `<xdr:spPr>${transform}${outline}${connector ? '' : fill}${line}</xdr:spPr>`;
   const label = `<xdr:cNvPr id="${id}" name="${xmlAttribute(name)}"/>`;
   if (connector)
@@ -1279,7 +1279,7 @@ function partXml(part: ShapePart, box: Box, id: number, name: string): string {
     : '';
   return `<xdr:sp macro=""${link}><xdr:nvSpPr>${label}<xdr:cNvSpPr/></xdr:nvSpPr>${properties}${part.text ? textXml(part.text) : ''}</xdr:sp>`;
 
-  function buildLine() {
+  function lineXml() {
     return part.line
       ? `<a:ln w="${Math.round(part.line.width * 9525)}">${part.line.color ? `<a:solidFill><a:srgbClr val="${hex(part.line.color)}"/></a:solidFill>` : '<a:solidFill><a:schemeClr val="tx1"/></a:solidFill>'}${part.line.dash ? `<a:prstDash val="${({ longDash: 'lgDash', longDashDot: 'lgDashDot' } as Record<string, string>)[part.line.dash] ?? part.line.dash}"/>` : ''}${part.line.head ? `<a:headEnd type="${part.line.head}"/>` : ''}${part.line.tail ? `<a:tailEnd type="${part.line.tail}"/>` : ''}</a:ln>`
       : '<a:ln><a:noFill/></a:ln>';

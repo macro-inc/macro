@@ -1,8 +1,10 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { until } from '@solid-primitives/promise';
 import { Mutex } from 'async-mutex';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import { reorderDatabaseColumns } from '../core/column-order';
 import {
+  type CreateDatabaseColumn,
   columnSchemaMessage,
   type DatabaseSchemaChange,
 } from '../core/column-schema';
@@ -30,7 +32,7 @@ export function createColumnLayout(options: {
   /** Saves the table's own column order, which All records follows. */
   saveColumnOrder?: (columnIds: string[]) => DatabaseSchemaChange;
   /** Creates a column at the table's end and returns its id. */
-  createColumn?: () => DatabaseSchemaChange<string>;
+  createColumn?: CreateDatabaseColumn;
   /** Opens a header's rename, as for a column just inserted. */
   renameColumn: (columnId: string) => void;
 }) {
@@ -166,10 +168,13 @@ export function createColumnLayout(options: {
           (direction === 'left' ? -1 : 1)
       ];
     if (target)
-      void reorderColumn(
-        columnId,
-        target.id,
-        direction === 'left' ? 'before' : 'after'
+      fireAndForget(
+        reorderColumn(
+          columnId,
+          target.id,
+          direction === 'left' ? 'before' : 'after'
+        ),
+        'database'
       );
   }
   return {

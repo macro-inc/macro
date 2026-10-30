@@ -1,5 +1,6 @@
 import { throwOnErr } from '@core/util/result';
 import type { CacheHost } from '@graphql-cache/index';
+import { Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
 import { storageServiceClient } from '@service-storage/client';
@@ -251,20 +252,40 @@ export function useCalendarOccurrencesQuery(
 export async function invalidateCalendarOccurrences() {
   const controller = activeCalendarSyncController();
   if (controller?.answering()) {
-    const settleRunDelta = async () => {
-      try {
-        return await controller.runDelta();
-      } catch (settleRunDeltaError) {
-        const error = settleRunDeltaError;
-
-        console.warn('Calendar delta sync failed', error);
-
-        return;
-      }
-    };
-    await settleRunDelta();
+    try {
+      await controller.runDelta();
+    } catch (error) {
+      console.warn('Calendar delta sync failed', error);
+    }
   }
   return queryClient.invalidateQueries({
     queryKey: calendarKeys.occurrences._def,
   });
+}
+
+/**
+ * Brings the calendar forward for a read that came back without something it
+ * expected. Unlike `invalidateCalendarOccurrences`, the delta always runs,
+ * waiting for a cache that is still starting: nothing awaits this refresh, and
+ * a refetch that skipped the delta could reread a stale covered week.
+ */
+export async function syncCalendarOccurrences() {
+  const controller = activeCalendarSyncController();
+  await Telemetry.span('calendar.occurrences_delta_sync', async (span) => {
+    span.setAttr('calendar.transport', controller ? 'graphql' : 'rest');
+    if (!controller) return;
+    try {
+      await controller.runDelta();
+      span.setAttr('calendar.delta.outcome', 'synced');
+    } catch (error) {
+      span.setAttr('calendar.delta.outcome', 'failed');
+      span.error('Calendar delta sync failed');
+      console.warn('Calendar delta sync failed', error);
+    }
+  });
+  return Telemetry.span('calendar.occurrences_refetch', () =>
+    queryClient.invalidateQueries({
+      queryKey: calendarKeys.occurrences._def,
+    })
+  );
 }

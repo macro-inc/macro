@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ApiEntityFilterAstCrma } from './apiEntityFilterAstCrma';
 import type { ApiEntityFilterAstFavoritesOnly } from './apiEntityFilterAstFavoritesOnly';
 
 /**
@@ -25,6 +26,7 @@ Empty/omitted = team's full visible list. */
   cf?: unknown;
   /** the filters that should be applied to the channel entity */
   chanf?: unknown;
+  crma?: ApiEntityFilterAstCrma;
   /** Opt-in filters for viewer-accessible CRM contacts (wire key `crmf`). */
   crmf?: unknown;
   /** the filters that should be applied to the channel-thread entity */
