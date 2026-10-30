@@ -234,7 +234,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
 
         <Entity.Slot
           placement="timestamp"
-          class="text-xs text-right text-ink-extra-muted font-light"
+          class="whitespace-nowrap text-xs text-right text-ink-extra-muted font-light"
         >
           <Show when={!props.hasNotifications}>
             <Entity.Timestamp entity={props.entity} />
