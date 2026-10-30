@@ -1,4 +1,5 @@
 import type { TModel } from '@core/component/AI/constant';
+import { Telemetry } from '@macro-inc/observability';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ActionTrigger } from '@service-scheduled-action/generated/schemas';
 import { z } from 'zod';
@@ -198,22 +199,48 @@ export function draftFromComposition(
     : { ...base, steps: draftSteps };
 }
 
-/** Draft a routine from a description; a string explains a failure. */
+const COMPOSE_FAILED = 'Couldn’t draft that routine. Please try again.';
+
+/**
+ * Draft a routine from a description; a string explains a failure. The span
+ * records how it ended, never the description or the workspace names sent.
+ */
 export async function composeRoutine(
   description: string,
   context: ComposerContext,
   model: TModel
 ): Promise<ScheduleDraft | string> {
-  const response = await cognitionApiServiceClient.structuredCompletion({
-    model,
-    prompt: description,
-    output_schema: compositionOutputSchema,
-    additional_instructions: compositionInstructions(context),
-    toolset: { type: 'none' },
+  return await Telemetry.span('routine.compose', async (span) => {
+    span.setAttr('gen_ai.request.model', model);
+    span.setAttr('routine.compose.decisions', context.decisions);
+    const response = await cognitionApiServiceClient.structuredCompletion({
+      model,
+      prompt: description,
+      output_schema: compositionOutputSchema,
+      additional_instructions: compositionInstructions(context),
+      toolset: { type: 'none' },
+    });
+    if (response.isErr()) {
+      span.setAttr('routine.compose.outcome', 'request_failed');
+      span.error('Routine composition request failed');
+      return COMPOSE_FAILED;
+    }
+    const outcome = response.value.outcome;
+    if (outcome.status !== 'completed') {
+      span.setAttr('routine.compose.outcome', 'not_completed');
+      span.error('Routine composition did not complete');
+      return COMPOSE_FAILED;
+    }
+    const draft = draftFromComposition(outcome.result, context);
+    if (typeof draft === 'string') {
+      // The model answered, but with a routine the editor can't use.
+      span.setAttr('routine.compose.outcome', 'unusable');
+      span.error('Routine composition was unusable');
+      return draft;
+    }
+    span.setAttr('routine.compose.outcome', 'drafted');
+    span.setAttr('routine.compose.steps', draft.steps?.length ?? 1);
+    span.setAttr('routine.compose.triggers', draft.triggers?.length ?? 0);
+    return draft;
   });
-  if (response.isErr()) return 'Couldn’t draft that routine. Please try again.';
-  const outcome = response.value.outcome;
-  return outcome.status === 'completed'
-    ? draftFromComposition(outcome.result, context)
-    : 'Couldn’t draft that routine. Please try again.';
 }
