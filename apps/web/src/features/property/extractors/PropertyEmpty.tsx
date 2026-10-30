@@ -1,7 +1,7 @@
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import PriorityNoneIcon from '@icon/system/regular/priority-none.svg';
 import ProjectIcon from '@icon/system/regular/stack.svg';
-import PersonIcon from '@icon/system/regular/user-circle.svg';
+import PersonIcon from '@icon/system/regular/user-circle-dashed.svg';
 import { cn } from '@ui';
 import { type JSX, Match, Show, Switch } from 'solid-js';
 import { SYSTEM_PROPERTY_IDS } from '../constants';

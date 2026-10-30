@@ -65,8 +65,8 @@ cutout. The badge's dedicated `priority-urgent` token maps to the theme's orange
 rather than warning or accent.
 Completed task status uses the filled check-circle through the shared property
 and task-status renderers. Empty priority uses three muted, hollow ascending bars.
-Empty assignees use the muted user-circle glyph; populated project properties use
-the regular stack glyph, while empty projects retain its dashed counterpart.
+Empty assignees use the muted user-circle-dashed glyph; populated project properties
+use the regular stack glyph, while empty projects retain its dashed counterpart.
 Task statuses use independent `task-status-not-started`, `task-status-in-progress`,
 `task-status-in-review`, `task-status-completed`, and `task-status-canceled` theme
 tokens for icons and group-header tints. Their defaults are muted gray, blended
@@ -76,8 +76,8 @@ without rotating amber toward a tinted foreground's hue. Authored overrides stay
 unchanged.
 Status and Urgent property glyphs default to 16 px, including property pills and
 desktop and mobile edit menus. Leading task-list status and priority controls use
-16 px glyphs with unchanged hit targets; compact display callers can still set an
-explicit smaller size.
+16 px desktop glyphs and 20 px phone glyphs with unchanged hit targets; trailing
+phone property icons also use 20 px. Compact display callers can set a smaller size.
 
 Prefer one recognizable silhouette and only the detail needed to identify its
 action. Chat variants share one bubble, task variants one checked square,

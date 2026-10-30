@@ -215,7 +215,7 @@ function KeyPropertiesRow(props: {
                           fallback={
                             <Property.Icon
                               property={shown()}
-                              class="shrink-0 @max-2xl/u-list:size-4"
+                              class="shrink-0 @max-2xl/u-list:size-4 mobile:size-5"
                             />
                           }
                         >
@@ -224,14 +224,14 @@ function KeyPropertiesRow(props: {
                               propertyDefinitionId={
                                 shown().propertyDefinitionId
                               }
-                              class="size-3.5 @max-2xl/u-list:size-4"
+                              class="size-3.5 @max-2xl/u-list:size-4 mobile:size-5"
                             />
                           </Match>
                           <Match when={isMultiUserEntity()}>
                             <div class="flex items-center gap-1">
                               <Show when={props.maxUserStackUsers === 0}>
                                 <UsersIcon
-                                  class="size-4 shrink-0"
+                                  class="size-4 shrink-0 mobile:size-5"
                                   data-icon-motion="none"
                                 />
                               </Show>

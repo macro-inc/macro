@@ -92,7 +92,7 @@ export function NarrowLayout(props: LayoutProps) {
             <div
               class={cn(
                 '-mr-1 flex shrink-0 items-center',
-                !compactTask() && 'touch:-mr-2'
+                compactTask() ? '-ml-1' : 'touch:-mr-2'
               )}
             >
               <TaskPropertyControl entity={task()} property="priority" />

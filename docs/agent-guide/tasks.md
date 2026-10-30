@@ -100,10 +100,11 @@ value icon, label, and count on one line; long labels truncate. Phone task rows 
 controls retain their 36px touch targets; selection highlighting and row selection
 behavior remain available.
 Click or tap the leading status or priority icon to edit without opening the task.
-Both icons are 16px on desktop and narrow rows; priority sits directly beside the
-title, with a gap after status. Their pickers replace
+Both icons are 16px on desktop and 20px on phones; phone tap targets sit edge-to-edge
+with a 16px gap between glyphs. Priority sits directly beside the title. Their pickers replace
 the separate Status/Priority columns and duplicate trailing mobile pills; Assignees
-and Project stay on the right. Empty priority shows hollow ascending bars, Urgent shows a
+and Project stay on the right, with 20px phone icons. Empty assignees use a person in
+a dashed circular frame. Empty priority shows hollow ascending bars, Urgent shows a
 filled exclamation badge, and Completed uses a filled check-circle.
 The status edit menu uses 16px status icons on desktop and mobile.
 Each status has its own `task-status-*` theme color, shared by task icons and

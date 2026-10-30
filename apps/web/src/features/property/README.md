@@ -18,8 +18,8 @@ side-panel collections own their refresh (below).
 
 `extractors/PropertyEmpty.tsx` shares empty-value glyphs across task list rows,
 board cards, group and column headers, and pickers: hollow ascending bars for no
-priority, a dashed stack for no project, and a person in a circular frame for no
-assignees. Other empty properties retain the dashed circle. Populated project
+priority, a dashed stack for no project, and a person in a dashed circular frame
+for no assignees. Other empty properties retain the dashed circle. Populated project
 properties use the solid-stroke stack icon through `Property.Icon`. Keep these
 state indicators static and readable in compact rows. When composing a project
 icon separately, pass `hideIcon` to `Property.Text` to avoid duplicate glyphs.
