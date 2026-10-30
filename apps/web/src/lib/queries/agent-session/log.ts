@@ -31,6 +31,7 @@ import {
 import {
   getGraphqlCacheHost,
   getGraphqlSoupClient,
+  graphqlSoupSessionActive,
 } from '@service-storage/graphql-soup';
 import { type OperationResult, stringifyDocument } from '@urql/core';
 import { pipe, subscribe } from 'wonka';
@@ -240,7 +241,11 @@ export function watchAgentSessionLog(
     getGraphqlSoupClient().query<
       AgentSessionLogQuery,
       AgentSessionLogQueryVariables
-    >(AgentSessionLogDocument, { sessionId }, { requestPolicy: policy }),
+    >(
+      AgentSessionLogDocument,
+      { sessionId, signedIn: graphqlSoupSessionActive() },
+      { requestPolicy: policy }
+    ),
     subscribe((result) => {
       const source = normalizedCacheResultMetadata(result)?.source;
       const fromCache =
@@ -416,7 +421,11 @@ async function appendAgentSessionLogRows(
   const args = {
     query: LOG_QUERY,
     operationName: LOG_OPERATION,
-    variables: { sessionId } satisfies AgentSessionLogQueryVariables,
+    // The cache exists only for a signed-in session, whose reads select its id.
+    variables: {
+      sessionId,
+      signedIn: true,
+    } satisfies AgentSessionLogQueryVariables,
   };
   const read = await host.readQuery({ ...args, priority: 'user-visible' });
   if (read.kind !== 'hit') return;
@@ -438,6 +447,7 @@ async function appendAgentSessionLogRows(
   await host.writeQuery({
     ...args,
     data: {
+      user: data.user,
       agentSession: {
         id: sessionId,
         log: { bot: log.bot, entries: [...log.entries, ...appended] },

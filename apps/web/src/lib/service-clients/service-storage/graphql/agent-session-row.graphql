@@ -3,7 +3,10 @@
 # normalized record is shared, so every Soup list holding the session shows the
 # new state without refetching the lists. No frecencyScore: a single-session
 # read carries none, and the list's score must survive.
-query AgentSessionRow($sessionId: ID!) {
+query AgentSessionRow($sessionId: ID!, $signedIn: Boolean = false) {
+  user @include(if: $signedIn) {
+    id
+  }
   agentSession(sessionId: $sessionId) {
     __typename
     cacheProjection @cacheOnly

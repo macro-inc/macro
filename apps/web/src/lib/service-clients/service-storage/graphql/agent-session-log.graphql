@@ -1,8 +1,12 @@
 # The raw protocol log of one agent session, as the fold reads it. Entries
 # carry ids, so the normalized cache keeps each row once and serves the whole
 # list from disk on the next open before the network answers. It reads at
-# the root, so a public link opens the session signed in or not.
-query AgentSessionLog($sessionId: ID!) {
+# the root, so a public link opens the session signed in or not. A signed-in
+# read also selects the viewer's id, which binds the cache to that account.
+query AgentSessionLog($sessionId: ID!, $signedIn: Boolean = false) {
+  user @include(if: $signedIn) {
+    id
+  }
   agentSession(sessionId: $sessionId) {
     id
     log {

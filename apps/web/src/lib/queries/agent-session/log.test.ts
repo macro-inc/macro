@@ -32,7 +32,9 @@ const host = vi.hoisted(() => ({
   writeQuery: vi.fn(),
   deleteRecords: vi.fn(),
 }));
+const session = vi.hoisted(() => ({ active: true }));
 vi.mock('@service-storage/graphql-soup', () => ({
+  graphqlSoupSessionActive: () => session.active,
   getGraphqlSoupClient: () => client,
   getGraphqlCacheHost: () => host,
 }));
@@ -142,6 +144,18 @@ describe('watchAgentSessionLog', () => {
     expect(rows.mock.calls[0][0][0].direction).toBe('notification');
     expect(gap).not.toHaveBeenCalled();
     watch.stop();
+  });
+
+  it('selects the viewer only for a signed-in read, which binds the cache', () => {
+    watchAgentSessionLog(SESSION).stop();
+    session.active = false;
+    watchAgentSessionLog(SESSION).stop();
+    session.active = true;
+
+    expect(client.query.mock.calls.map(([, variables]) => variables)).toEqual([
+      { sessionId: SESSION, signedIn: true },
+      { sessionId: SESSION, signedIn: false },
+    ]);
   });
 
   it('says why the cache missed', async () => {

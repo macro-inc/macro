@@ -73,6 +73,7 @@ vi.mock('@queries/soup/normalized-cache', () => ({
   hydrateSoupEntity: mocks.hydrate,
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
+  graphqlSoupSessionActive: () => true,
   mapGraphqlAgentSessionRow: (session: { id: string; turnState: string }) => ({
     id: session.id,
     turnState: session.turnState,
@@ -128,12 +129,12 @@ it('reads each changed session row from the primary under GraphQL Soup', async (
   expect(mocks.row.mock.calls).toEqual([
     [
       AgentSessionRowDocument,
-      { sessionId: 'first' },
+      { sessionId: 'first', signedIn: true },
       { requestPolicy: 'network-only' },
     ],
     [
       AgentSessionRowDocument,
-      { sessionId: 'second' },
+      { sessionId: 'second', signedIn: true },
       { requestPolicy: 'network-only' },
     ],
   ]);
@@ -173,8 +174,8 @@ it('retries a session whose row read failed', async () => {
   mocks.row.mockResolvedValueOnce({ error: new Error('network') });
   await refreshAgentSessionLists('first');
   expect(mocks.row.mock.calls.map(([, variables]) => variables)).toEqual([
-    { sessionId: 'first' },
-    { sessionId: 'first' },
+    { sessionId: 'first', signedIn: true },
+    { sessionId: 'first', signedIn: true },
   ]);
 });
 
