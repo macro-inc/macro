@@ -222,6 +222,14 @@ Light blur, Strong blur, a selected custom image, and Upload. Screen share and
 Leave call are separate buttons. Click outside or press Escape to close a menu.
 The controls also work by keyboard and touch.
 
+In the macOS desktop app, Screen share opens Macro's own **Share your screen**
+picker (screens first, the main display preselected, then open windows), since
+its Chromium has no system picker. Share publishes the chosen source; Cancel
+leaves sharing off. Without macOS Screen Recording access the picker says so
+and macOS shows its prompt; the user reopens Macro after allowing it. Browsers
+and older desktop builds keep the browser's own picker. Verify on a Mac by
+sharing a display and a window, stopping, and cancelling the picker.
+
 ### Browser call diagnostics
 
 Browser OpenTelemetry requires `enable-browser-otel` (or
@@ -250,7 +258,9 @@ guest names, and bearer URLs/tokens are not attributes.
 `call.connect` and background `call.media.setup` are children of the join flow.
 `call.media.publish_prejoin`, `enable`, and `toggle` expose publishing/capture
 failures after admission; `enumerate` and `background` cover waiting-room
-device lists and effects. A completed join/setup does not imply every device
+device lists and effects. `call.media.screen_share` records which picker ran
+(`native` or `browser`), Screen Recording access, the source count and kind,
+and whether the user cancelled. A completed join/setup does not imply every device
 worked: inspect its media children. Later toggles and connection-state samples
 are searchable by `call.id`. `call.connection.disconnected` records the SDK's
 numeric reason when available. These spans cover the browser LiveKit path,
