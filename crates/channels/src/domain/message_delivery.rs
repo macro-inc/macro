@@ -170,6 +170,7 @@ where
             .filter(|item| !created.contains(item))
             .collect();
         if !pending.is_empty() {
+            let pending_count = pending.len();
             tokio::spawn(
                 recheck_session_creations(
                     self.creations.clone(),
@@ -180,7 +181,13 @@ where
                     channel_id,
                     pending,
                 )
-                .instrument(tracing::info_span!("channels.recheck_agent_creations")),
+                .instrument(tracing::info_span!(
+                    "channels.recheck_agent_creations",
+                    %channel_id,
+                    %bot,
+                    %thread_root,
+                    pending = pending_count,
+                )),
             );
         }
         if !created.is_empty() {
