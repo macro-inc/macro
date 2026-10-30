@@ -3,6 +3,7 @@ import { AccessRequestVisitProvider } from '@app/features/access-requests/contex
 import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
+import { t } from '@app/lib/i18n';
 import { type PaneId, SplitRouter } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
@@ -29,7 +30,10 @@ import {
 } from '../context';
 import { useSplitLayout } from '../layout';
 import type { SplitHandle, SplitState } from '../layoutManager';
-import { shouldShowSplitCloseButton } from '../layoutUtils';
+import {
+  closeSplitOrReturnToList,
+  shouldShowSplitCloseButton,
+} from '../layoutUtils';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
 import { createOwnedSlots } from '../utils/createOwnedSlots';
 import { createSplitAutofocus } from '../utils/createSplitAutofocus';
@@ -163,6 +167,13 @@ export function SplitPanel(props: SplitPanelProps) {
       )
     );
   };
+
+  // A lone detail split uses the same corner button to return to its list.
+  const canReturnToList = () =>
+    !canCloseSplit() && hasSplitHeader() && isNotUnifiedList();
+
+  const frameCloseLabel = () =>
+    canCloseSplit() ? t('splitMenu.closeSplit') : t('splitMenu.returnToList');
 
   const MountedContent = () => (
     <SplitPanelControllerProvider
@@ -379,13 +390,17 @@ export function SplitPanel(props: SplitPanelProps) {
                   </Show>
                 </Panel.Body>
               </Panel>
-              <Show when={!isTouchDevice() && canCloseSplit()}>
+              <Show
+                when={
+                  !isTouchDevice() && (canCloseSplit() || canReturnToList())
+                }
+              >
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  aria-label="Close split"
+                  aria-label={frameCloseLabel()}
                   tooltip={{
-                    content: 'Close split',
+                    content: frameCloseLabel(),
                     hotkey: TOKENS.split.close,
                   }}
                   class={cn(
@@ -397,7 +412,9 @@ export function SplitPanel(props: SplitPanelProps) {
                   data-split-frame-close=""
                   onClick={(event) => {
                     event.stopPropagation();
-                    props.handle.close();
+                    const manager = globalSplitManager();
+                    if (manager)
+                      closeSplitOrReturnToList(manager, props.handle);
                   }}
                 >
                   <CloseIcon class="size-2.5" />

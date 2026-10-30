@@ -23,7 +23,6 @@ import ExpandIcon from '@icon/system/regular/arrows-out.svg';
 import CaretDown from '@icon/system/regular/caret-down.svg';
 import CaretLeft from '@icon/system/regular/caret-left.svg';
 import CaretUp from '@icon/system/regular/caret-up.svg';
-import CloseIcon from '@icon/system/regular/x.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { Button, ButtonGroup, cn } from '@ui';
@@ -40,10 +39,6 @@ import { match, P } from 'ts-pattern';
 import { runSplitBack } from '../back-interceptor';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import type { SplitContent } from '../layoutManager';
-import {
-  closeSplitOrReturnToList,
-  shouldShowSplitCloseButton,
-} from '../layoutUtils';
 import { canSpotlight } from '../utils/canSpotlight';
 import { HeaderIsland } from './HeaderIsland';
 import {
@@ -184,40 +179,6 @@ function _SplitSpotlightButton() {
         ) : (
           <ExpandIcon class="h-4" />
         )}
-      </Button>
-    </Show>
-  );
-}
-
-function SplitCloseButton() {
-  const context = useContext(SplitPanelContext);
-  const layout = useContext(SplitLayoutContext);
-  if (!context || !layout) return null;
-
-  const label = createMemo(() => {
-    const isOnlySplit = !shouldShowSplitCloseButton(layout.manager);
-    const isNotUnifiedList = !isListViewID(context.handle.content().id);
-    return isOnlySplit && isNotUnifiedList
-      ? t('splitMenu.returnToList')
-      : t('splitMenu.close');
-  });
-
-  return (
-    <Show
-      when={
-        (isTouchDevice() && shouldShowSplitCloseButton(layout.manager)) ||
-        (!shouldShowSplitCloseButton(layout.manager) &&
-          !isListViewID(context.handle.content().id))
-      }
-    >
-      <Button
-        aria-label={label()}
-        tooltip={{ content: label(), hotkey: TOKENS.split.close }}
-        variant="ghost"
-        size="icon-sm"
-        onClick={() => closeSplitOrReturnToList(layout.manager, context.handle)}
-      >
-        <CloseIcon class="size-3.5" />
       </Button>
     </Show>
   );
@@ -483,8 +444,6 @@ export function SplitHeader(props: {
             </Portal>
           )}
         </Show>
-        {/* pl-1 + the close wrapper's pl-2 insets the 24px close button 12px
-            from the left, matching its inset from the top of the 48px header. */}
         <div
           class="absolute inset-0 flex justify-start items-center not-touch:pl-1 touch:px-(--mobile-chrome-gutter) touch:gap-2"
           ref={props.collapseController.setRow}
@@ -493,7 +452,6 @@ export function SplitHeader(props: {
             when={isTouchDevice()}
             fallback={
               <div class="relative flex items-center pl-2 h-full">
-                <SplitCloseButton />
                 <SplitDriveReturnButton />
               </div>
             }
