@@ -680,8 +680,8 @@ def fraction(p):
 
 
 def _pct_ring(p):
-    rw, rh = p.w(236, 1.3), P.CAP * 0.47
-    ws, h = p.fstem * (0.84 - 0.12 * max(0.0, p.grow) / 70), _fh(p) * (0.8 - 0.1 * max(0.0, p.grow) / 70)
+    rw, rh = p.w(252, 0.6), P.CAP * 0.47
+    ws, h = p.fstem * (0.84 - 0.18 * max(0.0, p.grow) / 70), _fh(p) * (0.8 - 0.14 * max(0.0, p.grow) / 70)
     os_ = P.COS * 0.7
     sh = ring(0, -os_, rw, rh + os_, ws, h, n=_n(p), n_in=_ni(p))
     return sh
@@ -699,7 +699,7 @@ def _pct_rings(p, k):
 def percent(p):
     num = _pct_rings(p, 1).move(0, P.CAP * 0.5)
     den = _pct_rings(p, 1)
-    sh = _over(p, num, den, gap=p.w(18, 0.1), t=p.fstem * 0.8)
+    sh = _over(p, num, den, gap=p.w(30, 0.1), t=p.fstem * 0.8)
     return G(sh, l=p.csbr * 0.75, r=p.csbr * 0.75)
 
 
@@ -707,7 +707,7 @@ def percent(p):
 def perthousand(p):
     num = _pct_rings(p, 1).move(0, P.CAP * 0.5)
     den = _pct_rings(p, 2)
-    sh = _over(p, num, den, gap=p.w(18, 0.1), t=p.fstem * 0.8)
+    sh = _over(p, num, den, gap=p.w(30, 0.1), t=p.fstem * 0.8)
     return G(sh, l=p.csbr * 0.75, r=p.csbr * 0.75)
 
 

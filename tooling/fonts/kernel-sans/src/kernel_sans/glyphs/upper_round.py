@@ -123,24 +123,21 @@ class _Bowl:
         self.counter = _half_sq(cx, y0 + wb, xr - ws, y1 - wt, ni, xs)
         self.counter_mid = (y0 + wb + y1 - wt) / 2
 
-    def inside(self, x, y):
-        """Whether (x, y) lies inside the bowl's outer contour."""
-        if not (self.y0 <= y <= self.y1):
-            return False
-        if x <= self.cx:
-            return True
-        x0, y0, x1, y1 = self.box
-        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-        rx, ry = (x1 - x0) / 2, (y1 - y0) / 2
-        return (abs(x - cx) / rx) ** self.n + (abs(y - cy) / ry) ** self.n <= 1
+    def lower_quad(self):
+        """Control points of the outer contour's lower right quadrant, from
+        the bottom (cx, y0) to the right extreme, as drawn by _quad."""
+        p0 = _ext(self.box, "b")
+        return (p0,) + _quad(self.box, self.n, "b", "r")
 
-    def bottom_y(self, x):
-        """Height of the outer contour's lower edge at x."""
-        x0, y0, x1, y1 = self.box
-        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-        rx, ry = (x1 - x0) / 2, (y1 - y0) / 2
-        t = min(1.0, max(0.0, (x - cx) / rx))
-        return cy - ry * (1 - t**self.n) ** (1 / self.n)
+
+def _bez(q, t):
+    m = 1 - t
+    return tuple(m**3 * q[0][i] + 3 * m * m * t * q[1][i] + 3 * m * t * t * q[2][i] + t**3 * q[3][i] for i in (0, 1))
+
+
+def _bez_d(q, t):
+    m = 1 - t
+    return tuple(3 * m * m * (q[1][i] - q[0][i]) + 6 * m * t * (q[2][i] - q[1][i]) + 3 * t * t * (q[3][i] - q[2][i]) for i in (0, 1))
 
 
 def _mid_stroke(p):
@@ -223,32 +220,38 @@ def R(p):
     xl_t = x_bl + slope * yt
     leg = poly([(x_bl, 0), (x_br, 0), (xl_t + hw, yt), (xl_t, yt)])
     shape = (bowl.outer + rect(0, 0, s, yb + 2) + leg) - bowl.counter
-    # Crotch between the leg's right edge and the bowl: where the edge enters
-    # the bowl.
-    lo_, hi_ = 0.0, yt
-    for _ in range(50):
+    # Crotch between the leg's right edge and the bowl: where the edge line
+    # x = x_br + slope * y crosses the bowl's lower right quadrant (the leg
+    # always leaves the flat underside, so the crossing is on the curve).
+    q = bowl.lower_quad()
+    lo_, hi_ = 0.0, 1.0
+    for _ in range(60):
         mid = (lo_ + hi_) / 2
-        if bowl.inside(x_br + slope * mid, mid):
-            hi_ = mid
-        else:
+        x, y = _bez(q, mid)
+        if x < x_br + slope * y:
             lo_ = mid
-    cy_, cx_ = hi_, x_br + slope * hi_
+        else:
+            hi_ = mid
+    cx_, cy_ = _bez(q, hi_)
     # The trap is cut the way stem_trap cuts n: it runs up the leg's right
     # edge into the black and opens towards the bowl.
-    ul = math.hypot(-slope, 1.0)
+    ul = math.hypot(slope, 1.0)
     u = (slope / ul, 1.0 / ul)  # up along the leg edge
     nr = (u[1], -u[0])  # out of the leg, into the white crotch
-    d1 = (-u[0], -u[1])  # white angle: down the leg ...
-    d2 = (8.0, bowl.bottom_y(cx_ + 8) - cy_) if cx_ > bowl.cx else (1.0, 0.0)  # ... and along the bowl
-    l2 = math.hypot(*d2)
-    wedge = math.degrees(math.acos(max(-1.0, min(1.0, (d1[0] * d2[0] + d1[1] * d2[1]) / l2))))
+    d2 = _bez_d(q, hi_)  # along the bowl, away from the leg
+    cos_w = -(u[0] * d2[0] + u[1] * d2[1]) / math.hypot(*d2)
+    wedge = math.degrees(math.acos(max(-1.0, min(1.0, cos_w))))
     # The leg is wider at heavy weights, so it meets the bowl higher up the
     # curve and the crotch opens; scale the trap by how acute the white angle
     # is so it never notches an open join.
-    depth = p.trap * 1.3 * min(1.0, max(0.3, (110 - wedge) / 40))
-    tip = (cx_ + u[0] * depth - nr[0] * depth * 0.22, cy_ + u[1] * depth - nr[1] * depth * 0.22)
-    a = (cx_ - u[0] * 6 + nr[0] * 3, cy_ - u[1] * 6 + nr[1] * 3)
-    b = (cx_ + u[0] * depth * 1.1 + nr[0] * depth * 0.95, cy_ + u[1] * depth * 1.1 + nr[1] * depth * 0.95)
+    d = p.trap * 1.05 * min(1.0, max(0.3, (110 - wedge) / 40))
+
+    def at(ku, kn):
+        return (cx_ + (u[0] * ku + nr[0] * kn) * d, cy_ + (u[1] * ku + nr[1] * kn) * d)
+
+    # tip in the leg above the crotch, a in the white below it (the a-tip side
+    # crosses the leg edge, not the bowl), b inside the bowl.
+    tip, a, b = at(1.0, -0.22), at(-1.33, 0.1), at(1.0, 0.85)
     shape = shape - notch(tip, a, b)
     return G(shape, l=p.csb, r=p.csbr * 0.5, anchors={"top": w / 2})
 

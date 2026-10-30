@@ -802,13 +802,16 @@ def ampersand(p):
     dw = p.cstem * 0.95
     hw = dw * math.hypot(1, m) / abs(m)
     tx0, ty = _tangent_point(0, uy0, uw, top, n, m)
+    # The leg's foot sits on the bowl's overshoot line, so the bowl always
+    # meets the leg's side in a crotch rather than crossing its flat foot.
+    yf = -P.COS
     foot = lx1 + a["foot"] + a["footk"] * p.grow
-    ux0 = foot - (tx0 + ty / abs(m) + hw)
+    ux0 = foot - (tx0 + (ty - yf) / abs(m) + hw)
     tx = ux0 + tx0
     lws = ws * 0.92
     upper = ring(ux0, uy0, ux0 + uw, top, lws, wt, n=n, n_in=n_in)
     counter = squircle(ux0 + lws, uy0 + wt, ux0 + uw - lws, top - wt, n_in)
-    leg = poly([(foot - hw, 0), (foot, 0), (tx + hw, ty), (tx, ty)]) - counter
+    leg = poly([(foot - hw, yf), (foot, yf), (tx + hw, ty), (tx, ty)]) - counter
     # Open the bowl at the upper right; its top stroke ends inside the leg.
     y_open = ly1 - wt / 2
     x_open = tx + hw / 2 + (ty - y_open) / abs(m)

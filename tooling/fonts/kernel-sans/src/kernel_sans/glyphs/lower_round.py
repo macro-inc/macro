@@ -13,6 +13,7 @@ exactly instead of overlapping.
 """
 
 import math
+from types import SimpleNamespace
 
 from .. import params as P
 from ..geom import Shape, above, superness, band, below, chamfer, diag, left_of, poly, rect, right_of, ring, squircle, stroke
@@ -20,11 +21,12 @@ from . import G, glyph, ref
 from .parts import outer_x, solve_cx
 
 PROOF_TEXT = [
-    "nanbndnenpnqnsngn nnann.ss",
+    "nanbndnenpnqnsngn",
     "oaobodoeogoposoqo",
     "badges spaced bodega cabbage gasped passage",
     "nnænnœnnønnðnnþnnßnn ooæooœooøooðooþooßoo",
-    "æbcdes œø ðe þønd spæß grüße bagpipes grasped",
+    "æbcdes œø ðe þønd spæß",
+    "badges grasped bagpipes straße æsop œuvre",
 ]
 
 
@@ -95,8 +97,16 @@ def _trap(x, depth, up, counter, n_in):
     quad = _quadrant(counter, n_in, "tl" if up else "bl")
     _, yc = _bez_solve(quad, 0, x)  # the crotch
     tip = (x - depth * 0.22, yc + sy * depth)
-    q = _bez_solve(quad, 1, yc + sy * depth * 0.6)
-    b = (q[0] + (q[0] - tip[0]) * 0.6, q[1] + (q[1] - tip[1]) * 0.6)
+    # Far corner where geom.stem_trap puts it (a near-flat top edge, as in
+    # n) when that lies well inside the counter; otherwise, for counters
+    # that leave the stem at a shallow angle, just beyond the curve on a
+    # ray from the tip.
+    b = (x + depth * 0.95, yc + sy * depth * 1.1)
+    ytop = quad[0][1] if up else quad[3][1]
+    inside = sy * (ytop - b[1]) > 2 and b[0] > _bez_solve(quad, 1, b[1])[0] + depth * 0.2 + 1
+    if not inside:
+        q = _bez_solve(quad, 1, yc + sy * depth * 0.6)
+        b = (q[0] + (q[0] - tip[0]) * 0.6, q[1] + (q[1] - tip[1]) * 0.6)
     e = (x, yc - sy * (2.0 + 0.05 * depth))
     a = (e[0] + (e[0] - tip[0]) * 0.5, e[1] + (e[1] - tip[1]) * 0.5)
     return poly([a, tip, b])
@@ -109,31 +119,35 @@ def _bowl_on_stem(p, xl, xr, y0, y1, ws, wt, wb, out_top, in_top, out_bot, in_bo
     separately so the two joins can differ; both share the right extreme, so
     the side stays smooth.
 
-    Returns (bowl clipped to x >= xl - 1, outer, counter, traps), where traps
-    is a function of the depth giving both crotches' ink traps."""
+    Returns a namespace: shape (the bowl clipped to x >= xl - 1), out and cnt
+    (its unclipped outer and counter), out_bot_box (the box of the outer's
+    lower half) and traps(depth), both crotches' ink traps."""
     n, n_in = p.sq, p.sq_in
     yc, ry = (y0 + y1) / 2, (y1 - y0) / 2
     yi0, yi1 = y0 + wb, y1 - wt
     yci, ryi = (yi0 + yi1) / 2, (yi1 - yi0) / 2
     xri = xr - ws
 
-    def outer(join):
+    def outer_box(join):
         cx = solve_cx(xr, xl, join, yc, ry, n)
-        return squircle(2 * cx - xr, y0, xr, y1, n)
+        return (2 * cx - xr, y0, xr, y1)
 
     def inner_box(join):
         cx = solve_cx(xri, xl, join, yci, ryi, n_in)
         return (2 * cx - xri, yi0, xri, yi1)
 
+    ot, ob = outer_box(out_top), outer_box(out_bot)
     bt, bb = inner_box(in_top), inner_box(in_bot)
-    out = (outer(out_top) & above(yc)) + (outer(out_bot) & below(yc))
+    out = (squircle(*ot, n) & above(yc)) + (squircle(*ob, n) & below(yc))
     cnt = (squircle(*bt, n_in) & above(yci)) + (squircle(*bb, n_in) & below(yci))
     shape = (out - cnt) & right_of(xl - 1)
 
     def traps(depth):
+        # Never thinner than 3.5 units, so even Light keeps a clean notch.
+        depth = max(depth, 3.5)
         return _trap(xl, depth, True, bt, n_in) + _trap(xl, depth, False, bb, n_in)
 
-    return shape, out, cnt, traps
+    return SimpleNamespace(shape=shape, out=out, cnt=cnt, traps=traps, out_bot_box=ob)
 
 
 def _bowl_joins(p):
@@ -156,8 +170,8 @@ def _b_body(p, stem_y0, stem_y1, nw=0, sw=0):
     xl = s
     xr = _b_width(p)
     out_top, in_top, out_bot, in_bot = _bowl_joins(p)
-    bowl, _, _, traps = _bowl_on_stem(p, xl, xr, -P.OS, P.XH + P.OS, p.stem * 1.03, p.hair, p.hair, out_top, in_top, out_bot, in_bot)
-    shape = rect(0, stem_y0, s, stem_y1, nw=nw, sw=sw) + bowl - traps(p.trap * 1.3)
+    bowl = _bowl_on_stem(p, xl, xr, -P.OS, P.XH + P.OS, p.stem * 1.03, p.hair, p.hair, out_top, in_top, out_bot, in_bot)
+    shape = rect(0, stem_y0, s, stem_y1, nw=nw, sw=sw) + bowl.shape - bowl.traps(p.trap * 1.3)
     return shape, xr
 
 
@@ -236,13 +250,14 @@ def g(p):
 # a
 
 
-def _a_shape(p, xr, ae_clip=None):
+def _a_shape(p, xr, ae_e=None):
     """Double-storey a whose stem's right edge is at xr. Returns (shape,
     hook centre x, stem left x).
 
-    For ae, `ae_clip` is an x inside the e's left side: the stem then stops
-    above the baseline and the bowl's outer contour runs on under it up to
-    ae_clip, so the e can take over the bottom without a step."""
+    For ae, `ae_e` = (outer box of the e, x of the e's counter at its left
+    extreme): the stem then stops above the baseline and the bowl's outer
+    contour runs on under it until it disappears inside the e, so the two
+    bottoms meet in a clean V instead of a step."""
     s = p.stem
     xs = xr - s
     top = P.XH + P.OS
@@ -271,17 +286,29 @@ def _a_shape(p, xr, ae_clip=None):
     hook = hook - chamfer(_ox(*hb, p.sq, ct, "left"), ct, p.cut, "sw")
     # Lower bowl: drawn as a bowl on the right of a stem at -xs, mirrored.
     yi0, yi1 = -P.OS + wb, yb1 - wt
-    bowl, out, cnt, traps = _bowl_on_stem(
+    bw = _bowl_on_stem(
         p, -xs, 0, -P.OS, yb1, s * 1.03, wt, wb,
         out_top=yb1 - wt * 0.08, in_top=yi1 - c_lo * 0.30,
         out_bot=wb * 0.1, in_bot=yi0 + c_lo * 0.30,
     )
-    if ae_clip is None:
+    bowl = bw.shape
+    if ae_e is None:
         stem = rect(xs, 0, xr, yc_h)  # shares y = yc_h with the hook
     else:
-        bowl = (out & right_of(-ae_clip)) - (cnt & right_of(-xs))
-        stem = rect(xs, yb1 * 0.4, ae_clip, yc_h)
-    shape = hook + bowl.flip_x(0) + stem - traps(p.trap * 0.65).flip_x(0)
+        ebox, e_in = ae_e
+        # Where the e's bottom drops below the bowl's (mirrored) bottom.
+        ob = bw.out_bot_box
+        lo, hi = xs, e_in
+        for _ in range(50):
+            mid = (lo + hi) / 2
+            if _oy(*ebox, p.sq, mid, "bottom") > _oy(*ob, p.sq, -mid, "bottom"):
+                lo = mid
+            else:
+                hi = mid
+        clip = (lo + e_in) / 2
+        bowl = (bw.out & right_of(-clip)) - (bw.cnt & right_of(-xs))
+        stem = rect(xs, yb1 * 0.4, clip, yc_h)
+    shape = hook + bowl.flip_x(0) + stem - bw.traps(p.trap * 0.65).flip_x(0)
     return shape, cx_h, xs
 
 
@@ -370,8 +397,10 @@ def ae(p):
     s = p.stem
     xr = p.w(436, 0.9)
     xs = xr - s
-    a_shape, _, _ = _a_shape(p, xr, ae_clip=xs + s * 0.85)
-    e_shape = _e_shape(p, xs + s * 0.1, p.w(452, 1.0), ws=s * 0.98)
+    ex0, we, ws_e = xs + s * 0.06, p.w(452, 1.0), s
+    ebox = (ex0, -P.OS, ex0 + we, P.XH + P.OS)
+    a_shape, _, _ = _a_shape(p, xr, ae_e=(ebox, ex0 + ws_e))
+    e_shape = _e_shape(p, ex0, we, ws=ws_e)
     return G(a_shape + e_shape, l=p.sbr * 0.95, r=p.sbr * 0.85)
 
 
