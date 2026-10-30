@@ -27,6 +27,8 @@ reported to Macro once with the ACP extension notification `_session/closed`.
 Only Herdr's explicit `agent_not_found` answer counts, checked every few
 seconds while no Macro prompt runs; socket errors, timeouts, and unreadable
 answers are never reported, and neither is macrod or its connection stopping.
+Only an agent this macrod run launched or saw running counts, so sessions
+restored after Herdr itself restarted, whose agents are all gone, stay visible.
 Macro archives the session if its owner turned on archiving when the runtime
 closes and the session is idle. The next prompt still relaunches the agent,
 and a close of that new agent is reported again.
