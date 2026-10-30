@@ -10,6 +10,7 @@ import { cn } from '@ui';
 import { For, Show } from 'solid-js';
 import { ChannelLabelMenuItems } from './ChannelLabelRows';
 import {
+  ChannelAvatar,
   ChannelRailItemContextMenu,
   isPrimaryMouseDown,
 } from './ChannelRailItems';
@@ -65,7 +66,12 @@ export function ChannelFavoriteRow(props: { favorite: Favorite }) {
       }}
     >
       <ViewSidebar.Icon>
-        <FavoriteIcon favorite={props.favorite} class="size-4" />
+        <Show
+          when={channel()?.channelType === 'private' ? channel() : undefined}
+          fallback={<FavoriteIcon favorite={props.favorite} class="size-4" />}
+        >
+          {(channel) => <ChannelAvatar channel={channel()} />}
+        </Show>
       </ViewSidebar.Icon>
       <span class="min-w-0 flex-1 truncate">{displayName()}</span>
       <ChannelMutedIndicator muted={item().muted} />
