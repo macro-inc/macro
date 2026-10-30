@@ -45,6 +45,8 @@ interface ToastAction {
   onClick: () => void;
 }
 
+type ToastActionLayout = 'stacked' | 'inline';
+
 /**
  * Common options for all toast calls.
  */
@@ -56,6 +58,8 @@ interface ToastOptions {
   hideOnMobile?: boolean;
   /** Hide the visible dismissal control; Escape, swipe, and expiry stay unchanged. */
   showCloseButton?: boolean;
+  /** Place actions beside the title; defaults to a stacked action row. */
+  actionLayout?: ToastActionLayout;
 }
 
 interface ToastActionOptions extends ToastOptions {
@@ -76,6 +80,7 @@ export interface CustomToastConfig {
   /** Any CSS color value, e.g. 'var(--color-success)' or '#ff6600' */
   color?: string;
   actions?: ToastAction[];
+  actionLayout?: ToastActionLayout;
 }
 
 interface ToastMessage {
@@ -249,6 +254,7 @@ export function ToastContent(props: {
   message?: string;
   subtext?: string;
   actions?: ToastAction[];
+  actionLayout?: ToastActionLayout;
   persistent?: boolean;
   duration?: number;
   embed?: Component;
@@ -263,7 +269,12 @@ export function ToastContent(props: {
   const actions = () => props.custom?.actions ?? props.actions ?? [];
   const hasBody = () => Boolean(props.custom?.content || props.subtext);
   const hasActions = () => actions().length > 0;
-  const singleRow = () => !props.embed && !hasBody() && !hasActions();
+  const inlineActions = () =>
+    !props.embed &&
+    hasActions() &&
+    (props.custom?.actionLayout ?? props.actionLayout) === 'inline';
+  const singleRow = () =>
+    !props.embed && !hasBody() && (!hasActions() || inlineActions());
   const showDismiss = () => props.showCloseButton !== false;
   const showCloseButton = () => showDismiss() && !hasActions();
   const loading = () => !props.custom && props.toastType === ToastType.LOADING;
@@ -335,9 +346,18 @@ export function ToastContent(props: {
                 </Show>
                 <div class="min-w-0 flex-1">
                   <div class="flex min-w-0 flex-wrap items-center gap-2">
-                    <Toast.Title class="min-w-0 flex-1 text-base font-medium leading-normal text-ink wrap-anywhere">
+                    <Toast.Title class="min-w-0 flex-auto text-base font-medium leading-normal text-ink wrap-anywhere">
                       {props.custom?.title ?? props.message}
                     </Toast.Title>
+                    <Show when={inlineActions()}>
+                      <div class="flex max-w-full shrink-0 flex-wrap items-center gap-2">
+                        <ActionButtons
+                          actions={actions()}
+                          showDismiss={showDismiss()}
+                          onDismiss={props.onUserDismiss}
+                        />
+                      </div>
+                    </Show>
                   </div>
                   <Show when={hasBody()}>
                     <Toast.Description class="mt-0.5 text-sm leading-normal text-ink-muted wrap-anywhere">
@@ -346,7 +366,7 @@ export function ToastContent(props: {
                         : props.subtext}
                     </Toast.Description>
                   </Show>
-                  <Show when={hasActions()}>
+                  <Show when={hasActions() && !inlineActions()}>
                     <div class="mt-3 flex flex-wrap items-center gap-2">
                       <ActionButtons
                         actions={actions()}
@@ -476,8 +496,15 @@ function createToast(
   toastType: ToastType,
   options?: ToastActionOptions
 ) {
-  const { subtext, actions, duration, stack, hideOnMobile, showCloseButton } =
-    options ?? {};
+  const {
+    subtext,
+    actions,
+    actionLayout,
+    duration,
+    stack,
+    hideOnMobile,
+    showCloseButton,
+  } = options ?? {};
 
   if (isMobile() && hideOnMobile) return undefined;
 
@@ -501,6 +528,7 @@ function createToast(
         message={message}
         subtext={subtext}
         actions={actions}
+        actionLayout={actionLayout}
         duration={duration}
         showCloseButton={showCloseButton}
         onDismiss={() => {

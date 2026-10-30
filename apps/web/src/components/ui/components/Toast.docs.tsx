@@ -145,6 +145,7 @@ function ActionsDemo() {
       toastType: ToastType.SUCCESS,
       message: 'Email sent',
       duration: 5000,
+      actionLayout: 'inline',
       actions: [{
         label: 'Undo',
         onClick: () => {
@@ -336,7 +337,7 @@ export default defineDoc({
   import: "import { toast } from '@core/component/Toast/Toast';",
   demos: [
     { id: 'notifications', title: 'Statuses and close controls', render: StatusesDemo, fill: true },
-    { id: 'actions', title: 'Undo, persistent prompts, and custom content', render: ActionsDemo, fill: true },
+    { id: 'actions', title: 'Inline undo, stacked prompts, and custom content', render: ActionsDemo, fill: true },
     { id: 'async', title: 'Loading and progress', render: AsyncDemo, fill: true },
     {
       id: 'stack',
@@ -352,6 +353,7 @@ export default defineDoc({
       'Reserve persistent prompts for notices that need a response.',
       'Keep action labels short and retain meaningful content on mobile.',
       'Use primary actions with a secondary Dismiss button instead of a close icon.',
+      'Set actionLayout to inline for brief notices; keep stacked actions for longer prompts.',
       'Use the existing toast service so queueing, timing, and dismissal stay consistent.',
     ],
     dont: [
