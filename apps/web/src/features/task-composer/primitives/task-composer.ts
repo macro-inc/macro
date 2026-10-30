@@ -28,6 +28,7 @@ import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
@@ -348,21 +349,27 @@ export function createTaskComposer(
     }
 
     const task = { id: documentId, optimisticSnapshot };
-    toast.success('Task created', {
+    const openTask = (newSplit: boolean) => {
+      if (toastId !== undefined) toast.dismiss(toastId);
+      host.openTask(task, { newSplit, referredFrom: null });
+    };
+    const toastId = toast.success('Task created', {
       subtext: linkCopied ? 'Link copied' : undefined,
       actions: [
         {
           label: 'Open',
           icon: ArrowSquareOutIcon,
-          onClick: () =>
-            host.openTask(task, { newSplit: false, referredFrom: null }),
+          onClick: () => openTask(false),
         },
-        {
-          label: 'Open (New Split)',
-          icon: SplitIcon,
-          onClick: () =>
-            host.openTask(task, { newSplit: true, referredFrom: null }),
-        },
+        ...(!isTouchDevice()
+          ? [
+              {
+                label: 'Open (New Split)',
+                icon: SplitIcon,
+                onClick: () => openTask(true),
+              },
+            ]
+          : []),
       ],
     });
   };

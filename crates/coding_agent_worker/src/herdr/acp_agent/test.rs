@@ -828,3 +828,58 @@ async fn a_prompt_dismisses_the_exit_confirmation_a_second_ctrl_c_left() {
     assert!(stayed < prompted);
     adapter.shutdown.cancel();
 }
+
+#[tokio::test]
+async fn a_local_turn_without_a_transcript_ending_settles_once_herdr_is_idle() {
+    use std::io::Write as _;
+    let root = tempfile::tempdir().unwrap();
+    let id = uuid::Uuid::new_v4().to_string();
+    let transcript = save_transcript(root.path(), &id);
+    let (mut adapter, mut output) = test_adapter(root.path());
+    Arc::get_mut(&mut adapter).unwrap().herdr =
+        Some(queueing_herdr(root.path(), &transcript, "working"));
+    adapter
+        .load_session(&json!({"sessionId":id,"cwd":root.path()}))
+        .await
+        .unwrap();
+    // A turn typed in the TUI whose CLI exits before answering: the
+    // transcript never records its end.
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&transcript)
+        .unwrap();
+    writeln!(
+        file,
+        "{}",
+        json!({"type":"user", "uuid":"local-user", "message":{"content":"typed in herdr"}})
+    )
+    .unwrap();
+    let prompt = tokio::time::timeout(Duration::from_secs(2), output.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        prompt["params"]["update"]["content"]["text"],
+        "typed in herdr"
+    );
+    // Still working natively: the turn stays open past the quiet period.
+    assert!(
+        tokio::time::timeout(SETTLED_QUIET + Duration::from_secs(2), output.recv())
+            .await
+            .is_err()
+    );
+    std::fs::write(root.path().join("status"), "idle").unwrap();
+    let settled = tokio::time::timeout(Duration::from_secs(8), output.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(settled["method"], "_session/turn_complete");
+    assert_eq!(settled["params"]["outcome"]["kind"], "finished");
+    // Ended once, not again on every idle check.
+    assert!(
+        tokio::time::timeout(Duration::from_secs(5), output.recv())
+            .await
+            .is_err()
+    );
+    adapter.shutdown.cancel();
+}

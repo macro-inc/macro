@@ -26,6 +26,11 @@ A background reader forwards local TUI turns even without a Macro prompt.
 Complete JSONL records are read in bounded batches. Partial lines wait for the
 next append; truncation or replacement requires a reload. Turn boundaries are
 forwarded in order, including multiple local turns between polls.
+Only typed prompts start a local turn; Claude Code's own transcript lines
+(reminders, compaction summaries, local slash command output) do not, and an
+Esc interrupt ends the turn as cancelled. A local turn whose transcript never
+records an end, such as one cut short by a closed CLI, ends once Herdr reports
+the agent idle and the transcript has been quiet for a few seconds.
 
 ### Native controls and MCP
 

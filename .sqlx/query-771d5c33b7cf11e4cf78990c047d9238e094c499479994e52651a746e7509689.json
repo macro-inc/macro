@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH facts AS (\n            SELECT m.*, f.in_inbox,f.in_trash,f.in_junk,f.in_sent,\n                -- Outlook drafts composed in Macro gain a provider id once synced; their shadow row keeps them Macro drafts.\n                m.is_draft AND (m.provider_id IS NULL OR EXISTS (\n                    SELECT 1 FROM email_mailbox_drafts d WHERE d.message_id = m.id AND NOT d.delete_requested\n                )) AS macro_draft,\n                EXISTS (SELECT 1 FROM email_message_recipients r WHERE r.message_id = m.id AND r.contact_id = m.from_contact_id) AS sender_is_recipient\n            FROM email_messages m JOIN email_message_mailbox_facts f ON f.id = m.id\n            WHERE m.thread_id = $1 AND m.link_id = $2 AND f.is_present\n        ), aggregate AS (\n            SELECT COALESCE(bool_or(in_inbox AND NOT in_sent),false) AS mailbox_visible,\n                COALESCE(bool_or(macro_draft),false) AS has_macro_draft,\n                COALESCE(bool_or(in_inbox AND NOT in_trash AND NOT in_junk),false) AS has_inbox,\n                COALESCE(bool_and(is_read),true) AS is_read,\n                max(internal_date_ts) FILTER (WHERE in_inbox AND NOT is_draft AND (NOT is_sent OR sender_is_recipient)) AS received_ts,\n                max(updated_at) FILTER (WHERE macro_draft) AS draft_ts,\n                max(internal_date_ts) FILTER (WHERE is_sent AND NOT in_trash) AS outbound_ts,\n                greatest(max(internal_date_ts) FILTER (WHERE NOT in_trash AND NOT in_junk),max(updated_at) FILTER (WHERE macro_draft)) AS all_ts\n            FROM facts\n        ), effective AS (\n            -- A Macro draft brings a thread back to the inbox only as a reply to received mail.\n            SELECT a.*, a.mailbox_visible OR (t.has_received_mail AND a.has_macro_draft)\n                    OR (t.reminder_returned_at IS NOT NULL AND a.has_inbox) AS visible,\n                greatest(a.received_ts, CASE WHEN t.has_received_mail THEN a.draft_ts END) AS inbound_ts\n            FROM aggregate a JOIN email_threads t ON t.id = $1 AND t.link_id = $2\n        )\n        UPDATE email_threads t SET inbox_visible = a.visible,is_read = a.is_read,\n            latest_inbound_message_ts = a.inbound_ts,latest_outbound_message_ts = a.outbound_ts,\n            latest_non_spam_message_ts = a.all_ts,updated_at = now()\n        FROM effective a WHERE t.id = $1 AND t.link_id = $2\n            AND (t.inbox_visible,t.is_read,t.latest_inbound_message_ts,t.latest_outbound_message_ts,t.latest_non_spam_message_ts)\n                IS DISTINCT FROM (a.visible,a.is_read,a.inbound_ts,a.outbound_ts,a.all_ts)\n    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "771d5c33b7cf11e4cf78990c047d9238e094c499479994e52651a746e7509689"
+}
