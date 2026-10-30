@@ -1,5 +1,12 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { featuredTemplates } from '../core/routine-templates';
 import type { RoutineRow } from '../core/types';
 import { RoutinesList } from './routines-list';
 
@@ -58,7 +65,7 @@ const rows: RoutineRow[] = [
     editable: true,
   },
 ];
-function setup(overrides: { rows?: RoutineRow[]; pendingId?: string } = {}) {
+function setup(overrides: Partial<Parameters<typeof RoutinesList>[0]> = {}) {
   const props = {
     rows,
     loading: false,
@@ -152,6 +159,39 @@ describe('routines list', () => {
       screen.queryByRole('button', { name: 'Revenue signals' })
     ).toBeNull();
   });
+  it('starts a routine from a template card above the list', () => {
+    const onTemplate = vi.fn();
+    const props = setup({ templates: featuredTemplates(true), onTemplate });
+    const strip = within(screen.getByRole('region', { name: 'Templates' }));
+    expect(
+      strip
+        .getAllByRole('button', { name: /^Start a routine from/ })
+        .map((card) => card.getAttribute('aria-label'))
+    ).toEqual([
+      'Start a routine from Sort my inbox',
+      'Start a routine from Triage new tasks',
+      'Start a routine from Morning brief',
+      'Start a routine from Share updates',
+    ]);
+    // Each card says what starts it and what it does.
+    expect(strip.getByText('New email')).toBeTruthy();
+    expect(strip.getByText('Label with AI')).toBeTruthy();
+    fireEvent.click(
+      strip.getByRole('button', { name: 'Start a routine from Morning brief' })
+    );
+    expect(onTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'brief' })
+    );
+    fireEvent.click(strip.getByRole('button', { name: 'All templates' }));
+    expect(props.onCreate).toHaveBeenCalledOnce();
+    // A search is about routines; the templates step aside.
+    fireEvent.click(screen.getByRole('button', { name: 'Search routines' }));
+    fireEvent.input(screen.getByRole('searchbox'), {
+      target: { value: 'invoice' },
+    });
+    expect(screen.queryByRole('region', { name: 'Templates' })).toBeNull();
+  });
+
   it('opens a blank routine without a templates section', () => {
     const props = setup();
     fireEvent.click(screen.getByRole('button', { name: 'Create Routine' }));

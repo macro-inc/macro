@@ -2,6 +2,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import type { Accessor } from 'solid-js';
 import { RoutinesList } from '../components/routines-list';
 import type { RoutineListSource } from '../context/routine-sources';
+import type { RoutineTemplate } from '../core/routine-templates';
 import { createRoutineRows } from '../primitives/routines-list';
 
 export function RoutinesListView(props: {
@@ -11,6 +12,9 @@ export function RoutinesListView(props: {
   registerSearchFocus?: (focus: () => void) => void;
   onCreate(): void;
   onOpen(id: string): void;
+  /** Templates to start from, above the list. */
+  templates?: RoutineTemplate[];
+  onTemplate?: (template: RoutineTemplate) => void;
 }) {
   const rows = createRoutineRows(props.source, props.userId);
   return (
@@ -25,6 +29,8 @@ export function RoutinesListView(props: {
       onOpen={props.onOpen}
       pendingId={props.source.pendingId()}
       onToggle={(row) => props.source.setEnabled(row.id, !row.enabled)}
+      templates={props.templates}
+      onTemplate={props.onTemplate}
     />
   );
 }

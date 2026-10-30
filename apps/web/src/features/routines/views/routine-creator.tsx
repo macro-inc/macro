@@ -22,6 +22,7 @@ import {
 import { firstAgent } from '../core/routine-steps';
 import {
   availableTemplates,
+  findTemplate,
   type RoutineTemplate,
   templateDraft,
 } from '../core/routine-templates';
@@ -42,6 +43,8 @@ export function RoutineCreatorView(props: {
   ) => JSX.Element;
   onCreated(id: string): void;
   onClose(): void;
+  /** Open already started from this template, as a list card asks. */
+  initialTemplate?: string;
 }) {
   const {
     draft,
@@ -79,6 +82,9 @@ export function RoutineCreatorView(props: {
         target: { kind: 'model', model: props.defaultModel },
       })
     );
+  // Opened from a template card: the choice was made, so start from it.
+  const opening = findTemplate(props.initialTemplate, props.decisionsEnabled);
+  if (opening) startFrom(opening);
   return (
     <EntityComposer.Root
       class="w-full h-auto max-h-[75vh]"

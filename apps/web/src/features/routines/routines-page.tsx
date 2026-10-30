@@ -1,10 +1,16 @@
 import { useViewControlHotkeys } from '@app/components/view-shell';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
+import { enableRoutineConditions } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { Show, Suspense } from 'solid-js';
 import { getErrorMessage } from './core/routine-draft';
+import {
+  featuredTemplates,
+  type RoutineTemplate,
+} from './core/routine-templates';
 import { createRoutineListSource } from './queries/routine-sources';
 import { RoutineDetail } from './routine-detail';
 import { routineContent, routineIdFromContent } from './routine-navigation';
@@ -36,12 +42,15 @@ function RoutinesContent() {
   const source = createRoutineListSource((error) =>
     toast.alert('Could not update routine', { subtext: getErrorMessage(error) })
   );
-  function create() {
+  const decisions = useFeatureFlag(enableRoutineConditions);
+  /** New routine, or one already started from `template`. */
+  function create(template?: RoutineTemplate) {
     layout.popoverSplit({
       type: 'component',
       id: 'routine-compose',
       params: {
         onCreated: (id: string) => open(id),
+        ...(template ? { template: template.key } : {}),
       },
     });
   }
@@ -54,8 +63,10 @@ function RoutinesContent() {
           source={source}
           userId={userId}
           registerSearchFocus={(focus) => (focusSearch = focus)}
-          onCreate={create}
+          onCreate={() => create()}
           onOpen={(id) => open(id)}
+          templates={featuredTemplates(decisions().enabled)}
+          onTemplate={create}
         />
       }
     >

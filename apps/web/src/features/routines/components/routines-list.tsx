@@ -8,8 +8,10 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
 import { Button, Tabs } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
+import type { RoutineTemplate } from '../core/routine-templates';
 import type { RoutineRow } from '../core/types';
 import { RoutineListRow, RoutineRowLayout } from './routine-row';
+import { RoutineTemplateStrip } from './routine-template-strip';
 
 export function RoutinesList(props: {
   rows: RoutineRow[];
@@ -23,6 +25,9 @@ export function RoutinesList(props: {
   onOpen: (id: string, history?: boolean) => void;
   onToggle: (row: RoutineRow) => void;
   onRetry: () => void;
+  /** Templates to start from, above the list; absent where none are offered. */
+  templates?: RoutineTemplate[];
+  onTemplate?: (template: RoutineTemplate) => void;
 }) {
   const [search, setSearch] = createSignal('');
   const [show, setShow] = createSignal<'all' | 'on'>('all');
@@ -130,84 +135,103 @@ export function RoutinesList(props: {
           </Button>
         </div>
       </Show>
-      <div
-        ref={list}
-        role="table"
-        aria-label="Routines"
-        aria-busy={props.loading}
-        tabIndex={-1}
-        class="@container/routines min-h-0 min-w-0 flex-1 overflow-auto outline-none"
-      >
-        <div
-          role="rowgroup"
-          class="sticky top-0 z-1 mx-1 min-w-[760px] bg-panel pt-2 @max-[760px]/routines:hidden"
+      <div class="@container/routines min-h-0 min-w-0 flex-1 overflow-auto">
+        {/* Templates sit above the list, out of the way of a search. */}
+        <Show
+          when={
+            !search().trim() &&
+            show() === 'all' &&
+            (props.templates?.length ?? 0) > 0 &&
+            props.onTemplate
+          }
         >
-          <RoutineRowLayout
-            role="row"
-            class="min-h-8 px-2 text-xs font-medium text-ink-extra-muted"
-          >
-            <span role="columnheader">Routine</span>
-            <span role="columnheader">When</span>
-            <span role="columnheader">Then</span>
-            <span role="columnheader">Last run</span>
-          </RoutineRowLayout>
-        </div>
-        <div
-          role="rowgroup"
-          class="min-w-[760px] pb-6 @max-[760px]/routines:min-w-0"
-        >
-          <For each={groups()}>
-            {(group) => (
-              <>
-                <div
-                  role="row"
-                  class="mx-1 flex items-center px-2 pb-1.5 pt-4 text-xs font-medium text-ink-extra-muted"
-                >
-                  <span role="cell" aria-colspan={4} class="flex gap-2">
-                    {group.title}
-                    <span class="tabular-nums">{group.rows.length}</span>
-                  </span>
-                </div>
-                <For each={group.rows}>
-                  {(row) => (
-                    <RoutineListRow
-                      row={row}
-                      pending={props.pendingId === row.id}
-                      onOpen={props.onOpen}
-                      onToggle={props.onToggle}
-                    />
-                  )}
-                </For>
-              </>
-            )}
-          </For>
-        </div>
-        <Show when={!filtered().length}>
-          <div role="row">
-            <div
-              role="cell"
-              aria-colspan={4}
-              class="flex min-h-48 flex-col items-center justify-center gap-3 px-4 py-10 text-center text-sm text-ink-muted"
-            >
-              <ClockIcon class="size-6 text-ink-extra-muted" />
-              <p>
-                {props.loading
-                  ? 'Loading routines…'
-                  : props.error
-                    ? 'Routines are unavailable'
-                    : search().trim() || show() === 'on'
-                      ? 'No matching routines'
-                      : 'No routines yet'}
-              </p>
-              <Show when={!props.loading && !props.error && !search().trim()}>
-                <p>
-                  Create a routine to act on new email, tasks and messages, or
-                  on a schedule.
-                </p>
-              </Show>
-            </div>
-          </div>
+          {(onTemplate) => (
+            <RoutineTemplateStrip
+              templates={props.templates ?? []}
+              onUse={onTemplate()}
+              onAll={props.onCreate}
+            />
+          )}
         </Show>
+        <div
+          ref={list}
+          role="table"
+          aria-label="Routines"
+          aria-busy={props.loading}
+          tabIndex={-1}
+          class="min-w-0 outline-none"
+        >
+          <div
+            role="rowgroup"
+            class="sticky top-0 z-1 mx-1 min-w-[760px] bg-panel pt-2 @max-[760px]/routines:hidden"
+          >
+            <RoutineRowLayout
+              role="row"
+              class="min-h-8 px-2 text-xs font-medium text-ink-extra-muted"
+            >
+              <span role="columnheader">Routine</span>
+              <span role="columnheader">When</span>
+              <span role="columnheader">Then</span>
+              <span role="columnheader">Last run</span>
+            </RoutineRowLayout>
+          </div>
+          <div
+            role="rowgroup"
+            class="min-w-[760px] pb-6 @max-[760px]/routines:min-w-0"
+          >
+            <For each={groups()}>
+              {(group) => (
+                <>
+                  <div
+                    role="row"
+                    class="mx-1 flex items-center px-2 pb-1.5 pt-4 text-xs font-medium text-ink-extra-muted"
+                  >
+                    <span role="cell" aria-colspan={4} class="flex gap-2">
+                      {group.title}
+                      <span class="tabular-nums">{group.rows.length}</span>
+                    </span>
+                  </div>
+                  <For each={group.rows}>
+                    {(row) => (
+                      <RoutineListRow
+                        row={row}
+                        pending={props.pendingId === row.id}
+                        onOpen={props.onOpen}
+                        onToggle={props.onToggle}
+                      />
+                    )}
+                  </For>
+                </>
+              )}
+            </For>
+          </div>
+          <Show when={!filtered().length}>
+            <div role="row">
+              <div
+                role="cell"
+                aria-colspan={4}
+                class="flex min-h-48 flex-col items-center justify-center gap-3 px-4 py-10 text-center text-sm text-ink-muted"
+              >
+                <ClockIcon class="size-6 text-ink-extra-muted" />
+                <p>
+                  {props.loading
+                    ? 'Loading routines…'
+                    : props.error
+                      ? 'Routines are unavailable'
+                      : search().trim() || show() === 'on'
+                        ? 'No matching routines'
+                        : 'No routines yet'}
+                </p>
+                <Show when={!props.loading && !props.error && !search().trim()}>
+                  <p>
+                    Create a routine to act on new email, tasks and messages, or
+                    on a schedule.
+                  </p>
+                </Show>
+              </div>
+            </div>
+          </Show>
+        </div>
       </div>
     </div>
   );

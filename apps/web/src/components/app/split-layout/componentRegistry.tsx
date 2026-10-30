@@ -439,6 +439,7 @@ registerComponent('routine-compose', (params) => (
         ? (params.onCreated as (id: string) => void)
         : undefined
     }
+    template={typeof params.template === 'string' ? params.template : undefined}
   />
 ));
 registerComponent('document-compose', (params) => {

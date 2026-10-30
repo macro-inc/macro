@@ -21,7 +21,11 @@ import { RoutineCreatorView } from './views/routine-creator';
 
 /** Production composition for the shared task/project creation popover. */
 export function RoutineCreator(
-  props: { onCreated?: (id: string) => void } = {}
+  props: {
+    onCreated?: (id: string) => void;
+    /** A template key the routine starts from, as the list's cards open it. */
+    template?: string;
+  } = {}
 ) {
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
@@ -34,6 +38,7 @@ export function RoutineCreator(
       source={source}
       defaultModel={defaultModel()}
       decisionsEnabled={decisions().enabled}
+      initialTemplate={props.template}
       renderComposer={(apply, current, initialDescription) => (
         <RoutineAiComposer
           apply={apply}

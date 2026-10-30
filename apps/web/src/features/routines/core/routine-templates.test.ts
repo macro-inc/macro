@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createEmptyDraft, validateRoutineDraft } from './routine-draft';
 import {
   availableTemplates,
+  featuredTemplates,
   routineTemplates,
   templateDraft,
 } from './routine-templates';
@@ -72,6 +73,14 @@ describe('routine templates', () => {
     ]);
     // The channel is the person's to choose.
     expect(validateRoutineDraft(updates, true)).toMatch(/channel/);
+  });
+
+  it('features four templates on the list, filling in when one is off', () => {
+    const keys = (decisions: boolean) =>
+      featuredTemplates(decisions).map((template) => template.key);
+    expect(keys(true)).toEqual(['inbox', 'triage', 'brief', 'updates']);
+    // Without decisions Share updates can't run; Chase stuck tasks fills in.
+    expect(keys(false)).toEqual(['inbox', 'triage', 'brief', 'stuck']);
   });
 
   it('offers templates that need decisions only when decisions are available', () => {

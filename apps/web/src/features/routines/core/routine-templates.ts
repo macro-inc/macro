@@ -29,11 +29,14 @@ export type RoutineTemplate = {
   ai: boolean;
   /** It only runs right when AI checks its trigger, so it needs decisions. */
   needsDecisions?: true;
+  /** What starts it and what it does, as the list's template cards show. */
+  chain: { trigger: string; action: string; actionAi: boolean };
 };
 
 export const routineTemplates: RoutineTemplate[] = [
   {
     key: 'inbox',
+    chain: { trigger: 'New email', action: 'Label with AI', actionAi: true },
     when: 'When: New email received',
     title: 'Sort my inbox',
     description: 'AI labels new email by topic',
@@ -42,6 +45,11 @@ export const routineTemplates: RoutineTemplate[] = [
   },
   {
     key: 'triage',
+    chain: {
+      trigger: 'Task created',
+      action: 'Set priority with AI',
+      actionAi: true,
+    },
     when: 'When: Task created',
     title: 'Triage new tasks',
     description: 'AI sets priority and an owner',
@@ -50,6 +58,7 @@ export const routineTemplates: RoutineTemplate[] = [
   },
   {
     key: 'brief',
+    chain: { trigger: 'Weekdays 9:00', action: 'Ask AI', actionAi: true },
     when: 'Weekdays at 9:00 AM',
     title: 'Morning brief',
     description: 'Weekdays at 9, sum up my day',
@@ -58,6 +67,7 @@ export const routineTemplates: RoutineTemplate[] = [
   },
   {
     key: 'stuck',
+    chain: { trigger: 'Fridays 15:00', action: 'Ask AI', actionAi: true },
     when: 'Fridays at 3:00 PM',
     title: 'Chase stuck tasks',
     description: 'Fridays, list what’s stalled',
@@ -66,6 +76,11 @@ export const routineTemplates: RoutineTemplate[] = [
   },
   {
     key: 'updates',
+    chain: {
+      trigger: 'Status changed',
+      action: 'Send message',
+      actionAi: false,
+    },
     when: 'When: Status changed',
     title: 'Share updates',
     description: 'Post finished tasks to a channel',
@@ -80,6 +95,31 @@ export function availableTemplates(decisions: boolean): RoutineTemplate[] {
   return routineTemplates.filter(
     (template) => decisions || !template.needsDecisions
   );
+}
+
+/** The list shows four; these come first, the rest fill in when one is off. */
+const FEATURED: readonly RoutineTemplate['key'][] = [
+  'inbox',
+  'triage',
+  'brief',
+  'updates',
+];
+
+/** The templates the routines list offers above it. */
+export function featuredTemplates(decisions: boolean): RoutineTemplate[] {
+  const available = availableTemplates(decisions);
+  return [
+    ...available.filter((template) => FEATURED.includes(template.key)),
+    ...available.filter((template) => !FEATURED.includes(template.key)),
+  ].slice(0, FEATURED.length);
+}
+
+/** The template a creator was opened on, by key; anything else starts blank. */
+export function findTemplate(
+  key: string | undefined,
+  decisions: boolean
+): RoutineTemplate | undefined {
+  return availableTemplates(decisions).find((template) => template.key === key);
 }
 
 export type TemplateContext = {
