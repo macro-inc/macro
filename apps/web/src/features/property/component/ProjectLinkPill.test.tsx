@@ -79,10 +79,13 @@ it('opens the project from its name, in a new split on shift', () => {
 
 it('changes the project from the caret without opening it', () => {
   renderPill({});
+  const caret = screen.getByRole('button', { name: 'Change project' });
+  expect(caret.getAttribute('aria-expanded')).toBe('false');
 
-  fireEvent.click(screen.getByRole('button', { name: 'Change project' }));
+  fireEvent.click(caret);
 
   expect(screen.getByText('Editing')).toBeTruthy();
+  expect(caret.getAttribute('aria-expanded')).toBe('true');
   expect(mocks.openProject).not.toHaveBeenCalled();
 });
 

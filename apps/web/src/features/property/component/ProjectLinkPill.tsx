@@ -62,6 +62,7 @@ export function ProjectLinkPill(props: {
           <ButtonGroup.Button
             size="icon-xs"
             aria-label={t('entityActions.changeProject')}
+            aria-expanded={ctx.editorOpen()}
             onClick={(event) => {
               event.stopPropagation();
               ctx.openEditor(event.currentTarget);
