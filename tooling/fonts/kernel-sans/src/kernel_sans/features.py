@@ -9,7 +9,9 @@ registering a glyph with the right suffix:
     parenleft.case   -> case (case-sensitive forms)
     f_i              -> liga (ligature of f and i)
 
-plus calt, which raises the colon between figures when colon.case exists.
+plus calt, which applies the .case forms of the colon (between figures) and
+of dashes, arrows and math operators (between capitals or figures) without
+the case feature, as in 09:30, 2026-10-30 and A–Z.
 """
 
 import re
@@ -84,14 +86,55 @@ def feature_code(drawn, p):
             + "\n} liga;"
         )
 
-    # A colon between figures (09:30) rises to the figures' centre.
-    figs = [f for f in FIGURES if f in names] + [
-        f + ".tf" for f in FIGURES if f + ".tf" in names
-    ]
-    if "colon.case" in names and figs:
-        out.append(
-            "feature calt {\n"
-            f"  sub [{' '.join(figs)}] colon' [{' '.join(figs)}] by colon.case;\n"
-            "} calt;"
-        )
+    out.append(_calt(names))
     return "\n\n".join(x for x in out if x) + "\n"
+
+
+# .case forms that calt applies between capitals or figures.
+CALT_CASE = [
+    "hyphen",
+    "endash",
+    "emdash",
+    "bullet",
+    "plus",
+    "minus",
+    "multiply",
+    "divide",
+    "equal",
+    "plusminus",
+    "less",
+    "greater",
+    "lessequal",
+    "greaterequal",
+    "notequal",
+    "asciitilde",
+    "approxequal",
+    "logicalnot",
+    "arrowright",
+    "arrowleft",
+    "arrowboth",
+    "uni2197",
+    "uni2198",
+]
+
+
+def _calt(names):
+    """Case-sensitive forms by context. The figure class takes every form of
+    a figure (tabular, slashed), since tnum and zero run first."""
+    figs = sorted(n for n in names if n.split(".")[0] in FIGURES)
+    caps = sorted(n for n in names if n[:1].isupper())
+    rules = []
+    if "colon.case" in names and figs:
+        f = " ".join(figs)
+        rules.append(f"  sub [{f}] colon' [{f}] by colon.case;")
+    ops = [n for n in CALT_CASE if n in names and n + ".case" in names]
+    if ops and (figs or caps):
+        uf = " ".join(caps + figs)
+        src = " ".join(ops)
+        dst = " ".join(n + ".case" for n in ops)
+        rules.append(f"  sub [{uf}] [{src}]' [{uf}] by [{dst}];")
+        if "space" in names:
+            rules.append(f"  sub [{uf}] space [{src}]' space [{uf}] by [{dst}];")
+    if not rules:
+        return ""
+    return "feature calt {\n" + "\n".join(rules) + "\n} calt;"
