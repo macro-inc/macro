@@ -12,8 +12,8 @@ their `.case` forms sit on `P.CASE_AXIS`. Superiors, fraction parts and the
 ordinals are the full shapes drawn 150 weight units heavier and scaled by
 `SUP`.
 
-Ink traps at the inner vertices of straight edges (1, 2, 4, 6, 9, yen) use
-`geom.crotch_trap` at depth `p.trap`, like the letters.
+Ink traps at the crotches of 1, 2, 4, 6, 9 and the yen use `geom.crotch_trap`
+at depth `p.trap`, like the letters' vertices.
 """
 
 import math

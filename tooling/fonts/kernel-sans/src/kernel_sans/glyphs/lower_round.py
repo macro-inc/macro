@@ -371,7 +371,7 @@ def e(p):
 def _s_shape(p, w):
     """Two stacked squircle rings: the upper one's bottom stroke and the
     lower one's top stroke are the spine, a little heavier than the other
-    horizontals (between hair and stem) so it reads as heavy as the stems.
+    horizontals (1.09 x hair) so it holds its own against the sides.
     The upper ring is a touch narrower; the terminals are cut horizontally
     (top at right, bottom at left) with chamfered outer corners."""
     s = p.stem

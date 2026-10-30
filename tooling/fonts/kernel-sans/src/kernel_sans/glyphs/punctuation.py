@@ -677,12 +677,17 @@ def at(p):
     y0, y1 = -150, 730
     cy = (y0 + y1) / 2
     n, n_in = p.sq, p.sq_in
-    ws, wt = p.stem * 0.98, p.hair * 0.98  # ring
-    st = p.stem  # the a's stem
+    reg = P.params(400)
+    # The ring's horizontals and the inner a grow more slowly than the text
+    # above Regular, so the a's counter and the channel round it stay open
+    # at ExtraBold (as in Inter, whose inner a is lighter than its n).
+    ws, wt = p.stem * 0.98, _damp(p.hair * 0.98, reg.hair * 0.98, 0.8)  # ring
+    st = _damp(p.stem, reg.stem, 0.6)  # the a's stem
+    hair_a = _damp(p.hair, reg.hair, 0.6)  # the a's top and bottom
     hook_w = p.w(250, 0.3)  # from the stem's right edge to the ring's outer right
     xr = W - hook_w
     xs = xr - st
-    ha = 480 + 0.2 * p.grow
+    ha = 480 - 0.1 * p.grow
     oy0, oy1 = cy - ha / 2 - P.OS, cy + ha / 2 + P.OS  # the a, with overshoots
     xa0 = xr - p.w(372, 1.2)
     # Ring, open at the lower right.
@@ -699,29 +704,29 @@ def at(p):
     # The a: bowl and stem. The counter runs a fixed fraction of its radius
     # past the stem's edge, so it meets the stem at the same angle at every
     # weight; ink traps deepen those crotches.
-    wsb = p.stem * 1.03
+    wsb = _damp(p.stem * 1.03, reg.stem * 1.03, 0.6)
     xi0 = xa0 + wsb
     k = 0.42
     ix1 = (xs - k * xi0 / 2) / (1 - k / 2)
-    iy0, iy1 = oy0 + p.hair, oy1 - p.hair
+    iy0, iy1 = oy0 + hair_a, oy1 - hair_a
     bowl = _ring_part(xa0, oy0, ix1 + wsb, oy1, xi0, iy0, ix1, iy1, n, n_in, left_of(xs + 1))
     stem = rect(xs, oy0, xr, oy1, ne=p.cut)
     sh = ringsh + side + hook + bowl + stem
-    d = p.trap * 0.8
-    for side_ in ("top", "bottom"):
-        sy = 1 if side_ == "top" else -1
-        yc = _sq_y(xi0, iy0, ix1, iy1, n_in, xs, side_)
-        xb = xs - d * 0.9 - 2
-        yb = _sq_y(xi0, iy0, ix1, iy1, n_in, xb, side_) - sy * 3
-        sh = sh - _trap3(d, (xs + d * 0.2, yc + sy * d), (xs - 3, yc - sy * 6), (xb, yb))
+    # Bowl-join traps as in a: geom.stem_trap's notch at 0.65 * p.trap (a
+    # deeper one reaches past this short counter's top), with its far corner
+    # just inside the counter's curve, which leaves the stem too shallowly
+    # for stem_trap's own corner to stay in the white (it left a barb).
+    d = p.trap * 0.65
+    if d >= 1:
+        for side_ in ("top", "bottom"):
+            sy = 1 if side_ == "top" else -1
+            yc = _sq_y(xi0, iy0, ix1, iy1, n_in, xs, side_)
+            xb = xs - d * 0.95 - 2
+            tip = (xs + d * 0.22, yc + sy * d)
+            a = (xs - d * 0.05 - 0.3, yc - sy * (d * 0.4 + 4))
+            b = (xb, _sq_y(xi0, iy0, ix1, iy1, n_in, xb, side_) - sy * 3)
+            sh = sh - poly([a, tip, b])
     return G(sh, l=p.sbr, r=p.sbr)
-
-
-def _trap3(depth, tip, a, b):
-    """Ink-trap triangle with explicit base points (both in the white)."""
-    if depth < 1:
-        return Shape()
-    return poly([a, tip, b])
 
 
 def _tangent_point(x0, y0, x1, y1, n, slope):
@@ -737,7 +742,9 @@ def _tangent_point(x0, y0, x1, y1, n, slope):
 
 # Tuned so the leg, loop and tail meet the same way at every weight: the
 # leg's foot drifts left as weight grows to keep the tail's counter open.
-AMP = dict(lx=500, lxk=1.3, uw=272, uwk=1.6, m=-1.3, foot=60, footk=-0.7, ytail=0.44)
+# At ExtraBold (verticals damped by `damp`) the lower counter is about 128
+# and the loop's about 123 wide, as in Inter.
+AMP = dict(lx=500, lxk=1.5, uw=272, uwk=1.75, m=-1.3, foot=60, footk=-0.7, ytail=0.44, damp=0.85)
 
 
 @glyph("ampersand", 0x0026)
@@ -746,7 +753,10 @@ def ampersand(p):
     upper right into the tail; a straight leg leaves the loop tangentially
     on the left and runs through the bowl to the baseline."""
     a = AMP
-    ws, wt = p.cstem * 0.95, p.chair * 0.95
+    # Verticals and the leg grow a little more slowly than the capitals
+    # above Regular so both counters stay open at ExtraBold.
+    reg = P.params(400)
+    ws, wt = _damp(p.cstem * 0.95, reg.cstem * 0.95, a["damp"]), p.chair * 0.95
     n, n_in = p.sq * 0.92, p.sq_in * 0.95
     top = P.CAP + P.COS
     # Lower bowl.
@@ -758,7 +768,7 @@ def ampersand(p):
     uw = p.w(a["uw"], a["uwk"])
     uy0 = ly1 - wt
     m = a["m"]
-    dw = p.cstem * 0.95
+    dw = ws
     hw = dw * math.hypot(1, m) / abs(m)
     tx0, ty = _tangent_point(0, uy0, uw, top, n, m)
     # The leg's foot sits on the bowl's overshoot line, so the bowl always
@@ -835,11 +845,16 @@ def copyright(p):
     y0 = -P.COS
     sh = _ring_mark(p, 0, y0, size)
     ch = size * 0.46
-    cw = ch * 0.86
+    cw = ch * 0.86 + 0.3 * max(0.0, p.grow)
     cx0 = size / 2 - cw / 2 + cw * 0.04
     cy0 = y0 + size / 2 - ch / 2
+    # The c's strokes grow more slowly than the text above Regular, like
+    # the R of (R); at full weight its counter closed to a slit at 800.
+    reg = P.params(400)
+    cs = _damp(p.stem * 0.92, reg.stem * 0.92, 0.5)
+    chr_ = _damp(p.hair * 0.92, reg.hair * 0.92, 0.5)
     c = open_bowl(
-        p, cx0, cx0 + cw, cy0, cy0 + ch, p.stem * 0.92, p.hair * 0.92, p.hair * 0.92,
+        p, cx0, cx0 + cw, cy0, cy0 + ch, cs, chr_, chr_,
         cut_top=cy0 + ch * 0.66, cut_bottom=cy0 + ch * 0.34,
     )
     return G(sh + c, l=p.csbr * 0.9, r=p.csbr * 0.9)
