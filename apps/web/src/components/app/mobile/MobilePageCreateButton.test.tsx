@@ -12,6 +12,7 @@ const sources = vi.hoisted(() => ({
   calendar: vi.fn(),
   openEvent: vi.fn(),
   openCalendarEvent: vi.fn(),
+  raiseKeyboard: vi.fn(),
   openCompany: vi.fn(),
   openMenu: vi.fn(),
 }));
@@ -34,6 +35,9 @@ vi.mock(
 );
 vi.mock('@app/features/calendar-view/open-calendar-event', () => ({
   openCalendarEventSplit: sources.openCalendarEvent,
+}));
+vi.mock('@app/features/task-composer/new-task-title-focus', () => ({
+  raiseKeyboardForNewTaskTitle: sources.raiseKeyboard,
 }));
 vi.mock('@app/features/crm/creation-adapter', () => ({
   openCreateCompanyModal: sources.openCompany,
@@ -120,6 +124,10 @@ describe('mobile create availability', () => {
       },
     ]);
     fireEvent.click(screen.getByRole('button', { name: 'Task' }));
+    // iOS raises the keyboard only inside the tap; the composer opens after
+    // the menu has closed.
+    expect(sources.raiseKeyboard).toHaveBeenCalledOnce();
+    expect(createTask).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(createTask).toHaveBeenCalledOnce());
   });
 

@@ -27,6 +27,7 @@ import {
   ComposeTaskTitleEditor,
   TaskTitleAccessory,
 } from '../components/title-editor';
+import { TASK_COMPOSER_TITLE_ATTRIBUTE } from '../new-task-title-focus';
 import type { TaskComposerController } from '../primitives/task-composer';
 
 const TaskComposerPartsContext = createContext<TaskComposerController>();
@@ -173,7 +174,7 @@ function Title() {
   const composer = useTaskComposer();
   const pickers = useContext(TaskComposerPickersContext);
   return (
-    <EntityComposer.Title>
+    <EntityComposer.Title {...{ [TASK_COMPOSER_TITLE_ATTRIBUTE]: '' }}>
       <Show when={composer.tagLayoutMode() === 'title'}>
         <TaskTitleAccessory>
           <Dynamic
@@ -208,6 +209,7 @@ function Title() {
         onDeleteTagsAtStart={composer.deleteTitleTagsAtStart}
         portalScope={composer.portalScope()}
         ref={composer.setTitleEditorRoot}
+        autofocus={composer.autofocusTitle}
       />
     </EntityComposer.Title>
   );

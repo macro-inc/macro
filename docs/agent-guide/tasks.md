@@ -595,7 +595,9 @@ Use existing PRs and do not modify hosted data.
 
 On touch devices, task creation opens in a bottom sheet with a drag handle and
 scrollable, keyboard-aware content. It opens at 70% of the screen, with the
-description filling the room above the properties; the keyboard shortens it. Its glass pane has broad screen-scaled
+description filling the room above the properties; the keyboard shortens it.
+Opening it from `+ Task` or Home's `+ New` raises the keyboard with the title
+focused and the caret after any text. Its glass pane has broad screen-scaled
 corners, an 8px outer inset, and a blurred backdrop, matching the create and
 filter sheets. Its header has `Continue editing in split` on the left and
 `Create Task` on the right, with a text-only `Clear` 32px to its left once the

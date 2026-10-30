@@ -6,6 +6,7 @@ import {
   useCreateMenuBlocks,
 } from '@app/features/command/Launcher';
 import { openCreateCompanyModal } from '@app/features/crm/creation-adapter';
+import { raiseKeyboardForNewTaskTitle } from '@app/features/task-composer/new-task-title-focus';
 import { type TranslationKey, t } from '@app/lib/i18n';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -47,7 +48,10 @@ const NEW_ITEM_LABELS: Partial<Record<MobileNavViewId, TranslationKey>> = {
   companies: 'mobile.newCompany',
 };
 
-type PageCreateAction = Pick<MobileCreateMenuItem, 'label' | 'onSelect'>;
+type PageCreateAction = Pick<
+  MobileCreateMenuItem,
+  'label' | 'onSelect' | 'raiseKeyboard'
+>;
 
 /** The current non-AI view's New action above the navigation dock. */
 export function MobilePageCreateButton() {
@@ -80,7 +84,15 @@ export function MobilePageCreateButton() {
         : undefined;
     }
     const block = mobilePageCreateBlock(view, createBlocks());
-    return block && { label: block.label, onSelect: block.keyDownHandler };
+    return (
+      block && {
+        label: block.label,
+        onSelect: block.keyDownHandler,
+        ...(block.blockName === 'task'
+          ? { raiseKeyboard: raiseKeyboardForNewTaskTitle }
+          : {}),
+      }
+    );
   };
 
   const quickActions = (): MobileCreateMenuItem[] => [

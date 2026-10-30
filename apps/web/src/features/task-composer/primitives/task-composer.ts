@@ -28,6 +28,7 @@ import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
@@ -580,10 +581,6 @@ export function createTaskComposer(
     if (container) {
       attachHotkeys(container);
     }
-    // An empty title (e.g. a task started from an email) waits for the user.
-    if (!title().trim()) {
-      requestAnimationFrame(() => titleEditorRoot?.focus());
-    }
   });
 
   registerHotkey({
@@ -645,6 +642,13 @@ export function createTaskComposer(
     setTitleEditorRoot: (el: HTMLDivElement) => {
       titleEditorRoot = el;
     },
+    /**
+     * Whether the title takes focus as the composer opens. Always on touch,
+     * where the opening tap raised the keyboard for it
+     * (`raiseKeyboardForNewTaskTitle`); elsewhere a title that already has
+     * text (a task started from an email) waits for the user.
+     */
+    autofocusTitle: isTouchDevice() || !title().trim(),
     editorConfig,
     portalScope,
     isPopover: host.isPopover,

@@ -101,6 +101,10 @@ read their code, and follow that pattern rather than inventing a new one.
 
 - Focus inputs on user intent only, never on mount. On touch, Enter in a
   composer inserts a newline; the send button submits.
+- iOS raises the keyboard only for a focus inside the tap. A tap that opens a
+  composer whose field mounts later calls `triggerFocusInput` in the tap (see
+  `raiseKeyboardForNewTaskTitle`), or a create menu item's `raiseKeyboard`;
+  popovers and the create menu leave focus with its stand-in.
 - UI over an editor must not take focus: cancel `pointerdown` and
   `mousedown` on its root (`keepEditorFocus` in `TouchSelectionToolbar`) or
   use `usePreserveFocusOnButtonTaps`; mark sibling regions
