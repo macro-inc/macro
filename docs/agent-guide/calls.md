@@ -234,14 +234,22 @@ controls also work by keyboard and touch.
 The floating mobile **New** action is hidden while the call view is open and
 returns when you leave the call view. Phone calls also hide the app's bottom
 navigation and channel Invite action, but keep the channel header island visible.
-Invite returns when you leave the call tab. Setup screens, desktop, and tablets
-stay unchanged. Back returns to the app without hanging up; only **Leave call**
-ends participation.
+Invite returns when you leave the call tab, including in the block-hosted channel
+header; Invite remains available on setup screens, desktop, and tablets. Back
+returns to the app without hanging up; when a channel has no navigation history, Back opens its
+Messages tab instead. Only **Leave call** ends participation.
 
 Click or tap a participant, including your own tile, to focus them. Click or tap
 the focused tile again (**Back to grid**) to restore the grid. If that participant
 leaves, the grid returns automatically. Focus does not replace the video tracks.
 A talking participant has an accent-colored border above their video or avatar.
+
+The **Participants** header button shows the live attendee count and opens a
+scrollable roster: a popover on desktop and tablet, or a bottom drawer on phones.
+It includes you and connected guests, excludes recording agents, and updates as
+people join or leave. Rows show names, avatars, microphone/camera state, and a
+speaking indicator. This is the current call roster, not the channel member list.
+Dismiss with the backdrop or Escape to return focus to the header button.
 
 Open live chat with **Open chat** alongside the media controls. On phones, the
 fully rounded control bar fills the available space beside a separate chat button,

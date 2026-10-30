@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, type ParentProps, Show } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ChannelCallTab } from '../ChannelCallTab';
 
@@ -14,6 +14,12 @@ vi.mock('@solidjs/router', () => ({
 }));
 vi.mock('@channel/Channel/ChannelTabContext', () => ({
   useChannelTab: () => ({ setActiveTab: () => {} }),
+}));
+vi.mock('@components/app/split-layout/components/SplitHeader', () => ({
+  SplitHeaderRight: (props: ParentProps) => props.children,
+}));
+vi.mock('../CallParticipantsMenu', () => ({
+  CallParticipantsMenu: () => null,
 }));
 vi.mock('../use-call', () => ({
   useCall: () => ({

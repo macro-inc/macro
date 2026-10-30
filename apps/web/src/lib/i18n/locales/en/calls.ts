@@ -1,0 +1,13 @@
+export default {
+  participants: 'Participants',
+  participantsCount: { other: 'Participants ({{count}})' },
+  inCallParticipants: 'In-call participants',
+  localParticipant: '{{name}} (You)',
+  you: 'You',
+  guest: 'Guest',
+  speaking: 'Speaking',
+  microphoneOff: 'Microphone off',
+  microphoneOn: 'Microphone on',
+  cameraOn: 'Camera on',
+  cameraOff: 'Camera off',
+};

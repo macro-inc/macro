@@ -2,12 +2,13 @@
  * @vitest-environment jsdom
  */
 
-import { fireEvent, render, screen } from '@solidjs/testing-library';
+import { fireEvent, render, screen, within } from '@solidjs/testing-library';
 import type { RemoteParticipant, Track } from 'livekit-client';
 import { createSignal, type JSX, type Setter } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CallState } from '../CallContext';
 import { CallOverlay } from '../CallOverlay';
+import { CallParticipantsMenu } from '../CallParticipantsMenu';
 
 const mocks = vi.hoisted(() => ({
   callContext: undefined as unknown,
@@ -39,6 +40,7 @@ vi.mock('@core/user', () => ({
 
 vi.mock('@ui', async () => ({
   Button: (await import('@ui/components/Button')).Button,
+  Layer: (await import('@ui/components/Layer')).Layer,
   cn: (...classes: Array<string | false | null | undefined>) =>
     classes.filter(Boolean).join(' '),
   Dropdown: (await import('@ui/components/Dropdown')).Dropdown,
@@ -101,12 +103,13 @@ function createTrack(sid: string): Track {
 function createRemoteParticipant(
   identity: string,
   publications: ParticipantPublications,
-  name?: string
+  name?: string,
+  isAgent = false
 ): RemoteParticipant {
   return {
     identity,
     name,
-    isAgent: false,
+    isAgent,
     getTrackPublication(source: string) {
       return publications[source];
     },
@@ -408,5 +411,69 @@ describe('CallOverlay muted microphone badges', () => {
       screen.getByRole('button', { name: 'Focus Remote participant' })
     ).toBeTruthy();
     expect(screen.getByTestId('track-local-camera')).toBe(video);
+  });
+});
+
+describe('CallParticipantsMenu live roster', () => {
+  it('tracks human arrivals and departures without counting recording agents', () => {
+    const guest = createRemoteParticipant('guest-1', {}, 'Guest attendee');
+    const agent = createRemoteParticipant('agent-1', {}, 'Recorder', true);
+    const controls = setUpCallState([guest, agent]);
+    render(() => <CallParticipantsMenu localName="Local attendee" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Participants (2)' }));
+    const list = screen.getByRole('list', { name: 'In-call participants' });
+    expect(within(list).getAllByRole('listitem')).toHaveLength(2);
+    expect(list.textContent).toContain('Local attendee');
+    expect(list.textContent).toContain('Guest attendee');
+    expect(list.textContent).not.toContain('Recorder');
+
+    const joined = createRemoteParticipant('guest-2', {}, 'New attendee');
+    controls.setParticipants(
+      new Map([
+        [guest.identity, guest],
+        [agent.identity, agent],
+        [joined.identity, joined],
+      ])
+    );
+    expect(within(list).getAllByRole('listitem')).toHaveLength(3);
+    expect(list.textContent).toContain('New attendee');
+
+    controls.setParticipants(new Map([[agent.identity, agent]]));
+    expect(within(list).getAllByRole('listitem')).toHaveLength(1);
+    expect(list.textContent).not.toContain('Guest attendee');
+    expect(list.textContent).not.toContain('New attendee');
+  });
+
+  it('updates microphone and camera status when live publications change', () => {
+    const publications: ParticipantPublications = {};
+    const guest = createRemoteParticipant(
+      'guest-1',
+      publications,
+      'Guest attendee'
+    );
+    const controls = setUpCallState([guest]);
+    render(() => <CallParticipantsMenu />);
+    fireEvent.click(screen.getByRole('button', { name: 'Participants (2)' }));
+    const row = screen.getByText('Guest attendee').closest('li')!;
+    expect(
+      within(row).getByRole('img', { name: 'Microphone off' })
+    ).toBeTruthy();
+    expect(within(row).getByRole('img', { name: 'Camera off' })).toBeTruthy();
+
+    publications.microphone = { isMuted: false, isSubscribed: true };
+    publications.camera = { isMuted: false, isSubscribed: false };
+    controls.setTrackVersion((version) => version + 1);
+    expect(
+      within(row).getByRole('img', { name: 'Microphone on' })
+    ).toBeTruthy();
+    expect(within(row).getByRole('img', { name: 'Camera on' })).toBeTruthy();
+
+    publications.microphone.isMuted = true;
+    publications.camera.isMuted = true;
+    controls.setTrackVersion((version) => version + 1);
+    expect(
+      within(row).getByRole('img', { name: 'Microphone off' })
+    ).toBeTruthy();
+    expect(within(row).getByRole('img', { name: 'Camera off' })).toBeTruthy();
   });
 });
