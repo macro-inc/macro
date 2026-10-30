@@ -123,17 +123,28 @@ impl<N: NotificationReader, W: NotificationWithdrawal> CompleteNotifications
             .withdraw(notification_id)
             .await
             .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        let mut first_error = None;
         for user_id in recipients {
-            self.reader
+            let result = self
+                .reader
                 .update_notifications(UpdateNotificationsRequest {
                     user_id,
                     notification_ids: &[notification_id],
                     status: NotificationStatus::Done(true),
                 })
                 .await
-                .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+                .inspect_err(|error| {
+                    tracing::error!(
+                        ?error,
+                        %notification_id,
+                        "unable to complete notification for recipient"
+                    );
+                });
+            if let Err(error) = result {
+                first_error.get_or_insert_with(|| anyhow::anyhow!("{error:?}"));
+            }
         }
-        Ok(())
+        first_error.map_or(Ok(()), Err)
     }
 }
 

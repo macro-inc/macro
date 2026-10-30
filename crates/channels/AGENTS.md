@@ -66,6 +66,8 @@ DMs, and the shared message store other domains discuss things on.
   timeline through `macro.channels` and the activity consumer.
   Withdrawal starts the one-minute retry cooldown at `resolved_at`, even when
   the request has been pending longer than a minute.
+  Completing a resolved request's notification attempts every recipient before
+  returning a recipient update error.
 
 - A person's message shares every item it links; a bot message posted for a
   person (`triggered_by`) shares, as that person, only the linked items the
