@@ -1,13 +1,6 @@
 import { TextShimmer, WorkingDots } from '@app/features/block-agent/ui';
 import { Key } from '@solid-primitives/keyed';
-import {
-  createMemo,
-  createSignal,
-  on,
-  onCleanup,
-  onMount,
-  Show,
-} from 'solid-js';
+import { createMemo, createSignal, on, onCleanup, onMount } from 'solid-js';
 import type { ActivityRowView } from './activity-rows';
 
 /** How long each of several steps running at once holds the line. */
@@ -55,16 +48,9 @@ export function ActivityLine(props: { rows: readonly ActivityRowView[] }) {
             class="flex min-w-0 animate-agent-step-in items-center gap-2 motion-reduce:animate-none"
             data-status={step().status}
           >
-            <span class="shrink-0 text-ink-muted">
+            <span class="min-w-0 truncate text-ink-muted">
               <TextShimmer text={step().label} active />
             </span>
-            <Show when={step().detail}>
-              {(detail) => (
-                <span class="min-w-0 truncate font-mono text-ink-extra-muted">
-                  {detail()}
-                </span>
-              )}
-            </Show>
           </span>
         )}
       </Key>

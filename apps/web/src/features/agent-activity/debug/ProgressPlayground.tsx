@@ -37,7 +37,6 @@ import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME } from '@theme/constants';
 import { clearThemePreview, previewTheme } from '@theme/utils/themeUtils';
 import { Button, Tabs } from '@ui';
 import { createSignal, For, Index, type JSX, onCleanup, Show } from 'solid-js';
-import { match, P } from 'ts-pattern';
 import { ActivityLine } from '../components/activity-line';
 import type { ActivityRowView } from '../components/activity-rows';
 import { LiveTail } from '../components/live-tail';
@@ -445,7 +444,7 @@ const SCENARIOS: Scenario[] = [
   {
     id: 'long',
     title: 'Long details',
-    note: 'Queries and paths truncate on one line, running and done.',
+    note: 'The session truncates queries and paths on one line; a conversation names only the step.',
     parts: [
       macro(
         'long-search',
@@ -519,8 +518,6 @@ const REPLAY_FRAME_MS = 2500;
 // What follows mirrors agent_fold's `segment.rs`, so the channel reads its
 // steps as the server words them.
 
-const DETAIL_MAX_CHARS = 80;
-
 /** A step's verbs while it runs, once done, and if it failed. */
 const VERBS: Partial<
   Record<ToolDetail['kind'], readonly [string, string, string]>
@@ -534,43 +531,6 @@ const VERBS: Partial<
   fetch: ['Fetching', 'Fetched', 'Fetch failed'],
   subagent: ['Delegating', 'Delegated', 'Delegation failed'],
 };
-const INPUT_DETAIL_KEYS = [
-  'query',
-  'q',
-  'title',
-  'name',
-  'documentName',
-  'fileName',
-  'url',
-  'path',
-  'subject',
-];
-
-function truncate(value: string): string {
-  const line = (value.split('\n')[0] ?? '').trim();
-  const characters = [...line];
-  if (characters.length <= DETAIL_MAX_CHARS) return line;
-  return `${characters
-    .slice(0, DETAIL_MAX_CHARS - 1)
-    .join('')
-    .trimEnd()}…`;
-}
-
-function pathsDetail(paths: readonly string[]): string | null {
-  if (paths.length === 0) return null;
-  if (paths.length > 1) return `${paths.length} files`;
-  return truncate(paths[0]!.split('/').at(-1) ?? paths[0]!);
-}
-
-function inputDetail(input: unknown): string | null {
-  if (!input || typeof input !== 'object') return null;
-  for (const key of INPUT_DETAIL_KEYS) {
-    const value = (input as Record<string, unknown>)[key];
-    if (typeof value === 'string' && value.trim()) return truncate(value);
-  }
-  return null;
-}
-
 /** `ListEntities` reads `List entities`; acronyms stay as written. */
 function humanize(name: string): string {
   const words = name
@@ -588,21 +548,6 @@ function toolName(name: ToolName): string {
   return name.kind === 'native' ? name.name : name.tool;
 }
 
-function verbDetail(detail: ToolDetail): string | null {
-  return match(detail)
-    .with({ kind: 'terminal' }, ({ command }) =>
-      command ? truncate(command) : null
-    )
-    .with({ kind: 'edit' }, ({ diffs }) =>
-      pathsDetail(diffs.map((diff) => diff.path))
-    )
-    .with({ kind: P.union('read', 'delete', 'move', 'search') }, ({ paths }) =>
-      pathsDetail(paths)
-    )
-    .with({ kind: 'subagent' }, ({ title }) => truncate(title))
-    .otherwise(() => null);
-}
-
 function stepRow(part: ToolUsePart, closed: boolean): ActivityRow {
   const status: ActivityRow['status'] =
     part.status === 'completed'
@@ -617,19 +562,15 @@ function stepRow(part: ToolUsePart, closed: boolean): ActivityRow {
     const [whileRunning, done, failed] = verbs;
     const label =
       status === 'running' ? whileRunning : status === 'failed' ? failed : done;
-    return { id: part.id, label, detail: verbDetail(part.detail), status };
+    return { id: part.id, label, detail: null, status };
   }
   if (part.detail.kind === 'think')
     return { id: part.id, label: 'Thought it through', detail: null, status };
   const named = humanize(toolName(part.name));
-  const input =
-    part.detail.kind === 'macro' || part.detail.kind === 'other'
-      ? part.detail.input
-      : undefined;
   return {
     id: part.id,
     label: status === 'failed' ? `${named} failed` : named,
-    detail: inputDetail(input),
+    detail: null,
     status,
   };
 }
@@ -709,14 +650,10 @@ function foldedReply(scenario: Scenario): FoldedMessage {
   };
 }
 
-/**
- * A passage or a run of steps as a posted message stores it. Stored rows
- * never carry details, which only a reader of the live session sees.
- */
+/** A passage or a run of steps as a posted message stores it. */
 function storedSegment(
   scenario: Scenario,
-  segment: Segment,
-  reader: boolean
+  segment: Segment
 ): AgentReplySegment | undefined {
   const parts = scenario.parts.slice(segment.start, segment.end);
   if (segment.kind === 'prose') {
@@ -737,9 +674,6 @@ function storedSegment(
       id: row.id,
       label: row.label,
       status: row.status,
-      ...(reader && !segment.sealed && row.detail
-        ? { detail: row.detail }
-        : {}),
     })),
   };
 }
@@ -784,11 +718,10 @@ function leadingRuns(stored: readonly AgentReplySegment[], inFlight: boolean) {
  */
 function replyMessages(
   scenario: Scenario,
-  conversation: Conversation,
-  reader: boolean
+  conversation: Conversation
 ): AgentChatReply[] {
   const stored = segmentsOf(scenario.parts, scenario.inFlight).flatMap(
-    (segment) => storedSegment(scenario, segment, reader) ?? []
+    (segment) => storedSegment(scenario, segment) ?? []
   );
   if (conversation === 'mention') {
     const body: AgentChatReplyBody =
@@ -955,9 +888,8 @@ function ConversationView(props: {
 }) {
   const reply = () => foldedReply(props.scenario);
   const messages = () =>
-    replyMessages(props.scenario, props.conversation, props.reader).map(
-      (message, index) =>
-        channelMessage(message, `playground-${props.scenario.id}-${index}`)
+    replyMessages(props.scenario, props.conversation).map((message, index) =>
+      channelMessage(message, `playground-${props.scenario.id}-${index}`)
     );
   return (
     <>
@@ -1159,8 +1091,8 @@ export default function ProgressPlayground() {
           ]}
           onChange={applyPreview}
         />
-        {/* The session shows every step in full to anyone who can open it. */}
-        <Show when={view() !== 'session'}>
+        {/* Only a DM shows what the turn is doing beyond its messages. */}
+        <Show when={view() === 'dm' || view() === 'bottom-row'}>
           <Choice
             label="Viewer"
             value={viewer()}
