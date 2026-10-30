@@ -61,6 +61,7 @@ import { UNKNOWN_MENTION } from './unknownMention';
 import { I_VIDEO, VIDEO_LINK } from './video';
 import { E_WATERMARK, I_WATERMARK } from './watermark';
 
+export { ORDERED_LIST_ENTER } from './customTransformers';
 export { isConversionOnlyTransformer, protectEmptyParagraphLines };
 
 /**

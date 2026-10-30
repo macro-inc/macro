@@ -735,6 +735,7 @@ const List: TypedRenderableElement<ListNode> = {
           classList={{
             ['depth-' + depth]: true,
           }}
+          start={start !== 1 ? start : undefined}
           style={{ 'counter-reset': `static-md-counter-${depth} ${start - 1}` }}
         >
           {props.children}
