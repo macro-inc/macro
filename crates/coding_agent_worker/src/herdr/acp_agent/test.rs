@@ -357,6 +357,7 @@ async fn an_unconfirmed_submission_never_sends_an_extra_enter_or_reports_success
             &session,
             guard.as_mut().unwrap(),
             &CancellationToken::new(),
+            false,
         )
         .await
         .unwrap_err();
@@ -633,5 +634,152 @@ async fn a_late_codex_item_never_answers_a_waiting_macro_prompt() {
         output.try_recv().unwrap()["method"],
         "_session/turn_complete"
     );
+    adapter.shutdown.cancel();
+}
+
+/// A herdr whose agent status is the `status` file. Typing a prompt starts
+/// a turn that the transcript records as already answered.
+fn queueing_herdr(root: &Path, transcript: &Path, status: &str) -> HerdrCli {
+    use std::os::unix::fs::PermissionsExt as _;
+    std::fs::write(root.join("status"), status).unwrap();
+    std::fs::write(
+        root.join("macro-turn"),
+        format!(
+            "{}\n{}\n",
+            json!({"type":"user", "uuid":"macro-user", "message":{"content":"from macro"}}),
+            json!({"type":"assistant", "uuid":"macro-agent", "message":{"content":[{"type":"text", "text":"answered"}], "stop_reason":"end_turn"}}),
+        ),
+    )
+    .unwrap();
+    let script = root.join("herdr");
+    std::fs::write(
+        &script,
+        format!(
+            r#"#!/bin/sh
+cd {}
+printf '%s\n' "$*" >> calls
+case "$1:$2" in
+  agent:get) printf '{{"result":{{"agent":{{"agent_status":"%s","state_change_seq":1}}}}}}\n' "$(cat status)" ;;
+  agent:read) if [ "$(cat status)" = blocked ]; then cat dialog; fi ;;
+  agent:send-keys) printf idle > status ;;
+  agent:prompt) printf working > status; cat macro-turn >> {} ;;
+  *) exit 1 ;;
+esac
+"#,
+            shell_words::quote(&root.to_string_lossy()),
+            shell_words::quote(&transcript.to_string_lossy()),
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    HerdrCli::new(script, None)
+}
+
+#[tokio::test]
+async fn a_prompt_to_a_busy_native_session_waits_for_its_turn_then_submits() {
+    use std::io::Write as _;
+    let root = tempfile::tempdir().unwrap();
+    let id = uuid::Uuid::new_v4().to_string();
+    let transcript = save_transcript(root.path(), &id);
+    let (mut adapter, mut output) = test_adapter(root.path());
+    Arc::get_mut(&mut adapter).unwrap().herdr =
+        Some(queueing_herdr(root.path(), &transcript, "working"));
+    adapter
+        .load_session(&json!({"sessionId":id,"cwd":root.path()}))
+        .await
+        .unwrap();
+    let session = adapter.session(&json!({"sessionId":id})).unwrap();
+    session.prompt_pending.store(true, Ordering::SeqCst);
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&transcript)
+        .unwrap();
+    writeln!(
+        file,
+        "{}",
+        json!({"type":"user", "uuid":"local-user", "message":{"content":"typed in herdr"}})
+    )
+    .unwrap();
+
+    let prompt = tokio::spawn({
+        let adapter = adapter.clone();
+        let session = session.clone();
+        async move { adapter.prompt(&session, "from macro").await }
+    });
+    let mut next = async || {
+        tokio::time::timeout(Duration::from_secs(5), output.recv())
+            .await
+            .unwrap()
+            .unwrap()
+    };
+    // The native turn keeps streaming while the Macro prompt waits for it.
+    assert_eq!(
+        next().await["params"]["update"]["content"]["text"],
+        "typed in herdr"
+    );
+    std::fs::write(root.path().join("status"), "idle").unwrap();
+    writeln!(file, "{}", json!({"type":"assistant", "uuid":"local-agent", "message":{"content":[{"type":"text", "text":"local answer"}], "stop_reason":"end_turn"}})).unwrap();
+    assert_eq!(
+        next().await["params"]["update"]["content"]["text"],
+        "local answer"
+    );
+    assert_eq!(next().await["method"], "_session/turn_complete");
+    assert_eq!(
+        next().await["params"]["update"]["content"]["text"],
+        "from macro"
+    );
+    assert_eq!(
+        next().await["params"]["update"]["content"]["text"],
+        "answered"
+    );
+    assert_eq!(prompt.await.unwrap().unwrap(), "end_turn");
+    let name = agent_name(&id);
+    let calls = std::fs::read_to_string(root.path().join("calls")).unwrap();
+    assert_eq!(
+        calls
+            .matches(&format!("agent prompt {name} from macro\n"))
+            .count(),
+        1
+    );
+    adapter.shutdown.cancel();
+}
+
+#[tokio::test]
+async fn a_prompt_dismisses_the_exit_confirmation_a_second_ctrl_c_left() {
+    let root = tempfile::tempdir().unwrap();
+    let id = uuid::Uuid::new_v4().to_string();
+    let transcript = save_transcript(root.path(), &id);
+    std::fs::write(
+        root.path().join("dialog"),
+        "  Background work is running\n  ❯ 1. Exit and stop tasks\n    2. Move to background and exit\n    3. Stay\n  Enter to confirm · Esc to cancel\n",
+    )
+    .unwrap();
+    let (mut adapter, _output) = test_adapter(root.path());
+    Arc::get_mut(&mut adapter).unwrap().herdr =
+        Some(queueing_herdr(root.path(), &transcript, "blocked"));
+    adapter
+        .load_session(&json!({"sessionId":id,"cwd":root.path()}))
+        .await
+        .unwrap();
+    let session = adapter.session(&json!({"sessionId":id})).unwrap();
+    session.prompt_pending.store(true, Ordering::SeqCst);
+
+    let outcome = tokio::time::timeout(
+        Duration::from_secs(5),
+        adapter.prompt(&session, "from macro"),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(outcome.unwrap(), "end_turn");
+    let name = agent_name(&id);
+    let calls = std::fs::read_to_string(root.path().join("calls")).unwrap();
+    let stayed = calls
+        .find(&format!("agent send-keys {name} esc\n"))
+        .unwrap();
+    let prompted = calls
+        .find(&format!("agent prompt {name} from macro\n"))
+        .unwrap();
+    assert!(stayed < prompted);
     adapter.shutdown.cancel();
 }

@@ -651,13 +651,28 @@ impl Adapter {
         let _cancellation = PromptCancellation(&session.cancel);
 
         let mut guard = session.live.lock().await;
-        if let Some(live) = guard.as_ref() {
-            match herdr.agent_info(&live.name).await {
-                Ok(info) if matches!(info.status.as_str(), "working" | "blocked") => {
-                    return Err(RpcError::invalid(
-                        "the native session is busy; finish its current turn in Herdr first",
-                    ));
+        if let Some(live) = guard.as_mut() {
+            // Queued like input typed into the TUI mid-turn: the prompt waits
+            // for the native turn, which streams and asks for permission
+            // meanwhile, and a stop interrupts that turn.
+            let info = loop {
+                let info = herdr.agent_info(&live.name).await;
+                if !info
+                    .as_ref()
+                    .is_ok_and(|info| matches!(info.status.as_str(), "working" | "blocked"))
+                {
+                    break info;
                 }
+                if info.as_ref().is_ok_and(|info| info.status == "blocked")
+                    && self.stay(herdr, &live.name).await?
+                {
+                    continue;
+                }
+                if self.follow(herdr, session, live, &cancel, true).await? == "cancelled" {
+                    return Ok("cancelled");
+                }
+            };
+            match info {
                 Ok(info) => {
                     if info.cwd.as_ref().is_some_and(|cwd| cwd != &session.cwd)
                         || info
@@ -692,19 +707,14 @@ impl Adapter {
             return Err(RpcError::internal("the Claude Code window did not start"));
         };
 
-        if live.pending.is_empty() {
-            live.pending = self.drain(live)?.into();
-        }
-        while let Some(LogEvent::ModelChanged(_)) = live.pending.front() {
-            let Some(LogEvent::ModelChanged(model)) = live.pending.pop_front() else {
-                unreachable!()
-            };
-            self.report_model(session, live, &model)?;
-        }
-        if !live.pending.is_empty() {
-            return Err(RpcError::invalid(
-                "the native transcript has new activity; retry once it has synchronized",
-            ));
+        // Relay whatever the native session did before this prompt, so a
+        // turn end already in the transcript never ends this prompt's turn.
+        loop {
+            let offset = live.cursor.offset;
+            self.forward(session, live, &mut None)?;
+            if offset == live.cursor.offset && live.pending.is_empty() {
+                break;
+            }
         }
         // The observer cannot acquire this session until the turn ends. Publish
         // native settings now, while the freshly started composer is visible.
@@ -740,10 +750,34 @@ impl Adapter {
             }));
             return Ok("end_turn");
         }
-        let outcome = self.follow(herdr, session, live, &cancel).await;
+        let outcome = self.follow(herdr, session, live, &cancel, false).await;
         *lock(&session.cancel) = None;
         self.save(session, guard.as_ref())?;
         outcome
+    }
+
+    /// Dismiss the exit confirmation a second Ctrl-C in Herdr leaves behind,
+    /// so the prompt waiting on it can run. Returns whether it pressed Esc.
+    async fn stay(&self, herdr: &HerdrCli, name: &str) -> Result<bool, RpcError> {
+        let before = herdr.agent_info(name).await?;
+        let screen = herdr.read_agent(name).await?;
+        if !super::controls::exit_confirmation(self.options.kind, &screen) {
+            return Ok(false);
+        }
+        let after = herdr.agent_info(name).await?;
+        let current = herdr.read_agent(name).await?;
+        if !super::controls::same_dialog(
+            &screen,
+            &current,
+            before.state_change_seq,
+            after.state_change_seq,
+            &after.status,
+        ) {
+            return Ok(false);
+        }
+        herdr.send_keys(name, &["esc"]).await?;
+        tokio::time::sleep(POLL).await;
+        Ok(true)
     }
 
     /// Open the session's herdr window and start the agent in it.
@@ -870,19 +904,22 @@ impl Adapter {
         Ok(Some(path))
     }
 
-    /// Stream the turn from the transcript until it ends.
+    /// Stream the turn from the transcript until it ends. `running` says
+    /// the native turn is known to have started, so it may end without
+    /// ever reporting `working` (a dialog dismissed in Herdr).
     async fn follow(
         self: &Arc<Self>,
         herdr: &HerdrCli,
         session: &Arc<Session>,
         live: &mut Live,
         cancel: &CancellationToken,
+        running: bool,
     ) -> Result<&'static str, RpcError> {
         let started = Instant::now();
         let mut ticks = 0u32;
         let mut settled = 0u32;
         let mut missing = 0u32;
-        let mut active = false;
+        let mut active = running;
         let mut open_tool: Option<OpenTool> = None;
         // Bumped whenever a dialog is asked about or goes away, so a late
         // answer from Macro never presses keys into a different dialog.
