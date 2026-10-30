@@ -99,7 +99,14 @@ icon with a “Created by” tooltip on hover or focus. Owner names and the colu
 stay accessible; names remain available on hover. Its narrow-container visibility
 is unchanged.
 The project pill beneath a task title shows the project icon and name without
-a `Project:` prefix.
+a `Project:` prefix. It and the Project row in the Properties side panel split in
+two once a project is set: the name opens the project (shift-click for a new
+split, and an already open project is focused instead of opened again), and the
+caret changes the project. Hovering the name turns its icon into an arrow. People
+who can't edit the task get the name alone, so they can still open the project.
+An empty or unavailable project keeps the plain pill, and composers never split it.
+Enter activates a pill or any other document control reached by keyboard. After a
+mouse click, Enter still moves to the editor.
 Wide desktop task rows and group headers share their leading icon alignment.
 Narrow and mobile group headers use compact independent spacing and keep the caret,
 value icon, label, and count on one line; long labels truncate. Group-header carets
