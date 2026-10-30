@@ -98,12 +98,12 @@ Triggers:
 Steps run in order:
 - {"type":"tool","id"?:"lowercase_id","tool":NAME,"arguments":{...}} calls one tool. Tools and their arguments:
   - UpdateThreadLabels {"thread_id":"{{trigger.entity_id}}","label":NAME,"add":true|false}. Archive = label "INBOX" add false; mark read = "UNREAD" add false; star = "STARRED" add true; mark important = "IMPORTANT" add true; a custom label uses its name.
-  - SetSenderPolicy {"sender_email":"{{trigger.email.from.email}}","policy":"signal"|"noise"|"block"}.
+  - SetSenderPolicy {"sender_email":"{{trigger.email.from.email}}","policy":"signal"|"noise"|"block","thread_id":"{{trigger.entity_id}}"}; the thread picks the inbox.
   - SetEntityProperty {"entity_id":"{{trigger.entity_id}}","entity_type":"thread" for emails | "document" for tasks and documents | "channel","property_definition_id":ID, plus one value}. Tags: "add_option_ids":[tag option id] with the tag's definition id. Task status (definition 00000001-0000-0000-0000-000000000002) and priority (…0003) use "option_id"; status options Not Started 00000001-0000-0000-0002-000000000001, In Progress …0002, In Review …0003, Completed …0004, Canceled …0005; priority options Low 00000001-0000-0000-0003-000000000001, Medium …0002, High …0003, Urgent …0004. Assignees (definition 00000001-0000-0000-0000-000000000001) use "entity_refs":[{"entityType":"user","entityId":PERSON_ID}].
   - CreateDocument {"documentName":TEXT,"fileContent":TEXT,"fileExtension":"md","isTask":true} creates a task; give it "id":"task" so later steps can act on it as {{steps.task.documentId}} (entity_type "document"), even on a schedule. Without isTask it creates a document; give it "id":"doc".
   - CommentOnDocument {"documentId":"{{trigger.entity_id}}" or a created task's id,"content":TEXT}.
   - MoveToProject {"entityType":"email"|"document","entityId":"{{trigger.entity_id}}" or a created task's id,"projectId":FOLDER_ID} files the item in a folder.
-  - SendChannelMessage {"channel_id":ID,"content":TEXT,"thread_id"?:"{{trigger.message_id}}"}; to reply to a triggering channel message use channel_id "{{trigger.entity_id}}".
+  - SendChannelMessage {"channel_id":ID,"content":TEXT,"thread_id"?:"{{trigger.message.thread_id}}"}; to reply to a triggering channel message use channel_id "{{trigger.entity_id}}" and that thread_id.
 ${
   context.decisions
     ? `- {"type":"if","condition":"yes/no question about the triggering item","then":[steps],"else":[steps]}.

@@ -248,9 +248,11 @@ export const stepActions: StepAction[] = [
     create: () => ({
       kind: 'tool',
       tool: 'SetSenderPolicy',
+      // The inbox that received the email, not the primary one.
       arguments: {
         sender_email: '{{trigger.email.from.email}}',
         policy: 'noise',
+        thread_id: TRIGGER_ID,
       },
     }),
   },
@@ -384,7 +386,7 @@ export const stepActions: StepAction[] = [
       tool: 'SendChannelMessage',
       arguments: {
         channel_id: TRIGGER_ID,
-        thread_id: '{{trigger.message_id}}',
+        thread_id: '{{trigger.message.thread_id}}',
         content: '',
       },
     }),

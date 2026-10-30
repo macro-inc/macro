@@ -149,6 +149,18 @@ fn channel_messages_are_plain_text_from_their_sender() {
     assert_eq!(message_json(&bot)["sender"], "CI");
 }
 
+#[test]
+fn replies_go_to_the_root_of_the_message_thread() {
+    let mut root = message("Launch plan");
+    root.id = Uuid::now_v7();
+    assert_eq!(message_json(&root)["thread_id"], json!(root.id));
+
+    let mut reply = message("Looks good");
+    reply.id = Uuid::now_v7();
+    reply.thread_id = Some(root.id);
+    assert_eq!(message_json(&reply)["thread_id"], json!(root.id));
+}
+
 fn task() -> DocumentBasic {
     DocumentBasic {
         document_id: Uuid::nil().to_string(),
