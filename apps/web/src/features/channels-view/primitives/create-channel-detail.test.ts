@@ -157,7 +157,9 @@ describe('channel opening', () => {
     setLoad({ status: 'ready', channel: undefined });
     expect(detail.view().status).toBe('unavailable');
     setLoad({ status: 'pending' });
-    expect(detail.view().status).toBe('loading');
+    expect(detail.view().status).toBe('unavailable');
+    setCached(channel('one'));
+    expect(detail.view().status).toBe('unavailable');
     setLoad({ status: 'error', error: new Error('Offline') });
     expect(detail.view().status).toBe('unavailable');
     expect(markRead).not.toHaveBeenCalled();

@@ -42,12 +42,8 @@ export function createChannelDetail(options: {
         ? { status: 'ready', channel }
         : { status: 'unavailable', channelId: id, denied: false };
     }
-    // Retrying an access failure cannot make previously denied data visible.
-    if (
-      previous?.status === 'unavailable' &&
-      previous.channelId === id &&
-      previous.denied
-    )
+    // Pending revalidation cannot undo a confirmed absence or access failure.
+    if (previous?.status === 'unavailable' && previous.channelId === id)
       return previous;
     const cached = options.cached();
     const channel =

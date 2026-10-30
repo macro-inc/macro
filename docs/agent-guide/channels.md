@@ -860,9 +860,14 @@ response must not switch back or mark that earlier channel read.
 A transient notification-fetch failure keeps the conversation and composer mounted
 while notifications are unavailable. Recovery marks top-level message notifications
 seen without moving the conversation. No notification read marking runs
-from an abbreviated list result, even if that result is empty. Access failures
+from an abbreviated list result, even if that result is empty. Access failures and server-confirmed missing channels
 show **Conversation unavailable** and stay hidden during retry until access is
-confirmed. A route without cached channel metadata shows **Loading conversation**
+confirmed. With GraphQL caching enabled, an empty local projection cannot hide a
+server-confirmed conversation; a stale positive row cannot undo a fresh denial or
+deletion. Contradictory cache membership triggers a bounded server confirmation.
+An initially empty cache result waits for that confirmation before declaring the
+channel unavailable. Unavailable routes still recover from invite notifications
+and reconnect without mounting a message view first. A route without cached channel metadata shows **Loading conversation**
 until its channel arrives. On mobile, opening from the Recent conversation list
 also navigates immediately: a slow or failed notification lookup must not prevent
 messages and the composer from loading. Full-edge notification hydration runs
@@ -1183,10 +1188,20 @@ an opened unread conversation, so mark-read and message targeting retain their
 complete top-level inputs in Chat and thread-scoped inputs in Inbox. Reopening
 a conversation must refresh that full
 edge even within 30 seconds; mark-read waits for the refresh rather than using
-older cached notifications. Failed lookups and successful lookups with no matching
+older cached notifications. Failed server lookups and successful server lookups with no matching
 channel show **Conversation unavailable** with **Retry**, never permanent loading.
 Retry rather than marking just the one unread witness. Repeated mobile taps must
 open the last selected conversation, not a slower earlier request.
+
+A backend-free cache regression runs on desktop and phone viewports:
+`bunx playwright test --config src/lib/queries/channel/browser-test/playwright.config.ts`.
+It uses the production normalized exchange, query adapter, and detail state with a
+controlled transport. Confirm a channel, type a draft, then deliver repeated empty
+cache projections: the composer must remain mounted. A fresh server absence must
+hide it, a cached positive row must leave it hidden, and a fresh grant must recover
+it. See the [desktop fixture](assets/channel-access-cache-desktop.png) and
+[phone fixture](assets/channel-access-cache-phone.png); these show synthetic data,
+not a full app session.
 
 Opening also refreshes that channel's bounded unread edge in the same request.
 Read a DM on another device while its web sidebar retains an unread dot (for
