@@ -59,6 +59,7 @@ import {
   type NativeCallConnectionState,
   useMaybeNativeCallState,
 } from './native-call-state';
+import { ScreenShareError } from './screen-share-error';
 import {
   isNativeCallEnabled,
   prepareNativeCallJoin,
@@ -1577,6 +1578,8 @@ function createCallState() {
       });
     } catch (e) {
       console.error('failed to toggle screen share', e);
+      // The controls show it; browser picker failures include cancelling.
+      if (e instanceof ScreenShareError) throw e;
     }
   }
 

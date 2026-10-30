@@ -226,7 +226,8 @@ In the macOS desktop app, Screen share opens Macro's own **Share your screen**
 picker (screens first, the main display preselected, then open windows), since
 its Chromium has no system picker. Share publishes the chosen source; Cancel
 leaves sharing off. Without macOS Screen Recording access the picker says so
-and macOS shows its prompt; the user reopens Macro after allowing it. Browsers
+and macOS shows its prompt; the user reopens Macro after allowing it. A refused
+or failed capture shows its reason under the call controls. Browsers
 and older desktop builds keep the browser's own picker. Verify on a Mac by
 sharing a display and a window, stopping, and cancelling the picker.
 
@@ -260,7 +261,8 @@ guest names, and bearer URLs/tokens are not attributes.
 failures after admission; `enumerate` and `background` cover waiting-room
 device lists and effects. `call.media.screen_share` records which picker ran
 (`native` or `browser`), Screen Recording access, the source count and kind,
-and whether the user cancelled. A completed join/setup does not imply every device
+and whether the user cancelled; failures add the underlying
+`call.media.screen_share.error_type`. A completed join/setup does not imply every device
 worked: inspect its media children. Later toggles and connection-state samples
 are searchable by `call.id`. `call.connection.disconnected` records the SDK's
 numeric reason when available. These spans cover the browser LiveKit path,
