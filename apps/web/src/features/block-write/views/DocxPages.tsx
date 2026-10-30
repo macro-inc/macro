@@ -226,9 +226,11 @@ async function afterPrevious(
 }
 
 /** Writes to the system clipboard; a refused write leaves it as it was. */
-async function writeClipboard(item: ClipboardItem) {
+/** Builds the item only when the clipboard API exists, as ClipboardItem may not. */
+async function writeClipboard(item: () => ClipboardItem) {
+  if (!navigator.clipboard) return;
   try {
-    await navigator.clipboard?.write([item]);
+    await navigator.clipboard.write([item()]);
   } catch {
     // The browser refused (no permission or the page lost focus).
   }
@@ -750,10 +752,13 @@ export function DocxPages(props: DocxPagesProps) {
       new Blob([data(await clip)], { type });
     fireAndForget(
       writeClipboard(
-        new ClipboardItem({
-          'text/plain': blob('text/plain', (c) => c.text),
-          'text/html': blob('text/html', (c) => clipboardHtml(c, documentId())),
-        })
+        () =>
+          new ClipboardItem({
+            'text/plain': blob('text/plain', (c) => c.text),
+            'text/html': blob('text/html', (c) =>
+              clipboardHtml(c, documentId())
+            ),
+          })
       ),
       'docx-editor'
     );
