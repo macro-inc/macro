@@ -54,21 +54,23 @@ Eric. Each item is ready for one sitting; agents prepare the rest.
 
 ## In flight
 
-- [T016](tasks/T016-independent-hosting.md) independent hosting in `connect/infra`,
-  local compose run, no Doppler at runtime: builder, branch
-  `connect/T016-independent-hosting` (PR #9231).
-- [T009](tasks/T009-connect-client.md) `connect_client`: built on the old base;
-  to be reviewed and brought onto PR #9231.
+Nothing: waiting on your review of PR #9231 and the first dev deploy.
 
 ## Next
 
-T017 integration tests against the local stack and the dev deploy (after T016
-and T009). Later slices: [T010](tasks/T010-macro-adapter.md) Macro integration,
+After the deploy: `connect/tooling/integration.sh dev`, then a real consent per
+live app with test accounts and the browser (T018). Later slices: [T010](tasks/T010-macro-adapter.md) Macro integration,
 then reconnect prompts (T011). Submissions wait on the company
 facts above.
 
 ## Done
 
+- 2026-10-30: [T014](tasks/T014-deny-wrappers.md), [T015](tasks/T015-test-databases.md)
+  CI fixes; [T016](tasks/T016-independent-hosting.md) Connect hosted
+  independently in `connect/infra` with a local Compose run;
+  [T017](tasks/T017-integration-tests.md) `connect_client` and integration tests
+  (all 11 scenarios pass locally, including each live app's real authorize
+  redirect). PR #9231 touches none of Macro's deployed services.
 - 2026-10-30: [T013](tasks/T013-dev-slice-infra.md) Connect's own RDS (PostgreSQL
   17), Pulumi-written Doppler values through a project-scoped token, one-pass
   bootstrap ([runbook](docs/runbooks/bootstrap.md)); live catalog is Linear,
