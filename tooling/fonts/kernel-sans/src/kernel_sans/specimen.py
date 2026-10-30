@@ -123,7 +123,7 @@ def _glyph_table(fonts_by_weight):
         if "." in name and not name.startswith("."):
             base, suffix = name.split(".", 1)
             base_u = next((u for u, n in cmap.items() if n == base), None)
-            feature = {"ss01": "ss01", "zero": "zero", "case": "case", "tf": "tnum"}.get(suffix)
+            feature = {"ss01": "ss01", "ss02": "ss02", "zero": "zero", "case": "case", "tf": "tnum"}.get(suffix)
             if base_u is not None and feature:
                 alternates.append({
                     "n": name,

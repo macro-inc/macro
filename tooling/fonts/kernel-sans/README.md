@@ -47,6 +47,8 @@ body {
 | `tnum` | Tabular figures; the defaults are proportional |
 | `zero` | Slashed zero |
 | `ss01` | Single-storey a |
+| `ss02` | Serifed I and tailed l, distinct from 1 |
+| `calt` | Colon raised between figures, as in 09:30 |
 | `case` | Brackets, dashes, guillemets, math and accents raised for capitals |
 
 ## Character set

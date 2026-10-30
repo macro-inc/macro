@@ -88,5 +88,28 @@ class OutlineTest(unittest.TestCase):
         self.assertFalse(bad, "\n".join(f"{k}: {v}" for k, v in sorted(bad.items())))
 
 
+class FeatureTest(unittest.TestCase):
+    def test_regular_compiles_with_expected_features(self):
+        from kernel_sans import features
+        from kernel_sans.fontbuild import build_font
+
+        p = P.params(400)
+        drawn = _Drawn.at(400)
+        font = build_font(drawn, p, "ttf", features.feature_code(drawn, p))
+        tags = {fr.FeatureTag for fr in font["GSUB"].table.FeatureList.FeatureRecord}
+        for tag in ("liga", "tnum", "zero", "ss01", "case"):
+            self.assertIn(tag, tags)
+        self.assertIn("kern", {fr.FeatureTag for fr in font["GPOS"].table.FeatureList.FeatureRecord})
+
+    def test_diagonal_pairs_are_kerned_tighter(self):
+        from kernel_sans import kerning
+
+        p = P.params(400)
+        values = kerning.pair_values(_Drawn.at(400), p)
+        for pair in (("L_A", "R_V"), ("L_T", "r_o"), ("L_V", "R_A")):
+            with self.subTest(pair=pair):
+                self.assertLess(values.get(pair, 0), -20)
+
+
 if __name__ == "__main__":
     unittest.main()
