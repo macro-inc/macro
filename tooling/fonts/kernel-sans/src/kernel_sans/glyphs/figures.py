@@ -6,8 +6,12 @@ Figures sit on the cap height (720) with the capital overshoot `P.COS`, use
 `p.fstem` / `p.fhair` and the capital squircle exponents. The tabular `.tf`
 forms share one advance (`_fw`): each is drawn from x = 0 and centred in it
 by `_fit`. The default figures are those outlines respaced with their own
-sidebearings (`PROP_SB`). 6 and 9 have straight tails (DIN-like) blended into
-the bowl. Math operators share the tabular advance and centre on `P.AXIS`;
+sidebearings (`PROP_SB`); only the 1 differs, as the tabular one has a base.
+6 and 9 have straight tails (DIN-like) blended into the bowl. Widths follow
+DESIGN.md's rule and grow slowly with weight: k = 0.6 for the rounds 0 6 8 9,
+about 0.7 for the other figures, and 0.5 for the tabular advance, so heavy
+figures gain colour rather than width and tighten slightly in their cells.
+Math operators share the tabular advance and centre on `P.AXIS`;
 their `.case` forms sit on `P.CASE_AXIS`. Superiors, fraction parts and the
 ordinals are the full shapes drawn 150 weight units heavier and scaled by
 `SUP`.
@@ -72,7 +76,8 @@ def _fh(p):
 
 
 def _fw(p):
-    """The shared tabular advance."""
+    """The shared tabular advance (grows more slowly than the figures, so
+    their sidebearings shrink a little with weight, as in Inter)."""
     return round(p.w(600, 0.5))
 
 
@@ -546,7 +551,8 @@ FIGS = {
     "nine": _nine,
 }
 
-# Optical nudges inside the tabular advance (units at Regular).
+# Optical nudges inside the tabular advance (units at Regular). "one" now
+# applies only to the superior 1; the tabular 1 has a base and is centred.
 NUDGE = {"one": 28, "four": -6, "seven": 6}
 
 
@@ -608,7 +614,8 @@ def nine(p):
 # ---------------------------------------------------------------------------
 # Proportional figures, the default: the tabular outlines above respaced with
 # their own sidebearings (multiples of p.csbr), so "1" doesn't leave a hole in
-# running text. The tabular forms stay available through tnum (.tf).
+# running text (the 1 is drawn baseless from `_one`). The tabular forms stay
+# available through tnum (.tf).
 
 PROP_SB = {
     "zero": (1.0, 1.0),
