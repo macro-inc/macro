@@ -110,6 +110,9 @@ An arm reads `source_items` only when a per-source scan can stop at the page:
 every conjunct is served by the scan (kind, `"updatedAt"` bounds, the owner
 driver for the viewer's own documents, id and project lookups, notifications)
 or cannot be selective (a negated literal, or a disjunction with such a side).
+The owner index has no kind, so the viewer's tasks read the item tables. An id
+or project lookup wins over a notification state, whose notifications it then
+probes per match.
 Otherwise, for example a filter on another user's documents, a property value,
 a creation date or a name, that arm reads its item table in the same query, as
 it would with the projection disabled. So does an arm whose filter folds to
