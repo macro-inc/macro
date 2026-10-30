@@ -253,8 +253,9 @@ Dismiss with the backdrop or Escape to return focus to the header button.
 
 Open live chat with **Open chat** alongside the media controls. On phones, the
 fully rounded control bar fills the available space beside a separate chat button,
-with side gutters, an 8px gap (4px on the smallest phones), and a 48px chat tap
-target. Without chat, the controls fill the row without an empty chat column.
+while the media buttons stay together in a compact, centered group. The row keeps
+side gutters, an 8px gap (4px on the smallest phones), and a 48px chat tap target.
+Without chat, the controls fill the row without an empty chat column.
 On desktop, chat stays at the bottom-right and Copy Meeting Url stays at the
 bottom-left. On phones, Copy Meeting Url uses the shared `CopyButton` in a
 standard 40px header island, without custom button colors or sizing. Media
