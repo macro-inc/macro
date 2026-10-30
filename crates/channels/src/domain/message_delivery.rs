@@ -1,7 +1,10 @@
 //! Channel side effects for messages committed by the shared message service.
 use super::{
     events::{ChannelEvent, ReactionNotificationContext},
-    models::{ChannelMetadata, MutatedMessage, ReferencedShareItem, Sender},
+    models::{
+        ChannelMetadata, MutatedMessage, ReferenceShareOutcome, ReferenceShareResult,
+        ReferencedShareItem, Sender,
+    },
     ports::{
         AgentSessionCreations, ChannelEventDispatcher, ChannelReferenceSharePermissions,
         ChannelRepo,
@@ -77,6 +80,17 @@ fn triggering_person(message: &Message) -> Option<MacroUserIdStr<'static>> {
         .ok()
 }
 
+/// Record on the current span how many items were shared and how many the person could not share.
+fn record_share_outcomes(results: &[ReferenceShareResult]) {
+    let shared = results
+        .iter()
+        .filter(|result| result.outcome == ReferenceShareOutcome::Shared)
+        .count();
+    let span = tracing::Span::current();
+    span.record("shared", shared);
+    span.record("not_permitted", results.len() - shared);
+}
+
 /// Share the `pending` items once their creation by `bot` is recorded, giving
 /// up on any still unrecorded after the last re-check.
 async fn recheck_session_creations<C, P>(
@@ -107,7 +121,7 @@ async fn recheck_session_creations<C, P>(
             continue;
         }
         pending.retain(|item| !created.contains(item));
-        if let Err(error) = permissions
+        match permissions
             .update_channel_share_permissions_for_referenced_items(
                 person.clone(),
                 channel_id,
@@ -115,7 +129,10 @@ async fn recheck_session_creations<C, P>(
             )
             .await
         {
-            tracing::warn!(error = ?error.into(), attempt, "sharing agent creations failed");
+            Ok(results) => record_share_outcomes(&results),
+            Err(error) => {
+                tracing::warn!(error = ?error.into(), attempt, "sharing agent creations failed");
+            }
         }
         if pending.is_empty() {
             return;
@@ -143,7 +160,16 @@ where
     /// thread created. Items without a creation record yet are re-checked in
     /// the background; the rest, including anything the session did not
     /// create, stay unshared.
-    #[tracing::instrument(skip(self, person, items), fields(items = items.len()), err)]
+    #[tracing::instrument(
+        skip(self, person, items),
+        fields(
+            items = items.len(),
+            created = tracing::field::Empty,
+            shared = tracing::field::Empty,
+            not_permitted = tracing::field::Empty,
+        ),
+        err
+    )]
     async fn share_session_creations(
         &self,
         bot: BotId,
@@ -165,6 +191,7 @@ where
             .created_since(bot, started_at, items.clone())
             .await
             .map_err(Into::into)?;
+        tracing::Span::current().record("created", created.len());
         let pending: Vec<_> = items
             .into_iter()
             .filter(|item| !created.contains(item))
@@ -187,14 +214,18 @@ where
                     %bot,
                     %thread_root,
                     pending = pending_count,
+                    shared = tracing::field::Empty,
+                    not_permitted = tracing::field::Empty,
                 )),
             );
         }
         if !created.is_empty() {
-            self.permissions
+            let results = self
+                .permissions
                 .update_channel_share_permissions_for_referenced_items(person, channel_id, created)
                 .await
                 .map_err(Into::into)?;
+            record_share_outcomes(&results);
         }
         Ok(())
     }
