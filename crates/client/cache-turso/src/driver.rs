@@ -71,7 +71,15 @@ pub(crate) fn query_each(
     visit: impl FnMut(Values) -> Result<(), TursoStorageError>,
 ) -> Result<(), TursoStorageError> {
     let mut statement = prepare(connection, sql)?;
-    visit_prepared(&mut statement, values, visit)
+    query_each_prepared(&mut statement, values, visit)
+}
+
+pub(crate) fn query_each_prepared(
+    statement: &mut Statement,
+    values: Values,
+    visit: impl FnMut(Values) -> Result<(), TursoStorageError>,
+) -> Result<(), TursoStorageError> {
+    visit_prepared(statement, values, visit)
         .map(|_| ())
         .map_err(|failure| failure.error)
 }
