@@ -35644,6 +35644,17 @@
             "$ref": "#/components/schemas/ChannelSender",
             "description": "Actor that patched the message."
           },
+          "completed_reply": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessagePostedMetadata",
+                "description": "Completed bot answer eligible for explicit mention routing. Ordinary edits\nomit this; older producers remain compatible with the trigger consumer."
+              }
+            ]
+          },
           "content": {
             "type": "string",
             "description": "Macro Markdown body after the patch."

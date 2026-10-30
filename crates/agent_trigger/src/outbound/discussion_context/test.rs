@@ -260,6 +260,7 @@ async fn a_document_comment_carries_its_whole_thread_through_the_prompt() {
     assert_eq!(
         context,
         DiscussionContext {
+            agent_request: None,
             // An unanchored discussion names no place in the document.
             surface: DiscussionSurface::DocumentComment {
                 id: "doc".to_owned(),
@@ -441,6 +442,7 @@ async fn a_channel_thread_reply_is_about_its_thread_not_the_latest_message() {
     assert_eq!(
         context,
         DiscussionContext {
+            agent_request: None,
             surface: DiscussionSurface::Channel {
                 id: Uuid::from_u128(3),
                 name: Some("eng".to_owned()),
