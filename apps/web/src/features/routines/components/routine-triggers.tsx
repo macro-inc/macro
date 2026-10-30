@@ -195,7 +195,9 @@ function TriggerChoices(props: {
     <div
       class="flex min-h-0 flex-col"
       onKeyDown={(e) => {
-        if (!['ArrowDown', 'ArrowUp', 'Enter'].includes(e.key)) return;
+        // Keys that pick or confirm an IME candidate aren't the menu's.
+        if (e.isComposing || !['ArrowDown', 'ArrowUp', 'Enter'].includes(e.key))
+          return;
         const items = [
           ...e.currentTarget.querySelectorAll<HTMLButtonElement>(
             '[data-trigger-option]'

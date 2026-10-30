@@ -88,4 +88,21 @@ describe('routine triggers on the routine page', () => {
       { kind: 'schedule', frequency: 'week', time: '09:00' },
     ]);
   });
+
+  it('leaves Enter to an input method that is composing', () => {
+    renderRows([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+    const search = screen.getByRole('textbox', { name: 'Search triggers' });
+    fireEvent.input(search, { target: { value: 'task' } });
+    fireEvent.keyDown(search, { key: 'Enter', isComposing: true });
+    // Still searching: confirming a candidate picked nothing.
+    expect(screen.getByRole('textbox', { name: 'Search triggers' })).toBe(
+      search
+    );
+    // A plain Enter picks the first match and leaves the search.
+    fireEvent.keyDown(search, { key: 'Enter' });
+    expect(
+      screen.queryByRole('textbox', { name: 'Search triggers' })
+    ).toBeNull();
+  });
 });
