@@ -54,8 +54,10 @@ Discussion link scrolling has a backend-free browser regression:
 Phone sheets stacked on each other (Connect email over Settings, Add guests,
 RSVP scope and the delete confirmation over event details) have a backend-free
 browser regression for backdrop taps that must not press what the scrim covers,
-including mixed pointerdown/pointerup dismissal, and for taps inside the top
-sheet that must still press its own controls:
+including mixed pointerdown/pointerup dismissal, for taps inside the top
+sheet that must still press its own controls, and for swipes whose owner keeps
+the sheet open (a discard prompt, a pending confirmation, event details under a
+stacked sheet), which must bring it back on screen:
 `bunx playwright test --config src/components/app/mobile/browser-test/playwright.config.ts`.
 
 Composer typeahead menus choosing the side with room for their full list
@@ -333,7 +335,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   controls live under collapsed Advanced settings. See the
   [Bots walkthrough](../../docs/agent-guide/settings.md#bots).
 - Label the notification permission toast **Enable Desktop Notifications** in
-  the desktop app and keep its Enable action on the native notification provider.
+  the desktop app and **Enable Notifications** in the Android app, and keep
+  their Enable action on the native notification provider.
 - Keep signed-out Drive document routes on the shared detail viewer without
   mounting private list/sidebar sources; let document access checks decide visibility.
 - Gate account-only queries, comment readers, and account WebSockets on confirmed
@@ -408,7 +411,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, `sm`/`icon-sm` semantic islands (28px controls) with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for Tabs, New, and Search. Drive and Tasks list-header filter, layout, sort, and grouping islands use `md`/`icon-md` (32px) to match New and Search. Preserve touch layouts. Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
 - Keep desktop model and effort controls separate: the model selector opens the catalog and the speedometer opens the runtime's advertised slider stops; retain the mobile effort sheet.
 - Passive PR mentions must not retry initial GitHub status failures on remount; preserve confirmed status through refetch errors and keep pending data reads out of their parent Suspense boundary.
-- PR description and comment images are remote URL images: rewrite GitHub blob/`raw` links to `raw.githubusercontent.com` and load them through the image proxy so COEP does not block github.com.
+- PR description and comment images are remote URL images: rewrite GitHub blob/`raw` links to `raw.githubusercontent.com` and load them through the image proxy so COEP does not block github.com. Load Macro's own static-file URLs directly: a composer image reaches the server as Markdown and comes back as a URL image, and the proxy needs a session cookie that a `crossorigin="anonymous"` image never sends.
 - Keep native booking exit navigation in the route shell, outside page loading boundaries, and use the router so the native hash route stays intact.
 - Diagnose native full reloads with `native_webview_started`, `native_diagnostic_recovered`, and the shared `frontend_instance_id`; use `reloadApp(reason)` for frontend reloads and keep breadcrumbs content-free. Treat `previous_document_*` checkpoints as last-observed lifecycle evidence, never a crash verdict; clear them on logout. `previous_document_last_*` comes from the native navigation breadcrumb (route and entity type, never ids). See [frontend checkpoints](docs/native-reload-diagnostics.md) and `tauri/src-tauri/README.md`.
 - Pass `$APPLOCALDATA` (Application Support on Apple platforms) as the native HTTP cookie storage directory; the plugin owns the `.cookies` filename. Never use purgeable caches. The location change intentionally requires one new sign-in, without migration. See `tauri/src-tauri/README.md#native-authentication-cookies`.
@@ -578,6 +581,10 @@ pending-notification intent for bootstrap and live taps so newer taps supersede
 older work. Older native builds and pushes retain authenticated notification
 lookup. The local bridge and native release requirement are documented in
 [`docs/ios-releases.md`](docs/ios-releases.md).
+
+Cold channel push launches retain Home behind the target channel so the mobile
+header Back control and swipe-back have a destination. Keep this launch layout
+in `notificationLaunchPath`; warm taps retain their current pane stack.
 
 Bound the pre-router bridge handoff to 1.5 seconds and release the native cover
 on failure or timeout without consuming the pending tap. Late responses must

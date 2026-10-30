@@ -35651,6 +35651,17 @@
             "$ref": "#/components/schemas/ChannelSender",
             "description": "Actor that patched the message."
           },
+          "completed_reply": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessagePostedMetadata",
+                "description": "Completed bot answer, evaluated for agent triggers like a new post.\nOrdinary edits and streaming updates omit this; older producers remain\ncompatible with the trigger consumer."
+              }
+            ]
+          },
           "content": {
             "type": "string",
             "description": "Macro Markdown body after the patch."

@@ -1,6 +1,7 @@
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
+import * as doppler from '@pulumiverse/doppler';
 import {
   DATADOG_API_KEY,
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
@@ -25,6 +26,9 @@ import {
 const gatewayLoadBalancer = getGatewayAlb();
 
 const BASE_NAME = pulumi.getProject();
+/** Must match `ENCRYPTION_PURPOSE` in `mcp_auth_proxy::outbound::postgres`. */
+const MCP_OAUTH_KMS_PURPOSE = 'mcp-oauth-authorization-code';
+const MCP_OAUTH_KMS_ACTIONS = ['kms:Encrypt', 'kms:Decrypt'];
 const REPO_ROOT = '../../..';
 
 type Args = {
@@ -224,6 +228,8 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       },
       { parent: this, dependsOn: [this.role] }
     );
+
+    const mcpOauthKms = this.createMcpOauthKmsKey(tags);
 
     const image = new EcrImage(
       `${BASE_NAME}-ecr-image-${stack}`,
@@ -491,6 +497,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         // association.
         dependsOn: [
           ...args.configurationSecrets,
+          ...mcpOauthKms,
           gatewayTargetGroup.listener_rule,
           ...publicHostRules,
           ...sharedApiRules,
@@ -500,6 +507,105 @@ export class AgentHarnessService extends pulumi.ComponentResource {
     );
 
     this.setupServiceAlarms();
+  }
+
+  /**
+   * The key the public MCP OAuth broker encrypts its authorization codes'
+   * upstream tokens with, and the Doppler value naming it. Returns what the
+   * ECS service must wait for, so no task starts unable to issue a code.
+   */
+  private createMcpOauthKmsKey(tags: { [key: string]: string }) {
+    const accountRootArn = pulumi.interpolate`arn:aws:iam::${aws.getCallerIdentityOutput().accountId}:root`;
+    const key = new aws.kms.Key(
+      `${BASE_NAME}-mcp-oauth-key`,
+      {
+        description: `Public MCP OAuth authorization code encryption key for ${stack}`,
+        deletionWindowInDays: 30,
+        enableKeyRotation: true,
+        policy: aws.iam.getPolicyDocumentOutput({
+          statements: [
+            {
+              sid: 'AllowAccountKeyAdministration',
+              effect: 'Allow',
+              principals: [{ type: 'AWS', identifiers: [accountRootArn] }],
+              actions: [
+                'kms:CancelKeyDeletion',
+                'kms:Create*',
+                'kms:Delete*',
+                'kms:Describe*',
+                'kms:Disable*',
+                'kms:Enable*',
+                'kms:Get*',
+                'kms:List*',
+                'kms:Put*',
+                'kms:Revoke*',
+                'kms:ScheduleKeyDeletion',
+                'kms:TagResource',
+                'kms:UntagResource',
+                'kms:Update*',
+              ],
+              resources: ['*'],
+            },
+            {
+              sid: 'AllowMcpOauthCodeEncryption',
+              effect: 'Allow',
+              principals: [{ type: 'AWS', identifiers: [this.role.arn] }],
+              actions: MCP_OAUTH_KMS_ACTIONS,
+              resources: ['*'],
+              conditions: [
+                {
+                  test: 'StringEquals',
+                  variable: 'kms:EncryptionContext:macro:purpose',
+                  values: [MCP_OAUTH_KMS_PURPOSE],
+                },
+              ],
+            },
+          ],
+        }).json,
+        tags,
+      },
+      { parent: this, protect: stack === 'prod' }
+    );
+    const alias = new aws.kms.Alias(
+      `${BASE_NAME}-mcp-oauth-key-alias`,
+      { name: `alias/${BASE_NAME}-mcp-oauth-${stack}`, targetKeyId: key.keyId },
+      { parent: this }
+    );
+    const rolePolicy = new aws.iam.RolePolicy(
+      `${BASE_NAME}-mcp-oauth-kms-policy`,
+      {
+        role: this.role.id,
+        policy: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: MCP_OAUTH_KMS_ACTIONS,
+              Resource: key.arn,
+              Effect: 'Allow',
+              Condition: {
+                StringEquals: {
+                  'kms:EncryptionContext:macro:purpose': MCP_OAUTH_KMS_PURPOSE,
+                },
+              },
+            },
+          ],
+        },
+      },
+      { parent: this }
+    );
+    // MacroConfig reads only Doppler in ECS, so the key reaches the service
+    // through it rather than the container environment.
+    const dopplerKeyId = new doppler.Secret(
+      `harness-MCP_OAUTH_KMS_KEY_ID-${stack}`,
+      {
+        project: 'agent-harness-service',
+        config: stack === 'prod' ? 'prd' : 'dev',
+        name: 'MCP_OAUTH_KMS_KEY_ID',
+        value: alias.name,
+      },
+      { parent: this }
+    );
+    return [rolePolicy, dopplerKeyId];
   }
 
   private initializeSecurityGroups({

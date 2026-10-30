@@ -83,6 +83,22 @@ fn api_router(api_context: ApiContext) -> Router {
 
     let mcp_state = api_context.mcp_state.clone();
 
+    let image_generation_state =
+        image_generation::inbound::axum_router::ImageGenerationRouterState {
+            service: std::sync::Arc::new(
+                image_generation::domain::service::AdmittedImageGenerationService::new(
+                    api_context
+                        .tool_service_context
+                        .image_generation_tool_context
+                        .service
+                        .clone(),
+                    api_context.ai_admission.clone(),
+                ),
+            ),
+            authorization_state: authorization_state.clone(),
+            non_user_owners: api_context.non_user_owners,
+        };
+
     let internal_router = Router::new()
         .nest("/chats", chats::router(api_context.clone()))
         .nest("/stream", stream::router())
@@ -130,6 +146,9 @@ fn api_router(api_context: ApiContext) -> Router {
                 authorization_state,
             },
         ))
+        .merge(
+            image_generation::inbound::axum_router::image_generation_router(image_generation_state),
+        )
         .merge(mcp_client::inbound::mcp_router(mcp_state.clone()))
         .merge(pipedream_mcp::inbound::pipedream_mcp_router(
             api_context.pipedream_state.clone(),

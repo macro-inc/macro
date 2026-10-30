@@ -724,8 +724,60 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
   let contentEl: HTMLElement | undefined;
 
+  // Committing changes the selection, and Kobalte clears the input when it does.
+  const commitSeparatedEmails = (input: string) => {
+    if (!/[,;]\s*$/.test(input)) return false;
+    const emails = input
+      .split(/[,;]/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .filter(
+        (email, index, all) =>
+          all.findIndex(
+            (other) => other.toLowerCase() === email.toLowerCase()
+          ) === index
+      );
+    if (emails.length === 0 || !emails.every((e) => EmailValidator.validate(e)))
+      return false;
+    const known = recipients().raw;
+    const findKnown = (email: string) =>
+      known.find(
+        (option) =>
+          getRecipientOptionEmail(option)?.toLowerCase() === email.toLowerCase()
+      );
+    const pending = emails.filter(
+      (email) => !selectedEmails().has(email.toLowerCase())
+    );
+    // Every address is already a recipient: setting the same selection again
+    // still makes Kobalte clear the text instead of leaving it in the field.
+    if (pending.length === 0) {
+      handleChange([...(props.selectedOptions as CombinedRecipientItem[])]);
+      return true;
+    }
+    if (props.allowCustomRecipients === false && !pending.every(findKnown))
+      return false;
+    const added = pending.map(
+      (email) =>
+        findKnown(email) ??
+        recipientEntityMapper('custom')({
+          id: emailToId(email),
+          email,
+          invalid: false,
+        })
+    );
+    handleChange([
+      ...(props.selectedOptions as CombinedRecipientItem[]),
+      ...added,
+    ]);
+    return true;
+  };
+
   const onInputChange = (next: string) => {
     props.onInputChange?.(next);
+    if (commitSeparatedEmails(next)) {
+      setInputValue('');
+      return;
+    }
     const previous = inputValue();
     setInputValue(next);
     if (next !== previous) {

@@ -78,7 +78,6 @@ export function EmailComposeToolbar(props: {
           {/* Inline drafts send without waiting for inline media uploads. */}
           <Show when={props.editor && !props.inline}>
             <Button
-              variant="ghost"
               onClick={() =>
                 props
                   .editor?.()
@@ -87,8 +86,9 @@ export function EmailComposeToolbar(props: {
                     constrainedMediaDimensions: { width: 542, height: 542 },
                   })
               }
-              aria-label="Insert image"
+              variant="ghost"
               tooltip="Insert image"
+              aria-label="Insert image"
               size="icon-md"
               disabled={ctx.disabled()}
             >
