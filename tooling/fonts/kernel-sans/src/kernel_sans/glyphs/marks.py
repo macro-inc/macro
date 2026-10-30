@@ -9,14 +9,19 @@ and a little wider.
 
 Style, following DESIGN.md: acute and grave are parallelograms with flat
 (horizontal) ends like the house diagonals; circumflex and caron are chevrons
-with flat-cut tips and apex; dots are the house square dot (p.dot, the
-lowercase ones hanging from the ascender like the i dot); ring, breve and
-tilde are squircle strokes whose free ends are cut horizontally; cedilla and
-ogonek are small squircle hooks below the baseline with chamfered tails.
+with flat-cut tips and apex; dots are the house square dot (p.dot, capped
+at ExtraBold and hanging from the ascender exactly like the i dot); ring,
+breve and tilde are squircle strokes whose free ends are cut horizontally;
+cedilla and ogonek are small squircle hooks below the baseline with
+chamfered tails.
 Mark strokes are a little lighter than the stems and grow more slowly with
 weight, so the small counters of ring, breve and tilde stay open at
 ExtraBold. Breve, cedilla and ogonek share one pair of strokes (`_curve`)
 and one chamfer rule (`_mark_cut`: 0.36 of the mark's own stroke).
+
+Stylistic-set forms of the accented letters (`SS_COMPOSITES`: a.ss01 and
+I.ss02 with their marks) are unencoded; features.py adds them to ss01 / ss02
+by name.
 """
 
 import math
@@ -26,7 +31,7 @@ import pathops
 
 from .. import params as P
 from ..geom import Shape, chamfer, diag, dot, rect, ring, superness
-from . import REGISTRY, Compose, G, glyph
+from . import REGISTRY, Compose, G, glyph, ref
 
 PROOF_TEXT = [
     "nònónônõnön ñ ç oåo HÒHÓHÔHÕHÖH",
@@ -35,6 +40,7 @@ PROOF_TEXT = [
     "naïve naïf haïk façade crème brûlée",
     "São Paulo Ångström Mañana Škoda Žižek",
     "o`o´oˆoˇo˜o¨o¯o˚o˘o˙o˝o¸o˛o",
+    "naïf haïk NAÏF HAÏTI ÄÖÜ äöüÿ ëï ŠŽ šž",
 ]
 
 _MODULE = __name__.rsplit(".", 1)[-1]
@@ -252,9 +258,14 @@ def _chevron(p, case, flip=False):
     is fixed and the leg spread solved for it, so the inner counter keeps a
     good size as the strokes thicken."""
     b = _bot(case)
-    h = (122 if case else 146) + 0.06 * p.grow
-    t = _t(p, case) * 0.95
-    w = p.w(286 if case else 250, 1.0)
+    # The height grows with weight, and above Regular the legs thin a little
+    # (0.88 of the mark stroke at ExtraBold, where the apex is dense), so the
+    # inner notch stays open at ExtraBold, about 80 units deep lowercase and
+    # 70 .case, instead of filling into a solid cap. The lowercase top stays
+    # under 790, the .case top under 930.
+    h = 122 + 0.3 * p.grow if case else 146 + 0.35 * p.grow
+    t = _t(p, case) * (0.95 - 0.07 * _up(p) / 80)
+    w = p.w(286 if case else 250, 1.1)
     # Outer width = 2a + horizontal stroke width; solve for the spread a.
     a = w / 2
     for _ in range(30):
@@ -271,15 +282,24 @@ def _chevron(p, case, flip=False):
 # Dots
 
 
+# Least white between the i dot and the stem; the same rule as the i dot in
+# lower_straight (Inter ExtraBold keeps about this much).
+I_DOT_GAP = 64
+
+
 def _dot_size(p, case):
-    """Accent dots are the house dot (the i dot and the period)."""
-    return p.dot
+    """Accent dots are the house dot, capped like the i dot: p.dot up to
+    about Bold, then no taller than leaves I_DOT_GAP under a dot hanging
+    from the ascender (156 at ExtraBold). The .case dots use the same side,
+    so the 772-930 .case zone holds them at every weight."""
+    return min(p.dot, P.ASC - P.XH - I_DOT_GAP)
 
 
 def _dot_y(p, case, d=None):
     """Centre height of dieresis / dotaccent dots of side d. Lowercase dots
-    hang from the ascender like the i dot, so i, ï and ü line up; .case dots
-    span the .case zone (772-930) at ExtraBold."""
+    hang from the ascender like the i dot, so i, ï and ü line up and sit
+    I_DOT_GAP above a flat x-height at ExtraBold; .case dots span the .case
+    zone (774-930) at ExtraBold."""
     if case:
         return 846 + 0.08 * p.grow
     return P.ASC - (_dot_size(p, case) if d is None else d) / 2
@@ -294,9 +314,9 @@ def _dieresis_shape(p, case, narrow=False):
         # by at most about half a sidebearing and clears neighbouring
         # ascenders (naïf, haïk, laïque). That fits the full house dot up to
         # Regular; towards ExtraBold, where the sidebearings are tight, the
-        # dots give up 12% of their side rather than crowd an l or k or
+        # dots give up 5% of their side rather than crowd an l or k or
         # close the gap between them (48 units at ExtraBold).
-        d, gap = d * (1 - 0.12 * _up(p) / 70), p.w(56, 0.1) - 0.21 * _up(p)
+        d, gap = d * (1 - 0.05 * _up(p) / 80), p.w(56, 0.1) - 0.2 * _up(p)
     y = _dot_y(p, case, d)
     off = (d + gap) / 2
     return dot(-off, y, d) + dot(off, y, d)
@@ -323,16 +343,19 @@ def _ring_shape(p, case):
     stroke and its top and bottom thin with the house contrast, so the
     counter stays at least 80 units each way at ExtraBold. The .case ring
     sits on the .case floor at every weight (clear of the apex of A) and
-    grows up, to about 958 at ExtraBold, inside the line box."""
+    grows up, to about 954 at ExtraBold, inside the 960 line box; there its
+    top and bottom thin a little more (6%) so the counter keeps 80 units of
+    height in the shorter ring."""
     up = _up(p)
+    ws = 0.3 * p.stem + 26
+    wt = ws * _contrast(p)
     if case:
         b = UC_BOT
-        w, h = p.w(174, 0.6) + 0.15 * up, p.w(150, 0.36) + 0.16 * up
+        w, h = p.w(174, 0.6) + 0.15 * up, p.w(150, 0.36) + 0.04 * up
+        wt *= 1 - 0.06 * up / 80
     else:
         b = LC_BOT - 4 - 0.1 * p.grow
         w, h = p.w(170, 0.45) + 0.4 * up, p.w(164, 0.35) + 0.1 * up
-    ws = 0.3 * p.stem + 26
-    wt = ws * _contrast(p)
     return ring(-w / 2, b, w / 2, b + h, ws, wt, n=p.sq, n_in=p.sq_in)
 
 
@@ -438,11 +461,15 @@ def _cedilla_shape(p):
     """A short stub hanging from the letter into a squircle hook that turns
     right and back left, ending in a chamfered tail. Its top overlaps the
     base by 14 units so it joins c, C, s, t... at every weight. Strokes and
-    chamfer come from `_curve` / `_mark_cut`, shared with ogonek and breve."""
+    chamfer come from `_curve` / `_mark_cut`, shared with ogonek and breve.
+    Above Regular its two horizontals thin a little more (8% at ExtraBold),
+    so the hook keeps a real counter (about 48 units, as at Regular) in the
+    height between the baseline and the descender."""
     ws, wh = _curve(p)
+    wh *= 1 - 0.08 * _up(p) / 80
     st, wt, wb = ws * 0.92, wh, wh
     top, yt = 14, -34
-    h = p.w(130, 0.5)  # its foot stays above the descender (-199 at ExtraBold)
+    h = p.w(130, 0.45)  # its foot reaches the descender (-200) at ExtraBold
     rx = p.w(96, 0.6)
     yb = yt - h
     cy, ry = (yt + yb) / 2, h / 2
@@ -701,16 +728,43 @@ COMPOSITES = [
 ]
 
 
+# Stylistic-set forms of the accented letters, so ss01 (single-storey a) and
+# ss02 (serifed I) also reach them. Unencoded: features.py adds `name.ssNN`
+# to set NN because `name` exists.
+SS_COMPOSITES = [
+    ("agrave.ss01", None, "a.ss01", "grave"),
+    ("aacute.ss01", None, "a.ss01", "acute"),
+    ("acircumflex.ss01", None, "a.ss01", "circumflex"),
+    ("atilde.ss01", None, "a.ss01", "tilde"),
+    ("adieresis.ss01", None, "a.ss01", "dieresis"),
+    ("aring.ss01", None, "a.ss01", "ring"),
+    ("Igrave.ss02", None, "I.ss02", "grave.case"),
+    ("Iacute.ss02", None, "I.ss02", "acute.case"),
+    ("Icircumflex.ss02", None, "I.ss02", "circumflex.case"),
+    ("Idieresis.ss02", None, "I.ss02", "dieresis.case"),
+]
+
+
+# Bases whose accents centre on the outline rather than on the base's own
+# "top" anchor: a.ss01's anchor sits over the left of its bowl (about 80
+# units left of the counter's centre at ExtraBold), while its counter is
+# centred in the outline like o's.
+_CENTRED = {"a.ss01"}
+
+
 def _register_composite(name, cp, base, mark):
     def fn(p):
+        if base in _CENTRED:
+            b = ref(base).shape.bounds()
+            return Compose(base, [mark], anchors={"top": (b[0] + b[2]) / 2})
         return Compose(base, [mark])
 
     fn.__name__ = fn.__qualname__ = name
-    _glyph(name, cp)(fn)
+    _glyph(name, *([] if cp is None else [cp]))(fn)
 
 
-for _name, _cp, _base, _mk in COMPOSITES:
+for _name, _cp, _base, _mk in COMPOSITES + SS_COMPOSITES:
     _register_composite(_name, _cp, _base, _mk)
 
 
-__all__ = ["Shape", "COMPOSITES"]
+__all__ = ["COMPOSITES", "SS_COMPOSITES", "Shape"]
