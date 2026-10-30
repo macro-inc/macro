@@ -2,12 +2,14 @@ import {
   type EmailScheduleState,
   scheduleTimeLocked,
 } from '@app/features/email-compose/primitives/email-send-schedule';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import { buttonClasses, cn, Tooltip } from '@ui';
 import { addYears } from 'date-fns/addYears';
 import { format } from 'date-fns/format';
-import { type JSX, Show, type VoidComponent } from 'solid-js';
+import { createSignal, type JSX, Show, type VoidComponent } from 'solid-js';
 import { DateSelector } from './date-selector';
 
 interface EmailDateSelectorProps {
@@ -22,6 +24,8 @@ interface EmailDateSelectorProps {
   /** Render content inline instead of in a portal. */
   disablePortal?: boolean;
   disabled?: boolean;
+  /** The composer's hotkey scope, where Cmd+Shift+L opens the menu. */
+  hotkeyScope?: string;
   trigger?: (state: {
     selectedDate: Date | null;
     formattedDate: string | undefined;
@@ -59,10 +63,32 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
     (props.state.type === 'editing' && props.state.intent.type === 'later') ||
     hasProposal();
 
+  const [open, setOpen] = createSignal(false);
+  if (props.hotkeyScope) {
+    registerHotkey({
+      hotkey: 'shift+cmd+l',
+      scopeId: props.hotkeyScope,
+      description: 'Send later',
+      condition: () => !props.disabled && !scheduleTimeLocked(props.state),
+      keyDownHandler: () => {
+        setOpen(true);
+        return true;
+      },
+      runWithInputFocused: true,
+      hotkeyToken: TOKENS.email.sendLater,
+    });
+  }
+
   return (
-    <Tooltip label="Schedule send time" class="min-w-0 max-w-full">
+    <Tooltip
+      label="Schedule send time"
+      hotkey={props.hotkeyScope ? TOKENS.email.sendLater : undefined}
+      class="min-w-0 max-w-full"
+    >
       <div class="min-w-0 max-w-full">
         <DateSelector
+          open={open()}
+          onOpenChange={setOpen}
           selectedDate={props.selectedTime}
           onSelectDate={props.onSelectTime}
           disabled={props.disabled || scheduleTimeLocked(props.state)}

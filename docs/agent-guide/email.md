@@ -1097,6 +1097,18 @@ the time; when space is tight, that summary truncates or wraps separately from t
 fixed icon group. The
 former picker-auto-commit behavior was a defect and must not be restored.
 
+The send-time menu works without a mouse. `Cmd`/`Ctrl`+`Shift`+`L` opens it from a
+desktop reply or new email, with the search focused and the first choice
+highlighted: **Tomorrow morning** (8 AM), **Tomorrow afternoon** (1 PM), and
+**Monday morning** (8 AM), which `Option`/`Alt`+`1`–`3` pick directly. Typed
+shorthand such as `tom 5`, `fri 9am`, `in 2h`, `eod` (5 PM today), and `next week`
+(Monday) is parsed as you type; past times are never offered. An hour without
+am/pm lists its working-hours reading first and the other half of the day below
+it: `tom 5` offers tomorrow 5 PM then 5 AM, `tom 9` offers 9 AM then 9 PM. Up/Down
+and Enter pick; Escape closes. Closing returns focus to the field that had it, so
+`Ctrl`/`Cmd`+`Enter` then schedules. Keys typed straight after the shortcut must
+land in the search, not the message body.
+
 Only a successful scheduling response or authoritative lifecycle reconciliation
 shows **Scheduled for ...**. Confirmed scheduled composers are content-locked.
 Picking another time creates a local proposal while the original remains active;

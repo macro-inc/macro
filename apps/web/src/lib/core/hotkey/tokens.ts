@@ -154,6 +154,7 @@ export const TOKENS = {
     previousThread: 'email.previousThread',
     send: 'email.send',
     sendAndMarkDone: 'email.sendAndMarkDone',
+    sendLater: 'email.sendLater',
     archive: 'email.archive',
     reply: 'email.reply',
     replyAll: 'email.replyAll',

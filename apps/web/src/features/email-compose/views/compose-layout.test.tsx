@@ -120,9 +120,9 @@ describe('ComposeLayout root composition', () => {
       root.edit('Keep this message');
       render(() => (
         <ComposeLayout
-          toolbar={
+          toolbar={() => (
             <button onClick={root.state.context.onSend}>Send email</button>
-          }
+          )}
         />
       ));
       const picker = screen.getByRole('button', {
@@ -186,7 +186,9 @@ describe('ComposeLayout root composition', () => {
 
   it('routes pointer and keyboard submission through the same controller', () => {
     render(() => (
-      <ComposeLayout toolbar={<button onClick={onSend}>Send email</button>} />
+      <ComposeLayout
+        toolbar={() => <button onClick={onSend}>Send email</button>}
+      />
     ));
     fireEvent.click(screen.getByRole('button', { name: 'Send email' }));
 

@@ -25,6 +25,7 @@ export function EmailComposeToolbar(props: {
   editor?: () => LexicalEditor | undefined;
   /** Embedded drafts keep their controls in the card on phones too. */
   inline?: boolean;
+  hotkeyScope?: string;
 }) {
   const ctx = useCompose();
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
@@ -93,6 +94,7 @@ export function EmailComposeToolbar(props: {
                 onCancelSchedule={ctx.schedule.onCancel}
                 operation={ctx.schedule.operation()}
                 disabled={ctx.schedule.pickerDisabled()}
+                hotkeyScope={props.hotkeyScope}
               />
             </div>
           </Show>

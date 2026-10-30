@@ -3,6 +3,12 @@ export interface ParsedTime {
   minutes: number; // 0-59
 }
 
+/** `alternate` is the other half of the day when the input gave no am/pm. */
+interface TimeReading {
+  time: ParsedTime;
+  alternate?: ParsedTime;
+}
+
 type Meridiem = 'am' | 'pm';
 
 const MONTH_WORDS = new Set([
@@ -70,6 +76,8 @@ const DATE_WORD_PREFIXES = new Set([
   'saturday',
 ]);
 
+const DATE_PHRASES = new Set(['next week', 'nw']);
+
 function normalizeMeridiem(raw: string): Meridiem | null {
   const value = raw.toLowerCase();
   if (value === 'a' || value === 'am') return 'am';
@@ -84,11 +92,27 @@ function applyMeridiem(hours: number, meridiem: Meridiem): number | null {
   return hours;
 }
 
+/**
+ * Without am/pm, 7–11 read as morning and 12–6 as afternoon, the hours people
+ * send mail and set reminders for. A leading zero ("05:00") or an hour past 12
+ * is 24-hour time.
+ */
+function readClockTime(hourRaw: string, minutes: number): TimeReading {
+  const hours = parseInt(hourRaw, 10);
+  if (hours < 1 || hours > 12 || hourRaw.startsWith('0'))
+    return { time: { hours, minutes } };
+  const morning = { hours: hours % 12, minutes };
+  const afternoon = { hours: (hours % 12) + 12, minutes };
+  return hours >= 7 && hours <= 11
+    ? { time: morning, alternate: afternoon }
+    : { time: afternoon, alternate: morning };
+}
+
 function parseHourMinute(
   hourRaw: string,
   minuteRaw: string | undefined,
   meridiemRaw: string | undefined
-): ParsedTime | null {
+): TimeReading | null {
   const hours = parseInt(hourRaw, 10);
   const minutes = parseInt(minuteRaw || '0', 10);
   if (Number.isNaN(hours) || Number.isNaN(minutes) || minutes > 59) return null;
@@ -98,11 +122,18 @@ function parseHourMinute(
     if (!meridiem) return null;
     const converted = applyMeridiem(hours, meridiem);
     if (converted === null) return null;
-    return { hours: converted, minutes };
+    return { time: { hours: converted, minutes } };
   }
 
   if (hours > 23) return null;
-  return { hours, minutes };
+  return readClockTime(hourRaw, minutes);
+}
+
+/** A bare hour like the "5" in "tom 5"; 0 and 24+ are not hours of a day. */
+function parseBareHour(hourRaw: string): TimeReading | null {
+  const hours = parseInt(hourRaw, 10);
+  if (hours < 1 || hours > 23) return null;
+  return readClockTime(hourRaw, 0);
 }
 
 /**
@@ -112,7 +143,7 @@ function parseHourMinute(
 function parseCompactTime(
   digits: string,
   meridiemRaw: string
-): ParsedTime | null {
+): TimeReading | null {
   if (digits.length === 3) {
     return parseHourMinute(digits[0], digits.slice(1), meridiemRaw);
   }
@@ -127,6 +158,7 @@ function isBareHourDatePrefix(rest: string): boolean {
   if (tokens.length === 0) return false;
   // "feb 17" / "17 feb" day-of-month forms must not be treated as hours
   if (tokens.some((token) => MONTH_WORDS.has(token))) return false;
+  if (DATE_PHRASES.has(tokens.join(' '))) return true;
   const last = tokens[tokens.length - 1]!;
   if (DATE_WORD_PREFIXES.has(last)) return true;
   // Allow short weekday prefixes while typing ("mo", "fr")
@@ -146,12 +178,13 @@ function isBareHourDatePrefix(rest: string): boolean {
 
 /**
  * Parse time strings like "9am", "9a", "8p", "3:30pm", "14:00", "noon",
- * "midnight", and date+time composites like "tmrw 8", "friday 8p".
- * Returns the parsed time and the remaining input with the time portion removed.
+ * "midnight", bare hours like "5", and date+time composites like "tmrw 8",
+ * "friday 8p". Returns the most likely time, the other half of the day when
+ * the input gave no am/pm, and the remaining input with the time removed.
  */
 export function parseTime(
   input: string
-): { time: ParsedTime; rest: string } | null {
+): (TimeReading & { rest: string }) | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
 
@@ -168,8 +201,8 @@ export function parseTime(
   const compactAtEnd = /^(.*?)\s*(\d{3,4})\s*(a|am|p|pm)\s*$/i;
   let match = trimmed.match(compactAtEnd);
   if (match) {
-    const time = parseCompactTime(match[2], match[3]);
-    if (time) return { time, rest: match[1].trim() };
+    const reading = parseCompactTime(match[2], match[3]);
+    if (reading) return { ...reading, rest: match[1].trim() };
   }
 
   // Time at end with meridiem: "tomorrow 9am", "tmrw 8p", "feb 17 3:30 PM"
@@ -177,52 +210,55 @@ export function parseTime(
   const timeAtEnd = /^(.*?)\s*(\d{1,2})(?::(\d{2}))?\s*(a|am|p|pm)\s*$/i;
   match = trimmed.match(timeAtEnd);
   if (match) {
-    const time = parseHourMinute(match[2], match[3], match[4]);
-    if (time) return { time, rest: match[1].trim() };
+    const reading = parseHourMinute(match[2], match[3], match[4]);
+    if (reading) return { ...reading, rest: match[1].trim() };
   }
 
-  // 24-hour format with colon: "14:00", "tomorrow 14:00"
-  const time24AtEnd = /^(.*?)\s*(\d{1,2}):(\d{2})\s*$/;
-  match = trimmed.match(time24AtEnd);
+  // Clock time without meridiem: "14:00", "tomorrow 5:30"
+  const clockAtEnd = /^(.*?)\s*(\d{1,2}):(\d{2})\s*$/;
+  match = trimmed.match(clockAtEnd);
   if (match) {
-    const time = parseHourMinute(match[2], match[3], undefined);
-    if (time) return { time, rest: match[1].trim() };
+    const reading = parseHourMinute(match[2], match[3], undefined);
+    if (reading) return { ...reading, rest: match[1].trim() };
   }
 
   // Bare hour at end when prefix is a relative/weekday word: "tmrw 8", "friday 9"
   const bareHourAtEnd = /^(.*?[^\d\s])\s+(\d{1,2})\s*$/;
   match = trimmed.match(bareHourAtEnd);
   if (match && isBareHourDatePrefix(match[1])) {
-    const time = parseHourMinute(match[2], undefined, undefined);
-    if (time && time.hours >= 1 && time.hours <= 23) {
-      return { time, rest: match[1].trim() };
-    }
+    const reading = parseBareHour(match[2]);
+    if (reading) return { ...reading, rest: match[1].trim() };
   }
 
   // Compact meridiem at start: "830p tomorrow"
   const compactAtStart = /^(\d{3,4})\s*(a|am|p|pm)\s+(.+)$/i;
   match = trimmed.match(compactAtStart);
   if (match) {
-    const time = parseCompactTime(match[1], match[2]);
-    if (time) return { time, rest: match[3].trim() };
+    const reading = parseCompactTime(match[1], match[2]);
+    if (reading) return { ...reading, rest: match[3].trim() };
   }
 
   // Time at start with meridiem: "9am tomorrow", "8p friday", "3:30 PM feb 17"
   const timeAtStart = /^(\d{1,2})(?::(\d{2}))?\s*(a|am|p|pm)\s+(.+)$/i;
   match = trimmed.match(timeAtStart);
   if (match) {
-    const time = parseHourMinute(match[1], match[2], match[3]);
-    if (time) return { time, rest: match[4].trim() };
+    const reading = parseHourMinute(match[1], match[2], match[3]);
+    if (reading) return { ...reading, rest: match[4].trim() };
   }
 
   // Bare hour at start with date-word suffix: "8 tmrw", "9 friday"
   const bareHourAtStart = /^(\d{1,2})\s+(.+)$/;
   match = trimmed.match(bareHourAtStart);
   if (match && isBareHourDatePrefix(match[2])) {
-    const time = parseHourMinute(match[1], undefined, undefined);
-    if (time && time.hours >= 1 && time.hours <= 23) {
-      return { time, rest: match[2].trim() };
-    }
+    const reading = parseBareHour(match[1]);
+    if (reading) return { ...reading, rest: match[2].trim() };
+  }
+
+  // Bare hour alone: "5"
+  match = trimmed.match(/^(\d{1,2})$/);
+  if (match) {
+    const reading = parseBareHour(match[1]);
+    if (reading) return { ...reading, rest: '' };
   }
 
   return null;

@@ -572,6 +572,7 @@ describe('parseTime', () => {
   it('should parse bare hours after a date word like tmrw 8', () => {
     expect(parseTime('tmrw 8')).toEqual({
       time: { hours: 8, minutes: 0 },
+      alternate: { hours: 20, minutes: 0 },
       rest: 'tmrw',
     });
     expect(parseTime('tmrw 8p')).toEqual({
@@ -580,12 +581,67 @@ describe('parseTime', () => {
     });
     expect(parseTime('friday 9')).toEqual({
       time: { hours: 9, minutes: 0 },
+      alternate: { hours: 21, minutes: 0 },
       rest: 'friday',
     });
     expect(parseTime('8 tmrw')).toEqual({
       time: { hours: 8, minutes: 0 },
+      alternate: { hours: 20, minutes: 0 },
       rest: 'tmrw',
     });
+  });
+
+  it('reads an hour without am/pm as working hours, keeping the other half', () => {
+    expect(parseTime('tom 5')).toEqual({
+      time: { hours: 17, minutes: 0 },
+      alternate: { hours: 5, minutes: 0 },
+      rest: 'tom',
+    });
+    expect(parseTime('tom 9')).toEqual({
+      time: { hours: 9, minutes: 0 },
+      alternate: { hours: 21, minutes: 0 },
+      rest: 'tom',
+    });
+    expect(parseTime('5')).toEqual({
+      time: { hours: 17, minutes: 0 },
+      alternate: { hours: 5, minutes: 0 },
+      rest: '',
+    });
+    expect(parseTime('12')).toEqual({
+      time: { hours: 12, minutes: 0 },
+      alternate: { hours: 0, minutes: 0 },
+      rest: '',
+    });
+    expect(parseTime('7')).toEqual({
+      time: { hours: 7, minutes: 0 },
+      alternate: { hours: 19, minutes: 0 },
+      rest: '',
+    });
+    expect(parseTime('fri 5:30')).toEqual({
+      time: { hours: 17, minutes: 30 },
+      alternate: { hours: 5, minutes: 30 },
+      rest: 'fri',
+    });
+    expect(parseTime('next week 9')).toEqual({
+      time: { hours: 9, minutes: 0 },
+      alternate: { hours: 21, minutes: 0 },
+      rest: 'next week',
+    });
+  });
+
+  it('reads leading zeros and hours past 12 as unambiguous 24-hour time', () => {
+    expect(parseTime('05:00')).toEqual({
+      time: { hours: 5, minutes: 0 },
+      rest: '',
+    });
+    expect(parseTime('tom 17')).toEqual({
+      time: { hours: 17, minutes: 0 },
+      rest: 'tom',
+    });
+    expect(parseTime('0')).toBeNull();
+    expect(parseTime('24')).toBeNull();
+    expect(parseTime('830')).toBeNull();
+    expect(parseTime('feb 17')).toBeNull();
   });
 
   it('should parse times with spaces before meridiem', () => {
@@ -1006,7 +1062,7 @@ describe('useDateSearch with defaultTime', () => {
 
   it('should apply defaultTime to natural dates without explicit time', () => {
     createRoot((dispose) => {
-      const [query] = createSignal('thursday');
+      const [query] = createSignal('march 3');
       const options = useDateSearch({ query, baseDate, defaultTime });
 
       const result = options();
@@ -1105,7 +1161,7 @@ describe('useDateSearch with defaultTime', () => {
 
   it('should NOT show "at" suffix for natural dates when only defaultTime applies', () => {
     createRoot((dispose) => {
-      const [query] = createSignal('thursday');
+      const [query] = createSignal('march 3');
       const options = useDateSearch({ query, baseDate, defaultTime });
 
       const result = options();

@@ -520,9 +520,9 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
             </Show>
           }
           toolbar={
-            props.readOnly === true ? undefined : (
-              <EmailComposeToolbar editor={editor} inline />
-            )
+            props.readOnly === true
+              ? undefined
+              : () => <EmailComposeToolbar editor={editor} inline />
           }
         />
         <Show when={uiDisabled()}>
