@@ -122,6 +122,9 @@ describe('live trial checkout', () => {
       event: 'subscription_success',
       data: { type: 'max' },
     });
+    expect(fake.calls()).toContain(
+      'trackSubscriptionStarted:macro|ada@acme.com:max'
+    );
     expect(checkout).not.toHaveBeenCalled();
   });
 
@@ -154,7 +157,7 @@ describe('live trial checkout', () => {
   });
 
   it('lets existing paid members finish without buying again', async () => {
-    const { finish, checkout } = setup(undefined, {
+    const { finish, checkout, fake } = setup(undefined, {
       viewer: {
         id: 'macro|paid@acme.com',
         email: 'paid@acme.com',
@@ -170,6 +173,9 @@ describe('live trial checkout', () => {
     ).toBeTruthy();
     await waitFor(() => expect(finish).toHaveBeenCalledWith('premium'));
     expect(checkout).not.toHaveBeenCalled();
+    expect(
+      fake.calls().some((c) => c.startsWith('trackSubscriptionStarted'))
+    ).toBe(false);
   });
 
   it('offers an invite’s free months instead of the trial, with paid terms', () => {

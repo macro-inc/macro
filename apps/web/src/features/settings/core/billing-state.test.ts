@@ -19,6 +19,7 @@ describe('billing presentation policy', () => {
   it('requests a confirmed first-month trial when a Free account selects Pro', () => {
     expect(getFreePlanCheckoutRequest('premium', true)).toEqual({
       plan: 'premium',
+      type: 'premium',
       onboardingTrial: true,
     });
   });
@@ -26,6 +27,7 @@ describe('billing presentation policy', () => {
   it('keeps Max checkout on paid terms', () => {
     expect(getFreePlanCheckoutRequest('max', true)).toEqual({
       plan: 'max',
+      type: 'max',
       onboardingTrial: false,
     });
   });
@@ -33,6 +35,7 @@ describe('billing presentation policy', () => {
   it('lets a returning customer purchase Pro without requesting another trial', () => {
     expect(getFreePlanCheckoutRequest('premium', false)).toEqual({
       plan: 'premium',
+      type: 'premium',
       onboardingTrial: false,
     });
   });

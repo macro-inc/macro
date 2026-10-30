@@ -34,6 +34,7 @@ it.each([true, false, undefined])(
     } else {
       expect(checkout).toHaveBeenCalledWith({
         plan: 'premium',
+        type: 'premium',
         onboardingTrial: trialEligible,
       });
     }
