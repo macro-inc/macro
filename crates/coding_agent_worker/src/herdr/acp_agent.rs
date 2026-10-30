@@ -27,6 +27,7 @@ use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument as _;
 
 use super::HerdrSession;
 use super::cli::{HerdrCli, HerdrError};
@@ -655,23 +656,47 @@ impl Adapter {
             // Queued like input typed into the TUI mid-turn: the prompt waits
             // for the native turn, which streams and asks for permission
             // meanwhile, and a stop interrupts that turn.
-            let info = loop {
-                let info = herdr.agent_info(&live.name).await;
-                if !info
-                    .as_ref()
-                    .is_ok_and(|info| matches!(info.status.as_str(), "working" | "blocked"))
-                {
-                    break info;
+            let wait = tracing::info_span!(
+                "macrod.herdr.prompt_wait",
+                session_id = %session.id,
+                native_turns = 0u32,
+                exit_dismissed = false,
+                outcome = tracing::field::Empty,
+            );
+            let waited = async {
+                let mut native_turns = 0u32;
+                loop {
+                    let info = herdr.agent_info(&live.name).await;
+                    if !info
+                        .as_ref()
+                        .is_ok_and(|info| matches!(info.status.as_str(), "working" | "blocked"))
+                    {
+                        return Ok(Some(info));
+                    }
+                    if info.as_ref().is_ok_and(|info| info.status == "blocked")
+                        && self.stay(herdr, &live.name).await?
+                    {
+                        tracing::Span::current().record("exit_dismissed", true);
+                        continue;
+                    }
+                    native_turns += 1;
+                    tracing::Span::current().record("native_turns", native_turns);
+                    if self.follow(herdr, session, live, &cancel, true).await? == "cancelled" {
+                        return Ok(None);
+                    }
                 }
-                if info.as_ref().is_ok_and(|info| info.status == "blocked")
-                    && self.stay(herdr, &live.name).await?
-                {
-                    continue;
-                }
-                if self.follow(herdr, session, live, &cancel, true).await? == "cancelled" {
-                    return Ok("cancelled");
-                }
+            }
+            .instrument(wait.clone())
+            .await
+            .inspect_err(|error: &RpcError| {
+                wait.record("outcome", "failed");
+                tracing::warn!(parent: &wait, error = %error.message, "queued prompt failed while waiting");
+            })?;
+            let Some(info) = waited else {
+                wait.record("outcome", "cancelled");
+                return Ok("cancelled");
             };
+            wait.record("outcome", "ready");
             match info {
                 Ok(info) => {
                     if info.cwd.as_ref().is_some_and(|cwd| cwd != &session.cwd)
@@ -776,6 +801,10 @@ impl Adapter {
             return Ok(false);
         }
         herdr.send_keys(name, &["esc"]).await?;
+        tracing::info!(
+            agent = name,
+            "dismissed the native exit confirmation for a queued prompt"
+        );
         tokio::time::sleep(POLL).await;
         Ok(true)
     }
