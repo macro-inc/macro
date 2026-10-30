@@ -65,7 +65,6 @@ Run from `apps/web`:
 - `bun run test src/features/tasks-view`
 - `bun run type-check`
 - Project grouping browser regression: `bunx playwright test --config src/features/tasks-view/browser-test/playwright.config.ts project-grouping.browser.e2e.ts`.
-- Leading status and priority editor browser regression: `bunx playwright test --config src/features/tasks-view/browser-test/playwright.config.ts task-status-control.browser.e2e.ts`.
 
 ## Related
 
