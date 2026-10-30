@@ -149,6 +149,9 @@ pub enum TaskTargetError {
     MissingTarget,
 }
 
+/// Longest description a routine or template can carry.
+pub const MAX_DESCRIPTION_CHARS: usize = 1_000;
+
 /// Canonical client configuration. Ownership and execution state are server-owned.
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(deny_unknown_fields)]
@@ -162,6 +165,9 @@ pub struct ActionConfiguration {
     /// Omitted by clients that predate the setting; runs then start unlisted.
     #[serde(default)]
     pub run_visibility: RunVisibility,
+    /// What the routine is for, in the owner's words; empty when unset.
+    #[serde(default)]
+    pub description: String,
 }
 
 /// Deprecated cron-only input, accepted during the compatibility rollout.
@@ -190,6 +196,7 @@ impl From<LegacyActionConfiguration> for ActionConfiguration {
             task: input.task,
             enabled: input.enabled,
             run_visibility: RunVisibility::default(),
+            description: String::new(),
         }
     }
 }
@@ -203,8 +210,8 @@ pub enum CreateScheduledAction {
 }
 
 /// Canonical configuration replacement. Activation has its own endpoint, so
-/// omitting `enabled` keeps the stored value; omitting `run_visibility` keeps
-/// it too, so clients that predate the setting do not reset it.
+/// omitting `enabled` keeps the stored value; omitting `run_visibility` or
+/// `description` keeps them too, so clients that predate them do not reset them.
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ActionConfigurationUpdate {
@@ -219,6 +226,9 @@ pub struct ActionConfigurationUpdate {
     pub enabled: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run_visibility: Option<RunVisibility>,
+    /// An empty string clears it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 
 /// Full replacement of client configuration, not of server-owned action state.
@@ -241,9 +251,13 @@ impl UpdateScheduledAction {
                 task: input.task,
                 enabled: input.enabled.unwrap_or(stored.enabled),
                 run_visibility: input.run_visibility.unwrap_or(stored.run_visibility),
+                description: input
+                    .description
+                    .unwrap_or_else(|| stored.description.clone()),
             },
             Self::Legacy(input) => ActionConfiguration {
                 run_visibility: stored.run_visibility,
+                description: stored.description.clone(),
                 ..input.into()
             },
         }
@@ -272,6 +286,8 @@ pub enum ActionPolicyError {
     ConditionsDisabled,
     #[error("connect GitHub before enabling a GitHub trigger")]
     GithubNotLinked,
+    #[error("a routine description can be at most {MAX_DESCRIPTION_CHARS} characters")]
+    DescriptionTooLong,
     #[error("scheduled action changed or is running; reload before updating")]
     UpdateConflict,
     #[error(
@@ -314,6 +330,9 @@ pub struct ScheduledAction {
     #[serde(default)]
     #[schema(value_type = Option<String>, format = Uuid)]
     pub template_id: Option<Uuid>,
+    /// What the routine is for, in the owner's words; empty when unset.
+    #[serde(default)]
+    pub description: String,
 }
 
 impl ScheduledAction {

@@ -15,6 +15,8 @@ import type { RunVisibility } from './runVisibility';
  * Canonical client configuration. Ownership and execution state are server-owned.
  */
 export interface ActionConfiguration {
+  /** What the routine is for, in the owner's words; empty when unset. */
+  description?: string;
   enabled: boolean;
   kind: ActionKind;
   name: string;

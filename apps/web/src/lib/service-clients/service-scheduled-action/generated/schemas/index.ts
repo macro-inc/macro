@@ -9,6 +9,7 @@
 export * from './actionConfiguration';
 export * from './actionConfigurationTask';
 export * from './actionConfigurationUpdate';
+export * from './actionConfigurationUpdateDescription';
 export * from './actionConfigurationUpdateEnabled';
 export * from './actionConfigurationUpdateRunVisibility';
 export * from './actionConfigurationUpdateTask';

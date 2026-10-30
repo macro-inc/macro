@@ -322,6 +322,7 @@ pub(crate) fn configuration(events: bool) -> ActionConfiguration {
         task: json!({"model": "model", "prompt": "summarize", "user_prompt": "task"}),
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
+        description: String::new(),
     }
 }
 
@@ -334,6 +335,7 @@ fn update(config: ActionConfiguration) -> UpdateScheduledAction {
         task: config.task,
         enabled: Some(config.enabled),
         run_visibility: Some(config.run_visibility),
+        description: Some(config.description),
     })
 }
 
@@ -997,6 +999,7 @@ fn claim_expiry_instant_still_blocks_replacement() {
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        description: String::new(),
     };
     let expires_at = action
         .claim_expires_at()
@@ -1067,6 +1070,7 @@ fn seeded(
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        description: String::new(),
     }
 }
 
@@ -1659,4 +1663,47 @@ async fn a_github_trigger_runs_only_once_github_is_linked() {
         )
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn a_description_is_trimmed_kept_when_omitted_cleared_when_empty_and_bounded() {
+    let svc = service(false);
+    let created = svc
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(ActionConfiguration {
+                description: "  Label invoices.  ".into(),
+                ..configuration(false)
+            }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(created.description, "Label invoices.");
+    let id = created.id.unwrap();
+
+    // Clients that predate the field omit it, which keeps it.
+    let mut input = update(configuration(false));
+    if let UpdateScheduledAction::Canonical(input) = &mut input {
+        input.description = None;
+    }
+    let kept = svc.update_action(edit_receipt(id), input).await.unwrap();
+    assert_eq!(kept.description, "Label invoices.");
+
+    let cleared = svc
+        .update_action(edit_receipt(id), update(configuration(false)))
+        .await
+        .unwrap();
+    assert_eq!(cleared.description, "");
+
+    assert_policy(
+        svc.update_action(
+            edit_receipt(id),
+            update(ActionConfiguration {
+                description: "a".repeat(MAX_DESCRIPTION_CHARS + 1),
+                ..configuration(false)
+            }),
+        )
+        .await,
+        ActionPolicyError::DescriptionTooLong,
+    );
 }

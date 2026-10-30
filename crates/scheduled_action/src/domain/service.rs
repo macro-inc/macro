@@ -21,7 +21,8 @@ use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
 use super::models::{
     ActionConfiguration, ActionExecutionRecord, ActionPolicyError, CreateScheduledAction,
-    DispatchEvent, InProgressExecution, OwnerNotUserError, ScheduledAction, UpdateScheduledAction,
+    DispatchEvent, InProgressExecution, MAX_DESCRIPTION_CHARS, OwnerNotUserError, ScheduledAction,
+    UpdateScheduledAction,
 };
 use super::ports::{
     ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService, TaskTargetValidator,
@@ -202,6 +203,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
             owner_type: owner.owner_type(),
         })?;
         let input = ActionConfiguration::from(input);
+        let description = description(&input.description)?;
         self.check_event_management(&input.trigger)?;
         self.check_conditions(&input.trigger)?;
         self.targets.validate_task(&input.task, owner_user).await?;
@@ -230,6 +232,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
                 next_run_at,
                 claimed: None,
                 template_id,
+                description,
             })
             .await?;
         self.dispatcher_tx
@@ -269,7 +272,8 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
             || action.name != input.name
             || action.kind != input.kind
             || action.task != input.task
-            || action.run_visibility != input.run_visibility;
+            || action.run_visibility != input.run_visibility
+            || action.description != input.description.trim();
         let disable_only = !input.enabled && !configuration_changed;
         // A rollout gate must not prevent an owner from stopping an existing
         // event action. Deletion, history and explicit manual runs also remain available.
@@ -311,6 +315,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
         action.task = input.task;
         action.enabled = input.enabled;
         action.run_visibility = input.run_visibility;
+        action.description = description(&input.description)?;
         action.updated_at = now;
 
         let updated = self.repo.update_action(action).await?;
@@ -343,6 +348,15 @@ pub(crate) async fn granted_action<R: ScheduledActionRepo, T: RequiredPermission
         }
         _ => Err(ActionPolicyError::NotFound.into()),
     }
+}
+
+/// A description as stored: trimmed, and within the limit.
+fn description(text: &str) -> Result<String> {
+    let text = text.trim();
+    if text.chars().count() > MAX_DESCRIPTION_CHARS {
+        return Err(ActionPolicyError::DescriptionTooLong.into());
+    }
+    Ok(text.to_owned())
 }
 
 fn next_run(trigger: &ActionTrigger) -> Result<Option<DateTime<Utc>>> {
@@ -526,6 +540,7 @@ where
             task: action.task.clone(),
             enabled,
             run_visibility: action.run_visibility,
+            description: action.description.clone(),
         };
         self.replace_configuration(action, input).await
     }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                   updated_at, next_run_at, enabled, trigger_type, event_filters, trigger_config,\n                   configuration_revision, event_activated_at, run_visibility, template_id\n            FROM scheduled_action\n            WHERE id = ANY($1)\n            ",
+  "query": "\n            INSERT INTO scheduled_action\n                (id, owner, name, schedule, kind, timezone, task, next_run_at, enabled,\n                 trigger_type, event_filters, configuration_revision, event_activated_at, trigger_config,\n                 run_visibility, template_id, description)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)\n            RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                      updated_at, next_run_at, enabled, trigger_type, event_filters,\n                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id,\n                   description\n            ",
   "describe": {
     "columns": [
       {
@@ -75,18 +75,18 @@
       },
       {
         "ordinal": 14,
-        "name": "trigger_config",
-        "type_info": "Jsonb"
-      },
-      {
-        "ordinal": 15,
         "name": "configuration_revision",
         "type_info": "Int8"
       },
       {
-        "ordinal": 16,
+        "ordinal": 15,
         "name": "event_activated_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "trigger_config",
+        "type_info": "Jsonb"
       },
       {
         "ordinal": 17,
@@ -97,11 +97,32 @@
         "ordinal": 18,
         "name": "template_id",
         "type_info": "Uuid"
+      },
+      {
+        "ordinal": 19,
+        "name": "description",
+        "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
-        "UuidArray"
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Timestamptz",
+        "Bool",
+        "Text",
+        "Jsonb",
+        "Int8",
+        "Timestamptz",
+        "Jsonb",
+        "Text",
+        "Uuid",
+        "Text"
       ]
     },
     "nullable": [
@@ -119,12 +140,13 @@
       false,
       false,
       true,
+      false,
+      true,
       true,
       false,
       true,
-      false,
-      true
+      false
     ]
   },
-  "hash": "9368353b960a8ad7a15486869955277fb4387902f11b8d4efea1f7219cc5e731"
+  "hash": "6dabc135e25e5f79d31409f37e70b1a3e5db02756ca29c7654695bad8cc9f396"
 }

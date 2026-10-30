@@ -886,6 +886,10 @@
         "description": "Canonical client configuration. Ownership and execution state are server-owned.",
         "required": ["name", "trigger", "kind", "task", "enabled"],
         "properties": {
+          "description": {
+            "type": "string",
+            "description": "What the routine is for, in the owner's words; empty when unset."
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -910,9 +914,13 @@
       },
       "ActionConfigurationUpdate": {
         "type": "object",
-        "description": "Canonical configuration replacement. Activation has its own endpoint, so\nomitting `enabled` keeps the stored value; omitting `run_visibility` keeps\nit too, so clients that predate the setting do not reset it.",
+        "description": "Canonical configuration replacement. Activation has its own endpoint, so\nomitting `enabled` keeps the stored value; omitting `run_visibility` or\n`description` keeps them too, so clients that predate them do not reset them.",
         "required": ["name", "trigger", "kind", "task"],
         "properties": {
+          "description": {
+            "type": ["string", "null"],
+            "description": "An empty string clears it."
+          },
           "enabled": {
             "type": ["boolean", "null"],
             "description": "Still sent by clients deployed before the activation endpoint.",
@@ -1596,6 +1604,10 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "description": {
+            "type": "string",
+            "description": "What the routine is for, in the owner's words; empty when unset."
           },
           "enabled": {
             "type": "boolean",

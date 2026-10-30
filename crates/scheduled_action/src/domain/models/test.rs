@@ -247,6 +247,7 @@ fn action_owned_by(owner: Owner) -> ScheduledAction {
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        description: String::new(),
     }
 }
 

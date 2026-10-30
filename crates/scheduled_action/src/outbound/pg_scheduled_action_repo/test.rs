@@ -117,6 +117,7 @@ pub(crate) fn sample_action(owner: Owner, name: &str) -> ScheduledAction {
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        description: String::new(),
     }
 }
 

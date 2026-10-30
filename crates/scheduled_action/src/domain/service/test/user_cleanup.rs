@@ -113,6 +113,7 @@ pub(super) fn action(owner: Owner, events: bool) -> ScheduledAction {
         enabled: true,
         run_visibility: config.run_visibility,
         template_id: None,
+        description: String::new(),
     }
 }
 

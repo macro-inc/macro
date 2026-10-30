@@ -25,8 +25,8 @@ use super::ports::{RoutineTemplateRepo, RoutineTemplateService, ScheduledActionS
 #[cfg(test)]
 mod test;
 
-/// Longest description a template can carry.
-pub const MAX_DESCRIPTION_CHARS: usize = 1_000;
+/// Longest description a template can carry, as for a routine.
+pub use super::models::MAX_DESCRIPTION_CHARS;
 /// Most variables a template can mark.
 pub const MAX_VARIABLES: usize = 100;
 /// PostHog rollout shared with the web app; missing or failed evaluations stay off.

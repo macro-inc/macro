@@ -1,6 +1,6 @@
 # Type Alias: ScheduledAction
 
-> **ScheduledAction** = \{ `claimed?`: `string` \| `null`; `configuration_revision`: `number`; `created_at`: `string`; `enabled`: `boolean`; `event_activated_at?`: `string` \| `null`; `id?`: `string` \| `null`; `kind`: [`ActionKind`](ActionKind.md); `name`: `string`; `next_run_at?`: `string` \| `null`; `owner`: `string`; `run_visibility`: [`RunVisibility`](RunVisibility.md); `task`: \{\[`key`: `string`\]: `unknown`; \}; `template_id?`: `string` \| `null`; `trigger`: [`ActionTrigger`](ActionTrigger.md); `updated_at`: `string`; \}
+> **ScheduledAction** = \{ `claimed?`: `string` \| `null`; `configuration_revision`: `number`; `created_at`: `string`; `description?`: `string`; `enabled`: `boolean`; `event_activated_at?`: `string` \| `null`; `id?`: `string` \| `null`; `kind`: [`ActionKind`](ActionKind.md); `name`: `string`; `next_run_at?`: `string` \| `null`; `owner`: `string`; `run_visibility`: [`RunVisibility`](RunVisibility.md); `task`: \{\[`key`: `string`\]: `unknown`; \}; `template_id?`: `string` \| `null`; `trigger`: [`ActionTrigger`](ActionTrigger.md); `updated_at`: `string`; \}
 
 ## Properties
 
@@ -9,6 +9,7 @@
 | <a id="property-claimed"></a> `claimed?` | `string` \| `null` | - |
 | <a id="property-configuration_revision"></a> `configuration_revision` | `number` | Independent of execution bookkeeping in `updated_at`. |
 | <a id="property-created_at"></a> `created_at` | `string` | - |
+| <a id="property-description"></a> `description?` | `string` | What the routine is for, in the owner's words; empty when unset. |
 | <a id="property-enabled"></a> `enabled` | `boolean` | When false, automatic dispatch skips this action. `run_now` remains available regardless. |
 | <a id="property-event_activated_at"></a> `event_activated_at?` | `string` \| `null` | Event publication boundary; absent for cron actions. |
 | <a id="property-id"></a> `id?` | `string` \| `null` | - |

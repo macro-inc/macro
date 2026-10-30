@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO scheduled_action\n                (id, owner, name, schedule, kind, timezone, task, next_run_at, enabled,\n                 trigger_type, event_filters, configuration_revision, event_activated_at, trigger_config,\n                 run_visibility, template_id)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)\n            RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                      updated_at, next_run_at, enabled, trigger_type, event_filters,\n                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id\n            ",
+  "query": "\n            SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                   updated_at, next_run_at, enabled, trigger_type, event_filters,\n                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id,\n                   description\n            FROM scheduled_action\n            WHERE owner = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -97,26 +97,16 @@
         "ordinal": 18,
         "name": "template_id",
         "type_info": "Uuid"
+      },
+      {
+        "ordinal": 19,
+        "name": "description",
+        "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Jsonb",
-        "Timestamptz",
-        "Bool",
-        "Text",
-        "Jsonb",
-        "Int8",
-        "Timestamptz",
-        "Jsonb",
-        "Text",
-        "Uuid"
+        "Text"
       ]
     },
     "nullable": [
@@ -138,8 +128,9 @@
       true,
       true,
       false,
-      true
+      true,
+      false
     ]
   },
-  "hash": "4ea812c6e1eddc69e23c3bf23165283ff94cd1544bc135e89e0dcbbfd21a157c"
+  "hash": "bf67bd5f5237ddbe40206ebd29ab3fe38dddad6e1fc6aecf39eb4eeba5ce1d38"
 }

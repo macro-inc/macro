@@ -21,6 +21,8 @@ export interface ScheduledAction {
   /** Independent of execution bookkeeping in `updated_at`. */
   configuration_revision: number;
   created_at: string;
+  /** What the routine is for, in the owner's words; empty when unset. */
+  description?: string;
   /** When false, automatic dispatch skips this action. `run_now` remains
 available regardless. */
   enabled: boolean;

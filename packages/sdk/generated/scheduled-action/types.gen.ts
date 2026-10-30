@@ -8,6 +8,10 @@ export type ClientOptions = {
  * Canonical client configuration. Ownership and execution state are server-owned.
  */
 export type ActionConfiguration = {
+    /**
+     * What the routine is for, in the owner's words; empty when unset.
+     */
+    description?: string;
     enabled: boolean;
     kind: ActionKind;
     name: string;
@@ -23,10 +27,14 @@ export type ActionConfiguration = {
 
 /**
  * Canonical configuration replacement. Activation has its own endpoint, so
- * omitting `enabled` keeps the stored value; omitting `run_visibility` keeps
- * it too, so clients that predate the setting do not reset it.
+ * omitting `enabled` keeps the stored value; omitting `run_visibility` or
+ * `description` keeps them too, so clients that predate them do not reset them.
  */
 export type ActionConfigurationUpdate = {
+    /**
+     * An empty string clears it.
+     */
+    description?: string | null;
     /**
      * Still sent by clients deployed before the activation endpoint.
      *
@@ -379,6 +387,10 @@ export type ScheduledAction = {
      */
     configuration_revision: number;
     created_at: string;
+    /**
+     * What the routine is for, in the owner's words; empty when unset.
+     */
+    description?: string;
     /**
      * When false, automatic dispatch skips this action. `run_now` remains
      * available regardless.

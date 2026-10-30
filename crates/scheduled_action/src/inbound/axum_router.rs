@@ -530,7 +530,8 @@ impl IntoResponse for ScheduledActionApiError {
                 | ActionPolicyError::EventManagementDisabled
                 | ActionPolicyError::ConditionsDisabled
                 | ActionPolicyError::ProgramNeedsEvent
-                | ActionPolicyError::GithubNotLinked => StatusCode::BAD_REQUEST,
+                | ActionPolicyError::GithubNotLinked
+                | ActionPolicyError::DescriptionTooLong => StatusCode::BAD_REQUEST,
             };
             return (status, policy.to_string()).into_response();
         }
