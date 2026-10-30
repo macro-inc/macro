@@ -19,7 +19,6 @@ export default {
   goForward: 'Go Forward',
   createNewSplit: 'Create new split',
   close: 'Close',
-  returnToList: 'Return to list',
   previousItem: 'Previous item',
   nextItem: 'Next item',
   itemNavigation: 'Item navigation',

@@ -820,7 +820,6 @@ export default {
     goForward: 'Vorwärts',
     createNewSplit: 'Neuen Bereich erstellen',
     close: 'Schließen',
-    returnToList: 'Zurück zur Liste',
     previousItem: 'Vorheriges Element',
     nextItem: 'Nächstes Element',
     itemNavigation: 'Elementnavigation',

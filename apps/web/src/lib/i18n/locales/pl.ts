@@ -860,7 +860,6 @@ export default {
     goForward: 'Dalej',
     createNewSplit: 'Utwórz nowy panel',
     close: 'Zamknij',
-    returnToList: 'Wróć do listy',
     previousItem: 'Poprzedni element',
     nextItem: 'Następny element',
     itemNavigation: 'Nawigacja między elementami',

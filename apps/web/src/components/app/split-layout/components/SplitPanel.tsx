@@ -30,10 +30,7 @@ import {
 } from '../context';
 import { useSplitLayout } from '../layout';
 import type { SplitHandle, SplitState } from '../layoutManager';
-import {
-  closeSplitOrReturnToList,
-  shouldShowSplitCloseButton,
-} from '../layoutUtils';
+import { shouldShowSplitCloseButton } from '../layoutUtils';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
 import { createOwnedSlots } from '../utils/createOwnedSlots';
 import { createSplitAutofocus } from '../utils/createSplitAutofocus';
@@ -167,13 +164,6 @@ export function SplitPanel(props: SplitPanelProps) {
       )
     );
   };
-
-  // A lone detail split uses the same corner button to return to its list.
-  const canReturnToList = () =>
-    !canCloseSplit() && hasSplitHeader() && isNotUnifiedList();
-
-  const frameCloseLabel = () =>
-    canCloseSplit() ? t('splitMenu.closeSplit') : t('splitMenu.returnToList');
 
   const MountedContent = () => (
     <SplitPanelControllerProvider
@@ -390,17 +380,13 @@ export function SplitPanel(props: SplitPanelProps) {
                   </Show>
                 </Panel.Body>
               </Panel>
-              <Show
-                when={
-                  !isTouchDevice() && (canCloseSplit() || canReturnToList())
-                }
-              >
+              <Show when={!isTouchDevice() && canCloseSplit()}>
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  aria-label={frameCloseLabel()}
+                  aria-label={t('splitMenu.closeSplit')}
                   tooltip={{
-                    content: frameCloseLabel(),
+                    content: t('splitMenu.closeSplit'),
                     hotkey: TOKENS.split.close,
                   }}
                   class={cn(
@@ -412,9 +398,7 @@ export function SplitPanel(props: SplitPanelProps) {
                   data-split-frame-close=""
                   onClick={(event) => {
                     event.stopPropagation();
-                    const manager = globalSplitManager();
-                    if (manager)
-                      closeSplitOrReturnToList(manager, props.handle);
+                    props.handle.close();
                   }}
                 >
                   <CloseIcon class="size-2.5" />

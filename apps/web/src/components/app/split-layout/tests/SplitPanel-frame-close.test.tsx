@@ -1,10 +1,4 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  within,
-} from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, type ParentProps } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { SplitPanel } from '../components/SplitPanel';
@@ -138,7 +132,6 @@ function renderDetailSplit() {
     },
   };
   const close = vi.fn();
-  const goBackTo = vi.fn(() => true);
   const handle: SplitHandle = {
     id,
     content: () => content,
@@ -160,7 +153,7 @@ function renderDetailSplit() {
     isLast: () => true,
     activate: () => {},
     goBack: () => {},
-    goBackTo,
+    goBackTo: () => false,
     close,
     reset: () => {},
     previousContent: () => null,
@@ -183,28 +176,19 @@ function renderDetailSplit() {
       index={0}
     />
   ));
-  return { ...result, close, goBackTo };
+  return { ...result, close };
 }
 
-it('returns a lone detail split to its list from the frame corner, not a header X', () => {
-  const { container, close, goBackTo } = renderDetailSplit();
-  const header = container.querySelector<HTMLElement>('[data-split-header]');
-  if (!header) throw new Error('Expected the split header to mount');
-  expect(
-    within(header).queryByRole('button', { name: 'Return to list' })
-  ).toBeNull();
-
-  fireEvent.click(screen.getByRole('button', { name: 'Return to list' }));
-  expect(goBackTo).toHaveBeenCalledOnce();
-  expect(close).not.toHaveBeenCalled();
+it('shows no close button on a lone detail split', () => {
+  renderDetailSplit();
+  expect(screen.queryByRole('button', { name: 'Close split' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Return to list' })).toBeNull();
 });
 
 it('closes the split from the frame corner when several splits are open', () => {
   setVisibleSplits(2);
-  const { close, goBackTo } = renderDetailSplit();
-  expect(screen.queryByRole('button', { name: 'Return to list' })).toBeNull();
+  const { close } = renderDetailSplit();
 
   fireEvent.click(screen.getByRole('button', { name: 'Close split' }));
   expect(close).toHaveBeenCalledOnce();
-  expect(goBackTo).not.toHaveBeenCalled();
 });

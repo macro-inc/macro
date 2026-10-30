@@ -283,4 +283,4 @@ independent of glyph geometry. See the [icon guide](../../apps/web/src/component
 
 ![Joined desktop view tabs](images/joined-view-tabs.png)
 
-On desktop, multiple splits have a small close button nested into each frame’s top-left corner, outside the topbar. A lone detail view uses the same corner button for Return to list, with no X in its header; touch layouts keep header controls.
+On desktop, multiple splits have a small close button nested into each frame’s top-left corner, outside the topbar. A lone split has no close button; touch layouts keep header controls.

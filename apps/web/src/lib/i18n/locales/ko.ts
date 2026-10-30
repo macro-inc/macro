@@ -777,7 +777,6 @@ export default {
     goForward: '앞으로 가기',
     createNewSplit: '새 분할 화면 만들기',
     close: '닫기',
-    returnToList: '목록으로 돌아가기',
     previousItem: '이전 항목',
     nextItem: '다음 항목',
     itemNavigation: '항목 탐색',

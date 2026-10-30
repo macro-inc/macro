@@ -757,7 +757,6 @@ export default {
     goForward: '前进',
     createNewSplit: '新建分屏',
     close: '关闭',
-    returnToList: '返回列表',
     previousItem: '上一项',
     nextItem: '下一项',
     itemNavigation: '条目导航',

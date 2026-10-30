@@ -807,7 +807,6 @@ export default {
     goForward: 'Gå fremover',
     createNewSplit: 'Opprett ny rute',
     close: 'Lukk',
-    returnToList: 'Tilbake til listen',
     previousItem: 'Forrige element',
     nextItem: 'Neste element',
     itemNavigation: 'Elementnavigasjon',
