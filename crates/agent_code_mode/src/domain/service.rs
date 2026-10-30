@@ -216,6 +216,8 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ReadProject"
                 | "CreateProject"
                 | "SetFavorite"
+                | "RequestEntityAccess"
+                | "ReadEntityAccessRequest"
                 | "GetEntityProperties"
                 | "SetEntityProperty"
                 | "BulkSetEntityPropertyOptions"
