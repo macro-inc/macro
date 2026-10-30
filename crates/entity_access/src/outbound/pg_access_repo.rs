@@ -292,6 +292,24 @@ impl AccessRepository for PgAccessRepository {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_task_project(&self, document_id: &str) -> Result<Option<Uuid>, AccessError> {
+        // The definition id must stay equal to SystemPropertyKey::PROJECT_UUID.
+        let project = sqlx::query_scalar!(
+            r#"SELECT values->'value'->0->>'entity_id' AS "project_id?"
+               FROM entity_properties
+               WHERE entity_id = $1
+                 AND entity_type = 'TASK'
+                 AND property_definition_id = '00000001-0000-0000-0000-000000000014'
+                 AND values->'value'->0->>'entity_type' = 'INITIATIVE'"#,
+            document_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .flatten();
+        Ok(project.and_then(|project| project.parse().ok()))
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn agent_session_exists(&self, agent_session_id: &str) -> Result<bool, AccessError> {
         let session = agent_session_id
             .parse::<Uuid>()

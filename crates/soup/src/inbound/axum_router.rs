@@ -1423,6 +1423,7 @@ impl ApiEntityFilterAst {
         Ok(EntityFilterAst {
             favorites_only,
             crm_association,
+            viewable_project: None,
             calendar_event_filter,
             document_filter,
             project_filter,
