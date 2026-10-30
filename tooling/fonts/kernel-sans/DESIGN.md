@@ -67,7 +67,7 @@ wins; note the exception in a comment.
 ## Spacing
 
 - Lowercase: straight side `p.sb`, round side `p.sbr`, diagonal side about
-  `0.35 * p.sbr`. Capitals: `p.csb`, `p.csbr`, about `0.3 * p.csbr`. The
+  `0.5 * p.sbr`. Capitals: `p.csb`, `p.csbr`, about `0.3 * p.csbr`. The
   sidebearings shrink as weight rises (like Inter); keep using them rather
   than constants so that holds. Open sides (E F L T Z, c, r, f) still need a
   real sidebearing: about 0.75 of the straight one.
