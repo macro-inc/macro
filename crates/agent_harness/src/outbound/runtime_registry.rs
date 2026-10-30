@@ -32,12 +32,14 @@ mod test;
 const LIVE_SESSIONS_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// ACP sessions a runtime that just dialed in for `harness` still serves.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct LiveRuntimeSessions {
     /// The harness the runtime dialed in for.
     pub harness: HarnessId,
     /// Its agents' live ACP sessions.
     pub acp_sessions: Vec<SessionId>,
+    /// The span that asked, for reattaching to follow from.
+    pub span: tracing::Span,
 }
 
 /// Every harness's live runtime connection.
@@ -234,6 +236,7 @@ async fn report_live_sessions<Sender>(
     let _ = live_sessions.send(LiveRuntimeSessions {
         harness,
         acp_sessions,
+        span: tracing::Span::current(),
     });
 }
 

@@ -1297,7 +1297,7 @@ async fn run() -> anyhow::Result<()> {
             let harness = Arc::clone(&reattaching);
             tokio::spawn(async move {
                 harness
-                    .reattach_live_sessions(live.harness, live.acp_sessions)
+                    .reattach_live_sessions(live.harness, live.acp_sessions, live.span)
                     .await;
             });
         }

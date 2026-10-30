@@ -295,11 +295,10 @@ async fn a_dial_reports_the_sessions_its_runtime_still_serves() {
         serde_json::json!({"sessionIds": ["acp-1", "acp-2"]}),
     );
 
+    let report = reports.recv().await.expect("the dial reports");
+    assert_eq!(report.harness, HarnessId::TEST_A);
     assert_eq!(
-        reports.recv().await,
-        Some(LiveRuntimeSessions {
-            harness: HarnessId::TEST_A,
-            acp_sessions: vec![SessionId::from("acp-1"), SessionId::from("acp-2")],
-        })
+        report.acp_sessions,
+        [SessionId::from("acp-1"), SessionId::from("acp-2")]
     );
 }

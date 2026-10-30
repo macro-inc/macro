@@ -703,7 +703,9 @@ where
         &self,
         harness: harness_id::HarnessId,
         acp_sessions: Vec<agent_client_protocol::schema::v1::SessionId>,
+        cause: tracing::Span,
     ) {
+        tracing::Span::current().follows_from(&cause);
         let sessions = match self
             .inner
             .runtimes

@@ -60,7 +60,8 @@ async fn a_redial_loads_a_live_session_without_a_prompt() {
     tokio::join!(
         service.reattach_live_sessions(
             harness_for_bot(bot_id),
-            vec![SessionId::new(session.to_string())]
+            vec![SessionId::new(session.to_string())],
+            tracing::Span::none(),
         ),
         drive
     );
@@ -77,6 +78,7 @@ async fn a_redial_loads_a_live_session_without_a_prompt() {
         .reattach_live_sessions(
             harness_for_bot(bot_id),
             vec![SessionId::new(session.to_string())],
+            tracing::Span::none(),
         )
         .await;
     assert_eq!(agent.received_requests().len(), 2);
@@ -115,7 +117,8 @@ async fn a_redial_loads_every_live_session_but_not_archived_or_unknown_ones() {
                 SessionId::new(second.to_string()),
                 SessionId::new(archived.to_string()),
                 SessionId::new(AgentSessionId::new().to_string()),
-            ]
+            ],
+            tracing::Span::none(),
         ),
         drive
     );
@@ -139,6 +142,7 @@ async fn a_live_session_on_a_runtime_that_is_gone_is_left_for_the_next_dial() {
         .reattach_live_sessions(
             harness_for_bot(bot_id),
             vec![SessionId::new(session.to_string())],
+            tracing::Span::none(),
         )
         .await;
     assert!(
