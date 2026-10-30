@@ -24,6 +24,8 @@ export type RoutineEditorSlots = RoutineToolSlots & {
   Apps: Component<{
     apps: RoutineApp[];
     onChange(apps: RoutineApp[]): void;
+    /** A chip listing the apps (default), or an "Add connection" button. */
+    variant?: 'chip' | 'button';
   }>;
   /** The viewer's connected app slugs; undefined until they load. */
   createConnectedApps(): Accessor<ReadonlySet<string> | undefined>;

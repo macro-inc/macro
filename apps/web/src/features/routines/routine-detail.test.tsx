@@ -886,19 +886,31 @@ describe('routine editor triggers', () => {
     );
   });
 
+  it('turns the routine on and off beside its title', () => {
+    render(() => <Routine />);
+    const enabled = screen.getByRole('switch', { name: 'Enabled' });
+    expect((enabled as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(enabled);
+    expect(mocks.setEnabled).toHaveBeenCalledExactlyOnceWith({
+      scheduleId: 'routine-id',
+      enabled: false,
+    });
+    // An Ask AI routine lists the apps it can use on the page.
+    expect(
+      within(screen.getByRole('region', { name: 'Connections' })).getByText(
+        'No connections added'
+      )
+    ).toBeTruthy();
+  });
+
   it('saves whether the routine’s runs show in Home and Agents', async () => {
     render(() => <Routine />);
-    // A narrow pane shows the details panel on request.
-    fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
-    const visibility = await screen.findByRole('button', {
-      name: 'Runs: Hidden',
+    // Runs & notifications sits on the page, below the steps.
+    const visibility = screen.getByRole('switch', {
+      name: 'Show runs in Home and Agents',
     });
-    visibility.focus();
-    fireEvent.keyDown(visibility, { key: 'Enter' });
-    fireEvent.keyDown(
-      await screen.findByRole('menuitemradio', { name: /^Shown/ }),
-      { key: 'Enter' }
-    );
+    expect((visibility as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(visibility);
     await vi.advanceTimersByTimeAsync(300);
     expect(mocks.update).toHaveBeenCalledExactlyOnceWith({
       scheduleId: 'routine-id',

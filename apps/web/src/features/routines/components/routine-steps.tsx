@@ -209,7 +209,7 @@ export function StepList(props: {
   };
   const shown = () => props.steps.slice(from()).map((step) => step.id);
   return (
-    <div class="grid min-w-0 gap-2">
+    <div class="grid min-w-0 gap-0.5">
       <For each={shown()}>
         {(id) => {
           const index = () => props.steps.findIndex((step) => step.id === id);
@@ -260,7 +260,7 @@ function StepNode(props: StepCardProps) {
       ? props.step
       : undefined;
   return (
-    <div class="grid min-w-0 gap-2">
+    <div class="grid min-w-0 gap-0.5">
       <StepCard {...props} />
       <Show when={decision()}>
         {(step) => (
@@ -449,9 +449,12 @@ function StepCard(props: StepCardProps) {
   return (
     <section
       aria-label={headline().title}
+      // A row on the steps surface: the open one is raised, others light on hover.
       class={cn(
-        '@container/step group/step min-w-0 rounded-xl border bg-surface',
-        open() ? 'border-edge-frame' : 'border-edge'
+        '@container/step group/step min-w-0 rounded-2xl transition-colors',
+        open()
+          ? 'bg-hover ring-1 ring-inset ring-edge-divider'
+          : 'hover:bg-hover focus-within:bg-hover'
       )}
       onKeyDown={(event) => {
         if (!event.altKey) return;
@@ -464,7 +467,7 @@ function StepCard(props: StepCardProps) {
         <button
           type="button"
           aria-expanded={open()}
-          class="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-xl py-1.5 pl-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-edge-muted"
+          class="flex min-h-12 min-w-0 flex-1 items-center gap-2.5 rounded-2xl py-1.5 pl-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-edge-muted"
           onClick={() => setOpen(!open())}
         >
           <span class="w-4.5 shrink-0 text-right text-xs tabular-nums text-ink-extra-muted">

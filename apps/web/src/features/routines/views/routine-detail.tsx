@@ -3,25 +3,35 @@ import {
   EntityMetadata,
   EntityMetadataRow,
 } from '@components/app/side-panel/EntityMetadata';
+import { getDisplayName } from '@core/user/displayName';
+import { tryMacroId } from '@core/user/macroId';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { formatRelativeDate } from '@core/util/time';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import DotsIcon from '@icon/system/regular/dots-three.svg';
 import ShareIcon from '@icon/system/regular/share-network.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
-import { Button, Dropdown } from '@ui';
-import { type Accessor, createSignal, Match, Show, Switch } from 'solid-js';
-import { RoutineEditor } from '../components/routine-editor';
+import UserIcon from '@icon/system/regular/user.svg';
+import XIcon from '@icon/system/regular/x.svg';
+import { Button, Dropdown, ToggleSwitch } from '@ui';
+import {
+  type Accessor,
+  createSignal,
+  For,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
+import { RoutineEditor, RoutineSettingRow } from '../components/routine-editor';
 import { RoutineRunButton } from '../components/routine-run-button';
-import { RoutineRunVisibility } from '../components/routine-run-visibility';
-import { RoutineStatus } from '../components/routine-status';
 import {
   RoutineSteps,
   RoutineStepsSummary,
 } from '../components/routine-step-editor';
 import type { RoutineDetailSlots } from '../context/routine-slots';
 import type { RoutineDetailSource } from '../context/routine-sources';
-import { DEFAULT_RUN_VISIBILITY } from '../core/draft';
+import { DEFAULT_RUN_VISIBILITY, type RoutineApp } from '../core/draft';
 import type { HistoryRecord, HistoryResource } from '../core/history';
 import {
   createEmptyDraft,
@@ -57,6 +67,87 @@ function lastWeek(records: readonly HistoryRecord[], now = Date.now()) {
   ).length;
   const ran = recent.length - skipped - failed;
   return `${ran} ran · ${skipped} skipped · ${failed} failed`;
+}
+
+/** When the latest run started: its time today, else its day. */
+function lastRunTime(records: readonly HistoryRecord[]): string | undefined {
+  const latest = records
+    .map((record) => (record.startedAt ? new Date(record.startedAt) : null))
+    .filter(
+      (date): date is Date => date !== null && !Number.isNaN(date.getTime())
+    )
+    .sort((a, b) => b.getTime() - a.getTime())[0];
+  if (!latest) return undefined;
+  return new Date().toDateString() === latest.toDateString()
+    ? latest.toLocaleTimeString(undefined, {
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+    : formatRelativeDate(latest);
+}
+
+/**
+ * The routine's required apps, one row each, and the button that adds them.
+ * Only an Ask AI step uses them.
+ */
+function ConnectionRows(props: {
+  apps: RoutineApp[];
+  connected: Accessor<ReadonlySet<string> | undefined>;
+  onChange(apps: RoutineApp[]): void;
+  Picker: RoutineDetailSlots['Apps'];
+}) {
+  const add = () => (
+    <props.Picker
+      apps={props.apps}
+      onChange={props.onChange}
+      variant="button"
+    />
+  );
+  return (
+    <Show
+      when={props.apps.length}
+      fallback={
+        <RoutineSettingRow label="No connections added">
+          {add()}
+        </RoutineSettingRow>
+      }
+    >
+      <For each={props.apps}>
+        {(app) => (
+          <RoutineSettingRow
+            label={app.server_name}
+            description={
+              props.connected() === undefined ? undefined : props
+                  .connected()
+                  ?.has(app.app_slug) ? (
+                <span class="text-success">Connected</span>
+              ) : (
+                <span class="text-failure">
+                  Not connected. Connect it before the routine runs.
+                </span>
+              )
+            }
+          >
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`Remove ${app.server_name}`}
+              onClick={() =>
+                props.onChange(
+                  props.apps.filter((other) => other.app_slug !== app.app_slug)
+                )
+              }
+            >
+              <XIcon class="size-4" />
+            </Button>
+          </RoutineSettingRow>
+        )}
+      </For>
+      <div class="flex justify-end border-t border-edge-divider px-6 py-3">
+        {add()}
+      </div>
+    </Show>
+  );
 }
 
 /** Whether the routine's edits have reached the server. */
@@ -112,6 +203,7 @@ export function RoutineDetailView(props: {
     connectedApps: props.slots.createConnectedApps(),
     onRename: (name) => props.onRename(name),
   });
+  const connectedApps = props.slots.createConnectedApps();
   const [tab, setTab] = createSignal(props.initialTab ?? 'settings');
   const [showRun, setShowRun] = createSignal(true);
   const back = () => props.onBack();
@@ -121,6 +213,21 @@ export function RoutineDetailView(props: {
   };
   const copyPrompt = async () => {
     if (prompt()) await props.onCopyPrompt(prompt());
+  };
+  /** Why the Enabled switch can't change right now. */
+  const activationHint = () => {
+    if (!activationDisabled() || !isOwned()) return undefined;
+    if (isRunning()) return 'Wait for the current run to finish';
+    if (nextRun() === 'No upcoming runs')
+      return 'Update the schedule before turning it on';
+    return 'Fix the routine before turning it on';
+  };
+  /** A routine with an Ask AI step, or apps already, shows its connections. */
+  const connectionsDraft = () => {
+    const draft = state();
+    return draft && (firstAgent(draftSteps(draft)) || draft.apps.length)
+      ? draft
+      : undefined;
   };
   /** Manual runs have no triggering item for steps to read. */
   const needsEvent = () => {
@@ -239,50 +346,6 @@ export function RoutineDetailView(props: {
                   </Show>
                 </EntityMetadata>
               </SidePanel.Footer>
-              <SidePanel.Section
-                id="routine-properties"
-                title="Properties"
-                order={10}
-                defaultOpen
-              >
-                <SidePanel.Grid>
-                  <SidePanel.Row label="Status">
-                    <RoutineStatus
-                      enabled={isActive()}
-                      disabled={!isOwned() || activationDisabled()}
-                      onChange={(enabled) => props.source.setEnabled(enabled)}
-                    />
-                  </SidePanel.Row>
-                  <SidePanel.Row label="Runs">
-                    <RoutineRunVisibility
-                      appearance="pill"
-                      disabled={!isOwned()}
-                      value={state()?.runVisibility ?? DEFAULT_RUN_VISIBILITY}
-                      onChange={(runVisibility) =>
-                        setState((draft) => ({ ...draft, runVisibility }))
-                      }
-                    />
-                  </SidePanel.Row>
-                  <Show when={state()}>
-                    {(draft) => (
-                      <Show
-                        when={
-                          firstAgent(draftSteps(draft())) || draft().apps.length
-                        }
-                      >
-                        <SidePanel.Row label="Apps">
-                          <props.slots.Apps
-                            apps={draft().apps}
-                            onChange={(apps) =>
-                              setState((current) => ({ ...current, apps }))
-                            }
-                          />
-                        </SidePanel.Row>
-                      </Show>
-                    )}
-                  </Show>
-                </SidePanel.Grid>
-              </SidePanel.Section>
               <Show when={props.onOpenTemplate || props.onShareTemplate}>
                 <SidePanel.Section
                   id="routine-template"
@@ -326,6 +389,86 @@ export function RoutineDetailView(props: {
             </>
           }
           nextRun={nextRun()}
+          meta={
+            <>
+              <ToggleSwitch
+                class="flex-row-reverse"
+                label="Enabled"
+                labelClass="text-sm font-medium text-ink"
+                title={activationHint()}
+                checked={isActive()}
+                disabled={activationDisabled()}
+                onChange={(enabled) => props.source.setEnabled(enabled)}
+              />
+              <span>
+                Owned by{' '}
+                <span class="font-medium text-ink">
+                  {routine().ownerId === props.userId()
+                    ? 'You'
+                    : getDisplayName(tryMacroId(routine().ownerId)) ||
+                      'Someone'}
+                </span>
+              </span>
+              <Show when={isOwned() && lastRunTime(props.source.history())}>
+                {(at) => (
+                  <>
+                    <span aria-hidden="true" class="text-ink-extra-muted">
+                      ·
+                    </span>
+                    <span>Last run {at()}</span>
+                  </>
+                )}
+              </Show>
+            </>
+          }
+          connections={
+            connectionsDraft() && (
+              <ConnectionRows
+                apps={connectionsDraft()?.apps ?? []}
+                connected={connectedApps}
+                onChange={(apps) =>
+                  setState((current) => ({ ...current, apps }))
+                }
+                Picker={props.slots.Apps}
+              />
+            )
+          }
+          settings={
+            <>
+              <RoutineSettingRow
+                label="Show runs in Home and Agents"
+                description="Runs stay in this routine’s history unless shown."
+              >
+                <ToggleSwitch
+                  size="md"
+                  label="Show runs in Home and Agents"
+                  labelClass="sr-only"
+                  checked={
+                    (state()?.runVisibility ?? DEFAULT_RUN_VISIBILITY) ===
+                    'listed'
+                  }
+                  disabled={!isOwned() || !state()}
+                  onChange={(listed) =>
+                    setState((draft) => ({
+                      ...draft,
+                      runVisibility: listed ? 'listed' : 'unlisted',
+                    }))
+                  }
+                />
+              </RoutineSettingRow>
+              <RoutineSettingRow
+                label="Runs as"
+                description="Steps and AI act with the owner’s access."
+              >
+                <span class="inline-flex items-center gap-1.5 text-sm text-ink">
+                  <UserIcon class="size-4 text-ink-muted" />
+                  {routine().ownerId === props.userId()
+                    ? 'You'
+                    : getDisplayName(tryMacroId(routine().ownerId)) || 'Owner'}
+                </span>
+              </RoutineSettingRow>
+            </>
+          }
           stepsAside={
             <Show when={state()}>
               {(draft) => (

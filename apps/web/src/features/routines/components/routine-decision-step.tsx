@@ -126,7 +126,7 @@ export function DecisionBranches(props: {
   const rowFor = (key: string) => rows().find((row) => row.key === key);
   return (
     <Show when={rowKeys().length}>
-      <div class="ml-5.5 grid min-w-0 gap-2 border-l border-edge-muted pl-4 max-sm:ml-3 max-sm:pl-3">
+      <div class="ml-5.5 grid min-w-0 gap-1 border-l border-edge-frame pl-4 max-sm:ml-3 max-sm:pl-3">
         <For each={rowKeys()}>
           {(key) => (
             <Show when={rowFor(key)}>

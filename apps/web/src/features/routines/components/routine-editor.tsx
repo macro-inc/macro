@@ -2,26 +2,61 @@ import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import ClockIcon from '@icon/system/regular/clock.svg';
+import ClockCounterIcon from '@icon/system/regular/clock-counter-clockwise.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Layer, TabSelector } from '@ui';
+import { ComposerSurface, cn, TabSelector } from '@ui';
 import { createSignal, For, type JSX, type ParentProps, Show } from 'solid-js';
 import type { ScheduleDraft } from '../core/draft';
 
-/** A section of the routine page: a small uppercase heading over its content. */
+/**
+ * The raised card a page section sits on: the composer surface settings use
+ * (menu fill, large radius, glass edge), framed on touch as settings are.
+ */
+export function RoutineSurface(props: ParentProps<{ class?: string }>) {
+  return (
+    <ComposerSurface
+      as="div"
+      class={cn(
+        'relative min-w-0 touch:rounded-3xl touch:border touch:border-edge-muted touch:bg-composer touch:text-composer-ink',
+        props.class
+      )}
+    >
+      {props.children}
+    </ComposerSurface>
+  );
+}
+
+/** One setting on a surface: label and description, its control on the right. */
+export function RoutineSettingRow(props: {
+  label: JSX.Element;
+  description?: JSX.Element;
+  children?: JSX.Element;
+}) {
+  return (
+    <div class="flex min-h-16 items-center gap-4 border-t border-edge-divider px-6 py-4 first:border-t-0 @max-[600px]/routine:px-4">
+      <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span class="text-base text-ink">{props.label}</span>
+        <Show when={props.description}>
+          <span class="text-sm text-ink-muted">{props.description}</span>
+        </Show>
+      </div>
+      <div class="shrink-0">{props.children}</div>
+    </div>
+  );
+}
+
+/** A section of the routine page: a heading and its aside over its surface. */
 function RoutineSection(props: {
   label: string;
   aside?: JSX.Element;
   children: JSX.Element;
 }) {
   return (
-    <section aria-label={props.label} class="grid min-w-0 gap-2.5">
-      <div class="flex min-h-5 items-center gap-2">
-        <h2 class="text-xs font-semibold uppercase tracking-[0.04em] text-ink-extra-muted">
-          {props.label}
-        </h2>
-        <span class="flex-1" />
+    <section aria-label={props.label} class="grid min-w-0 gap-3">
+      <div class="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1 px-6 @max-[600px]/routine:px-1">
+        <h2 class="text-sm font-medium text-ink-muted">{props.label}</h2>
         <Show when={props.aside}>
-          <span class="flex min-w-0 items-center gap-2 truncate text-xs text-ink-extra-muted">
+          <span class="ml-auto flex min-w-0 items-center gap-2 text-xs text-ink-extra-muted">
             {props.aside}
           </span>
         </Show>
@@ -69,8 +104,14 @@ export function RoutineEditor(props: {
   steps: JSX.Element;
   /** The Then heading's controls, on its line. */
   stepsAside?: JSX.Element;
-  /** The When card's rows: triggers and their conditions. */
+  /** The Trigger surface's content: triggers and their filters. */
   triggerContent?: JSX.Element;
+  /** Under the title: Enabled, owner, last run. */
+  meta?: JSX.Element;
+  /** The Connections surface's rows; the section shows only with them. */
+  connections?: JSX.Element;
+  /** The Runs & notifications surface's rows. */
+  settings?: JSX.Element;
   nextRun: string;
   history: JSX.Element;
   showHistory?: boolean;
@@ -185,52 +226,93 @@ export function RoutineEditor(props: {
           >
             <SidePanel.Layout headerToggle={false} floating={floating()}>
               <DocumentScroller floating={floating()}>
-                <div class="mx-auto flex w-full max-w-[760px] flex-col gap-7 px-10 pb-16 pt-8 @max-[600px]/routine:px-4 touch:pt-6">
-                  <div class="min-w-0">
-                    <Show
-                      when={!props.disabled}
-                      fallback={
-                        <h1 class="min-w-0 truncate text-2xl font-semibold">
-                          {props.draft.name}
-                        </h1>
-                      }
+                <div class="mx-auto flex w-full max-w-[760px] flex-col gap-8 px-10 pb-18 pt-10 @max-[600px]/routine:px-4 touch:pt-6">
+                  <header class="flex min-w-0 flex-col gap-3">
+                    <span
+                      aria-hidden="true"
+                      class="flex size-11 items-center justify-center rounded-xl bg-accent-bg text-accent"
                     >
-                      <InlineTitleEditor
-                        value={props.draft.name}
-                        placeholder="Routine name"
-                        ariaLabel="Routine name"
-                        class="text-2xl"
-                        onRename={(name) =>
-                          props.onChange((draft) => ({ ...draft, name }))
+                      <ClockCounterIcon class="size-5.5" />
+                    </span>
+                    <div class="min-w-0">
+                      <Show
+                        when={!props.disabled}
+                        fallback={
+                          <h1 class="min-w-0 truncate text-[28px] font-semibold leading-[34px]">
+                            {props.draft.name}
+                          </h1>
                         }
-                      />
+                      >
+                        <InlineTitleEditor
+                          value={props.draft.name}
+                          placeholder="Routine name"
+                          ariaLabel="Routine name"
+                          class="text-[28px] leading-[34px]"
+                          onRename={(name) =>
+                            props.onChange((draft) => ({ ...draft, name }))
+                          }
+                        />
+                      </Show>
+                    </div>
+                    <Show when={props.meta}>
+                      <div class="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-ink-muted">
+                        {props.meta}
+                      </div>
                     </Show>
-                  </div>
+                  </header>
                   <RoutineSection
-                    label="When"
+                    label="Trigger"
                     aside={`Next run: ${props.nextRun}`}
                   >
-                    <Layer depth={1}>
+                    <RoutineSurface class="px-6 py-5 @max-[600px]/routine:px-4">
                       <fieldset
                         aria-label="Routine triggers"
                         disabled={props.disabled}
                         inert={props.disabled}
-                        class="min-w-0 rounded-xl border border-edge-muted bg-surface px-3 py-2.5"
+                        class="min-w-0"
                       >
                         {props.triggerContent}
                       </fieldset>
-                    </Layer>
+                    </RoutineSurface>
                   </RoutineSection>
-                  <RoutineSection label="Then" aside={props.stepsAside}>
-                    <fieldset
-                      disabled={props.disabled}
-                      inert={props.disabled}
-                      class="min-w-0"
-                      aria-label="Routine steps"
-                    >
-                      <Layer depth={1}>{props.steps}</Layer>
-                    </fieldset>
+                  <RoutineSection label="Steps" aside={props.stepsAside}>
+                    <RoutineSurface class="p-3 @max-[600px]/routine:p-2">
+                      <fieldset
+                        disabled={props.disabled}
+                        inert={props.disabled}
+                        class="min-w-0"
+                        aria-label="Routine steps"
+                      >
+                        {props.steps}
+                      </fieldset>
+                    </RoutineSurface>
                   </RoutineSection>
+                  <Show when={props.connections}>
+                    {(connections) => (
+                      <RoutineSection
+                        label="Connections"
+                        aside="Apps Ask AI steps can use, on top of the agent’s own"
+                      >
+                        <RoutineSurface>
+                          <fieldset
+                            disabled={props.disabled}
+                            inert={props.disabled}
+                            class="min-w-0"
+                            aria-label="Routine connections"
+                          >
+                            {connections()}
+                          </fieldset>
+                        </RoutineSurface>
+                      </RoutineSection>
+                    )}
+                  </Show>
+                  <Show when={props.settings}>
+                    {(settings) => (
+                      <RoutineSection label="Runs & notifications">
+                        <RoutineSurface>{settings()}</RoutineSurface>
+                      </RoutineSection>
+                    )}
+                  </Show>
                   <Show when={props.feedback}>
                     <div class="grid gap-2 empty:hidden">{props.feedback}</div>
                   </Show>

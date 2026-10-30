@@ -1,8 +1,7 @@
-import { SidePanel } from '@components/app/side-panel';
 import CheckIcon from '@icon/system/regular/check.svg';
 import EyeIcon from '@icon/system/regular/eye.svg';
 import EyeSlashIcon from '@icon/system/regular/eye-slash.svg';
-import { cn, Dropdown } from '@ui';
+import { Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
 import type { RunVisibility } from '../core/draft';
 
@@ -26,43 +25,25 @@ const OPTIONS: {
 
 /**
  * Whether the routine's runs appear in Home and the Agents list: a chip in the
- * composer, a pill in the routine's details panel.
+ * composer. The routine's page sets it with a switch.
  */
 export function RoutineRunVisibility(props: {
   value: RunVisibility;
   onChange(value: RunVisibility): void;
-  appearance?: 'chip' | 'pill';
   disabled?: boolean;
 }) {
   const listed = () => props.value === 'listed';
   return (
     <Dropdown modal={false} placement="bottom-start">
-      <Show
-        when={props.appearance === 'pill'}
-        fallback={
-          <Dropdown.Trigger
-            class="rounded-full text-ink-muted"
-            disabled={props.disabled}
-          >
-            <Show when={listed()} fallback={<EyeSlashIcon class="size-3.5" />}>
-              <EyeIcon class="size-3.5" />
-            </Show>
-            {listed() ? 'Runs shown' : 'Runs hidden'}
-          </Dropdown.Trigger>
-        }
+      <Dropdown.Trigger
+        class="rounded-full text-ink-muted"
+        disabled={props.disabled}
       >
-        <Dropdown.Trigger
-          as="button"
-          aria-label={`Runs: ${listed() ? 'Shown' : 'Hidden'}`}
-          disabled={props.disabled}
-          class={cn(
-            SidePanel.pillClass,
-            'text-ink outline-none hover:bg-hover focus-visible:bg-hover'
-          )}
-        >
-          {listed() ? 'Shown' : 'Hidden'}
-        </Dropdown.Trigger>
-      </Show>
+        <Show when={listed()} fallback={<EyeSlashIcon class="size-3.5" />}>
+          <EyeIcon class="size-3.5" />
+        </Show>
+        {listed() ? 'Runs shown' : 'Runs hidden'}
+      </Dropdown.Trigger>
       <Dropdown.Content
         portalScope="local"
         class="w-72 max-w-[calc(100vw-1rem)]"
