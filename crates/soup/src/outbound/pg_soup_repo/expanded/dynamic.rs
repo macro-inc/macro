@@ -74,6 +74,22 @@ static PREFIX: &str = r#"
     ),
 "#;
 
+/// `PREFIX`, with the source list materialized when the query reads `source_items`. Its
+/// projected arms reference the list less often than the item-table query, whose every arm
+/// does; referenced once, Postgres inlines it and re-reads the user's channels and teams for
+/// every row an item-table arm checks.
+fn prefix(reads_source_items: bool) -> String {
+    if reads_source_items {
+        PREFIX.replacen(
+            "user_source_ids AS (",
+            "user_source_ids AS MATERIALIZED (",
+            1,
+        )
+    } else {
+        PREFIX.to_string()
+    }
+}
+
 /// Whether the user holds the source of the `source_items` row `g`, checked
 /// with index probes so the cost does not grow with the user's sources. Must
 /// accept exactly the sources `user_source_ids` lists. Channel ids only match
@@ -1484,8 +1500,6 @@ fn build_query<'a>(
     viewer: &str,
     document_ids: &mut DocumentIdArrays,
 ) -> QueryBuilder<'a, Postgres> {
-    let mut builder = sqlx::QueryBuilder::new(PREFIX);
-
     let include_initiatives = initiative_opted_in(filter_ast.initiative_filter.as_deref())
         && properties_filter_can_apply_to(
             filter_ast.properties_filter.as_deref(),
@@ -1570,20 +1584,6 @@ fn build_query<'a>(
             filter_ast.project_filter.as_deref()
         };
 
-    if let Some(predicate) = optimized_notification_predicate {
-        let mut item_types = Vec::with_capacity(3);
-        if include_documents && document_notification.is_some() {
-            item_types.push("document");
-        }
-        if include_chats && chat_notification.is_some() {
-            item_types.push("chat");
-        }
-        if include_projects && project_notification.is_some() {
-            item_types.push("project");
-        }
-        build_notification_items_cte(&mut builder, predicate, &item_types);
-    }
-
     let properties_filter = filter_ast.properties_filter.as_deref();
     // An arm comes from source_items when the projection can order this sort and
     // the arm's filter lets a source scan stop at the page; otherwise it reads its
@@ -1631,6 +1631,21 @@ fn build_query<'a>(
             )
         })
         .flatten();
+
+    let mut builder = sqlx::QueryBuilder::new(prefix(feed.is_some()));
+    if let Some(predicate) = optimized_notification_predicate {
+        let mut item_types = Vec::with_capacity(3);
+        if include_documents && document_notification.is_some() {
+            item_types.push("document");
+        }
+        if include_chats && chat_notification.is_some() {
+            item_types.push("chat");
+        }
+        if include_projects && project_notification.is_some() {
+            item_types.push("project");
+        }
+        build_notification_items_cte(&mut builder, predicate, &item_types);
+    }
     if let Some(feed) = &feed {
         feed.push_ctes(&mut builder);
     }

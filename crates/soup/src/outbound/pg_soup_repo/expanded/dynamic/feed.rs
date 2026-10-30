@@ -725,17 +725,22 @@ impl Feed {
         FeedSort::of(sort).is_some()
     }
 
-    /// `None` for `CreatedAt`, which `source_items` cannot order.
+    /// `None` for `CreatedAt`, which `source_items` cannot order, and when no
+    /// arm can match a row.
     pub(super) fn new(
         sort: SimpleSortMethod,
         exclude_frecency: bool,
         arms: impl IntoIterator<Item = FeedArm>,
     ) -> Option<Self> {
+        let arms: Vec<_> = arms
+            .into_iter()
+            .filter(|arm| !arm.kinds.is_empty())
+            .collect();
+        if arms.is_empty() {
+            return None;
+        }
         Some(Feed {
-            arms: arms
-                .into_iter()
-                .filter(|arm| !arm.kinds.is_empty())
-                .collect(),
+            arms,
             sort: FeedSort::of(sort)?,
             exclude_frecency,
         })
