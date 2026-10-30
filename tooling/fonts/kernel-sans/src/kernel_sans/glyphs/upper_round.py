@@ -22,7 +22,6 @@ from ..geom import (
     Shape,
     band,
     chamfer,
-    crotch_trap,
     diag,
     poly,
     rect,
@@ -133,38 +132,10 @@ class _Bowl:
         n, ni = _n(p), _ni(p)
         rx = (xr - xs) * frac
         cx = xr - rx
-        self.cx, self.n, self.y0, self.y1 = cx, n, y0, y1
-        self.box = (cx - rx, y0, xr, y1)
+        self.cx = cx
         self.outer = _half_sq(cx, y0, xr, y1, n, x_out)
         self.counter = _half_sq(cx, y0 + wb, xr - ws, y1 - wt, ni, xs)
         self.counter_mid = (y0 + wb + y1 - wt) / 2
-
-    def lower_quad(self):
-        """Control points of the outer contour's lower right quadrant, from
-        the bottom (cx, y0) to the right extreme, as drawn by _quad."""
-        p0 = _ext(self.box, "b")
-        return (p0,) + _quad(self.box, self.n, "b", "r")
-
-
-def _bez(q, t):
-    m = 1 - t
-    return tuple(
-        m**3 * q[0][i]
-        + 3 * m * m * t * q[1][i]
-        + 3 * m * t * t * q[2][i]
-        + t**3 * q[3][i]
-        for i in (0, 1)
-    )
-
-
-def _bez_d(q, t):
-    m = 1 - t
-    return tuple(
-        3 * m * m * (q[1][i] - q[0][i])
-        + 6 * m * t * (q[2][i] - q[1][i])
-        + 3 * t * t * (q[3][i] - q[2][i])
-        for i in (0, 1)
-    )
 
 
 def _mid_stroke(p):
@@ -175,8 +146,10 @@ def _mid_stroke(p):
 
 
 def _d_shape(p):
+    # Rounds widen with weight at k ~0.6 like O, so heavy weights gain colour
+    # rather than width.
     s = p.cstem
-    bowl = _Bowl(p, s, 0, P.CAP, p.w(568, 1.0), p.chair, p.chair, s * 1.03, 0.71)
+    bowl = _Bowl(p, s, 0, P.CAP, p.w(568, 0.62), p.chair, p.chair, s * 1.03, 0.71)
     return bowl.outer - bowl.counter
 
 
@@ -203,15 +176,17 @@ def Eth(p):
     s = p.cstem
     yc = P.CAP * 0.5
     hb = _mid_stroke(p) * 0.47
-    ext = p.w(88, 0.35)  # bar overhang left of the stem
-    bar = rect(-ext, yc - hb, s + p.w(175, 0.2), yc + hb)
+    ext = p.w(88, 0.1)  # bar overhang left of the stem
+    bar = rect(-ext, yc - hb, s + p.w(175, -0.15), yc + hb)
     return G(_d_shape(p) + bar, l=p.csb * 0.15, r=p.csbr)
 
 
 @glyph("P", 0x0050)
 def P_(p):
     s = p.cstem
-    yb = P.CAP * (0.361 - 0.00025 * max(0.0, p.grow))
+    # The bowl reaches lower at heavy weights (as in Inter) so its counter
+    # stays open.
+    yb = P.CAP * (0.361 - 0.0005 * max(0.0, p.grow))
     bowl = _Bowl(p, s, yb, P.CAP, p.w(492, 0.85), p.chair, p.chair, s * 1.02, 0.61)
     shape = (bowl.outer + rect(0, 0, s, yb + 2)) - bowl.counter
     return G(shape, l=p.csb, r=p.csbr * 0.9)
@@ -220,13 +195,12 @@ def P_(p):
 @glyph("Thorn", 0x00DE)
 def Thorn(p):
     s = p.cstem
-    # The bowl grows taller with weight (as in Inter) so its counter stays
-    # open at ExtraBold.
+    # The bowl grows taller with weight and its round side gets relatively
+    # lighter (both as in Inter) so the counter stays open at ExtraBold.
     y0 = P.CAP * (0.218 - 0.00024 * p.grow)
     y1 = P.CAP * (0.794 + 0.0004 * p.grow)
-    bowl = _Bowl(
-        p, s, y0, y1, p.w(469, 0.85), p.chair, p.chair, s * 1.02, 0.635, x_out=s - 2
-    )
+    ws = s * (1.02 - 0.0008 * max(0.0, p.grow))
+    bowl = _Bowl(p, s, y0, y1, p.w(469, 0.95), p.chair, p.chair, ws, 0.635, x_out=s - 2)
     shape = (rect(0, 0, s, P.CAP, nw=p.ccut) + bowl.outer) - bowl.counter
     return G(shape, l=p.csb, r=p.csbr * 1.15)
 
@@ -242,7 +216,7 @@ def R(p):
     # (always on the flat part, so the contour is the same at every weight);
     # its top runs up into the counter and is trimmed by it.
     wl = p.cstem * 0.97
-    x_br = w + p.w(26, 0.1)  # right edge of the foot
+    x_br = w + 26  # right edge of the foot
     xa = (
         bowl.cx - 8 - 0.9 * max(0.0, p.grow)
     )  # left edge at the stroke's underside, on its flat part
@@ -255,29 +229,10 @@ def R(p):
     xl_t = x_bl + slope * yt
     leg = poly([(x_bl, 0), (x_br, 0), (xl_t + hw, yt), (xl_t, yt)])
     shape = (bowl.outer + rect(0, 0, s, yb + 2) + leg) - bowl.counter
-    # Crotch between the leg's right edge and the bowl: where the edge line
-    # x = x_br + slope * y crosses the bowl's lower right quadrant (the leg
-    # always leaves the flat underside, so the crossing is on the curve).
-    q = bowl.lower_quad()
-    lo_, hi_ = 0.0, 1.0
-    for _ in range(60):
-        mid = (lo_ + hi_) / 2
-        x, y = _bez(q, mid)
-        if x < x_br + slope * y:
-            lo_ = mid
-        else:
-            hi_ = mid
-    cx_, cy_ = _bez(q, hi_)
-    # Ink trap in the white wedge between the leg's right edge (running down
-    # from the crotch) and the bowl's underside (running right). The wedge is
-    # acute (about 60-72 degrees) and the bowl is nearly flat there, so it is
-    # cut like the vertex traps of K and V: a short notch continuing the wedge,
-    # depth p.trap, mouth 0.6 of it. (A stem_trap laid along the leg would
-    # open only a sliver onto the bowl and read as a slit.)
-    ul = math.hypot(slope, 1.0)
-    down_leg = (-slope / ul, -1.0 / ul)
-    along_bowl = _bez_d(q, hi_)
-    shape = shape - crotch_trap((cx_, cy_), down_leg, along_bowl, p.trap)
+    # No ink trap where the leg's right edge meets the bowl: the bowl curves
+    # away, so the white opens like a 63/70/77-degree wedge at 300/400/800
+    # (DESIGN.md: no trap past about 70 degrees). A trap at some weights only
+    # would break the variable font, so there is none at any weight.
     return G(shape, l=p.csb, r=p.csbr * 0.5, anchors={"top": w / 2})
 
 
@@ -287,7 +242,7 @@ def R(p):
 
 @glyph("C", 0x0043)
 def C(p):
-    w = p.w(610, 1.0)
+    w = p.w(610, 0.7)
     shape = open_bowl(
         p,
         0,
@@ -308,7 +263,7 @@ def C(p):
 
 @glyph("G", 0x0047)
 def G_(p):
-    w = p.w(618, 1.05)
+    w = p.w(618, 0.65)
     n, ni = _n(p), _ni(p)
     ws = p.cstem * 1.03
     wt = wb = p.chair * 1.04
@@ -353,7 +308,7 @@ def G_(p):
 @glyph("J", 0x004A)
 def J(p):
     s = p.cstem
-    w = p.w(430, 0.6)
+    w = p.w(430, 0.7)
     n, ni = _n(p), _ni(p)
     c = p.ccut
     yc = P.CAP * (0.287 - 0.0002 * max(0.0, p.grow))  # where the hook turns straight
@@ -384,7 +339,7 @@ def J(p):
 @glyph("U", 0x0055)
 def U(p):
     s = p.cstem
-    w = p.w(562, 1.0)
+    w = p.w(562, 0.85)
     n, ni = _n(p), _ni(p)
     c = p.ccut
     yc = P.CAP * 0.345
@@ -417,7 +372,7 @@ def U(p):
 @glyph("S", 0x0053)
 def S(p):
     n, ni = _n(p), _ni(p)
-    w = p.w(523, 0.9)
+    w = p.w(523, 0.8)
     ws = p.cstem * 1.0
     wt = p.chair * 1.03
     wb = p.chair * 1.06
@@ -513,7 +468,10 @@ def Oslash(p):
 @glyph("OE", 0x0152)
 def OE(p):
     s = p.cstem
-    xs = p.w(428, 0.7)  # left edge of the shared stem
+    # Left edge of the shared stem. It stays put across weights (as in
+    # Inter): the round half then widens with the stem and keeps its counter,
+    # and the whole glyph widens with the E arms (k 0.65, like O).
+    xs = 428
     # Left: a mirrored D bowl whose straight strokes run into the E stem.
     rx = xs * 0.755
     outer = _half_sq(rx, 0, 0, P.CAP, _n(p), xs + s)

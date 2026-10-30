@@ -13,6 +13,7 @@ import math
 
 from .. import params as P
 from ..geom import (
+    Shape,
     above,
     below,
     chamfer,
@@ -99,6 +100,31 @@ def _arch_through(p, xl, xr, yc, out_pt, join_in):
 def _shoulder_trap(p, x, y, side="right", up=True):
     """n's ink trap where an arch leaves a stem edge x at the crotch height y."""
     return stem_trap(x, y, p.trap * 1.3, side=side, up=up)
+
+
+def _stroke_trap(p, x, y, edge):
+    """Ink trap where a straight stroke leaves the right edge x of a stem at
+    height y, with the white in the acute wedge above it (k's arm). `edge` is
+    the direction of the stroke's upper edge going away from the stem.
+
+    It runs along the stem edge like geom.stem_trap (the same leaning cut
+    into the stem and the same depth below the crotch), but its far wall
+    climbs parallel to that cut until it meets the stroke's edge. A plain
+    stem_trap's far corner lands deep inside the stroke here, because the
+    stroke rises away from the crotch instead of curving off like n's arch,
+    so it would leave a pocket behind a 10-unit neck; this way the floor is
+    the trap's narrowest part and it opens straight into the white."""
+    d = p.trap
+    if d < 1:
+        return Shape()
+    a = (x + d * 0.05 + 0.3, y + d * 0.4 + 4)  # in the white, as in stem_trap
+    tip = (x - d * 0.22, y - d)  # into the stem below the crotch
+    floor = (tip[0] + d * 0.6, tip[1])  # flat floor, like crotch_trap's
+    wall = (a[0] - tip[0], a[1] - tip[1])
+    c = _isect(floor, wall, (x, y), edge)  # far wall meets the stroke's edge
+    w = _unit(*wall)
+    out = (c[0] + w[0] * 3, c[1] + w[1] * 3)  # just past it, in the white
+    return poly([(a[0], a[1] + 6), tip, floor, out])
 
 
 def _sq_tangent(box, n, deg):
@@ -192,12 +218,12 @@ def _i_stem(p, height=P.XH):
     return rect(0, 0, p.stem, height, nw=p.cut)
 
 
-I_DOT_GAP = 64  # least white between the i/j dot and the stem (Inter ExtraBold)
+I_DOT_GAP = 60  # least white between the i/j dot and the stem (Inter ExtraBold)
 
 
 def _i_dot(p, cx):
-    # The dot's top stays at the ascender; at ExtraBold p.dot would leave
-    # only 62 units above the stem, so it gives up a unit or two there.
+    # The dot's top stays at the ascender. At ExtraBold p.dot (174) would
+    # leave only 46 units above the stem, so the dot stops at 160 there.
     side = min(p.dot, P.ASC - P.XH - I_DOT_GAP)
     return dot(cx, P.ASC - side / 2, side)
 
@@ -236,7 +262,9 @@ def i(p):
 
 
 def _j_body(p):
-    """j without its dot, drawn with the stem's left edge at x = 0."""
+    """j without its dot, drawn with the stem's left edge at x = 0. The tail
+    reaches about p.sb + 28 left of the stem at every weight, so it never
+    overhangs the origin by more than 0.2 stem (brackets, quotes)."""
     s = p.stem
     hook, yc, _ = _hook(
         p,
@@ -244,7 +272,7 @@ def _j_body(p):
         P.DESC - P.OS * 0.8,
         p.w(150, 0.3),
         p.w(118, 0.55),
-        p.w(96, 0.25),
+        p.w(96, -0.15),
         p.hair * 1.02,
     )
     body = hook.flip_x(s / 2) + rect(0, yc, s, P.XH, nw=p.cut)
@@ -269,7 +297,8 @@ def j(p):
 def h(p):
     s = p.stem
     a, xr, yc, crotch, _, _ = _shoulder(p, s, p.w(300, -1.0))
-    shape = rect(0, 0, s, P.ASC, nw=p.cut) + a + rect(xr - s, 0, xr, yc + 1)
+    # Edge to edge at the arch's vertical extreme, as in n.
+    shape = rect(0, 0, s, P.ASC, nw=p.cut) + a + rect(xr - s, 0, xr, yc)
     shape = shape - _shoulder_trap(p, s, crotch)
     return G(shape, l=p.sb, r=p.sb * 0.92)
 
@@ -290,10 +319,10 @@ def m(p):
     shape = (
         rect(0, 0, s, P.XH, nw=p.cut)
         + a1
-        + rect(x1 - s, 0, x1, yc + 1)
+        + rect(x1 - s, 0, x1, yc)
         + valley
         + a2
-        + rect(x2 - s, 0, x2, yc + 1)
+        + rect(x2 - s, 0, x2, yc)
     )
     shape = shape - _shoulder_trap(p, s, crotch) - _shoulder_trap(p, x1, crotch)
     return G(shape, l=p.sb, r=p.sb * 0.92)
@@ -306,7 +335,7 @@ def u(p):
     # the baseline with its own full-height edge.
     s = p.stem
     a, xr, yc, crotch, _, _ = _shoulder(p, s, p.w(300, -1.0))
-    bowl = (a + rect(xr - s, 0, xr, yc + 1)).rotate180(xr / 2, P.XH / 2)
+    bowl = (a + rect(xr - s, 0, xr, yc)).rotate180(xr / 2, P.XH / 2)
     bowl = bowl - chamfer(0, P.XH, p.cut, "nw")
     shape = bowl + rect(xr - s, 0, xr, P.XH, ne=p.cut)
     shape = shape - _shoulder_trap(p, xr - s, P.XH - crotch, side="left", up=False)
@@ -355,9 +384,11 @@ def _t_parts(p):
     """t drawn with its bar's left end at x = 0. Returns (shape, stem left
     edge, hook terminal x)."""
     s = p.stem
-    el = p.w(70, 0.35)  # bar left of the stem
+    # Bar and hook shrink a little as the stem grows, so t gains colour,
+    # not width (ink about 284/297/353 at 300/400/800, like Inter).
+    el = p.w(85, -0.15)  # bar left of the stem
     x0 = el
-    ext = p.w(112, 0.3)
+    ext = p.w(130, -0.15)
     hook, yc, x_term = _hook(
         p, x0, -P.OS, p.w(170, 0.2), p.w(132, 0.62), ext, p.hair * 1.04
     )
@@ -392,8 +423,11 @@ def _f_hook(p, x0, ext):
 
 def _f_dims(p):
     """(bar left of the stem, hook reach past the stem, bar right of the
-    stem). The hook and the bar end on the same vertical."""
-    return p.w(86, 0.15), p.w(122, 0.2), p.w(122, 0.2)
+    stem). The bar stops at 0.7 of the hook's reach, so the white under the
+    hook opens f|n, f|r and f|u at x-height. Both shrink a little as the
+    stem grows: f gains colour, not width (advance about 363/372/411)."""
+    ext = p.w(150, -0.2)
+    return p.w(100, -0.2), ext, ext * 0.7
 
 
 def _f_parts(p, ext=None):
@@ -405,28 +439,28 @@ def _f_parts(p, ext=None):
     stem = rect(x0, 0, x0 + s, yc)
     bar_r = x0 + s + er
     bar = rect(0, P.XH - p.hair, bar_r, P.XH)
-    return hook, stem, bar, x0, bar_r
+    return hook, stem, bar, x0, x_term
 
 
 def _f_metrics(p):
-    # The hook and bar overhang the next letter; kerning tightens f before
-    # round letters and leaves it at this distance from stems.
+    # The hook overhangs the next letter; kerning tightens f before round
+    # letters and leaves it at this distance from stems.
     return p.sbr * 0.5, p.sbr * 0.25
 
 
 @glyph("f", 0x0066)
 def f(p):
-    hook, stem, bar, x0, bar_r = _f_parts(p)
+    hook, stem, bar, x0, x_term = _f_parts(p)
     lsb, rsb = _f_metrics(p)
-    return G(hook + stem + bar, l=lsb, r=rsb, anchors={"top": (x0 + bar_r) / 2})
+    return G(hook + stem + bar, l=lsb, r=rsb, anchors={"top": (x0 + x_term) / 2})
 
 
 def _f_lig_layout(p):
     """Where the f sits in a ligature and where the next stem starts, so the
     ligature sets exactly like f followed by i or l."""
-    hook, stem, bar, x0, bar_r = _f_parts(p)
+    hook, stem, bar, x0, x_term = _f_parts(p)
     lsb, rsb = _f_metrics(p)
-    f_adv = lsb + bar_r + rsb  # bar ends are the f's extremes
+    f_adv = lsb + x_term + rsb  # the bar's left end and the hook are the extremes
     x_next = f_adv + p.sb
     return lsb, f_adv, x_next
 
@@ -467,7 +501,9 @@ def f_l(p):
 @glyph("k", 0x006B)
 def k(p):
     s = p.stem
-    W = s + p.w(330, 0.7)  # the arm's top-right corner is (W, XH)
+    # The arm's top-right corner is (W, XH). The body barely widens past the
+    # stem's own growth, so k gains colour, not width.
+    W = s + p.w(350, 0.1)
     wa = s * 0.94  # arm, perpendicular
     wl = s * 0.98  # leg, perpendicular
     # Arm: its lower edge leaves the stem's right edge at y_low and ends at
@@ -502,12 +538,12 @@ def k(p):
     c0 = (s + nrm[0] * wa / 2, y_low + nrm[1] * wa / 2)
     leg = leg - half_plane(c0, (c0[0] + ad[0], c0[1] + ad[1]))
     shape = rect(0, 0, s, P.ASC, nw=p.cut) + arm + leg
-    # Ink traps: the acute crotch above the arm at the stem, and the one
-    # under the arm where the leg branches off. Both are vertices of two
-    # straight edges, so they take the short vertex trap.
-    shape = shape - crotch_trap((s, y_up), (0, 1), ad, p.trap)
-    c2 = _isect((s, y_low), ad, (xr_leg - hw_l, 0), ld)
-    shape = shape - crotch_trap(c2, (-ad[0], -ad[1]), (-ld[0], -ld[1]), p.trap)
+    # Ink trap where the arm leaves the stem (a 38 degree crotch): a straight
+    # stroke leaving a stem takes a trap along the stem edge, like n's,
+    # opening up into the white above the arm (_stroke_trap). The crotch
+    # under the arm where the leg branches off is 70-77 degrees, too open
+    # to need one.
+    shape = shape - _stroke_trap(p, s, y_up, ad)
     return G(shape, l=p.sb, r=p.sbr * 0.3)
 
 

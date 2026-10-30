@@ -12,8 +12,10 @@ their `.case` forms sit on `P.CASE_AXIS`. Superiors, fraction parts and the
 ordinals are the full shapes drawn 150 weight units heavier and scaled by
 `SUP`.
 
-Ink traps at the crotches of 1, 2, 4, 6, 9 and the yen use `geom.crotch_trap`
-at depth `p.trap`, like the letters' vertices.
+Ink traps follow DESIGN.md: where a straight stroke leaves a stem (the flag of
+1, the diagonal of 4 at its stem) `geom.stem_trap` runs along the stem edge,
+like n; the vertices between two strokes (2, the 4's bar join, 6, 9 and the
+yen) take the flat-floored `geom.crotch_trap` at depth `p.trap`.
 """
 
 import math
@@ -35,10 +37,11 @@ from ..geom import (
     right_of,
     ring,
     squircle,
+    stem_trap,
     stroke,
 )
 from . import G, glyph, ref
-from .parts import arch, outer_x, solve_cx
+from .parts import arch, outer_x
 
 PROOF_TEXT = [
     "H0H1H2H3H4H5H6H7H8H9H",
@@ -70,7 +73,7 @@ def _fh(p):
 
 def _fw(p):
     """The shared tabular advance."""
-    return round(p.w(600, 0.9))
+    return round(p.w(600, 0.5))
 
 
 def _ox(box, n, y, side):
@@ -209,7 +212,7 @@ def _fit(p, shape, dx=0.0, width=None):
 
 
 def _zero_box(p):
-    w = p.w(468, 1.2)
+    w = p.w(468, 0.6)
     ws = p.fstem * 1.04
     h = _fh(p)
     return (0, -P.COS, w, P.CAP + P.COS), ws, h
@@ -223,16 +226,17 @@ def _zero(p):
 
 def _zero_slash(p):
     """Short slash floating in the zero's counter: flat ends (like every
-    diagonal), steep fixed angle, length set so the ends clear the counter
-    by a gap at every weight."""
+    diagonal), length set so the ends clear the counter by a gap at every
+    weight. The heavy zero's counter is narrow, so there the slash gets
+    steeper and relatively thinner to keep its length."""
     box, ws, h = _zero_box(p)
     x0, y0, x1, y1 = box
     ibox = (x0 + ws, y0 + h, x1 - ws, y1 - h)
     ni = _ni(p)
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
     g = max(0.0, p.grow) / 70
-    t = p.fhair * (0.8 - 0.22 * g)
-    th = math.radians(68)
+    t = p.fhair * (0.8 - 0.3 * g)
+    th = math.radians(68 + 8 * g)
     hw = t / (2 * math.sin(th))
     gap = 12 + 0.15 * t
     ry_in = (ibox[3] - ibox[1]) / 2
@@ -253,11 +257,13 @@ def _zero_slash(p):
     return diag(cx - a, cy - L, cx + a, cy + L, t)
 
 
-def _one(p):
+def _one(p, longer=0.0):
+    """1 without a base: a stem and a flag at 35 degrees. `longer` extends
+    the flag (the tabular form, which has more room)."""
     s = p.fstem
     t = _fh(p) * 1.04
     a = math.radians(35)
-    reach = p.w(192, 0.45)  # flag reach left of the stem, along its top edge
+    reach = p.w(192, 0.45) + longer  # flag reach left of the stem, along its top
     d = (-math.cos(a), -math.sin(a))
     nrm = (math.sin(a), -math.cos(a))  # across the flag, towards the stem foot
     L = reach / math.cos(a)
@@ -269,13 +275,28 @@ def _one(p):
     # The flag covers the stem's top-left corner, so only the free top-right
     # corner takes the house chamfer.
     stem = rect(0, 0, s, P.CAP, ne=p.ccut)
+    # Trap where the flag's lower edge leaves the stem: along the stem edge,
+    # opening into the white below the flag (DESIGN.md, like n).
     crotch = P.CAP - t / math.cos(a)
-    return stem + flag - crotch_trap((0, crotch), 270, 180 + math.degrees(a), p.trap)
+    return stem + flag - stem_trap(0, crotch, p.trap, side="left")
+
+
+def _one_tf(p):
+    """Tabular 1: the flag 40 units longer (at Regular) and a base, so a column of figures
+    keeps an even colour (its ink is about 0.78 of the mean tabular figure,
+    like Inter's; the baseless 1 is under 0.65). An exception to DESIGN.md's
+    "1 without a base" for the tabular form only; the default 1, the
+    superiors and fractions keep the baseless form. The base is the free end
+    of a bar, so its ends stay square, and its join with the stem is a right
+    angle, so it takes no trap."""
+    s = p.fstem
+    base = rect(-p.w(150, -0.2), 0, s + p.w(130, -0.2), _fh(p))
+    return _one(p, p.w(40, -0.3)) + base
 
 
 def _two(p):
     n, ni = _n(p), _ni(p)
-    w = p.w(452, 1.1)
+    w = p.w(452, 0.7)
     ws = p.fstem * 1.0
     h = _fh(p)
     hb = h * 1.02
@@ -337,8 +358,8 @@ def _three(p):
     n, ni = _n(p), _ni(p)
     ws = p.fstem * 1.0
     h = _fh(p)
-    wl = p.w(462, 1.1)
-    wu = p.w(420, 1.0)
+    wl = p.w(462, 0.7)
+    wu = p.w(420, 0.65)
     xr_u = wl - p.w(16, 0.1)
     xu0 = xr_u - wu
     ym, hm = _waist(p, 0.96)
@@ -363,7 +384,7 @@ def _three(p):
 
 def _four(p):
     s = p.fstem
-    w = p.w(506, 1.1)
+    w = p.w(506, 0.75)
     t = p.fstem * 0.9
     hb = _fh(p)
     yb = P.CAP * 0.235
@@ -381,9 +402,10 @@ def _four(p):
     )
     dg = dg & left_of(xs + s * 0.5)
     shape = stem + bar + dg
-    # Crotch where the inner edge meets the stem.
+    # Where the diagonal's inner edge leaves the stem: a trap along the stem
+    # edge, opening into the counter below (DESIGN.md, like n).
     yc = oy0 + (xs - hw) * dy / dx
-    shape = shape - crotch_trap((xs, yc), 270, (-dx, -dy), p.trap)
+    shape = shape - stem_trap(xs, yc, p.trap, side="left")
     # Crotch where the inner edge meets the bar.
     shape = shape - crotch_trap((hw, oy0), 0, (dx, dy), p.trap)
     return shape
@@ -394,7 +416,7 @@ def _five(p):
     s = p.fstem
     ws = s * 1.02
     h = _fh(p)
-    w = p.w(458, 1.1)
+    w = p.w(458, 0.7)
     xs = p.w(18, 0.15)
     xl = xs + s
     top = P.CAP * 0.615
@@ -411,14 +433,13 @@ def _five(p):
     lo = lo - chamfer(_ox(lb, n, ytl, "left"), ytl, p.ccut, "nw")
     # The stem stops where the shoulder's counter leaves it, so the bowl
     # opens to the left with no tooth; its free foot gets the sw chamfer.
-    # The arch reaches 1 unit into the stem, where its counter has already
-    # dropped below join_in (more steeply at heavy weights): stop the foot
-    # just below that point so no sliver of the arch shows under it.
-    ry_i = top - h - yc
-    xri = w - ws
-    cx_i = solve_cx(xri, xl, join_in, yc, ry_i, ni)
-    y_in = _oy((2 * cx_i - xri, yc - ry_i, xri, top - h), ni, xl - 1)
-    ysb = min(join_in, y_in) - 2
+    # The shoulder is clipped at the stem edge (arch() reaches 1 unit into
+    # it, where its counter has already dropped), and the foot stops a fixed
+    # 3 units below where the drawn counter meets that edge, so the join has
+    # the same corners at every weight.
+    shoulder = shoulder & right_of(xl)
+    y_in = (shoulder & left_of(xl + 0.5)).bounds()[1]
+    ysb = y_in - 3
     stem = rect(xs, ysb, xl, P.CAP, sw=p.ccut)
     bar = rect(xs, P.CAP - h, w - p.w(28, 0.2), P.CAP)
     return shoulder + lo + stem + bar
@@ -428,7 +449,7 @@ def _six(p):
     n, ni = _n(p), _ni(p)
     ws = p.fstem * 1.03
     h = _fh(p)
-    w = p.w(472, 1.2)
+    w = p.w(472, 0.6)
     yt = P.CAP * 0.65
     box = (0, -P.COS, w, yt)
     ibox = (ws, -P.COS + h, w - ws, yt - h)
@@ -477,7 +498,7 @@ def _nine(p):
 
 
 def _seven(p):
-    w = p.w(456, 1.0)
+    w = p.w(456, 0.7)
     h = _fh(p)
     t = p.fstem * 0.95
     xb = w * 0.30
@@ -493,8 +514,8 @@ def _eight(p):
     n, ni = _n(p), _ni(p)
     ws = p.fstem * 1.0
     h = _fh(p)
-    wl = p.w(480, 1.2)
-    wu = p.w(436, 1.05)
+    wl = p.w(480, 0.6)
+    wu = p.w(436, 0.55)
     ym, hm = _waist(p, 0.94)
     lb = (0, -P.COS, wl, ym + hm / 2)
     li = (ws * 1.03, lb[1] + h, wl - ws * 1.03, lb[3] - hm)
@@ -537,7 +558,7 @@ def zero_zero(p):
 
 @glyph("one.tf")
 def one(p):
-    return _fit(p, _one(p), NUDGE["one"])
+    return _fit(p, _one_tf(p))
 
 
 @glyph("two.tf")
@@ -617,7 +638,9 @@ def zero_zero_prop(p):
 
 @glyph("one", 0x0031)
 def one_prop(p):
-    return _prop(p, "one")
+    # Drawn from the baseless 1, not the tabular one.
+    lk, rk = PROP_SB["one"]
+    return G(_one(p), l=lk * p.csbr, r=rk * p.csbr)
 
 
 @glyph("two", 0x0032)
@@ -762,42 +785,80 @@ def fraction(p):
 
 
 # ---------------------------------------------------------------------------
-# Percent and per mille: small squircle rings either side of a slash.
+# Percent and per mille: small squircle rings either side of a slash. The
+# sign has a set width, p.w(800, 0.8), and the rings are sized to fill it: each
+# sits as close to the slash as a perpendicular gap allows, so they reach in
+# over the slash's run instead of the width adding up ring + slash + ring.
+
+PCT_RH = P.CAP * 0.46  # ring height without overshoot
+PCT_OS = P.COS * 0.7
 
 
-def _pct_ring(p, narrow=1.0):
+def _pct_t(p):
+    return p.fstem * 0.8
+
+
+def _pct_gap(p):
+    """Perpendicular gap between a ring and the slash."""
+    return p.w(36, 0.1)
+
+
+def _pct_ring(p, rw):
     g = max(0.0, p.grow) / 70
-    rw, rh = p.w(262, 1.4) * narrow, P.CAP * 0.46
     ws, h = p.fstem * (0.84 - 0.22 * g), _fh(p) * (0.8 - 0.18 * g)
-    os_ = P.COS * 0.7
-    sh = ring(0, -os_, rw, rh + os_, ws, h, n=_n(p), n_in=_ni(p))
-    return sh
+    return ring(0, -PCT_OS, rw, PCT_RH + PCT_OS, ws, h, n=_n(p), n_in=_ni(p))
 
 
-def _pct_rings(p, k):
-    if k == 1:
-        return _pct_ring(p)
+def _pct_x(p, rw, y0, side):
+    """Left edge for a ring rw wide whose box starts at y0 (without
+    overshoot), so it clears the slash (centred on x = 0, rising at
+    SLASH_ANGLE through (0, CAP / 2)) by the gap: side "num" above-left of
+    it, "den" below-right."""
+    a = math.radians(SLASH_ANGLE)
+    nrm = (-math.sin(a), math.cos(a))  # away from the slash, up and left
+    box = (0, y0 - PCT_OS, rw, y0 + PCT_RH + PCT_OS)
+    ds = [x * nrm[0] + (y - P.CAP / 2) * nrm[1] for x, y in _sq_pts(box, _n(p), 60)]
+    need = _pct_t(p) / 2 + _pct_gap(p)
+    if side == "num":
+        return (min(ds) - need) / math.sin(a)
+    return (max(ds) + need) / math.sin(a)
+
+
+def _pct_rw(p):
+    """Ring width that makes the percent sign p.w(800, 0.8) wide."""
+    ink = p.w(800, 0.8) - 1.5 * p.csbr
+    lo, hi = 100.0, 600.0
+    for _ in range(40):
+        rw = (lo + hi) / 2
+        width = _pct_x(p, rw, 0, "den") + rw - _pct_x(p, rw, P.CAP / 2, "num")
+        lo, hi = (rw, hi) if width < ink else (lo, rw)
+    return lo
+
+
+def _pct(p, den_rings):
+    rw = _pct_rw(p)
+    num = _pct_ring(p, rw)
+    sh = num.move(_pct_x(p, rw, P.CAP / 2, "num"), P.CAP / 2)
     # Per mille: the pair below is a little narrower, so the sign stays
     # compact.
-    r = _pct_ring(p, 0.9)
-    rw = r.bounds()[2] - r.bounds()[0]
-    return r + r.move(rw + p.w(36, 0.2), 0)
+    rd = rw if den_rings == 1 else rw * 0.9
+    den = _pct_ring(p, rd)
+    x = _pct_x(p, rd, 0, "den")
+    for _ in range(den_rings):
+        sh = sh + den.move(x, 0)
+        x += rd + p.w(36, 0.2)
+    sh = sh + _slash(p, 0.0, t=_pct_t(p))
+    return G(sh, l=p.csbr * 0.75, r=p.csbr * 0.75)
 
 
 @glyph("percent", 0x0025)
 def percent(p):
-    num = _pct_rings(p, 1).move(0, P.CAP * 0.5)
-    den = _pct_rings(p, 1)
-    sh = _over(p, num, den, gap=p.w(30, 0.1), t=p.fstem * 0.8)
-    return G(sh, l=p.csbr * 0.75, r=p.csbr * 0.75)
+    return _pct(p, 1)
 
 
 @glyph("perthousand", 0x2030)
 def perthousand(p):
-    num = _pct_rings(p, 1).move(0, P.CAP * 0.5)
-    den = _pct_rings(p, 2)
-    sh = _over(p, num, den, gap=p.w(30, 0.1), t=p.fstem * 0.8)
-    return G(sh, l=p.csbr * 0.75, r=p.csbr * 0.75)
+    return _pct(p, 2)
 
 
 # ---------------------------------------------------------------------------
@@ -898,7 +959,7 @@ def _s_shape(p, w, y0, y1, ws, wt, wb, cut_t, cut_b):
 
 @glyph("dollar", 0x0024)
 def dollar(p):
-    w = p.w(452, 1.0)
+    w = p.w(452, 0.7)
     ws = p.fstem * 0.98
     h = _fh(p) * 0.98
     s_ = _s_shape(p, w, -P.COS, P.CAP + P.COS, ws, h, h * 1.02, 0.745, 0.262)
@@ -914,7 +975,7 @@ def dollar(p):
 @glyph("cent", 0x00A2)
 def cent(p):
     n, ni = _n(p), _ni(p)
-    w = p.w(408, 0.9)
+    w = p.w(408, 0.6)
     ws = p.fstem * 1.02
     h = _fh(p)
     top = P.CAP * 0.8
@@ -950,7 +1011,7 @@ def sterling(p):
     n, ni = _n(p), _ni(p)
     s = p.fstem
     h = _fh(p)
-    w = p.w(470, 1.0)
+    w = p.w(470, 0.7)
     xs = p.w(78, 0.3)  # stem left edge
     hook_r = w - p.w(6, 0.0)
     ytop = P.CAP + P.COS
@@ -978,7 +1039,7 @@ def sterling(p):
 
 @glyph("yen", 0x00A5)
 def yen(p):
-    w = p.w(520, 1.1)
+    w = p.w(520, 0.75)
     s = p.fstem
     t = p.fstem * 0.92
     h = _fh(p) * 0.92
@@ -1011,7 +1072,7 @@ def Euro(p):
     from .parts import open_bowl
 
     n, ni = _n(p), _ni(p)
-    w = p.w(462, 1.0)
+    w = p.w(462, 0.6)
     ws = p.fstem * 1.02
     h = _fh(p)
     c_ = open_bowl(
@@ -1029,7 +1090,7 @@ def Euro(p):
         n_in=ni,
         chamfer_leg=p.ccut,
     )
-    c_ = c_.move(p.w(92, 0.3), 0)
+    c_ = c_.move(p.w(92, -0.15), 0)
     bt = h * 0.8
     off = bt / 2 + p.w(34, 0.25)
     sh = c_
@@ -1225,7 +1286,7 @@ def multiply(p):
 def divide(p):
     cx, cy = _cx(p), P.AXIS
     ds = p.dot * 0.95
-    off = _mt(p) / 2 + p.w(48, 0.35) + ds / 2
+    off = _mt(p) / 2 + p.w(48, 0.1) + ds / 2
     sh = _minus(p, cx, cy) + dot(cx, cy + off, ds) + dot(cx, cy - off, ds)
     return _math(p, sh)
 
@@ -1248,10 +1309,27 @@ def plusminus(p):
     return _math(p, _plus(p, cx, yc, a) + _minus(p, cx, y_bar, _arm(p)))
 
 
-def _lt(p, cy=P.AXIS, scale=1.0):
-    hw = _arm(p) * 0.92 * scale
-    hh = _arm(p) * 0.86 * scale
-    return _chevron(p, _cx(p), cy, hw, hh)
+def _chev_ext(hw, hh, t):
+    """Ink of `_chevron(p, cx, cy, hw, hh, t)` relative to (cx, cy): left and
+    right edge offsets and the half height."""
+    al = math.atan2(hh, 2 * hw)
+    left = -hw - (t / 2) / math.sin(al) + 0.3 * t / math.tan(al)
+    return left, hw, hh + t / (2 * math.cos(al))
+
+
+# The point side of < carries less ink near its edge, so the sign sits a
+# little left of centre (Inter: 7-17 units).
+LT_SHIFT = 12
+
+
+def _lt_dims(p):
+    return _arm(p) * 0.92, _arm(p) * 0.86
+
+
+def _lt(p, cy=P.AXIS):
+    hw, hh = _lt_dims(p)
+    left, right, _ = _chev_ext(hw, hh, _mt(p))
+    return _chevron(p, _cx(p) - LT_SHIFT - (left + right) / 2, cy, hw, hh)
 
 
 @glyph("less", 0x003C)
@@ -1264,13 +1342,26 @@ def greater(p):
     return _math(p, _lt(p).flip_x(_cx(p)))
 
 
-def _lte(p):
+def _lte(p, cy=P.AXIS):
+    """< over a bar, centred on cy: chevron, gap and bar together are exactly
+    as tall as <, and chevron and bar as wide as it, so the sign keeps the
+    height of < at every weight. The chevron flattens to make room."""
     t = _mt(p)
-    gap = p.w(70, 0.2)
-    hh = _arm(p) * 0.78
-    bar_y = t / 2
-    cy = t + gap + hh + t * 0.45
-    return _lt(p, cy, 0.92) + _minus(p, _cx(p), bar_y, _arm(p) * 0.92)
+    hw, hh = _lt_dims(p)
+    left, right, H = _chev_ext(hw, hh, t)
+    W = right - left
+    gap = p.w(48, -0.1)
+    hc = (2 * H - t - gap) / 2  # the chevron's half height
+    al = math.atan2(hh, 2 * hw)
+    for _ in range(60):
+        hh2 = hc - t / (2 * math.cos(al))
+        hw2 = (W - t / (2 * math.sin(al)) + 0.3 * t / math.tan(al)) / 2
+        al = math.atan2(hh2, 2 * hw2)
+    l2, r2, _ = _chev_ext(hw2, hh2, t)
+    cx = _cx(p)
+    chev = _chevron(p, cx - (l2 + r2) / 2, cy + H - hc, hw2, hh2)
+    bar = rect(cx - W / 2, cy - H, cx + W / 2, cy - H + t)
+    return chev + bar
 
 
 @glyph("lessequal", 0x2264)
@@ -1298,7 +1389,8 @@ def notequal(p):
 
 
 def _tilde(p, cy, scale=1.0):
-    return _wave(p, _cx(p), cy, p.w(216, 0.9) * scale, p.w(58, 0.3) * scale)
+    # The ends grow outward with the stroke, so the length barely widens.
+    return _wave(p, _cx(p), cy, p.w(216, 0.1) * scale, p.w(58, 0.3) * scale)
 
 
 @glyph("asciitilde", 0x007E)
@@ -1329,7 +1421,7 @@ def logicalnot(p):
 @glyph("asciicircum", 0x005E)
 def asciicircum(p):
     w = _fw(p)
-    hw = p.w(196, 0.4)
+    hw = p.w(196, 0.0)  # the stroke widens it already
     depth = P.CAP * 0.42
     sh = _chevron(p, 0.0, 0.0, depth / 2, hw, t=_mt(p))
     # Rotate the chevron so it points up, tip on the cap height.
@@ -1532,7 +1624,7 @@ def infinity(p):
     td = (ws + h) / 2 * 0.98  # the crossing diagonals
     th = 42.0
     c, s = math.cos(math.radians(th)), math.sin(math.radians(th))
-    half = p.w(300, 0.9)
+    half = p.w(300, 0.5)
     hh = p.w(150, 0.5)
     cy = P.AXIS
     # Outer silhouette: one contour that pinches to a V above and below the

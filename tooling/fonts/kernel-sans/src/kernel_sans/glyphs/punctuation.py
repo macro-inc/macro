@@ -29,6 +29,7 @@ from ..geom import (
     right_of,
     ring,
     squircle,
+    stem_trap,
     stroke,
 )
 from . import G, glyph, ref
@@ -51,10 +52,17 @@ SQ2 = math.sqrt(2)
 # Shared helpers
 
 
+def _psb(p):
+    """Sidebearing of . , : ; ! : the letters' straight one at Light and
+    Regular; above Regular it stops shrinking (about 71 at ExtraBold), so
+    n. and e.g. don't clamp at heavy weights."""
+    return p.sb * 0.95 + 0.25 * max(0.0, p.grow)
+
+
 def _period(p):
     """(dot side, period sidebearing, period advance)."""
     s = p.dot
-    sb = p.sb * 0.95
+    sb = _psb(p)
     return s, sb, s + 2 * sb
 
 
@@ -76,12 +84,17 @@ def _ring_part(x0, y0, x1, y1, ix0, iy0, ix1, iy1, n, n_in, clip):
     return (squircle(x0, y0, x1, y1, n) - squircle(ix0, iy0, ix1, iy1, n_in)) & clip
 
 
+def _comma_tail(p):
+    """Length of the comma's (and curly quotes') tail below the square."""
+    return p.dot * 0.6 + 92
+
+
 def _comma(p, x0, y0):
     """The comma: the period's square at (x0, y0) with a wedge tail growing
     down and to the left from its bottom edge."""
     s = p.dot
     c = s * 0.22  # the dot's chamfer (geom.dot)
-    tail = s * 0.6 + 92  # length of the tail below the square
+    tail = _comma_tail(p)
     tw = s * 0.34  # width of the flat tail end
     tl = x0 - s * 0.06  # left corner of the tail end
     return poly(
@@ -207,9 +220,9 @@ def comma(p):
 
 @glyph("colon", 0x003A)
 def colon(p):
-    per = ref("period")
-    s = p.dot
-    return G(per.shape + per.shape.move(0, P.XH - s), width=per.width)
+    s, sb, adv = _period(p)
+    shape = dot(sb + s / 2, s / 2, s) + dot(sb + s / 2, P.XH - s / 2, s)
+    return G(shape, width=adv)
 
 
 @glyph("colon.case")
@@ -236,10 +249,10 @@ def periodcentered(p):
 @glyph("ellipsis", 0x2026)
 def ellipsis(p):
     s, sb, _ = _period(p)
-    # The gap follows the dot, not the sidebearing (which shrinks with
-    # weight): about 108 / 115 / 143 at 300 / 400 / 800, so the heavy dots
-    # don't clump.
-    pitch = s + s * 0.5 + 64
+    # The gap follows the dot: about 123 / 129 / 158 at 300 / 400 / 800,
+    # 1.3 / 1.2 / 0.9 of the dot as in Inter, a little under the gap of
+    # typed periods so the three read as one sign.
+    pitch = s + s * 0.45 + 80
     shape = Shape()
     for i in range(3):
         shape = shape + dot(sb + s / 2 + i * pitch, s / 2, s)
@@ -252,7 +265,7 @@ def exclam(p):
     w = p.stem * 1.05
     cx = s / 2
     stem = rect(cx - w / 2, s + _gap(p), cx + w / 2, P.CAP, nw=0.36 * w)
-    sb = p.sb * 0.95
+    sb = _psb(p)
     return G(stem + dot(cx, s / 2, s), l=sb, r=sb)
 
 
@@ -270,7 +283,7 @@ def _question(p):
     (an S), so the stem grows out of the curve instead of sitting under it."""
     s = p.dot
     w = p.stem * 1.05  # stem, as in exclam
-    W = p.w(400, 1.5)
+    W = p.w(410, 1.2)
     ws, wt = p.stem * 1.04, p.hair * 1.04
     top = P.CAP + P.COS
     n, n_in = p.sq, p.sq_in
@@ -350,7 +363,15 @@ def _quote_pitch(p):
 
 
 def _qsb(p):
-    return p.sb * 0.95, p.sb * 0.75
+    """(left, right) of the raised quotes: the mark sits right of centre, as
+    in Inter (‘ ’ “ ” share it). kerning.py sets 's 'r 'd from these."""
+    return p.sbr * 1.25 + 15, p.sbr * 0.6
+
+
+def _qsb_low(p):
+    """(left, right) of the low quotes ‚ „: the comma's left side, the raised
+    quotes' tight right."""
+    return p.sbr + 8, p.sbr * 0.6
 
 
 @glyph("quoteright", 0x2019)
@@ -369,7 +390,7 @@ def quoteleft(p):
 
 @glyph("quotesinglbase", 0x201A)
 def quotesinglbase(p):
-    lsb, rsb = _qsb(p)
+    lsb, rsb = _qsb_low(p)
     return G(_comma(p, 0, 0), l=lsb, r=rsb)
 
 
@@ -390,15 +411,17 @@ def quotedblleft(p):
 
 @glyph("quotedblbase", 0x201E)
 def quotedblbase(p):
-    lsb, rsb = _qsb(p)
+    lsb, rsb = _qsb_low(p)
     sh = _comma(p, 0, 0) + _comma(p, _quote_pitch(p), 0)
     return G(_lr(sh), l=lsb, r=rsb)
 
 
 def _tick(p, x0):
-    """A straight quote: a slightly tapered vertical tick from cap height."""
+    """A straight quote: a slightly tapered vertical tick from cap height
+    down to the curly quote's bottom, so ' and ’ are the same height and
+    grow alike with weight (as in Inter)."""
     w = p.stem * 1.0
-    h = P.CAP * 0.36
+    h = p.dot + _comma_tail(p)
     wb = w * 0.78
     cx = x0 + w / 2
     c = 0.36 * w
@@ -541,10 +564,16 @@ def _paren(p, dy=0):
     return sh
 
 
+def _inner_sb(p):
+    """Inner sidebearing of ( ) [ ] { }: a full round sidebearing that stops
+    shrinking above Regular (about 73 at ExtraBold), so (on), (A and [j
+    don't clamp at heavy weights."""
+    return p.sbr + 0.4 * max(0.0, p.grow)
+
+
 def _paren_sb(p):
-    """(outer, inner): the inner side is a full round sidebearing, so (on)
-    and (10) don't look clamped."""
-    return p.sbr * 1.35, p.sbr * 1.0
+    """(outer, inner)."""
+    return p.sbr * 1.35, _inner_sb(p)
 
 
 _pair("parenleft", "parenright", (0x0028, 0x0029), _paren, _paren_sb)
@@ -566,7 +595,7 @@ def _bracket(p, dy=0):
 
 
 def _bracket_sb(p):
-    return p.sb * 1.35, p.sbr * 1.05
+    return p.sb * 1.35, _inner_sb(p)
 
 
 _pair("bracketleft", "bracketright", (0x005B, 0x005D), _bracket, _bracket_sb)
@@ -620,7 +649,7 @@ def _brace(p, dy=0):
 
 
 def _brace_sb(p):
-    return p.sb * 0.9, p.sbr * 1.05
+    return p.sb * 0.9, _inner_sb(p)
 
 
 _pair("braceleft", "braceright", (0x007B, 0x007D), _brace, _brace_sb)
@@ -635,18 +664,28 @@ _pair(
 SL_LO, SL_HI = -140, P.ASC
 
 
+def _slash(p):
+    """/ with its advance set (about p.w(380, 0.5)) and its stroke grown
+    inward: heavier slashes get steeper, not much wider."""
+    sb = p.sb * 0.3
+    ink = p.w(380, 0.5) - 2 * sb  # outer left to outer right
+    w = p.stem * 0.95
+    hw = w  # horizontal width of the stroke
+    for _ in range(20):
+        hw = hwidth(w, ink - hw, SL_HI - SL_LO)
+    return diag(hw / 2, SL_LO, ink - hw / 2, SL_HI, w), sb
+
+
 @glyph("slash", 0x002F)
 def slash(p):
-    run = p.w(300, 0.4)
-    sh = diag(0, SL_LO, run, SL_HI, p.stem * 0.95)
-    return G(sh, l=p.sb * 0.3, r=p.sb * 0.3)
+    sh, sb = _slash(p)
+    return G(sh, l=sb, r=sb)
 
 
 @glyph("backslash", 0x005C)
 def backslash(p):
-    run = p.w(300, 0.4)
-    sh = diag(run, SL_LO, 0, SL_HI, p.stem * 0.95)
-    return G(sh, l=p.sb * 0.3, r=p.sb * 0.3)
+    sh, sb = _slash(p)
+    return G(sh.flip_x(0), l=sb, r=sb)
 
 
 @glyph("bar", 0x007C)
@@ -670,19 +709,27 @@ def brokenbar(p):
 # Daggers, asterisk, bullets
 
 
+ASTERISK_R = 186  # outer radius of the asterisk
+
+
 @glyph("asterisk", 0x002A)
 def asterisk(p):
-    """Six square-ended spokes hanging from the cap height; the spokes thin
-    a little at heavy weights so the hub stays open."""
+    """Six square-ended spokes hanging from the cap height. The outer
+    radius (to the spoke ends' corners) stays fixed and the spokes thicken
+    inward, a little more slowly than the text above Regular so the white
+    between them stays open."""
     t = _damp(p.hair * 0.98, P.params(400).hair * 0.98, 0.75)
-    r = 172 + 0.5 * p.grow
+    r = math.sqrt(ASTERISK_R**2 - (t / 2) ** 2)  # spoke half-length
     cy = P.CAP - r
     sh = Shape()
     for a in (90, 30, 150):
         ra = math.radians(a)
         dx, dy = r * math.cos(ra), r * math.sin(ra)
         sh = sh + stroke((-dx, cy - dy), (dx, cy + dy), t)
-    return G(sh, l=p.sb * 0.75, r=p.sb * 0.75)
+    # Its ink no longer widens with weight, so its spacing doesn't shrink
+    # above Regular either (as in Inter).
+    sb = p.sb * 0.75 + 0.25 * max(0.0, p.grow)
+    return G(sh, l=sb, r=sb)
 
 
 def _dagger(p, double=False):
@@ -735,7 +782,7 @@ def at(p):
     runs straight down and hooks into the foot of the a's stem; below the
     hook the ring is open. The ring's terminal ends travelling sideways, so
     it is cut vertically with the house chamfer on its outer corner."""
-    W = p.w(840, 1.9)
+    W = p.w(840, 1.5)
     y0, y1 = -150, 730
     cy = (y0 + y1) / 2
     n, n_in = p.sq, p.sq_in
@@ -751,7 +798,7 @@ def at(p):
     xs = xr - st
     ha = 480 - 0.1 * p.grow
     oy0, oy1 = cy - ha / 2 - P.OS, cy + ha / 2 + P.OS  # the a, with overshoots
-    xa0 = xr - p.w(372, 1.2)
+    xa0 = xr - p.w(372, 0.9)
     # Ring, open at the lower right.
     x_cut = W * 0.73
     ringsh = ring(0, y0, W, y1, ws, wt, n=n, n_in=n_in) - (right_of(x_cut) & below(cy))
@@ -776,7 +823,7 @@ def at(p):
     )
     # The a: bowl and stem. The counter runs a fixed fraction of its radius
     # past the stem's edge, so it meets the stem at the same angle at every
-    # weight; ink traps deepen those crotches.
+    # weight.
     wsb = _damp(p.stem * 1.03, reg.stem * 1.03, 0.6)
     xi0 = xa0 + wsb
     k = 0.42
@@ -787,20 +834,10 @@ def at(p):
     )
     stem = rect(xs, oy0, xr, oy1, ne=p.cut)
     sh = ringsh + side + hook + bowl + stem
-    # Bowl-join traps as in a: geom.stem_trap's notch at 0.65 * p.trap (a
-    # deeper one reaches past this short counter's top), with its far corner
-    # just inside the counter's curve, which leaves the stem too shallowly
-    # for stem_trap's own corner to stay in the white (it left a barb).
-    d = p.trap * 0.65
-    if d >= 1:
-        for side_ in ("top", "bottom"):
-            sy = 1 if side_ == "top" else -1
-            yc = _sq_y(xi0, iy0, ix1, iy1, n_in, xs, side_)
-            xb = xs - d * 0.95 - 2
-            tip = (xs + d * 0.22, yc + sy * d)
-            a = (xs - d * 0.05 - 0.3, yc - sy * (d * 0.4 + 4))
-            b = (xb, _sq_y(xi0, iy0, ix1, iy1, n_in, xb, side_) - sy * 3)
-            sh = sh - poly([a, tip, b])
+    # No bowl-join traps: the counter runs into the stem near its flat top,
+    # so the white at those crotches is about 111 degrees at every weight,
+    # well past DESIGN.md's 70-degree limit (a notch there only made a
+    # spike at ExtraBold).
     return G(sh, l=p.sbr, r=p.sbr)
 
 
@@ -883,7 +920,7 @@ def section(p):
     """§ : two squircle S shapes sharing their middle bowl, so it reads as
     three stacked bowls: the top one open at the lower right below its
     terminal, the middle one closed, the bottom one the top turned round."""
-    W = p.w(420, 1.4)
+    W = p.w(440, 1.0)
     ws, wt = p.stem * 1.02, _damp(p.hair, P.params(400).hair, 0.8)
     n, n_in = p.sq, p.sq_in
     top = P.CAP + P.COS
@@ -892,8 +929,12 @@ def section(p):
     h = (top - bot + 2 * wt) / 3  # each bowl; neighbours share a stroke
     m0, m1 = mid - h / 2, mid + h / 2
     middle = ring(0, m0, W, m1, ws, wt, n=n, n_in=n_in)
-    tb = m1 - wt  # the top bowl's bottom stroke is the middle bowl's top
-    upper = ring(0, tb, W, top, ws, wt, n=n, n_in=n_in)
+    # The top bowl's bottom stroke is the middle bowl's top stroke, drawn
+    # 2 units thinner inside it: edges that coincide exactly leave
+    # zero-length segments where the two squircles part.
+    e = 2.0
+    tb = m1 - wt + e
+    upper = ring(0, tb, W, top, ws, wt, n=n, n_in=n_in, wy_bottom=wt - 2 * e)
     y_cut = tb + (top - tb) * 0.66
     upper = upper - (right_of(W / 2) & below(y_cut))
     xt = outer_x(0, W, tb, top, n, y_cut, "right")
@@ -904,11 +945,14 @@ def section(p):
 @glyph("paragraph", 0x00B6)
 def paragraph(p):
     """¶ : a filled squircle bowl on the left stem, a top bar and a second
-    stem, standing on the baseline as in Inter."""
-    st = p.stem * 0.9
+    stem, standing on the baseline as in Inter. The solid bowl already
+    carries the colour, so above Regular it narrows a little and the stems
+    grow more slowly than the text; otherwise its two stems and bowl made
+    it a third wider at ExtraBold (Inter's ¶ keeps its width)."""
+    st = _damp(p.stem * 0.9, P.params(400).stem * 0.9, 0.75)
     th = p.hair
-    xl = p.w(250, 0.7)  # bowl width = left edge of the inner stem
-    xr = xl + 2 * st + p.w(70, 0.3)
+    xl = p.w(250, -0.2)  # bowl width = left edge of the inner stem
+    xr = xl + 2 * st + p.w(70, 0.15)
     yb = P.CAP * 0.38
     bowl = squircle(0, yb, 2 * xl, P.CAP, p.sq) & left_of(xl + 1)
     sh = (
@@ -1008,7 +1052,9 @@ def registered(p):
 def _small_m(p, x0, y0, h, w, st):
     """A small M built like the capital: square-topped vertical sides,
     diagonals that start inside the side tops and meet at a flat vertex on
-    the baseline, and ink traps at the three inner vertices."""
+    the baseline. Ink traps as in M: geom.stem_trap along the sides where
+    the diagonals leave them, geom.crotch_trap at the inner vertex, both
+    scaled from the capital's by the stroke ratio."""
     td = st * 0.94  # diagonals (M: 0.86 / 0.92 of its sides)
     fv = st * 0.87  # flat vertex on the baseline
     e = st * 0.3  # diagonals start inside the side tops
@@ -1027,12 +1073,12 @@ def _small_m(p, x0, y0, h, w, st):
         + right
         + [(x0 + w, top), (2 * cx - xt - hw, top), (cx, yv), (xt + hw, top), (x0, top)]
     )
-    d = p.trap * 0.5
-    down = (xb - xt, -h)  # along the left diagonal, downwards
-    up = (xt - xb, h)
-    sh = sh - crotch_trap((x0 + st, yl), (0, -1), down, d)
-    sh = sh - crotch_trap((2 * cx - x0 - st, yl), (0, -1), (-down[0], down[1]), d)
-    sh = sh - crotch_trap((cx, yv), up, (-up[0], up[1]), d)
+    k = st / p.cstem
+    d = 1.3 * p.trap * k
+    sh = sh - stem_trap(x0 + st, yl, d, side="right", up=True)
+    sh = sh - stem_trap(2 * cx - x0 - st, yl, d, side="left", up=True)
+    up = (xt - xb, h)  # along the left diagonal, upwards
+    sh = sh - crotch_trap((cx, yv), up, (-up[0], up[1]), p.trap * k)
     return sh
 
 
