@@ -173,12 +173,9 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   );
   const partitioned = createMemo(() => partitionArchived(conversations()));
   const updateSessions = () =>
-    query.isSuccess
-      ? query.data.filter(
-          (entity): entity is AgentSessionEntity =>
-            entity.type === 'agent_session'
-        )
-      : [];
+    (query.isPending ? [] : (query.data?.entities ?? [])).filter(
+      (entity): entity is AgentSessionEntity => entity.type === 'agent_session'
+    );
   const modeForConversation = (conversation: AgentConversationEntity) =>
     conversationMode(conversation, (botId) =>
       kindForBot(botId, rosterSource.roster())

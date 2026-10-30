@@ -22,7 +22,7 @@ function RequestActions(props: {
   const send = (answer: UpdateAnswer) =>
     fireAndForget(props.onAnswer(answer), 'agent-updates');
   return (
-    <div class="mt-2 flex flex-wrap items-center gap-1 pl-4 touch:[&_button]:min-h-11">
+    <div class="mt-2 flex flex-wrap items-center gap-1 pl-4">
       {match(props.request)
         .with({ kind: 'permission' }, (permission) => (
           <For each={permission.options}>
