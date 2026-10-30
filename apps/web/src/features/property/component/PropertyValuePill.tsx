@@ -1,4 +1,5 @@
 import { type ComponentProps, type JSX, Match, Show, Switch } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { Property } from '../property';
 import { getEntityValues, hasValue } from '../utils';
 import { ProjectLinkPill } from './ProjectLinkPill';
@@ -19,6 +20,8 @@ type PropertyValuePillProps = Pick<
   >['entitySelfFilter'];
   /** The pill's name opens the task's project, leaving the caret to change it. */
   opensProject?: boolean;
+  /** The editor the pill opens; `Property.SheetEditor` inside a touch sheet. */
+  editor?: typeof Property.PopoverEditor;
 };
 
 /** Controlled property pill shared by task and project composers. */
@@ -97,7 +100,10 @@ export function PropertyValuePill(props: PropertyValuePillProps) {
                 />
               </Show>
             </Property.Tooltip>
-            <Property.PopoverEditor entitySelfFilter={props.entitySelfFilter} />
+            <Dynamic
+              component={props.editor ?? Property.PopoverEditor}
+              entitySelfFilter={props.entitySelfFilter}
+            />
           </>
         );
       }}

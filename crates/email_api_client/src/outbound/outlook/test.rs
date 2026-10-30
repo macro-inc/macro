@@ -615,6 +615,39 @@ fn folder_subtrees_inherit_trash_without_becoming_move_destinations() {
     );
 }
 
+#[test]
+fn reply_snippets_leave_out_the_quoted_message() {
+    let snippet = |body: serde_json::Value| {
+        let source = serde_json::from_value(json!({
+            "id":"m","conversationId":"c","subject":"RE: Hello",
+            "bodyPreview":"Preview with quoted history","body":body
+        }))
+        .unwrap();
+        super::messages::normalize(source, Vec::new(), Uuid::new_v4(), &[])
+            .unwrap()
+            .content
+            .message
+            .snippet
+    };
+    assert_eq!(
+        snippet(json!({"contentType":"html","content":concat!(
+            "<html><body><div>Tell gab   I said\nhello</div>",
+            "<div id=\"appendonsend\"></div><hr><div id=\"divRplyFwdMsg\">",
+            "<b>From:</b> Teo<br><b>Sent:</b> Tuesday<br><b>To:</b> Gab<br>",
+            "<b>Subject:</b> Hello</div><div>Original message</div></body></html>"
+        )}))
+        .as_deref(),
+        Some("Tell gab I said hello")
+    );
+    assert_eq!(
+        snippet(json!({"contentType":"text","content":
+            "Me too\n\nOn Tue, Oct 20, 2026 at 3:00 PM Teo <teo@example.com> wrote:\n> God I love outlook"
+        }))
+        .as_deref(),
+        Some("Me too")
+    );
+}
+
 #[tokio::test]
 async fn cloud_reference_attachments_preserve_provider_open_without_download_bytes() {
     let (server, api, token) = setup().await;

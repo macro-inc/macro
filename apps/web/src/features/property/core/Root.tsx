@@ -89,14 +89,28 @@ export function Root(props: PropertyRootProps) {
     }
   };
 
+  // A touch editor leaves focus in the field the user was typing in (a
+  // composer's title), and a picker sheet hands it back there.
+  let focusAtOpen: Element | null = null;
+
   // Focus restoration helper - used by both closeEditor and onOpenChange
   // When a value is saved, the component may remount (due to reactive updates),
   // so we fall back to finding the trigger by property ID if the anchor is stale.
   const restoreFocusToAnchor = () => {
     const propertyId = local.property.propertyId;
     const anchor = editorAnchor();
+    const focusedAtOpen = focusAtOpen;
 
     setTimeout(() => {
+      // Focus is back where the editor found it; moving it to the pill would
+      // drop the phone keyboard.
+      if (
+        focusedAtOpen &&
+        focusedAtOpen !== document.body &&
+        document.activeElement === focusedAtOpen
+      )
+        return;
+
       // First try the stored anchor if it's still in the DOM
       if (anchor?.isConnected) {
         anchor.focus();
@@ -126,6 +140,7 @@ export function Root(props: PropertyRootProps) {
     },
     editorOpen,
     openEditor: (anchor) => {
+      focusAtOpen = document.activeElement;
       if (anchor) setEditorAnchor(() => anchor);
       setEditorOpen(true);
     },

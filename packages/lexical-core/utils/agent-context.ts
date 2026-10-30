@@ -68,11 +68,20 @@ export type DiscussionContext = {
   surface: DiscussionSurface;
   prompt_message_id: string;
   sender: ContextPerson;
+  /** Present when the sender is an agent asking on a person's behalf. */
+  agent_request?: AgentRequest;
   reply_target: ReplyTarget;
   /** Absent for a top-level channel message. */
   thread?: ContextThread;
   /** Absent when empty. */
   channel?: ContextThread[];
+};
+
+export type AgentRequest = {
+  /** The person the asking agent acts for, who owns the work it starts. */
+  on_behalf_of: ContextPerson;
+  /** Agent-to-agent handoffs since a person last wrote, this one included. */
+  hops: number;
 };
 
 export type ChannelType = 'public' | 'private' | 'direct_message' | 'team';
@@ -1020,6 +1029,15 @@ function discussionNode(
         ]
       : []),
     personNode('sender', discussion.sender),
+    ...(discussion.agent_request
+      ? [
+          el(
+            'agent_request',
+            [personNode('on_behalf_of', discussion.agent_request.on_behalf_of)],
+            { hops: String(discussion.agent_request.hops) }
+          ),
+        ]
+      : []),
     contextReplyTargetNode(discussion.reply_target, marker, reading.subject),
     ...(discussionHasAttachments(discussion)
       ? [
@@ -1150,12 +1168,23 @@ function callNode(call: CallSnapshot): FxpNode {
   );
 }
 
+/**
+ * Who an agent's message speaks for, so the reply goes to the agent that
+ * asked rather than to a person who never wrote it.
+ */
+function agentRequestNote(discussion: DiscussionContext): string {
+  const request = discussion.agent_request;
+  if (!request) return '';
+  const person = request.on_behalf_of.name;
+  return ` ${discussion.sender.name} is another agent asking on behalf of ${person}; ${person} did not write this message. Address your reply to ${discussion.sender.name} in the discussion, where ${person} can read it too.`;
+}
+
 function mentionedNode(discussion: DiscussionContext): FxpNode {
   return el(
     'trigger',
     [
       note(
-        `${discussion.sender.name} mentioned you, and that mention opened this session. Their message is the prompt.`
+        `${discussion.sender.name} mentioned you, and that mention opened this session. Their message is the prompt.${agentRequestNote(discussion)}`
       ),
       discussionNode(discussion, {
         marker: 'mentioned_you',
@@ -1188,7 +1217,7 @@ function followUpNode({ addressed_by, discussion }: FollowUpContext): FxpNode {
     'trigger',
     [
       note(
-        `This session was already running when ${discussion.sender.name} posted this message in its discussion. ${explanation} The message is the prompt.`
+        `This session was already running when ${discussion.sender.name} posted this message in its discussion. ${explanation} The message is the prompt.${agentRequestNote(discussion)}`
       ),
       discussionNode(discussion, {
         marker,

@@ -38,6 +38,7 @@ function thread(messages: ApiMessage[]): ApiThread {
     link_id: 'inbox',
     access_level: 'owner',
     inbox_visible: true,
+    has_received_mail: true,
     is_read: true,
     created_at: '2026-09-01T10:00:00Z',
     updated_at: '2026-09-01T10:00:00Z',

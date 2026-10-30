@@ -572,6 +572,13 @@ where
             .map(|timestamp| timestamp.to_rfc3339()))
     }
 
+    /// Whether any message was received rather than drafted or sent. Only
+    /// threads with received mail can return to the inbox.
+    async fn has_received_mail(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
+        let metadata = load_email_thread_metadata::<ER>(ctx, self.thread_id).await?;
+        Ok(metadata.has_received_mail)
+    }
+
     /// Most recent explicit return from an email reminder.
     async fn reminder_returned_at(
         &self,

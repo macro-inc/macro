@@ -57,6 +57,20 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
+  # Releases the iOS version Apple approved for the native changes in this
+  # release; it is held until now. It waits for the web deploy, so the native
+  # build never goes live while prod still serves the previous web bundle (a
+  # release request cannot be cancelled). Nothing depends on it: an App Store
+  # Connect failure must not hold back the prod deploy.
+  publish-ios:
+    name: Publish iOS App Store Version
+    needs: [deploy]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ios-app-store-publish.yml
+    secrets:
+      IOS_RELEASE_DOPPLER_TOKEN: ${{ secrets.IOS_RELEASE_DOPPLER_TOKEN }}
+
   build:
     if: github.event_name == 'release'
     name: Build Web App

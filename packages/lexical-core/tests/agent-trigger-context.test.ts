@@ -266,6 +266,51 @@ describe('composeAgentContextPrompt with a trigger', () => {
     );
   });
 
+  it('tells an agent asked by another agent who that agent speaks for', () => {
+    const markdown = composeAgentContextPrompt({
+      promptMarkdown: 'please fix the failing test',
+      trigger: {
+        kind: 'mentioned',
+        surface: {
+          type: 'channel',
+          id: 'c1',
+          name: 'eng',
+          channel_type: 'public',
+        },
+        prompt_message_id: 'm2',
+        sender: { id: 'bot|macro', name: 'Macro' },
+        agent_request: {
+          on_behalf_of: {
+            id: 'macro|julia@example.com',
+            name: 'Julia',
+            email: 'julia@example.com',
+          },
+          hops: 1,
+        },
+        reply_target: { kind: 'thread', root_id: 'm1' },
+      },
+    });
+
+    expect(hiddenContext(markdown)).toBe(
+      [
+        '<trigger kind="mentioned">',
+        '  <note>Macro mentioned you, and that mention opened this session. Their message is the prompt. Macro is another agent asking on behalf of Julia; Julia did not write this message. Address your reply to Macro in the discussion, where Julia can read it too.</note>',
+        '  <discussion>',
+        '    <channel id="c1" name="eng" type="public"/>',
+        '    <origin>This prompt was posted in a channel thread, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.</origin>',
+        '    <sender name="Macro" id="bot|macro"/>',
+        '    <agent_request hops="1">',
+        '      <on_behalf_of name="Julia" email="julia@example.com" id="macro|julia@example.com"/>',
+        '    </agent_request>',
+        '    <reply_target kind="thread" thread="m1">',
+        '      <note>The prompt was posted as a reply in the thread below. It is about that thread.</note>',
+        '    </reply_target>',
+        '  </discussion>',
+        '</trigger>',
+      ].join('\n')
+    );
+  });
+
   it('renders an inferred follow-up after the session block and warns the inference can be wrong', () => {
     const markdown = composeAgentContextPrompt({
       promptMarkdown: 'and the popover one too',

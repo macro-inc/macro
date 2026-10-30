@@ -106,13 +106,55 @@ describe('gesture scroll compensation', () => {
     expect(f.writeOffset).toHaveBeenCalledExactlyOnceWith(1300);
   });
 
-  it('releases the shifted origin when native scrolling reaches the top', () => {
+  it('releases the shifted origin once scrolling settles at the top', () => {
     const f = setup();
     f.wheel();
     f.compensation.defer(1200);
     f.element.scrollTop = 0;
     expect(f.compensation.observeOffset(0, true)).toBe(200);
+    // Momentum bounces at the boundary, where WebKit would drop the write.
+    expect(f.writeOffset).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(150);
     expect(f.shift()).toBe(0);
+    expect(f.writeOffset).toHaveBeenCalledExactlyOnceWith(200);
+  });
+
+  it('waits while momentum moves between delayed scroll events', () => {
+    const f = setup();
+    f.element.addEventListener('touchstart', f.compensation.onTouchStart);
+    f.element.dispatchEvent(new TouchEvent('touchstart'));
+    f.compensation.defer(1200);
+    f.element.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+    // A busy main thread delays the next scroll event while momentum continues.
+    f.element.scrollTop = 900;
+    vi.advanceTimersByTime(150);
+    expect(f.writeOffset).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(150);
+    expect(f.writeOffset).toHaveBeenCalledExactlyOnceWith(1100);
+  });
+
+  it('defers corrections for a fling that starts during momentum', () => {
+    const f = setup();
+    // iOS sends no touchstart when a touch catches momentum and flings again.
+    f.element.scrollTop = 950;
+    expect(f.compensation.observeOffset(950, true)).toBe(950);
+    expect(f.compensation.defer(1150)).toBe(true);
+    expect(f.shift()).toBe(200);
+    vi.advanceTimersByTime(150);
+    expect(f.writeOffset).toHaveBeenCalledExactlyOnceWith(1150);
+  });
+
+  it('does not release at an edge while a finger holds the list', () => {
+    const f = setup();
+    f.element.addEventListener('touchstart', f.compensation.onTouchStart);
+    f.element.dispatchEvent(new TouchEvent('touchstart'));
+    f.compensation.defer(1200);
+    f.element.scrollTop = 0;
+    expect(f.compensation.observeOffset(0, true)).toBe(200);
+    vi.advanceTimersByTime(1000);
+    expect(f.writeOffset).not.toHaveBeenCalled();
+    f.element.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+    vi.advanceTimersByTime(150);
     expect(f.writeOffset).toHaveBeenCalledExactlyOnceWith(200);
   });
 
@@ -128,12 +170,13 @@ describe('gesture scroll compensation', () => {
     expect(f.writeOffset).not.toHaveBeenCalled();
   });
 
-  it('releases negative compensation at the physical bottom', () => {
+  it('releases negative compensation once settled at the physical bottom', () => {
     const f = setup();
     f.wheel();
     f.compensation.defer(800);
     f.element.scrollTop = 4500;
     expect(f.compensation.observeOffset(4500, true)).toBe(4300);
+    vi.advanceTimersByTime(150);
     expect(f.shift()).toBe(0);
     expect(f.writeOffset).toHaveBeenCalledExactlyOnceWith(4300);
   });
@@ -193,6 +236,8 @@ describe('gesture scroll compensation', () => {
     expect(f.writeOffset).not.toHaveBeenCalled();
     f.element.scrollTop = 0;
     expect(f.compensation.observeOffset(0, true)).toBe(200);
+    expect(f.writeOffset).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(150);
     expect(f.writeOffset).toHaveBeenCalledExactlyOnceWith(200);
   });
 
@@ -211,6 +256,9 @@ describe('gesture scroll compensation', () => {
       expect(f.shift()).toBe(target - 1000);
 
       f.element.scrollTop = settled;
+      // Returning from overscroll is still native motion.
+      vi.advanceTimersByTime(150);
+      expect(f.writeOffset).not.toHaveBeenCalled();
       vi.advanceTimersByTime(150);
       expect(f.writeOffset).toHaveBeenCalledExactlyOnceWith(expected);
       expect(f.shift()).toBe(0);
