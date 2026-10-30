@@ -110,9 +110,7 @@ export function getDefaultSemanticColorTokens(
     failure: tokenReference('red'),
     'priority-urgent': tokenReference('orange'),
     'task-status-not-started': tokenReference('content-1'),
-    'task-status-in-progress': tokenReference(
-      mode === 'dark' ? 'amber' : 'yellow'
-    ),
+    'task-status-in-progress': tokenReference('amber'),
     'task-status-in-review': tokenReference('violet'),
     'task-status-completed': tokenReference('green'),
     'task-status-canceled': tokenReference('content-1'),

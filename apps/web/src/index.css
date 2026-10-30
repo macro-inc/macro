@@ -736,7 +736,6 @@ body.tauri-ios {
 }
 
 [data-theme-light='true'] {
-  --color-task-status-in-progress: var(--color-yellow);
   /* Neutral borders. */
   --border-primary: oklch(0 0 0 / 16%);
   --border-secondary: oklch(0 0 0 / 12%);

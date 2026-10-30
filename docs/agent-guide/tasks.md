@@ -99,10 +99,12 @@ Both icons sit before the title on desktop and narrow rows. Their pickers replac
 the separate Status/Priority columns and duplicate trailing mobile pills; Assignees
 and Project stay on the right. Empty priority shows a circled minus, Urgent shows a
 filled exclamation badge, and Completed uses a filled check-circle.
+The status edit menu uses 16px status icons on desktop and mobile.
 Each status has its own `task-status-*` theme color, shared by task icons and
 group-header tints. In the theme editor's **Task statuses** section, change a status
 color and verify its icons and group-header tints update together in List and Gantt,
 while Board column icons match and global warning/success colors stay unchanged.
+In Progress defaults to amber in both light and dark themes.
 
 Click a task row or favorite to replace the list with the editable task document. Its top
 bar shows the originating task tab as a text-only return breadcrumb,

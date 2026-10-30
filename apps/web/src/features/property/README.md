@@ -21,6 +21,8 @@ board cards, group and column headers, and pickers: a circled minus for no prior
 dashed stack for no project, and a dashed person for no assignees. Other empty
 properties retain the dashed circle. Keep these state indicators static and
 readable in compact rows.
+Status option icons default to 16px in both desktop and mobile editors;
+compact displays can override the size explicitly.
 
 ## Side-panel collections
 
