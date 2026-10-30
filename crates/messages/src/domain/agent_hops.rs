@@ -5,11 +5,10 @@ use channel_sender::ChannelSender;
 #[cfg(test)]
 mod test;
 
-/// Most agent-to-agent hops one person's message can set off. Three covers
-/// a handoff, the answer back, and one more round; a fourth agent turn with
-/// nobody stepping in is far likelier a loop than a plan, and every hop
-/// bills the attributed user.
-pub const MAX_AGENT_HOPS: usize = 3;
+/// Most agent-to-agent hops one person's message can set off: 64 round
+/// trips between two agents. The limit exists to stop runaway loops between
+/// agents with nobody stepping in; every hop bills the attributed user.
+pub const MAX_AGENT_HOPS: usize = 128;
 
 /// Agent hops leading to the last of `senders`, a thread read oldest first
 /// through the prompt: each change of bot author since the last message by

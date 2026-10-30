@@ -1445,20 +1445,27 @@ async fn unattributed_or_unmentioned_bot_messages_do_not_trigger() {
 }
 
 #[tokio::test]
-async fn agents_mentioning_each_other_stop_after_three_hops_without_a_person() {
-    let person = ChannelSender::new_from_user(user());
+async fn agents_mentioning_each_other_stop_at_the_hop_limit_without_a_person() {
     let macro_ai = ChannelSender::new_from_bot(bot_id::MACRO_NEW_BOT_ID);
     let cursor = ChannelSender::new_from_bot(bot_id::CURSOR_BOT_ID);
-    let thread = vec![
-        thread_message(100, person, "@macro hand this to cursor"),
-        thread_message(101, macro_ai.clone(), "@cursor please fix it"),
-        thread_message(102, cursor.clone(), "@macro done, check it"),
-        thread_message(103, macro_ai.clone(), "@cursor one more change"),
-    ];
-    for (read, sender, target, triggers) in [
-        (3, macro_ai.clone(), bot_id::CURSOR_BOT_ID, true),
-        (4, cursor.clone(), bot_id::MACRO_NEW_BOT_ID, false),
-    ] {
+    // The agent posting hop `n`, alternating from Macro's first handoff.
+    let agent = |n: usize| {
+        if n % 2 == 1 {
+            (macro_ai.clone(), bot_id::CURSOR_BOT_ID)
+        } else {
+            (cursor.clone(), bot_id::MACRO_NEW_BOT_ID)
+        }
+    };
+    let thread: Vec<ThreadMessage> = std::iter::once(thread_message(
+        100,
+        ChannelSender::new_from_user(user()),
+        "@macro go",
+    ))
+    .chain((1..=MAX_AGENT_HOPS).map(|n| thread_message(100 + n as u128, agent(n).0, "over to you")))
+    .collect();
+    for (hop, triggers) in [(MAX_AGENT_HOPS, true), (MAX_AGENT_HOPS + 1, false)] {
+        let (sender, target) = agent(hop);
+        let read = hop;
         let mut posted = message(vec![mention_of(target)]);
         posted.sender = sender;
         posted.triggered_by = Some(user().to_string());
@@ -1483,6 +1490,6 @@ async fn agents_mentioning_each_other_stop_after_three_hops_without_a_person() {
         .evaluate(&posted)
         .await
         .unwrap();
-        assert_eq!(!events.is_empty(), triggers, "after {read} thread messages");
+        assert_eq!(!events.is_empty(), triggers, "hop {hop}");
     }
 }

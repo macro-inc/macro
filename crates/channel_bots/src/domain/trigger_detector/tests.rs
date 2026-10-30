@@ -220,7 +220,7 @@ async fn attributed_bots_require_an_explicit_other_bot_mention_and_current_acces
 }
 
 #[tokio::test]
-async fn agents_handing_a_thread_back_and_forth_stop_after_three_hops() {
+async fn agents_handing_a_thread_back_and_forth_stop_at_the_hop_limit() {
     let by = |id: u128, bot: bot_id::BotId| {
         let mut reply = message(id, Some(Uuid::from_u128(1)), "over to you");
         reply.sender_id = channel_sender::ChannelSender::new_from_bot(bot);
@@ -231,14 +231,22 @@ async fn agents_handing_a_thread_back_and_forth_stop_after_three_hops() {
         }];
         reply
     };
-    let earlier = vec![
-        by(2, bot_id::MACRO_AI_BOT_ID),
-        by(3, bot_id::CURSOR_BOT_ID),
-        by(4, bot_id::MACRO_AI_BOT_ID),
-    ];
-    for (read, expected) in [(2, true), (3, false)] {
-        let trigger = by(10, bot_id::CURSOR_BOT_ID);
-        let mut replies = earlier[..read].to_vec();
+    for (hop, expected) in [
+        (messages::domain::agent_hops::MAX_AGENT_HOPS, true),
+        (messages::domain::agent_hops::MAX_AGENT_HOPS + 1, false),
+    ] {
+        // Cursor posts hop `hop`; Macro and Cursor alternate before it.
+        let mut replies: Vec<_> = (1..hop)
+            .map(|n| {
+                let bot = if (hop - n) % 2 == 0 {
+                    bot_id::CURSOR_BOT_ID
+                } else {
+                    bot_id::MACRO_AI_BOT_ID
+                };
+                by(1 + n as u128, bot)
+            })
+            .collect();
+        let trigger = by(10_000, bot_id::CURSOR_BOT_ID);
         replies.push(trigger.clone());
         let mut api = MockMessageServiceApi::new();
         configure_reads(
@@ -254,7 +262,7 @@ async fn agents_handing_a_thread_back_and_forth_stop_after_three_hops() {
         assert_eq!(
             !detector.detect(&event(&trigger)).await.is_empty(),
             expected,
-            "after {read} agent replies"
+            "hop {hop}"
         );
     }
 }
