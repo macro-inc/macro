@@ -115,7 +115,9 @@ const opensearchDomain = new aws.opensearch.Domain(
       // Enbale master nodes for prod
       dedicatedMasterCount: stack === 'prod' ? 3 : undefined,
       dedicatedMasterEnabled: stack === 'prod',
-      dedicatedMasterType: stack === 'prod' ? 'r7g.large.search' : undefined,
+      // Masters only hold cluster state (3 data nodes, ~220 shards); 8 GiB
+      // meets AWS master sizing here. See docs/opensearch-cost-savings.md.
+      dedicatedMasterType: stack === 'prod' ? 'm7g.large.search' : undefined,
       zoneAwarenessEnabled: stack === 'prod',
 
       zoneAwarenessConfig:
