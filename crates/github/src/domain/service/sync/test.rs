@@ -2362,6 +2362,39 @@ async fn pr_merged_credits_the_linked_macro_user_who_merged() {
 }
 
 #[tokio::test]
+async fn pr_merged_by_an_unlinked_github_account_is_not_credited() {
+    let (service, doc_service) = make_sync_service_with_repo_and_doc_service(
+        StubSyncRepo::new().with_github_link("333", "macro|merger@example.com"),
+    );
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "closed",
+            "pull_request": {
+                "number": 42,
+                "title": "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "merged": true
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 },
+            "sender": { "login": "someone-else", "id": 444 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let status_calls = doc_service.task_status_calls();
+    assert_eq!(status_calls.len(), 1);
+    assert_eq!(status_calls[0].status, "Completed");
+    assert!(status_calls[0].credited_user.is_none());
+}
+
+#[tokio::test]
 async fn pr_closed_without_merge_sets_task_status_todo() {
     let (service, doc_service) = make_sync_service_with_doc_service();
     let event = ValidatedGithubWebhookEvent::new(

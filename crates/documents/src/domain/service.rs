@@ -2190,7 +2190,11 @@ impl<
         })
     }
 
-    #[tracing::instrument(skip(self, credited_user), fields(credited = credited_user.is_some()))]
+    #[tracing::instrument(
+        skip(self, credited_user),
+        fields(credit_requested = credited_user.is_some()),
+        err
+    )]
     async fn update_task_status(
         &self,
         entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,

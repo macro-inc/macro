@@ -844,7 +844,7 @@ impl<
         tracing::trace!(
             doc_count = doc_ids.len(),
             status,
-            credited = credited_user.is_some(),
+            linked_user = credited_user.is_some(),
             "updating task statuses"
         );
 

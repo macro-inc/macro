@@ -63,7 +63,7 @@ use email::{
 };
 use entity_access::{
     domain::{
-        models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel},
+        models::{EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, ViewAccessLevel},
         service::EntityAccessServiceImpl,
     },
     outbound::PgAccessRepository,
@@ -332,6 +332,16 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
             .map_err(Into::into)
     }
 
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            task_id = %access.entity().entity_id,
+            status,
+            unchanged = tracing::field::Empty,
+            credited = tracing::field::Empty
+        ),
+        err
+    )]
     async fn update_task_status(
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
@@ -350,11 +360,16 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
             .await?;
         // PR edits and comments re-send In Review; an unchanged status publishes nothing.
         if current == Some(PropertyValue::SelectOption(vec![status_option.uuid()])) {
+            tracing::Span::current().record("unchanged", true);
             return Ok(());
         }
         let access =
             credited_task_edit_receipt(self.entity_access_service.as_ref(), access, credited_user)
                 .await;
+        tracing::Span::current().record(
+            "credited",
+            matches!(access.auth(), EntityAccessAuth::Authenticated(_)),
+        );
         self.properties
             .set_entity_property(
                 &access,
