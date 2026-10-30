@@ -52,6 +52,7 @@ pub fn routine_toolset() -> AsyncToolCollection<RoutineToolContext> {
 )]
 pub struct CreateRoutine {
     /// Name, triggers and steps.
+    #[serde(deserialize_with = "crate::domain::deserialize_configuration")]
     pub configuration: RoutineConfiguration,
 }
 impl ToolAnnotated for CreateRoutine {
@@ -157,6 +158,7 @@ pub enum RoutineChange {
     /// Replace the saved name, triggers and steps. Read first; activation is preserved.
     Configuration {
         /// Complete replacement configuration.
+        #[serde(deserialize_with = "crate::domain::deserialize_configuration")]
         configuration: RoutineConfiguration,
     },
 }

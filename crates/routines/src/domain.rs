@@ -183,6 +183,40 @@ pub struct RoutineApp {
     pub name: String,
 }
 
+/// A configuration in the current shape, or in the single-agent shape callers
+/// used before steps (`instructions`, `target`, `schedule`), which becomes one
+/// agent step on that schedule. The advertised schema is the current one.
+pub fn deserialize_configuration<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<RoutineConfiguration, D::Error> {
+    use serde::de::Error;
+    let mut value = Value::deserialize(deserializer)?;
+    if let Value::Object(fields) = &mut value
+        && !fields.contains_key("steps")
+        && let Some(instructions) = fields.remove("instructions")
+    {
+        let mut agent = serde_json::json!({ "type": "agent", "instructions": instructions });
+        if let Some(Value::Object(target)) = fields.remove("target") {
+            match target.get("type").and_then(Value::as_str) {
+                Some("model") => {
+                    agent["model"] = target.get("model").cloned().unwrap_or(Value::Null);
+                }
+                Some("agent") => {
+                    agent["agent"] = serde_json::json!({ "bot_id": target.get("agentId") });
+                }
+                _ => {}
+            }
+        }
+        fields.insert("steps".into(), Value::Array(vec![agent]));
+        if !fields.contains_key("triggers")
+            && let Some(schedule) = fields.remove("schedule")
+        {
+            fields.insert("triggers".into(), Value::Array(vec![schedule]));
+        }
+    }
+    RoutineConfiguration::deserialize(value).map_err(D::Error::custom)
+}
+
 /// Steps travel as a JSON string so the tool's input schema stays flat: some
 /// providers reject recursive or free-form schemas. An array is accepted too.
 mod steps_json {
