@@ -110,6 +110,9 @@ export type EmailThreadState = {
   markThreadUnread: () => boolean;
   /** Re-marks the thread read after a mark-unread. */
   markThreadRead: () => boolean;
+  /** True when a sender other than the viewer exists for the sender actions
+   *  to target. False on a thread the viewer sent alone. */
+  canActOnSender: Accessor<boolean>;
   blockSender: () => boolean;
   markSenderSignal: () => boolean;
   markSenderNoise: () => boolean;

@@ -5,6 +5,7 @@ import {
   makeCopyLinkAction,
 } from '@app/features/next-soup/actions';
 import type { ComposeTaskProps } from '@app/features/task-composer/core/types';
+import { t } from '@app/lib/i18n';
 import { useNavigate } from '@app/lib/split-router';
 import {
   projectDetailRoute,
@@ -17,10 +18,12 @@ import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
+import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
+import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
 import StackIcon from '@icon/system/regular/stack.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
@@ -255,19 +258,28 @@ function ProjectDetailHost(props: ProjectDetailProps) {
             )}
           </Show>
         }
-        navigation={
+        navigation={(compact) => (
           <Tabs
-            aria-label="Project sections"
+            aria-label={t('tabs.projectSections')}
             touch="inset"
             class="shrink-0"
             options={[
-              { value: 'overview', label: 'Overview' },
-              { value: 'tasks', label: 'Tasks' },
+              {
+                value: 'overview',
+                label: t('tabs.project-overview'),
+                icon: compact() ? SquaresFourIcon : undefined,
+              },
+              {
+                value: 'tasks',
+                label: t('tabs.project-tasks'),
+                icon: compact() ? getIconConfig('task').icon : undefined,
+              },
             ]}
+            iconOnly={compact()}
             value={props.route.section}
             onChange={section}
           />
-        }
+        )}
       >
         <Show when={source.project()}>
           {(project) => (

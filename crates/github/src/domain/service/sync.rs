@@ -17,11 +17,14 @@ use crate::domain::{
         GithubInstallationAccessToken, GithubInstallationSetupAction, GithubKey,
         GithubPullRequestDetails, GithubPullRequestLabel, GithubPullRequestReview,
         GithubPullRequestReviewState, GithubPullRequestStatus, GithubPullRequestUser,
-        GithubWebhookEventType, InstallationState, MacroTaskId, ResolvedTeamTaskReference,
-        TeamTaskReference, ValidatedGithubWebhookEvent, latest_reviews, sign_installation_state,
-        verify_installation_state,
+        GithubWebhookEventType, GithubWebhookReceived, InstallationState, MacroTaskId,
+        ResolvedTeamTaskReference, TeamTaskReference, ValidatedGithubWebhookEvent, latest_reviews,
+        sign_installation_state, verify_installation_state,
     },
-    ports::{GithubSyncClient, GithubSyncRealtime, GithubSyncRepo, GithubSyncService},
+    ports::{
+        GithubSyncClient, GithubSyncRealtime, GithubSyncRepo, GithubSyncService,
+        GithubWebhookPublisher,
+    },
 };
 use documents::domain::{models::DocumentError, ports::DocumentService};
 use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
@@ -78,6 +81,7 @@ pub struct GithubSyncServiceImpl<
     realtime: P,
     repo: R,
     pub(crate) client: C,
+    webhook_publisher: Option<Arc<dyn GithubWebhookPublisher>>,
 }
 
 impl<
@@ -107,7 +111,32 @@ impl<
             realtime,
             repo,
             client,
+            webhook_publisher: None,
         }
+    }
+
+    /// Publish every verified delivery for other domains, such as routines.
+    pub fn with_webhook_publisher(mut self, publisher: impl GithubWebhookPublisher) -> Self {
+        self.webhook_publisher = Some(Arc::new(publisher));
+        self
+    }
+
+    async fn publish_webhook_event(
+        &self,
+        webhook_event: &ValidatedGithubWebhookEvent,
+    ) -> Result<(), GithubError> {
+        let Some(publisher) = &self.webhook_publisher else {
+            return Ok(());
+        };
+        let Some(delivery) = GithubWebhookReceived::from_delivery(
+            webhook_event.delivery_id.clone(),
+            webhook_event.event_type.clone(),
+            &webhook_event.payload,
+        ) else {
+            tracing::debug!("skipping publication of a delivery without an installation");
+            return Ok(());
+        };
+        publisher.publish_received(delivery).await
     }
 }
 
@@ -919,7 +948,9 @@ impl<
         let action = webhook_event.action();
         tracing::info!(event_type=?event_type, action, "processing github webhook event");
 
-        match event_type {
+        // Routines subscribe to every delivery, so sync failing must not keep
+        // one from being published.
+        let synced = match event_type {
             GithubWebhookEventType::Unknown(ref name) => {
                 tracing::debug!(event_type=%name, "skipping unknown event type");
                 Ok(())
@@ -1008,7 +1039,9 @@ impl<
                     Ok(())
                 }
             },
-        }
+        };
+        let published = self.publish_webhook_event(webhook_event).await;
+        synced.and(published)
     }
 
     #[tracing::instrument(skip(self), fields(macro_user_id = %macro_user_id), err)]

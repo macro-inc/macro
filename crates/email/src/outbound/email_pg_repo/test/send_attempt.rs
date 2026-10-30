@@ -501,13 +501,16 @@ async fn cancellation_repairs_draft_only_thread_metadata(
         .unwrap();
     assert!(!before.inbox_visible);
     assert!(before.latest_inbound_message_ts.is_none());
+    assert!(before.latest_non_spam_message_ts.is_none());
 
     repo.cancel_send(&actor(), link(), attempt).await?;
     let restored = crate::outbound::email_pg_repo::thread::thread_by_id(&pool, thread_id)
         .await?
         .unwrap();
-    assert!(restored.inbox_visible);
-    assert!(restored.latest_inbound_message_ts.is_some());
+    // The restored draft is back in Drafts and All, but a thread with no
+    // received mail stays out of the inbox.
+    assert!(!restored.inbox_visible);
+    assert!(restored.latest_inbound_message_ts.is_none());
     assert!(restored.latest_non_spam_message_ts.is_some());
     assert!(restored.latest_outbound_message_ts.is_none());
     Ok(())

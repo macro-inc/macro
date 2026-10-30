@@ -144,9 +144,10 @@ or **Unpin from title**. Pinning adds the property to the title row; unpinning k
 its saved value and the side-panel row. The title pill's hover card also offers
 **Unpin** as a filled icon-only button with a gap: beside the value in a row,
 or beside the key above a full-width divider in a column.
-Status, Priority, and Assignees are pinned by default, with Project when
-enabled. Unpinning a default preserves the other pins, and clearing all pins stays
-cleared after reopening. The empty Project placeholder can also be pinned or
+Status, Priority, Assignees, and Due Date are pinned by default, with Project when
+enabled. Defaults apply only when the task has no saved pin list; customized pins
+stay unchanged. Unpinning a default preserves the other pins, and clearing all pins
+stays cleared after reopening. The empty Project placeholder can also be pinned or
 unpinned without creating an assignment; its pin follows the real assignment when
 one is saved. Builtin task properties cannot be deleted from the title or side panel.
 
@@ -630,7 +631,10 @@ Use existing PRs and do not modify hosted data.
 ## Create a task
 
 On touch devices, task creation opens in a bottom sheet with a drag handle and
-scrollable, keyboard-aware content. Its glass pane has broad screen-scaled
+scrollable, keyboard-aware content. It opens at 70% of the screen, with the
+description filling the room above the properties; the keyboard shortens it.
+Opening it from `+ Task` or Home's `+ New` raises the keyboard with the title
+focused and the caret after any text. Its glass pane has broad screen-scaled
 corners, an 8px outer inset, and a blurred backdrop, matching the create and
 filter sheets. Its header has `Continue editing in split` on the left and
 `Create Task` on the right, with a text-only `Clear` 32px to its left once the
@@ -640,11 +644,23 @@ top of the sheet (with a solid background only while pinned over content), so
 `Create Task` stays in reach. The properties sit on a single line that scrolls
 horizontally, with the `Share with <team name>` switch below them. The sheet
 has no `Create More` switch and no similar-tasks list. `Create Task` shows no
-keyboard shortcut on touch. While the keyboard is up, the tag picker opens
-above its trigger so its search results stay above the keyboard. Desktop uses
+keyboard shortcut on touch. Assignees, Project, Tags, and Due Date open their
+pickers in a full-height sheet stacked over the composer (`PickerSheet`), with
+Cancel, the property's name, and Done: picks apply on Done, Cancel or the
+backdrop drop them, picking keeps the keyboard up, and a single-choice Project
+or a date applies its pick at once. Status and Priority keep their dropdowns,
+which leave focus in the title. Tapping a pill doesn't take focus, and closing
+a picker sheet returns it to the title or description with its caret, so the
+keyboard stays up throughout. Desktop uses
 the centered composer dialog. Both layouts are views in
 `apps/web/src/features/task-composer/views` composing the shared
 `TaskComposer` parts.
+
+After creation, the `Task created` toast shows an `Open` action. Touch devices
+omit `Open (New Split)`; desktop keeps both actions. Either action immediately dismisses the toast before opening
+the task. Verify the toast at phone and tablet widths with touch
+emulation: the message and action fit without clipping, and `Open` visits the
+created task in place.
 
 1. Click the `Task` button (or `Create` → `Task T`, or keyboard `c` then `t`).
 2. A dialog opens with the title contenteditable focused (placeholder `New task`), plus
@@ -665,6 +681,10 @@ the centered composer dialog. Both layouts are views in
 3. `type_text` the title, then press **Ctrl+Enter** to create, or tap `Create Task` on
    touch (the button enables once there is a title). Dialog also offers `Continue editing in split` to open the
    task as a full document.
+   Creating shows a `Task created` toast with `Open` (and `Open (New Split)` on
+   desktop) as soon as the server returns, then copies the task link in the
+   background. A denied or prompted clipboard write never delays or replaces
+   that toast.
 
 The property row adapts when the launching pane supplies a task-composer preset.
 The app shell's creation-context provider snapshots the focused pane's preset
@@ -794,9 +814,11 @@ shows the Projects return breadcrumb and the project name, with the same Share
 and side-panel controls as task detail. `Project actions` (the dots button
 after the name) opens the row context menu's entries for this project,
 including `Delete` for its owner. Choose Overview or Tasks using the inset
-tabs in that top bar. In Tasks, an outlined circular search button expands into
-a focused `Search in <project name>` field. Close or Escape clears the query and
-restores focus to the button. The task toolbar stays the same height and scrolls
+tabs in that top bar; below 600px they collapse to icons, with tooltips on
+desktop, and the project name truncates instead. In Tasks, an outlined
+circular search button expands into a focused `Search in <project name>` field.
+Close or Escape clears the query and restores focus to the button. The task
+toolbar stays the same height and scrolls
 horizontally in narrow splits, keeping list controls, Add existing tasks, and New
 task accessible. Opening an associated task extends the breadcrumb trail; choose
 the project breadcrumb to return, or Projects to restore the collection and its
@@ -957,10 +979,11 @@ the server returns the new item ID. Use disposable tasks/folders for these check
 
 ## View and edit task properties
 
-An open task shows Status, Priority, and Assignees as property pills below its title. Task
-mentions and document references also show the same three pills in their hover-card preview,
-including properties that do not have a value yet. Click a preview pill to edit it without
-opening the task; the property picker keeps the preview open while you make a selection.
+An open task shows its pinned properties below the title, with Status, Priority,
+Assignees, and Due Date by default, plus Project when enabled. Task mentions and
+document references show Status, Priority, and Assignees in their hover-card preview,
+including properties that do not have a value yet. Click a preview pill to edit it
+without opening the task; the property picker keeps the preview open while you make a selection.
 Users with view or comment access see the same pills read-only.
 
 Each GitHub pull request linked to an open task shows a pill beside its property pills

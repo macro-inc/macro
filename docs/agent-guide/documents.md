@@ -150,9 +150,9 @@ Long keys wrap without displacing the Unpin button.
 **Delete from item** stays below, where removal is allowed (removes the
 assignment without deleting the shared property definition). Task builtins cannot
 be deleted from these pills. Pins are saved with the document, including an
-explicitly empty pin list. Tasks initially show Status, Priority, Assignees, and
-Project when enabled; changing pins keeps the other defaults unless they are
-explicitly unpinned.
+explicitly empty pin list. Tasks initially show Status, Priority, Assignees, Due Date,
+and Project when enabled. Defaults apply only without a saved pin list; customized
+pins stay unchanged. Changing pins keeps the other defaults unless explicitly unpinned.
 
 Markdown code blocks have a **Copy Code** button in both editable and read-only
 views. Successful copies briefly animate the icon to a solid green check-circle;
@@ -2424,6 +2424,8 @@ nodes — use the snapshot itself to verify content. For formatting checks, run
 
 Body placeholder advertises: `/` for block commands, `@` to reference files, `;` for snippets.
 Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote).
+Pasting multiple paragraphs inside a quote keeps those paragraphs quoted;
+see [block formatting](channels.md#block-formatting) for verification.
 Imported Markdown recognizes bare URLs with the same shared matcher as messages;
 code and escaped URLs remain literal. Remove link persists through Markdown and
 editor-state saves. See [message links](channels.md#message-links) for verification.

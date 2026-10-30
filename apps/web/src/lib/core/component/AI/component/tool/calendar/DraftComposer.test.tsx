@@ -1,4 +1,4 @@
-import type { EventFormProps } from '@app/features/calendar/components/composer/EventForm';
+import type { EventFormProps } from '@app/features/calendar/components/composer/event-form-state';
 import type { VisibleCalendar } from '@queries/calendar/calendars';
 import type { CreateCalendarEvent } from '@service-cognition/generated/tools/types';
 import type { Link } from '@service-email/generated/schemas';

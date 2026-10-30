@@ -1,5 +1,6 @@
 import { useCrmContactMentionSource } from '@app/features/crm/record-adapter';
 import { externalChatApi } from '@app/features/external-chat/queries/production-api';
+import { useRoutineMentionSource } from '@app/features/routines/routine-mentions';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { BlockName } from '@core/block';
@@ -293,6 +294,16 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       }));
   });
 
+  // Mentioning a routine in a channel shares it with the channel's members.
+  const routines = useRoutineMentionSource(
+    searchTerm,
+    () =>
+      !hasCustomEntities() &&
+      props.block === 'channel' &&
+      props.menu.isOpen() &&
+      (!props.sources || props.sources.includes('routines'))
+  );
+
   const dateOptions = useDateSearch({ query: searchTerm });
   const dates = createLazyMemo((): DateMentionItem[] => {
     return dateOptions().map(
@@ -382,6 +393,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       ...(sourceEnabled('documents') ? (docs() ?? []) : []),
       ...(sourceEnabled('channels') ? (channels() ?? []) : []),
       ...externalChats(),
+      ...routines(),
       ...(sourceEnabled('agentSessions') ? agentSessions() : []),
       ...(sourceEnabled('companies') ? (companies() ?? []) : []),
       ...(sourceEnabled('emails') ? (emails() ?? []) : []),
@@ -409,6 +421,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
             (sourceEnabled('agentSessions') ? agentSessions().length : 0) +
             (sourceEnabled('channels') ? channelsMention.totalCount() : 0) +
             externalChats().length +
+            routines().length +
             (sourceEnabled('companies')
               ? (companyMention?.totalCount() ?? 0)
               : 0) +
@@ -494,6 +507,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         label: 'WhatsApp chats',
         getData: externalChats,
         getFullCount: () => externalChats().length,
+      },
+      {
+        id: 'routines',
+        label: 'Routines',
+        getData: routines,
+        getFullCount: () => routines().length,
       },
       {
         id: 'agentSessions',

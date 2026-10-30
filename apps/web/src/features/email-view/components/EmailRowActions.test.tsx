@@ -39,6 +39,7 @@ describe('email row actions', () => {
           starred={false}
           archived={false}
           canArchive
+          canUnarchive
           pending={false}
           onStar={onStar}
           onArchive={onArchive}
@@ -71,6 +72,7 @@ describe('email row actions', () => {
         starred={starred()}
         archived={archived()}
         canArchive={canArchive()}
+        canUnarchive
         pending={pending()}
         onStar={() => setStarred(!starred())}
         onArchive={() => setArchived(!archived())}
@@ -113,6 +115,7 @@ describe('email row actions', () => {
           starred={false}
           archived={false}
           canArchive
+          canUnarchive
           pending={false}
           onStar={() => {}}
           onArchive={() => {}}

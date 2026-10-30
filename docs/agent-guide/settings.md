@@ -113,8 +113,10 @@ under that action, including the account catalog's durable refresh.
 
 After onboarding, an eligible desktop app user sees **Enable Desktop
 Notifications**. Select **Enable** to request permission through the native
-notification provider; macOS uses its system permission dialog. The web prompt
-continues to say **Enable Browser Notifications** and uses browser permissions.
+notification provider; macOS uses its system permission dialog. The Android app
+says **Enable Notifications** and requests the Android notification permission
+through the same native provider. The web prompt says **Enable Browser
+Notifications** and uses browser permissions.
 Select **Hide** to dismiss the prompt. It waits in the same region as other
 prompts, one card at a time.
 
@@ -610,7 +612,8 @@ dot sits beside the name.
 The search filters every row by name, description and category and also searches
 the catalog. **Add custom** sits beside it. Gmail, Google Calendar and Google
 Sheets are hidden from the catalog because Macro syncs email and calendars
-natively. Scrolling toward the end loads the next catalog page; a failed page
+natively. LinkedIn never appears in the catalog or its search: the backend
+hides it. Scrolling toward the end loads the next catalog page; a failed page
 keeps loaded apps and offers Retry.
 Overlaid catalog apps (the `mcp_overlays` table, served at
 `GET /pipedream/mcp/overlays`) look the same in the catalog but never open

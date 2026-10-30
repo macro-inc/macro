@@ -22,8 +22,9 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   create/dial/prompt against the live harness service.
 - `src/tui.rs` (`src/tui/`): the control panel itself (registration, agents,
   sessions, config form, logs).
-- `src/herdr.rs` (`src/herdr/`): native herdr pane integration — only compiled
-  `#[cfg(unix)]`.
+- `src/herdr.rs` (`src/herdr/`): native herdr integration — only compiled
+  `#[cfg(unix)]`. `src/herdr/cli.rs` picks herdr 0.9 (`herdr`) or herdr-core
+  (`hc`) by environment; both stay supported.
 - `src/executable.rs`: `PATH` lookup; every spawn of a bare command name goes
   through `launchable`, which finds Windows `.cmd` shims (`npm`, `npx`).
 - `install/`: `install.sh` and `install.ps1`, the one-line installers the docs
@@ -103,6 +104,9 @@ external chat replies depend on it. Direct session controls still mint IDs.
   Windows-breaking code there without a cfg gate.
 - The ACP child is killed with its whole tree: a process group on Unix, a Job
   Object on Windows (`src/outbound/acp_process/job.rs`).
+- Every herdr call goes through the `HerdrCli` facade; add a capability to both
+  `cli/legacy.rs` and `cli/hc.rs`. herdr-core has no agent registry or
+  worktrees, and status comes only from OSC 7501 (README.md, "Herdr versions").
 - macrod never pulls into the operator's working branch — new herdr worktrees
   start from a fresh fetch of `origin/main` (see README.md).
 - Only release builds update themselves: the tag workflow compiles the tag in
