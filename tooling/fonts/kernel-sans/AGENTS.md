@@ -27,7 +27,8 @@ weight, compiles CFF `.otf`, TrueType `.ttf` and `.woff2`, then matches the
 - Add an alternate: register `name.ss0N`, `name.zero` or `name.case`;
   `features.py` writes the substitution. Name new stylistic sets in
   `STYLISTIC_SET_NAMES`.
-- Add kerning: classes and pairs in `kerning.py` (values at Regular).
+- Kerning: classes in `kerning.py`; values are measured from the outlines at
+  each weight. Tune with `FACTOR`, or `TWEAKS` for one pair of classes.
 - Proof: `python3 build.py --proof --only <module> --out /tmp/proofs` or
   `python3 build.py --zoom a,b --weights 400,800`.
 - Check variable compatibility: `python3 build.py --compat --only <module>`.
