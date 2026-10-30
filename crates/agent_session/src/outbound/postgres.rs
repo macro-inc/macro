@@ -10,6 +10,7 @@ use sqlx::types::Json;
 mod test;
 
 mod agent_conversation;
+mod auto_archive;
 mod pull_request;
 mod queue;
 mod recovery;
