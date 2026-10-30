@@ -571,6 +571,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             favorites_service,
             entity_access_service.clone(),
         ),
+        access_request_tool_context: ai_tools::build_access_request_tool_context(
+            pool.clone(),
+            entity_access_service.clone(),
+        ),
         initiative_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         crm_tool_context,

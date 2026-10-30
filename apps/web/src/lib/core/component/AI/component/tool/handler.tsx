@@ -15,6 +15,10 @@ import {
 import { createMemo, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
+  readEntityAccessRequestHandler,
+  requestEntityAccessHandler,
+} from './AccessRequests';
+import {
   createAgentSessionHandler,
   manageAgentSessionHandler,
   readAgentSessionSharingHandler,
@@ -357,6 +361,8 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   SendEmail: sendEmailHandler,
   SetSenderPolicy: setSenderPolicyHandler,
   SetFavorite: setFavoriteHandler,
+  RequestEntityAccess: requestEntityAccessHandler,
+  ReadEntityAccessRequest: readEntityAccessRequestHandler,
   SetEntityProperty: setEntityPropertyHandler,
   BulkSetEntityPropertyOptions: bulkSetEntityPropertyOptionsHandler,
   Subagent: subagentHandler,

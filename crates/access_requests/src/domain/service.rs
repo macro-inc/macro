@@ -223,39 +223,83 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
         entity: ShareEntity,
         args: RequestAccess,
     ) -> Result<AccessRequest, RequestError> {
+        self.write_request(
+            user,
+            entity,
+            args.requested_level,
+            Supersedes::Revision(args.revision),
+        )
+        .await
+        .map(|submitted| submitted.request)
+    }
+
+    /// Request `level` for an agent acting on the requester's word. It supersedes
+    /// the requester's own latest request without an observed revision, keeps
+    /// every cooldown, and names who reviews it when the requester can already
+    /// see the item.
+    #[tracing::instrument(name = "access_requests.request", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type, requested_level = ?level), err(level = Level::DEBUG))]
+    pub async fn request(
+        &self,
+        user: MacroUserIdStr<'static>,
+        entity: ShareEntity,
+        level: AccessLevel,
+    ) -> Result<SubmittedRequest, RequestError> {
+        self.write_request(user, entity, level, Supersedes::Latest)
+            .await
+    }
+
+    async fn write_request(
+        &self,
+        user: MacroUserIdStr<'static>,
+        entity: ShareEntity,
+        requested_level: AccessLevel,
+        supersedes: Supersedes,
+    ) -> Result<SubmittedRequest, RequestError> {
         let (mut tx, level) = self.begin_request(&user, entity).await?;
-        if reviewers(tx.facts()).is_empty() || reviewers(tx.facts()).contains(&user) {
+        let reviewers = reviewers(tx.facts());
+        if reviewers.is_empty() || reviewers.contains(&user) {
             return Err(RequestError::Forbidden);
         }
         if !supported_levels(entity.entity_type, tx.facts().file_type.as_deref())
-            .contains(&args.requested_level)
-            || level.is_some_and(|level| args.requested_level <= level)
+            .contains(&requested_level)
+            || level.is_some_and(|level| requested_level <= level)
         {
             return Err(RequestError::InvalidLevel);
         }
+        // Callers without access never learn who owns the item.
+        let reviewers = if level.is_some() {
+            reviewers
+        } else {
+            Vec::new()
+        };
         let previous = tx.mine(&user).await?;
         let now = self.clock.now();
         if let Some(previous) = &previous {
             if previous.status == RequestStatus::Pending
-                && previous.requested_level == args.requested_level
+                && previous.requested_level == requested_level
             {
-                return Ok(previous.clone());
+                return Ok(SubmittedRequest {
+                    request: previous.clone(),
+                    reviewers,
+                });
             }
             if let Some(until) = previous.retry_after
                 && now < until
             {
                 return Err(RequestError::Cooldown(until));
             }
-            if args.revision != Some(previous.revision) {
+            if let Supersedes::Revision(revision) = supersedes
+                && revision != Some(previous.revision)
+            {
                 return Err(RequestError::Conflict);
             }
-        } else if args.revision.is_some() {
+        } else if let Supersedes::Revision(Some(_)) = supersedes {
             return Err(RequestError::Conflict);
         }
         let request = AccessRequest {
             id: previous.as_ref().map_or_else(Uuid::now_v7, |r| r.id),
             requester_id: user.clone(),
-            requested_level: args.requested_level,
+            requested_level,
             status: RequestStatus::Pending,
             revision: next_revision(previous.as_ref())?,
             created_at: previous
@@ -277,7 +321,7 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
         );
         tx.enqueue(event).await?;
         tx.commit().await?;
-        Ok(request)
+        Ok(SubmittedRequest { request, reviewers })
     }
 
     /// Cancel only the caller's current revision.
@@ -389,6 +433,15 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
         tx.enqueue(event).await?;
         tx.commit().await
     }
+}
+
+/// Which earlier request a submission may replace.
+#[derive(Clone, Copy)]
+enum Supersedes {
+    /// Only the revision the caller observed; none for a first request.
+    Revision(Option<i32>),
+    /// Whatever the requester's latest request is.
+    Latest,
 }
 
 fn ensure_pending(request: &AccessRequest, revision: i32) -> Result<(), RequestError> {

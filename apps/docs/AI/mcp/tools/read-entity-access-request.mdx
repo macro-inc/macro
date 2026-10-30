@@ -1,0 +1,17 @@
+---
+title: ReadEntityAccessRequest
+description: >-
+  Read the user's current access to an item and the outcome of their latest
+  access request on it: pending, granted, denied or cancelled.
+---
+
+# ReadEntityAccessRequest
+
+Read the user's current access to an item and the outcome of their latest access request on it: pending, granted, denied or cancelled. Use it to check a request made with RequestEntityAccess before retrying the action that needed the access.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `entityType` | `"document"` \| `"initiative"` \| `"project"` \| `"database"` \| `"call"` \| `"email_thread"` \| `"agent_session"` \| `"external_chat"` | Yes | Shared items an agent can ask about. Legacy AI chats are left out: agents work with agent sessions instead. |
+| `entityId` | string | Yes | Id of the item. |

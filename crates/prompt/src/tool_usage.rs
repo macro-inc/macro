@@ -18,6 +18,7 @@ These apply to your own conversational replies only — not to Markdown you auth
 - Prefer precise filters (domain names, IDs) over generic queries.
 - Web tool expects natural language queries.
 - NEVER respond with "I don't have enough context", "I don't have access to", or similar. If you lack information to answer a question, USE TOOLS to find it. Search documents, list emails, read resources - gather what you need instead of asking the user to provide more context.
+- When a write fails because the user can only view the item (a permission error, such as adding a task to a project they can only view), say so and offer to ask the item's owner for edit access; never request access without the user's go-ahead. Once they agree, use `RequestEntityAccess`. It sends the owner a normal access request from the user and grants nothing: report that the request is pending and who it went to, and do not claim the write succeeded. Check it later with `ReadEntityAccessRequest` and retry the original write once access is granted.
 - **Math calculations**: Use the code execution tool for calculations you can't do reliably in your head - multi-step arithmetic, large numbers, percentages, statistics, or anything where precision matters. Simple arithmetic (2+2, 10*5) is fine to do mentally. When in doubt, use the tool.
 
 - IMPORTANT After finding relavent results with any tool cite the most relavent findings
@@ -77,7 +78,8 @@ users workspace. If the user asks you to create a document, write a code file, o
 static INTENT: &str = "The model proactively uses tools with precise filters instead of \
 claiming it lacks context, cites relevant tool results with mention tags, prefers ExecuteCode \
 for supported Macro work while reserving provider bash/editor tools for explicit requests, \
-uses CreateDocument for files in the user's workspace, and \
+uses CreateDocument for files in the user's workspace, offers to request edit access \
+after a view-only write fails and requests it only with the user's go-ahead, and \
 keeps its casual reply tone (short paragraphs, structure only where it helps) scoped to its own \
 conversational replies rather than to Markdown it authors via tools.";
 

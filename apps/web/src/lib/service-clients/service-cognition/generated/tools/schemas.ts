@@ -13633,6 +13633,83 @@ export const ReadDiscussionResponse = z.object({
   ),
 });
 
+export const ReadEntityAccessRequest = z.object({
+  entityType: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.literal('document'),
+      z.literal('initiative'),
+      z.literal('project'),
+      z.literal('database'),
+      z.literal('call'),
+      z.literal('email_thread'),
+      z.literal('agent_session'),
+      z.literal('external_chat'),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
+  entityId: z.string().uuid(),
+});
+
+export const ReadEntityAccessRequestResponse = z.object({
+  currentAccess: z
+    .union([z.enum(['view', 'comment', 'edit', 'owner']), z.null()])
+    .optional(),
+  supportedLevels: z.array(z.enum(['view', 'comment', 'edit', 'owner'])),
+  owner: z.union([z.string(), z.null()]).optional(),
+  request: z
+    .union([
+      z.object({
+        status: z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.literal('pending'),
+            z.literal('granted'),
+            z.literal('denied'),
+            z.literal('cancelled'),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        }),
+        requestedLevel: z.enum(['view', 'comment', 'edit', 'owner']),
+        grantedLevel: z
+          .union([z.enum(['view', 'comment', 'edit', 'owner']), z.null()])
+          .optional(),
+        updatedAt: z.string().datetime({ offset: true }),
+        retryAfter: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
+      }),
+      z.null(),
+    ])
+    .optional(),
+});
+
 export const ReadForm = z.object({
   formId: z.string().uuid(),
   view: z
@@ -15300,6 +15377,88 @@ export const CanvasRender = z.object({
   modelMedia: z.array(
     z.object({ type: z.string(), mediaType: z.string(), data: z.string() })
   ),
+});
+
+export const RequestEntityAccess = z.object({
+  entityType: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.literal('document'),
+      z.literal('initiative'),
+      z.literal('project'),
+      z.literal('database'),
+      z.literal('call'),
+      z.literal('email_thread'),
+      z.literal('agent_session'),
+      z.literal('external_chat'),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
+  entityId: z.string().uuid(),
+  access: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.literal('view'),
+      z.literal('comment'),
+      z.literal('edit'),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
+});
+
+export const RequestEntityAccessResponse = z.object({
+  status: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.literal('pending'),
+      z.literal('granted'),
+      z.literal('denied'),
+      z.literal('cancelled'),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
+  requestedLevel: z.enum(['view', 'comment', 'edit', 'owner']),
+  sentTo: z.array(z.string()),
+  requestedAt: z.string().datetime({ offset: true }),
 });
 
 export const ResolveComment = z.object({

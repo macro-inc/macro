@@ -1533,6 +1533,28 @@ pub fn build_favorites_tool_context(
     ))
 }
 
+/// Access requests an agent makes in the user's name; reviewers still decide.
+pub type ToolAccessRequestToolContext = access_requests::inbound::toolset::AccessRequestToolContext<
+    access_requests::outbound::postgres::PgRequestRepository,
+    ToolEntityAccessService,
+    access_requests::domain::ports::SystemClock,
+>;
+
+/// Build the access-request tools over the same workflow the Share menu uses.
+/// Document storage delivers the notifications they enqueue.
+pub fn build_access_request_tool_context(
+    pool: sqlx::PgPool,
+    entity_access_service: Arc<ToolEntityAccessService>,
+) -> ToolAccessRequestToolContext {
+    access_requests::inbound::toolset::AccessRequestToolContext {
+        service: Arc::new(access_requests::domain::service::AccessRequestService::new(
+            Arc::new(access_requests::outbound::postgres::PgRequestRepository::new(pool)),
+            entity_access_service,
+            access_requests::domain::ports::SystemClock,
+        )),
+    }
+}
+
 /// Type alias for the chat tool context
 pub type ToolChatToolContext = ChatToolContext<ToolChatService, ToolEntityAccessService>;
 
@@ -2091,6 +2113,8 @@ pub struct ToolServiceContext {
     pub project_tool_context: ToolProjectToolContext,
     /// Favorite toggles; the same favorites back `soup_service`'s favorites filter.
     pub favorites_tool_context: ToolFavoritesToolContext,
+    /// Requests for more access on items the user can't fully use.
+    pub access_request_tool_context: ToolAccessRequestToolContext,
     /// The Discussion of any item: the same message service the document
     /// tools comment through.
     pub message_tool_context: ToolMessageToolContext,

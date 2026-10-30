@@ -731,6 +731,10 @@ pub async fn build_tool_service_context_from_env(
             favorites_service,
             entity_access_service.clone(),
         ),
+        access_request_tool_context: crate::tool_context::build_access_request_tool_context(
+            pool.clone(),
+            entity_access_service.clone(),
+        ),
         initiative_tool_context,
         team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),
         crm_tool_context,

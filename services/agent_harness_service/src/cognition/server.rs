@@ -901,6 +901,10 @@ pub async fn build(
             favorites_service,
             entity_access_service.clone(),
         ),
+        access_request_tool_context: ai_tools::build_access_request_tool_context(
+            db.clone(),
+            entity_access_service.clone(),
+        ),
         initiative_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         crm_tool_context,

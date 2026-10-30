@@ -170,6 +170,8 @@ fn app_item_actions_are_available_in_every_host() {
         "RenameItem",
         "UpdateSharing",
         "SetFavorite",
+        "RequestEntityAccess",
+        "ReadEntityAccessRequest",
         "MuteNotifications",
         "RunRoutine",
         "DeleteRoutine",
@@ -700,6 +702,14 @@ fn session_reader_is_available_to_every_conversation_host_and_mcp() {
         );
     }
     assert!(subagent_toolset().tools.contains_key("ReadAgentSession"));
+    // The SDK has no access handle on external chats and does not return who a
+    // request went to, so code mode keeps the direct access-request tools.
+    for name in ["RequestEntityAccess", "ReadEntityAccessRequest"] {
+        assert!(
+            tools_for_agent_code_mode().toolset.tools.contains_key(name),
+            "{name}"
+        );
+    }
     let code_mode = tools_for_agent_code_mode();
     assert!(code_mode.toolset.tools.contains_key("ReadAgentSession"));
     assert!(
@@ -743,6 +753,8 @@ fn conversation_tools_only_advertise_new_sessions() {
                 "UpdateSharing",
                 "ShareWithChannel",
                 "SetFavorite",
+                "RequestEntityAccess",
+                "ReadEntityAccessRequest",
                 "GetEntityProperties",
                 "SetEntityProperty",
                 "BulkSetEntityPropertyOptions",

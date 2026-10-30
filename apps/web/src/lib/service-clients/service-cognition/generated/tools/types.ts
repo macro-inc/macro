@@ -4471,6 +4471,23 @@ export type CommentAnchor =
       type: 'fig';
     };
 /**
+ * Shared items an agent can ask about. Legacy AI chats are left out: agents
+ * work with agent sessions instead.
+ */
+export type RequestableEntityType =
+  | 'document'
+  | 'initiative'
+  | 'project'
+  | 'database'
+  | 'call'
+  | 'email_thread'
+  | 'agent_session'
+  | 'external_chat';
+/**
+ * Durable outcome; reading a notification never changes it.
+ */
+export type RequestStatus = 'pending' | 'granted' | 'denied' | 'cancelled';
+/**
  * Read actual editor content or the respondent-safe projection.
  */
 export type ReadView = 'authoring' | 'respondent';
@@ -4572,6 +4589,10 @@ export type ProjectItemType = 'document' | 'project' | 'chat';
  * The kind of item to rename.
  */
 export type RenameableEntityType = 'project' | 'chat';
+/**
+ * Access a requester can ask for; ownership is never requestable.
+ */
+export type RequestedAccess = 'view' | 'comment' | 'edit';
 /**
  * A sort direction. Empty cells sort last either way.
  */
@@ -14178,6 +14199,56 @@ export interface DiscussionComment {
   editedAt?: string | null;
 }
 /**
+ * Read the user's current access to an item and the outcome of their latest access request on it: pending, granted, denied or cancelled. Use it to check a request made with RequestEntityAccess before retrying the action that needed the access.
+ */
+export interface ReadEntityAccessRequest {
+  entityType: RequestableEntityType;
+  /**
+   * Id of the item.
+   */
+  entityId: string;
+}
+/**
+ * The user's access and their latest request.
+ */
+export interface ReadEntityAccessRequestResponse {
+  /**
+   * The user's effective access, absent without any.
+   */
+  currentAccess?: AccessLevel | null;
+  /**
+   * Access levels this item can be shared at.
+   */
+  supportedLevels: AccessLevel[];
+  /**
+   * The recorded owner, absent when the user cannot see the item.
+   */
+  owner?: string | null;
+  /**
+   * The user's latest request, absent when they never asked.
+   */
+  request?: AccessRequestSummary | null;
+}
+/**
+ * One request's outcome.
+ */
+export interface AccessRequestSummary {
+  status: RequestStatus;
+  requestedLevel: AccessLevel;
+  /**
+   * Access a reviewer granted.
+   */
+  grantedLevel?: AccessLevel | null;
+  /**
+   * Last change.
+   */
+  updatedAt: string;
+  /**
+   * Earliest time another request may be made.
+   */
+  retryAfter?: string | null;
+}
+/**
  * Read a known form before editing. Authoring view requires Edit and returns the actual durable collaborative draft, current schema, stable IDs and current settings. Respondent view returns only safe projected content, never hidden booking targets or response rows. Optional summary requires Edit. After a partial write, inspect the returned formId before making further changes. A respondent link may exist while responses are closed; check acceptingResponses.
  */
 export interface ReadForm {
@@ -14839,6 +14910,33 @@ export interface RenderCanvas {
    * Optional world-space rectangle; overrides selection-derived bounds.
    */
   crop?: CanvasBounds | null;
+}
+/**
+ * Ask the owner of an item for more access in the user's name, as the Share menu's Request access does: the owner gets a normal access request from the user and decides. Use it only when the user asked you to request access or agreed after you offered, typically after a write failed because the user can only view the item; never request access on your own. It never grants access and does not retry the failed action. Tell the user the request is pending and who it went to, then check it with ReadEntityAccessRequest and retry the original action only once it is granted.
+ */
+export interface RequestEntityAccess {
+  entityType: RequestableEntityType;
+  /**
+   * Id of the item.
+   */
+  entityId: string;
+  access: RequestedAccess;
+}
+/**
+ * A request waiting on the item's reviewers.
+ */
+export interface RequestEntityAccessResponse {
+  status: RequestStatus;
+  requestedLevel: AccessLevel;
+  /**
+   * User ids of the people who can approve it; empty when the user cannot yet
+   * see the item, whose owner then stays private.
+   */
+  sentTo: string[];
+  /**
+   * When the request was made.
+   */
+  requestedAt: string;
 }
 /**
  * Resolve or reopen a comment thread in the Discussion of a document, task, Tasks project, CRM company or CRM contact on behalf of the user. A thread id is enough to find its item. Only use this when explicitly asked to resolve or reopen a comment. Thread ids come from ReadDiscussion, or from ReadContent for a document.
