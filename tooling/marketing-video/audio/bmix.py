@@ -1,13 +1,17 @@
-"""Soundtrack for the block ads (blocks.html): close, ASMR-style block foley over a soft synthesized bed.
+"""Soundtrack for the block ads (blocks.html, blocks2.html): close, ASMR-style foley over a soft synthesized bed.
 
-Everything is synthesized here, so there is no music file to license or download. The bed is a 100 BPM groove in F
-(felt kick, shaker, sub bass, a Rhodes-like electric piano and a pad) on the scene's bars: the kick drops out for the
-two beats the core hovers, and the core locks on the downbeat of bar 5. The foley is the point. Every contact is a
-short, dry, close sound with a tuned body (bigger blocks sound lower; block snaps climb an F major pentatonic as the
-system fills), placed so its loudest sample lands on the cue and panned to where the block lands.
+Everything is synthesized here, so there is no music file to license or download. Both beds are 100 BPM in F on the
+scene's bars: the kick drops out for the two beats the core hovers, and the core locks on the downbeat of bar 5.
+blocks.html gets a groove with a felt kick, shaker, sub bass, a Rhodes-like electric piano and a pad; blocks2.html
+(MUSIC.style "premium") gets a minimal one: a warm saw pad on long chords, a sub, a felt kick and quiet hats. The
+foley is the point. Every contact is a short, dry, close sound with a tuned body, placed so its loudest sample lands
+on the cue and panned to where the block lands. In blocks.html bigger blocks sound lower and the snaps climb an F
+major pentatonic as the system fills; the premium kit is machined (module snaps, split-flap flips, slabs, a hydraulic
+press, LEDs, a chime when the system comes on).
 
-    python3 bmix.py cues.json out.wav      cues.json from `node render.mjs cues` (PAGE=blocks.html)
-FF=/path/to/ffmpeg measures loudness. The result is 48 kHz stereo at about -16 LUFS with true peaks under -1 dBTP.
+    python3 bmix.py cues.json out.wav      cues.json from `node render.mjs cues` (PAGE=blocks.html or blocks2.html)
+FF=/path/to/ffmpeg measures loudness. The result is 48 kHz stereo at about -16 LUFS with true peaks at -1.8 dBTP, which
+leaves room for the AAC encode (it adds a few tenths of a dB) to stay under -1 dBTP.
 """
 import json
 import os
@@ -190,7 +194,90 @@ def softriser(dur=1.4):
     return norm(y)
 
 
-START = {"slide", "lift", "riser", "whoosh", "scribble"}   # placed by their start; everything else by its peak
+# ---------- the premium kit (blocks2.html) ----------
+def msnap(seed=0):
+    """A machined module seating into its socket: a tight click, the latch, a faint metal tick, a soft low thump. Its
+    body sits near F4, in the bed's key, and doesn't climb a scale."""
+    n = int(0.25 * SR)
+    r = np.random.default_rng(500 + seed)
+    hit = band(noise(n, 500 + seed), 2500, 13000) * env(n, 0.0001, 0.0007)
+    latch = delayed(band(noise(n, 520 + seed), 3000, 12000) * env(n, 0.0001, 0.0005), r.uniform(0.006, 0.009))
+    ping = sine(r.uniform(2350, 2550), n) * env(n, 0.0004, 0.022)
+    body = modal(r.uniform(338, 356), n, [(1, 1.0, 0.04), (2.4, 0.3, 0.015)], 540 + seed)
+    thump = sine(95, n) * env(n, 0.001, 0.03)
+    return norm(0.85 * hit + 0.4 * latch + 0.08 * ping + 0.32 * body + 0.6 * thump)
+
+
+def absorb(seed=0):
+    """A tool drawn into its module: a soft, quick, falling 'thup' of air."""
+    n = int(0.12 * SR)
+    return norm(0.7 * sweep(1100, 380, n) * env(n, 0.001, 0.025) + 0.45 * band(noise(n, 600 + seed), 900, 5000) * env(n, 0.002, 0.018))
+
+
+def flap(seed=0):
+    """A split-flap tile turning over: a quick clatter of light flaps."""
+    n = int(0.2 * SR)
+    r = np.random.default_rng(700 + seed)
+    y = np.zeros(n)
+    for i, (d, g) in enumerate([(0.0, 0.55), (0.016, 0.45), (0.031, 0.38), (0.044, 0.3)]):
+        y += g * delayed(band(noise(n, 700 + 5 * seed + i), 1800, 9000) * env(n, 0.0001, 0.0012) + 0.25 * modal(r.uniform(1300, 1700), n, [(1, 1, 0.006)], seed + i), d)
+    return norm(y)
+
+
+def slabthud(heavy=False, seed=0):
+    """A heavy slab set down on a stack: a felt-damped thud, a dull body, a little rattle."""
+    n = int(0.6 * SR)
+    sub = sweep(70 if heavy else 85, 46, n) * env(n, 0.001, 0.16 if heavy else 0.11)
+    body = modal(150 if heavy else 190, n, [(1, 1, 0.05), (1.6, 0.5, 0.03), (2.7, 0.25, 0.018)], 800 + seed)
+    felt = band(noise(n, 820 + seed), 250, 1800) * env(n, 0.0006, 0.018)
+    hit = band(noise(n, 840 + seed), 1500, 8000) * env(n, 0.0002, 0.0015)
+    rattle = sum(g * delayed(band(noise(n, 860 + seed + i), 2000, 8000) * env(n, 0.0002, 0.001), d) for i, (d, g) in enumerate([(0.022, 0.25), (0.041, 0.15)]))
+    return norm(0.95 * sub + 0.45 * body + 0.5 * felt + 0.35 * hit + 0.25 * rattle)
+
+
+def hydraulic(dur=1.2):
+    """A press closing: a low motor hum that rises a little, and creaks of material giving way."""
+    n = int(dur * SR)
+    u = tt(n) / dur
+    ph = 2 * np.pi * np.cumsum(52 + 10 * u) / SR
+    hum = (np.sin(ph) + 0.5 * np.sin(2 * ph) + 0.3 * np.sin(3 * ph) + 0.15 * np.sin(5 * ph)) * np.minimum(1, u / 0.1) * (0.6 + 0.4 * u)
+    creak = band(noise(n, 901), 500, 2200) * grains(n, 902, 400) ** 2 * 0.35 * u
+    y = band(hum, 40, 1200) + creak
+    y[-int(0.01 * SR):] *= np.linspace(1, 0, int(0.01 * SR))
+    return norm(y)
+
+
+def hiss(seed=0):
+    """Air let out after the press."""
+    n = int(0.7 * SR)
+    t = tt(n)
+    return norm(band(noise(n, 950 + seed), 2500, 9000) * np.minimum(1, t / 0.01) * np.exp(-t / 0.18))
+
+
+def count(seed=0):
+    """A counter's digit rolling over: a tiny dry tick."""
+    n = int(0.04 * SR)
+    r = np.random.default_rng(1000 + seed)
+    return norm(band(noise(n, 1000 + seed), 3000, 9000) * env(n, 0.0001, 0.0006) + 0.4 * sine(r.uniform(2100, 2300), n) * env(n, 0.0003, 0.006))
+
+
+def led(seed=0):
+    """An LED coming on: a faint, soft blip on a note of the F chord."""
+    n = int(0.08 * SR)
+    return norm(sine([1396.9, 1568.0, 1760.0, 2093.0][seed % 4], n) * env(n, 0.001, 0.02))
+
+
+def online():
+    """The system coming on: a soft, glassy chime on F (F5, C6, F6)."""
+    n = int(1.6 * SR)
+    y = np.zeros(n)
+    for f, dt, g in [(698.5, 0.0, 1.0), (1046.5, 0.07, 0.75), (1396.9, 0.14, 0.35)]:
+        m = n - int(dt * SR)
+        y[int(dt * SR):] += g * (sine(f, m) + 0.12 * sine(2 * f, m) + 0.05 * sine(3.01 * f, m)) * env(m, 0.003, 0.55)
+    return norm(y)
+
+
+START = {"slide", "lift", "riser", "whoosh", "scribble", "hydraulic"}   # placed by their start; everything else by its peak
 
 
 def synth(c):
@@ -209,12 +296,16 @@ def synth(c):
         "press": lambda: press(seed), "release": lambda: release(seed), "chime": lambda: chime(), "blip": lambda: blip(),
         "swish": lambda: swish(), "riser": lambda: softriser(c.get("dur", 1.4)), "rec": lambda: rec(),
         "toggle": lambda: toggle(seed), "scribble": lambda: scribble(seed), "tak": lambda: tak(seed),
+        "msnap": lambda: msnap(seed), "absorb": lambda: absorb(seed), "flap": lambda: flap(seed), "slab": lambda: slabthud(bool(c.get("heavy")), seed),
+        "hydraulic": lambda: hydraulic(c.get("dur", 1.2)), "hiss": lambda: hiss(seed), "count": lambda: count(seed), "led": lambda: led(seed),
+        "online": lambda: online(),
     }[k]()
 
 
 LEVEL = {"snap": 1.0, "tock": 0.62, "thock": 1.25, "fill": 0.55, "slide": 0.16, "lift": 0.22, "whoosh": 0.3, "clunk": 1.0,
          "click": 0.42, "tick": 0.35, "pop": 0.45, "key": 0.42, "press": 0.85, "release": 0.5, "chime": 0.32, "blip": 0.35,
-         "swish": 0.25, "riser": 0.2, "rec": 0.3, "toggle": 0.5, "scribble": 0.18, "tak": 0.55}
+         "swish": 0.25, "riser": 0.2, "rec": 0.3, "toggle": 0.5, "scribble": 0.18, "tak": 0.55,
+         "msnap": 0.95, "absorb": 0.3, "flap": 0.5, "slab": 1.15, "hydraulic": 0.5, "hiss": 0.2, "count": 0.25, "led": 0.16, "online": 0.42}
 
 
 # ---------- the bed ----------
@@ -322,6 +413,62 @@ def bed(meta, n):
     return keys, drums, bass, pads
 
 
+def saw(f, n):
+    """A band-limited sawtooth (additive; the pad's filter takes everything above ~1.6 kHz anyway)."""
+    t = tt(n)
+    return sum(np.sin(2 * np.pi * f * h * t) / h for h in range(1, int(min(24, 1700 // max(f, 1))) + 1))
+
+
+def warmpad(notes, dur, seed):
+    """A warm pad: three detuned saws per note, low-passed, slow in and out."""
+    n = int(dur * SR)
+    t = tt(n)
+    y = sum(saw(midi(m) * (1 + d), n) for m in notes for d in (-0.0042, 0.0, 0.0047))
+    e = np.minimum(1, t / 0.7) * np.minimum(1, np.maximum(0, dur - t) / 0.5)
+    return band(y, 90, 1400) * e
+
+
+def felt(vel=1.0):
+    """A soft, felted kick."""
+    n = int(0.45 * SR)
+    return band(sweep(96, 44, n) * env(n, 0.002, 0.12) + 0.06 * band(noise(n, 1201), 600, 2500) * env(n, 0.0005, 0.004), 35, 4000) * vel
+
+
+def hat(seed, vel=1.0):
+    n = int(0.05 * SR)
+    return band(noise(n, 1300 + seed), 7000, 14000) * env(n, 0.0008, 0.011) * vel
+
+
+def bed_premium(meta, n):
+    """Minimal and warm: a pad on long chords, a sub, a felt kick on 1 and 3 and quiet off-beat hats. Kick, hats and
+    sub drop out for the two beats the core hovers; the end rings out."""
+    m = meta["music"]
+    spb = 60 / m["bpm"]
+    beats, lock, end = m["beats"], m["lock"], m["end"]
+    CH = [(0, "F"), (4, "Dm"), (8, "Bb"), (12, "Csus"), (16, "F"), (20, "Bb"), (22, "F")]
+    pads = np.zeros((n, 2))
+    drums = np.zeros((n, 2))
+    bass = np.zeros((n, 2))
+    for i, (b0, name) in enumerate(CH):
+        b1 = CH[i + 1][0] if i + 1 < len(CH) else beats
+        notes, root = VOICE[name]
+        dur = (b1 - b0) * spb + 0.6
+        put(pads, warmpad(notes[1:], dur, 70 + i), b0 * spb - 0.08, -0.35)
+        put(pads, warmpad(notes[1:], dur, 90 + i) * 0.9, b0 * spb - 0.05, 0.35)
+        for b in np.arange(b0, b1, 4 if b1 - b0 >= 4 else 2):
+            if lock - 2 <= b < lock:
+                continue
+            put(bass, bassnote(midi(root), min(b1 - b, 4) * spb, 0.8), b * spb)
+    for b in range(beats):
+        if lock - 2 <= b < lock or b >= beats - 1:
+            continue
+        if b % 2 == 0:
+            put(drums, felt(1.0 if b % 4 == 0 else 0.75), b * spb)
+        put(drums, hat(b, 0.55 if b < end else 0.35), (b + 0.5) * spb, 0.3)
+        put(drums, hat(100 + b, 0.18), (b + 0.75) * spb, -0.3)
+    return pads, drums, bass
+
+
 # ---------- space ----------
 def ir(sec, decay, seed, lp=5000):
     n = int(sec * SR)
@@ -344,7 +491,7 @@ def convolve(x, h):
     return y
 
 
-def tp_limit(x, ceil_db=-1.3, rel=0.06, over=4):
+def tp_limit(x, ceil_db=-1.8, rel=0.06, over=4):
     """Look-ahead limiter on the true peak: the signal is band-limited-interpolated 4x to find the peaks between samples,
     the gain is already down when a peak arrives (1.5 ms look-ahead, smoothed), and recovers with a short release."""
     n = len(x)
@@ -389,11 +536,17 @@ def main(cues_path, out_path):
         y = synth(c) * c["gain"] * LEVEL[c["type"]]
         start = c["t"] if c["type"] in START else c["t"] - int(np.argmax(np.abs(y))) / SR
         put(fol, y, start, c.get("pan", 0.0))
-    keys, drums, bass, pads = bed(meta, n)
     room = ir(0.5, 0.06, 11, 7000)                                       # a small, close room for the foley
     hall = ir(1.6, 0.25, 21, 4500)                                       # a softer space for the keys
     fol = 0.9 * fol + 0.12 * convolve(fol, room)
-    music = 0.5 * keys + 0.45 * drums + 0.5 * bass + 0.06 * pads + 0.35 * convolve(0.5 * keys + 0.06 * pads, hall)
+    premium = meta["music"].get("style") == "premium"
+    if premium:
+        pads, drums, bass = bed_premium(meta, n)
+        music = 0.5 * pads + 0.5 * drums + 0.55 * bass + 0.3 * convolve(0.5 * pads, hall)
+    else:
+        keys, drums, bass, pads = bed(meta, n)
+        music = 0.5 * keys + 0.45 * drums + 0.5 * bass + 0.06 * pads + 0.35 * convolve(0.5 * keys + 0.06 * pads, hall)
+    bed_db = BED_DB + (1.0 if premium else 0.0)
     # the bed sits a fixed distance under the foley, whatever the variant's density
     tmp = out_path + ".tmp.wav"
     write(tmp, fol / (np.abs(fol).max() + 1e-9) * 0.5)
@@ -401,7 +554,7 @@ def main(cues_path, out_path):
     write(tmp, music / (np.abs(music).max() + 1e-9) * 0.5)
     lm, _ = measure(tmp)
     fol = fol / (np.abs(fol).max() + 1e-9) * 0.5
-    music = music / (np.abs(music).max() + 1e-9) * 0.5 * 10 ** ((lf - BED_DB - lm) / 20)
+    music = music / (np.abs(music).max() + 1e-9) * 0.5 * 10 ** ((lf - bed_db - lm) / 20)
     mix = fol + music
     fade = int(0.25 * SR)
     mix[-fade:] *= np.linspace(1, 0, fade)[:, None] ** 1.5
@@ -415,7 +568,7 @@ def main(cues_path, out_path):
             break
         gain += -16.0 - lufs2
     os.replace(tmp, out_path)
-    print(f"{out_path}: {n / SR:.3f}s  {lufs2:.1f} LUFS  {tp2:.1f} dBTP  ({len(meta['cues'])} cues; bed {BED_DB} dB under the foley)")
+    print(f"{out_path}: {n / SR:.3f}s  {lufs2:.1f} LUFS  {tp2:.1f} dBTP  ({len(meta['cues'])} cues; bed {bed_db} dB under the foley)")
 
 
 if __name__ == "__main__":
