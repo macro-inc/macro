@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ExecutionResultCondition } from './executionResultCondition';
+import type { ExecutionResultConfigurationRevision } from './executionResultConfigurationRevision';
 import type { ExecutionResultError } from './executionResultError';
 import type { ExecutionResultResource } from './executionResultResource';
 import type { ExecutionResultStepsItem } from './executionResultStepsItem';
@@ -16,6 +17,9 @@ Null/string column values predate this envelope and refer to legacy chats.
  */
 export interface ExecutionResult {
   condition?: ExecutionResultCondition;
+  /** The routine configuration the run used. Step paths only name the same
+steps in that configuration; a later edit can put another step there. */
+  configuration_revision?: ExecutionResultConfigurationRevision;
   error?: ExecutionResultError;
   resource?: ExecutionResultResource;
   /** What each step that ran did, in order: decisions, tool calls, the agent. */

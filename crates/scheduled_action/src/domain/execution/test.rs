@@ -1008,4 +1008,9 @@ async fn runs_without_a_transcript_still_announce_start_and_stop_and_keep_their_
         records[0].result["steps"],
         json!([{ "path": "0", "kind": "tool", "tool": "UpdateThreadLabels" }])
     );
+    // Its step paths are read against the configuration that ran.
+    assert_eq!(
+        records[0].result["configuration_revision"],
+        json!(action().configuration_revision)
+    );
 }

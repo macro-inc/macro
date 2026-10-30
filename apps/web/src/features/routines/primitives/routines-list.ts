@@ -2,16 +2,14 @@ import { formatRelativeDate } from '@core/util/time';
 import { type Accessor, createMemo } from 'solid-js';
 import type { RoutineListSource } from '../context/routine-sources';
 import { isClaimActive } from '../core/claim';
-import type { HistoryRecord } from '../core/history';
 import type { RoutineSnapshot } from '../core/routine';
-import type { StepDraft } from '../core/routine-steps';
 import type { RoutineTarget } from '../core/routine-target';
 import {
   describeTrigger,
   hasOnlyScheduledTriggers,
 } from '../core/routine-triggers';
 import { describeSteps } from '../core/step-catalog';
-import { summarizeRun } from '../core/step-history';
+import { stepsForRun, summarizeRun } from '../core/step-history';
 import type { RoutineRow } from '../core/types';
 
 /** Today's runs show their time; older ones their day. */
@@ -24,16 +22,14 @@ function runTime(at: string): string {
     : formatRelativeDate(date);
 }
 
-function lastRun(
-  record: HistoryRecord | undefined,
-  steps: StepDraft[] | undefined
-): RoutineRow['lastRun'] {
+function lastRun(routine: RoutineSnapshot): RoutineRow['lastRun'] {
+  const record = routine.lastRun;
   const at = record?.startedAt;
   if (!record || !at) return undefined;
   return {
     at: runTime(at),
     failed: record.success === false,
-    summary: summarizeRun(record, steps),
+    summary: summarizeRun(record, stepsForRun(record, routine)),
   };
 }
 
@@ -69,7 +65,7 @@ export function createRoutineRows(
           when: (draft?.triggers ?? []).map(describeTrigger).join(' · '),
           does: describeWork(routine, targetLabel),
           group: scheduled ? 'schedule' : 'activity',
-          lastRun: lastRun(routine.lastRun, draft?.steps),
+          lastRun: lastRun(routine),
           status: running
             ? 'Running'
             : completed

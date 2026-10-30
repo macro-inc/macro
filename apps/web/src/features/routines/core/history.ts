@@ -18,5 +18,10 @@ export type HistoryRecord = {
   skipped?: HistorySkip;
   /** Present for runs of routines with steps. */
   steps?: HistoryStep[];
+  /**
+   * The routine configuration the run used. Its step paths only name the
+   * same steps in that configuration.
+   */
+  revision?: number;
   error?: string;
 };

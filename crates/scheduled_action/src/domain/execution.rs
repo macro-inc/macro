@@ -279,7 +279,7 @@ fn execution_record(
         is_success: result.is_ok(),
         result: serde_json::to_value(
             ExecutionResult::new(resource, result.as_ref().err().map(ToString::to_string))
-                .with_steps(handle.steps.clone()),
+                .with_steps(handle.steps.clone(), action.configuration_revision),
         )
         .expect("execution metadata is JSON serializable"),
         created_at: end_time,

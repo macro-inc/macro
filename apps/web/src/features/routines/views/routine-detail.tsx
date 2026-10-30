@@ -27,7 +27,11 @@ import {
   withDraftSteps,
 } from '../core/routine-draft';
 import { firstAgent, stepsNeedEvent } from '../core/routine-steps';
-import { describeHistoryStep, latestStepRun } from '../core/step-history';
+import {
+  describeHistoryStep,
+  latestStepRun,
+  stepsForRun,
+} from '../core/step-history';
 import {
   createRoutineDetail,
   RoutineConflictError,
@@ -262,7 +266,10 @@ export function RoutineDetailView(props: {
                     }
                     decisionsEnabled={props.decisionsEnabled}
                     slots={props.slots}
-                    lastRun={latestStepRun(props.source.history())}
+                    lastRun={latestStepRun(
+                      props.source.history(),
+                      routine().revision
+                    )}
                   />
                 </Show>
               )}
@@ -339,8 +346,8 @@ export function RoutineDetailView(props: {
               </Show>
               <RoutineHistory
                 records={props.source.history()}
-                describeStep={(step) =>
-                  describeHistoryStep(step, state()?.steps)
+                describeStep={(step, record) =>
+                  describeHistoryStep(step, stepsForRun(record, routine()))
                 }
                 isPending={props.source.historyLoading()}
                 createChatMetadata={props.slots.createChatMetadata}

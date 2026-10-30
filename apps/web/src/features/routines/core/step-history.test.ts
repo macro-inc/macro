@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { stepsFromTask } from './routine-steps';
-import { describeHistoryStep, stepAtPath } from './step-history';
+import {
+  describeHistoryStep,
+  latestStepRun,
+  stepAtPath,
+  stepsForRun,
+} from './step-history';
 
 const steps =
   stepsFromTask({
@@ -84,6 +89,44 @@ describe('routine step history', () => {
         { path: '9', kind: 'tool', tool: 'SendChannelMessage' },
         steps
       )
-    ).toBe('Send Channel Message');
+    ).toBe('Sent a message');
+  });
+
+  it('reads a run against the steps of the configuration it ran', () => {
+    const routine = { revision: 3, draft: { steps } };
+    const run = { revision: 3, steps: [] };
+    expect(stepsForRun(run, routine)).toBe(steps);
+    // After an edit, the same path can hold another step; describe the run
+    // from what it recorded instead.
+    const older = { ...run, revision: 2 };
+    expect(stepsForRun(older, routine)).toBeUndefined();
+    expect(
+      describeHistoryStep(
+        { path: '0', kind: 'tool', tool: 'UpdateThreadLabels' },
+        stepsForRun(older, routine)
+      )
+    ).toBe('Changed labels');
+    expect(
+      describeHistoryStep(
+        { path: '1.otherwise.0', kind: 'if', answer: true, probability: 0.8 },
+        stepsForRun(older, routine)
+      )
+    ).toBe('Decided yes');
+
+    const step = {
+      path: '0',
+      kind: 'tool' as const,
+      tool: 'UpdateThreadLabels',
+    };
+    const ran = (revision: number, startedAt: string) => ({
+      revision,
+      startedAt,
+      endedAt: startedAt,
+      steps: [step],
+    });
+    expect(
+      latestStepRun([ran(3, '2026-10-01'), ran(2, '2026-10-02')], 3)?.startedAt
+    ).toBe('2026-10-01');
+    expect(latestStepRun([ran(2, '2026-10-02')], 3)).toBeUndefined();
   });
 });

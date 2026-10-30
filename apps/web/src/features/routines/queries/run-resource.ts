@@ -47,6 +47,7 @@ const stepSchema = z.discriminatedUnion('kind', [
 ]);
 const stepsSchema = z.object({ steps: z.array(stepSchema) });
 const errorSchema = z.object({ error: z.string() });
+const revisionSchema = z.object({ configuration_revision: z.number().int() });
 
 /** What each step of a run did; unknown or older results have none. */
 function getHistorySteps(record: {
@@ -131,6 +132,8 @@ export function toHistoryRecord(record: {
     success: record.is_success,
     skipped: getHistorySkip(record),
     steps: getHistorySteps(record),
+    revision: revisionSchema.safeParse(record.result).data
+      ?.configuration_revision,
     error: errorSchema.safeParse(record.result).data?.error,
   };
 }

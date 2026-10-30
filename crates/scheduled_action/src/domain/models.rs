@@ -372,6 +372,11 @@ pub struct ExecutionResult {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[schema(value_type = Vec<Object>)]
     pub steps: Vec<StepRecord>,
+    /// The routine configuration the run used. Step paths only name the same
+    /// steps in that configuration; a later edit can put another step there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<i64>)]
+    pub configuration_revision: Option<ConfigurationRevision>,
 }
 
 impl ExecutionResult {
@@ -382,11 +387,13 @@ impl ExecutionResult {
             error,
             condition: None,
             steps: Vec::new(),
+            configuration_revision: None,
         }
     }
 
-    pub fn with_steps(mut self, steps: Vec<StepRecord>) -> Self {
+    pub fn with_steps(mut self, steps: Vec<StepRecord>, revision: ConfigurationRevision) -> Self {
         self.steps = steps;
+        self.configuration_revision = Some(revision);
         self
     }
 

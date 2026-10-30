@@ -32,7 +32,7 @@ type RoutineHistoryProps = {
   createAgentMetadata: (id: string) => Accessor<HistoryMetadata>;
   onOpen: (resource: HistoryResource, newSplit: boolean) => void;
   /** Describes what a run did at a step, for routines with steps. */
-  describeStep?: (step: HistoryStep) => string;
+  describeStep?: (step: HistoryStep, record: HistoryRecord) => string;
 };
 
 type HistoryRowProps = {
@@ -323,7 +323,7 @@ function ResolvedHistoryRow(props: {
         {(describe) => (
           <StepsSummary
             record={props.record}
-            describe={describe()}
+            describe={(step) => describe()(step, props.record)}
             onSelect={props.onSelect}
           />
         )}
@@ -478,7 +478,9 @@ export function RoutineHistory(props: RoutineHistoryProps): JSX.Element {
             <aside class="min-h-0 w-96 shrink-0 overflow-y-auto border-l border-edge-muted @max-[720px]/runs:w-full @max-[720px]/runs:border-l-0">
               <RunDetail
                 record={record()}
-                describe={(step) => props.describeStep?.(step) ?? step.kind}
+                describe={(step) =>
+                  props.describeStep?.(step, record()) ?? step.kind
+                }
                 onOpenConversation={
                   resource()
                     ? () => {

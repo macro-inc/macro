@@ -1257,6 +1257,11 @@
               }
             ]
           },
+          "configuration_revision": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The routine configuration the run used. Step paths only name the same\nsteps in that configuration; a later edit can put another step there."
+          },
           "error": {
             "type": ["string", "null"]
           },

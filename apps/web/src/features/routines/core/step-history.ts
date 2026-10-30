@@ -37,8 +37,30 @@ export function stepAtPath(
   return step;
 }
 
-function humanize(tool: string): string {
-  return tool.replace(/([a-z])([A-Z])/g, '$1 $2');
+/**
+ * The routine's steps to read a run's step paths against: only those of the
+ * configuration the run used, since an edit can put another step at a path.
+ */
+export function stepsForRun(
+  record: HistoryRecord,
+  routine: { revision: number; draft?: { steps?: StepDraft[] } }
+): StepDraft[] | undefined {
+  return record.revision === routine.revision
+    ? routine.draft?.steps
+    : undefined;
+}
+
+/** What a tool did, from its name alone. */
+function toolDone(tool: string): string {
+  return match(tool)
+    .with('UpdateThreadLabels', () => 'Changed labels')
+    .with('SetSenderPolicy', () => 'Set the sender’s policy')
+    .with('SetEntityProperty', () => 'Set a property')
+    .with('CreateDocument', () => 'Created a document')
+    .with('Comment', () => 'Commented')
+    .with('SendChannelMessage', () => 'Sent a message')
+    .with('MoveToProject', () => 'Moved to a folder')
+    .otherwise(() => tool.replace(/([a-z])([A-Z])/g, '$1 $2'));
 }
 
 /** A short description of what a run did at one step. */
@@ -62,7 +84,7 @@ export function describeHistoryStep(
       const label =
         step?.kind === 'tool' && step.tool === record.tool
           ? describeToolStep(step)
-          : humanize(record.tool);
+          : toolDone(record.tool);
       return record.error ? `${label} failed: ${record.error}` : label;
     })
     .with({ kind: 'agent' }, (record) =>
@@ -71,13 +93,18 @@ export function describeHistoryStep(
     .exhaustive();
 }
 
-/** The most recent run that reached its steps, to show on the editor. */
+/**
+ * The most recent run that reached its steps, to show on the editor: only a
+ * run of the configuration being edited, whose steps it can point at.
+ */
 export function latestStepRun(
-  records: readonly HistoryRecord[]
+  records: readonly HistoryRecord[],
+  revision: number
 ): (HistoryRecord & { steps: HistoryStep[] }) | undefined {
   return records
     .filter(
       (record): record is HistoryRecord & { steps: HistoryStep[] } =>
+        record.revision === revision &&
         !record.skipped &&
         Boolean(record.steps?.length) &&
         Boolean(record.endedAt)

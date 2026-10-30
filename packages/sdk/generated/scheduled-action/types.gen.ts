@@ -209,6 +209,11 @@ export type ExecutionResourceType = 'chat' | 'agent';
  */
 export type ExecutionResult = {
     condition?: null | ConditionResult;
+    /**
+     * The routine configuration the run used. Step paths only name the same
+     * steps in that configuration; a later edit can put another step there.
+     */
+    configuration_revision?: number | null;
     error?: string | null;
     resource?: null | ExecutionResource;
     /**

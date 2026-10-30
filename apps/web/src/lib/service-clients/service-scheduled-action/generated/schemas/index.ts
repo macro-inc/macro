@@ -46,6 +46,7 @@ export * from './executionResource';
 export * from './executionResourceType';
 export * from './executionResult';
 export * from './executionResultCondition';
+export * from './executionResultConfigurationRevision';
 export * from './executionResultError';
 export * from './executionResultResource';
 export * from './executionResultStepsItem';

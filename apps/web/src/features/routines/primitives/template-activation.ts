@@ -33,7 +33,9 @@ export type TemplateReference = {
  * The instructions a template's routine runs, from its task: a routine with
  * steps keeps them on its agent step.
  */
-export function templatePrompt(template: Pick<RoutineTemplate, 'task'>): string {
+export function templatePrompt(
+  template: Pick<RoutineTemplate, 'task'>
+): string {
   const steps = stepsFromTask(template.task);
   if (steps) return firstAgent(steps)?.instructions ?? '';
   const prompt = template.task.user_prompt;
