@@ -4,6 +4,7 @@ import type { Property as PropertyType } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
 import { Layer } from '@ui';
 import { type Accessor, Match, Show, Switch } from 'solid-js';
+import { SYSTEM_PROPERTY_IDS } from '../constants';
 import { PropertyEmptyIcon } from '../extractors/PropertyEmpty';
 
 /** Shared property cell for unified task and native project lists. */
@@ -82,7 +83,12 @@ function ListPropertyCell(props: {
                 <>
                   <PropertyEmptyIcon
                     propertyDefinitionId={props.property().propertyDefinitionId}
-                    class="size-3.5 text-ink-extra-muted @max-[840px]/u-list:size-4"
+                    class={
+                      props.property().propertyDefinitionId ===
+                      SYSTEM_PROPERTY_IDS.PRIORITY
+                        ? 'text-ink-extra-muted @max-[840px]/u-list:size-4'
+                        : 'size-3.5 text-ink-extra-muted @max-[840px]/u-list:size-4'
+                    }
                   />
                   <span class="min-w-0 flex-1 truncate opacity-50 @max-[840px]/u-list:hidden">
                     {props.property().displayName}

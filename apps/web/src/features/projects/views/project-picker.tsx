@@ -2,8 +2,8 @@ import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import LoadingSpinner from '@icon/system/regular/spinner.svg';
-import StackIcon from '@icon/system/regular/stack.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
   DropdownSearchInput,
@@ -184,7 +184,7 @@ export function ProjectPicker(props: {
                       >
                         {(project) => (
                           <>
-                            <StackIcon class="size-3 shrink-0" />
+                            <ProjectIcon class="size-3 shrink-0" />
                             <p class="flex-1 min-w-0 truncate">
                               {project().name}
                             </p>

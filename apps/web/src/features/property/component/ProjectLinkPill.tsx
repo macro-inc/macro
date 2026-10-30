@@ -3,7 +3,7 @@ import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
-import ProjectIcon from '@icon/system/regular/stack.svg';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import { ButtonGroup, cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { useProperty } from '../core/context';

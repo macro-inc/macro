@@ -12,10 +12,10 @@ import {
 } from '@entity';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
-import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
-import ProjectIcon from '@icon/system/regular/stack.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
+import { PropertyEmptyIcon } from '@property/extractors/PropertyEmpty';
 import { Button, cn, Layer } from '@ui';
 import type { ComponentProps } from 'solid-js';
 import {
@@ -27,7 +27,10 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { STATUS_GROUP_HEADER_TINTS } from '../components/task-list/TaskGroupHeader';
+import {
+  EMPTY_GROUP_PROPERTY_IDS,
+  STATUS_GROUP_HEADER_TINTS,
+} from '../components/task-list/TaskGroupHeader';
 import { taskGanttDates } from '../queries/task-gantt';
 import type { TasksDataSource } from '../queries/use-tasks-query';
 import type { TaskGroupBy } from '../types';
@@ -289,7 +292,12 @@ export function TaskGanttView(props: {
                                 </Layer>
                                 <Switch>
                                   <Match when={!group().groupId}>
-                                    <CircleDashedIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+                                    <PropertyEmptyIcon
+                                      propertyDefinitionId={
+                                        EMPTY_GROUP_PROPERTY_IDS[props.groupBy]
+                                      }
+                                      class="size-3.5 shrink-0 text-ink-extra-muted"
+                                    />
                                   </Match>
                                   <Match
                                     when={

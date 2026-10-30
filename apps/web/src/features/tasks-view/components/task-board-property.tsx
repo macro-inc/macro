@@ -1,6 +1,6 @@
 import { UserIcon } from '@core/component/UserIcon';
 import CalendarIcon from '@icon/system/regular/calendar.svg';
-import ProjectIcon from '@icon/system/regular/stack.svg';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import { Property } from '@property';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import type { PropertySaveFn } from '@property/core/context';

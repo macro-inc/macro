@@ -29,7 +29,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Keep Updated at 80px with an untruncated header and single-line timestamps; keep Created by last as a 16px avatar with a 16px gap after Updated and preserve its narrow-container visibility.
 - Show a 16px user-plus icon in the Created by header, right-aligned with creator avatars, with an accessible name and a keyboard-focusable “Created by” tooltip.
 - Scope task-only column widths with `.task-grid-row.task-grid-icon-creator` so shared Soup `.task-grid-row` rules cannot override them when stylesheets load in a different order.
-- Reuse `PropertyEmptyIcon` for absent values in list rows, board cards, and group or board-column headers; keep the glyphs aligned with the property feature.
+- Reuse `PropertyEmptyIcon` for absent values in list rows, board cards, and group or board-column headers: 30%-opacity wide priority bars, a dashed user circle, and a corner-dashed project cube; use the regular cube for set projects.
 
 - Save filters, selected layout, grouping, and ordered sort directions; keep text search and scroll state local, and capture implicit person conditions as normal OR-valued facets.
 - Preserve stable tag/property bindings when labels disappear; skip unsupported or malformed conditions without discarding supported filters.

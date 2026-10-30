@@ -4,7 +4,7 @@ import {
 } from '@app/features/tasks-view/components/task-list/task-grid-template';
 import '@app/features/tasks-view/components/task-list/task-list.css';
 import { Entity, MultiSelectCheckbox } from '@entity';
-import StackIcon from '@icon/system/regular/stack.svg';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import { ListPropertyValue } from '@property/component/ListPropertyValue';
 import { Modals } from '@property/component/modal';
 import { PropertiesProvider } from '@property/context/PropertiesContext';
@@ -124,7 +124,7 @@ export function ProjectRow(props: {
             placement="content"
             class="flex min-w-0 items-center gap-2 truncate font-medium"
           >
-            <StackIcon class="size-4 shrink-0 text-ink-muted" />
+            <ProjectIcon class="size-4 shrink-0 text-ink-muted" />
             <span class="min-w-0 truncate">{props.row.project.name}</span>
           </Entity.Slot>
           <For each={TASK_GRID_COLUMNS}>

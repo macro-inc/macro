@@ -1,5 +1,5 @@
 import { UserIcon } from '@core/component/UserIcon';
-import ProjectIcon from '@icon/system/regular/stack.svg';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import { cn } from '@ui';
 import { type JSX, Show } from 'solid-js';

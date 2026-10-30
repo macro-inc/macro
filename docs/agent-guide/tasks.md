@@ -121,12 +121,15 @@ Status and Urgent icons are 18px on desktop and phones; other priority icons are
 16px on desktop and 20px on phones. Phone tap targets sit edge-to-edge.
 Priority sits directly beside the title. Their pickers replace
 the separate Status/Priority columns and duplicate trailing mobile pills; Assignees
-and Project stay on the right, with 20px phone icons. Empty assignees use a person in
-a dashed circular frame. Empty priority shows hollow ascending bars, Urgent shows a
-filled badge with a hollow exclamation mark, Completed uses a filled check-circle,
-and Canceled uses a filled x-circle.
-Not started uses a plain hollow ring without shadows or highlights; its status
-color and icon dimensions stay unchanged.
+and Project stay on the right, with 20px phone icons. Empty assignees use a filled
+person in a dashed circular frame. Empty priority shows the same wide ascending
+bars as Low/Medium/High, with every bar at 30% opacity. Urgent shows a rounded
+square with a transparent exclamation cutout. Completed and Canceled use filled
+discs with transparent check and cross cutouts. Set projects use a cube; empty
+projects use its corner-dashed counterpart. Not started stays a neutral hollow
+ring without shadows or highlights; In progress and In review add counterclockwise
+half and three-quarter pies from 12 o'clock. Current status colors and icon
+dimensions stay unchanged.
 The property edit menus use 18px status and Urgent icons on desktop and mobile.
 Each status has its own `task-status-*` theme color, shared by task icons and
 group-header tints. Completed defaults to accent; explicit Completed theme overrides

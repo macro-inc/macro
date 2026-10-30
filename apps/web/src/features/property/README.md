@@ -17,12 +17,14 @@ current, so `Property.Root` editors never refetch properties after a save;
 side-panel collections own their refresh (below).
 
 `extractors/PropertyEmpty.tsx` shares empty-value glyphs across task list rows,
-board cards, group and column headers, and pickers: hollow ascending bars for no
-priority, a dashed stack for no project, and a person in a dashed circular frame
-for no assignees. Other empty properties retain the dashed circle. Populated project
-properties use the solid-stroke stack icon through `Property.Icon`. Keep these
-state indicators static and readable in compact rows. When composing a project
-icon separately, pass `hideIcon` to `Property.Text` to avoid duplicate glyphs.
+board cards, group and column headers, and pickers: the wide ascending priority
+bars at 30% opacity for no priority, a corner-dashed cube for no project, and a
+filled person in a dashed circular frame for no assignees. No priority uses the
+same color and display box as Low/Medium/High, without additional icon dimming.
+Other empty properties retain the dashed circle. Populated project properties
+use the regular cube icon through `Property.Icon`. Keep these state indicators
+static and readable in compact rows. When composing a project icon separately,
+pass `hideIcon` to `Property.Text` to avoid duplicate glyphs.
 Status and Urgent option icons default to 18px in property pills and both desktop
 and mobile editors; compact displays can override the size explicitly.
 

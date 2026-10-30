@@ -82,6 +82,7 @@ export const PropertyValueIcon: Component<PropertyValueIconProps> = (props) => {
       {/* Status */}
       <Match when={taskStatusIds.has(props.optionId)}>
         <TaskStatusIcon
+          decorative
           statusId={props.optionId}
           class={twMerge('size-4.5 shrink-0', props.class)}
         />

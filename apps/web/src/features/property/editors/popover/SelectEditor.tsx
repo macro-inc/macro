@@ -6,6 +6,7 @@ import {
 } from '@queries/properties/options';
 import { usablePropertyOptions } from '@queries/properties/options-data';
 import { onMount, Show } from 'solid-js';
+import { SYSTEM_PROPERTY_IDS } from '../../constants';
 import { useProperty } from '../../core/context';
 import { PropertyEmptyIcon } from '../../extractors/PropertyEmpty';
 import type { PropertyApiValues, SelectProperty } from '../../types';
@@ -111,7 +112,12 @@ function SelectEditorBody() {
                   icon: (
                     <PropertyEmptyIcon
                       propertyDefinitionId={property.propertyDefinitionId}
-                      class="size-4 text-ink-extra-muted"
+                      class={
+                        property.propertyDefinitionId ===
+                        SYSTEM_PROPERTY_IDS.PRIORITY
+                          ? 'text-ink-extra-muted'
+                          : 'size-4 text-ink-extra-muted'
+                      }
                     />
                   ),
                   onClear: editor.clearOptions,

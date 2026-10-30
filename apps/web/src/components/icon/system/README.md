@@ -47,6 +47,9 @@ independent of the drawing size. Avoid scaling detailed glyphs below 14 px.
 SVGs are decorative by default; put accessible names on their controls.
 For a meaningful standalone glyph with its own accessible label, explicitly
 set `aria-hidden={false}` so the default does not hide its status or label.
+Property status option glyphs are decorative too: their surrounding value or
+menu label names the status. Standalone `TaskStatusIcon` identity glyphs retain
+their accessible status label.
 
 The existing semantic filenames make the migration explicit at each import.
 Several equivalent concepts (for example `folder` and `folder-simple`) share
@@ -58,18 +61,21 @@ staggered bottoms and open counters, following the familiar Phosphor silhouette.
 it is also listed in the regular icon gallery. Brand marks retain their existing assets.
 Icons introduced on main after the source PR retain their existing assets when
 this family has no matching drawing.
-Urgent priority uses a filled rounded-square exclamation badge with a wide hollow
-stem and dot for small-size legibility. Both marks are transparent cutouts. The
-badge's dedicated `priority-urgent` token maps to the theme's orange rather than
-warning or accent.
-Not started uses a plain hollow ring with no shadow or highlight; its status
-color and icon dimensions stay unchanged.
-Completed and Canceled task statuses use filled check-circle and x-circle glyphs
-through the shared property and task-status renderers. Their marks are transparent
-cutouts. Empty priority uses three muted, hollow ascending bars,
-scaled down by 15% within the unchanged icon box to balance their visual weight.
-Empty assignees use the muted user-circle-dashed glyph; populated project properties
-use the regular stack glyph, while empty projects retain its dashed counterpart.
+Urgent priority uses `priority-urgent-fill`, a filled rounded square with rounded
+exclamation-stem and dot cutouts. Its dedicated `priority-urgent` token maps to
+the theme's orange rather than warning or accent.
+Task status rings use a 2.25-unit stroke: `task-created` is a plain hollow ring,
+`task-in-progress` adds a counterclockwise half pie from 12 o'clock, and
+`task-in-review` adds a counterclockwise three-quarter pie. Not started keeps its
+neutral color, with no shadow or highlight. Completed and Canceled use the
+status-specific `task-completed-fill` and `task-canceled-fill` discs with transparent
+check and cross cutouts; keep generic check-circle and x-circle icons separate.
+Empty priority uses `../wide-priority-none.svg`: the same 18×12 ascending bars,
+color, and display box as Low/Medium/High, with all three bars at 30% opacity in
+the SVG and no additional empty-icon dimming. Empty assignees use
+`user-circle-dashed`, a dashed ring around a filled person. Set projects use
+`cube`; empty projects use `cube-dashed`, with a dash at every corner rather than
+a dashed stack.
 Task statuses use independent `task-status-not-started`, `task-status-in-progress`,
 `task-status-in-review`, `task-status-completed`, and `task-status-canceled` theme
 tokens for icons and group-header tints. Their defaults are muted gray, blended

@@ -1,3 +1,3 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-macro-icon="user-circle-dashed">
-  <circle cx="12" cy="12" r="9" stroke-dasharray="2 3"/><circle cx="12" cy="9" r="2.5"/><path d="M7.5 17a4.5 4.5 0 0 1 9 0"/>
+  <circle cx="12" cy="12" r="9" stroke-width="2.25" stroke-linecap="butt" stroke-dasharray="3.54 3.525" stroke-dashoffset="1.77" transform="rotate(-90 12 12)"/><path d="M14.4 9.75a2.4 2.4 0 1 0-4.8 0 2.4 2.4 0 1 0 4.8 0Z" fill="currentColor" stroke="none"/><path d="M7.35 17.1a4.65 3.6 0 0 1 9.3 0Z" fill="currentColor" stroke="none"/>
 </svg>

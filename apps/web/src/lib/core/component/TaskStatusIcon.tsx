@@ -1,5 +1,5 @@
-import StatusDone from '@icon/system/fill/check-circle-fill.svg';
-import StatusCanceled from '@icon/system/fill/x-circle-fill.svg';
+import StatusCanceled from '@icon/system/fill/task-canceled-fill.svg';
+import StatusDone from '@icon/system/fill/task-completed-fill.svg';
 import StatusCreated from '@icon/system/regular/task-created.svg';
 import StatusInProgress from '@icon/system/regular/task-in-progress.svg';
 import StatusInReview from '@icon/system/regular/task-in-review.svg';
@@ -50,6 +50,8 @@ export function TaskStatusIcon(
   props: Omit<EntityIconProps, 'targetType' | 'shared'> & {
     statusId?: string;
     completed?: boolean;
+    /** Hide the glyph from assistive technology when its caller supplies the label. */
+    decorative?: boolean;
   }
 ) {
   const status = () => {
@@ -66,6 +68,7 @@ export function TaskStatusIcon(
     <span
       role="img"
       aria-label={`Task: ${status().label}`}
+      aria-hidden={props.decorative || undefined}
       data-icon-motion="none"
       class={cn(
         ICON_SIZE_CLASSES[props.size ?? 'xs'],

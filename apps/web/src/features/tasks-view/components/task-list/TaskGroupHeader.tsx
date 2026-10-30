@@ -8,7 +8,7 @@ import { getPropertyOptionLabel } from '@entity';
 import { SOUP_ROW_CLASS } from '@entity/composed/list-entity/row-geometry';
 import { useListLayout } from '@entity/composed/list-entity/shared';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
-import ProjectIcon from '@icon/system/regular/stack.svg';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { PropertyEmptyIcon } from '@property/extractors/PropertyEmpty';
@@ -18,7 +18,7 @@ import { ComposerSurface, cn, Layer } from '@ui';
 import { createMemo, Match, Show, Switch } from 'solid-js';
 import type { TaskGroupBy } from '../../types';
 
-const EMPTY_GROUP_PROPERTY_IDS: Partial<Record<TaskGroupBy, string>> = {
+export const EMPTY_GROUP_PROPERTY_IDS: Partial<Record<TaskGroupBy, string>> = {
   priority: SYSTEM_PROPERTY_IDS.PRIORITY,
   project: SYSTEM_PROPERTY_IDS.PROJECT,
   assignee: SYSTEM_PROPERTY_IDS.ASSIGNEES,
@@ -151,7 +151,10 @@ export function TaskGroupHeader(props: {
                         propertyDefinitionId={
                           EMPTY_GROUP_PROPERTY_IDS[props.groupBy]
                         }
-                        class="size-3.5 text-ink-extra-muted"
+                        class={cn(
+                          'size-3.5 text-ink-extra-muted',
+                          props.groupBy === 'priority' && 'size-4'
+                        )}
                       />
                     </Match>
                     <Match
