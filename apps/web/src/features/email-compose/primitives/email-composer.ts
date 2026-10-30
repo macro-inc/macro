@@ -1114,6 +1114,16 @@ export function createEmailComposer(props: EmailComposerOptions) {
     if (persistencePaused() || scheduling()) return false;
     setDiscarding(true);
     autosave.cancel();
+    // A standalone draft owns its thread, so nothing is left to show. Leave
+    // first, because a queued save or delete can take minutes and the
+    // optimistic delete empties a draft-only thread around this composer.
+    // Discarding keeps autosave paused, so disposal cannot save it again.
+    // A host that cannot leave must not keep the draft from being deleted.
+    try {
+      props.host?.goBack?.();
+    } catch (error) {
+      props.notices.reportError(error);
+    }
     try {
       // A first save may still be creating the draft. Delete its returned ID
       // after it settles so discard cannot leave an orphan behind.
@@ -1137,10 +1147,6 @@ export function createEmailComposer(props: EmailComposerOptions) {
       }
       identityVersion += 1;
       resetState();
-      // A standalone draft owns its thread; after discard there is no
-      // conversation left to display. Reset before leaving so disposal cannot
-      // flush the deleted draft back into the save queue.
-      props.host?.goBack?.();
       return true;
     } finally {
       setDiscarding(false);

@@ -1041,16 +1041,21 @@ completion must not archive the restored thread.
 
 With GraphQL Mail enabled, discarding the last draft in a thread must remove the
 thread from every local Mail view, including after queued replay. Discarding a
-standalone draft from its composer returns to the previous list after deletion
-is accepted, including offline; a failed deletion keeps the composer open.
-Check both the toolbar trash button and the mobile Delete Draft action.
+standalone draft from its composer returns to the previous list at once, even
+while a save or the deletion is still on the wire, including offline. The
+deletion finishes in the background; a failed deletion reports **Failed to
+delete draft** and keeps the draft. No empty **[No subject]** thread may show
+in between. Check both the toolbar trash button and the mobile Delete Draft
+action, including after a pasted image leaves a save pending.
 In Email's inline detail, deletion closes the detail and preserves the current
 mail tab and filters; it must not navigate split history to an older composer.
 Discarding a reply draft must preserve the remaining conversation. A previously
 cached thread that the server no longer has must leave the lists after opening it or receiving
 a 404 while changing its labels; a cached record must not override the server's
 not-found response. Check the same behavior after REST discard. Offline/network
-errors alone must never evict a cached thread.
+errors alone must never evict a cached thread. An open thread the server answers
+404 for stops polling `email/threads/<id>/operations`; transient failures keep
+polling.
 
 Choosing or clearing a send time is local preparation only. The composer remains
 editable and autosaves normally, shows **Scheduled send: ...** (the time and the
