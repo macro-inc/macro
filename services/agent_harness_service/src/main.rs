@@ -678,6 +678,7 @@ async fn run() -> anyhow::Result<()> {
         &secrets,
         tool_context.clone(),
         pool.clone(),
+        aws_sdk_kms::Client::new(&aws_config),
         macro_auth::middleware::decode_jwt::JwtValidationArgs::new_with_secret_manager(
             config.environment,
             &secrets,

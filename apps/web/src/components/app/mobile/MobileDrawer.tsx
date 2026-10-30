@@ -1,10 +1,11 @@
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { isEditableInput } from '@core/util/isEditableInput';
-import Drawer from '@corvu/drawer';
+import Drawer, { type Size } from '@corvu/drawer';
 import { Layer } from '@ui/components/Layer';
 import { cn } from '@ui/utils/classname';
 import {
   type ComponentProps,
+  createSignal,
   onCleanup,
   splitProps,
   type ValidComponent,
@@ -287,16 +288,25 @@ export const MobileDrawer = Object.assign(
       disposed = true;
     });
     const closed = () => disposed || !(props.open ?? uncontrolledOpen);
+    // A drag past the break point moves Corvu to its closed snap point before
+    // it asks to close. An owner that keeps the drawer open (to confirm a
+    // discard) would leave it parked off-screen behind its scrim, so return
+    // it to the open snap point. It starts closed, as Corvu's own state does,
+    // so opening slides it in.
+    const [activeSnapPoint, setActiveSnapPoint] = createSignal<Size>(0);
     return (
       <Drawer
         breakPoints={[0.8]}
         closeOnOutsideFocus={false}
         noOutsidePointerEvents={false}
         restoreFocus={false}
+        activeSnapPoint={activeSnapPoint()}
+        onActiveSnapPointChange={setActiveSnapPoint}
         {...rest}
         onOpenChange={(open) => {
           uncontrolledOpen = open;
           local.onOpenChange?.(open);
+          if (!open && !closed()) setActiveSnapPoint(1);
         }}
         onOutsidePointer={(event) => {
           if (!dismissesDrawer(event)) event.preventDefault();

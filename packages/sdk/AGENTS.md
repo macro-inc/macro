@@ -24,6 +24,10 @@ enforced by the ordinary backend APIs.
   `external_chat`) and their message/send/upload/participant handles.
 - `src/entities/whatsapp/`: the owner's WhatsApp account and chat list; `WhatsAppChat.add()`
   returns an `ExternalChat`.
+- `src/entities/images/`: `macro.images.generate()` (cognition
+  `POST /images/generate`, admitted against the user's AI allowance) returns a
+  sized `GeneratedImage`; `StaticImage` handles attach to `channel.send(text,
+  { images })` and `thread.reply` as `static/image` attachments.
 - `services.ts`, `openapi-ts.config.ts`: generated service contract inputs.
 
 ## Boundaries

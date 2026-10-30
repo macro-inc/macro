@@ -86,11 +86,13 @@ export function EmailComposeToolbar(props: {
                     constrainedMediaDimensions: { width: 542, height: 542 },
                   })
               }
-              label="Insert image"
-              size="icon-composer"
+              variant="ghost"
+              tooltip="Insert image"
+              aria-label="Insert image"
+              size="icon-md"
               disabled={ctx.disabled()}
             >
-              <ImageIcon />
+              <ImageIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </Show>
           <Button

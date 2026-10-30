@@ -6,12 +6,19 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EventFilterCondition } from './eventFilterCondition';
+import type { EventFilterGithub } from './eventFilterGithub';
 import type { EventFilterIds } from './eventFilterIds';
+import type { EventFilterMatch } from './eventFilterMatch';
 import type { EventName } from './eventName';
 
 /**
  * An event name AND an entity ID must match within the same filter. A
 condition further requires the event's content to answer it with yes.
+
+`github` comes from outside Macro and carries its payload: it stands
+alone in its filter, takes no ids, and may require
+exact payload values with `match`. A `github` filter narrows deliveries
+with its `github` selector.
  */
 export interface EventFilter {
   /**
@@ -21,5 +28,8 @@ invoice?". The routine runs only when the answer is yes.
    */
   condition?: EventFilterCondition;
   events: EventName[];
+  github?: EventFilterGithub;
   ids?: EventFilterIds;
+  /** Exact tests on the payload, all of which must pass. */
+  match?: EventFilterMatch;
 }

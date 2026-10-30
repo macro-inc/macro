@@ -22,6 +22,7 @@ use ai_projections::inbound::axum_router::upsert_projection::{
     ProjectionStateResponse, UpsertProjectionRequest,
 };
 use ai_usage::inbound::axum_router::{self as ai_usage_api};
+use image_generation::inbound::axum_router::{self as image_generation_api};
 use import::inbound::axum_router::{self as import_api, RunImportRequest};
 use mcp_client::inbound::axum_router::{
     self as mcp_api, AddServerRequest, ServerResponse, StartAuthRequest, StartAuthResponse,
@@ -93,6 +94,7 @@ use utoipa::OpenApi;
             stream_stop::stop_chat_stream,
             structured_completion::structured_completion,
             decisions::decide,
+            image_generation_api::generate_image_handler,
             database_query::generate_database_query,
             memory_api::get_memory_handler,
             import_api::get_state_handler,
@@ -202,6 +204,11 @@ use utoipa::OpenApi;
                 jev::domain::DecisionRequest,
                 jev::domain::DecisionResponse,
                 decisions::DecisionErrorBody,
+                image_generation_api::GenerateImageRequest,
+                image_generation_api::GenerateImageResponse,
+                image_generation_api::GenerateImageErrorBody,
+                image_generation_api::GenerateImageAspectRatio,
+                image_generation_api::GenerateImageReference,
                 agent::structured_output::DynamicSchema,
 
                 // Memory

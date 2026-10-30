@@ -12,6 +12,7 @@ import { paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { AgentConversation } from '../agent-sessions/conversation';
 import { PropertiedEntity } from '../entity';
+import type { StaticImage } from '../images/image';
 import {
   MessageThread,
   type TimelineOptions,
@@ -165,18 +166,22 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
 
   /**
    * Post a message. Plain text, or a rich body composed with `msg`.
+   * `images` attaches static images, such as one from
+   * `macro.images.generate()`, below the text.
    *
    * Works with a channel webhook token as well as a normal one — see
    * {@link postToChannel} for which endpoint that picks and what it costs.
+   * The webhook endpoint takes no images.
    */
   async send(
     body: string | RichMessage,
-    opts?: { thread?: Thread },
+    opts?: { thread?: Thread; images?: StaticImage[] },
   ): Promise<Message> {
     const id = await postToChannel(
       this.client,
       opts?.thread ?? this,
       toBody(body),
+      opts?.images,
     );
     return Message.byId(this.client, this.id, id);
   }

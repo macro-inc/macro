@@ -73,6 +73,11 @@ draft exactly like its trash button, `Cmd+Shift+U` opens the attach picker, and
 list and quote. Check discard from both a reply (the reply closes) and
 standalone compose (the view goes back), with focus in the body.
 
+Recipient fields turn complete addresses into chips when the typed or pasted
+text ends in a comma or semicolon, so `a@example.com, b@example.com,` adds both.
+Enter or a click picks the highlighted suggestion. Type, paste, or Tab straight
+after picking one and check that both recipients stay and the input is empty.
+
 Outlook connections support personal Outlook.com and individual Microsoft 365
 inboxes. Choose the inbox explicitly when testing mixed-provider accounts. The
 same thread, search, Signal/Noise, draft, and schedule surfaces apply to both

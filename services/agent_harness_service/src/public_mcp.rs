@@ -11,6 +11,7 @@ use crate::config::Config;
 use analytics::McpAnalytics;
 use analytics_client::{AnalyticsClient, AnalyticsClientConfig, PostHogConfig};
 use anyhow::Context;
+use cursor_api_key::cipher::AwsKmsCiphertexts;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use mcp_auth_proxy::{
     domain::{
@@ -19,7 +20,9 @@ use mcp_auth_proxy::{
     },
     outbound::{
         fusionauth::FusionAuthOAuthProvider,
+        postgres::PostgresAuthStore,
         redis::{RedisClientRegistry, RedisInflightAuth},
+        redis_cutover::{RedisCutoverAuthStore, backfill_from_redis},
     },
 };
 use rmcp::transport::streamable_http_server::{
@@ -54,13 +57,15 @@ pub async fn router(
     secrets: &secretsmanager_client::SecretsManager,
     tool_context: ai_tools::ToolServiceContext,
     db: sqlx::PgPool,
+    kms: aws_sdk_kms::Client,
     jwt_args: JwtValidationArgs,
     background_tasks: tokio_util::task::TaskTracker,
     cancellation: tokio_util::sync::CancellationToken,
     code_mode: Option<PublicCodeMode>,
 ) -> anyhow::Result<axum::Router> {
     let public_url = macro_service_urls::McpPublicUrl::new()?;
-    let auth_proxy = build_auth_proxy(config, secrets, &public_url).await?;
+    let (auth_proxy, backfill) =
+        build_auth_proxy(config, secrets, &public_url, db.clone(), kms).await?;
     let analytics = build_analytics(config, db);
     let item_base_url = macro_service_urls::AppServiceUrl::new()?.to_string();
     let static_file_base_url =
@@ -110,6 +115,7 @@ pub async fn router(
         },
     );
 
+    background_tasks.spawn(backfill);
     let cleanup_state = auth_proxy.clone();
     background_tasks.spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
@@ -137,11 +143,18 @@ pub async fn router(
     )
 }
 
+/// The broker, and the one-off copy of its Redis state into Postgres to run
+/// in the background.
 async fn build_auth_proxy(
     config: &Config,
     secretsmanager_client: &secretsmanager_client::SecretsManager,
     public_url: &macro_service_urls::McpPublicUrl,
-) -> anyhow::Result<McpAuthProxyServiceImpl<RedisInflightAuth>> {
+    db: sqlx::PgPool,
+    kms: aws_sdk_kms::Client,
+) -> anyhow::Result<(
+    McpAuthProxyServiceImpl<RedisCutoverAuthStore>,
+    impl Future<Output = ()> + Send + 'static,
+)> {
     let mcp_public_url = public_url.to_string();
     let mcp_oauth_redirect_uri = format!("{mcp_public_url}/oauth/callback");
 
@@ -187,7 +200,26 @@ async fn build_auth_proxy(
         .context("failed to initialize MCP auth provider")?;
     let redis_client = redis::Client::open(config.redis_uri.as_ref().to_owned())
         .context("failed to initialize redis client for MCP auth proxy")?;
-    let client_registry = Arc::new(RedisClientRegistry::new(redis_client.clone()));
+    let legacy_clients = Arc::new(RedisClientRegistry::new(redis_client.clone()));
+    let postgres = PostgresAuthStore::new(
+        db,
+        Arc::new(AwsKmsCiphertexts::new(
+            kms,
+            config.mcp_oauth_kms_key_id.as_ref().to_owned(),
+        )),
+    );
+    let store = Arc::new(RedisCutoverAuthStore::new(
+        postgres.clone(),
+        legacy_clients.clone(),
+        Arc::new(RedisInflightAuth::new(redis_client)),
+    ));
+    let backfill = async move {
+        // Failure leaves the lazy fallback to copy entries as they are used;
+        // the next deploy retries the rest.
+        if let Err(error) = backfill_from_redis(&legacy_clients, &postgres).await {
+            tracing::error!(error = ?error, "MCP OAuth backfill from Redis failed");
+        }
+    };
 
     let redirect_uri_policy = build_redirect_uri_policy(config);
     tracing::info!(
@@ -195,14 +227,15 @@ async fn build_auth_proxy(
         "initialized MCP OAuth redirect URI policy"
     );
 
-    Ok(McpAuthProxyServiceImpl::new(McpAuthProxyServiceDeps {
+    let auth_proxy = McpAuthProxyServiceImpl::new(McpAuthProxyServiceDeps {
         public_url: mcp_public_url,
         redirect_uri_policy,
-        inflight_auth: Arc::new(RedisInflightAuth::new(redis_client)),
-        client_registrations: client_registry.clone(),
-        refresh_token_bindings: client_registry,
+        inflight_auth: store.clone(),
+        client_registrations: store.clone(),
+        refresh_token_bindings: store,
         oauth_provider: Arc::new(auth_provider),
-    }))
+    });
+    Ok((auth_proxy, backfill))
 }
 
 /// PostHog MCP analytics when `POSTHOG_API_KEY` is set; otherwise disabled.

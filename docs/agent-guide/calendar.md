@@ -273,8 +273,8 @@ Connected calendars offers Connect account (pick Gmail or Outlook / Microsoft 36
 then consent), Connect calendar for accounts missing calendar permission (consent
 again for that account at its own provider with its address preselected, as
 Settings → Email's Enable calendar does), and Disconnect with confirmation. When
-the only linked account lacks calendar permission, the Google
-Calendar row shows just a filled Connect button for it, with no account list or
+the only linked account lacks calendar permission, the Calendar accounts row
+shows just a filled Connect button for it, with no account list or
 visibility note. Disconnect removes calendar access/data, not the Gmail connection.
 Settings → Calendar lists only the viewer's own inboxes. The **Enable calendar**
 toast (behind `enable-calendar-prompt-web` and `enable-calendar-prompt-mobile`)

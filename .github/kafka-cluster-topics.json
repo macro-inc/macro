@@ -14,6 +14,7 @@
   "macro.example",
   "macro.forms",
   "macro.github_pull_requests",
+  "macro.github_webhooks",
   "macro.initiatives",
   "macro.mentions",
   "macro.messages",
