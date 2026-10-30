@@ -4,7 +4,7 @@ use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolCallError,
     ToolResult,
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -86,14 +86,22 @@ pub struct CalendarEventListItem {
     pub viewer_can: ViewerCapabilities,
     /// Calendar the event belongs to, when known.
     pub calendar_id: Option<uuid::Uuid>,
-    /// Display name of that calendar, when known.
+    /// Display name of that calendar, when known. It often says whose
+    /// calendar it is: Google names a person's primary calendar after them or
+    /// their address.
     pub calendar_name: Option<String>,
-    /// Connected inbox address holding this copy of the event. A meeting on
-    /// several of the user's inboxes is listed once per inbox, each with its
-    /// own `eventId`.
+    /// Whether that calendar counts toward the user's busy time, when known.
+    /// Only these and meetings they attend are the user's schedule; false
+    /// does not say whose it is, as their own other calendars are false too.
+    pub contributes_to_availability: Option<bool>,
+    /// Connected inbox address syncing this copy of the event. It stays the
+    /// user's own address on a colleague's calendar, so it never says whose
+    /// calendar it is. A meeting on several of the user's inboxes is listed
+    /// once per inbox, each with its own `eventId`.
     pub inbox: Option<String>,
     /// Whether the user organizes this event or is a guest on it, through
-    /// `inbox`; absent when they are neither.
+    /// `inbox`; absent when they are neither, or nothing shows the calendar
+    /// is theirs.
     pub my_role: Option<ToolEventRole>,
     /// Every calendar carrying a copy of this event when there is more than
     /// one, primary first. Pass a copy's `calendarId` to UpdateCalendarEvent
@@ -110,7 +118,7 @@ pub struct CalendarEventCopyItem {
     pub calendar_id: uuid::Uuid,
     /// Display name of that calendar, when known.
     pub calendar_name: Option<String>,
-    /// Connected inbox address the calendar belongs to, when known.
+    /// Connected inbox address syncing the calendar, when known.
     pub inbox: Option<String>,
     /// The copy's own title.
     pub title: String,
@@ -151,6 +159,16 @@ before creating an event. Keep the window as narrow as the request allows — a 
 — since wide windows truncate at 200 occurrences. The window must be at most 370 days and \
 within one year past to two years future. If `syncStatus` is `syncing`, tell the user \
 results may still be incomplete.\n\
+\n\
+The user can see calendars that are not theirs, such as a colleague's or a team's. `inbox` is \
+the account syncing a calendar, so it stays the user's own address on all of them, and neither \
+it, `isReadOnly` nor `myRole` says whose calendar it is. Their schedule is the calendars with \
+`contributesToAvailability`, plus meetings they attend: only those are \"your calendar\", and \
+only those count as conflicts or busy time, as in GetTeamAvailability. Anything else is what \
+that calendar shows, not where the user is or what they are doing. Call it by `calendarName`, \
+say whose it is when the name shows that, and otherwise say you cannot tell rather than guess. \
+When one overlaps a time you suggest, mention it so the user can decide, since their own other \
+calendars read the same way.\n\
 \n\
 Each entry names the calendar (`calendarName`) and connected inbox (`inbox`) holding that \
 copy of the event, and `myRole` says whether the user organizes it or is a guest there. A \
@@ -310,8 +328,10 @@ where
                     viewer_can: event.viewer_can,
                     calendar_id: event.calendar_id,
                     calendar_name: labels.calendar_name(event.calendar_id),
+                    contributes_to_availability: labels
+                        .contributes_to_availability(event.calendar_id),
                     inbox: labels.inbox(event.calendar_id, Some(link_id)),
-                    my_role: ToolEventRole::of(&event),
+                    my_role: ToolEventRole::of(&event, &labels),
                     copies: if event.sources.len() > 1 {
                         event
                             .sources
@@ -336,7 +356,13 @@ where
             CalendarSyncStatus::Ready => "ready",
         }
         .to_string();
-        let summary = build_summary(events.len(), truncated, &sync_status, multi_inbox_meetings);
+        let summary = build_summary(
+            events.len(),
+            truncated,
+            &sync_status,
+            multi_inbox_meetings,
+            &calendars_outside_schedule(&events),
+        );
 
         Ok(ListCalendarEventsResponse {
             events,
@@ -392,11 +418,27 @@ fn multi_inbox_meetings(occurrences: &[(CalendarEvent, CalendarOccurrence, Uuid)
     copies.values().filter(|events| events.len() > 1).count()
 }
 
+/// The calendars in the result that are not part of the user's schedule, by
+/// name: those events are neither on it nor meetings the user attends.
+fn calendars_outside_schedule(events: &[CalendarEventListItem]) -> Vec<&str> {
+    events
+        .iter()
+        .filter(|event| {
+            event.contributes_to_availability == Some(false)
+                && event.my_role != Some(ToolEventRole::Guest)
+        })
+        .filter_map(|event| event.calendar_name.as_deref())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
 fn build_summary(
     count: usize,
     truncated: bool,
     sync_status: &str,
     multi_inbox_meetings: usize,
+    other_calendars: &[&str],
 ) -> String {
     let mut summary = match count {
         0 => "No calendar events in this window.".to_string(),
@@ -413,6 +455,13 @@ fn build_summary(
             " {meetings} meetings are on more than one of the user's inboxes; tell their entries \
              apart by `inbox` and `myRole`."
         )),
+    }
+    if !other_calendars.is_empty() {
+        summary.push_str(&format!(
+            " Some events are on calendars outside the user's schedule ({}): call them by \
+             `calendarName`, not the user's, and do not count them as busy time.",
+            other_calendars.join(", ")
+        ));
     }
     if truncated {
         summary.push_str(" More exist — narrow the window to see the rest.");

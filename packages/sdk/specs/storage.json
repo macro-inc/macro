@@ -22398,6 +22398,11 @@
             "format": "date-time",
             "description": "Entity update time of the previewed copy."
           },
+          "viewerCalendarId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The calendar holding `viewer_event_id`, when it is still listed."
+          },
           "viewerCopy": {
             "oneOf": [
               {

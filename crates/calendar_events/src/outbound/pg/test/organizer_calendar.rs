@@ -157,6 +157,7 @@ async fn an_invitation_from_a_secondary_calendar_names_the_organizers_copy(pool:
         );
     };
     assert_eq!(preview.viewer_copy, Some(CalendarMentionViewerCopy::Event));
+    assert_eq!(preview.viewer_calendar_id, Some(primary_id));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

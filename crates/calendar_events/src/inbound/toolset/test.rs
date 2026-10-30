@@ -1444,6 +1444,7 @@ async fn list_calendars_maps_visible_calendars() {
             is_primary: true,
             is_writable: true,
             is_subscription: false,
+            contributes_to_availability: true,
             sync_error: None,
             default_reminders: Vec::new(),
         }]),
@@ -1469,6 +1470,7 @@ async fn list_calendars_maps_visible_calendars() {
     assert_eq!(calendar.email_address, "gab@example.com");
     assert!(calendar.is_primary);
     assert!(calendar.is_writable);
+    assert!(calendar.contributes_to_availability);
     assert_eq!(
         calendar.provider,
         crate::domain::models::CalendarProvider::Google
@@ -1500,6 +1502,7 @@ fn visible_calendar(id: u128, email_link_id: u128, inbox: &str, name: &str) -> V
         is_primary: true,
         is_writable: true,
         is_subscription: false,
+        contributes_to_availability: true,
         sync_error: None,
         default_reminders: Vec::new(),
     }
@@ -1626,22 +1629,27 @@ async fn list_events_labels_each_calendar_copy_of_one_entity() {
 
 #[test]
 fn role_follows_the_copy_inbox() {
+    let labels =
+        CalendarLabels::from_calendars(vec![visible_calendar(9, 1, "owner@example.com", "Owner")]);
     let mut event = sample_event(Vec::new());
     assert_eq!(
-        ToolEventRole::of(&event),
+        ToolEventRole::of(&event, &labels),
         Some(ToolEventRole::Organizer),
         "the inbox's own row organizes"
     );
 
     event.attendees[0].is_self = false;
     assert_eq!(
-        ToolEventRole::of(&event),
+        ToolEventRole::of(&event, &labels),
         None,
         "neither organizer nor guest"
     );
 
     event.attendees[1].is_self = true;
-    assert_eq!(ToolEventRole::of(&event), Some(ToolEventRole::Guest));
+    assert_eq!(
+        ToolEventRole::of(&event, &labels),
+        Some(ToolEventRole::Guest)
+    );
 
     event.attendees.clear();
     event.viewer_can = ViewerCapabilities {
@@ -1649,9 +1657,94 @@ fn role_follows_the_copy_inbox() {
         ..ViewerCapabilities::NONE
     };
     assert_eq!(
-        ToolEventRole::of(&event),
+        ToolEventRole::of(&event, &labels),
         Some(ToolEventRole::Organizer),
         "an own event without guests"
+    );
+}
+
+/// Writing a calendar lets the user act as its organizer, which says nothing
+/// about whose calendar or event it is.
+#[test]
+fn role_never_claims_an_event_on_someone_elses_calendar() {
+    let mut shared = visible_calendar(9, 1, "owner@example.com", "colleague@example.com");
+    shared.contributes_to_availability = false;
+    let labels = CalendarLabels::from_calendars(vec![shared]);
+    let writer = ViewerCapabilities {
+        organize: true,
+        ..ViewerCapabilities::NONE
+    };
+
+    let mut event = sample_event(Vec::new());
+    event.viewer_can = writer;
+    event.attendees[0].is_self = false;
+    assert_eq!(
+        ToolEventRole::of(&event, &labels),
+        None,
+        "their meeting, seen on their calendar"
+    );
+
+    event.attendees.clear();
+    assert_eq!(
+        ToolEventRole::of(&event, &labels),
+        None,
+        "their event without guests"
+    );
+
+    let own_calendar =
+        CalendarLabels::from_calendars(vec![visible_calendar(9, 1, "owner@example.com", "Owner")]);
+    let mut invited = sample_event(Vec::new());
+    invited.viewer_can = writer;
+    invited.attendees[0].is_self = false;
+    invited.attendees[1].is_self = true;
+    assert_eq!(
+        ToolEventRole::of(&invited, &own_calendar),
+        Some(ToolEventRole::Guest),
+        "invited by someone whose calendar the user can write"
+    );
+}
+
+#[tokio::test]
+async fn list_names_a_colleagues_calendar_and_keeps_the_inbox() {
+    let mut event = sample_event(Vec::new());
+    event.attendees.clear();
+    event.viewer_can = ViewerCapabilities {
+        organize: true,
+        ..ViewerCapabilities::NONE
+    };
+    let mut shared = visible_calendar(9, 1, "owner@example.com", "colleague@example.com");
+    shared.contributes_to_availability = false;
+    let mutations = MockMutations {
+        calendars: Mutex::new(vec![shared]),
+        ..Default::default()
+    };
+    let occurrences = MockOccurrences {
+        rows: Mutex::new(vec![(event.clone(), occurrence_of(&event, "k-1", false))]),
+        status: CalendarSyncStatus::Ready,
+        copies: Mutex::new(Vec::new()),
+    };
+    let (_, context) = context(mutations, occurrences);
+
+    let tool = ListCalendarEvents {
+        start: Utc.with_ymd_and_hms(2026, 8, 20, 0, 0, 0).unwrap(),
+        end: Utc.with_ymd_and_hms(2026, 8, 21, 0, 0, 0).unwrap(),
+    };
+    let response = tool.call(context, request_context()).await.unwrap();
+
+    let listed = &response.events[0];
+    assert_eq!(
+        listed.calendar_name.as_deref(),
+        Some("colleague@example.com")
+    );
+    assert_eq!(listed.contributes_to_availability, Some(false));
+    assert_eq!(listed.inbox.as_deref(), Some("owner@example.com"));
+    assert_eq!(listed.my_role, None);
+    assert!(
+        response
+            .summary
+            .contains("outside the user's schedule (colleague@example.com)"),
+        "{}",
+        response.summary
     );
 }
 

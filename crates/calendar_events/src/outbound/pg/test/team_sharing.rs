@@ -498,6 +498,22 @@ async fn team_sources_require_current_membership_and_verified_source_entitlement
             .await
             .unwrap()
     );
+    let visible = repo.list_visible_calendars(owner).await.unwrap();
+    let contributes = |calendars: &[VisibleCalendar], id: Uuid| {
+        calendars
+            .iter()
+            .find(|calendar| calendar.id == id)
+            .unwrap()
+            .contributes_to_availability
+    };
+    assert!(
+        contributes(&visible, primary),
+        "an inbox's primary calendar is the owner's schedule by default"
+    );
+    assert!(
+        !contributes(&visible, secondary),
+        "any other calendar is not, whatever access the owner holds on it"
+    );
     assert!(
         team.set_availability_calendar(owner, secondary, true)
             .await
@@ -511,6 +527,13 @@ async fn team_sources_require_current_membership_and_verified_source_entitlement
             .find(|calendar| calendar.calendar_id == secondary)
             .unwrap()
             .contributes_to_availability
+    );
+    assert!(
+        contributes(
+            &repo.list_visible_calendars(owner).await.unwrap(),
+            secondary
+        ),
+        "the setting reaches the calendar list"
     );
 }
 

@@ -320,6 +320,7 @@ struct VisibleCalendarRow {
     unconfirmed_reply: bool,
     provider: String,
     online_meeting_providers: Vec<String>,
+    contributes_to_availability: bool,
 }
 
 fn visible_calendar(row: VisibleCalendarRow) -> VisibleCalendar {
@@ -347,6 +348,7 @@ fn visible_calendar(row: VisibleCalendarRow) -> VisibleCalendar {
         is_primary: row.is_primary,
         is_writable: matches!(row.access_role.as_deref(), Some("owner" | "writer")),
         is_subscription: is_system_calendar(&row.provider_calendar_id),
+        contributes_to_availability: row.contributes_to_availability,
         sync_error: VisibleCalendar::sync_issue(
             row.last_sync_error,
             row.consecutive_sync_failures,
@@ -415,6 +417,7 @@ const MENTION_PREVIEW_DESCRIPTION_MAX_CHARS: u16 = 4000;
 struct MentionPreviewRow {
     mention_exists: bool,
     resolved_event_id: Option<Uuid>,
+    viewer_calendar_id: Option<Uuid>,
     is_channel_shared: Option<bool>,
     is_snapshot: Option<bool>,
     inbox_organizes: Option<bool>,
@@ -1374,6 +1377,11 @@ impl CalendarRepository for PgCalendarRepository {
             SELECT
                 (mentioned.id IS NOT NULL) AS "mention_exists!",
                 viewer_event.id AS "resolved_event_id?",
+                (
+                    SELECT viewer_source.calendar_id
+                    FROM calendar_event_sources viewer_source
+                    WHERE viewer_source.id = calendar_event_canonical_source_id(viewer_event.id)
+                ) AS "viewer_calendar_id?",
                 viewer_event.is_channel_shared AS "is_channel_shared?",
                 viewer_event.is_snapshot AS "is_snapshot?",
                 viewer_event.inbox_organizes AS "inbox_organizes?",
@@ -2664,10 +2672,14 @@ impl CalendarRepository for PgCalendarRepository {
                 calendar.last_sync_error,
                 EXISTS(SELECT 1 FROM calendar_outlook_declines d
                     WHERE d.mailbox_key=calendar_outlook_mailbox_key(link.id) AND d.provider_calendar_id=calendar.provider_calendar_id AND d.confirmed_at IS NULL AND d.submitted_at<now()-interval '5 minutes') AS "unconfirmed_reply!",
-                calendar.consecutive_sync_failures,account.provider,calendar.online_meeting_providers
+                calendar.consecutive_sync_failures,account.provider,calendar.online_meeting_providers,
+                COALESCE(preference.contributes_to_availability,
+                    account.owner_id = $1 AND calendar.is_primary) AS "contributes_to_availability!"
             FROM email_links link
             JOIN calendar_accounts account ON account.email_link_id = link.id
             JOIN calendars calendar ON calendar.account_id = account.id
+            LEFT JOIN calendar_availability_preferences preference
+                ON preference.calendar_id = calendar.id AND preference.user_id = $1
             WHERE NOT calendar.is_deleted
               AND account.sync_status <> 'disabled'
               AND (
@@ -4904,6 +4916,7 @@ fn mention_preview_from_row(row: MentionPreviewRow) -> Result<CalendarMentionPre
     Ok(CalendarMentionPreview::Accessible(Box::new(
         CalendarMentionEvent {
             viewer_event_id: (!is_channel_shared).then_some(resolved_event_id),
+            viewer_calendar_id: row.viewer_calendar_id.filter(|_| !is_channel_shared),
             viewer_copy: (!is_channel_shared).then(|| {
                 CalendarMentionViewerCopy::classify(
                     row.is_snapshot.unwrap_or_default(),

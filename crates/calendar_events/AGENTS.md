@@ -270,6 +270,19 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   (`agent_code_mode::covered_by_code_sdk`), so the routes and the SDK docs are
   what reach them; the web, which opens one copy, sends no `inbox` and is not
   checked.
+- No provider field says whose calendar it is. An inbox syncs every calendar
+  its account can see under its own address, and Google gives `accessRole`
+  `owner` to anyone with manage rights, on a colleague's primary calendar too;
+  Outlook stores only `canEdit`; `is_primary` is false on a person's own other
+  calendars. `VisibleCalendar::contributes_to_availability` is the nearest
+  signal: the user's setting, by default the primaries of inboxes they own.
+  With meetings they attend, it is their own schedule for agents as for
+  `TeamSourceOccurrence::is_personally_busy`. `viewer_can.organize` stays a
+  capability, since writing a calendar lets the user act as its organizer, so
+  `ToolEventRole::of` and the SDK's `eventRole` count it only on such a
+  calendar, and `ReadCalendarEvent` reports anything else as
+  `on_visible_calendar`. The calendar's name is what tells an agent whose it
+  is: Google names a person's primary calendar after them or their address.
 - Copies of one meeting pair by `calendar_meeting_uid(ical_uid)`, not the raw
   UID: Exchange gives a meeting it imports from an invitation its own UID that
   wraps the original after `vCal-Uid`, and the SQL function unwraps it, so an

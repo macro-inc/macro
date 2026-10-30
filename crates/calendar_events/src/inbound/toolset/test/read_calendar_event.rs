@@ -83,6 +83,7 @@ fn mention(viewer_event_id: Option<Uuid>) -> CalendarMentionEvent {
     CalendarMentionEvent {
         viewer_event_id,
         viewer_copy: viewer_event_id.map(|_| CalendarMentionViewerCopy::Event),
+        viewer_calendar_id: viewer_event_id.map(|_| Uuid::from_u128(9)),
         title: "Design review".to_string(),
         description: Some("Walk through the rollout.".to_string()),
         time: EventTime::Timed {
@@ -109,12 +110,27 @@ async fn read(
     ai_toolset::ToolResult<serde_json::Value>,
     Vec<CalendarMentionRequestItem>,
 ) {
+    let own = visible_calendar(9, 1, "gab@example.com", "gab@example.com");
+    read_with_calendar(preview, args, own).await
+}
+
+async fn read_with_calendar(
+    preview: CalendarMentionPreview,
+    args: serde_json::Value,
+    calendar: VisibleCalendar,
+) -> (
+    ai_toolset::ToolResult<serde_json::Value>,
+    Vec<CalendarMentionRequestItem>,
+) {
     let occurrences = std::sync::Arc::new(PreviewOccurrences {
         preview,
         requested: Mutex::new(Vec::new()),
     });
     let context = CalendarToolContext::new(
-        std::sync::Arc::new(MockMutations::default()),
+        std::sync::Arc::new(MockMutations {
+            calendars: Mutex::new(vec![calendar]),
+            ..Default::default()
+        }),
         occurrences.clone(),
         std::sync::Arc::new(MockMeetingLinks::default()),
     );
@@ -176,6 +192,30 @@ async fn an_event_on_the_users_calendar_reads_with_their_own_copy() {
     assert_eq!(read["access"], "on_your_calendar");
     assert_eq!(read["eventId"], own_copy.to_string());
     assert!(read.get("joinRequestStatus").is_none());
+}
+
+#[tokio::test]
+async fn an_event_on_a_colleagues_calendar_never_reads_as_the_users() {
+    let copy = Uuid::from_u128(42);
+    let mut shared = visible_calendar(9, 1, "gab@example.com", "colleague@example.com");
+    shared.contributes_to_availability = false;
+
+    let (result, _) = read_with_calendar(
+        CalendarMentionPreview::Accessible(Box::new(mention(Some(copy)))),
+        serde_json::json!({ "eventId": copy, "occurrenceKey": null }),
+        shared,
+    )
+    .await;
+
+    let read = result.unwrap();
+    assert_eq!(read["access"], "on_visible_calendar");
+    assert_eq!(read["calendarName"], "colleague@example.com");
+    assert_eq!(read["eventId"], copy.to_string());
+    assert_eq!(
+        read["summary"],
+        "Design review is on colleague@example.com, which the user can see but which is not \
+         part of their schedule and may be someone else's."
+    );
 }
 
 #[tokio::test]

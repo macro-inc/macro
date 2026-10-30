@@ -1931,6 +1931,10 @@ export type CalendarMentionEvent = {
      * Entity update time of the previewed copy.
      */
     updatedAt: string;
+    /**
+     * The calendar holding `viewer_event_id`, when it is still listed.
+     */
+    viewerCalendarId?: string | null;
     viewerCopy?: null | CalendarMentionViewerCopy;
     /**
      * The requester's own event entity for the mentioned meeting. Differs

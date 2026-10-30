@@ -1006,6 +1006,9 @@ pub struct CalendarMentionEvent {
     /// exactly when that is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub viewer_copy: Option<CalendarMentionViewerCopy>,
+    /// The calendar holding `viewer_event_id`, when it is still listed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub viewer_calendar_id: Option<Uuid>,
     /// Display title.
     pub title: String,
     /// Provider description, plain text or HTML, truncated for the preview.
@@ -1569,6 +1572,12 @@ pub struct VisibleCalendar {
     /// Whether this is one of Google's shared system calendars (holidays,
     /// birthdays) the account subscribes to rather than one a person maintains.
     pub is_subscription: bool,
+    /// Whether this calendar counts toward the requester's busy time: their
+    /// setting, by default only the primary calendars of inboxes they own.
+    /// The nearest thing to "this is the requester's own": a provider's
+    /// access role only says what they may do, on a colleague's calendar too.
+    #[serde(default)]
+    pub contributes_to_availability: bool,
     /// A persistent sync failure isolated to this calendar, surfaced so the
     /// settings row can badge it. `None` while the calendar is syncing
     /// normally or a failure has not yet crossed the persistence threshold.
