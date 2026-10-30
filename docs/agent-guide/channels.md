@@ -899,9 +899,9 @@ the sidebar and mobile feed, including favorited private conversations.
 All section headers use the shared collapsible-section styling, and channel rows
 align across sections. The caret stays hidden in expanded sections until hover
 and remains visible when collapsed. Team-shared sections show a neutral Shared
-badge after the caret. Personal sections have no scope icon or badge. Header
-focus backgrounds fill the entire header row, including its trailing controls,
-with no extra right padding.
+badge next to the name, before the caret. Personal sections have no scope icon or
+badge. Header focus backgrounds fill the entire header row, including its
+trailing controls, with no extra right padding.
 
 The upper sidebar uses one virtualized scroll area instead of dividing available
 height between sections. Direct messages have a separate collapsible panel fixed

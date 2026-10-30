@@ -57,8 +57,8 @@ export function ChannelSectionHeading(props: {
           class={cn('flex-1', props.focused && 'text-ink')}
         >
           <span class="min-w-0 truncate">{props.label}</span>
-          <WorkspaceSection.Indicator />
           {props.badge}
+          <WorkspaceSection.Indicator />
           <Show when={props.unreadCount > 0}>
             <span class="text-xs text-accent">{props.unreadCount}</span>
           </Show>
