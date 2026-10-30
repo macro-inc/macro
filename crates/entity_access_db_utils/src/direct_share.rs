@@ -105,7 +105,6 @@ pub async fn set(
         super::delete_user_entity_access_rows(tx, id, kind, std::slice::from_ref(user)).await?;
     }
     if kind != EntityType::Project {
-        source_items::sync_one(tx.as_mut(), kind, &id.to_string()).await?;
         return Ok(());
     }
     let descendants = super::get_nested_project_entities(tx, id).await?;
@@ -114,7 +113,7 @@ pub async fn set(
     sqlx::query!("DELETE FROM entity_access WHERE source_type = 'user' AND source_id = $1 AND granted_from_project_id = $2", user.as_ref(), project_id).execute(tx.as_mut()).await?;
     if level.is_some() {
         let effective = sqlx::query_scalar!(r#"SELECT access_level AS "access_level: AccessLevel" FROM entity_access WHERE entity_id = $1 AND entity_type = 'project' AND source_type = 'user' AND source_id = $2 AND granted_from_project_id IS NULL"#, id, user.as_ref()).fetch_one(tx.as_mut()).await?;
-        for child in &descendants {
+        for child in descendants {
             if child.entity_id == project_id && child.entity_type == "project" {
                 continue;
             }
@@ -128,11 +127,5 @@ pub async fn set(
                 DO UPDATE SET access_level = EXCLUDED.access_level, updated_at = now()"#, child_id, child.entity_type, user.as_ref(), effective as _, project_id).execute(tx.as_mut()).await?;
         }
     }
-    let mut affected = descendants
-        .into_iter()
-        .map(|child| (child.entity_type, child.entity_id))
-        .collect::<Vec<_>>();
-    affected.push((kind.as_ref().to_owned(), project_id));
-    source_items::sync_rows(tx.as_mut(), &affected).await?;
     Ok(())
 }

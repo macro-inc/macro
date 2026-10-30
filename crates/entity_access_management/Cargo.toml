@@ -8,7 +8,6 @@ version = "0.1.0"
 default = ["outbound", "ports"]
 outbound = [
   "dep:entity_access_db_utils",
-  "dep:source_items",
   "dep:sqlx",
   "models_entity_access_management/db",
   "ports",
@@ -16,7 +15,6 @@ outbound = [
 ports = []
 
 [dependencies]
-source_items = { path = "../source_items", optional = true }
 # Core
 anyhow = { workspace = true }
 serde = { workspace = true }

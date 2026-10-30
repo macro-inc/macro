@@ -9,7 +9,6 @@ pub mod channel_share;
 pub mod direct_share;
 pub mod source_grants;
 pub mod team_share;
-pub mod transaction_retry;
 
 pub use channel_share::get_direct_channel_grants;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -47,8 +46,6 @@ pub async fn insert_entity_access_row(
     )
     .execute(transaction.as_mut())
     .await?;
-
-    source_items::sync_one(transaction.as_mut(), entity_type, &entity_id.to_string()).await?;
 
     Ok(())
 }
@@ -103,8 +100,6 @@ pub async fn upsert_owner_grant(
     .execute(transaction.as_mut())
     .await?;
 
-    source_items::sync_one(transaction.as_mut(), entity_type, &entity_id.to_string()).await?;
-
     Ok(())
 }
 
@@ -134,8 +129,6 @@ pub async fn remove_non_owner_user_entity_access(
     )
     .execute(transaction.as_mut())
     .await?;
-
-    source_items::sync_one(transaction.as_mut(), entity_type, &entity_id.to_string()).await?;
 
     Ok(())
 }
@@ -181,8 +174,6 @@ pub async fn delete_user_entity_access_rows(
     .execute(transaction.as_mut())
     .await?;
 
-    source_items::sync_one(transaction.as_mut(), entity_type, &entity_id.to_string()).await?;
-
     Ok(())
 }
 
@@ -204,8 +195,6 @@ pub async fn delete_entity_access_rows(
     )
     .execute(transaction.as_mut())
     .await?;
-
-    source_items::sync_one(transaction.as_mut(), entity_type, &entity_id.to_string()).await?;
 
     Ok(())
 }
@@ -245,14 +234,17 @@ where
 /// An owner row is never rewritten: the guard sits on the `DO UPDATE`, where
 /// it filters the conflicting row, not on the conflict target, where it would
 /// only steer index inference.
-#[tracing::instrument(skip(transaction), err)]
-pub async fn upsert_user_entity_access_bulk(
-    transaction: &mut Transaction<'_, Postgres>,
+#[tracing::instrument(skip(executor), err)]
+pub async fn upsert_user_entity_access_bulk<'e, E>(
+    executor: E,
     user_ids: &[MacroUserIdStr<'_>],
     entity_id: &macro_uuid::Uuid,
     entity_type: EntityType,
     access_level: AccessLevel,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<()>
+where
+    E: Executor<'e, Database = Postgres>,
+{
     if user_ids.is_empty() {
         return Ok(());
     }
@@ -274,10 +266,9 @@ pub async fn upsert_user_entity_access_bulk(
         access_level as _,
         macro_ids.as_slice(),
     )
-    .execute(transaction.as_mut())
+    .execute(executor)
     .await?;
 
-    source_items::sync_one(transaction.as_mut(), entity_type, &entity_id.to_string()).await?;
     Ok(())
 }
 
@@ -378,7 +369,6 @@ pub async fn update_entity_access_channel_share_permissions(
     entity_type: EntityType,
     channel_perms: &[UpdateChannelSharePermission],
 ) -> Result<(), sqlx::Error> {
-    let mut affected = vec![(entity_type.to_string(), entity_id.to_string())];
     let mut upsert_channel_ids = Vec::new();
     let mut remove_channel_ids = Vec::new();
 
@@ -423,14 +413,12 @@ pub async fn update_entity_access_channel_share_permissions(
             EntityType::Project => {
                 // Get all items in project
                 let project_items = get_nested_project_entities(transaction, entity_id).await?;
-                affected.extend(project_items.iter().map(|item| (item.entity_type.clone(), item.entity_id.clone())));
 
-                let removed = sqlx::query!(
+                sqlx::query!(
                     r#"
                     DELETE FROM entity_access
                     WHERE (source_id = ANY($1) AND source_type = 'channel')
                     AND (entity_id = ANY($2) OR granted_from_project_id = ANY($3))
-                    RETURNING entity_type, entity_id::text AS "entity_id!"
                     "#,
                     &remove_channel_ids,
                     &project_items
@@ -448,10 +436,8 @@ pub async fn update_entity_access_channel_share_permissions(
                         })
                         .collect::<Vec<String>>(),
                 )
-                .map(|row| (row.entity_type, row.entity_id))
-                .fetch_all(transaction.as_mut())
+                .execute(transaction.as_mut())
                 .await?;
-                affected.extend(removed);
             }
             EntityType::Database
             | EntityType::CrmPipeline
@@ -468,16 +454,13 @@ pub async fn update_entity_access_channel_share_permissions(
                     DELETE FROM entity_access
                     WHERE entity_id = $1 AND entity_type = $2
                     AND source_id = ANY($3) AND source_type = 'channel'
-                    RETURNING entity_type, entity_id::text AS "entity_id!"
                     "#,
                     entity_id,
                     entity_type.as_ref(),
                     &remove_channel_ids,
                 )
-                .map(|row| (row.entity_type, row.entity_id))
-                .fetch_all(transaction.as_mut())
+                .execute(transaction.as_mut())
                 .await?;
-                affected.extend(removed);
             }
         }
     }
@@ -527,7 +510,6 @@ pub async fn update_entity_access_channel_share_permissions(
 
                 // (b) Inherited grants on every nested entity (granted_from_project_id = project_id)
                 let project_items = get_nested_project_entities(transaction, entity_id).await?;
-                affected.extend(project_items.iter().map(|item| (item.entity_type.clone(), item.entity_id.clone())));
                 let granted_from = entity_id.to_string();
 
                 // Cross-join nested entities × upsert channel perms, excluding the
@@ -610,6 +592,5 @@ pub async fn update_entity_access_channel_share_permissions(
         }
     }
 
-    source_items::sync_rows(transaction.as_mut(), &affected).await?;
     Ok(())
 }

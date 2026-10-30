@@ -83,3 +83,4 @@ VALUES (
 
 -- Re-enable foreign key constraints
 SET session_replication_role = 'origin';
+

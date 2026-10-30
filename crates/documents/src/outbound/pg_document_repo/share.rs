@@ -39,29 +39,21 @@ pub async fn get_team_share_facts(
     pool: &PgPool,
     document_id: &str,
 ) -> Result<TeamShareFacts, DocumentError> {
-    entity_access_db_utils::transaction_retry::on_conflict(
-        || async {
-            let entity = EntityType::Document.with_entity_str(document_id);
-            let mut transaction = pool.begin().await?;
-            let mut facts = team_share::load_facts(&mut transaction, &entity)
-                .await
-                .map_err(map_team_share_error)?;
-            if let Some(legacy) = legacy_grant(&mut transaction, &facts).await? {
-                team_share::adopt(&mut transaction, &facts, legacy)
-                    .await
-                    .map_err(map_team_share_error)?;
-                facts = team_share::load_facts(&mut transaction, &entity)
-                    .await
-                    .map_err(map_team_share_error)?;
-            }
-            transaction.commit().await?;
-            Ok(facts)
-        },
-        |error: &DocumentError| {
-            entity_access_db_utils::transaction_retry::is_transaction_conflict(error)
-        },
-    )
-    .await
+    let entity = EntityType::Document.with_entity_str(document_id);
+    let mut transaction = pool.begin().await?;
+    let mut facts = team_share::load_facts(&mut transaction, &entity)
+        .await
+        .map_err(map_team_share_error)?;
+    if let Some(legacy) = legacy_grant(&mut transaction, &facts).await? {
+        team_share::adopt(&mut transaction, &facts, legacy)
+            .await
+            .map_err(map_team_share_error)?;
+        facts = team_share::load_facts(&mut transaction, &entity)
+            .await
+            .map_err(map_team_share_error)?;
+    }
+    transaction.commit().await?;
+    Ok(facts)
 }
 
 /// A historical direct grant for the owner's team on a document that canonical
@@ -114,26 +106,18 @@ pub async fn set_team_share(
     pool: &PgPool,
     command: AuthorizedTeamShareCommand,
 ) -> Result<DocumentTeamShare, DocumentError> {
-    entity_access_db_utils::transaction_retry::on_conflict(
-        || async {
-            if command.expected().entity.entity_type != EntityType::Document {
-                return Err(DocumentError::BadRequest(
-                    "team-share command must target a document".to_string(),
-                ));
-            }
-            let mut transaction = pool.begin().await?;
-            team_share::apply(&mut transaction, &command)
-                .await
-                .map_err(map_team_share_error)?;
-            transaction.commit().await?;
-            Ok(DocumentTeamShare {
-                team_id: command.expected().owner_team_id,
-                shared_with_team: command.target().is_some(),
-            })
-        },
-        |error: &DocumentError| {
-            entity_access_db_utils::transaction_retry::is_transaction_conflict(error)
-        },
-    )
-    .await
+    if command.expected().entity.entity_type != EntityType::Document {
+        return Err(DocumentError::BadRequest(
+            "team-share command must target a document".to_string(),
+        ));
+    }
+    let mut transaction = pool.begin().await?;
+    team_share::apply(&mut transaction, &command)
+        .await
+        .map_err(map_team_share_error)?;
+    transaction.commit().await?;
+    Ok(DocumentTeamShare {
+        team_id: command.expected().owner_team_id,
+        shared_with_team: command.target().is_some(),
+    })
 }

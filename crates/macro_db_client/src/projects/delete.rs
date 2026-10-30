@@ -7,24 +7,16 @@ pub async fn delete_projects_bulk(
     db: &Pool<Postgres>,
     project_ids: &[String],
 ) -> anyhow::Result<()> {
-    entity_access_db_utils::transaction_retry::on_conflict(
-        || async {
-            let mut transaction = db.begin().await.context("unable to begin transaction")?;
+    let mut transaction = db.begin().await.context("unable to begin transaction")?;
 
-            delete_projects_bulk_tsx(&mut transaction, project_ids).await?;
+    delete_projects_bulk_tsx(&mut transaction, project_ids).await?;
 
-            transaction
-                .commit()
-                .await
-                .context("unable to commit transaction")?;
+    transaction
+        .commit()
+        .await
+        .context("unable to commit transaction")?;
 
-            Ok(())
-        },
-        |error: &anyhow::Error| {
-            entity_access_db_utils::transaction_retry::is_transaction_conflict(error.as_ref())
-        },
-    )
-    .await
+    Ok(())
 }
 
 #[tracing::instrument(skip(transaction))]
@@ -35,8 +27,6 @@ pub async fn delete_projects_bulk_tsx(
     if project_ids.is_empty() {
         return Ok(());
     }
-    let cascade_targets =
-        source_items::project_deletion::capture(transaction.as_mut(), project_ids).await?;
     sqlx::query!(
         r#"
         DELETE FROM "Pin" WHERE "pinnedItemId" = ANY($1) AND "pinnedItemType" = $2
@@ -97,6 +87,5 @@ pub async fn delete_projects_bulk_tsx(
     .await
     .context("unable to delete projects")?;
 
-    source_items::sync_rows(transaction.as_mut(), &cascade_targets).await?;
     Ok(())
 }

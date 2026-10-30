@@ -10,7 +10,6 @@ default = ["account_merge_request", "team"]
 team = ["dep:models_team"]
 
 [dependencies]
-source_items = { path = "../source_items" }
 messages = { path = "../messages", features = ["outbound", "annotations"] }
 agent = { path = "../agent" }
 anyhow = { workspace = true }

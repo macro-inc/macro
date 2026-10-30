@@ -91,8 +91,6 @@ async fn delete_items(
     document_ids: &[String],
     chat_ids: &[String],
 ) -> Result<(), sqlx::Error> {
-    let cascade_targets =
-        source_items::project_deletion::capture(transaction.as_mut(), project_ids).await?;
     let all_ids = project_ids
         .iter()
         .chain(document_ids)
@@ -129,18 +127,16 @@ async fn delete_items(
     )
     .execute(transaction.as_mut())
     .await?;
-    let removed_grants = sqlx::query!(
+    sqlx::query!(
         r#"
         DELETE FROM entity_access
         WHERE entity_id::text = ANY($1)
            OR "granted_from_project_id" = ANY($2)
-        RETURNING entity_type, entity_id::text AS "entity_id!"
         "#,
         &all_ids,
         project_ids,
     )
-    .map(|row| (row.entity_type, row.entity_id))
-    .fetch_all(transaction.as_mut())
+    .execute(transaction.as_mut())
     .await?;
     delete_registered_entities(transaction, &all_ids).await?;
     sqlx::query!(r#"DELETE FROM "Document" WHERE id = ANY($1)"#, document_ids)
@@ -152,17 +148,6 @@ async fn delete_items(
     sqlx::query!(r#"DELETE FROM "Project" WHERE id = ANY($1)"#, project_ids)
         .execute(transaction.as_mut())
         .await?;
-    let affected = removed_grants
-        .into_iter()
-        .chain(cascade_targets)
-        .chain(
-            document_ids
-                .iter()
-                .map(|id| ("document".to_owned(), id.clone())),
-        )
-        .chain(chat_ids.iter().map(|id| ("chat".to_owned(), id.clone())))
-        .collect::<Vec<_>>();
-    source_items::sync_rows(transaction.as_mut(), &affected).await?;
     Ok(())
 }
 
@@ -243,18 +228,6 @@ pub(super) async fn soft_delete_project(
     .await?;
     mark_registered_entities_deleted(transaction, &all_ids, deleted_at).await?;
 
-    let affected = document_ids
-        .iter()
-        .map(|id| ("document".to_owned(), id.clone()))
-        .chain(chat_ids.iter().map(|id| ("chat".to_owned(), id.clone())))
-        .chain(
-            project_ids
-                .iter()
-                .map(|id| ("project".to_owned(), id.clone())),
-        )
-        .collect::<Vec<_>>();
-    source_items::sync_rows(transaction.as_mut(), &affected).await?;
-
     Ok(SoftDeleteResult {
         project_ids,
         document_ids,
@@ -267,6 +240,10 @@ fn parse_entity_id(id: &str) -> Result<Uuid, sqlx::Error> {
         .map_err(|error| sqlx::Error::Decode(Box::new(error)))
 }
 
+fn registry_protocol_error(error: impl ToString) -> sqlx::Error {
+    sqlx::Error::Protocol(error.to_string())
+}
+
 async fn mark_registered_entities_deleted(
     transaction: &mut Transaction<'_, Postgres>,
     ids: &[String],
@@ -275,7 +252,7 @@ async fn mark_registered_entities_deleted(
     for id in ids {
         entity_registry_db_utils::mark_deleted(transaction, parse_entity_id(id)?, deleted_at)
             .await
-            .map_err(entity_access_db_utils::transaction_retry::report_into_sqlx_error)?;
+            .map_err(registry_protocol_error)?;
     }
     Ok(())
 }
@@ -287,7 +264,7 @@ async fn delete_registered_entities(
     for id in ids {
         entity_registry_db_utils::delete_entity(transaction, parse_entity_id(id)?)
             .await
-            .map_err(entity_access_db_utils::transaction_retry::report_into_sqlx_error)?;
+            .map_err(registry_protocol_error)?;
     }
     Ok(())
 }
