@@ -42,7 +42,7 @@ its named instances equal the statics.
 - `python3 build.py`, then commit the regenerated `fonts/` and `specimen/`
   with the source change. Builds are reproducible: unchanged sources give
   byte-identical fonts.
-- `python3 build.py --compat` (all glyphs) and `ruff format .`.
+- `python3 build.py --compat` (all glyphs), `ruff format .` and `ruff check .`.
 - Requires `pip install fonttools skia-pathops brotli`; proofs also need
   `freetype-py` and Pillow with raqm.
 
