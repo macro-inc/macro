@@ -149,6 +149,7 @@ impl<A: UserAccessExpander, P: SoupRealtimePublisher> Worker<A, P> {
             .expand_user_access(&msg.access_source)
             .await
             .context("failed to expand current user access")?;
+        users.extend(msg.audience);
 
         let mut seen = HashSet::with_capacity(users.len());
         users.retain(|user_id| seen.insert(user_id.clone()));

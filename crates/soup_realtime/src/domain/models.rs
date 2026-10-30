@@ -42,6 +42,9 @@ pub struct SoupRealtimePatch {
     pub patch: Patch<Entity<'static>>,
     /// Entity whose current accessors should receive the patch.
     pub access_source: Entity<'static>,
+    /// Users who also receive the patch: those who had access before the
+    /// source event removed it, which current access can no longer name.
+    pub audience: Vec<MacroUserIdStr<'static>>,
 }
 
 impl SoupRealtimePatch {
@@ -50,6 +53,7 @@ impl SoupRealtimePatch {
         Self {
             patch,
             access_source,
+            audience: Vec::new(),
         }
     }
 
@@ -57,6 +61,12 @@ impl SoupRealtimePatch {
     pub fn for_entity(patch: Patch<Entity<'static>>) -> Self {
         let access_source = patch.value().clone();
         Self::new(patch, access_source)
+    }
+
+    /// Adds users captured before the source event removed their access.
+    pub fn with_audience(mut self, audience: Vec<MacroUserIdStr<'static>>) -> Self {
+        self.audience = audience;
+        self
     }
 }
 

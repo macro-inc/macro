@@ -385,6 +385,29 @@ async fn duplicate_accessors_are_deduplicated() {
 }
 
 #[tokio::test]
+async fn audience_users_receive_the_patch_alongside_current_accessors() {
+    let harness = harness(vec![user("one")], false, HashSet::new());
+
+    harness
+        .service
+        .notify_users(
+            SoupRealtimePatch::for_entity(Patch::Deleted(document(DOCUMENT_ID)))
+                .with_audience(vec![user("one"), user("former")]),
+        )
+        .await
+        .expect("patch is published");
+
+    let recipients = harness
+        .messages
+        .lock()
+        .expect("messages lock")
+        .iter()
+        .map(|message| message.user_id.clone())
+        .collect::<HashSet<_>>();
+    assert_eq!(recipients, HashSet::from([user("one"), user("former")]));
+}
+
+#[tokio::test]
 async fn access_failure_is_returned_and_prevents_publication() {
     let harness = harness(vec![user("one")], true, HashSet::new());
 
