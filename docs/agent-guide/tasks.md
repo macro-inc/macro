@@ -118,8 +118,8 @@ and Project stay on the right, with 20px phone icons. Empty assignees use a pers
 a dashed circular frame. Empty priority shows hollow ascending bars, Urgent shows a
 filled badge with a hollow exclamation mark, Completed uses a filled check-circle,
 and Canceled uses a filled x-circle.
-Not started stays hollow, with a subtle recessed bevel formed by inner shadow and
-highlight arcs; its status color and icon dimensions stay unchanged.
+Not started uses a plain hollow ring without shadows or highlights; its status
+color and icon dimensions stay unchanged.
 The property edit menus use 18px status and Urgent icons on desktop and mobile.
 Each status has its own `task-status-*` theme color, shared by task icons and
 group-header tints. Completed defaults to accent; explicit Completed theme overrides

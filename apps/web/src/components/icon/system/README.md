@@ -62,9 +62,8 @@ Urgent priority uses a filled rounded-square exclamation badge with a wide hollo
 stem and dot for small-size legibility. Both marks are transparent cutouts. The
 badge's dedicated `priority-urgent` token maps to the theme's orange rather than
 warning or accent.
-Not started uses a hollow ring with opposing inner shadow and highlight arcs and
-a subtle outer bevel. Keep the shading inside the existing outline and the center
-transparent so its status color and surrounding surface remain visible.
+Not started uses a plain hollow ring with no shadow or highlight; its status
+color and icon dimensions stay unchanged.
 Completed and Canceled task statuses use filled check-circle and x-circle glyphs
 through the shared property and task-status renderers. Their marks are transparent
 cutouts. Empty priority uses three muted, hollow ascending bars,
