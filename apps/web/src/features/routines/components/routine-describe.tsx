@@ -46,7 +46,12 @@ export function RoutineDescribe(props: {
             class="min-h-28 px-3.5 pb-12 pt-3 text-[15px] leading-[22px]"
             placeholder="Describe what should happen, and when. “When an invoice arrives, label it Finance and make a task to pay it.”"
             onKeyDown={(event: KeyboardEvent) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
+              // Enter that confirms an IME candidate isn't a request yet.
+              if (
+                event.key === 'Enter' &&
+                !event.shiftKey &&
+                !event.isComposing
+              ) {
                 event.preventDefault();
                 event.stopPropagation();
                 fireAndForget(submit(), 'routines');
