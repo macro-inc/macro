@@ -23,6 +23,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Render status and Urgent icons at 18px in task rows, list/board headers, cards, and property menus; use 16px group-header carets and preserve the existing hit targets.
 - Use the matching `task-status-*` theme token for each status icon and group-header tint; keep global warning, success, and accent colors independent.
 - Edit status and priority through leading `TaskPropertyControl` icons on desktop and mobile; place priority directly beside the title after the status gap, and keep separate Status/Priority columns and duplicate trailing mobile pills removed.
+- Place Project before Assignees in desktop task headers and rows, preserving the mobile property order and other hosts of the shared grid.
 - Reuse `PropertyEmptyIcon` for absent values in list rows, board cards, and group or board-column headers; keep the glyphs aligned with the property feature.
 
 - Save filters, selected layout, grouping, and ordered sort directions; keep text search and scroll state local, and capture implicit person conditions as normal OR-valued facets.

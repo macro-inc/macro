@@ -63,16 +63,24 @@ export function taskGridTemplate(options: {
   status?: boolean;
   /** Task rows edit priority beside status before the title. */
   priority?: boolean;
+  /** Put task projects before assignees without reordering other grid hosts. */
+  projectBeforeAssignees?: boolean;
 }) {
+  const propertyColumns: TaskGridColumn[] = TASK_GRID_COLUMNS.filter(
+    (column) =>
+      (options.status !== false || column.id !== 'status') &&
+      (options.priority !== false || column.id !== 'priority')
+  );
+  if (options.project) {
+    const projectIndex = options.projectBeforeAssignees
+      ? propertyColumns.findIndex((column) => column.id === 'assignees')
+      : propertyColumns.length;
+    propertyColumns.splice(projectIndex, 0, TASK_PROJECT_COLUMN);
+  }
   const columns = [
     ...(options.indicator ? [{ id: 'indicator', width: '1rem' }] : []),
     { id: 'content', width: 'minmax(0, 100%)' },
-    ...TASK_GRID_COLUMNS.filter(
-      (column) =>
-        (options.status !== false || column.id !== 'status') &&
-        (options.priority !== false || column.id !== 'priority')
-    ),
-    ...(options.project ? [TASK_PROJECT_COLUMN] : []),
+    ...propertyColumns,
     { id: 'createdBy', width: CREATED_BY_COLUMN_WIDTH },
     { id: 'timestamp', width: 'var(--task-col-timestamp, 5rem)' },
   ];

@@ -125,6 +125,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
           project: props.showProject === true,
           status: false,
           priority: false,
+          projectBeforeAssignees: true,
         })}
       >
         <Show when={!props.hideCheckbox}>
@@ -195,6 +196,21 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
           />
         </Entity.Slot>
 
+        <Show when={props.showProject}>
+          <Entity.Slot
+            placement={TASK_PROJECT_COLUMN.id}
+            class="flex items-center min-w-0 text-xs ph-no-capture @container/slot @max-[840px]/u-list:justify-center"
+          >
+            <ListPropertyValue
+              entityId={props.entity.id}
+              property={
+                propertyMap().get(TASK_PROJECT_COLUMN.defId) ??
+                buildStubProperty(TASK_PROJECT_COLUMN)
+              }
+            />
+          </Entity.Slot>
+        </Show>
+
         <For
           each={TASK_GRID_COLUMNS.filter(
             (column) => column.id !== 'status' && column.id !== 'priority'
@@ -214,21 +230,6 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
             </Entity.Slot>
           )}
         </For>
-
-        <Show when={props.showProject}>
-          <Entity.Slot
-            placement={TASK_PROJECT_COLUMN.id}
-            class="flex items-center min-w-0 text-xs ph-no-capture @container/slot @max-[840px]/u-list:justify-center"
-          >
-            <ListPropertyValue
-              entityId={props.entity.id}
-              property={
-                propertyMap().get(TASK_PROJECT_COLUMN.defId) ??
-                buildStubProperty(TASK_PROJECT_COLUMN)
-              }
-            />
-          </Entity.Slot>
-        </Show>
 
         <Entity.Slot
           placement="createdBy"
