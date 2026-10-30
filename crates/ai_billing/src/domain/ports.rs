@@ -5,9 +5,9 @@ use super::financial::FundingPeriod;
 use super::ledger::SettlementPolicy;
 use super::models::{
     AllowanceDecision, AllowanceStore, AutoReloadThresholds, BillingPeriod, BillingSettings,
-    CreditReloadStatus, Entitlement, OpenPeriodStart, OverageChargeStatus, PeriodAllowance,
-    PeriodLedger, Result, SeatAllowance, SeatGeneration, SeatUsage, SubscriptionScope,
-    UsageSnapshot,
+    CreditPurchase, CreditReloadKind, CreditReloadStatus, Entitlement, OpenPeriodStart,
+    OverageChargeStatus, PeriodAllowance, PeriodLedger, Result, SeatAllowance, SeatGeneration,
+    SeatUsage, SubscriptionScope, UsageSnapshot,
 };
 use super::policy::UsageAllocation;
 use ai_usage::domain::financial::{
@@ -114,6 +114,28 @@ pub struct PendingReload {
     pub stripe_invoice_id: Option<String>,
 }
 
+/// How an attempt to collect an invoice ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InvoicePayment {
+    /// Collected.
+    Paid,
+    /// The card was declined; the invoice stays open for the provider's
+    /// retries.
+    Declined,
+    /// The card needs the cardholder to authenticate (3-D Secure), which an
+    /// off-session charge can't do; the invoice stays open.
+    AuthenticationRequired,
+}
+
+/// The state of an invoice after asking the provider to void it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InvoiceVoid {
+    /// Void (or otherwise uncollectible): it can no longer charge the card.
+    Voided,
+    /// The provider collected it before it could be voided.
+    Paid,
+}
+
 /// A credit reload whose Stripe invoice outcome just changed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedReload {
@@ -121,6 +143,25 @@ pub struct ResolvedReload {
     pub payer: MacroUserIdStr<'static>,
     /// Amount collected (or not), customer cents.
     pub amount_cents: i64,
+    /// Whether Auto-Reload or a one-time purchase charged it.
+    pub kind: CreditReloadKind,
+}
+
+/// What reserving a one-time card-on-file purchase found.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PurchaseReservation {
+    /// A new purchase to collect.
+    New(PendingReload),
+    /// An earlier declined purchase whose invoice is still open, handed back
+    /// (as pending) so buying again pays that invoice instead of charging twice.
+    Retry(PendingReload),
+    /// The purchase would take this month's card charges past the limit.
+    OverLimit {
+        /// What can still be charged this month, customer cents.
+        remaining_cents: i64,
+    },
+    /// An earlier purchase is still with the payment provider.
+    InProgress,
 }
 
 /// What a settlement booked.
@@ -157,8 +198,9 @@ pub trait BillingRepo: Send + Sync + 'static {
         payer: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<BillingSettings>> + Send;
 
-    /// Reload commitments charged against a UTC calendar-month cap. Includes
-    /// pending reloads and failed invoices that may still collect; excludes manual purchases.
+    /// Card charges counted against the UTC calendar-month credit limit:
+    /// automatic reloads and one-time purchases, including pending ones and
+    /// failed invoices that may still collect. Checkout purchases are excluded.
     fn credit_reload_committed_cents(
         &self,
         payer: &MacroUserIdStr<'_>,
@@ -357,6 +399,33 @@ pub trait BillingRepo: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<Option<PendingReload>>> + Send;
 
+    /// Under the payer's row lock, reserve a one-time purchase of
+    /// `amount_cents` asked for by `purchased_by`. Purchases and automatic
+    /// reloads in the UTC calendar month containing `now` that Stripe may
+    /// still collect count against `monthly_limit_cents` (`None` is no limit).
+    /// An earlier purchase that never reached Stripe is marked failed; one
+    /// declined with its invoice still open is retried instead of reserving a
+    /// new one; one still pending with Stripe blocks the purchase.
+    fn reserve_credit_purchase(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        purchased_by: &MacroUserIdStr<'_>,
+        amount_cents: i64,
+        monthly_limit_cents: Option<i64>,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<PurchaseReservation>> + Send;
+
+    /// One-time purchases by `payer` that were declined with their invoice
+    /// still open (status `failed`), oldest first.
+    fn declined_credit_purchases(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<PendingReload>>> + Send;
+
+    /// Mark a purchase whose invoice was voided: `failed` with no invoice, so
+    /// it is neither retried nor counted against the monthly limit.
+    fn void_credit_purchase(&self, reload_id: Uuid) -> impl Future<Output = Result<()>> + Send;
+
     /// Record the result of collecting a reserved reload.
     fn finish_credit_reload(
         &self,
@@ -479,14 +548,33 @@ pub trait PaymentGateway: Send + Sync + 'static {
     /// If no active or trialing subscription matches, an invoice-stored
     /// payment method may still collect the existing debt.
     ///
-    /// `Ok(true)` when it is paid, `Ok(false)` when the card was declined and
-    /// the invoice stays open for the provider's own retries (the webhook
-    /// reports the outcome), `Err` when the provider could not be reached or
-    /// rejected the request.
+    /// [`InvoicePayment::Paid`] when it is paid; `Declined` or
+    /// `AuthenticationRequired` when it was not and the invoice stays open
+    /// for the provider's own retries (the webhook reports the outcome);
+    /// `Err` when the provider could not be reached or rejected the request.
     fn pay_overage_invoice(
         &self,
         charge_id: Uuid,
         invoice_id: &str,
+        scope: SubscriptionScope,
+    ) -> impl Future<Output = Result<InvoicePayment>> + Send;
+
+    /// Void an open credit reload invoice so it can never charge the card,
+    /// for example before the payer pays the same pack through checkout.
+    /// Reports [`InvoiceVoid::Paid`] when it was collected first.
+    fn void_credit_invoice(
+        &self,
+        invoice_id: &str,
+    ) -> impl Future<Output = Result<InvoiceVoid>> + Send;
+
+    /// Whether a charge in `scope` has a card to collect from: the
+    /// subscription's or the customer's default payment method, or a legacy
+    /// default source. `Ok(false)` when there is none (for example after the
+    /// payer removed their card in the billing portal) or no active or
+    /// trialing subscription matches `scope`.
+    fn has_payment_method(
+        &self,
+        customer_id: &str,
         scope: SubscriptionScope,
     ) -> impl Future<Output = Result<bool>> + Send;
 
@@ -610,6 +698,16 @@ pub trait BillingService: Send + Sync + 'static {
         cancel_url: String,
     ) -> impl Future<Output = Result<String>> + Send;
 
+    /// Buy a credit pack now, charged to the payer's card on file. Any paid,
+    /// metered member of the payer's team may buy, within the monthly credit
+    /// limit: the payer's configured limit, or for a member when none is set,
+    /// the plan's default. Credits are booked and usage settled once paid.
+    fn purchase_credits(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        amount_cents: i64,
+    ) -> impl Future<Output = Result<CreditPurchase>> + Send;
+
     /// Book a completed credit purchase (webhook). Idempotent on
     /// `stripe_reference`.
     fn apply_credit_purchase(
@@ -639,8 +737,8 @@ pub trait BillingService: Send + Sync + 'static {
 
     /// Record the outcome of a credit reload invoice (webhook). Unknown
     /// invoices are ignored. A paid invoice books its credits once, even when
-    /// the collector already did, and settles; a failed one pauses automatic
-    /// reloads.
+    /// the collector already did, and settles; a failed automatic reload
+    /// pauses automatic reloads, while a failed purchase changes nothing else.
     fn mark_credit_reload_invoice(
         &self,
         stripe_invoice_id: &str,

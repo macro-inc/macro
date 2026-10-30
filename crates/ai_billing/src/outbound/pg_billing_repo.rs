@@ -16,10 +16,10 @@ use super::pg_funding_repo::{credit_commitments, lock_payer, postpaid_commitment
 use crate::domain::financial::legacy_cap_remaining;
 use crate::domain::{
     AiPricing, AllowanceStore, AutoReloadThresholds, BillingError, BillingPeriod, BillingRepo,
-    BillingSettings, CreditReloadStatus, OpenPeriodStart, OverageChargeStatus, PendingCharge,
-    PendingReload, PeriodAllowance, PeriodLedger, ReloadState, ResolvedReload, Result,
-    SeatAllowance, SeatGeneration, SettlementOutcome, SettlementPolicy, SettlementState,
-    plan_reload, plan_settlement,
+    BillingSettings, CreditReloadKind, CreditReloadStatus, OpenPeriodStart, OverageChargeStatus,
+    PendingCharge, PendingReload, PeriodAllowance, PeriodLedger, PurchaseReservation, ReloadState,
+    ResolvedReload, Result, SeatAllowance, SeatGeneration, SettlementOutcome, SettlementPolicy,
+    SettlementState, plan_reload, plan_settlement,
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -930,6 +930,7 @@ impl BillingRepo for PgBillingRepo {
                     AND updated_at < NOW() - INTERVAL '10 minutes') AS "orphaned!"
             FROM ai_credit_reload
             WHERE user_id = $1
+              AND kind = 'automatic'
               AND (status = 'pending'
                    OR (status = 'failed' AND stripe_invoice_id IS NOT NULL))
             ORDER BY created_at
@@ -1032,6 +1033,152 @@ impl BillingRepo for PgBillingRepo {
         }))
     }
 
+    #[tracing::instrument(skip(self), err)]
+    async fn reserve_credit_purchase(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        purchased_by: &MacroUserIdStr<'_>,
+        amount_cents: i64,
+        monthly_limit_cents: Option<i64>,
+        now: DateTime<Utc>,
+    ) -> Result<PurchaseReservation> {
+        let payer = payer.as_ref();
+        let mut tx = self.pool.begin().await.map_err(storage)?;
+        // Serialize purchases with reloads and settlements on the account row.
+        lock_payer(&mut tx, payer).await.map_err(funding_storage)?;
+        let open = sqlx::query!(
+            r#"
+            SELECT id, amount_cents, stripe_invoice_id, status::text AS "status!",
+                   (status = 'pending'
+                    AND stripe_invoice_id IS NULL
+                    AND updated_at < NOW() - INTERVAL '10 minutes') AS "orphaned!"
+            FROM ai_credit_reload
+            WHERE user_id = $1
+              AND kind = 'purchase'
+              AND (status = 'pending'
+                   OR (status = 'failed' AND stripe_invoice_id IS NOT NULL))
+            ORDER BY created_at
+            FOR UPDATE
+            "#,
+            payer,
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(storage)?;
+        // A purchase whose collector died before Stripe saw it charged nothing.
+        for row in open.iter().filter(|row| row.orphaned) {
+            sqlx::query!(
+                r#"
+                UPDATE ai_credit_reload
+                SET status = 'failed', updated_at = NOW()
+                WHERE id = $1
+                "#,
+                row.id,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(storage)?;
+        }
+        if let Some(row) = open.iter().find(|row| row.status == "failed") {
+            sqlx::query!(
+                r#"
+                UPDATE ai_credit_reload
+                SET status = 'pending', updated_at = NOW()
+                WHERE id = $1
+                "#,
+                row.id,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(storage)?;
+            tx.commit().await.map_err(storage)?;
+            return Ok(PurchaseReservation::Retry(PendingReload {
+                id: row.id,
+                amount_cents: row.amount_cents,
+                stripe_invoice_id: row.stripe_invoice_id.clone(),
+            }));
+        }
+        if open.iter().any(|row| !row.orphaned) {
+            tx.commit().await.map_err(storage)?;
+            return Ok(PurchaseReservation::InProgress);
+        }
+
+        if let Some(limit) = monthly_limit_cents {
+            let month = BillingPeriod::calendar_month(now);
+            let committed = reload_committed_cents(&mut tx, payer, month).await?;
+            let remaining_cents = (limit - committed).max(0);
+            if amount_cents > remaining_cents {
+                tx.commit().await.map_err(storage)?;
+                return Ok(PurchaseReservation::OverLimit { remaining_cents });
+            }
+        }
+
+        let id = macro_uuid::generate_uuid_v7();
+        sqlx::query!(
+            r#"
+            INSERT INTO ai_credit_reload (id, user_id, amount_cents, status, kind, purchased_by)
+            VALUES ($1, $2, $3, 'pending', 'purchase', $4)
+            "#,
+            id,
+            payer,
+            amount_cents,
+            purchased_by.as_ref(),
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(storage)?;
+        tx.commit().await.map_err(storage)?;
+        Ok(PurchaseReservation::New(PendingReload {
+            id,
+            amount_cents,
+            stripe_invoice_id: None,
+        }))
+    }
+
+    async fn declined_credit_purchases(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<PendingReload>> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, amount_cents, stripe_invoice_id
+            FROM ai_credit_reload
+            WHERE user_id = $1
+              AND kind = 'purchase'
+              AND status = 'failed'
+              AND stripe_invoice_id IS NOT NULL
+            ORDER BY created_at
+            "#,
+            payer.as_ref(),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(storage)?;
+        Ok(rows
+            .into_iter()
+            .map(|row| PendingReload {
+                id: row.id,
+                amount_cents: row.amount_cents,
+                stripe_invoice_id: row.stripe_invoice_id,
+            })
+            .collect())
+    }
+
+    async fn void_credit_purchase(&self, reload_id: Uuid) -> Result<()> {
+        sqlx::query!(
+            r#"
+            UPDATE ai_credit_reload
+            SET status = 'failed', stripe_invoice_id = NULL, updated_at = NOW()
+            WHERE id = $1 AND kind = 'purchase' AND status <> 'paid'
+            "#,
+            reload_id,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(storage)?;
+        Ok(())
+    }
+
     async fn finish_credit_reload(
         &self,
         reload_id: Uuid,
@@ -1102,7 +1249,7 @@ impl BillingRepo for PgBillingRepo {
             WHERE stripe_invoice_id = $1
               AND status <> 'paid'
               AND status <> ($2::text)::ai_credit_reload_status
-            RETURNING user_id, amount_cents
+            RETURNING user_id, amount_cents, kind::text AS "kind!"
             "#,
             stripe_invoice_id,
             status.to_string(),
@@ -1116,6 +1263,12 @@ impl BillingRepo for PgBillingRepo {
         let resolved = ResolvedReload {
             payer: MacroUserIdStr::try_from(row.user_id).map_err(invalid_payer)?,
             amount_cents: row.amount_cents,
+            kind: CreditReloadKind::from_str(&row.kind).map_err(|e| {
+                BillingError::Storage(anyhow::anyhow!(
+                    "unknown credit reload kind {}: {e}",
+                    row.kind
+                ))
+            })?,
         };
         if status == CreditReloadStatus::Paid {
             book_credit_reload(

@@ -347,6 +347,78 @@
         }
       }
     },
+    "/ai-billing/credits/purchase": {
+      "post": {
+        "tags": ["ai_billing"],
+        "summary": "Buy a credit pack now, charged to the payer's card on file. Any paid team\nmember may buy, within the team's monthly credit limit.",
+        "operationId": "purchase_ai_credits",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreditPurchaseRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Purchase outcome and updated position",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditPurchaseResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid pack or no payment account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiBillingErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "402": {
+            "description": "A paid plan is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiBillingErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Over the monthly credit limit, or an earlier purchase is still processing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiBillingErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiBillingErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/ai-billing/overage": {
       "patch": {
         "tags": ["ai_billing"],
@@ -5908,7 +5980,7 @@
           "committed_cents": {
             "type": "integer",
             "format": "int64",
-            "description": "Reloads paid, pending, or failed with an invoice that can still collect.\nCustomer cents; manual credit purchases do not count."
+            "description": "Reloads and one-time card purchases paid, pending, or failed with an\ninvoice that can still collect. Customer cents; Checkout purchases do\nnot count."
           },
           "limit_reached": {
             "type": "boolean",
@@ -6293,6 +6365,70 @@
             "description": "The hosted Checkout URL to redirect to."
           }
         }
+      },
+      "CreditPurchaseRequestBody": {
+        "type": "object",
+        "description": "Request body for [`purchase_credits_handler`].",
+        "required": ["amountCents"],
+        "properties": {
+          "amountCents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "One of the catalog's credit packs, cents."
+          }
+        }
+      },
+      "CreditPurchaseResponse": {
+        "type": "object",
+        "description": "Response for [`purchase_credits_handler`].",
+        "required": ["status", "amountCents", "snapshot"],
+        "properties": {
+          "amountCents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Amount charged, cents. A retry of an earlier declined purchase charges\nthat purchase's amount."
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/UsageSnapshot",
+            "description": "The caller's position after the purchase."
+          },
+          "status": {
+            "$ref": "#/components/schemas/CreditPurchaseStatus",
+            "description": "Whether the card on file paid."
+          }
+        }
+      },
+      "CreditPurchaseSnapshot": {
+        "type": "object",
+        "description": "The monthly credit limit that applies to this user's one-time purchases.",
+        "required": ["committed_cents", "resets_at"],
+        "properties": {
+          "committed_cents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Charged this month so far, including charges that may still collect."
+          },
+          "monthly_limit_cents": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Most credits charged to the card on file per UTC calendar month, from\nautomatic reloads and one-time purchases together, in customer cents.\n`null` when the payer set no limit; team members always have one."
+          },
+          "resets_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Start of the next UTC calendar month."
+          }
+        }
+      },
+      "CreditPurchaseStatus": {
+        "type": "string",
+        "description": "How a one-time credit purchase charged to the card on file ended.",
+        "enum": [
+          "paid",
+          "declined",
+          "payment_method_required",
+          "authentication_required"
+        ]
       },
       "CursorApiKeyStatus": {
         "type": "object",
@@ -7603,6 +7739,11 @@
           "purchasable"
         ],
         "properties": {
+          "auto_reload_default_monthly_limit_cents": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Monthly automatic reload limit a payer on this plan starts from,\ncents. Absent for plans that cannot reload."
+          },
           "included_ai_cents_per_seat": {
             "type": "integer",
             "format": "int64",
@@ -8364,6 +8505,17 @@
             "type": "integer",
             "format": "int64",
             "description": "Shared prepaid credit balance, in customer cents."
+          },
+          "credit_purchase": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CreditPurchaseSnapshot",
+                "description": "The monthly credit limit for one-time purchases charged to the card on\nfile. Present for paid, metered users, payer and team members alike."
+              }
+            ]
           },
           "credits_consumed_cents": {
             "type": "integer",

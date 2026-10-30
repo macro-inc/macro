@@ -524,11 +524,7 @@ export function BillingLabView(props: {
         open={lab.limitOpen()}
         code={`ai_${lab.state().blockedReason ?? (lab.state().tier === 'free' ? 'free_allowance_exhausted' : 'allowance_exhausted')}`}
         freePlan={lab.state().tier === 'free'}
-        usage={{
-          percentage: lab.percentage(),
-          periodEnd: lab.state().periodEnd,
-          unlimited: lab.state().unlimited,
-        }}
+        resetsAt={lab.state().periodEnd}
         previewNotice="Billing Lab · simulated account"
         onClose={() => lab.setLimitOpen(false)}
         onOpenSettings={() => {

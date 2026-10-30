@@ -155,15 +155,25 @@ export function createBillingLab(initial: ScenarioId) {
         (value) => ({ ...value, status: 'ready' }),
         'Usage summary loaded'
       ),
-    checkout: {
+    creditPurchase: {
       pending,
       supportedAmounts: () => [2_500, 5_000, 10_000],
-      start: async (amountCents) => {
-        if (!manageable()) throw new Error('Credit purchase unavailable');
+      // Team members buy on the owner's card too, within the team limit.
+      buy: async (amountCents) => {
+        if (state().tier === 'free' || state().unlimited)
+          throw new Error('Credit purchase unavailable');
+        await perform('Credit purchase', () =>
+          openPayment({ kind: 'credits', amountCents })
+        );
+        return 'paid';
+      },
+      // The lab has no Stripe; checkout opens its simulated payment flow.
+      checkout: async (amountCents) => {
+        if (!manageable()) throw new Error('Credit checkout unavailable');
         await perform('Credit checkout', () =>
           openPayment({ kind: 'credits', amountCents })
         );
-        return 'billing-lab:checkout';
+        return '#billing-lab-checkout';
       },
     },
     autoReload: {

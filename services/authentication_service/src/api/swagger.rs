@@ -167,6 +167,7 @@ use model::user::{
                 ai_billing::inbound::axum_router::update_overage_handler::<crate::api::context::AiBillingServiceType, crate::api::context::AuthorizationService>,
                 ai_billing::inbound::axum_router::update_auto_reload_handler::<crate::api::context::AiBillingServiceType, crate::api::context::AuthorizationService>,
                 ai_billing::inbound::axum_router::create_credit_checkout_handler::<crate::api::context::AiBillingServiceType, crate::api::context::AuthorizationService>,
+                ai_billing::inbound::axum_router::purchase_credits_handler::<crate::api::context::AiBillingServiceType, crate::api::context::AuthorizationService>,
 
                 /// /session
                 session::session_login::handler,
@@ -287,6 +288,10 @@ use model::user::{
                         ai_billing::AutoReloadSnapshot,
                         ai_billing::inbound::axum_router::CreditCheckoutRequestBody,
                         ai_billing::inbound::axum_router::CreditCheckoutResponse,
+                        ai_billing::inbound::axum_router::CreditPurchaseRequestBody,
+                        ai_billing::inbound::axum_router::CreditPurchaseResponse,
+                        ai_billing::CreditPurchaseStatus,
+                        ai_billing::CreditPurchaseSnapshot,
 
                         // GitHub pull requests
                         EnrichGithubPullRequestsProxyRequest,

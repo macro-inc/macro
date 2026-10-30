@@ -8,6 +8,7 @@ use super::ledger::{SettlementPolicy, build_snapshot, decide};
 use super::models::{
     AiUsageBilling, AllowanceDecision, AllowanceStore, AutoReloadMonthlyBudget,
     AutoReloadThresholds, BillingError, BillingPeriod, BillingSettings, CREDIT_PACKS_CENTS,
+    CreditPurchase, CreditPurchaseSnapshot, CreditPurchaseStatus, CreditReloadKind,
     CreditReloadStatus, Entitlement, MIN_STRIPE_CHARGE_CENTS, OVERAGE_CHARGE_THRESHOLD_CENTS,
     OverageChargeStatus, PayerScope, PeriodAllowance, PeriodLedger, Result, SeatAllowance,
     SeatUsage, SubscriptionScope, UsageSnapshot,
@@ -15,7 +16,7 @@ use super::models::{
 use super::period::{PeriodSync, SubscriptionPeriod};
 use super::ports::{
     BillingRepo, BillingService, CreditCheckoutRequest, CreditReloadRequest, EntitlementSource,
-    PaymentGateway, PendingReload, UsageReader,
+    InvoicePayment, InvoiceVoid, PaymentGateway, PendingReload, PurchaseReservation, UsageReader,
 };
 use super::pricing::AiPricing;
 use ai_usage::AiUsageEnforcement;
@@ -583,8 +584,11 @@ where
         else {
             return Ok(());
         };
-        match self.collect_reload(entitlement, reload).await {
-            Ok(()) => Ok(()),
+        match self
+            .collect_credit_charge(entitlement, reload, CreditReloadKind::Automatic)
+            .await
+        {
+            Ok(_) => Ok(()),
             Err(e @ (BillingError::Payment(_) | BillingError::NoStripeCustomer)) => {
                 tracing::warn!(
                     error = ?e,
@@ -596,24 +600,32 @@ where
         }
     }
 
-    /// Collect a reserved credit reload: open its invoice (or pick up the one
-    /// an earlier attempt opened), try to pay it, and book the credits once
-    /// paid. A provider failure marks the reload failed and pauses automatic
-    /// reloads until the payer saves their settings again. A recorded invoice
-    /// stays on the row because Stripe may still collect it, in which case
-    /// the webhook books the credits.
-    async fn collect_reload(&self, entitlement: &Entitlement, reload: PendingReload) -> Result<()> {
+    /// Collect a reserved card charge for credits: open its invoice (or pick
+    /// up the one an earlier attempt opened), try to pay it, and book the
+    /// credits once paid. Reports how the payment ended. A purchase whose card
+    /// needs authentication has its invoice voided, since the payer pays
+    /// through checkout instead; an automatic reload keeps it open like a
+    /// decline. A failure marks the charge failed; for an automatic reload it also pauses
+    /// automatic reloads until the payer saves their settings again. A
+    /// recorded invoice stays on the row because Stripe may still collect it,
+    /// in which case the webhook books the credits.
+    async fn collect_credit_charge(
+        &self,
+        entitlement: &Entitlement,
+        reload: PendingReload,
+        kind: CreditReloadKind,
+    ) -> Result<InvoicePayment> {
         let payer = &entitlement.payer;
         let scope = SubscriptionScope::from(&entitlement.scope);
         let customer_id = match self.entitlements.stripe_customer_id(payer).await {
             Ok(Some(customer_id)) => customer_id,
             Ok(None) => {
                 tracing::warn!("credit reload reserved but payer has no stripe customer");
-                self.fail_reload(payer, reload.id).await?;
+                self.fail_credit_charge(payer, reload.id, kind).await?;
                 return Err(BillingError::NoStripeCustomer);
             }
             Err(e) => {
-                self.fail_reload(payer, reload.id).await?;
+                self.fail_credit_charge(payer, reload.id, kind).await?;
                 return Err(e);
             }
         };
@@ -621,10 +633,15 @@ where
         let invoice_id = match reload.stripe_invoice_id.clone() {
             Some(invoice_id) => invoice_id,
             None => {
-                let description = format!(
-                    "Macro AI credits, automatic reload of {}",
-                    dollars(reload.amount_cents)
-                );
+                let description = match kind {
+                    CreditReloadKind::Automatic => format!(
+                        "Macro AI credits, automatic reload of {}",
+                        dollars(reload.amount_cents)
+                    ),
+                    CreditReloadKind::Purchase => {
+                        format!("Macro AI credits, {}", dollars(reload.amount_cents))
+                    }
+                };
                 match self
                     .payments
                     .open_credit_reload_invoice(CreditReloadRequest {
@@ -644,7 +661,7 @@ where
                             cents = reload.amount_cents,
                             "ai credit reload invoice could not be opened"
                         );
-                        self.fail_reload(payer, reload.id).await?;
+                        self.fail_credit_charge(payer, reload.id, kind).await?;
                         return Err(e);
                     }
                 }
@@ -661,7 +678,7 @@ where
             .pay_overage_invoice(reload.id, &invoice_id, scope)
             .await
         {
-            Ok(true) => {
+            Ok(InvoicePayment::Paid) => {
                 self.repo
                     .record_credit_reload(payer, reload.amount_cents, &invoice_id)
                     .await?;
@@ -671,19 +688,46 @@ where
                 tracing::info!(
                     cents = reload.amount_cents,
                     invoice = %invoice_id,
-                    "collected automatic ai credit reload"
+                    %kind,
+                    "collected ai credit charge"
                 );
-                Ok(())
+                Ok(InvoicePayment::Paid)
             }
-            Ok(false) => {
-                // Declined: the invoice stays open for Stripe's retries and
-                // the webhook books the credits if one succeeds.
+            Ok(InvoicePayment::AuthenticationRequired) if kind == CreditReloadKind::Purchase => {
                 tracing::info!(
                     cents = reload.amount_cents,
                     invoice = %invoice_id,
-                    "ai credit reload invoice awaiting payment"
+                    "ai credit purchase needs card authentication; voiding for checkout"
                 );
-                Ok(())
+                if self
+                    .abandon_credit_purchase(payer, reload.id, reload.amount_cents, &invoice_id)
+                    .await?
+                {
+                    return Ok(InvoicePayment::Paid);
+                }
+                Ok(InvoicePayment::AuthenticationRequired)
+            }
+            Ok(InvoicePayment::Declined | InvoicePayment::AuthenticationRequired) => {
+                // Declined: the invoice stays open for Stripe's retries and
+                // the webhook books the credits if one succeeds. A declined
+                // purchase is marked failed so buying again retries this
+                // invoice rather than waiting on it.
+                if kind == CreditReloadKind::Purchase {
+                    self.repo
+                        .finish_credit_reload(
+                            reload.id,
+                            Some(&invoice_id),
+                            CreditReloadStatus::Failed,
+                        )
+                        .await?;
+                }
+                tracing::info!(
+                    cents = reload.amount_cents,
+                    invoice = %invoice_id,
+                    %kind,
+                    "ai credit charge declined; invoice awaiting payment"
+                );
+                Ok(InvoicePayment::Declined)
             }
             Err(e) => {
                 tracing::error!(
@@ -692,19 +736,72 @@ where
                     invoice = %invoice_id,
                     "ai credit reload failed"
                 );
-                self.fail_reload(payer, reload.id).await?;
+                self.fail_credit_charge(payer, reload.id, kind).await?;
                 Err(e)
             }
         }
     }
 
-    /// A reload that could not be collected: automatic reloads pause until
-    /// the payer saves their settings again.
-    async fn fail_reload(&self, payer: &MacroUserIdStr<'_>, reload_id: Uuid) -> Result<()> {
+    /// Void a purchase's open invoice so it can never charge the card, before
+    /// the payer pays through checkout instead. If Stripe collected it first,
+    /// book the credits and return `true`.
+    async fn abandon_credit_purchase(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        reload_id: Uuid,
+        amount_cents: i64,
+        invoice_id: &str,
+    ) -> Result<bool> {
+        match self.payments.void_credit_invoice(invoice_id).await? {
+            InvoiceVoid::Voided => {
+                self.repo.void_credit_purchase(reload_id).await?;
+                Ok(false)
+            }
+            InvoiceVoid::Paid => {
+                self.repo
+                    .record_credit_reload(payer, amount_cents, invoice_id)
+                    .await?;
+                self.repo
+                    .finish_credit_reload(reload_id, Some(invoice_id), CreditReloadStatus::Paid)
+                    .await?;
+                Ok(true)
+            }
+        }
+    }
+
+    /// A charge that could not be collected. A failed automatic reload pauses
+    /// automatic reloads until the payer saves their settings again; a failed
+    /// purchase does not.
+    async fn fail_credit_charge(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        reload_id: Uuid,
+        kind: CreditReloadKind,
+    ) -> Result<()> {
         self.repo
             .finish_credit_reload(reload_id, None, CreditReloadStatus::Failed)
             .await?;
-        self.repo.suspend_auto_reload(payer).await
+        match kind {
+            CreditReloadKind::Automatic => self.repo.suspend_auto_reload(payer).await,
+            CreditReloadKind::Purchase => Ok(()),
+        }
+    }
+
+    /// The monthly credit limit on `user`'s one-time purchases: the payer's
+    /// configured limit, or for a team member when none is set, their plan's
+    /// default, so a member can never charge the team card without a limit.
+    fn purchase_limit_cents(
+        entitlement: &Entitlement,
+        settings: &BillingSettings,
+        user: &MacroUserIdStr<'_>,
+    ) -> Option<i64> {
+        settings.auto_reload.monthly_limit_cents.or_else(|| {
+            if entitlement.is_payer(user) {
+                None
+            } else {
+                entitlement.tier.default_auto_reload_monthly_limit_cents()
+            }
+        })
     }
 
     fn require_payer(entitlement: &Entitlement, user: &MacroUserIdStr<'_>) -> Result<()> {
@@ -819,19 +916,29 @@ where
         let now = Utc::now();
         let position = self.position(user, now).await?;
         let mut snapshot = self.snapshot_at(user, &position).await?;
-        // Summary-only read; allowance enforcement does not need monthly reload facts.
-        if position.entitlement.is_metered()
-            && let Some(limit) = position.settings.auto_reload.monthly_limit_cents
-        {
+        // Summary-only read; allowance enforcement does not need monthly
+        // credit-limit facts.
+        if position.entitlement.is_metered() {
             let month = BillingPeriod::calendar_month(now);
             let committed_cents = self
                 .repo
                 .credit_reload_committed_cents(&position.entitlement.payer, month)
                 .await?;
-            snapshot.auto_reload.monthly_budget = Some(AutoReloadMonthlyBudget {
+            if let Some(limit) = position.settings.auto_reload.monthly_limit_cents {
+                snapshot.auto_reload.monthly_budget = Some(AutoReloadMonthlyBudget {
+                    committed_cents,
+                    resets_at: month.end,
+                    limit_reached: limit.saturating_sub(committed_cents) < MIN_STRIPE_CHARGE_CENTS,
+                });
+            }
+            snapshot.credit_purchase = Some(CreditPurchaseSnapshot {
+                monthly_limit_cents: Self::purchase_limit_cents(
+                    &position.entitlement,
+                    &position.settings,
+                    user,
+                ),
                 committed_cents,
                 resets_at: month.end,
-                limit_reached: limit.saturating_sub(committed_cents) < MIN_STRIPE_CHARGE_CENTS,
             });
         }
         // Keep the summary consistent with the configured allowance gate.
@@ -916,6 +1023,100 @@ where
             tracing::warn!(error = ?e, "settlement after enabling automatic reload failed");
         }
         self.snapshot(user).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn purchase_credits(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        amount_cents: i64,
+    ) -> Result<CreditPurchase> {
+        if !CREDIT_PACKS_CENTS.contains(&amount_cents) {
+            return Err(BillingError::InvalidCreditAmount);
+        }
+        let now = Utc::now();
+        let Position {
+            entitlement,
+            settings,
+            ..
+        } = self.position(user, now).await?;
+        // Every billed seat may buy for the team; Free has nothing to fund and
+        // Enterprise is never metered.
+        if !entitlement.is_metered() {
+            return Err(BillingError::FreePlan);
+        }
+        // A payer who removed their card can't be charged off-session; send
+        // them to checkout instead of opening an invoice nobody can pay.
+        let customer_id = self
+            .entitlements
+            .stripe_customer_id(&entitlement.payer)
+            .await?
+            .ok_or(BillingError::NoStripeCustomer)?;
+        let scope = SubscriptionScope::from(&entitlement.scope);
+        if !self
+            .payments
+            .has_payment_method(&customer_id, scope)
+            .await?
+        {
+            // A purchase declined before the card was removed keeps an open
+            // invoice; void it so a card added later can't collect it on top
+            // of the checkout payment.
+            for declined in self
+                .repo
+                .declined_credit_purchases(&entitlement.payer)
+                .await?
+            {
+                if let Some(invoice_id) = declined.stripe_invoice_id.as_deref() {
+                    self.abandon_credit_purchase(
+                        &entitlement.payer,
+                        declined.id,
+                        declined.amount_cents,
+                        invoice_id,
+                    )
+                    .await?;
+                }
+            }
+            return Ok(CreditPurchase {
+                amount_cents,
+                status: CreditPurchaseStatus::PaymentMethodRequired,
+            });
+        }
+        let limit = Self::purchase_limit_cents(&entitlement, &settings, user);
+        let reload = match self
+            .repo
+            .reserve_credit_purchase(&entitlement.payer, user, amount_cents, limit, now)
+            .await?
+        {
+            PurchaseReservation::New(reload) | PurchaseReservation::Retry(reload) => reload,
+            PurchaseReservation::OverLimit { remaining_cents } => {
+                return Err(BillingError::CreditLimitExceeded { remaining_cents });
+            }
+            PurchaseReservation::InProgress => return Err(BillingError::PurchaseInProgress),
+        };
+        let amount_cents = reload.amount_cents;
+        let status = match self
+            .collect_credit_charge(&entitlement, reload, CreditReloadKind::Purchase)
+            .await
+        {
+            Ok(InvoicePayment::Paid) => CreditPurchaseStatus::Paid,
+            Ok(InvoicePayment::AuthenticationRequired) => {
+                CreditPurchaseStatus::AuthenticationRequired
+            }
+            Ok(InvoicePayment::Declined) | Err(BillingError::Payment(_)) => {
+                CreditPurchaseStatus::Declined
+            }
+            Err(e) => return Err(e),
+        };
+        if status == CreditPurchaseStatus::Paid
+            && let Err(e) = self.settle(user).await
+        {
+            // The credits are booked; the next settlement applies them.
+            tracing::warn!(error = ?e, "settlement after credit purchase failed");
+        }
+        Ok(CreditPurchase {
+            amount_cents,
+            status,
+        })
     }
 
     #[tracing::instrument(skip(self, success_url, cancel_url), err)]
@@ -1040,7 +1241,10 @@ where
             return Ok(());
         };
         if !paid {
-            return self.repo.suspend_auto_reload(&resolved.payer).await;
+            return match resolved.kind {
+                CreditReloadKind::Automatic => self.repo.suspend_auto_reload(&resolved.payer).await,
+                CreditReloadKind::Purchase => Ok(()),
+            };
         }
         // Resolving a paid reload atomically books its credits with the status.
         // The reloaded credits cover any usage that was waiting on them.

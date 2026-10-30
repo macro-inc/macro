@@ -57,8 +57,9 @@ export type AutoReloadDefaults = {
  */
 export type AutoReloadMonthlyBudget = {
     /**
-     * Reloads paid, pending, or failed with an invoice that can still collect.
-     * Customer cents; manual credit purchases do not count.
+     * Reloads and one-time card purchases paid, pending, or failed with an
+     * invoice that can still collect. Customer cents; Checkout purchases do
+     * not count.
      */
     committed_cents: number;
     /**
@@ -377,6 +378,60 @@ export type CreditCheckoutResponse = {
      */
     url: string;
 };
+
+/**
+ * Request body for [`purchase_credits_handler`].
+ */
+export type CreditPurchaseRequestBody = {
+    /**
+     * One of the catalog's credit packs, cents.
+     */
+    amountCents: number;
+};
+
+/**
+ * Response for [`purchase_credits_handler`].
+ */
+export type CreditPurchaseResponse = {
+    /**
+     * Amount charged, cents. A retry of an earlier declined purchase charges
+     * that purchase's amount.
+     */
+    amountCents: number;
+    /**
+     * The caller's position after the purchase.
+     */
+    snapshot: UsageSnapshot;
+    /**
+     * Whether the card on file paid.
+     */
+    status: CreditPurchaseStatus;
+};
+
+/**
+ * The monthly credit limit that applies to this user's one-time purchases.
+ */
+export type CreditPurchaseSnapshot = {
+    /**
+     * Charged this month so far, including charges that may still collect.
+     */
+    committed_cents: number;
+    /**
+     * Most credits charged to the card on file per UTC calendar month, from
+     * automatic reloads and one-time purchases together, in customer cents.
+     * `null` when the payer set no limit; team members always have one.
+     */
+    monthly_limit_cents?: number | null;
+    /**
+     * Start of the next UTC calendar month.
+     */
+    resets_at: string;
+};
+
+/**
+ * How a one-time credit purchase charged to the card on file ended.
+ */
+export type CreditPurchaseStatus = 'paid' | 'declined' | 'payment_method_required' | 'authentication_required';
 
 /**
  * What settings needs to render the Cursor connection.
@@ -1370,6 +1425,11 @@ export type Permission = {
  */
 export type PlanCatalogEntry = {
     /**
+     * Monthly automatic reload limit a payer on this plan starts from,
+     * cents. Absent for plans that cannot reload.
+     */
+    auto_reload_default_monthly_limit_cents?: number | null;
+    /**
      * Included AI per seat per period, in cents at provider cost. For the
      * free plan this is its monthly hard cap.
      */
@@ -1933,6 +1993,7 @@ export type UsageSnapshot = {
      * Shared prepaid credit balance, in customer cents.
      */
     credit_balance_cents: number;
+    credit_purchase?: null | CreditPurchaseSnapshot;
     /**
      * Shared payer credits already applied to this period, in customer cents.
      */
@@ -2229,6 +2290,47 @@ export type CreateAiCreditCheckoutResponses = {
 };
 
 export type CreateAiCreditCheckoutResponse = CreateAiCreditCheckoutResponses[keyof CreateAiCreditCheckoutResponses];
+
+export type PurchaseAiCreditsData = {
+    body: CreditPurchaseRequestBody;
+    path?: never;
+    query?: never;
+    url: '/ai-billing/credits/purchase';
+};
+
+export type PurchaseAiCreditsErrors = {
+    /**
+     * Invalid pack or no payment account
+     */
+    400: AiBillingErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * A paid plan is required
+     */
+    402: AiBillingErrorBody;
+    /**
+     * Over the monthly credit limit, or an earlier purchase is still processing
+     */
+    409: AiBillingErrorBody;
+    /**
+     * Internal server error
+     */
+    500: AiBillingErrorBody;
+};
+
+export type PurchaseAiCreditsError = PurchaseAiCreditsErrors[keyof PurchaseAiCreditsErrors];
+
+export type PurchaseAiCreditsResponses = {
+    /**
+     * Purchase outcome and updated position
+     */
+    200: CreditPurchaseResponse;
+};
+
+export type PurchaseAiCreditsResponse = PurchaseAiCreditsResponses[keyof PurchaseAiCreditsResponses];
 
 export type UpdateAiBillingOverageData = {
     body: UpdateOverageRequest;

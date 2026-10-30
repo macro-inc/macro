@@ -213,6 +213,7 @@ pub fn build_snapshot(
         uncovered_cents,
         remaining_cents,
         blocked_reason: None,
+        credit_purchase: None,
     };
     snapshot.blocked_reason = match decide(&snapshot) {
         AllowanceDecision::Allow => None,

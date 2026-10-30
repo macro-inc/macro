@@ -91,6 +91,14 @@ impl ai_billing::domain::BillingService for UnavailableBilling {
         panic!("admission must not change settings")
     }
 
+    async fn purchase_credits(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: i64,
+    ) -> ai_billing::domain::Result<ai_billing::domain::CreditPurchase> {
+        panic!("admission must not purchase credits")
+    }
+
     async fn create_credit_checkout(
         &self,
         _: &MacroUserIdStr<'_>,

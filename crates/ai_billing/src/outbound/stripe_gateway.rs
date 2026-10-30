@@ -6,8 +6,8 @@
 mod test;
 
 use crate::domain::{
-    BillingError, BillingPeriod, CreditCheckoutRequest, CreditReloadRequest, OverageChargeRequest,
-    PaymentGateway, Result, SubscriptionScope,
+    BillingError, BillingPeriod, CreditCheckoutRequest, CreditReloadRequest, InvoicePayment,
+    InvoiceVoid, OverageChargeRequest, PaymentGateway, Result, SubscriptionScope,
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -16,13 +16,13 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use stripe::{
-    CheckoutSession, CheckoutSessionMode, CollectionMethod, CreateCheckoutSession,
+    ApiErrorsCode, CheckoutSession, CheckoutSessionMode, CollectionMethod, CreateCheckoutSession,
     CreateCheckoutSessionLineItems, CreateCheckoutSessionLineItemsPriceData,
     CreateCheckoutSessionLineItemsPriceDataProductData, CreateCheckoutSessionPaymentIntentData,
     CreateInvoice, CreateInvoiceItem, Currency, Customer, CustomerId, Expandable,
     FinalizeInvoiceParams, Invoice, InvoiceId, InvoiceItem, InvoicePendingInvoiceItemsBehavior,
-    InvoiceStatus, ListSubscriptions, PaymentMethodId, RequestStrategy, Subscription,
-    SubscriptionStatus,
+    InvoiceStatus, ListSubscriptions, PaymentIntentStatus, PaymentMethodId, RequestStrategy,
+    Subscription, SubscriptionStatus,
 };
 
 /// Metadata key stamped on every Stripe object this crate creates.
@@ -263,6 +263,19 @@ impl ChargeMethod {
     }
 }
 
+/// Whether the invoice's last payment attempt stopped for card
+/// authentication (3-D Secure), which an off-session charge can't complete.
+fn needs_authentication(invoice: &Invoice) -> bool {
+    let Some(Expandable::Object(intent)) = invoice.payment_intent.as_ref() else {
+        return false;
+    };
+    intent.status == PaymentIntentStatus::RequiresAction
+        || intent.last_payment_error.as_ref().is_some_and(|error| {
+            error.code == Some(ApiErrorsCode::AuthenticationRequired)
+                || error.decline_code.as_deref() == Some("authentication_required")
+        })
+}
+
 fn customer_fallback(customer: &Customer) -> Option<PaymentMethodId> {
     customer
         .invoice_settings
@@ -482,7 +495,7 @@ impl PaymentGateway for StripePaymentGateway {
         charge_id: Uuid,
         invoice_id: &str,
         scope: SubscriptionScope,
-    ) -> Result<bool> {
+    ) -> Result<InvoicePayment> {
         let invoice_id: InvoiceId = invoice_id.parse().map_err(|e| {
             BillingError::Payment(anyhow::anyhow!("invalid stripe invoice id: {e}"))
         })?;
@@ -499,7 +512,7 @@ impl PaymentGateway for StripePaymentGateway {
             return Err(BillingError::DirectUsageBillingDisabled);
         }
         if invoice.status == Some(InvoiceStatus::Paid) {
-            return Ok(true);
+            return Ok(InvoicePayment::Paid);
         }
         let invoice_scope = stamped_scope(&invoice)?;
         let scope = invoice_scope.unwrap_or(scope);
@@ -541,12 +554,13 @@ impl PaymentGateway for StripePaymentGateway {
             .post_form::<Invoice, _>(&format!("/invoices/{invoice_id}/pay"), &pay)
             .await
         {
-            Ok(invoice) => Ok(invoice.status == Some(InvoiceStatus::Paid)),
+            Ok(invoice) if invoice.status == Some(InvoiceStatus::Paid) => Ok(InvoicePayment::Paid),
+            Ok(_) => Ok(InvoicePayment::Declined),
             Err(e) => {
                 // A decline is a failed collection, not a failed request: the
                 // invoice stays open and Stripe retries it. The invoice's own
                 // status also tells a retry that Stripe already collected it.
-                let invoice = Invoice::retrieve(&self.client, &invoice_id, &[])
+                let invoice = Invoice::retrieve(&self.client, &invoice_id, &["payment_intent"])
                     .await
                     .map_err(|retrieve_err| {
                         tracing::warn!(
@@ -556,13 +570,20 @@ impl PaymentGateway for StripePaymentGateway {
                         payment(retrieve_err)
                     })?;
                 match invoice.status {
-                    Some(InvoiceStatus::Paid) => Ok(true),
+                    Some(InvoiceStatus::Paid) => Ok(InvoicePayment::Paid),
+                    Some(InvoiceStatus::Open) if needs_authentication(&invoice) => {
+                        tracing::warn!(
+                            error = ?e,
+                            "invoice payment needs card authentication; left open"
+                        );
+                        Ok(InvoicePayment::AuthenticationRequired)
+                    }
                     Some(InvoiceStatus::Open) => {
                         tracing::warn!(
                             error = ?e,
                             "overage invoice payment did not succeed; left open for stripe retries"
                         );
-                        Ok(false)
+                        Ok(InvoicePayment::Declined)
                     }
                     other => Err(BillingError::Payment(anyhow::anyhow!(
                         "overage invoice is {other:?} after a failed payment attempt: {e}"
@@ -570,6 +591,59 @@ impl PaymentGateway for StripePaymentGateway {
                 }
             }
         }
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn void_credit_invoice(&self, invoice_id: &str) -> Result<InvoiceVoid> {
+        let invoice_id: InvoiceId = invoice_id.parse().map_err(|e| {
+            BillingError::Payment(anyhow::anyhow!("invalid stripe invoice id: {e}"))
+        })?;
+        let invoice = Invoice::retrieve(&self.client, &invoice_id, &[])
+            .await
+            .map_err(payment)?;
+        match invoice.status {
+            Some(InvoiceStatus::Paid) => Ok(InvoiceVoid::Paid),
+            Some(InvoiceStatus::Open) => {
+                match Invoice::void(&self.client, &invoice_id).await {
+                    Ok(_) => Ok(InvoiceVoid::Voided),
+                    // Stripe may have collected it between the read and the
+                    // void; the invoice's own status says which.
+                    Err(e) => {
+                        let invoice = Invoice::retrieve(&self.client, &invoice_id, &[])
+                            .await
+                            .map_err(payment)?;
+                        match invoice.status {
+                            Some(InvoiceStatus::Paid) => Ok(InvoiceVoid::Paid),
+                            Some(InvoiceStatus::Void | InvoiceStatus::Uncollectible) => {
+                                Ok(InvoiceVoid::Voided)
+                            }
+                            _ => Err(payment(e)),
+                        }
+                    }
+                }
+            }
+            _ => Ok(InvoiceVoid::Voided),
+        }
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn has_payment_method(
+        &self,
+        customer_id: &str,
+        scope: SubscriptionScope,
+    ) -> Result<bool> {
+        let customer_id = parse_customer(customer_id)?;
+        let customer = Customer::retrieve(&self.client, &customer_id, &[])
+            .await
+            .map_err(payment)?;
+        let subscriptions = self.non_canceled_subscriptions(&customer_id).await?;
+        Ok(
+            match charge_method(customer_fallback(&customer), &subscriptions, scope)? {
+                ChargeMethod::PaymentMethod(_) => true,
+                ChargeMethod::StripeFallback => customer.default_source.is_some(),
+                ChargeMethod::NoMatchingSubscription => false,
+            },
+        )
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -612,6 +686,22 @@ impl PaymentGateway for NoOpPaymentGateway {
         &self,
         _charge_id: Uuid,
         _invoice_id: &str,
+        _scope: SubscriptionScope,
+    ) -> Result<InvoicePayment> {
+        Err(BillingError::Payment(anyhow::anyhow!(
+            "payments are not configured in this service"
+        )))
+    }
+
+    async fn void_credit_invoice(&self, _invoice_id: &str) -> Result<InvoiceVoid> {
+        Err(BillingError::Payment(anyhow::anyhow!(
+            "payments are not configured in this service"
+        )))
+    }
+
+    async fn has_payment_method(
+        &self,
+        _customer_id: &str,
         _scope: SubscriptionScope,
     ) -> Result<bool> {
         Err(BillingError::Payment(anyhow::anyhow!(

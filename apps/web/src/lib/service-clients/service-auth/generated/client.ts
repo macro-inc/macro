@@ -25,6 +25,8 @@ import type {
   CreateTeamRequest,
   CreditCheckoutRequestBody,
   CreditCheckoutResponse,
+  CreditPurchaseRequestBody,
+  CreditPurchaseResponse,
   CursorApiKeyStatus,
   CursorModelsResponse,
   EmailConnectionProviders,
@@ -467,6 +469,82 @@ export const createAiCreditCheckout = async (
     status: res.status,
     headers: res.headers,
   } as createAiCreditCheckoutResponse;
+};
+
+/**
+ * @summary Buy a credit pack now, charged to the payer's card on file. Any paid team
+member may buy, within the team's monthly credit limit.
+ */
+export type purchaseAiCreditsResponse200 = {
+  data: CreditPurchaseResponse;
+  status: 200;
+};
+
+export type purchaseAiCreditsResponse400 = {
+  data: AiBillingErrorBody;
+  status: 400;
+};
+
+export type purchaseAiCreditsResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type purchaseAiCreditsResponse402 = {
+  data: AiBillingErrorBody;
+  status: 402;
+};
+
+export type purchaseAiCreditsResponse409 = {
+  data: AiBillingErrorBody;
+  status: 409;
+};
+
+export type purchaseAiCreditsResponse500 = {
+  data: AiBillingErrorBody;
+  status: 500;
+};
+
+export type purchaseAiCreditsResponseSuccess = purchaseAiCreditsResponse200 & {
+  headers: Headers;
+};
+export type purchaseAiCreditsResponseError = (
+  | purchaseAiCreditsResponse400
+  | purchaseAiCreditsResponse401
+  | purchaseAiCreditsResponse402
+  | purchaseAiCreditsResponse409
+  | purchaseAiCreditsResponse500
+) & {
+  headers: Headers;
+};
+
+export type purchaseAiCreditsResponse =
+  | purchaseAiCreditsResponseSuccess
+  | purchaseAiCreditsResponseError;
+
+export const getPurchaseAiCreditsUrl = () => {
+  return `/ai-billing/credits/purchase`;
+};
+
+export const purchaseAiCredits = async (
+  creditPurchaseRequestBody: CreditPurchaseRequestBody,
+  options?: RequestInit
+): Promise<purchaseAiCreditsResponse> => {
+  const res = await fetch(getPurchaseAiCreditsUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(creditPurchaseRequestBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: purchaseAiCreditsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as purchaseAiCreditsResponse;
 };
 
 /**

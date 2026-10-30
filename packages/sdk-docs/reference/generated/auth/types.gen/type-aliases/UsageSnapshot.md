@@ -1,6 +1,6 @@
 # Type Alias: UsageSnapshot
 
-> **UsageSnapshot** = \{ `auto_reload`: [`AutoReloadSnapshot`](AutoReloadSnapshot.md); `blocked_reason?`: `null` \| [`DenyReason`](DenyReason.md); `can_manage_billing`: `boolean`; `credit_balance_cents`: `number`; `credits_consumed_cents`: `number`; `credits_shared_with_team`: `boolean`; `included_cents`: `number`; `overage_charged_cents`: `number`; `overage_enabled`: `boolean`; `overage_limit_cents`: `number`; `overage_suspended`: `boolean`; `payer`: `string`; `period_end`: `string`; `period_start`: `string`; `remaining_cents`: `number`; `seats`: `number`; `tier`: [`PlanTier`](PlanTier.md); `uncovered_cents`: `number`; `unlimited`: `boolean`; `used_cents`: `number`; \}
+> **UsageSnapshot** = \{ `auto_reload`: [`AutoReloadSnapshot`](AutoReloadSnapshot.md); `blocked_reason?`: `null` \| [`DenyReason`](DenyReason.md); `can_manage_billing`: `boolean`; `credit_balance_cents`: `number`; `credit_purchase?`: `null` \| [`CreditPurchaseSnapshot`](CreditPurchaseSnapshot.md); `credits_consumed_cents`: `number`; `credits_shared_with_team`: `boolean`; `included_cents`: `number`; `overage_charged_cents`: `number`; `overage_enabled`: `boolean`; `overage_limit_cents`: `number`; `overage_suspended`: `boolean`; `payer`: `string`; `period_end`: `string`; `period_start`: `string`; `remaining_cents`: `number`; `seats`: `number`; `tier`: [`PlanTier`](PlanTier.md); `uncovered_cents`: `number`; `unlimited`: `boolean`; `used_cents`: `number`; \}
 
 The payer's current-period position, as shown in Billing settings and used
 by the gate.
@@ -13,6 +13,7 @@ by the gate.
 | <a id="property-blocked_reason"></a> `blocked_reason?` | `null` \| [`DenyReason`](DenyReason.md) | - |
 | <a id="property-can_manage_billing"></a> `can_manage_billing` | `boolean` | Whether the requesting user is the payer. |
 | <a id="property-credit_balance_cents"></a> `credit_balance_cents` | `number` | Shared prepaid credit balance, in customer cents. |
+| <a id="property-credit_purchase"></a> `credit_purchase?` | `null` \| [`CreditPurchaseSnapshot`](CreditPurchaseSnapshot.md) | - |
 | <a id="property-credits_consumed_cents"></a> `credits_consumed_cents` | `number` | Shared payer credits already applied to this period, in customer cents. |
 | <a id="property-credits_shared_with_team"></a> `credits_shared_with_team` | `boolean` | Whether prepaid credits belong to the team, including a team with one seat. |
 | <a id="property-included_cents"></a> `included_cents` | `number` | Included AI for this user's seat this period, in cents at provider cost. |

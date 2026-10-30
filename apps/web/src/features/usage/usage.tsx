@@ -8,11 +8,13 @@ import {
 } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { getWebOrigin } from '@core/util/webOrigin';
 import {
   useAiBillingPlansQuery,
   useAiBillingSummaryQuery,
   useCreateAiCreditCheckoutMutation,
   useCreateBillingPortalMutation,
+  usePurchaseAiCreditsMutation,
   useUpdateAiAutoReloadMutation,
   useUpdateAiOverageMutation,
 } from '@queries/auth';
@@ -31,6 +33,7 @@ export function Usage() {
   const summary = useAiBillingSummaryQuery();
   const plans = useAiBillingPlansQuery();
   const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
+  const purchase = usePurchaseAiCreditsMutation();
   const checkout = useCreateAiCreditCheckoutMutation();
   const portal = useCreateBillingPortalMutation();
   const overage = useUpdateAiOverageMutation();
@@ -45,13 +48,16 @@ export function Usage() {
   const available = () =>
     !usagePreview.beforeLaunch() &&
     isUsageAvailable(PROD_MODE_ENV && !LOCAL_ONLY, aiUsageBilling().enabled);
-  const returnUrl = `${window.location.origin}/app/settings/usage`;
+  // Stripe can't return to the native app's own origin.
+  const returnUrl = `${getWebOrigin()}/app/settings/usage`;
   const usageSummary = () => {
     const snapshot = usagePreview.withPreview(
       summary.isSuccess ? summary.data : undefined,
       plans.isSuccess ? plans.data.plans : undefined
     );
-    return snapshot ? toUsageSummary(snapshot) : undefined;
+    return snapshot
+      ? toUsageSummary(snapshot, plans.isSuccess ? plans.data : undefined)
+      : undefined;
   };
   const canChangeAutoReload = () =>
     available() &&
@@ -71,22 +77,33 @@ export function Usage() {
     refresh: () => {
       fireAndForget(summary.refetch(), 'usage');
     },
-    checkout: {
-      pending: () => checkout.isPending,
+    creditPurchase: {
+      pending: () => purchase.isPending || checkout.isPending,
       supportedAmounts: () =>
         plans.isSuccess
           ? plans.data.credit_packs_cents
           : [1_000, 2_500, 5_000, 10_000],
-      start: async (amountCents) => {
+      // Team members buy on the owner's card within the team's monthly limit.
+      buy: async (amountCents) => {
         if (
           !available() ||
           previewing() ||
           !summary.isSuccess ||
           summary.data.unlimited ||
-          summary.data.tier === 'free' ||
-          !summary.data.can_manage_billing
+          summary.data.tier === 'free'
         )
           throw new Error('Credit purchase unavailable');
+        const result = await purchase.mutateAsync({ amountCents });
+        return result.status;
+      },
+      checkout: async (amountCents) => {
+        if (
+          !available() ||
+          previewing() ||
+          !summary.isSuccess ||
+          !summary.data.can_manage_billing
+        )
+          throw new Error('Credit checkout unavailable');
         return await checkout.mutateAsync({
           amountCents,
           successUrl: `${returnUrl}?aiCreditsSuccess=true`,

@@ -42,7 +42,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
           }
           pending={
             props.context.autoReload.pending() ||
-            props.context.checkout.pending()
+            props.context.creditPurchase.pending()
           }
           onAdjust={(trigger) => {
             autoReloadTrigger = trigger;
@@ -257,9 +257,44 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                     }
                   >
                     <SettingsCard>
-                      <p class="p-4 text-sm text-ink-muted">
-                        Usage credits are managed by your team.
-                      </p>
+                      <SettingsRow
+                        label={
+                          <span class="font-medium">
+                            {formatCreditBalance(summary().creditBalanceCents)}{' '}
+                            credits remaining
+                          </span>
+                        }
+                        description={
+                          <Show
+                            when={summary().purchaseLimit}
+                            fallback="Shared team balance"
+                          >
+                            {(limit) =>
+                              `Shared team balance. You can add ${formatCreditBalance(limit().remainingCents)} more this month, within your team's ${formatCreditBalance(limit().limitCents)} limit.`
+                            }
+                          </Show>
+                        }
+                      >
+                        <Button
+                          ref={(button) => {
+                            purchaseTrigger = button;
+                          }}
+                          variant="secondary"
+                          size="sm"
+                          class="rounded-full px-4"
+                          disabled={props.context.creditPurchase
+                            .supportedAmounts()
+                            .every(
+                              (cents) =>
+                                cents >
+                                (summary().purchaseLimit?.remainingCents ??
+                                  Number.POSITIVE_INFINITY)
+                            )}
+                          onClick={() => setPurchaseOpen(true)}
+                        >
+                          Add more
+                        </Button>
+                      </SettingsRow>
                     </SettingsCard>
                   </Show>
                 </SettingsSection>

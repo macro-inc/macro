@@ -895,8 +895,32 @@ for Premium, `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`, and
 used up and no credits or usage billing cover the request, sending a message
 answers HTTP 402 and the app opens the **AI usage limit** dialog (title
 `You've used this month's included AI`, or the spending-limit / failed-charge
-variants). It shows **Monthly limit**, the message `Add additional credits to
-keep going.`, and an `Open usage settings` button. Credit purchases live in
+variants). It says when the included AI resets. When the viewer is the payer
+on a paid plan, it offers **One-time** and, while Auto-Reload is off or
+suspended, **Auto-reload**:
+
+- **One-time** picks a credit pack ($25 / $50 / $100 from the plan catalog) and
+  **Buy $25 in credits** charges the card on file right away, closing with an
+  `Added $25 in credits. Resend your message.` toast. Team members see it too:
+  it charges the team owner's card, shows **Team monthly limit** (`$X of $Y
+  left`), and disables packs over what is left. A declined card shows inline;
+  the payer gets **Add payment method**, a member is told to ask the owner.
+  With no card on file (for example, removed in the billing portal), or a card
+  that needs 3-D Secure, nothing is charged: the payer is sent to Stripe
+  Checkout for the same pack and returns to the same page (Settings → Usage on
+  the web origin from the native app, which opens Stripe in the system
+  browser). A member is asked to have the owner add or update the card.
+- **Auto-reload** shows the reload (`$25 when below $5`), an editable
+  **Monthly limit** prefilled with the plan default ($200 Pro, $1,000 Max; blank
+  means no limit), and **Turn on auto-reload**, which enables it in one click.
+  Enabling reloads right away when the balance is low; on success the dialog
+  closes with an `Auto-reload is on` toast and the user resends. If the card on
+  file can't be charged, the button becomes **Add payment method** (Stripe
+  billing portal, returning to Settings → Usage).
+
+The primary action uses the black-and-white `neutral` Button; **Usage settings** and
+**Dismiss** are ghost buttons. Team members who don't pay see `Open usage
+settings` only when they cannot buy (no paid, metered plan). Credit purchases and Auto-Reload thresholds also live in
 Settings → Usage; subscription changes live in Settings → Billing.
 
 The free plan is a hard cap: when its monthly allowance is used up, requests

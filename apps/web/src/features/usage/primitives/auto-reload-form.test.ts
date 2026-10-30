@@ -3,7 +3,7 @@ import { DEFAULT_AUTO_RELOAD } from '../core/usage';
 import { createAutoReloadForm } from './auto-reload-form';
 
 describe('Auto-Reload form', () => {
-  it('defaults to $10/$100, accepts an optional cap and rejects an inverted balance range', () => {
+  it('defaults to $5/$25, accepts an optional cap and rejects an inverted balance range', () => {
     const form = createAutoReloadForm(DEFAULT_AUTO_RELOAD);
     expect(form.error()).toBeUndefined();
     expect(form.settings()).toEqual({ ...DEFAULT_AUTO_RELOAD, enabled: true });

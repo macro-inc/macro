@@ -152,6 +152,66 @@ describe('automatic reload', () => {
     });
   });
 
+  it('starts an off Auto-Reload from the catalog defaults and the plan limit, but keeps an opted-in payer’s settings', () => {
+    const catalog = {
+      plans: [
+        {
+          tier: 'premium' as const,
+          monthly_price_cents: 4_000,
+          included_ai_cents_per_seat: 2_000,
+          purchasable: true,
+          auto_reload_default_monthly_limit_cents: 20_000,
+        },
+        {
+          tier: 'max' as const,
+          monthly_price_cents: 20_000,
+          included_ai_cents_per_seat: 10_000,
+          purchasable: true,
+          auto_reload_default_monthly_limit_cents: 100_000,
+        },
+      ],
+      credit_packs_cents: [1_000],
+      overage_limit_min_cents: 500,
+      overage_limit_max_cents: 500_000,
+      auto_reload_defaults: {
+        minimum_balance_cents: 500,
+        target_balance_cents: 2_500,
+      },
+    };
+    const stored = {
+      minimum_balance_cents: 1_000,
+      target_balance_cents: 10_000,
+      monthly_spend_limit_cents: null,
+      suspended: false,
+      active: false,
+    };
+    expect(
+      toUsageSummary({ ...snapshot, tier: 'max', auto_reload: stored }, catalog)
+        .autoReload.settings
+    ).toEqual({
+      enabled: false,
+      minimumBalanceCents: 500,
+      targetBalanceCents: 2_500,
+      monthlySpendLimitCents: 100_000,
+    });
+    expect(
+      toUsageSummary(
+        {
+          ...snapshot,
+          tier: 'premium',
+          overage_enabled: true,
+          auto_reload: stored,
+        },
+        catalog
+      ).autoReload.settings
+    ).toEqual({
+      enabled: true,
+      minimumBalanceCents: 1_000,
+      targetBalanceCents: 10_000,
+      monthlySpendLimitCents: null,
+    });
+  });
+
   it('falls back to the default thresholds when the snapshot has none', () => {
     expect(toUsageSummary(snapshot).autoReload).toEqual({
       settings: DEFAULT_AUTO_RELOAD,

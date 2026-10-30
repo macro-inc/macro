@@ -232,7 +232,7 @@ fn reload_below_the_stripe_minimum_is_skipped() {
 #[test]
 fn default_thresholds_are_valid() {
     let defaults = AutoReloadThresholds::default();
-    assert_eq!(defaults, thresholds(1_000, 10_000, None));
+    assert_eq!(defaults, thresholds(500, 2_500, None));
     assert!(defaults.validate().is_ok());
 }
 
@@ -435,8 +435,8 @@ fn snapshot_reports_auto_reload_settings_and_activity() {
         PeriodLedger::default(),
         0,
     );
-    assert_eq!(s.auto_reload.minimum_balance_cents, 1_000);
-    assert_eq!(s.auto_reload.target_balance_cents, 10_000);
+    assert_eq!(s.auto_reload.minimum_balance_cents, 500);
+    assert_eq!(s.auto_reload.target_balance_cents, 2_500);
     assert_eq!(s.auto_reload.monthly_spend_limit_cents, None);
     assert!(!s.auto_reload.suspended);
     assert!(!s.auto_reload.active, "overage off: reloads never fire");

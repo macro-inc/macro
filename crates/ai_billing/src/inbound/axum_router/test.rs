@@ -104,6 +104,16 @@ async fn plan_catalog_lists_every_tier_and_marks_the_purchasable_ones() {
         catalog.auto_reload_defaults.target_balance_cents,
         AUTO_RELOAD_DEFAULT_TARGET_CENTS
     );
+
+    // Paid plans start Auto-Reload with a monthly limit sized to the plan.
+    assert_eq!(
+        catalog
+            .plans
+            .iter()
+            .map(|plan| plan.auto_reload_default_monthly_limit_cents)
+            .collect::<Vec<_>>(),
+        vec![None, Some(20_000), Some(100_000)]
+    );
 }
 
 #[test]

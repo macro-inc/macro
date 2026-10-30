@@ -672,8 +672,8 @@ async fn auto_reload_defaults_when_no_account_row_exists(pool: PgPool) {
     assert_eq!(
         settings.auto_reload,
         AutoReloadThresholds {
-            minimum_cents: 1_000,
-            target_cents: 10_000,
+            minimum_cents: 500,
+            target_cents: 2_500,
             monthly_limit_cents: None,
         }
     );
@@ -1647,4 +1647,105 @@ async fn credit_only_settlement_never_reserves_or_retries_direct_charges(pool: P
         assert!(outcome.pending_charge.is_none());
         assert_eq!(charge_rows(&pool).await, 1);
     }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn credit_purchases_respect_the_monthly_limit_and_retry_declined_invoices(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
+    let now = Utc::now();
+    let member = MacroUserIdStr::try_from("macro|member@example.com".to_string()).unwrap();
+
+    let PurchaseReservation::New(first) = repo
+        .reserve_credit_purchase(&payer(), &member, 2_500, Some(5_000), now)
+        .await
+        .unwrap()
+    else {
+        panic!("first purchase reserved");
+    };
+    // Still with Stripe: a second purchase waits.
+    assert_eq!(
+        repo.reserve_credit_purchase(&payer(), &member, 2_500, Some(5_000), now)
+            .await
+            .unwrap(),
+        PurchaseReservation::InProgress
+    );
+    // Declined with its invoice open: buying again retries that invoice.
+    repo.finish_credit_reload(first.id, Some("in_first"), CreditReloadStatus::Failed)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.reserve_credit_purchase(&payer(), &member, 5_000, Some(5_000), now)
+            .await
+            .unwrap(),
+        PurchaseReservation::Retry(PendingReload {
+            id: first.id,
+            amount_cents: 2_500,
+            stripe_invoice_id: Some("in_first".into()),
+        })
+    );
+    repo.finish_credit_reload(first.id, Some("in_first"), CreditReloadStatus::Paid)
+        .await
+        .unwrap();
+
+    // The paid purchase counts against the limit.
+    assert_eq!(
+        repo.reserve_credit_purchase(&payer(), &member, 5_000, Some(5_000), now)
+            .await
+            .unwrap(),
+        PurchaseReservation::OverLimit {
+            remaining_cents: 2_500
+        }
+    );
+    assert!(matches!(
+        repo.reserve_credit_purchase(&payer(), &member, 2_500, Some(5_000), now)
+            .await
+            .unwrap(),
+        PurchaseReservation::New(_)
+    ));
+    let committed = repo
+        .credit_reload_committed_cents(&payer(), BillingPeriod::calendar_month(now))
+        .await
+        .unwrap();
+    assert_eq!(committed, 5_000);
+    let buyer = sqlx::query_scalar!(
+        "SELECT purchased_by FROM ai_credit_reload WHERE kind = 'purchase' LIMIT 1"
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(buyer.as_deref(), Some(member.as_ref()));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn automatic_reloads_ignore_open_purchases(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
+    let now = Utc::now();
+    let period_start = now - chrono::Duration::days(10);
+    let PurchaseReservation::New(purchase) = repo
+        .reserve_credit_purchase(&payer(), &payer(), 2_500, None, now)
+        .await
+        .unwrap()
+    else {
+        panic!("purchase reserved");
+    };
+    repo.finish_credit_reload(purchase.id, Some("in_purchase"), CreditReloadStatus::Failed)
+        .await
+        .unwrap();
+    enable_auto_reload(&repo, &thresholds(None)).await;
+
+    let reload = repo
+        .reserve_credit_reload(&payer(), period_start, 0, now)
+        .await
+        .unwrap()
+        .expect("automatic reload reserved");
+    assert_ne!(reload.id, purchase.id);
+    assert!(reload.stripe_invoice_id.is_none());
+
+    // A failed purchase invoice resolves as a purchase.
+    let resolved = repo
+        .resolve_credit_reload_invoice("in_purchase", CreditReloadStatus::Paid)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(resolved.kind, CreditReloadKind::Purchase);
 }

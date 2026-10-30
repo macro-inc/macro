@@ -5,8 +5,8 @@
 use crate::domain::{
     AUTO_RELOAD_DEFAULT_MINIMUM_CENTS, AUTO_RELOAD_DEFAULT_TARGET_CENTS,
     AUTO_RELOAD_TARGET_MAX_CENTS, AiPricing, AutoReloadThresholds, BillingError, BillingService,
-    CREDIT_PACKS_CENTS, OVERAGE_LIMIT_MAX_CENTS, OVERAGE_LIMIT_MIN_CENTS, PaymentGateway, PlanTier,
-    SubscriptionScope, UsageSnapshot,
+    CREDIT_PACKS_CENTS, CreditPurchaseStatus, OVERAGE_LIMIT_MAX_CENTS, OVERAGE_LIMIT_MIN_CENTS,
+    PaymentGateway, PlanTier, SubscriptionScope, UsageSnapshot,
 };
 use axum::{
     Json, Router,
@@ -46,6 +46,9 @@ pub struct PlanCatalogEntry {
     pub included_ai_cents_per_seat: i64,
     /// Whether a new purchase or plan move may pick this plan today.
     pub purchasable: bool,
+    /// Monthly automatic reload limit a payer on this plan starts from,
+    /// cents. Absent for plans that cannot reload.
+    pub auto_reload_default_monthly_limit_cents: Option<i64>,
 }
 
 /// The plan catalog and the knobs the billing UI offers.
@@ -308,6 +311,10 @@ where
             post(create_credit_checkout_handler::<B, Auth>),
         )
         .route(
+            "/ai-billing/credits/purchase",
+            post(purchase_credits_handler::<B, Auth>),
+        )
+        .route(
             "/internal/ai-billing/settle",
             post(settle_handler::<B, Auth>),
         )
@@ -327,6 +334,9 @@ fn error_response(e: BillingError) -> Response {
         | BillingError::DirectUsageBillingDisabled
         | BillingError::InvalidAutoReload(_)
         | BillingError::NoStripeCustomer => StatusCode::BAD_REQUEST,
+        BillingError::CreditLimitExceeded { .. } | BillingError::PurchaseInProgress => {
+            StatusCode::CONFLICT
+        }
         BillingError::Payment(_) | BillingError::Storage(_) | BillingError::Entitlement(_) => {
             tracing::error!(error = ?e, "ai billing request failed");
             StatusCode::INTERNAL_SERVER_ERROR
@@ -393,6 +403,8 @@ pub async fn get_plans_handler(State(pricing): State<AiPricing>) -> Json<PlanCat
                 purchasable: SeatPlan::PURCHASABLE
                     .into_iter()
                     .any(|plan| PlanTier::from(plan) == tier),
+                auto_reload_default_monthly_limit_cents: tier
+                    .default_auto_reload_monthly_limit_cents(),
             })
             .collect(),
         credit_packs_cents: CREDIT_PACKS_CENTS.to_vec(),
@@ -474,6 +486,66 @@ pub async fn update_auto_reload_handler<B: BillingService, Auth: MacroAuthorizat
         .await
     {
         Ok(snapshot) => Json(snapshot).into_response(),
+        Err(e) => error_response(e),
+    }
+}
+
+/// Request body for [`purchase_credits_handler`].
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreditPurchaseRequestBody {
+    /// One of the catalog's credit packs, cents.
+    pub amount_cents: i64,
+}
+
+/// Response for [`purchase_credits_handler`].
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreditPurchaseResponse {
+    /// Whether the card on file paid.
+    pub status: CreditPurchaseStatus,
+    /// Amount charged, cents. A retry of an earlier declined purchase charges
+    /// that purchase's amount.
+    pub amount_cents: i64,
+    /// The caller's position after the purchase.
+    pub snapshot: UsageSnapshot,
+}
+
+/// Buy a credit pack now, charged to the payer's card on file. Any paid team
+/// member may buy, within the team's monthly credit limit.
+#[utoipa::path(
+    post,
+    path = "/ai-billing/credits/purchase",
+    operation_id = "purchase_ai_credits",
+    request_body = CreditPurchaseRequestBody,
+    responses(
+        (status = 200, description = "Purchase outcome and updated position", body = CreditPurchaseResponse),
+        (status = 400, description = "Invalid pack or no payment account", body = AiBillingErrorBody),
+        (status = 401, description = "Unauthorized"),
+        (status = 402, description = "A paid plan is required", body = AiBillingErrorBody),
+        (status = 409, description = "Over the monthly credit limit, or an earlier purchase is still processing", body = AiBillingErrorBody),
+        (status = 500, description = "Internal server error", body = AiBillingErrorBody),
+    ),
+    tag = "ai_billing"
+)]
+#[tracing::instrument(skip(service, user), fields(user_id = %user.authorization.user.macro_user_id, cents = req.amount_cents))]
+pub async fn purchase_credits_handler<B: BillingService, Auth: MacroAuthorizationService>(
+    State(service): State<Arc<B>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Json(req): Json<CreditPurchaseRequestBody>,
+) -> Response {
+    let user_id = &user.authorization.user.macro_user_id;
+    let purchase = match service.purchase_credits(user_id, req.amount_cents).await {
+        Ok(purchase) => purchase,
+        Err(e) => return error_response(e),
+    };
+    match service.snapshot(user_id).await {
+        Ok(snapshot) => Json(CreditPurchaseResponse {
+            status: purchase.status,
+            amount_cents: purchase.amount_cents,
+            snapshot,
+        })
+        .into_response(),
         Err(e) => error_response(e),
     }
 }

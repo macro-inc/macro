@@ -13,10 +13,23 @@ export type UsageContext = {
   loading: Accessor<boolean>;
   failed: Accessor<boolean>;
   refresh: () => void;
-  checkout: {
+  /** One-time credit purchases charged to the card on file (the team owner's
+   * for a member). Resolves to how the charge ended; rejects when refused.
+   * When the card can't be charged off-session (none on file, or it needs
+   * 3-D Secure) nothing is charged and the payer can `checkout`. */
+  creditPurchase: {
     pending: Accessor<boolean>;
     supportedAmounts: Accessor<readonly number[]>;
-    start: (amountCents: number) => Promise<string>;
+    buy: (
+      amountCents: number
+    ) => Promise<
+      | 'paid'
+      | 'declined'
+      | 'payment_method_required'
+      | 'authentication_required'
+    >;
+    /** Stripe Checkout for the same pack; resolves to its URL. Payer only. */
+    checkout: (amountCents: number) => Promise<string>;
   };
   autoReload: {
     settings: Accessor<AutoReloadSettings>;

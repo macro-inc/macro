@@ -1,12 +1,13 @@
 use super::*;
 use crate::domain::ledger::{ReloadState, plan_reload, plan_settlement};
 use crate::domain::models::{
-    AllowanceStore, AutoReloadThresholds, CreditReloadStatus, DenyReason, OVERAGE_LIMIT_MIN_CENTS,
-    OpenPeriodStart, PayerScope, PeriodAllowance, PeriodLedger, PlanTier, SeatGeneration,
+    AllowanceStore, AutoReloadThresholds, CreditPurchaseStatus, CreditReloadKind,
+    CreditReloadStatus, DenyReason, OVERAGE_LIMIT_MIN_CENTS, OpenPeriodStart, PayerScope,
+    PeriodAllowance, PeriodLedger, PlanTier, SeatGeneration,
 };
 use crate::domain::ports::{
-    CreditReloadRequest, OverageChargeRequest, PendingCharge, PendingReload, ResolvedReload,
-    SettlementOutcome,
+    CreditReloadRequest, OverageChargeRequest, PendingCharge, PendingReload, PurchaseReservation,
+    ResolvedReload, SettlementOutcome,
 };
 use chrono::TimeZone;
 use macro_user_id::cowlike::CowLike;
@@ -164,6 +165,8 @@ struct FakeReload {
     status: CreditReloadStatus,
     invoice: Option<String>,
     created_at: DateTime<Utc>,
+    kind: CreditReloadKind,
+    purchased_by: Option<String>,
 }
 
 #[derive(Default)]
@@ -589,6 +592,7 @@ impl BillingRepo for FakeRepo {
             .reloads
             .iter()
             .filter(|r| r.status == CreditReloadStatus::Pending)
+            .filter(|r| r.kind == CreditReloadKind::Automatic)
             .collect();
         if let Some(orphan) = pending
             .iter()
@@ -626,12 +630,102 @@ impl BillingRepo for FakeRepo {
             status: CreditReloadStatus::Pending,
             invoice: None,
             created_at: now,
+            kind: CreditReloadKind::Automatic,
+            purchased_by: None,
         });
         Ok(Some(PendingReload {
             id,
             amount_cents,
             stripe_invoice_id: None,
         }))
+    }
+    async fn reserve_credit_purchase(
+        &self,
+        _payer: &MacroUserIdStr<'_>,
+        purchased_by: &MacroUserIdStr<'_>,
+        amount_cents: i64,
+        monthly_limit_cents: Option<i64>,
+        now: DateTime<Utc>,
+    ) -> Result<PurchaseReservation> {
+        let mut s = self.state.lock().unwrap();
+        let stale_before = now - chrono::Duration::minutes(10);
+        for r in s.reloads.iter_mut().filter(|r| {
+            r.kind == CreditReloadKind::Purchase
+                && r.status == CreditReloadStatus::Pending
+                && r.invoice.is_none()
+                && r.created_at < stale_before
+        }) {
+            r.status = CreditReloadStatus::Failed;
+        }
+        if let Some(r) = s.reloads.iter_mut().find(|r| {
+            r.kind == CreditReloadKind::Purchase
+                && r.status == CreditReloadStatus::Failed
+                && r.invoice.is_some()
+        }) {
+            r.status = CreditReloadStatus::Pending;
+            return Ok(PurchaseReservation::Retry(PendingReload {
+                id: r.id,
+                amount_cents: r.amount_cents,
+                stripe_invoice_id: r.invoice.clone(),
+            }));
+        }
+        if s.reloads.iter().any(|r| {
+            r.kind == CreditReloadKind::Purchase && r.status == CreditReloadStatus::Pending
+        }) {
+            return Ok(PurchaseReservation::InProgress);
+        }
+        if let Some(limit) = monthly_limit_cents {
+            let committed = s.reload_committed_cents(BillingPeriod::calendar_month(now));
+            let remaining_cents = (limit - committed).max(0);
+            if amount_cents > remaining_cents {
+                return Ok(PurchaseReservation::OverLimit { remaining_cents });
+            }
+        }
+        let id = macro_uuid::generate_uuid_v7();
+        s.reloads.push(FakeReload {
+            id,
+            amount_cents,
+            status: CreditReloadStatus::Pending,
+            invoice: None,
+            created_at: now,
+            kind: CreditReloadKind::Purchase,
+            purchased_by: Some(purchased_by.as_ref().to_string()),
+        });
+        Ok(PurchaseReservation::New(PendingReload {
+            id,
+            amount_cents,
+            stripe_invoice_id: None,
+        }))
+    }
+    async fn declined_credit_purchases(
+        &self,
+        _payer: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<PendingReload>> {
+        Ok(self
+            .state
+            .lock()
+            .unwrap()
+            .reloads
+            .iter()
+            .filter(|r| {
+                r.kind == CreditReloadKind::Purchase
+                    && r.status == CreditReloadStatus::Failed
+                    && r.invoice.is_some()
+            })
+            .map(|r| PendingReload {
+                id: r.id,
+                amount_cents: r.amount_cents,
+                stripe_invoice_id: r.invoice.clone(),
+            })
+            .collect())
+    }
+    async fn void_credit_purchase(&self, reload_id: Uuid) -> Result<()> {
+        let mut s = self.state.lock().unwrap();
+        for r in s.reloads.iter_mut().filter(|r| r.id == reload_id) {
+            r.status = CreditReloadStatus::Failed;
+            r.invoice = None;
+        }
+        Ok(())
     }
     async fn finish_credit_reload(
         &self,
@@ -673,6 +767,7 @@ impl BillingRepo for FakeRepo {
             ResolvedReload {
                 payer: user("payer@x.com"),
                 amount_cents: r.amount_cents,
+                kind: r.kind,
             }
         });
         if let Some(resolved) = &resolved
@@ -697,6 +792,8 @@ enum PayOutcome {
     Paid,
     /// Card declined: the invoice stays open for Stripe's retries.
     Declined,
+    /// The card needs 3-D Secure: the invoice stays open.
+    AuthenticationRequired,
     /// The provider could not be reached.
     Error,
 }
@@ -719,9 +816,17 @@ struct FakePayments {
     payments: Arc<Mutex<Vec<(Uuid, String)>>>,
     period_reply: Arc<Mutex<PeriodReply>>,
     period_requests: Arc<Mutex<Vec<(String, SubscriptionScope)>>>,
+    no_card: Arc<Mutex<bool>>,
+    voided: Arc<Mutex<Vec<String>>>,
 }
 
 impl FakePayments {
+    fn voided(&self) -> Vec<String> {
+        self.voided.lock().unwrap().clone()
+    }
+    fn remove_card(&self) {
+        *self.no_card.lock().unwrap() = true;
+    }
     fn set_pay(&self, outcome: PayOutcome) {
         *self.pay_outcome.lock().unwrap() = outcome;
     }
@@ -768,16 +873,28 @@ impl PaymentGateway for FakePayments {
         charge_id: Uuid,
         invoice_id: &str,
         _scope: SubscriptionScope,
-    ) -> Result<bool> {
+    ) -> Result<InvoicePayment> {
         self.payments
             .lock()
             .unwrap()
             .push((charge_id, invoice_id.to_string()));
         match *self.pay_outcome.lock().unwrap() {
-            PayOutcome::Paid => Ok(true),
-            PayOutcome::Declined => Ok(false),
+            PayOutcome::Paid => Ok(InvoicePayment::Paid),
+            PayOutcome::Declined => Ok(InvoicePayment::Declined),
+            PayOutcome::AuthenticationRequired => Ok(InvoicePayment::AuthenticationRequired),
             PayOutcome::Error => Err(BillingError::Payment(anyhow::anyhow!("card declined"))),
         }
+    }
+    async fn void_credit_invoice(&self, invoice_id: &str) -> Result<InvoiceVoid> {
+        self.voided.lock().unwrap().push(invoice_id.to_string());
+        Ok(InvoiceVoid::Voided)
+    }
+    async fn has_payment_method(
+        &self,
+        _customer_id: &str,
+        _scope: SubscriptionScope,
+    ) -> Result<bool> {
+        Ok(!*self.no_card.lock().unwrap())
     }
     async fn subscription_period(
         &self,
@@ -1420,6 +1537,8 @@ async fn summary_reports_calendar_month_commitments_and_minimum_reload_cap_statu
                 status,
                 invoice: invoice.map(str::to_string),
                 created_at,
+                kind: CreditReloadKind::Automatic,
+                purchased_by: None,
             });
         }
     }
@@ -1439,6 +1558,8 @@ async fn summary_reports_calendar_month_commitments_and_minimum_reload_cap_statu
         status: CreditReloadStatus::Paid,
         invoice: Some("in_last_cent".to_string()),
         created_at: now,
+        kind: CreditReloadKind::Automatic,
+        purchased_by: None,
     });
     let budget = service
         .snapshot(&payer)
@@ -1675,7 +1796,7 @@ async fn a_low_balance_reloads_credits_before_overage_is_reserved() {
     // 600 cost over is 630 owed: the balance would end at -130, so the
     // reload brings it back to the $100 target after this usage is paid.
     let snap = svc
-        .update_auto_reload(&payer, true, AutoReloadThresholds::default())
+        .update_auto_reload(&payer, true, thresholds(1_000, 10_000, None))
         .await
         .unwrap();
     let opened = payments.opened_reloads();
@@ -1937,7 +2058,7 @@ async fn reload_invoice_webhooks_book_credits_once() {
     let (svc, repo, _, _) = premium_service(0);
     let payer = user("payer@x.com");
     repo.set_balance(500);
-    svc.update_auto_reload(&payer, true, AutoReloadThresholds::default())
+    svc.update_auto_reload(&payer, true, thresholds(1_000, 10_000, None))
         .await
         .unwrap();
     let invoice = repo.reloads()[0].invoice.clone().unwrap();
@@ -1951,7 +2072,7 @@ async fn reload_invoice_webhooks_book_credits_once() {
     let (svc, repo, payments, _) = premium_service(0);
     repo.set_balance(500);
     payments.set_pay(PayOutcome::Declined);
-    svc.update_auto_reload(&payer, true, AutoReloadThresholds::default())
+    svc.update_auto_reload(&payer, true, thresholds(1_000, 10_000, None))
         .await
         .unwrap();
     let invoice = repo.reloads()[0].invoice.clone().unwrap();
@@ -1986,7 +2107,7 @@ async fn a_failed_reload_invoice_webhook_pauses_reloads_only() {
     let payer = user("payer@x.com");
     repo.set_balance(500);
     payments.set_pay(PayOutcome::Declined);
-    svc.update_auto_reload(&payer, true, AutoReloadThresholds::default())
+    svc.update_auto_reload(&payer, true, thresholds(1_000, 10_000, None))
         .await
         .unwrap();
     let invoice = repo.reloads()[0].invoice.clone().unwrap();
@@ -2228,7 +2349,7 @@ async fn previous_period_usage_never_triggers_a_reload() {
     // credits on hand.
     usage.add(&payer, previous.start + chrono::Duration::days(2), 4_000);
 
-    svc.update_auto_reload(&payer, true, AutoReloadThresholds::default())
+    svc.update_auto_reload(&payer, true, thresholds(1_000, 10_000, None))
         .await
         .unwrap();
 
@@ -3500,4 +3621,278 @@ async fn assert_upgrade_resets_snapshot_and_gate(pool: sqlx::PgPool, from: PlanT
         .await
         .unwrap();
     assert_eq!(svc.snapshot(&payer).await.unwrap().used_cents, 200);
+}
+
+fn purchase_team(monthly_limit: Option<i64>) -> (Service, FakeRepo, FakePayments) {
+    let owner = user("owner@x.com");
+    let member = user("member@x.com");
+    let repo = FakeRepo::default();
+    repo.state
+        .lock()
+        .unwrap()
+        .settings
+        .auto_reload
+        .monthly_limit_cents = monthly_limit;
+    let payments = FakePayments::default();
+    let svc = BillingServiceImpl::new(
+        FakeEntitlements::default()
+            .with(premium_team(&owner, &member, Uuid::from_u128(9)))
+            .with_customer(&owner, "cus_owner"),
+        FakeUsage::default(),
+        repo.clone(),
+        payments.clone(),
+        AiPricing::testing(),
+    )
+    .with_billing(AiUsageBilling::Enabled);
+    (svc, repo, payments)
+}
+
+#[tokio::test]
+async fn a_payer_buys_credits_on_the_card_on_file() {
+    let (svc, repo, payments, _) = premium_service(0);
+    let payer = user("payer@x.com");
+
+    let purchase = svc.purchase_credits(&payer, 2_500).await.unwrap();
+
+    assert_eq!(
+        purchase,
+        CreditPurchase {
+            amount_cents: 2_500,
+            status: CreditPurchaseStatus::Paid,
+        }
+    );
+    assert_eq!(repo.state.lock().unwrap().balance, 2_500);
+    let opened = payments.opened_reloads();
+    assert_eq!(opened.len(), 1);
+    assert_eq!(opened[0].customer_id, "cus_123");
+    assert_eq!(opened[0].description, "Macro AI credits, $25.00");
+    let reloads = repo.reloads();
+    assert_eq!(reloads[0].kind, CreditReloadKind::Purchase);
+    assert_eq!(reloads[0].status, CreditReloadStatus::Paid);
+    assert_eq!(reloads[0].purchased_by.as_deref(), Some(payer.as_ref()));
+}
+
+#[tokio::test]
+async fn a_purchase_without_a_card_on_file_asks_for_checkout_and_charges_nothing() {
+    let (svc, repo, payments, _) = premium_service(0);
+    payments.remove_card();
+    let payer = user("payer@x.com");
+
+    let purchase = svc.purchase_credits(&payer, 2_500).await.unwrap();
+
+    assert_eq!(
+        purchase,
+        CreditPurchase {
+            amount_cents: 2_500,
+            status: CreditPurchaseStatus::PaymentMethodRequired,
+        }
+    );
+    assert!(payments.opened_reloads().is_empty());
+    assert!(payments.payments().is_empty());
+    assert!(repo.reloads().is_empty());
+    assert_eq!(repo.state.lock().unwrap().balance, 0);
+}
+
+#[tokio::test]
+async fn a_card_that_needs_authentication_voids_the_invoice_for_checkout() {
+    let (svc, repo, payments, _) = premium_service(0);
+    payments.set_pay(PayOutcome::AuthenticationRequired);
+    let payer = user("payer@x.com");
+
+    let purchase = svc.purchase_credits(&payer, 2_500).await.unwrap();
+
+    assert_eq!(
+        purchase.status,
+        CreditPurchaseStatus::AuthenticationRequired
+    );
+    let reloads = repo.reloads();
+    assert_eq!(payments.voided(), vec![format!("in_{}", reloads[0].id)]);
+    // Voided: neither retried nor counted against the monthly limit.
+    assert_eq!(reloads[0].status, CreditReloadStatus::Failed);
+    assert_eq!(reloads[0].invoice, None);
+    assert_eq!(repo.state.lock().unwrap().balance, 0);
+    assert!(!repo.state.lock().unwrap().auto_reload_suspended);
+}
+
+#[tokio::test]
+async fn removing_the_card_after_a_decline_voids_the_open_invoice_before_checkout() {
+    let (svc, repo, payments, _) = premium_service(0);
+    let payer = user("payer@x.com");
+    payments.set_pay(PayOutcome::Declined);
+    let declined = svc.purchase_credits(&payer, 2_500).await.unwrap();
+    assert_eq!(declined.status, CreditPurchaseStatus::Declined);
+    let invoice = repo.reloads()[0].invoice.clone().unwrap();
+
+    payments.remove_card();
+    let purchase = svc.purchase_credits(&payer, 5_000).await.unwrap();
+
+    assert_eq!(purchase.status, CreditPurchaseStatus::PaymentMethodRequired);
+    assert_eq!(payments.voided(), vec![invoice]);
+    let reloads = repo.reloads();
+    assert_eq!(reloads.len(), 1);
+    assert_eq!(reloads[0].invoice, None);
+}
+
+#[tokio::test]
+async fn a_team_member_without_a_team_card_on_file_reserves_nothing() {
+    let (svc, repo, payments) = purchase_team(Some(5_000));
+    payments.remove_card();
+
+    let purchase = svc
+        .purchase_credits(&user("member@x.com"), 2_500)
+        .await
+        .unwrap();
+
+    assert_eq!(purchase.status, CreditPurchaseStatus::PaymentMethodRequired);
+    assert!(repo.reloads().is_empty());
+    assert!(payments.opened_reloads().is_empty());
+}
+
+#[tokio::test]
+async fn purchases_need_a_paid_plan_and_an_offered_pack() {
+    let (svc, _, _, _) = premium_service(0);
+    let payer = user("payer@x.com");
+    assert!(matches!(
+        svc.purchase_credits(&payer, 1_234).await,
+        Err(BillingError::InvalidCreditAmount)
+    ));
+
+    let free = user("free@x.com");
+    let svc = BillingServiceImpl::new(
+        FakeEntitlements::default().with(Entitlement::personal(free.clone(), PlanTier::Free)),
+        FakeUsage::default(),
+        FakeRepo::default(),
+        FakePayments::default(),
+        AiPricing::testing(),
+    );
+    assert!(matches!(
+        svc.purchase_credits(&free, 2_500).await,
+        Err(BillingError::FreePlan)
+    ));
+}
+
+#[tokio::test]
+async fn a_team_member_buys_on_the_team_card_within_the_plan_default_limit() {
+    let (svc, repo, payments) = purchase_team(None);
+    let member = user("member@x.com");
+
+    // Premium's $200 default applies to members while the owner set no limit.
+    svc.purchase_credits(&member, 10_000).await.unwrap();
+    svc.purchase_credits(&member, 10_000).await.unwrap();
+    assert!(matches!(
+        svc.purchase_credits(&member, 2_500).await,
+        Err(BillingError::CreditLimitExceeded { remaining_cents: 0 })
+    ));
+
+    assert_eq!(repo.state.lock().unwrap().balance, 20_000);
+    assert!(
+        payments
+            .opened_reloads()
+            .iter()
+            .all(|request| request.customer_id == "cus_owner"
+                && request.payer.as_ref() == user("owner@x.com").as_ref())
+    );
+    assert!(
+        repo.reloads()
+            .iter()
+            .all(|reload| reload.purchased_by.as_deref() == Some(member.as_ref()))
+    );
+
+    // The owner set no limit, so their own purchases are not capped.
+    svc.purchase_credits(&user("owner@x.com"), 10_000)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn automatic_reloads_and_purchases_share_the_owners_monthly_limit() {
+    let (svc, repo, _) = purchase_team(Some(5_000));
+    let member = user("member@x.com");
+    repo.state.lock().unwrap().reloads.push(FakeReload {
+        id: macro_uuid::generate_uuid_v7(),
+        amount_cents: 2_500,
+        status: CreditReloadStatus::Paid,
+        invoice: Some("in_auto".into()),
+        created_at: Utc::now(),
+        kind: CreditReloadKind::Automatic,
+        purchased_by: None,
+    });
+
+    assert!(matches!(
+        svc.purchase_credits(&member, 5_000).await,
+        Err(BillingError::CreditLimitExceeded {
+            remaining_cents: 2_500
+        })
+    ));
+    svc.purchase_credits(&member, 2_500).await.unwrap();
+
+    let snapshot = svc.snapshot(&member).await.unwrap();
+    let limit = snapshot.credit_purchase.unwrap();
+    assert_eq!(limit.monthly_limit_cents, Some(5_000));
+    assert_eq!(limit.committed_cents, 5_000);
+}
+
+#[tokio::test]
+async fn members_see_the_plan_default_limit_and_payers_their_own() {
+    let (svc, _, _) = purchase_team(None);
+    let member = svc.snapshot(&user("member@x.com")).await.unwrap();
+    assert_eq!(
+        member.credit_purchase.unwrap().monthly_limit_cents,
+        Some(20_000)
+    );
+    let owner = svc.snapshot(&user("owner@x.com")).await.unwrap();
+    assert_eq!(owner.credit_purchase.unwrap().monthly_limit_cents, None);
+}
+
+#[tokio::test]
+async fn a_declined_purchase_retries_its_invoice_and_never_pauses_auto_reload() {
+    let (svc, repo, payments, _) = premium_service(0);
+    let payer = user("payer@x.com");
+    payments.set_pay(PayOutcome::Declined);
+
+    let declined = svc.purchase_credits(&payer, 2_500).await.unwrap();
+    assert_eq!(declined.status, CreditPurchaseStatus::Declined);
+    assert!(!repo.state.lock().unwrap().auto_reload_suspended);
+    let invoice = repo.reloads()[0].invoice.clone().unwrap();
+
+    // Stripe reports the failure too: still no effect on Auto-Reload.
+    svc.mark_credit_reload_invoice(&invoice, false)
+        .await
+        .unwrap();
+    assert!(!repo.state.lock().unwrap().auto_reload_suspended);
+
+    // Buying again pays the open invoice instead of charging a second time.
+    payments.set_pay(PayOutcome::Paid);
+    let retried = svc.purchase_credits(&payer, 5_000).await.unwrap();
+    assert_eq!(
+        retried,
+        CreditPurchase {
+            amount_cents: 2_500,
+            status: CreditPurchaseStatus::Paid,
+        }
+    );
+    assert_eq!(payments.opened_reloads().len(), 1);
+    assert_eq!(repo.state.lock().unwrap().balance, 2_500);
+}
+
+#[tokio::test]
+async fn automatic_reloads_never_pick_up_a_purchase() {
+    let (svc, repo, payments, _) = premium_service(0);
+    let payer = user("payer@x.com");
+    payments.set_pay(PayOutcome::Declined);
+    svc.purchase_credits(&payer, 2_500).await.unwrap();
+
+    // Turning Auto-Reload on reserves its own reload rather than retrying
+    // the declined purchase.
+    payments.set_pay(PayOutcome::Paid);
+    repo.set_balance(0);
+    svc.update_auto_reload(&payer, true, thresholds(1_000, 10_000, None))
+        .await
+        .unwrap();
+    let reloads = repo.reloads();
+    assert_eq!(reloads.len(), 2);
+    assert_eq!(reloads[0].kind, CreditReloadKind::Purchase);
+    assert_eq!(reloads[0].status, CreditReloadStatus::Failed);
+    assert_eq!(reloads[1].kind, CreditReloadKind::Automatic);
+    assert_eq!(reloads[1].status, CreditReloadStatus::Paid);
 }
