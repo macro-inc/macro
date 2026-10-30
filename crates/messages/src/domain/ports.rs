@@ -329,8 +329,9 @@ pub enum AgentTypingPhase {
 }
 
 impl MessageEvent {
-    /// A posted message or finalized bot reply to evaluate for agent mentions.
-    /// Streaming and ordinary edits must never wake an agent.
+    /// A posted message or finalized bot reply to evaluate for agent triggers,
+    /// explicit or implicit. Streaming and ordinary edits must never wake an
+    /// agent.
     pub fn agent_trigger(&self) -> Option<super::events::MessagePostedMetadata> {
         let (message, mentions) = match &self.change {
             MessageChange::Posted {
@@ -342,8 +343,7 @@ impl MessageEvent {
                 notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
                 ..
             } if message.sender_id.as_bot().is_some()
-                && self.actor == message.sender_id.as_ref()
-                && !super::mentions::bot_mention_ids(mentions).is_empty() =>
+                && self.actor == message.sender_id.as_ref() =>
             {
                 (message, mentions)
             }

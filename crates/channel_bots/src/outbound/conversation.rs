@@ -55,8 +55,8 @@ impl<A: EntityAccessService> ConversationAccess for EntityAccessConversation<A> 
 /// Feeds the built-in responder from the same committed message stream hosted
 /// and external agents consume, for channel and document posts alike.
 ///
-/// Trusted bot posts and completed replies enter the same mention path as
-/// human posts. The detector keeps implicit triggering exclusive to humans.
+/// Attributed bot posts and completed replies enter the same trigger path as
+/// human posts; the detector bounds agent chains with the hop limit.
 #[derive(Clone)]
 pub struct LocalBotPublisher {
     triggers: tokio::sync::mpsc::UnboundedSender<MessagePostedMetadata>,

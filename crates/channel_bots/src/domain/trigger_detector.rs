@@ -10,6 +10,7 @@ use messages::domain::{
     agent_hops::{MAX_AGENT_HOPS, agent_hops},
     api::MessageReader,
     events::MessagePostedMetadata,
+    models::Message,
     service::MessageWrite,
 };
 use uuid::Uuid;
@@ -28,8 +29,9 @@ use super::sender_label;
 /// * the thread already contains a Macro AI message,
 /// * the classifier judges that the message expects an agent response.
 ///
-/// Attributed bot messages require an explicit mention of another bot;
-/// classifier failures resolve to no trigger.
+/// Attributed bot messages trigger like a person's, within the agent hop
+/// limit and never their own bot; unattributed bot messages trigger nothing.
+/// Classifier failures resolve to no trigger.
 pub struct MentionOrInferredDetector<I> {
     messages: Arc<dyn MessageReader>,
     access: Arc<dyn ConversationAccess>,
@@ -70,12 +72,11 @@ where
         parent_id: Uuid,
     ) -> anyhow::Result<Vec<TranscriptMessage>> {
         let user = candidate
-            .sender
-            .as_user()
-            .ok_or_else(|| anyhow::anyhow!("only users invoke agents"))?;
+            .invoking_user()
+            .ok_or_else(|| anyhow::anyhow!("nobody invoked this message"))?;
         let access = self
             .access
-            .user_write(user, &candidate.parent)
+            .user_write(&user, &candidate.parent)
             .await
             .map_err(|e| anyhow::anyhow!(e.to_string()))?;
         let view = access.try_into_requirement()?;
@@ -93,10 +94,7 @@ where
         let mut transcript = Vec::new();
         for message in std::iter::once(thread.root).chain(thread.replies) {
             if message.deleted_at.is_none() && !message.content.trim().is_empty() {
-                transcript.push(transcript_message(
-                    message.sender_id.as_ref(),
-                    &message.content,
-                ));
+                transcript.push(transcript_message(&message));
             }
         }
         Ok(transcript)
@@ -139,8 +137,14 @@ where
         true
     }
 
+    /// Macro AI never infers a reply to its own message.
     async fn infer(&self, candidate: &MessagePostedMetadata) -> Option<BotInvocation> {
-        let requesting_user = candidate.sender.as_user()?;
+        if candidate.sender.as_bot().map(|sender| sender.bot_id()) == Some(bot_id::MACRO_AI_BOT_ID)
+        {
+            return None;
+        }
+        let requesting_user = candidate.invoking_user()?;
+        let requesting_user = &requesting_user;
         let parent_id = candidate.thread_id?;
 
         let transcript = self
@@ -178,13 +182,18 @@ where
     }
 }
 
-fn transcript_message(sender_id: &str, content: &str) -> TranscriptMessage {
-    let from_agent = bot_id::BotIdStr::parse_from_str(sender_id)
-        .is_ok_and(|bot| bot.bot_id() == bot_id::MACRO_AI_BOT_ID);
+/// Macro AI's messages are the agent's; other bots go by their public name.
+fn transcript_message(message: &Message) -> TranscriptMessage {
+    let from_agent =
+        message.sender_id.as_bot().map(|bot| bot.bot_id()) == Some(bot_id::MACRO_AI_BOT_ID);
+    let sender = match &message.bot_profile {
+        Some(profile) if !from_agent => profile.name.clone(),
+        _ => sender_label(message.sender_id.as_ref()),
+    };
     TranscriptMessage {
         from_agent,
-        sender: sender_label(sender_id),
-        content: content.trim().to_string(),
+        sender,
+        content: message.content.trim().to_string(),
     }
 }
 
@@ -200,12 +209,10 @@ where
         let Ok(access) = self.access.user_write(&user, &candidate.parent).await else {
             return Vec::new();
         };
-        let mentioned = messages::domain::mentions::bot_mention_ids(&candidate.mentions);
-        if candidate.sender.as_bot().is_some()
-            && (mentioned.is_empty() || !self.within_hop_limit(candidate, access).await)
-        {
+        if candidate.sender.as_bot().is_some() && !self.within_hop_limit(candidate, access).await {
             return Vec::new();
         }
+        let mentioned = messages::domain::mentions::bot_mention_ids(&candidate.mentions);
         if !mentioned.is_empty() {
             return mentioned
                 .into_iter()

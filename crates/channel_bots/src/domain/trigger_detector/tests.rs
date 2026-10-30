@@ -266,3 +266,120 @@ async fn agents_handing_a_thread_back_and_forth_stop_at_the_hop_limit() {
         );
     }
 }
+
+#[tokio::test]
+async fn an_agents_follow_up_is_inferred_for_macro_and_labelled_by_its_name() {
+    let root = message(1, None, "question");
+    let mut answer = message(2, Some(root.id), "previous answer");
+    answer.sender_id = channel_sender::ChannelSender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
+    let mut trigger = message(3, Some(root.id), "Macro, can you double-check this?");
+    trigger.sender_id = channel_sender::ChannelSender::new_from_bot(bot_id::CURSOR_BOT_ID);
+    trigger.triggered_by = Some(user().to_string());
+    trigger.bot_profile = Some(messages::domain::models::BotSenderProfile {
+        name: "Cursor".to_owned(),
+        avatar_url: None,
+    });
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(
+        &mut api,
+        &trigger,
+        thread(root, vec![answer, trigger.clone()]),
+    );
+    let classifier = classifier(Ok(true));
+    let detector = MentionOrInferredDetector::new(
+        Arc::new(api),
+        Arc::new(Access::default()),
+        classifier.clone(),
+    );
+
+    assert_eq!(
+        detector.detect(&event(&trigger)).await,
+        vec![BotInvocation {
+            bot_id: bot_id::MACRO_AI_BOT_ID,
+            trigger: BotTrigger::Inferred,
+        }]
+    );
+    let calls = classifier.calls.lock().unwrap();
+    let judged = calls[0].last().unwrap();
+    assert_eq!(judged.sender, "Cursor");
+    assert!(!judged.from_agent);
+}
+
+#[tokio::test]
+async fn macro_never_infers_a_reply_to_its_own_message() {
+    let root = message(1, None, "question");
+    let mut answer = message(2, Some(root.id), "previous answer");
+    answer.sender_id = channel_sender::ChannelSender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
+    let mut trigger = message(3, Some(root.id), "anything else?");
+    trigger.sender_id = channel_sender::ChannelSender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
+    trigger.triggered_by = Some(user().to_string());
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(
+        &mut api,
+        &trigger,
+        thread(root, vec![answer, trigger.clone()]),
+    );
+    let classifier = classifier(Ok(true));
+    let detector = MentionOrInferredDetector::new(
+        Arc::new(api),
+        Arc::new(Access::default()),
+        classifier.clone(),
+    );
+
+    assert!(detector.detect(&event(&trigger)).await.is_empty());
+    assert!(classifier.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn an_unattributed_agent_follow_up_infers_nothing() {
+    let mut trigger = message(3, Some(Uuid::from_u128(1)), "Macro, thoughts?");
+    trigger.sender_id = channel_sender::ChannelSender::new_from_bot(bot_id::CURSOR_BOT_ID);
+    let classifier = classifier(Ok(true));
+    let detector = MentionOrInferredDetector::new(
+        Arc::new(MockMessageServiceApi::new()),
+        Arc::new(Access::default()),
+        classifier.clone(),
+    );
+
+    assert!(detector.detect(&event(&trigger)).await.is_empty());
+    assert!(classifier.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn an_inferred_agent_chain_stops_at_the_hop_limit_before_classifying() {
+    let hop = messages::domain::agent_hops::MAX_AGENT_HOPS + 1;
+    let by = |id: u128, bot: bot_id::BotId| {
+        let mut reply = message(id, Some(Uuid::from_u128(1)), "your turn");
+        reply.sender_id = channel_sender::ChannelSender::new_from_bot(bot);
+        reply.triggered_by = Some(user().to_string());
+        reply
+    };
+    // Cursor posts the hop past the limit; Macro and Cursor alternate before it.
+    let mut replies: Vec<_> = (1..hop)
+        .map(|n| {
+            let bot = if (hop - n) % 2 == 0 {
+                bot_id::CURSOR_BOT_ID
+            } else {
+                bot_id::MACRO_AI_BOT_ID
+            };
+            by(1 + n as u128, bot)
+        })
+        .collect();
+    let trigger = by(10_000, bot_id::CURSOR_BOT_ID);
+    replies.push(trigger.clone());
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(
+        &mut api,
+        &trigger,
+        thread(message(1, None, "work it out between you"), replies),
+    );
+    let classifier = classifier(Ok(true));
+    let detector = MentionOrInferredDetector::new(
+        Arc::new(api),
+        Arc::new(Access::default()),
+        classifier.clone(),
+    );
+
+    assert!(detector.detect(&event(&trigger)).await.is_empty());
+    assert!(classifier.calls.lock().unwrap().is_empty());
+}

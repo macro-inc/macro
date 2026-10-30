@@ -230,12 +230,15 @@ async fn deletions_publish_and_reactions_typing_and_thread_state_stay_off_the_to
 }
 
 #[test]
-fn only_completed_bot_replies_offer_mentions_to_agents() {
+fn only_finalized_bot_replies_reach_agent_triggers_with_or_without_a_mention() {
     use crate::domain::models::PatchMessageNotificationPolicy::{Default, NotifyAsPostedMessage};
+    // A bot's streaming updates are `Default` edits; so is a person's ordinary edit.
     for (bot, policy, has_mention, expected) in [
         (true, NotifyAsPostedMessage, true, true),
+        (true, NotifyAsPostedMessage, false, true),
         (true, Default, true, false),
-        (true, NotifyAsPostedMessage, false, false),
+        (true, Default, false, false),
+        (false, Default, false, false),
         (false, NotifyAsPostedMessage, true, false),
     ] {
         let parent = MessageParent::Channel(Uuid::from_u128(20));

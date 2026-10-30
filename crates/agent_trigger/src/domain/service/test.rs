@@ -1418,11 +1418,11 @@ async fn attributed_bots_cannot_bypass_access_or_trigger_themselves() {
 }
 
 #[tokio::test]
-async fn unattributed_or_unmentioned_bot_messages_do_not_trigger() {
+async fn unattributed_bot_messages_do_not_trigger() {
     for (attribution, mentions) in [
         (None, vec![mention_of(BotId::TEST_A)]),
+        (None, vec![]),
         (Some("invalid".to_owned()), vec![mention_of(BotId::TEST_A)]),
-        (Some(user().to_string()), vec![]),
     ] {
         let mut posted = message(mentions);
         posted.sender = ChannelSender::new_from_bot(BotId::TEST_B);
@@ -1492,4 +1492,89 @@ async fn agents_mentioning_each_other_stop_at_the_hop_limit_without_a_person() {
         .unwrap();
         assert_eq!(!events.is_empty(), triggers, "hop {hop}");
     }
+}
+
+#[tokio::test]
+async fn an_agents_unmentioned_follow_up_reaches_another_agents_session() {
+    for (replies, judge, kind) in [
+        (
+            extractor(Ok(None)),
+            judge_saying(Ok(true)),
+            ThreadMessageKind::Inferred,
+        ),
+        (
+            extractor(Ok(Some(reply_to_bot(BotId::TEST_A)))),
+            MockImplicitTriggerJudge::new(),
+            ThreadMessageKind::ExplicitReply,
+        ),
+    ] {
+        let mut posted = message(vec![]);
+        posted.sender = ChannelSender::new_from_bot(BotId::TEST_B);
+        posted.triggered_by = Some(user().to_string());
+        let sessions = implicit_sessions(vec![
+            thread_session(AgentSessionId::TEST_A, BotId::TEST_A),
+            thread_session(AgentSessionId::TEST_B, BotId::TEST_B),
+        ]);
+
+        let events = service(sessions, agent_bots(), replies, judge)
+            .evaluate(&posted)
+            .await
+            .unwrap();
+
+        let metadata = existing_channel_metadata(&events);
+        assert_eq!(metadata.bot_id, BotId::TEST_A);
+        assert_eq!(metadata.session_id, AgentSessionId::TEST_A);
+        assert_eq!(metadata.kind, kind);
+    }
+}
+
+#[tokio::test]
+async fn an_agent_never_infers_into_its_own_session() {
+    let mut posted = message(vec![]);
+    posted.sender = ChannelSender::new_from_bot(BotId::TEST_A);
+    posted.triggered_by = Some(user().to_string());
+    let sessions = implicit_sessions(vec![thread_session(AgentSessionId::TEST_A, BotId::TEST_A)]);
+    let (replies, judge) = no_implicit();
+
+    let events = service(sessions, agent_bots(), replies, judge)
+        .evaluate(&posted)
+        .await
+        .unwrap();
+
+    assert!(events.is_empty());
+}
+
+#[tokio::test]
+async fn an_inferred_agent_chain_stops_at_the_hop_limit_before_judging() {
+    let agent = |n: usize| {
+        ChannelSender::new_from_bot(if n % 2 == 1 {
+            BotId::TEST_A
+        } else {
+            BotId::TEST_B
+        })
+    };
+    let thread: Vec<ThreadMessage> = std::iter::once(thread_message(
+        100,
+        ChannelSender::new_from_user(user()),
+        "work it out between you",
+    ))
+    .chain((1..=MAX_AGENT_HOPS).map(|n| thread_message(100 + n as u128, agent(n), "your turn")))
+    .collect();
+    let mut posted = message(vec![]);
+    posted.sender = agent(MAX_AGENT_HOPS + 1);
+    posted.triggered_by = Some(user().to_string());
+    let (replies, judge) = no_implicit();
+
+    let events = service_reading(
+        MockAgentSessionRepo::new(),
+        MockAgentBotLookup::new(),
+        replies,
+        judge,
+        thread_of(thread),
+    )
+    .evaluate(&posted)
+    .await
+    .unwrap();
+
+    assert!(events.is_empty());
 }

@@ -27,7 +27,7 @@ use macro_uuid::Uuid;
 use crate::domain::broker_events::{ThreadMessageKind, TriggerDecision};
 use crate::domain::thread_window::{ThreadMessage, render_transcript, thread_window};
 use crate::domain::yield_event::{
-    AgentSessionEventDecision, NoEventReason, PotentialTriggerEvent, yield_event,
+    AgentSessionEventDecision, NoEventReason, PotentialTriggerEvent, is_own_message, yield_event,
 };
 use messages::domain::agent_hops::{MAX_AGENT_HOPS, agent_hops};
 
@@ -368,9 +368,10 @@ where
             .await
     }
 
-    /// Whether a bot's mention stays within [`MAX_AGENT_HOPS`] of the last
-    /// person in its thread. An unreadable thread counts as over the limit:
-    /// an agent loop is worse than one missed handoff.
+    /// Whether a bot's message stays within [`MAX_AGENT_HOPS`] of the last
+    /// person in its thread. Checked before any routing or judging, explicit
+    /// or implicit. An unreadable thread counts as over the limit: an agent
+    /// loop is worse than one missed handoff.
     async fn within_hop_limit(
         &self,
         posted: &MessagePostedMetadata,
@@ -394,7 +395,7 @@ where
             tracing::info!(
                 message_id = %posted.message_id,
                 hops,
-                "agent mention exceeds the hop limit; not starting another agent"
+                "agent message exceeds the hop limit; not triggering another agent"
             );
             return false;
         }
@@ -413,9 +414,6 @@ where
         let Some(user) = posted.invoking_user() else {
             return Ok(Vec::new());
         };
-        if posted.sender.as_bot().is_some() && bot_mention_ids(&posted.mentions).is_empty() {
-            return Ok(Vec::new());
-        }
         let Some(invocation) = self
             .history
             .authorize_invocation(&user, &posted.parent, posted.root_id())
@@ -450,7 +448,7 @@ where
         if mentioned.is_empty() {
             if let Some(event) = self.evaluate_bot(posted, None, &mut seen_sessions).await? {
                 events.push(event);
-            } else if let Some(event) = self.evaluate_implicit(posted, &invocation).await? {
+            } else if let Some(event) = self.evaluate_implicit(posted, &user, &invocation).await? {
                 events.push(event);
             }
             return Ok(events);
@@ -546,23 +544,23 @@ where
     /// Extractor and judge failures are treated as "no" rather than propagated:
     /// implicit triggering is best-effort, and an outage must not wedge the
     /// message stream or fabricate forwards.
+    ///
+    /// A bot's message is judged like anyone's, but never against the bot's
+    /// own session; the hop limit has already bounded agent chains.
     async fn evaluate_implicit(
         &self,
         posted: &MessagePostedMetadata,
+        _user: &MacroUserIdStr<'static>,
         invocation: &AuthorizedInvocation,
     ) -> Result<Option<TriggerDecision>> {
         let Some(thread_id) = posted.thread_id else {
-            return Ok(None);
-        };
-        // Only a user implicitly addresses an agent; bot traffic must always
-        // mention explicitly, or bots would relay each other forever.
-        let Some(_user) = posted.sender.as_user() else {
             return Ok(None);
         };
         let mut candidates = Vec::new();
         for session in self.sessions.find_all_for_thread(thread_id).await? {
             if session.thread_parent.as_ref() == Some(&posted.parent)
                 && session.thread_id == Some(thread_id)
+                && !is_own_message(session.bot_id, &posted.sender)
                 && self.agent_is_available(posted, session.bot_id).await?
             {
                 candidates.push(session);

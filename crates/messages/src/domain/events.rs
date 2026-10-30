@@ -127,8 +127,9 @@ pub struct MessageMentionedMetadata {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessagePatchedMetadata {
-    /// Completed bot answer eligible for explicit mention routing. Ordinary edits
-    /// omit this; older producers remain compatible with the trigger consumer.
+    /// Completed bot answer, evaluated for agent triggers like a new post.
+    /// Ordinary edits and streaming updates omit this; older producers remain
+    /// compatible with the trigger consumer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completed_reply: Option<MessagePostedMetadata>,
     /// Entity that owns the message.
