@@ -59,7 +59,7 @@ it is also listed in the regular icon gallery. Brand marks retain their existing
 Icons introduced on main after the source PR retain their existing assets when
 this family has no matching drawing.
 Urgent priority uses a filled rounded-square exclamation badge with semantic
-`failure-ink` red, not the configurable accent color. Completed task status uses
+`warning-ink` amber, not the configurable accent color. Completed task status uses
 the filled check-circle through the shared property and task-status renderers.
 Empty priority uses a muted circled minus.
 
