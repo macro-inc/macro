@@ -329,4 +329,40 @@ async fn a_contact_added_before_anyone_wrote_has_nothing_to_import(pool: PgPool)
     .await
     .unwrap();
     assert_eq!(state.as_deref(), Some("done"));
+
+    let anchored = |minutes: i64| ChatUpdate {
+        anchor: Some(MessageAnchor {
+            id: format!("3EB0{minutes:04}"),
+            at: Utc::now() + Duration::minutes(minutes),
+            from_me: false,
+            sender_jid: None,
+        }),
+        ..contact(&dana_jid, "Dana Smith")
+    };
+    assert!(
+        !session.update_chats(alice, &[anchored(5)]).await.unwrap(),
+        "a message after adding arrives live; nothing to import"
+    );
+    assert!(session.backfill_work(alice).await.unwrap().is_empty());
+    sqlx::query!(
+        "UPDATE whatsapp_chat SET anchor = NULL WHERE chat_jid = $1",
+        dana_jid
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        session.update_chats(alice, &[anchored(-60)]).await.unwrap(),
+        "a message from before adding means the phone has earlier history"
+    );
+    assert_eq!(
+        session
+            .backfill_work(alice)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|work| (work.chat_id, work.state))
+            .collect::<Vec<_>>(),
+        [(added.id, BackfillState::Pending)]
+    );
 }

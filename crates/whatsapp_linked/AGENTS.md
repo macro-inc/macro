@@ -43,7 +43,8 @@ They share no HTTP: only MacroDB rows and `NOTIFY` (`external_chat`'s
   anchor is the chat's `whatsapp_chat.anchor`, else the newest stored message
   the account saw; without one a group is `waiting_for_message` until a chat
   update brings one, and a direct chat (a saved contact, a looked-up number)
-  is added `done`. Saved contacts are chat-list rows with no activity. History
+  is added `done`, reopened to `pending` only by an anchor older than its
+  adoption while nothing was imported. Saved contacts are chat-list rows with no activity. History
   messages skip the adoption-time boundary but only reach the account owner's
   own groups (`observed_bindings_in`).
 - `src/outbound/pg/lookups.rs`: phone-number lookups (`whatsapp_lookup`,

@@ -126,18 +126,24 @@ pub(super) async fn update_chats_in(
     .map_err(failure)?
     .rows_affected();
     let changed = inserted + renamed_rows > 0;
-    let anchored_jids: Vec<String> = merged
+    let (anchored_jids, anchored_at): (Vec<String>, Vec<chrono::DateTime<Utc>>) = merged
         .values()
-        .filter(|chat| chat.anchor.is_some())
-        .map(|chat| chat.jid.clone())
-        .collect();
+        .filter_map(|chat| Some((chat.jid.clone(), chat.anchor.as_ref()?.at)))
+        .unzip();
+    // A chat waiting for its first message is ready. So is a direct chat added
+    // with nothing to import once a message older than its adoption shows the
+    // phone has earlier history after all; newer messages arrive live.
     let ready = sqlx::query_scalar!(
-        r#"UPDATE external_chat SET backfill_state = 'pending'
-        WHERE user_id = $1 AND provider = 'whatsapp' AND remote_id = ANY($2) AND state = 'active'
-          AND backfill_state = 'waiting_for_message'
-        RETURNING id"#,
+        r#"UPDATE external_chat g SET backfill_state = 'pending'
+        FROM UNNEST($2::text[], $3::timestamptz[]) AS i(jid, at)
+        WHERE g.user_id = $1 AND g.provider = 'whatsapp' AND g.remote_id = i.jid AND g.state = 'active'
+          AND (g.backfill_state = 'waiting_for_message'
+            OR (g.kind = 'direct' AND g.backfill_state = 'done' AND g.backfill_imported = 0
+                AND g.backfill_cursor IS NULL AND i.at < g.adopted_at))
+        RETURNING g.id"#,
         account.user_id,
-        &anchored_jids
+        &anchored_jids,
+        &anchored_at
     )
     .fetch_all(&mut **tx)
     .await

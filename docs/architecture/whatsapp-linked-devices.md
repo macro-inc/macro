@@ -136,7 +136,9 @@ known to start from (the chat list's anchor, or a stored message the account
 saw), else `waiting_for_message`: nothing to import from until someone posts.
 A direct chat with no known message (a saved contact or looked-up number)
 starts `done`: there is nothing earlier to import, and its first message
-arrives live.
+arrives live. If a chat update later brings a message from before the chat
+was added (the phone had history after all), it goes back to `pending` once
+and imports like any chat.
 The chat's first message (live, history sync or chat-list update) makes it
 `pending` and starts the import at once. The owner's account then
 imports the chat's earlier messages from the phone, on demand only: it asks for
