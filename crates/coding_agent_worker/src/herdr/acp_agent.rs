@@ -666,6 +666,9 @@ impl Adapter {
             let waited = async {
                 let mut native_turns = 0u32;
                 loop {
+                    if cancel.is_cancelled() {
+                        return Ok(None);
+                    }
                     let info = herdr.agent_info(&live.name).await;
                     if !info
                         .as_ref()
@@ -681,7 +684,10 @@ impl Adapter {
                     }
                     native_turns += 1;
                     tracing::Span::current().record("native_turns", native_turns);
-                    if self.follow(herdr, session, live, &cancel, true).await? == "cancelled" {
+                    // An interrupted native turn ends "cancelled" too; only a
+                    // Stop from Macro drops the waiting prompt.
+                    self.follow(herdr, session, live, &cancel, true).await?;
+                    if cancel.is_cancelled() {
                         return Ok(None);
                     }
                 }
@@ -740,6 +746,9 @@ impl Adapter {
             if offset == live.cursor.offset && live.pending.is_empty() {
                 break;
             }
+        }
+        if cancel.is_cancelled() {
+            return Ok("cancelled");
         }
         // The observer cannot acquire this session until the turn ends. Publish
         // native settings now, while the freshly started composer is visible.
