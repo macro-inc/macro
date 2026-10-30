@@ -27,8 +27,15 @@ export function openFolderIds(manager: SplitManager | undefined): string[] {
   );
 }
 
+/** Whether a split lists the folder, rather than an item opened inside it. */
+function listsFolder(content: SplitContent, folderId: string): boolean {
+  if (splitFolderId(content) !== folderId) return false;
+  const location = content.entryMetadata as SplitLocation | undefined;
+  return !routeParams<{ documentId?: string }>(location?.route).documentId;
+}
+
 /**
- * Opens a folder in Drive, focusing a split already showing it. The layout
+ * Opens a folder in Drive, focusing a split already listing it. The layout
  * reuses any Drive split as the same shell, so finding the folder falls here.
  */
 export function openFolder(
@@ -38,7 +45,7 @@ export function openFolder(
 ) {
   const showing = manager
     ?.splits()
-    .find(({ content }) => splitFolderId(content) === folderId);
+    .find(({ content }) => listsFolder(content, folderId));
   if (showing) {
     manager?.activateSplit(showing.id);
     return;
