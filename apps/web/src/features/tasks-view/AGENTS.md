@@ -18,6 +18,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Keep project navigation in a separate Projects section above Saved views, with assigned-to-me, all-accessible, and created-by-me views; replace individual-project shortcuts and use one mobile Projects picker.
 - Preserve project scope through detail navigation, history, pagination, and editable-filter clearing; keep project views out of task queries and saved-task-view capture.
 - Keep list rows and group headers inset from the surrounding container on desktop and touch; group disclosures keep a 44px touch target.
+- Render group-header property-value icons at 16px without flex shrinking so priority badges stay legible in narrow panes.
 - Edit status and priority through leading `TaskPropertyControl` icons before the title on desktop and mobile; keep separate Status/Priority columns and duplicate trailing mobile pills removed.
 - Reuse `PropertyEmptyIcon` for absent values in list rows, board cards, and group or board-column headers; keep the glyphs aligned with the property feature.
 

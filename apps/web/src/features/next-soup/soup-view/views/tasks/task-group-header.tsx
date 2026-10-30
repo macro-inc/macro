@@ -112,7 +112,7 @@ export const TaskGroupHeader = (
         >
           {(value) => (
             <>
-              <PropertyValueIcon optionId={value()} class="size-3.5" />
+              <PropertyValueIcon optionId={value()} class="size-4 shrink-0" />
               <span class="truncate">{props.group.label}</span>
             </>
           )}

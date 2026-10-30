@@ -70,7 +70,9 @@ export const PropertyValueIcon: Component<PropertyValueIconProps> = (props) => {
         />
       </Match>
       <Match when={props.optionId === PROPERTY_OPTION_IDS.PRIORITY.URGENT}>
-        <PriorityUrgent class={twMerge('size-3', props.class, 'text-accent')} />
+        <PriorityUrgent
+          class={twMerge('size-3', props.class, 'text-failure-ink')}
+        />
       </Match>
 
       {/* Status */}

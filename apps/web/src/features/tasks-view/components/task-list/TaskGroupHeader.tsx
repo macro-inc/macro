@@ -138,7 +138,7 @@ export function TaskGroupHeader(props: {
                 >
                   <PropertyValueIcon
                     optionId={props.row.groupId}
-                    class="size-3.5"
+                    class="size-4 shrink-0"
                   />
                 </Match>
                 <Match when={props.groupBy === 'assignee'}>
