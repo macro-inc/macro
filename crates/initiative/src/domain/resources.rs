@@ -5,7 +5,8 @@ use std::{collections::HashMap, future::Future, pin::Pin};
 use macro_user_id::user_id::MacroUserIdStr;
 
 use entity_access::domain::models::{
-    EditAccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, ViewAccessLevel,
+    EditAccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityAccessSource,
+    ViewAccessLevel,
 };
 
 use super::{
@@ -30,6 +31,9 @@ pub trait InitiativeResources: std::fmt::Debug + Send + Sync + 'static {
         id: InitiativeId,
         values: Vec<InitialPropertyValue>,
     ) -> ResourceFuture<'_, ()>;
+    /// The initiative's user, channel and team grants. A delete reads them before it removes
+    /// them, so the people they cover can still be told about it.
+    fn audience(&self, id: InitiativeId) -> ResourceFuture<'_, Vec<EntityAccessSource>>;
     /// Clean up properties after the initiative is deleted using its already-verified capability:
     /// its own values, and the Project values that put tasks in it.
     fn purge(&self, receipt: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()>;

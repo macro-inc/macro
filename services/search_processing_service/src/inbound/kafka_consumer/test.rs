@@ -982,6 +982,7 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
         (
             DocumentTopicEvent::Purged(DocumentPurgedMetadata {
                 document_id: DOCUMENT_ID.to_string(),
+                audience: Vec::new(),
             }),
             DocumentEventDescription {
                 action: DocumentIndexAction::Remove,
@@ -1869,6 +1870,7 @@ fn exact_macro_documents_envelopes_decode_into_document_events() {
                 Uuid::from_u128(3),
                 DocumentTopicEvent::Purged(DocumentPurgedMetadata {
                     document_id: DOCUMENT_ID.to_string(),
+                    audience: Vec::new(),
                 }),
             ),
         ),
@@ -2311,6 +2313,7 @@ fn non_email_events_shard_by_their_producer_key() {
         DOCUMENT_ID,
         Event::new(DocumentTopicEvent::Purged(DocumentPurgedMetadata {
             document_id: DOCUMENT_ID.to_string(),
+            audience: Vec::new(),
         })),
     );
     let document = DeclaredMacroEvent::decode(&message).expect("decodable document event");

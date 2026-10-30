@@ -11,6 +11,7 @@ use crate::domain::models::{
 #[cfg(feature = "explain_binary")]
 use crate::domain::models::{AccessExplanation, AccessGrant};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
+use models_entity_access_management::EntityAccessSource;
 use std::{collections::HashMap, future::Future};
 use uuid::Uuid;
 
@@ -326,6 +327,20 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         channel_id: &Uuid,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
 
+    /// The user, channel and team grants on an entity, read uncached.
+    fn get_entity_access_sources(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<Vec<EntityAccessSource>, AccessError>> + Send;
+
+    /// Users the sources reach now: user grants themselves, active channel
+    /// participants and team members.
+    fn get_users_for_sources(
+        &self,
+        sources: &[EntityAccessSource],
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
     /// Resolve a call ID to its channel ID and share permission ID.
     ///
     /// Resolves the durable identity for native and imported calls.
@@ -360,6 +375,24 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> impl Future<Output = Result<Option<UserTeamInfo>, AccessError>> + Send;
+}
+
+/// An entity's audience as its grants rather than the users they reach. A
+/// permanent delete records the grants before removing them, so the people who
+/// had access can still be told, however large a team or channel it was shared with.
+pub trait EntityAccessSources: Send + Sync + 'static {
+    /// The entity's user, channel and team grants, read fresh.
+    fn access_sources(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<Vec<EntityAccessSource>, AccessError>> + Send;
+
+    /// Users the sources reach now.
+    fn users_for_sources(
+        &self,
+        sources: &[EntityAccessSource],
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
 }
 
 /// Scheduled actions the user can reach through any of their sources

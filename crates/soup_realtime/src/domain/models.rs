@@ -4,6 +4,7 @@ use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroSoupRealtimeTopic;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
+use models_entity_access_management::EntityAccessSource;
 use serde::{Deserialize, Serialize};
 
 /// A change to one value.
@@ -36,12 +37,15 @@ impl<T> Patch<T> {
 }
 
 /// A patch paired with the entity used to resolve its recipients.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct SoupRealtimePatch {
     /// Patch delivered to each recipient.
     pub patch: Patch<Entity<'static>>,
     /// Entity whose current accessors should receive the patch.
     pub access_source: Entity<'static>,
+    /// Grants the entity had before the source event removed them. The users
+    /// they reach also receive the patch, which current access can no longer name.
+    pub audience: Vec<EntityAccessSource>,
 }
 
 impl SoupRealtimePatch {
@@ -50,6 +54,7 @@ impl SoupRealtimePatch {
         Self {
             patch,
             access_source,
+            audience: Vec::new(),
         }
     }
 
@@ -57,6 +62,23 @@ impl SoupRealtimePatch {
     pub fn for_entity(patch: Patch<Entity<'static>>) -> Self {
         let access_source = patch.value().clone();
         Self::new(patch, access_source)
+    }
+
+    /// Adds grants captured before the source event removed them.
+    pub fn with_audience(mut self, audience: Vec<EntityAccessSource>) -> Self {
+        self.audience = audience;
+        self
+    }
+}
+
+/// Spans and logs record patches; the audience names users, so only its size is shown.
+impl std::fmt::Debug for SoupRealtimePatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SoupRealtimePatch")
+            .field("patch", &self.patch)
+            .field("access_source", &self.access_source)
+            .field("audience_count", &self.audience.len())
+            .finish()
     }
 }
 

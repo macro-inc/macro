@@ -65,6 +65,7 @@ the entity-access domain service.
   `entity_mutation`) takes a receipt, not a raw boolean/level.
 
 - `ExternalChat` resolves ordinary entity-access/link/team grants through `external_chat_access_level`; its extractor reads `chat_id`.
+- `get_users_by_entity` is cached for 10 seconds per process. A permanent delete that must name who had access reads `EntityAccessSources::access_sources` (uncached grants) before removing them, and consumers expand those grants with `users_for_sources`.
 
 ## Related
 

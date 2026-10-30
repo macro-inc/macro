@@ -5,7 +5,10 @@ mod test;
 
 use std::future::Future;
 
-use entity_access::domain::{models::AccessError, ports::EntityAccessService};
+use entity_access::domain::{
+    models::{AccessError, EntityAccessSource},
+    ports::{EntityAccessService, EntityAccessSources},
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use rootcause::prelude::{Report, ResultExt as _};
@@ -24,11 +27,17 @@ pub trait EntityAccessUserLookup: Send + Sync + 'static {
         entity_id: &str,
         entity_type: EntityType,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
+    /// Returns the users the grants reach now.
+    fn users_for_sources(
+        &self,
+        sources: &[EntityAccessSource],
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
 }
 
 impl<S> EntityAccessUserLookup for S
 where
-    S: EntityAccessService,
+    S: EntityAccessService + EntityAccessSources,
 {
     async fn get_users_by_entity(
         &self,
@@ -36,6 +45,13 @@ where
         entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
         EntityAccessService::get_users_by_entity(self, entity_id, entity_type).await
+    }
+
+    async fn users_for_sources(
+        &self,
+        sources: &[EntityAccessSource],
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        EntityAccessSources::users_for_sources(self, sources).await
     }
 }
 
@@ -64,6 +80,18 @@ where
             .get_users_by_entity(entity.entity_id.as_ref(), entity.entity_type)
             .await
             .context("failed to query current entity accessors")
+            .map_err(Into::into)
+    }
+
+    #[tracing::instrument(skip(self, sources), fields(source_count = sources.len()), err)]
+    async fn expand_sources(
+        &self,
+        sources: &[EntityAccessSource],
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        self.service
+            .users_for_sources(sources)
+            .await
+            .context("failed to query the users of recorded grants")
             .map_err(Into::into)
     }
 }

@@ -65,6 +65,14 @@ fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from("macro|owner@example.com".to_string()).expect("valid user id")
 }
 
+/// A team grant recorded before a purge removed it.
+fn team_grant() -> models_entity_access_management::EntityAccessSource {
+    models_entity_access_management::EntityAccessSource {
+        source_type: models_entity_access_management::EntityAccessSourceType::Team,
+        source_id: "00000000-0000-0000-0000-0000000000aa".to_string(),
+    }
+}
+
 fn updated_event() -> Event<DocumentTopicEvent> {
     Event::new(DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
         document_id: DOCUMENT_ID.to_string(),
@@ -221,12 +229,26 @@ fn search_only_document_events_do_not_emit_patches() {
         }),
         DocumentTopicEvent::Purged(DocumentPurgedMetadata {
             document_id: DOCUMENT_ID.to_string(),
+            audience: Vec::new(),
         }),
     ];
 
     for event in events {
         assert!(patches_from_document_event(&event).is_empty());
     }
+}
+
+#[test]
+fn document_purge_deletes_the_document_for_the_audience_read_before_it() {
+    let event = DocumentTopicEvent::Purged(DocumentPurgedMetadata {
+        document_id: DOCUMENT_ID.to_string(),
+        audience: vec![team_grant()],
+    });
+
+    assert_eq!(
+        patches_from_document_event(&event),
+        vec![delete(EntityType::Document, DOCUMENT_ID).with_audience(vec![team_grant()])]
+    );
 }
 
 #[test]
@@ -393,6 +415,7 @@ fn initiative_purge_cleanup_cannot_replace_the_deletion_in_either_event_order() 
     let id = Uuid::now_v7();
     let purged = InitiativeTopicEvent::Purged {
         initiative_id: initiative::domain::models::InitiativeId::from_uuid(id),
+        audience: Vec::new(),
     };
     let cleanup = PropertyTopicEvent::EntityPropertiesCleared(EntityPropertiesClearedMetadata {
         entity_id: id.to_string(),
@@ -1020,8 +1043,11 @@ fn initiative_lifecycle_and_properties_refresh_the_soup_entity() {
         vec![update(EntityType::Initiative, id)]
     );
     assert_eq!(
-        patches_from_initiative_event(&InitiativeTopicEvent::Purged { initiative_id: id }),
-        vec![delete(EntityType::Initiative, id)]
+        patches_from_initiative_event(&InitiativeTopicEvent::Purged {
+            initiative_id: id,
+            audience: vec![team_grant()],
+        }),
+        vec![delete(EntityType::Initiative, id).with_audience(vec![team_grant()])]
     );
 }
 

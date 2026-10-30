@@ -3,9 +3,10 @@
 use entity_access::domain::{
     models::{
         AccessError, AccessLevel, BotAccessScope, BotReceiptScope, EditAccessLevel, Entity,
-        EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType, ViewAccessLevel,
+        EntityAccessAuth, EntityAccessReceipt, EntityAccessSource, EntityPermission, EntityType,
+        ViewAccessLevel,
     },
-    ports::EntityAccessService,
+    ports::{EntityAccessService, EntityAccessSources},
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::property_value::PropertyValue;
@@ -43,8 +44,8 @@ impl<P, S, A> ProjectResources<P, S, A> {
     }
 }
 
-impl<P: PropertiesService, S: SystemPropertiesService, A: EntityAccessService> InitiativeResources
-    for ProjectResources<P, S, A>
+impl<P: PropertiesService, S: SystemPropertiesService, A: EntityAccessService + EntityAccessSources>
+    InitiativeResources for ProjectResources<P, S, A>
 {
     fn initialize(&self, id: InitiativeId) -> ResourceFuture<'_, ()> {
         Box::pin(async move {
@@ -112,6 +113,14 @@ impl<P: PropertiesService, S: SystemPropertiesService, A: EntityAccessService> I
                 }
             }
             Ok(())
+        })
+    }
+    fn audience(&self, id: InitiativeId) -> ResourceFuture<'_, Vec<EntityAccessSource>> {
+        Box::pin(async move {
+            self.access
+                .access_sources(&id.to_string(), EntityType::Initiative)
+                .await
+                .map_err(|error| InitiativeError::Internal(rootcause::report!(error).into()))
         })
     }
     fn purge(&self, receipt: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()> {
