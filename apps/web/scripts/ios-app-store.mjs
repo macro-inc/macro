@@ -11,16 +11,23 @@
 //                is caught rather than papered over.
 //
 //   submit       Attach the processed build to an App Store version (created
-//                on demand with releaseType AFTER_APPROVAL), fill in empty
-//                "What's New" texts, and submit it for App Review. Safe to
-//                re-run: an already-submitted version is a no-op success.
+//                on demand with releaseType MANUAL, so Apple's approval holds
+//                it in Pending Developer Release), fill in empty "What's New"
+//                texts, and submit it for App Review. Safe to re-run: an
+//                already-submitted version is a no-op success.
 //
-//   status       Report the App Store state of a version. With --require-live
-//                it exits non-zero unless exactly this version+build is live
-//                on the App Store, built from --native-tree (or this checkout's
-//                native code) — the gate the `iOS Native Check` job runs on
-//                PRs with native iOS changes. Writes a JSON gate_result to
+//   status       Report the App Store state of a version. With
+//                --require-approved it exits non-zero unless Apple approved
+//                exactly this version+build (held for release, or already
+//                live), built from --native-tree (or this checkout's native
+//                code) — the gate the `iOS Native Check` job runs on PRs with
+//                native iOS changes. Writes a JSON gate_result to
 //                GITHUB_OUTPUT only after evaluating the App Store response.
+//
+//   publish      Release this version+build to the App Store if it is held
+//                for release (Pending Developer Release). The prod deploy runs
+//                it; any other state (already live, not approved, a different
+//                build attached) is reported and left alone.
 //
 // Auth (same values as ios-release.sh):
 //   APPLE_API_KEY       App Store Connect API Key ID
@@ -40,7 +47,8 @@
 // Usage:
 //   bun scripts/ios-app-store.mjs wait-build [--timeout-minutes 30]
 //   bun scripts/ios-app-store.mjs submit [--whats-new "release notes"]
-//   bun scripts/ios-app-store.mjs status [--require-live] [--require-unused-build]
+//   bun scripts/ios-app-store.mjs status [--require-approved] [--require-unused-build]
+//   bun scripts/ios-app-store.mjs publish
 //   bun scripts/ios-app-store.mjs release-info
 //   bun scripts/ios-app-store.mjs withdraw --pr <number>
 //   bun scripts/ios-app-store.mjs prepare-signing
@@ -67,8 +75,8 @@
 // --require-unused-build, before the release builds) fails when a build at
 // or above ours exists with a different stamp — another PR or a hand release — and
 // reports `uploaded=true` (GITHUB_OUTPUT) when it is our own upload, so a
-// release retry skips the build. The live check (--require-live) requires the
-// live build's stamp to match this checkout's native tree — in the merge gate
+// release retry skips the build. The approval check (--require-approved)
+// requires the approved build's stamp to match this checkout's native tree — in the merge gate
 // that checkout is the PR's merge result, so native code that landed on main
 // after the release also fails it (the shipped build lacks it).
 
@@ -102,14 +110,31 @@ const SUBMITTED_STATES = new Set([
   ...LIVE_STATES,
 ]);
 
-// Past review: Apple approved the version and nothing can withdraw it any
-// more — with release type "after approval" it is minutes from live.
+// How `submit` creates versions: Apple's approval holds them in
+// PENDING_DEVELOPER_RELEASE until `publish` (the prod deploy) releases them.
+const RELEASE_TYPE = "MANUAL";
+const HELD_STATE = "PENDING_DEVELOPER_RELEASE";
+
+// Past review: Apple approved the version and its review submission can no
+// longer be withdrawn. A held version only goes live once released.
 const APPROVED_STATES = new Set([
   "ACCEPTED",
   "PENDING_APPLE_RELEASE",
   "PENDING_DEVELOPER_RELEASE",
   "PROCESSING_FOR_DISTRIBUTION",
   "PROCESSING_FOR_APP_STORE",
+]);
+
+// What the merge gate accepts: an approved version that reaches the App Store
+// with nothing left but the prod deploy's `publish` (held) or nothing at all
+// (releasing, live). Not ACCEPTED: another item of the submission was
+// rejected, and the version cannot publish until that is resolved. Not
+// PENDING_APPLE_RELEASE: Apple holds it until an unreleased iOS version ships.
+const MERGEABLE_STATES = new Set([
+  HELD_STATE,
+  "PROCESSING_FOR_DISTRIBUTION",
+  "PROCESSING_FOR_APP_STORE",
+  ...LIVE_STATES,
 ]);
 
 // Versions that shipped and were superseded or pulled — never in flight.
@@ -128,7 +153,7 @@ const WITHDRAWABLE_SUBMISSION_STATES = new Set([
   "UNRESOLVED_ISSUES",
 ]);
 
-const BOOLEAN_FLAGS = new Set(["require-live", "require-unused-build"]);
+const BOOLEAN_FLAGS = new Set(["require-approved", "require-unused-build"]);
 
 /// "The native code": every tracked blob under this directory except what
 /// never reaches the iOS binary — anything Android-only or desktop-only by
@@ -174,9 +199,9 @@ function parseArgs(argv) {
 }
 
 const [command, ...rest] = process.argv.slice(2);
-if (!["wait-build", "submit", "status", "release-info", "withdraw", "prepare-signing"].includes(command ?? "")) {
+if (!["wait-build", "submit", "status", "publish", "release-info", "withdraw", "prepare-signing"].includes(command ?? "")) {
   console.error(
-    "Usage: ios-app-store.mjs <wait-build|submit|status|release-info|withdraw|prepare-signing> [flags]",
+    "Usage: ios-app-store.mjs <wait-build|submit|status|publish|release-info|withdraw|prepare-signing> [flags]",
   );
   exit(2);
 }
@@ -632,8 +657,9 @@ async function inFlightVersionForPr(pr) {
 /// `withdraw --pr N`: remove PR N's in-flight submission from review (native
 /// code changed after the release, so that build must never go live).
 /// GITHUB_OUTPUT gets withdrawn=true|false and, if the PR's version is past
-/// the point of withdrawal — approved by Apple or already shipped —
-/// live=<version> (<build>) so the caller can warn loudly. With
+/// the point of withdrawal, held=<version> (<build>) when Apple approved it
+/// and it awaits release, or live=<version> (<build>) when it is shipping or
+/// shipped, so the caller can say what to do. With
 /// --unless-tree <hash> (the watcher's drift check) a build whose stamp still
 /// matches the PR's native code is left alone in every state, in-flight or
 /// live: nothing drifted, so nothing to withdraw or warn about.
@@ -661,7 +687,16 @@ async function withdraw() {
     const withdrawn = await cancelOpenSubmission();
     setGitHubOutput("withdrawn", withdrawn ? "true" : "false");
     if (!withdrawn) {
-      if (APPROVED_STATES.has(state)) {
+      if (state === HELD_STATE) {
+        const held = `${mine.record.attributes.versionString} (${mine.buildNumber})`;
+        console.error(
+          `PR #${pr}'s version ${held} is ${state}: Apple has approved it, so the ` +
+            "submission can no longer be withdrawn, but it stays off the App Store until " +
+            "released. It blocks the next submission until it is removed in App Store " +
+            `Connect (Developer Reject).\n${distributionUrl}`,
+        );
+        setGitHubOutput("held", held);
+      } else if (APPROVED_STATES.has(state)) {
         const live = `${mine.record.attributes.versionString} (${mine.buildNumber})`;
         console.error(
           `PR #${pr}'s version ${live} is ${state}: Apple has approved it and the ` +
@@ -785,9 +820,10 @@ the ios-update label to pick it up.\n${distributionUrl}`);
   }
   console.error(`Could not create App Store version ${version}: App Store Connect allows one iOS
 version in flight at a time, and these are: ${inFlight.join(", ")}.
-Wait for it to ship (another native PR's release) or remove it from review in App
-Store Connect, then remove and re-add the ios-update label — the uploaded build
-${build} is reused, only the submission is retried.
+Wait for it to ship (another native PR's release; an approved one ships with the
+next prod deploy) or remove it in App Store Connect (remove from review, or
+Developer Reject once approved), then remove and re-add the ios-update label —
+the uploaded build ${build} is reused, only the submission is retried.
 ${distributionUrl}`);
 }
 
@@ -824,12 +860,21 @@ async function submit() {
           `${attachedNumber}; withdrawing it to resubmit with build ${build}.`,
       );
       if (!(await cancelOpenSubmission())) {
-        console.error(
-          `App Store version ${version} (build ${attachedNumber}) is ${state}: past the point ` +
-            "where a submission can be withdrawn, so that build will ship. Bump " +
-            "(`just ios-bump`), commit, and re-add the ios-update label to release " +
-            `build ${build} as the follow-up.\n${distributionUrl}`,
-        );
+        if (state === HELD_STATE) {
+          console.error(
+            `App Store version ${version} (build ${attachedNumber}) is ${state}: Apple ` +
+              "approved this PR's stale build, so the submission can no longer be withdrawn. " +
+              "Remove it in App Store Connect (Developer Reject), then remove and re-add the " +
+              `ios-update label — the uploaded build ${build} is reused.\n${distributionUrl}`,
+          );
+        } else {
+          console.error(
+            `App Store version ${version} (build ${attachedNumber}) is ${state}: past the point ` +
+              "where a submission can be withdrawn, so that build will ship. Bump " +
+              "(`just ios-bump`), commit, and re-add the ios-update label to release " +
+              `build ${build} as the follow-up.\n${distributionUrl}`,
+          );
+        }
         exit(1);
       }
     } else if (LIVE_STATES.has(state)) {
@@ -846,9 +891,10 @@ async function submit() {
           `not this PR's build ${build}` +
           (stamp?.pr ? ` (uploaded for PR #${stamp.pr})` : " (uploaded outside the release flow)") +
           ". App Store Connect allows one version in flight at a time: wait for it to " +
-          "ship (then `just ios-bump` moves the version) or remove it from review in App " +
-          `Store Connect, then remove and re-add the ios-update label — the uploaded build ${build} ` +
-          `is reused.\n${distributionUrl}`,
+          "ship (an approved one ships with the next prod deploy; then `just ios-bump` moves " +
+          "the version) or remove it in App Store Connect (remove from review, or Developer " +
+          "Reject once approved), then remove and re-add the ios-update label — the uploaded " +
+          `build ${build} is reused.\n${distributionUrl}`,
       );
       exit(1);
     }
@@ -892,9 +938,9 @@ async function submit() {
             attributes: {
               platform: "IOS",
               versionString: version,
-              // Release to the App Store as soon as Apple approves — the
-              // merge gate (`status --require-live`) waits for exactly that.
-              releaseType: "AFTER_APPROVAL",
+              // Hold the approved version until the prod deploy that ships
+              // its web bundle runs `publish`.
+              releaseType: RELEASE_TYPE,
             },
             relationships: {
               app: { data: { type: "apps", id: app.id } },
@@ -908,6 +954,22 @@ async function submit() {
     console.log(
       `Reusing App Store version ${version} (state ${versionState(versionRecord)}).`,
     );
+    // Records created before releases were held still release on approval.
+    if (versionRecord.attributes.releaseType !== RELEASE_TYPE) {
+      versionRecord = (
+        await api(`/v1/appStoreVersions/${versionRecord.id}`, {
+          method: "PATCH",
+          body: {
+            data: {
+              type: "appStoreVersions",
+              id: versionRecord.id,
+              attributes: { releaseType: RELEASE_TYPE },
+            },
+          },
+        })
+      ).data;
+      console.log(`Set App Store version ${version} to release manually.`);
+    }
   }
 
   await api(`/v1/appStoreVersions/${versionRecord.id}/relationships/build`, {
@@ -1042,10 +1104,10 @@ async function submit() {
 }
 
 async function status() {
-  const requireLive = args["require-live"] === true;
-  // The collision check is a pre-build check: once our version is live it is
-  // the latest release, and later TestFlight uploads (another PR's) are
-  // irrelevant — the live version + build + stamp below is the proof.
+  const requireApproved = args["require-approved"] === true;
+  // The collision check is a pre-build check: once our version is approved
+  // it is the next release, and later TestFlight uploads (another PR's) are
+  // irrelevant — the approved version + build + stamp below is the proof.
   if (args["require-unused-build"] === true) {
     await requireUnusedBuild();
   }
@@ -1061,15 +1123,15 @@ async function status() {
     report(kind, reason, state);
     console.error(`${reason}
 
-This PR changes native iOS code, so iOS ${version} (build ${build}) must be
-live on the App Store before merging (after the merge, the next prod deploy
-applies the iOS native build floor committed in min-native-build.json and
-prompts older installs to update):
+This PR changes native iOS code, so Apple must approve iOS ${version} (build ${build})
+before merging (after the merge, the next prod deploy releases it on the App Store
+and applies the iOS native build floor committed in min-native-build.json,
+prompting older installs to update):
   - Not started yet? Add the \`ios-update\` label to the PR to build, upload,
     and submit it for review.
-  - Submitted? Wait for Apple to approve and release it. The \`iOS Release
-    Watch\` workflow re-runs this check within half an hour of the release
-    (or re-run it yourself).
+  - Submitted? Wait for Apple to approve it. The \`iOS Release Watch\`
+    workflow re-runs this check within half an hour of the approval (or
+    re-run it yourself).
   - If these tauri changes don't break the native/web contract, add the
     \`skip-ios-update\` label instead.
 ${distributionUrl}`);
@@ -1078,7 +1140,7 @@ ${distributionUrl}`);
 
   if (!versionRecord) {
     console.log(`No App Store version ${version} exists for ${bundleId}.`);
-    if (requireLive) {
+    if (requireApproved) {
       fail(`App Store version ${version} has not been created.`);
     }
     return;
@@ -1091,7 +1153,7 @@ ${distributionUrl}`);
     `App Store version ${version}: state ${state}, ` +
       `build ${attachedBuildNumber ?? "not attached"}.`,
   );
-  if (!requireLive) {
+  if (!requireApproved) {
     return;
   }
 
@@ -1103,17 +1165,25 @@ ${distributionUrl}`);
       "mismatch", state,
     );
   }
-  if (!LIVE_STATES.has(state)) {
+  if (!MERGEABLE_STATES.has(state)) {
     fail(
-      `App Store version ${version} is not live yet (state ${state}).`,
+      `App Store version ${version} is not held for release or live yet (state ${state}).`,
       SUBMITTED_STATES.has(state) ? "waiting" : "release-required",
       state,
     );
   }
+  // A held stale build blocks the follow-up submission until it is removed.
+  const heldNote = state === HELD_STATE
+    ? "First remove the approved version in App Store Connect (Developer Reject): it is " +
+      "held for release and App Store Connect allows one version in flight."
+    : null;
+  const withHeldNote = (reason) => [reason, heldNote].filter(Boolean).join(" ");
   if (attachedBuildNumber !== build) {
     fail(
-      `App Store version ${version} is live but was built from build ` +
-        `${attachedBuildNumber ?? "unknown"}, not this PR's build ${build}.`,
+      withHeldNote(
+        `App Store version ${version} was approved with build ` +
+          `${attachedBuildNumber ?? "unknown"}, not this PR's build ${build}.`,
+      ),
       "mismatch", state,
     );
   }
@@ -1121,33 +1191,81 @@ ${distributionUrl}`);
   const ours = nativeTreeHash();
   if (!ours) {
     console.error(
-      "Could not compute this checkout's native tree; the live build could not be verified. " +
+      "Could not compute this checkout's native tree; the approved build could not be verified. " +
         "Check the Git checkout and rerun the check.",
     );
     exit(1);
   }
   if (stamp !== ours) {
-    report("mismatch", "The live build does not match this PR's current merge result.", state);
-    console.error(`App Store version ${version} (${build}) is live, but that build was not built from
+    report("mismatch", withHeldNote("The approved build does not match this PR's current merge result."), state);
+    console.error(`App Store version ${version} (${build}) is approved (${state}), but that build was not built from
 the native code this merge would produce: its stamp is ${stamp ?? "missing (uploaded outside the release flow)"},
 the merge result's native tree (${NATIVE_TREE_PATH}) is ${ours}.
 Either native commits were pushed to this PR after the release, native code landed
-on main since the release (so the merge would contain code the shipped build lacks),
+on main since the release (so the merge would contain code the approved build lacks),
 or another PR / a hand release shipped the same version + build number. Merging main
 alone cannot fix it: bump again, commit, and re-add the ios-update label so what will
 actually be merged gets released:
   cd apps/web && doppler run --project ios-release --config prd -- just ios-bump
-${distributionUrl}`);
+${heldNote ? `${heldNote}\n` : ""}${distributionUrl}`);
     exit(1);
   }
-  report("live", "The exact version, build, and native code are live and verified.", state);
-  console.log(`App Store version ${version} (${build}) is live, built from this native tree.`);
+  report("approved", "Apple approved the exact version, build, and native code.", state);
+  console.log(`App Store version ${version} (${build}) is approved (${state}), built from this native tree.`);
+}
+
+/// `publish`: release this version + build (by default the committed one) to
+/// the App Store if Apple approved it and it is held for release. The prod
+/// deploy runs this without waiting on it. Nothing else is released: a held
+/// version with another build belongs to a PR that this commit doesn't
+/// contain.
+async function publish() {
+  const versionRecord = await findAppStoreVersion();
+  if (!versionRecord) {
+    console.log(`No App Store version ${version} exists; nothing to release.`);
+    return;
+  }
+  const state = versionState(versionRecord);
+  const attached = await api(`/v1/appStoreVersions/${versionRecord.id}/build`);
+  const attachedNumber = attached.data?.attributes.version ?? null;
+  if (state !== HELD_STATE) {
+    console.log(
+      `App Store version ${version} (build ${attachedNumber ?? "none"}) is ${state}; ` +
+        "nothing to release.",
+    );
+    return;
+  }
+  if (attachedNumber !== build) {
+    console.log(
+      `App Store version ${version} is held for release with build ${attachedNumber ?? "none"}, ` +
+        `not build ${build}; leaving it alone.\n${distributionUrl}`,
+    );
+    return;
+  }
+  await api("/v1/appStoreVersionReleaseRequests", {
+    method: "POST",
+    body: {
+      data: {
+        type: "appStoreVersionReleaseRequests",
+        relationships: {
+          appStoreVersion: { data: { type: "appStoreVersions", id: versionRecord.id } },
+        },
+      },
+    },
+  });
+  const released = await findAppStoreVersion();
+  console.log(
+    `Released App Store version ${version} (${build}); it is now ` +
+      `${versionState(released)}.\n${distributionUrl}`,
+  );
 }
 
 if (command === "wait-build") {
   await waitBuild();
 } else if (command === "submit") {
   await submit();
+} else if (command === "publish") {
+  await publish();
 } else if (command === "release-info") {
   await releaseInfo();
 } else if (command === "withdraw") {

@@ -6,8 +6,7 @@ pub use mailbox::*;
 use std::future::Future;
 
 use models_email::email::service::label::Label;
-use models_email::email::service::message::Message;
-use models_email::service::contact::Contact;
+use models_email::service::contact::{Contact, ContactList};
 use models_email::service::link::Link;
 use uuid::Uuid;
 
@@ -86,13 +85,14 @@ pub trait MailboxMessageClient: Send + Sync + 'static {
         provider_thread_id: &str,
     ) -> impl Future<Output = Result<Vec<String>, EmailApiError>> + Send;
 
-    /// Fetches and normalizes every message in a provider thread.
+    /// Fetches and normalizes every message in a provider thread, each with
+    /// its calendar invitation parts, in one provider read.
     fn get_thread(
         &self,
         access_token: &AccessToken,
         link_id: Uuid,
         provider_thread_id: &str,
-    ) -> impl Future<Output = Result<Vec<Message>, EmailApiError>> + Send;
+    ) -> impl Future<Output = Result<Vec<MessageWithCalendarParts>, EmailApiError>> + Send;
 
     /// Lists one page of provider threads.
     fn list_threads(
@@ -108,6 +108,17 @@ pub trait MailboxMessageClient: Send + Sync + 'static {
         &self,
         access_token: &AccessToken,
         provider_message_id: &str,
+        label_ids_to_add: &[String],
+        label_ids_to_remove: &[String],
+    ) -> impl Future<Output = Result<(), EmailApiError>> + Send;
+
+    /// Adds and removes provider labels from many messages in one request.
+    /// The provider reports no per-message outcome: the request succeeds or
+    /// fails as a whole.
+    fn batch_modify_message_labels(
+        &self,
+        access_token: &AccessToken,
+        provider_message_ids: &[String],
         label_ids_to_add: &[String],
         label_ids_to_remove: &[String],
     ) -> impl Future<Output = Result<(), EmailApiError>> + Send;
@@ -194,6 +205,16 @@ pub trait MailboxAttachmentClient: Send + Sync + 'static {
         access_token: &AccessToken,
         provider_message_id: &str,
         provider_attachment_id: &str,
+    ) -> impl Future<Output = Result<Vec<u8>, EmailApiError>> + Send;
+}
+
+/// Original message source capability.
+pub trait MailboxRawMessageClient: Send + Sync + 'static {
+    /// Fetches a message's original RFC 822 bytes.
+    fn get_raw_message(
+        &self,
+        access_token: &AccessToken,
+        provider_message_id: &str,
     ) -> impl Future<Output = Result<Vec<u8>, EmailApiError>> + Send;
 }
 
@@ -424,7 +445,7 @@ impl MailboxMessageClient for NoOpMailboxClient {
         _: &AccessToken,
         _: Uuid,
         _: &str,
-    ) -> Result<Vec<Message>, EmailApiError> {
+    ) -> Result<Vec<MessageWithCalendarParts>, EmailApiError> {
         Err(unavailable())
     }
 
@@ -442,6 +463,16 @@ impl MailboxMessageClient for NoOpMailboxClient {
         &self,
         _: &AccessToken,
         _: &str,
+        _: &[String],
+        _: &[String],
+    ) -> Result<(), EmailApiError> {
+        Err(unavailable())
+    }
+
+    async fn batch_modify_message_labels(
+        &self,
+        _: &AccessToken,
+        _: &[String],
         _: &[String],
         _: &[String],
     ) -> Result<(), EmailApiError> {
@@ -505,6 +536,12 @@ impl MailboxAttachmentClient for NoOpMailboxClient {
         _: &str,
         _: &str,
     ) -> Result<Vec<u8>, EmailApiError> {
+        Err(unavailable())
+    }
+}
+
+impl MailboxRawMessageClient for NoOpMailboxClient {
+    async fn get_raw_message(&self, _: &AccessToken, _: &str) -> Result<Vec<u8>, EmailApiError> {
         Err(unavailable())
     }
 }

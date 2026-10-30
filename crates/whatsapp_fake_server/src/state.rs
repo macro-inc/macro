@@ -75,6 +75,19 @@ pub(crate) struct Group {
     pub(crate) created: u64,
     /// Members by phone number, in join order.
     pub(crate) members: Vec<String>,
+    /// Members made admins (the creator is always the super admin).
+    pub(crate) admins: Vec<String>,
+    /// The group description, if set.
+    pub(crate) description: Option<String>,
+    /// Disappearing-messages timer in seconds; `Some(0)` once turned off,
+    /// which WhatsApp still lists as `<ephemeral expiration="0"/>`.
+    pub(crate) disappearing: Option<u32>,
+    /// This is a community (it has no chat of its own).
+    pub(crate) community_parent: bool,
+    /// The community this group belongs to, by group id.
+    pub(crate) community: Option<String>,
+    /// The community's announcement group.
+    pub(crate) announcements: bool,
 }
 
 /// A connection that is pairing a new device.
@@ -274,9 +287,52 @@ impl State {
                 ];
                 if user.phone == group.creator {
                     attrs.push(("type", text("superadmin")));
+                } else if group.admins.contains(&user.phone) {
+                    attrs.push(("type", text("admin")));
                 }
                 node("participant", attrs, None)
             })
+            .collect::<Vec<_>>();
+        let description = group.description.iter().map(|description| {
+            node(
+                "description",
+                vec![
+                    ("id", text(format!("{:X}", group.created))),
+                    ("t", text(group.created.to_string())),
+                ],
+                children(vec![node("body", vec![], bytes(description.as_bytes()))]),
+            )
+        });
+        let mut settings = vec![];
+        if let Some(seconds) = group.disappearing {
+            settings.push(node(
+                "ephemeral",
+                vec![("expiration", text(seconds.to_string()))],
+                None,
+            ));
+        }
+        if group.community_parent {
+            settings.push(node(
+                "parent",
+                vec![("default_membership_approval_mode", text("request_required"))],
+                None,
+            ));
+        }
+        if let Some(community) = &group.community {
+            settings.push(node(
+                "linked_parent",
+                vec![("jid", jid(&group_jid(community)))],
+                None,
+            ));
+        }
+        if group.announcements {
+            settings.push(node("announcement", vec![], None));
+            settings.push(node("default_sub_group", vec![], None));
+        }
+        let group_children = participants
+            .into_iter()
+            .chain(description)
+            .chain(settings)
             .collect();
         let creator_lid = self
             .users
@@ -296,7 +352,7 @@ impl State {
                 ("addressing_mode", text("lid")),
                 ("size", text(group.members.len().to_string())),
             ],
-            children(participants),
+            children(group_children),
         )
     }
 

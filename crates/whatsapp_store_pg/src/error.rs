@@ -45,6 +45,22 @@ pub enum WhatsAppStoreError {
     Database(#[from] sqlx::Error),
 }
 
+impl WhatsAppStoreError {
+    /// Whether the account's stored device can never be read again: KMS
+    /// refused its data key (a lost or replaced key, another context), or the
+    /// device row does not decrypt or parse. Only a fresh device helps; a
+    /// retryable KMS failure is not this.
+    pub fn is_unreadable_device(&self) -> bool {
+        match self {
+            WhatsAppStoreError::Kms(error) => !error.is_retryable(),
+            WhatsAppStoreError::Decrypt
+            | WhatsAppStoreError::Malformed
+            | WhatsAppStoreError::UnsupportedVersion(_) => true,
+            _ => false,
+        }
+    }
+}
+
 impl From<WhatsAppStoreError> for StoreError {
     fn from(error: WhatsAppStoreError) -> Self {
         match error {

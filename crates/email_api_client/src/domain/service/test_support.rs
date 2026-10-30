@@ -1,8 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use models_email::email::service::label::Label;
-use models_email::email::service::message::Message;
-use models_email::service::contact::Contact;
+use models_email::service::contact::{Contact, ContactList};
 use uuid::Uuid;
 
 use super::super::models::{
@@ -218,7 +217,7 @@ impl MailboxMessageClient for FakeRepository {
         _: &AccessToken,
         _: Uuid,
         _: &str,
-    ) -> Result<Vec<Message>, EmailApiError> {
+    ) -> Result<Vec<crate::domain::models::MessageWithCalendarParts>, EmailApiError> {
         self.unavailable("get_thread")
     }
 
@@ -240,6 +239,16 @@ impl MailboxMessageClient for FakeRepository {
         _: &[String],
     ) -> Result<(), EmailApiError> {
         self.unavailable("modify_message_labels")
+    }
+
+    async fn batch_modify_message_labels(
+        &self,
+        _: &AccessToken,
+        _: &[String],
+        _: &[String],
+        _: &[String],
+    ) -> Result<(), EmailApiError> {
+        self.unavailable("batch_modify_message_labels")
     }
 }
 

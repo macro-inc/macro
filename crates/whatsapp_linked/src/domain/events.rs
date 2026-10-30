@@ -1,8 +1,14 @@
 //! Types exchanged in-process with the WhatsApp session service. They carry no
 //! whatsmeow types: the session service maps protocol events onto them.
 
-use super::models::{BackfillState, ChatKind, Identity, PairingState};
+use super::models::{Identity, PairingState};
 use chrono::{DateTime, Utc};
+use external_chat::domain::{
+    models::{
+        AttachmentRef, BackfillState, ExternalChatKind, MediaKind, MediaPresentation, MediaShape,
+    },
+    rich::RichContent,
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -76,13 +82,16 @@ pub enum PairingUpdate {
         /// Verified phone-number JID of the linked account.
         identity_jid: String,
     },
+    /// WhatsApp's QR session ran out of codes before any was scanned.
+    Expired,
     /// Pairing failed.
     Failed,
 }
 
 /// Kind of a normalized group message.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::IntoStaticStr)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum MessageKind {
     /// Text, possibly quoting `target`.
     Text,
@@ -94,6 +103,21 @@ pub enum MessageKind {
     Delete,
     /// A shape Macro does not import; `text` is a readable placeholder.
     Unsupported,
+    /// A poll, location, contact card or event: `rich` holds it, `text` any
+    /// caption.
+    Rich,
+    /// Something that happened in the group (`rich` is a system line); never
+    /// notifies or counts as unread.
+    System,
+    /// A vote on the poll `target` (`rich` is the vote).
+    PollVote,
+}
+
+impl MessageKind {
+    /// Snake-case name, as serialized.
+    pub fn as_str(self) -> &'static str {
+        self.into()
+    }
 }
 
 /// Source message reference for quotes and mutations.
@@ -120,10 +144,22 @@ pub struct Media {
     /// returned unchanged by `claim_media_imports`.
     #[serde(default)]
     pub locator: Vec<u8>,
+    /// Pixel size of an image, sticker or video, as WhatsApp declared it.
+    #[serde(default)]
+    pub width: Option<u32>,
+    /// Pixel height, as declared.
+    #[serde(default)]
+    pub height: Option<u32>,
+    /// Length of audio or video in whole seconds, as declared.
+    #[serde(default)]
+    pub duration_seconds: Option<u32>,
+    /// How WhatsApp shows it, when not as a plain file of its kind.
+    #[serde(default)]
+    pub presentation: Option<MediaPresentation>,
 }
 
 /// One normalized group message or revision.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Message {
     /// WhatsApp message id.
     pub source_id: String,
@@ -145,6 +181,19 @@ pub struct Message {
     pub target: Option<Target>,
     /// Attachments.
     pub media: Vec<Media>,
+    /// People the text @-mentions, as WhatsApp ids; the text carries
+    /// `@<user part>` for each.
+    #[serde(default)]
+    pub mentions: Vec<String>,
+    /// Forwarded from another chat.
+    #[serde(default)]
+    pub forwarded: bool,
+    /// Sent as view-once; kept and shown like any media.
+    #[serde(default)]
+    pub view_once: bool,
+    /// Structured content of rich, system and poll-vote messages.
+    #[serde(default)]
+    pub rich: Option<RichContent>,
 }
 
 /// One participant's receipt, never proof of group-wide delivery.
@@ -154,13 +203,33 @@ pub struct Receipt {
     pub source_ids: Vec<String>,
     /// Participant who sent the receipt.
     pub participant_jid: String,
-    /// Receipt category, such as `delivered` or `read`.
-    pub state: String,
+    /// What the participant reported.
+    pub state: ReceiptState,
+}
+
+/// What a participant's receipt reports; other WhatsApp receipt types (retry,
+/// from the account's own devices, server errors) are not kept.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::AsRefStr, strum::EnumString,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum ReceiptState {
+    /// Reached the participant's device.
+    Delivered,
+    /// The participant saw it.
+    Read,
+    /// The participant played the voice note or opened the view-once media.
+    Played,
 }
 
 /// What happened in the group.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "one event per WhatsApp message, built and moved once, never held in bulk"
+)]
 pub enum InboundKind {
     /// A message, reaction, edit or delete.
     Message(Message),
@@ -172,12 +241,17 @@ pub enum InboundKind {
 
 /// One event from an observed group. `event_id` must be stable across
 /// redelivery of the same protocol event.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InboundEvent {
     /// Stable id for deferral and quarantine.
     pub event_id: Uuid,
-    /// Group JID.
+    /// Chat JID: the group, or a direct chat's other person (by phone number
+    /// when known).
     pub group_jid: String,
+    /// A direct chat's other address for the same person (LID for a phone
+    /// number, or the reverse), so either addressing reaches the added chat.
+    #[serde(default)]
+    pub chat_alternate_jid: Option<String>,
     /// Protocol timestamp.
     pub source_at: DateTime<Utc>,
     /// When the replica observed it.
@@ -208,6 +282,9 @@ pub enum OutgoingContent {
         text: String,
         /// Quoted message.
         quote: Option<Target>,
+        /// Mentioned participants (WhatsApp ids); the text carries
+        /// `@<user part>` for each.
+        mentions: Vec<String>,
     },
     /// Reaction; empty emoji removes it.
     Reaction {
@@ -231,7 +308,7 @@ pub enum OutgoingContent {
     /// One attachment; fetch its bytes with `outbound_media`.
     Media {
         /// Category.
-        kind: super::models::MediaKind,
+        kind: MediaKind,
         /// MIME type.
         mime: String,
         /// Display filename.
@@ -240,20 +317,9 @@ pub enum OutgoingContent {
         caption: Option<String>,
         /// Quoted message.
         quote: Option<Target>,
+        /// Pixel size and length, read from the file when it was staged.
+        shape: MediaShape,
     },
-}
-
-/// One attachment of one source message.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AttachmentRef {
-    /// Binding the message belongs to.
-    pub binding_id: Uuid,
-    /// Verified author.
-    pub person_id: Uuid,
-    /// WhatsApp message id.
-    pub source_id: String,
-    /// Position within the message.
-    pub ordinal: i16,
 }
 
 /// An attachment this replica should download.
@@ -286,7 +352,7 @@ pub enum MediaFailure {
 #[derive(Clone)]
 pub struct OutboundMedia {
     /// Category.
-    pub kind: super::models::MediaKind,
+    pub kind: MediaKind,
     /// MIME type.
     pub mime: String,
     /// Display filename.
@@ -305,9 +371,12 @@ pub struct ClaimedSend {
     /// Group to send to.
     pub group_jid: String,
     /// Commit order within the group, across all accounts.
-    pub group_sequence: i64,
+    pub chat_sequence: i64,
     /// Content.
     pub content: OutgoingContent,
+    /// The group's disappearing-messages timer in seconds, as the sending
+    /// account last saw it; the message carries it like a phone's would.
+    pub disappearing_seconds: Option<u32>,
     /// W3C trace context of the request that recorded the send.
     pub traceparent: Option<String>,
 }
@@ -352,7 +421,7 @@ pub struct ChatUpdate {
     /// Chat JID (groups; direct chats by phone-number JID when known).
     pub jid: String,
     /// Group or direct.
-    pub kind: ChatKind,
+    pub kind: ExternalChatKind,
     /// Group subject, or the contact or WhatsApp name of a direct chat.
     pub name: Option<String>,
     /// Activity; only ever moves forward.
@@ -372,7 +441,7 @@ pub struct ChatUpdate {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BackfillWork {
     /// Group entity.
-    pub group_id: Uuid,
+    pub chat_id: Uuid,
     /// WhatsApp group.
     pub group_jid: String,
     /// Progress.

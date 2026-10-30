@@ -3,27 +3,28 @@ import { queryClient } from '@queries/client';
 import { refreshEmailThreadCache } from '@queries/email/cache-cleanup';
 import { emailKeys } from '@queries/email/keys';
 import { emailClient } from '@service-email/client';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import { createSignal } from 'solid-js';
 import type { MessageOperationSourceFactory } from '../context/message-operation-source';
 
-export const createMessageOperationSource: MessageOperationSourceFactory = (
-  messageId,
-  threadId
-) => {
-  const [needsReload, setNeedsReload] = createSignal(false);
-  let refreshedRemote = false;
-  const query = useQuery(() => ({
-    queryKey: emailKeys.messageOperation(messageId() ?? '').queryKey,
-    enabled: !!messageId(),
+/** After taking the provider's copy, reload the thread once it synchronizes. */
+type RemoteReload = { requested: boolean; done: boolean };
+
+function messageOperationQueryOptions(
+  messageId: string | undefined,
+  thread: string | undefined,
+  reload: RemoteReload
+) {
+  return queryOptions({
+    queryKey: emailKeys.messageOperation(messageId ?? '').queryKey,
+    enabled: !!messageId,
     queryFn: async () => {
       const result = await throwOnErr(() =>
-        emailClient.messageOperation(messageId()!)
+        emailClient.messageOperation(messageId!)
       );
-      const thread = threadId?.();
       if (
-        needsReload() &&
-        !refreshedRemote &&
+        reload.requested &&
+        !reload.done &&
         result.operation?.state === 'SYNCHRONIZED' &&
         thread
       ) {
@@ -31,7 +32,7 @@ export const createMessageOperationSource: MessageOperationSourceFactory = (
         await queryClient.invalidateQueries({
           queryKey: emailKeys.thread(thread).queryKey,
         });
-        refreshedRemote = true;
+        reload.done = true;
       }
       return result;
     },
@@ -43,7 +44,18 @@ export const createMessageOperationSource: MessageOperationSourceFactory = (
         ? 5000
         : false;
     },
-  }));
+  });
+}
+
+export const createMessageOperationSource: MessageOperationSourceFactory = (
+  messageId,
+  threadId
+) => {
+  const [needsReload, setNeedsReload] = createSignal(false);
+  const reload: RemoteReload = { requested: false, done: false };
+  const query = useQuery(() =>
+    messageOperationQueryOptions(messageId(), threadId?.(), reload)
+  );
   return {
     needsReload,
     operation: () => {
@@ -70,7 +82,10 @@ export const createMessageOperationSource: MessageOperationSourceFactory = (
           accept_duplicate_risk: acceptDuplicateRisk,
         })
       );
-      if (action === 'use_provider') setNeedsReload(true);
+      if (action === 'use_provider') {
+        reload.requested = true;
+        setNeedsReload(true);
+      }
       await query.refetch();
       await queryClient.invalidateQueries({ queryKey: emailKeys._def });
       const thread = threadId?.();

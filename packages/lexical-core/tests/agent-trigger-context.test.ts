@@ -10,6 +10,96 @@ function hiddenContext(markdown: string): string | undefined {
   return (first as SerializedAgentContextNode).text;
 }
 
+describe('composeAgentContextPrompt with an external routine event', () => {
+  it('renders a GitHub delivery with the selector and payload tests that let it through', () => {
+    const markdown = composeAgentContextPrompt({
+      promptMarkdown: 'Fix it.',
+      trigger: {
+        kind: 'routine',
+        routine_id: 'r-9',
+        name: 'Fix CI',
+        owner: { id: 'macro|julia@example.com', name: 'Julia' },
+        instructions: 'Find why CI failed.',
+        triggers: [
+          {
+            type: 'events',
+            events: ['github'],
+            github: {
+              events: ['workflow_run'],
+              actions: ['completed'],
+              repositories: ['macro-inc/macro'],
+              include_bots: false,
+            },
+            payload_match: ['workflow_run.conclusion in ["failure"]'],
+          },
+        ],
+        firing: {
+          type: 'event',
+          event: {
+            event: 'github',
+            delivery: {
+              event: 'workflow_run',
+              action: 'completed',
+              repository: 'macro-inc/macro',
+              sender: 'octocat',
+              payload: { workflow_run: { name: 'CI', conclusion: 'failure' } },
+            },
+          },
+        },
+      },
+    });
+
+    expect(hiddenContext(markdown)).toBe(
+      [
+        '<trigger kind="routine">',
+        '  <note>The routine Fix CI, owned by Julia, fired. The prompt is what the routine asks you to do.</note>',
+        '  <routine id="r-9" name="Fix CI" owner="Julia" owner_id="macro|julia@example.com"/>',
+        '  <instructions>Find why CI failed.</instructions>',
+        '  <triggers>',
+        '    <events names="github">',
+        '      <github events="workflow_run" actions="completed" repositories="macro-inc/macro" bots="ignored"/>',
+        '      <match>workflow_run.conclusion in [&quot;failure&quot;]</match>',
+        '    </events>',
+        '  </triggers>',
+        '  <event type="github">',
+        '    <github event="workflow_run" action="completed" repository="macro-inc/macro" sender="octocat">',
+        '      <payload>{&quot;workflow_run&quot;:{&quot;name&quot;:&quot;CI&quot;,&quot;conclusion&quot;:&quot;failure&quot;}}</payload>',
+        '    </github>',
+        '  </event>',
+        '</trigger>',
+      ].join('\n')
+    );
+  });
+
+  it('says when a GitHub payload was too large to carry', () => {
+    const markdown = composeAgentContextPrompt({
+      promptMarkdown: 'Look.',
+      trigger: {
+        kind: 'routine',
+        routine_id: 'r-10',
+        name: 'Pushes',
+        owner: { id: 'macro|julia@example.com', name: 'Julia' },
+        instructions: 'Summarize the push.',
+        triggers: [
+          {
+            type: 'events',
+            events: ['github'],
+            github: { include_bots: true },
+          },
+        ],
+        firing: {
+          type: 'event',
+          event: { event: 'github', delivery: { event: 'push' } },
+        },
+      },
+    });
+
+    expect(hiddenContext(markdown)).toContain(
+      '<note>The payload was too large to carry; read the details from GitHub.</note>'
+    );
+  });
+});
+
 describe('composeAgentContextPrompt with a trigger', () => {
   it('renders a mention that opened the session with its document comment discussion', () => {
     const markdown = composeAgentContextPrompt({
@@ -89,6 +179,132 @@ describe('composeAgentContextPrompt with a trigger', () => {
         '      <message id="m1" author="Teo" author_email="teo@example.com" author_id="macro|teo@example.com" at="2026-10-08T14:00:00Z">Is Monday realistic?</message>',
         '      <message id="m2" author="Julia" author_email="julia@example.com" author_id="macro|julia@example.com" at="2026-10-08T14:02:00Z" mentioned_you="true">Cursor can you check the QA calendar?</message>',
         '    </thread>',
+        '  </discussion>',
+        '</trigger>',
+      ].join('\n')
+    );
+  });
+
+  it('lists a thread-root image on its message so the agent can fetch it', () => {
+    const fileId = '9ec21122-4bd8-473f-bfb0-21d2e6e5f03b';
+    const markdown = composeAgentContextPrompt({
+      promptMarkdown: 'see screenshot and create a task',
+      trigger: {
+        kind: 'mentioned',
+        surface: {
+          type: 'channel',
+          id: 'c1',
+          name: 'eng',
+          channel_type: 'public',
+        },
+        prompt_message_id: 'm2',
+        sender: {
+          id: 'macro|julia@example.com',
+          name: 'Julia',
+          email: 'julia@example.com',
+        },
+        reply_target: { kind: 'thread', root_id: 'm1' },
+        thread: {
+          root_id: 'm1',
+          messages: [
+            {
+              id: 'm1',
+              author: {
+                id: 'macro|teo@example.com',
+                name: 'Teo',
+                email: 'teo@example.com',
+              },
+              content: 'We need agent templates',
+              posted_at: '2026-10-08T14:00:00Z',
+              attachments: [
+                {
+                  entity_type: 'static/image',
+                  entity_id: fileId,
+                  url: `https://static.example/file/${fileId}`,
+                },
+                { entity_type: 'document', entity_id: 'doc-1' },
+              ],
+            },
+            {
+              id: 'm2',
+              author: {
+                id: 'macro|julia@example.com',
+                name: 'Julia',
+                email: 'julia@example.com',
+              },
+              content: 'see screenshot and create a task',
+              posted_at: '2026-10-08T14:02:00Z',
+            },
+          ],
+          messages_omitted: false,
+        },
+      },
+    });
+
+    expect(hiddenContext(markdown)).toBe(
+      [
+        '<trigger kind="mentioned">',
+        '  <note>Julia mentioned you, and that mention opened this session. Their message is the prompt.</note>',
+        '  <discussion>',
+        '    <channel id="c1" name="eng" type="public"/>',
+        '    <origin>This prompt was posted in a channel thread, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.</origin>',
+        '    <sender name="Julia" email="julia@example.com" id="macro|julia@example.com"/>',
+        '    <reply_target kind="thread" thread="m1">',
+        '      <note>The prompt was posted as a reply in the thread below. It is about that thread.</note>',
+        '    </reply_target>',
+        '    <note>Attachments are listed on each message and can be fetched by their url.</note>',
+        '    <thread root="m1">',
+        `      <message id="m1" author="Teo" author_email="teo@example.com" author_id="macro|teo@example.com" at="2026-10-08T14:00:00Z">We need agent templates`,
+        `        <attachment type="static/image" id="${fileId}" url="https://static.example/file/${fileId}"/>`,
+        '        <attachment type="document" id="doc-1"/>',
+        '      </message>',
+        '      <message id="m2" author="Julia" author_email="julia@example.com" author_id="macro|julia@example.com" at="2026-10-08T14:02:00Z" mentioned_you="true">see screenshot and create a task</message>',
+        '    </thread>',
+        '  </discussion>',
+        '</trigger>',
+      ].join('\n')
+    );
+  });
+
+  it('tells an agent asked by another agent who that agent speaks for', () => {
+    const markdown = composeAgentContextPrompt({
+      promptMarkdown: 'please fix the failing test',
+      trigger: {
+        kind: 'mentioned',
+        surface: {
+          type: 'channel',
+          id: 'c1',
+          name: 'eng',
+          channel_type: 'public',
+        },
+        prompt_message_id: 'm2',
+        sender: { id: 'bot|macro', name: 'Macro' },
+        agent_request: {
+          on_behalf_of: {
+            id: 'macro|julia@example.com',
+            name: 'Julia',
+            email: 'julia@example.com',
+          },
+          hops: 1,
+        },
+        reply_target: { kind: 'thread', root_id: 'm1' },
+      },
+    });
+
+    expect(hiddenContext(markdown)).toBe(
+      [
+        '<trigger kind="mentioned">',
+        '  <note>Macro mentioned you, and that mention opened this session. Their message is the prompt. Macro is another agent asking on behalf of Julia; Julia did not write this message. Address your reply to Macro in the discussion, where Julia can read it too.</note>',
+        '  <discussion>',
+        '    <channel id="c1" name="eng" type="public"/>',
+        '    <origin>This prompt was posted in a channel thread, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.</origin>',
+        '    <sender name="Macro" id="bot|macro"/>',
+        '    <agent_request hops="1">',
+        '      <on_behalf_of name="Julia" email="julia@example.com" id="macro|julia@example.com"/>',
+        '    </agent_request>',
+        '    <reply_target kind="thread" thread="m1">',
+        '      <note>The prompt was posted as a reply in the thread below. It is about that thread.</note>',
+        '    </reply_target>',
         '  </discussion>',
         '</trigger>',
       ].join('\n')

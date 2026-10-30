@@ -14,6 +14,7 @@ export const badgeVariants = createVariants(
   {
     variant: {
       ghost: 'bg-transparent text-ink-muted',
+      secondary: 'bg-button-secondary-bg text-ink',
       outline: 'bg-transparent text-ink-muted border-edge-muted',
     },
     size: {
@@ -62,9 +63,8 @@ export function badgeTriggerClasses(options: BadgeClassOptions = {}): string {
   const { variant = 'ghost', size = 'md', class: className } = options;
   return cn(
     buttonClasses({
-      variant,
-      size,
-      noTouchResize: true,
+      variant: variant ?? 'ghost',
+      size: size ?? 'md',
       class: className,
     }),
     'focus-visible:ring-2 focus-visible:ring-accent/20',

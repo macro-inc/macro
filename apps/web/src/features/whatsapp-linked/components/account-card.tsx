@@ -2,14 +2,18 @@ import DotsThreeIcon from '@phosphor/dots-three.svg';
 import LinkBreakIcon from '@phosphor/link-break.svg';
 import WhatsappIcon from '@phosphor/whatsapp-logo.svg';
 import { Button, Dropdown, Item } from '@ui';
+import { Show } from 'solid-js';
 import type { WhatsAppAccount } from '../core/account';
 import { WhatsAppTile } from './whatsapp-tile';
 
-/** Nothing linked yet: what linking means, its risk, and Connect. */
+/**
+ * Nothing linked yet: what linking means, and Connect. A phone
+ * can't scan its own screen, so on one it says to link from a computer.
+ */
 export function ConnectCard(props: {
   reconnect: boolean;
-  /** Pairing is switched off on the server. */
-  unavailable: boolean;
+  /** This is the phone that would have to scan the code. */
+  phone: boolean;
   pending: boolean;
   onConnect: () => void;
 }) {
@@ -20,27 +24,28 @@ export function ConnectCard(props: {
         <Item.Title>WhatsApp</Item.Title>
         <Item.Description>
           {props.reconnect
-            ? 'WhatsApp signed this device out. Link it again to keep your groups syncing.'
-            : 'Link your personal WhatsApp as a linked device. Only groups you choose come into Macro.'}
+            ? 'WhatsApp signed this device out. Link it again to keep your chats syncing.'
+            : 'Link your personal WhatsApp as a linked device. Only chats you choose come into Macro.'}
         </Item.Description>
-        <Item.Metadata>
-          Macro connects as an unofficial WhatsApp client, which WhatsApp may
-          restrict or ban accounts for.
-        </Item.Metadata>
+        <Show when={props.phone}>
+          <Item.Description>
+            To link, open Macro on a computer, go to External → WhatsApp, and
+            scan the code it shows with this phone.
+          </Item.Description>
+        </Show>
       </Item.Content>
-      <Item.Actions class="self-center">
-        <Button
-          type="button"
-          variant="strong"
-          disabled={props.unavailable || props.pending}
-          tooltip={
-            props.unavailable ? 'Linking WhatsApp is turned off' : undefined
-          }
-          onClick={props.onConnect}
-        >
-          {props.reconnect ? 'Reconnect' : 'Connect'}
-        </Button>
-      </Item.Actions>
+      <Show when={!props.phone}>
+        <Item.Actions class="self-center">
+          <Button
+            type="button"
+            variant="primary"
+            disabled={props.pending}
+            onClick={props.onConnect}
+          >
+            {props.reconnect ? 'Reconnect' : 'Connect'}
+          </Button>
+        </Item.Actions>
+      </Show>
     </Item>
   );
 }

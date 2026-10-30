@@ -427,6 +427,7 @@ fn gmail_operation(operation: ApiOperationKind) -> GmailApiOperation {
         ApiOperationKind::GetMessage => GmailApiOperation::MessagesGet,
         ApiOperationKind::ListMessages => GmailApiOperation::MessagesList,
         ApiOperationKind::ModifyMessageLabels => GmailApiOperation::MessagesModify,
+        ApiOperationKind::BatchModifyMessageLabels => GmailApiOperation::MessagesBatchModify,
         ApiOperationKind::GetAttachment => GmailApiOperation::MessagesAttachmentsGet,
         ApiOperationKind::SendMessage => GmailApiOperation::MessagesSend,
         ApiOperationKind::GetThread => GmailApiOperation::ThreadsGet,

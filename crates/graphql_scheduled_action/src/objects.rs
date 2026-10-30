@@ -70,8 +70,25 @@ pub(crate) struct GraphqlScheduledActionEventFilter {
     events: Vec<GraphqlScheduledActionEventName>,
     /// Entity ids that can satisfy this filter. Null matches every id; an empty list matches nothing.
     entity_ids: Option<Vec<ID>>,
+    /// Which GitHub App deliveries satisfy a `GITHUB` filter.
+    github: Option<GraphqlScheduledActionGithubSelector>,
+    /// Exact payload tests a GitHub delivery must pass, as a reader would state them.
+    payload_match: Vec<String>,
     /// Yes/no question the triggering content must answer with yes before the routine runs.
     condition: Option<String>,
+}
+
+/// GitHub deliveries a filter watches. Empty lists match everything.
+#[derive(SimpleObject)]
+pub(crate) struct GraphqlScheduledActionGithubSelector {
+    /// GitHub event names, such as `workflow_run`.
+    events: Vec<String>,
+    /// Payload actions, such as `completed`.
+    actions: Vec<String>,
+    /// Repositories, as `owner/name`.
+    repositories: Vec<String>,
+    /// Whether deliveries caused by bots also match.
+    include_bots: bool,
 }
 
 /// The agent task a routine runs.
@@ -127,6 +144,8 @@ pub(crate) enum GraphqlScheduledActionEventName {
     CallStarted,
     /// A call the routine's owner joined ended.
     CallEnded,
+    /// Macro's GitHub App received a delivery.
+    Github,
 }
 
 impl From<EventName> for GraphqlScheduledActionEventName {
@@ -147,6 +166,7 @@ impl From<EventName> for GraphqlScheduledActionEventName {
             EventName::ChannelMessageAttachmentCreated => Self::ChannelMessageAttachmentCreated,
             EventName::CallStarted => Self::CallStarted,
             EventName::CallEnded => Self::CallEnded,
+            EventName::Github => Self::Github,
         }
     }
 }
@@ -249,6 +269,24 @@ fn event_filters(
                 entity_ids: filter
                     .ids()
                     .map(|ids| ids.iter().map(|id| ID(id.to_string())).collect()),
+                github: filter
+                    .github()
+                    .map(|selector| GraphqlScheduledActionGithubSelector {
+                        events: selector.events().to_vec(),
+                        actions: selector.actions().to_vec(),
+                        repositories: selector.repositories().to_vec(),
+                        include_bots: selector.include_bots(),
+                    }),
+                payload_match: filter
+                    .payload()
+                    .map(|conditions| {
+                        conditions
+                            .as_slice()
+                            .iter()
+                            .map(|condition| condition.describe())
+                            .collect()
+                    })
+                    .unwrap_or_default(),
                 condition: filter
                     .condition()
                     .map(|condition| condition.as_str().to_owned()),

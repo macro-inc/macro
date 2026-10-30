@@ -10,8 +10,10 @@ type FromPillProps = {
 
 /**
  * Shows who triggered an agent (bot) message, e.g. `from Eric Hayes`, where the
- * name is a hoverable user reference (same hover card as an `@mention`).
- * Rendered only when the message's sender carries a `triggered_by` user id.
+ * name is a hoverable user reference (same hover card as an `@mention`), and
+ * the client they wrote it through when it names one, e.g.
+ * `from Eric Hayes via Claude Code`. Rendered only when the message's sender
+ * carries a `triggered_by` user id.
  */
 export function FromPill(props: FromPillProps) {
   const message = useMessage();
@@ -26,6 +28,7 @@ export function FromPill(props: FromPillProps) {
     return id ? macroIdToEmail(id) : (triggeredBy() ?? '');
   };
   const label = () => displayName() || email() || (triggeredBy() ?? '');
+  const via = () => message().sender?.triggered_via ?? undefined;
 
   return (
     <Show when={triggeredBy()}>
@@ -50,6 +53,14 @@ export function FromPill(props: FromPillProps) {
             </span>
           }
         />
+        <Show when={via()}>
+          {(client) => (
+            <>
+              via
+              <span class="font-medium text-ink">{client()}</span>
+            </>
+          )}
+        </Show>
       </span>
     </Show>
   );

@@ -1,4 +1,6 @@
 import { useIsInsideHoverCard } from '@core/component/HoverCard';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isEditableInput } from '@core/util/isEditableInput';
 import { cn, Dropdown } from '@ui';
 import { type JSX, onCleanup, onMount, useContext } from 'solid-js';
 import { PropertyRootContext } from '../../core/context';
@@ -26,8 +28,8 @@ type EditorPopoverProps = {
  * Floating shell for popover-style editors (date / select / entity). The
  * surrounding <Property.Root> (or any <Dropdown>) hosts a Kobalte DropdownMenu — this component
  * just renders the Content. Kobalte handles ESC, click-outside, focus
- * trap, and focus return. `onClose` is invoked on dismissal so consumers can
- * save-on-close.
+ * trap, and focus return; on touch it leaves focus where it was. `onClose` is
+ * invoked on dismissal so consumers can save-on-close.
  */
 export function EditorPopover(props: EditorPopoverProps) {
   const ctx = useContext(PropertyRootContext);
@@ -89,6 +91,26 @@ export function EditorPopover(props: EditorPopoverProps) {
     close();
   };
 
+  // On touch the popover leaves focus where it was, so a phone keyboard
+  // raised by the field behind it (a composer's title) stays up: opening
+  // doesn't focus the menu, and taps outside its own fields don't move focus.
+  const keepFocusOnOpen = (event: Event) => {
+    if (isTouchDevice()) event.preventDefault();
+  };
+  // Kobalte's menu list also focuses the menu itself once it mounts, with no
+  // option to opt out.
+  const keepFocusOnMount = (content: HTMLElement) => {
+    if (!isTouchDevice()) return;
+    const focus = content.focus.bind(content);
+    content.focus = (options) => {
+      if (!isEditableInput(document.activeElement)) focus(options);
+    };
+  };
+  const keepFocusOnTap = (event: PointerEvent | MouseEvent) => {
+    if (isTouchDevice() && !isEditableInput(event.target as Element))
+      event.preventDefault();
+  };
+
   return (
     // Virtual anchors normally use the body portal. Modal hosts opt into
     // their own portal scope to keep focus and outside interactions local.
@@ -101,6 +123,10 @@ export function EditorPopover(props: EditorPopoverProps) {
       )}
       onInteractOutside={handleInteractOutside}
       onEscapeKeyDown={handleEscapeKeyDown}
+      ref={keepFocusOnMount}
+      onOpenAutoFocus={keepFocusOnOpen}
+      onPointerDown={keepFocusOnTap}
+      onMouseDown={keepFocusOnTap}
       depth={3}
     >
       <Dropdown.Group

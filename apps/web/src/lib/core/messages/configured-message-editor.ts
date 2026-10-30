@@ -1,4 +1,5 @@
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
+import type { MentionBucketId } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenuController';
 import {
   DefaultShortcuts,
   type ItemMention,
@@ -27,6 +28,8 @@ export type MessageEditorOptions = {
   namespace: string;
   resolveAppLink?: MentionLinkResolver;
   enableMentions?: boolean;
+  /** Restrict the `@` menu, e.g. to `['users']` for a fixed people list. */
+  mentionSources?: MentionBucketId[];
   onMentionCreate?: (mention: ItemMention) => void;
   onMentionRemove?: (mention: ItemMention) => void;
   users?: () => IUser[];
@@ -57,6 +60,7 @@ export function createConfiguredMessageEditor(options: MessageEditorOptions) {
       onCreate: options.onMentionCreate,
       onRemove: options.onMentionRemove,
       users: options.users,
+      sources: options.mentionSources,
       block: options.groupMentions ? 'channel' : undefined,
       disableMentionTracking: options.disableMentionTracking,
     });

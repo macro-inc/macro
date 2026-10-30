@@ -20,6 +20,7 @@ import { createSignal, For } from 'solid-js';
 import { render } from 'solid-js/web';
 import { channelTheme } from '../../../theme';
 import { StaticMarkdownContext } from '../../core/StaticMarkdown';
+import { MentionsMenuItem } from '../../menu/MentionsMenu/components/MentionsMenuItem';
 import { DocumentMention, DocumentMentionStatic } from '../DocumentMention';
 
 const states = [
@@ -119,6 +120,24 @@ function StatusExample(props: {
           theme={channelTheme}
         />
       </div>
+      <div data-testid="task-menu-item" class="w-64 menu-surface py-1.5">
+        <MentionsMenuItem
+          item={{
+            kind: 'entity',
+            bucket: 'task',
+            id,
+            searchText: task().name,
+            sortTimestamp: 0,
+            timestamps: {},
+            data: task(),
+          }}
+          index={0}
+          selected={false}
+          itemAction={() => {}}
+          setIndex={() => {}}
+          setOpen={() => {}}
+        />
+      </div>
       <Button onClick={() => update(PROPERTY_OPTION_IDS.STATUS.COMPLETED)}>
         Complete
       </Button>
@@ -131,7 +150,7 @@ function StatusExample(props: {
 
 function Fixture() {
   return (
-    <main class="min-h-screen space-y-4 bg-page p-8 text-ink">
+    <main class="h-screen space-y-4 overflow-y-auto bg-page p-8 text-ink">
       <h1 class="text-lg font-semibold">Task status — rows and mentions</h1>
       <div data-testid="static-task-mention">
         <DocumentMentionStatic

@@ -61,7 +61,8 @@ export function getMentionItemName(item: MentionItem): string {
       return item.data.title;
     case 'entity':
       return item.data.name ?? (item.bucket === 'email' ? 'No Subject' : '');
-    case 'whatsappGroup':
+    case 'externalChat':
+    case 'routine':
       return item.data.name;
   }
 }

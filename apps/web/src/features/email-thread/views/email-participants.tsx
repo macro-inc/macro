@@ -1,4 +1,5 @@
 import { EmailUserTooltip } from '@app/features/email-message/components/email-user-tooltip';
+import { isViewerAddress } from '@app/features/email-message/core/email-user';
 import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { emailToMacroId } from '@core/user/macroId';
 import { Key } from '@solid-primitives/keyed';
@@ -65,7 +66,7 @@ export function EmailParticipants() {
   );
 
   const getDisplayName = (p: Participant) => {
-    if (p.email === currentUserEmail()) return 'Me';
+    if (isViewerAddress(p.email, currentUserEmail())) return 'Me';
     if (p.name) return p.name.split(' ')[0];
     return p.email.split('@')[0];
   };
@@ -118,9 +119,8 @@ export function EmailParticipants() {
       </Key>
       <Show when={hiddenCount() > 0}>
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
-          noTouchResize
           onClick={() => setExpanded((v) => !v)}
           class={badgeTriggerClasses({
             variant: 'outline',

@@ -3,13 +3,18 @@
 //! everything outside adopted groups.
 
 use chrono::{DateTime, Utc};
+use external_chat::domain::rich::SystemLine;
+use external_chat::domain::{
+    models::{ExternalChatKind, MediaPresentation},
+    rich::RichContent,
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
     ChatUpdate, HistoryPage, InboundEvent, InboundKind, Media, Message, MessageAnchor, MessageKind,
-    Receipt, Target,
+    Receipt, ReceiptState, Target,
 };
-use whatsapp_linked::domain::models::{ChatKind, Identity};
+use whatsapp_linked::domain::models::Identity;
 use whatsmeow::Event;
 use whatsmeow::download::{DownloadableMessage, MediaType};
 use whatsmeow::proto::wa_common::MessageKey;
@@ -18,11 +23,13 @@ use whatsmeow::proto::wa_e2e::protocol_message;
 use whatsmeow::proto::wa_history_sync::conversation::EndOfHistoryTransferType;
 use whatsmeow::proto::wa_history_sync::{Conversation, HistorySync, Pushname};
 use whatsmeow::proto::wa_web::WebMessageInfo;
-use whatsmeow::store::{ContactStore, LidStore};
-use whatsmeow::types::{DEFAULT_USER_SERVER, GROUP_SERVER, HIDDEN_USER_SERVER, Jid};
+use whatsmeow::store::{ContactStore, LidStore, StoreError};
+use whatsmeow::types::events::GroupInfo;
+use whatsmeow::types::{DEFAULT_USER_SERVER, GROUP_SERVER, HIDDEN_USER_SERVER, Jid, MessageSource};
 
 use crate::domain::ports::SessionEvent;
 
+mod rich;
 #[cfg(test)]
 mod test;
 
@@ -83,37 +90,58 @@ impl LocatorMediaType {
     }
 }
 
-/// The meaning of a whatsmeow event, if the account cares about it. `seal`
-/// turns a [`MediaLocator`] into the opaque bytes stored with the attachment;
-/// `None` drops the attachment to a placeholder.
+/// What a whatsmeow event means for the account, if anything. `seal` turns
+/// a [`MediaLocator`] into the opaque bytes stored with the attachment;
+/// `None` drops the attachment to a placeholder. Poll votes are mapped by
+/// [`map_poll_vote`] once decrypted.
 pub fn map_event(
     account: Uuid,
     event: &Event,
     now: DateTime<Utc>,
     seal: &dyn Fn(&MediaLocator) -> Option<Vec<u8>>,
-) -> Option<Mapped> {
-    Some(match event {
+) -> Vec<Mapped> {
+    let inbound = |event: InboundEvent| Mapped::Inbound(Box::new(event));
+    match event {
         // A message the phone sent again on request is an earlier message.
-        Event::Message(message) => Mapped::Inbound(Box::new(map_message(
+        Event::Message(message) => map_message(
             account,
             message,
             now,
             seal,
             !message.unavailable_request_id.is_empty(),
-        )?)),
-        Event::Receipt(receipt) => Mapped::Inbound(Box::new(map_receipt(account, receipt, now)?)),
-        Event::JoinedGroup(joined) => Mapped::Session(SessionEvent::GroupChanged {
+        )
+        .map(inbound)
+        .into_iter()
+        .collect(),
+        Event::Receipt(receipt) => map_receipt(account, receipt, now)
+            .map(inbound)
+            .into_iter()
+            .collect(),
+        Event::JoinedGroup(joined) => vec![Mapped::Session(SessionEvent::GroupChanged {
             group_jid: joined.group_info.jid.to_non_ad().to_string(),
             info: Some(Box::new(super::group_info(joined.group_info.clone(), now))),
-        }),
+        })],
         Event::GroupInfo(change) if change.jid.server == GROUP_SERVER => {
-            Mapped::Session(SessionEvent::GroupChanged {
+            let mut mapped = vec![Mapped::Session(SessionEvent::GroupChanged {
                 group_jid: change.jid.to_non_ad().to_string(),
                 info: None,
-            })
+            })];
+            mapped.extend(
+                map_group_info(account, change, now)
+                    .into_iter()
+                    .map(inbound),
+            );
+            mapped
         }
-        event => Mapped::Session(map_session(event)?),
-    })
+        Event::Picture(picture) => map_group_picture(account, picture, now)
+            .map(inbound)
+            .into_iter()
+            .collect(),
+        event => map_session(event)
+            .map(Mapped::Session)
+            .into_iter()
+            .collect(),
+    }
 }
 
 fn map_session(event: &Event) -> Option<SessionEvent> {
@@ -139,33 +167,99 @@ fn map_session(event: &Event) -> Option<SessionEvent> {
     }
 }
 
+/// A direct chat as the account's phone keys it: by LID when the store knows
+/// the person's LID (phones keep direct chats by LID), else as given.
+pub async fn phone_chat(lids: &dyn LidStore, chat: Jid) -> Jid {
+    if chat.server != DEFAULT_USER_SERVER {
+        return chat;
+    }
+    match lids.get_lid_for_pn(&chat).await {
+        Ok(Some(lid)) => lid.to_non_ad(),
+        Ok(None) => chat,
+        Err(error) => {
+            tracing::debug!(error = %error, "Reading a chat's LID mapping failed");
+            chat
+        }
+    }
+}
+
+/// A direct chat as Macro keys it: by phone number when the store knows it.
+pub async fn macro_chat(lids: &dyn LidStore, chat: &str) -> String {
+    let Ok(jid) = chat.parse::<Jid>() else {
+        return chat.to_owned();
+    };
+    if jid.server != HIDDEN_USER_SERVER {
+        return chat.to_owned();
+    }
+    match lids.get_pn_for_lid(&jid).await {
+        Ok(Some(phone)) => phone.to_non_ad().to_string(),
+        Ok(None) => chat.to_owned(),
+        Err(error) => {
+            tracing::debug!(error = %error, "Reading a chat's LID mapping failed");
+            chat.to_owned()
+        }
+    }
+}
+
+/// Fills in addresses the message didn't carry from the account's LID store:
+/// the sender's other address (see [`complete_sender`]) and a direct chat's
+/// other address, so either addressing reaches the added chat. A store
+/// failure is returned: without the other address the gate could drop a
+/// message of an added chat, so the caller leaves it unacknowledged and
+/// WhatsApp redelivers it.
+pub async fn complete_addresses(
+    lids: &dyn LidStore,
+    event: &mut InboundEvent,
+) -> Result<(), StoreError> {
+    complete_sender(lids, event).await?;
+    if event.chat_alternate_jid.is_some() {
+        return Ok(());
+    }
+    let Ok(chat) = event.group_jid.parse::<Jid>() else {
+        return Ok(());
+    };
+    let alternate = match chat.server.as_str() {
+        HIDDEN_USER_SERVER => lids.get_pn_for_lid(&chat).await?,
+        DEFAULT_USER_SERVER => lids.get_lid_for_pn(&chat).await?,
+        _ => return Ok(()),
+    };
+    match alternate {
+        Some(alternate) if alternate.server == DEFAULT_USER_SERVER => {
+            // Direct chats go by phone number when it is known.
+            event.chat_alternate_jid = Some(event.group_jid.clone());
+            event.group_jid = alternate.to_non_ad().to_string();
+        }
+        alternate => event.chat_alternate_jid = alternate.as_ref().and_then(person),
+    }
+    Ok(())
+}
+
 /// Fills the other half of a message sender's phone-number/LID pair from the
 /// account's LID store, which whatsmeow fills at pairing (the account's own
 /// pair), from group participant lists and from message addressing. Without
 /// it a LID-only sender cannot be matched to the person already seen by phone
 /// number and is quarantined.
-pub async fn complete_sender(lids: &dyn LidStore, event: &mut InboundEvent) {
+pub async fn complete_sender(
+    lids: &dyn LidStore,
+    event: &mut InboundEvent,
+) -> Result<(), StoreError> {
     let InboundKind::Message(message) = &mut event.kind else {
-        return;
+        return Ok(());
     };
     let sender = &mut message.sender;
     if sender.alternate_jid.is_some() {
-        return;
+        return Ok(());
     }
     let Ok(jid) = sender.jid.parse::<Jid>() else {
-        return;
+        return Ok(());
     };
     let alternate = match jid.server.as_str() {
-        HIDDEN_USER_SERVER => lids.get_pn_for_lid(&jid).await,
-        DEFAULT_USER_SERVER => lids.get_lid_for_pn(&jid).await,
-        _ => return,
+        HIDDEN_USER_SERVER => lids.get_pn_for_lid(&jid).await?,
+        DEFAULT_USER_SERVER => lids.get_lid_for_pn(&jid).await?,
+        _ => return Ok(()),
     };
-    match alternate {
-        Ok(alternate) => sender.alternate_jid = alternate.as_ref().and_then(person),
-        Err(error) => {
-            tracing::debug!(error = %error, "Reading a sender's LID mapping failed");
-        }
-    }
+    sender.alternate_jid = alternate.as_ref().and_then(person);
+    Ok(())
 }
 
 fn person(jid: &Jid) -> Option<String> {
@@ -212,15 +306,55 @@ fn carries_only_keys(message: &wa_e2e::Message) -> bool {
     content == wa_e2e::Message::default()
 }
 
-fn text_of(message: &wa_e2e::Message) -> Option<(String, Option<&wa_e2e::ContextInfo>)> {
+fn text_of(message: &wa_e2e::Message) -> Option<String> {
     if let Some(text) = &message.conversation {
-        return Some((text.clone(), None));
+        return Some(text.clone());
     }
     let extended = message.extended_text_message.as_ref()?;
-    Some((
-        extended.text.clone().unwrap_or_default(),
-        extended.context_info.as_deref(),
-    ))
+    Some(extended.text.clone().unwrap_or_default())
+}
+
+/// The context of a message's content part: what it quotes, whom it
+/// mentions, whether it was forwarded. Every content type carries its own.
+fn context_of(message: &wa_e2e::Message) -> Option<&wa_e2e::ContextInfo> {
+    [
+        message
+            .extended_text_message
+            .as_ref()
+            .and_then(|part| part.context_info.as_deref()),
+        message
+            .image_message
+            .as_ref()
+            .and_then(|part| part.context_info.as_deref()),
+        message
+            .video_message
+            .as_ref()
+            .and_then(|part| part.context_info.as_deref()),
+        message
+            .audio_message
+            .as_ref()
+            .and_then(|part| part.context_info.as_deref()),
+        message
+            .document_message
+            .as_ref()
+            .and_then(|part| part.context_info.as_deref()),
+        message
+            .sticker_message
+            .as_ref()
+            .and_then(|part| part.context_info.as_deref()),
+    ]
+    .into_iter()
+    .flatten()
+    .next()
+}
+
+/// The message a reply quotes.
+fn quote_of(context: Option<&wa_e2e::ContextInfo>) -> Option<Target> {
+    let context = context?;
+    Some(Target {
+        source_id: context.stanza_id.clone()?,
+        sender_jid: person_text(context.participant.as_deref()?)?,
+    })
 }
 
 /// One attachment part of a message, with its caption.
@@ -231,6 +365,10 @@ struct Attachment<'part> {
     filename: Option<&'part str>,
     size: Option<u64>,
     caption: Option<&'part str>,
+    width: Option<u32>,
+    height: Option<u32>,
+    seconds: Option<u32>,
+    presentation: Option<MediaPresentation>,
 }
 
 fn attachment_of(message: &wa_e2e::Message) -> Option<Attachment<'_>> {
@@ -242,6 +380,24 @@ fn attachment_of(message: &wa_e2e::Message) -> Option<Attachment<'_>> {
             filename: None,
             size: image.file_length,
             caption: image.caption.as_deref(),
+            width: image.width,
+            height: image.height,
+            seconds: None,
+            presentation: None,
+        });
+    }
+    if let Some(sticker) = &message.sticker_message {
+        return Some(Attachment {
+            part: sticker.as_ref(),
+            media_type: LocatorMediaType::Image,
+            mime: sticker.mimetype.as_deref().or(Some("image/webp")),
+            filename: None,
+            size: sticker.file_length,
+            caption: None,
+            width: sticker.width,
+            height: sticker.height,
+            seconds: None,
+            presentation: Some(MediaPresentation::Sticker),
         });
     }
     if let Some(video) = &message.video_message {
@@ -252,6 +408,13 @@ fn attachment_of(message: &wa_e2e::Message) -> Option<Attachment<'_>> {
             filename: None,
             size: video.file_length,
             caption: video.caption.as_deref(),
+            width: video.width,
+            height: video.height,
+            seconds: video.seconds,
+            presentation: video
+                .gif_playback
+                .unwrap_or(false)
+                .then_some(MediaPresentation::Gif),
         });
     }
     if let Some(audio) = &message.audio_message {
@@ -262,6 +425,13 @@ fn attachment_of(message: &wa_e2e::Message) -> Option<Attachment<'_>> {
             filename: None,
             size: audio.file_length,
             caption: None,
+            width: None,
+            height: None,
+            seconds: audio.seconds,
+            presentation: audio
+                .ptt
+                .unwrap_or(false)
+                .then_some(MediaPresentation::VoiceNote),
         });
     }
     let document = message.document_message.as_ref()?;
@@ -272,6 +442,10 @@ fn attachment_of(message: &wa_e2e::Message) -> Option<Attachment<'_>> {
         filename: document.file_name.as_deref(),
         size: document.file_length,
         caption: document.caption.as_deref(),
+        width: None,
+        height: None,
+        seconds: None,
+        presentation: None,
     })
 }
 
@@ -296,6 +470,7 @@ fn media_of(
         _ => {
             let extension = mime.rsplit('/').next().unwrap_or("bin");
             let stem = match attachment.media_type {
+                LocatorMediaType::Image if attachment.presentation.is_some() => "sticker",
                 LocatorMediaType::Image => "image",
                 LocatorMediaType::Video => "video",
                 LocatorMediaType::Audio => "audio",
@@ -317,6 +492,10 @@ fn media_of(
         size: attachment.size?,
         sha256,
         locator,
+        width: attachment.width.filter(|width| *width > 0),
+        height: attachment.height.filter(|height| *height > 0),
+        duration_seconds: attachment.seconds,
+        presentation: attachment.presentation,
     })
 }
 
@@ -339,121 +518,451 @@ fn map_message(
     history: bool,
 ) -> Option<InboundEvent> {
     let info = &event.info;
-    if info.chat.server != GROUP_SERVER {
-        return None;
-    }
+    chat_of(info)?;
     let author = person(&info.sender)?;
-    let sender = Identity {
-        jid: author.clone(),
-        alternate_jid: person(&info.sender_alt),
-        display_name: (!info.push_name.is_empty()).then(|| info.push_name.clone()),
-    };
     let source_at = info.timestamp.unwrap_or(now);
-    let message = event.message.as_ref()?;
-    if carries_only_keys(message) {
-        return None;
+    let content = match event.message.as_ref() {
+        Some(message) => {
+            if carries_only_keys(message) || message.poll_update_message.is_some() {
+                return None;
+            }
+            message_content(message, &author, source_at, seal)?
+        }
+        // A history page keeps what happened in the group as stub messages.
+        None => {
+            let line = event.source_web_msg.as_ref().and_then(rich::stub_line)?;
+            let target = event
+                .source_web_msg
+                .as_ref()
+                .and_then(|web| web.pin_in_chat.as_ref()?.key.as_ref())
+                .and_then(|key| target(key, &author));
+            Content {
+                kind: MessageKind::System,
+                text: String::new(),
+                target,
+                revision: 0,
+                media: vec![],
+                rich: Some(RichContent::System(line)),
+                context: None,
+            }
+        }
+    };
+    Some(inbound_message(
+        account, event, &author, now, history, content,
+    ))
+}
+
+/// What one message says, before it is addressed to its group.
+struct Content<'message> {
+    kind: MessageKind,
+    text: String,
+    target: Option<Target>,
+    revision: i64,
+    media: Vec<Media>,
+    rich: Option<RichContent>,
+    context: Option<&'message wa_e2e::ContextInfo>,
+}
+
+impl Content<'_> {
+    fn new(kind: MessageKind, text: String, target: Option<Target>, revision: i64) -> Self {
+        Self {
+            kind,
+            text,
+            target,
+            revision,
+            media: vec![],
+            rich: None,
+            context: None,
+        }
     }
-    let mut media = Vec::new();
-    let (kind, text, target, revision) = if let Some(protocol) = &message.protocol_message {
+
+    fn unsupported(text: &str) -> Self {
+        Self::new(MessageKind::Unsupported, text.to_owned(), None, 0)
+    }
+}
+
+/// Media WhatsApp shows once on the phone (the port unwraps the view-once
+/// wrappers; the flag can also sit on the media itself). Macro keeps it.
+fn message_view_once(message: Option<&wa_e2e::Message>) -> bool {
+    message.is_some_and(|message| {
+        message
+            .image_message
+            .as_ref()
+            .and_then(|part| part.view_once)
+            .or_else(|| {
+                message
+                    .video_message
+                    .as_ref()
+                    .and_then(|part| part.view_once)
+            })
+            .or_else(|| {
+                message
+                    .audio_message
+                    .as_ref()
+                    .and_then(|part| part.view_once)
+            })
+            .unwrap_or(false)
+    })
+}
+
+fn message_content<'message>(
+    message: &'message wa_e2e::Message,
+    author: &str,
+    source_at: DateTime<Utc>,
+    seal: &dyn Fn(&MediaLocator) -> Option<Vec<u8>>,
+) -> Option<Content<'message>> {
+    if let Some(protocol) = &message.protocol_message {
         let key = protocol.key.as_ref()?;
         let edit_target = Target {
             source_id: key.id.clone()?,
-            sender_jid: author.clone(),
+            sender_jid: author.to_owned(),
         };
-        match protocol
+        return match protocol
             .r#type
             .and_then(|value| protocol_message::Type::try_from(value).ok())
         {
-            Some(protocol_message::Type::Revoke) => {
-                (MessageKind::Delete, String::new(), Some(edit_target), 0)
-            }
+            Some(protocol_message::Type::Revoke) => Some(Content::new(
+                MessageKind::Delete,
+                String::new(),
+                Some(edit_target),
+                0,
+            )),
             Some(protocol_message::Type::MessageEdit) => {
-                let (text, _) = protocol.edited_message.as_deref().and_then(text_of)?;
+                let text = protocol.edited_message.as_deref().and_then(text_of)?;
                 let revision = protocol
                     .timestamp_ms
                     .unwrap_or_else(|| source_at.timestamp_millis());
-                (MessageKind::Edit, text, Some(edit_target), revision)
+                Some(Content::new(
+                    MessageKind::Edit,
+                    text,
+                    Some(edit_target),
+                    revision,
+                ))
             }
             // Key shares, history notifications and the like are not group content.
-            _ => return None,
-        }
-    } else if let Some(reaction) = &message.reaction_message {
-        let target = target(reaction.key.as_ref()?, &author)?;
-        let revision = reaction.sender_timestamp_ms.unwrap_or(0);
-        (
+            _ => None,
+        };
+    }
+    if let Some(reaction) = &message.reaction_message {
+        let target = target(reaction.key.as_ref()?, author)?;
+        return Some(Content::new(
             MessageKind::Reaction,
             reaction.text.clone().unwrap_or_default(),
             Some(target),
-            revision,
-        )
-    } else if let Some(attachment) = attachment_of(message) {
-        match media_of(&attachment, seal) {
-            Some(part) => {
-                media.push(part);
-                (
+            reaction.sender_timestamp_ms.unwrap_or(0),
+        ));
+    }
+    if let Some(pin) = message.pin_in_chat_message.as_ref() {
+        let line = rich::pin_line(pin)?;
+        return Some(Content {
+            rich: Some(RichContent::System(line)),
+            ..Content::new(
+                MessageKind::System,
+                String::new(),
+                target(pin.key.as_ref()?, author),
+                0,
+            )
+        });
+    }
+    if let Some(call) = message.call_log_messsage.as_ref() {
+        return Some(Content {
+            rich: Some(RichContent::System(rich::call_line(call))),
+            ..Content::new(MessageKind::System, String::new(), None, 0)
+        });
+    }
+    if let Some(attachment) = attachment_of(message) {
+        let context = context_of(message);
+        return Some(match media_of(&attachment, seal) {
+            Some(part) => Content {
+                media: vec![part],
+                context,
+                ..Content::new(
                     MessageKind::Text,
                     attachment.caption.unwrap_or_default().to_owned(),
-                    None,
+                    quote_of(context),
                     0,
                 )
-            }
-            None => (
-                MessageKind::Unsupported,
-                UNSUPPORTED_TEXT.to_owned(),
-                None,
-                0,
-            ),
-        }
-    } else if let Some((text, context)) = text_of(message) {
-        let quote = context.and_then(|context| {
-            Some(Target {
-                source_id: context.stanza_id.clone()?,
-                sender_jid: person_text(context.participant.as_deref()?)?,
-            })
+            },
+            None => Content::unsupported(UNSUPPORTED_TEXT),
         });
-        (MessageKind::Text, text, quote, 0)
-    } else {
-        (
-            MessageKind::Unsupported,
-            UNSUPPORTED_TEXT.to_owned(),
-            None,
-            0,
-        )
+    }
+    if let Some(rich_content) = rich::rich_of(message) {
+        let context = rich::rich_context(message);
+        return Some(Content {
+            rich: Some(rich_content),
+            context,
+            ..Content::new(MessageKind::Rich, String::new(), quote_of(context), 0)
+        });
+    }
+    if let Some(text) = text_of(message) {
+        let context = context_of(message);
+        return Some(Content {
+            context,
+            ..Content::new(MessageKind::Text, text, quote_of(context), 0)
+        });
+    }
+    Some(Content::unsupported(UNSUPPORTED_TEXT))
+}
+
+fn inbound_message(
+    account: Uuid,
+    event: &whatsmeow::types::events::Message,
+    author: &str,
+    now: DateTime<Utc>,
+    history: bool,
+    content: Content<'_>,
+) -> InboundEvent {
+    let info = &event.info;
+    let sender = Identity {
+        jid: author.to_owned(),
+        alternate_jid: person(&info.sender_alt),
+        display_name: (!info.push_name.is_empty()).then(|| info.push_name.clone()),
     };
-    let kind_name = match kind {
-        MessageKind::Text => "text",
-        MessageKind::Reaction => "reaction",
-        MessageKind::Edit => "edit",
-        MessageKind::Delete => "delete",
-        MessageKind::Unsupported => "unsupported",
-    };
-    let revision_text = revision.to_string();
-    Some(InboundEvent {
+    let revision_text = content.revision.to_string();
+    let mentions = content
+        .context
+        .map(|context| {
+            context
+                .mentioned_jid
+                .iter()
+                .filter_map(|jid| person_text(jid))
+                .collect()
+        })
+        .unwrap_or_default();
+    let (group_jid, chat_alternate_jid) =
+        chat_of(info).unwrap_or_else(|| (info.chat.to_non_ad().to_string(), None));
+    InboundEvent {
         event_id: event_id(
             account,
             &[
                 "message",
                 &info.chat.to_string(),
-                &author,
+                author,
                 info.id.as_str(),
-                kind_name,
+                content.kind.as_str(),
                 &revision_text,
             ],
         ),
-        group_jid: info.chat.to_non_ad().to_string(),
-        source_at,
+        group_jid,
+        chat_alternate_jid,
+        source_at: info.timestamp.unwrap_or(now),
         observed_at: now,
         kind: InboundKind::Message(Message {
             source_id: info.id.to_string(),
             sender,
-            kind,
-            text,
+            kind: content.kind,
+            text: content.text,
             from_me: info.is_from_me,
             history,
-            revision,
-            target,
-            media,
+            revision: content.revision,
+            target: content.target,
+            media: content.media,
+            mentions,
+            forwarded: content
+                .context
+                .is_some_and(|context| context.is_forwarded.unwrap_or(false)),
+            view_once: event.is_view_once || message_view_once(event.message.as_ref()),
+            rich: content.rich,
         }),
+    }
+}
+
+/// A decrypted vote on a poll in a group: the options the voter chose now.
+pub fn map_poll_vote(
+    account: Uuid,
+    event: &whatsmeow::types::events::Message,
+    selected: &[Vec<u8>],
+    now: DateTime<Utc>,
+) -> Option<InboundEvent> {
+    let info = &event.info;
+    chat_of(info)?;
+    let author = person(&info.sender)?;
+    let update = event.message.as_ref()?.poll_update_message.as_ref()?;
+    let poll = target(update.poll_creation_message_key.as_ref()?, &author)?;
+    let content = Content {
+        rich: Some(rich::poll_vote(selected)),
+        ..Content::new(
+            MessageKind::PollVote,
+            String::new(),
+            Some(poll),
+            update.sender_timestamp_ms.unwrap_or(0),
+        )
+    };
+    Some(inbound_message(
+        account,
+        event,
+        &author,
+        now,
+        !event.unavailable_request_id.is_empty(),
+        content,
+    ))
+}
+
+/// The votes a history page carries on a poll message (already decrypted by
+/// the phone), one event per voter.
+pub fn history_poll_votes(
+    account: Uuid,
+    event: &whatsmeow::types::events::Message,
+    now: DateTime<Utc>,
+) -> Vec<InboundEvent> {
+    let Some(web) = event.source_web_msg.as_ref() else {
+        return vec![];
+    };
+    let Some(poll_author) = person(&event.info.sender) else {
+        return vec![];
+    };
+    let Some((group_jid, chat_alternate_jid)) = chat_of(&event.info) else {
+        return vec![];
+    };
+    let direct = event.info.chat.server != GROUP_SERVER;
+    let poll = Target {
+        source_id: event.info.id.clone(),
+        sender_jid: poll_author,
+    };
+    web.poll_updates
+        .iter()
+        .filter_map(|update| {
+            let key = update.poll_update_message_key.as_ref()?;
+            let voter = if key.from_me.unwrap_or(false) {
+                person(&event.info.sender).filter(|_| event.info.is_from_me)?
+            } else if direct {
+                // A direct chat's only other voter is the other person.
+                person_text(key.participant.as_deref().unwrap_or(&group_jid))?
+            } else {
+                person_text(key.participant.as_deref()?)?
+            };
+            let vote = update.vote.as_ref()?;
+            let source_id = key.id.clone()?;
+            let revision = update.sender_timestamp_ms.unwrap_or(0);
+            let source_at = DateTime::from_timestamp_millis(revision).unwrap_or(now);
+            Some(InboundEvent {
+                event_id: event_id(
+                    account,
+                    &[
+                        "message",
+                        &event.info.chat.to_string(),
+                        &voter,
+                        &source_id,
+                        MessageKind::PollVote.as_str(),
+                        &revision.to_string(),
+                    ],
+                ),
+                group_jid: group_jid.clone(),
+                chat_alternate_jid: chat_alternate_jid.clone(),
+                source_at,
+                observed_at: now,
+                kind: InboundKind::Message(Message {
+                    source_id,
+                    sender: Identity {
+                        jid: voter,
+                        alternate_jid: None,
+                        display_name: None,
+                    },
+                    from_me: key.from_me.unwrap_or(false),
+                    kind: MessageKind::PollVote,
+                    text: String::new(),
+                    history: true,
+                    revision,
+                    target: Some(poll.clone()),
+                    media: vec![],
+                    mentions: vec![],
+                    forwarded: false,
+                    view_once: false,
+                    rich: Some(rich::poll_vote(&vote.selected_options)),
+                }),
+            })
+        })
+        .collect()
+}
+
+/// A system line from a group notification, which has no message id: the
+/// line gets a stable one from what it says.
+fn system_event(
+    account: Uuid,
+    group: &Jid,
+    actor: Option<&Jid>,
+    actor_pn: Option<&Jid>,
+    at: Option<DateTime<Utc>>,
+    mut line: SystemLine,
+    now: DateTime<Utc>,
+) -> InboundEvent {
+    let group = group.to_non_ad().to_string();
+    let actor = actor.and_then(person);
+    line.by_whatsapp = actor.is_none();
+    let source_at = at.unwrap_or(now);
+    // The same change seen by several accounts is one line: its id comes
+    // from what it says, never from who saw it.
+    let said = [
+        "system",
+        &group,
+        &source_at.timestamp().to_string(),
+        &serde_json::to_string(&line).unwrap_or_default(),
+    ]
+    .join("\n");
+    let source = Uuid::new_v5(&EVENT_NAMESPACE, said.as_bytes());
+    InboundEvent {
+        event_id: event_id(account, &[&said]),
+        source_at,
+        observed_at: now,
+        kind: InboundKind::Message(Message {
+            source_id: format!("SYSTEM-{}", source.simple()).to_uppercase(),
+            sender: Identity {
+                jid: actor.unwrap_or_else(|| group.clone()),
+                alternate_jid: actor_pn.and_then(person),
+                display_name: None,
+            },
+            from_me: false,
+            kind: MessageKind::System,
+            text: String::new(),
+            history: false,
+            revision: 0,
+            target: None,
+            media: vec![],
+            mentions: vec![],
+            forwarded: false,
+            view_once: false,
+            rich: Some(RichContent::System(line)),
+        }),
+        group_jid: group,
+        chat_alternate_jid: None,
+    }
+}
+
+/// The system lines of a live group notification, each its own event.
+pub fn map_group_info(account: Uuid, change: &GroupInfo, now: DateTime<Utc>) -> Vec<InboundEvent> {
+    let actor = change.sender.as_ref().and_then(person);
+    rich::group_info_lines(change, actor.as_deref())
+        .into_iter()
+        .map(|line| {
+            system_event(
+                account,
+                &change.jid,
+                change.sender.as_ref(),
+                change.sender_pn.as_ref(),
+                change.timestamp,
+                line,
+                now,
+            )
+        })
+        .collect()
+}
+
+/// A new (or removed) group icon, as a system line.
+pub fn map_group_picture(
+    account: Uuid,
+    picture: &whatsmeow::types::events::Picture,
+    now: DateTime<Utc>,
+) -> Option<InboundEvent> {
+    (picture.jid.server == GROUP_SERVER).then(|| {
+        system_event(
+            account,
+            &picture.jid,
+            (!picture.author.is_empty()).then_some(&picture.author),
+            None,
+            picture.timestamp,
+            rich::icon_line(),
+            now,
+        )
     })
 }
 
@@ -463,13 +972,16 @@ fn map_receipt(
     now: DateTime<Utc>,
 ) -> Option<InboundEvent> {
     let source = &receipt.source;
-    if source.chat.server != GROUP_SERVER || receipt.message_ids.is_empty() {
+    if receipt.message_ids.is_empty() {
         return None;
     }
+    let (group_jid, chat_alternate_jid) = chat_of(source)?;
     let participant = person(&source.sender)?;
     let state = match receipt.r#type.as_str() {
-        "" => "delivered",
-        other => other,
+        "" => ReceiptState::Delivered,
+        "read" => ReceiptState::Read,
+        "played" => ReceiptState::Played,
+        _ => return None,
     };
     let source_ids: Vec<String> = receipt
         .message_ids
@@ -484,27 +996,56 @@ fn map_receipt(
                 "receipt",
                 &source.chat.to_string(),
                 &participant,
-                state,
+                state.as_ref(),
                 &joined,
             ],
         ),
-        group_jid: source.chat.to_non_ad().to_string(),
+        group_jid,
+        chat_alternate_jid,
         source_at: receipt.timestamp.unwrap_or(now),
         observed_at: now,
         kind: InboundKind::Receipt(Receipt {
             source_ids,
             participant_jid: participant,
-            state: state.to_owned(),
+            state,
         }),
     })
 }
 
+/// The chat a message or receipt belongs to: the group, or a direct chat's
+/// other person, by phone number when the addressing carries it, with their
+/// other address. `None` for what isn't a chat (status, broadcasts, channels).
+fn chat_of(source: &MessageSource) -> Option<(String, Option<String>)> {
+    let chat = source.chat.to_non_ad();
+    match chat_kind(&chat)? {
+        ExternalChatKind::Group => Some((chat.to_string(), None)),
+        ExternalChatKind::Direct => {
+            let alternate = if source.is_from_me {
+                &source.recipient_alt
+            } else {
+                &source.sender_alt
+            };
+            let other = (!alternate.is_empty() && alternate.server != chat.server)
+                .then(|| alternate.to_non_ad())
+                .filter(|other| chat_kind(other) == Some(ExternalChatKind::Direct));
+            Some(match other {
+                Some(phone) if phone.server == DEFAULT_USER_SERVER => {
+                    (phone.to_string(), Some(chat.to_string()))
+                }
+                other => (chat.to_string(), other.map(|other| other.to_string())),
+            })
+        }
+    }
+}
+
 /// A chat in the account's list: groups, and direct chats with people.
 /// Status updates, broadcasts and channels are not chats.
-fn chat_kind(jid: &Jid) -> Option<ChatKind> {
+fn chat_kind(jid: &Jid) -> Option<ExternalChatKind> {
     match jid.server.as_str() {
-        GROUP_SERVER => Some(ChatKind::Group),
-        DEFAULT_USER_SERVER | HIDDEN_USER_SERVER if !jid.user.is_empty() => Some(ChatKind::Direct),
+        GROUP_SERVER => Some(ExternalChatKind::Group),
+        DEFAULT_USER_SERVER | HIDDEN_USER_SERVER if !jid.user.is_empty() => {
+            Some(ExternalChatKind::Direct)
+        }
         _ => None,
     }
 }
@@ -550,7 +1091,7 @@ pub fn message_chat(event: &whatsmeow::types::events::Message) -> Option<ChatUpd
         jid: chat.to_string(),
         kind,
         // A direct chat is named after the other person, never after us.
-        name: (kind == ChatKind::Direct && !info.is_from_me && !info.push_name.is_empty())
+        name: (kind == ExternalChatKind::Direct && !info.is_from_me && !info.push_name.is_empty())
             .then(|| info.push_name.clone()),
         last_activity_at: Some(at),
         archived: None,
@@ -582,7 +1123,7 @@ pub fn web_message_anchor(message: &WebMessageInfo) -> Option<MessageAnchor> {
 
 /// The chat of a history-sync conversation, by phone number when WhatsApp
 /// gave one for a LID chat.
-fn conversation_chat(conversation: &Conversation) -> Option<(Jid, ChatKind)> {
+fn conversation_chat(conversation: &Conversation) -> Option<(Jid, ExternalChatKind)> {
     let id: Jid = conversation.id.parse().ok()?;
     let id = match (id.server.as_str(), conversation.pn_jid.as_deref()) {
         (HIDDEN_USER_SERVER, Some(pn)) => pn.parse().unwrap_or(id),
@@ -643,9 +1184,9 @@ pub fn history_chats(history: &HistorySync) -> Vec<ChatUpdate> {
 fn push_name_chat(push_name: &Pushname) -> Option<ChatUpdate> {
     let jid: Jid = push_name.id.as_deref()?.parse().ok()?;
     let name = push_name.pushname.as_deref()?.trim();
-    (chat_kind(&jid) == Some(ChatKind::Direct) && !name.is_empty()).then(|| ChatUpdate {
+    (chat_kind(&jid) == Some(ExternalChatKind::Direct) && !name.is_empty()).then(|| ChatUpdate {
         jid: jid.to_non_ad().to_string(),
-        kind: ChatKind::Direct,
+        kind: ExternalChatKind::Direct,
         name: Some(name.to_owned()),
         last_activity_at: None,
         archived: None,
@@ -685,7 +1226,7 @@ pub fn chat_setting(event: &Event) -> Option<ChatUpdate> {
             setting_chat(&push_name.jid, |chat| {
                 chat.name = Some(push_name.new_push_name.clone());
             })
-            .filter(|chat| chat.kind == ChatKind::Direct)
+            .filter(|chat| chat.kind == ExternalChatKind::Direct)
         }
         Event::Contact(contact) => {
             let action = contact.action.as_ref()?;
@@ -695,7 +1236,7 @@ pub fn chat_setting(event: &Event) -> Option<ChatUpdate> {
                 .or(action.first_name.as_deref())
                 .filter(|name| !name.trim().is_empty())?;
             setting_chat(&contact.jid, |chat| chat.name = Some(name.to_owned()))
-                .filter(|chat| chat.kind == ChatKind::Direct)
+                .filter(|chat| chat.kind == ExternalChatKind::Direct)
         }
         _ => None,
     }
@@ -710,7 +1251,7 @@ pub async fn complete_chats(
 ) {
     for chat in chats
         .iter_mut()
-        .filter(|chat| chat.kind == ChatKind::Direct)
+        .filter(|chat| chat.kind == ExternalChatKind::Direct)
     {
         let Ok(mut jid) = chat.jid.parse::<Jid>() else {
             continue;

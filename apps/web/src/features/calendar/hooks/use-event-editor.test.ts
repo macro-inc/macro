@@ -504,6 +504,33 @@ describe('scheduling a Macro call', () => {
     }
   });
 
+  it('reports the created event before it closes', async () => {
+    const order: string[] = [];
+    const created = vi.fn(() => order.push('created'));
+    const [editor, dispose] = createRoot(
+      (dispose) =>
+        [
+          useEventEditor({
+            macroCallsEnabled: () => false,
+            event: () => undefined,
+            onCreated: created,
+            onSaved: () => order.push('saved'),
+          }),
+          dispose,
+        ] as const
+    );
+    try {
+      await editor.save(values);
+      expect(created).toHaveBeenCalledExactlyOnceWith({
+        eventId: 'event-1',
+        time: values.time,
+      });
+      expect(order).toEqual(['created', 'saved']);
+    } finally {
+      dispose();
+    }
+  });
+
   it.each(['off', 'loading'] as const)(
     'preserves an existing Macro link without syncing it while %s',
     async (state) => {
@@ -1066,7 +1093,8 @@ describe('guests of an event the viewer was invited to', () => {
     event: CalendarEvent,
     invitesEnabled: boolean,
     onDetailsLocked?: () => void,
-    syncedEvent?: () => CalendarEvent | undefined
+    syncedEvent?: () => CalendarEvent | undefined,
+    forwardEnabled = invitesEnabled
   ) {
     return createRoot((dispose) => ({
       editor: useEventEditor({
@@ -1075,6 +1103,7 @@ describe('guests of an event the viewer was invited to', () => {
         onSaved: vi.fn(),
         macroCallsEnabled: () => false,
         guestInvitesEnabled: () => invitesEnabled,
+        invitationForwardEnabled: () => forwardEnabled,
         onDetailsLocked,
       }),
       dispose,
@@ -1183,10 +1212,21 @@ describe('guests of an event the viewer was invited to', () => {
     }
   });
 
-  it('explains why a guest the organizer does not let invite cannot add guests', () => {
+  it('explains why a guest the organizer does not let invite cannot add guests, and offers the forward', () => {
     const { editor, dispose } = editorFor(invitedEvent(mayNotInvite), true);
     try {
       expect(editor.disabledFields()?.guests).toBe(true);
+      expect(editor.guestsReadOnlyReason()).toBe(
+        "Only the organizer can invite guests. You can forward the invitation instead. The people you send it to get the event by email but won't be on the guest list."
+      );
+    } finally {
+      dispose();
+    }
+  });
+
+  it('explains without offering the forward while forwarding is off', () => {
+    const { editor, dispose } = editorFor(invitedEvent(mayNotInvite), false);
+    try {
       expect(editor.guestsReadOnlyReason()).toBe(
         'Only the organizer can invite guests.'
       );

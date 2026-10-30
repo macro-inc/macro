@@ -17,6 +17,7 @@ import { useSearchInputFocus } from '@property/utils';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';
+import { cn } from '@ui';
 import * as EmailValidator from 'email-validator';
 import {
   createEffect,
@@ -51,6 +52,8 @@ type EntityInputProps = {
     entityInfo?: { id: string; entity_type: EntityType }[]
   ) => void;
   onClose?: () => void;
+  /** Escape in the search; `onClose` when absent, as a popover saves on close. */
+  onCancel?: () => void;
   pinnedOptions?: PinnedOption[];
 };
 
@@ -359,7 +362,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       }
     } else {
       newSelected.clear();
-      newSelected.add(entity.id);
+      if (!isCurrentlySelected) newSelected.add(entity.id);
     }
 
     props.setSelectedOptions(newSelected, [
@@ -454,9 +457,12 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   useSearchInputFocus(() => searchInputRef);
 
+  const fills = () => props.config.fillHeight === true;
+  const keepSearchFocus = (event: Event) => event.preventDefault();
+
   return (
-    <div>
-      <div class="relative">
+    <div class={cn(fills() && 'flex min-h-0 flex-1 flex-col')}>
+      <div class="relative shrink-0">
         <div class="flex w-full items-center py-2 gap-2 px-2 border-b border-edge-muted">
           <SearchIcon class="size-4 text-ink-muted" />
           <input
@@ -469,9 +475,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
               if (e.key === 'Escape') {
                 e.preventDefault();
                 e.stopPropagation();
-                if (props.onClose) {
-                  props.onClose();
-                }
+                (props.onCancel ?? props.onClose)?.();
               }
             }}
             placeholder={props.config.placeholder}
@@ -480,7 +484,14 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       </div>
 
       <Show when={totalCount() > 0}>
-        <div class="p-1.5">
+        {/* Picking a row keeps focus in the search field: a tap that moved
+            it would drop the phone keyboard until the refocus below. iOS
+            devices still send mousedown after a cancelled pointerdown. */}
+        <div
+          class={cn('p-1.5', fills() && 'flex min-h-0 flex-1 flex-col')}
+          onPointerDown={keepSearchFocus}
+          onMouseDown={keepSearchFocus}
+        >
           <For each={visiblePinnedOptions()}>
             {(option, i) => {
               const isSelected = () => props.selectedOptions().has(option.id);
@@ -488,7 +499,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
               return (
                 <div
-                  class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0"
+                  class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0 touch:min-h-12"
                   classList={{
                     'bg-hover': isKeyboardSelected(),
                   }}
@@ -519,9 +530,12 @@ export function PropertyEntitySelector(props: EntityInputProps) {
             <div
               ref={scrollContainerRef}
               style={{
-                'max-height': `${MAX_LIST_HEIGHT}px`,
+                'max-height': fills() ? undefined : `${MAX_LIST_HEIGHT}px`,
               }}
-              class="overflow-y-auto overflow-x-hidden scrollbar-hidden"
+              class={cn(
+                'overflow-y-auto overflow-x-hidden scrollbar-hidden',
+                fills() && 'min-h-0 flex-1'
+              )}
             >
               <For each={sortedEntities()}>
                 {(entity, index) => {
@@ -538,7 +552,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                       </Show>
                       <div
                         data-entity-index={index()}
-                        class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0"
+                        class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0 touch:min-h-12"
                         classList={{
                           'bg-hover': isKeyboardSelected(),
                         }}
@@ -631,7 +645,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
               const entity = () => customEmailEntity();
               return (
                 <div
-                  class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0"
+                  class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0 touch:min-h-12"
                   classList={{
                     'bg-hover': rowIndex() === selectedIndex(),
                   }}

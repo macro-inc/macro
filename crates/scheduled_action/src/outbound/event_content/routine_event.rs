@@ -18,9 +18,9 @@ use properties::EntityPropertyInfo;
 use rootcause::Report;
 use system_properties::SystemPropertyKey;
 use trigger_context::{
-    CallSnapshot, CallStartedSnapshot, ChannelType, ContextMessage, ContextPerson, ContextThread,
-    DiscussionContext, DiscussionSurface, DocumentSnapshot, EmailSnapshot, ReplyTarget,
-    RoutineEvent, TaskSnapshot, TranscriptLine,
+    CallSnapshot, CallStartedSnapshot, ChannelType, ContextAttachment, ContextMessage,
+    ContextPerson, ContextThread, DiscussionContext, DiscussionSurface, DocumentSnapshot,
+    EmailSnapshot, GithubDelivery, ReplyTarget, RoutineEvent, TaskSnapshot, TranscriptLine,
 };
 
 use super::{
@@ -41,6 +41,7 @@ pub(super) fn routine_event(
     content: EventContent,
 ) -> Result<RoutineEvent, Report> {
     let name = event.event_name();
+    let entity_id = || super::entity_id(event);
     match content {
         EventContent::Document {
             document,
@@ -49,7 +50,7 @@ pub(super) fn routine_event(
         } => document_event(name, document, &properties, markdown.as_deref()),
         EventContent::Email(message) => match (name, message) {
             (EventName::EmailMessageReceived, Some(message)) => Ok(RoutineEvent::EmailReceived {
-                email: email_snapshot(event.entity_id(), &message),
+                email: email_snapshot(entity_id()?, &message),
             }),
             (EventName::EmailMessageReceived, None) => {
                 Err(rootcause::report!("the email is no longer available"))
@@ -57,20 +58,29 @@ pub(super) fn routine_event(
             (name, _) => Err(mismatch(name)),
         },
         EventContent::Channel { channel, message } => {
-            channel_event(name, event.entity_id(), channel, message)
+            channel_event(name, entity_id()?, channel, message)
         }
         EventContent::Call(record) => match (name, record) {
             (EventName::CallStarted, Some(record)) => Ok(RoutineEvent::CallStarted {
-                call: call_started_snapshot(event.entity_id(), record)?,
+                call: call_started_snapshot(entity_id()?, record)?,
             }),
             (EventName::CallEnded, Some(record)) => Ok(RoutineEvent::CallEnded {
-                call: call_snapshot(event.entity_id(), record)?,
+                call: call_snapshot(entity_id()?, record)?,
             }),
             (EventName::CallStarted | EventName::CallEnded, None) => {
                 Err(rootcause::report!("the call record is no longer available"))
             }
             (name, _) => Err(mismatch(name)),
         },
+        EventContent::Github(delivery) => Ok(RoutineEvent::Github {
+            delivery: GithubDelivery {
+                event: delivery.event,
+                action: delivery.action,
+                repository: delivery.repository.map(|repository| repository.full_name),
+                sender: delivery.sender.map(|sender| sender.login),
+                payload: delivery.payload,
+            },
+        }),
     }
 }
 
@@ -335,6 +345,7 @@ fn discussion(
     let prompt_message_id = message.id;
     match message.thread_id.filter(|root| *root != message.id) {
         Some(root_id) => DiscussionContext {
+            agent_request: None,
             surface,
             prompt_message_id,
             sender,
@@ -343,6 +354,7 @@ fn discussion(
             channel: Vec::new(),
         },
         None => DiscussionContext {
+            agent_request: None,
             surface,
             prompt_message_id,
             sender,
@@ -396,6 +408,15 @@ fn context_message(message: &Message) -> ContextMessage {
         author: author(message),
         content: truncate(&message.content),
         posted_at: message.created_at,
+        attachments: message
+            .attachments
+            .iter()
+            .map(|attachment| ContextAttachment {
+                entity_type: attachment.entity_type.clone(),
+                entity_id: attachment.entity_id.clone(),
+                url: None,
+            })
+            .collect(),
     }
 }
 

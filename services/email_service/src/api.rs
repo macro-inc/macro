@@ -1,3 +1,4 @@
+mod calendar_event_forward;
 mod calendar_invitations;
 use anyhow::Context;
 use axum::Router;
@@ -75,6 +76,10 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .route(
             "/email/threads/{thread_id}/messages/{message_id}/calendar-invitations/{invitation_id}/copy",
             axum::routing::post(calendar_invitations::copy_handler),
+        )
+        .route(
+            "/email/calendar-events/{event_id}/forward",
+            axum::routing::post(calendar_event_forward::handler),
         )
         .nest("/email", email::router(state))
         .nest("/gmail", gmail::router())

@@ -78,6 +78,9 @@ use referral::{
     domain::service::ReferralServiceImpl,
     outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
 };
+use user_language::{
+    domain::service::UserLanguageServiceImpl, outbound::pg_user_language_repo::PgUserLanguageRepo,
+};
 
 use crate::{
     api::{
@@ -461,6 +464,7 @@ pub async fn run() -> anyhow::Result<()> {
                     messages::outbound::connection_gateway::ConnectionGatewayMessages(
                         connection_gateway_client,
                     ),
+                    channels::outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
                 ),
             ),
         )
@@ -502,6 +506,10 @@ pub async fn run() -> anyhow::Result<()> {
             redis: redis_client,
         },
     };
+    let user_language_service = Arc::new(UserLanguageServiceImpl::new(PgUserLanguageRepo::new(
+        db.clone(),
+    )));
+
     let referral_service = ReferralServiceImpl {
         repo: PgReferralRepo::new(db.clone()),
         discount_client: StripeDiscountClient::new(
@@ -744,6 +752,7 @@ pub async fn run() -> anyhow::Result<()> {
             favorites_service: Arc::new(favorites_service),
             entity_access_service: entity_access_service_impl,
             referral_service: Arc::new(referral_service),
+            user_language_service,
             gtm_invite_service,
             native_app_service: Arc::new(NativeAppServiceImpl {
                 bundle_fetcher: DefaultBundleFetcher::new(

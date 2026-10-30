@@ -9,66 +9,60 @@ default = []
 # Port traits and the domain services built on them.
 ports = [
   "dep:async-trait",
-  "dep:entity_access",
   "dep:macro_user_id",
   "dep:rootcause",
-  "entity_access/ports",
+  "external_chat/ports",
 ]
 # Postgres adapters, shared by DSS and the session service.
 outbound = [
-  "dep:entity_access",
   "dep:entity_access_db_utils",
   "dep:entity_registry_db_utils",
-  "dep:model-entity",
   "dep:model_owner",
   "dep:share_permission_db_utils",
-  "dep:opentelemetry",
   "dep:sqlx",
-  "dep:tracing-opentelemetry",
-  "entity_access/ports",
-  "entity_access/outbound",
+  "external_chat/outbound",
   "ports",
 ]
 # DSS HTTP routes.
 inbound = [
   "dep:axum",
-  "dep:entity_access",
   "dep:macro_authorization",
-  "entity_access/inbound",
+  "external_chat/inbound",
   "ports",
   "schema",
 ]
-schema = ["dep:utoipa"]
+schema = ["dep:utoipa", "external_chat/schema"]
 
 [dependencies]
-models_permissions = { path = "../models_permissions" }
-share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
-entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils", optional = true }
-entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
-model_owner = { path = "../model_owner", optional = true }
-model-entity = { path = "../model-entity", optional = true }
-opentelemetry = { workspace = true, features = ["trace"], optional = true }
 async-trait = { workspace = true, optional = true }
-axum = { workspace = true, features = ["multipart"], optional = true }
+axum = { workspace = true, optional = true }
 chrono = { workspace = true }
-entity_access = { path = "../entity_access", default-features = false, optional = true }
+entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
+entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils", optional = true }
+external_chat = { path = "../external_chat" }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"], optional = true }
 macro_user_id = { path = "../macro_user_id", optional = true }
+model-entity = { path = "../model-entity" }
+model_owner = { path = "../model_owner", optional = true }
+nom = { workspace = true }
 rootcause = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
+share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
 sqlx = { workspace = true, optional = true }
-thiserror = { workspace = true }
+strum = { workspace = true }
 tracing = { workspace = true }
-tracing-opentelemetry = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+entity_access = { path = "../entity_access", default-features = false, features = ["inbound", "outbound", "ports"] }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
+image = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 model_user = { path = "../model_user" }
+models_permissions = { path = "../models_permissions" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower = { workspace = true, features = ["util"] }

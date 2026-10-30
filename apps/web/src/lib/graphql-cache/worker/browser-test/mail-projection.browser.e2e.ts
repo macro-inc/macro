@@ -1,6 +1,113 @@
 import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 
+test('server-confirmed invitations survive missing cache metadata and confirmed archives still leave Inbox', async ({
+  page,
+}) => {
+  const scope = `mail-membership-${crypto.randomUUID()}`;
+  await page.goto(`/mail-projection.html?scope=${scope}`);
+  await expect(page.locator('#result')).toHaveAttribute(
+    'data-status',
+    'ready',
+    { timeout: 60_000 }
+  );
+  const result = await page.evaluate(
+    async ({ scope, modulePath }) => {
+      const { createWorkerCacheHost } = (await import(
+        modulePath
+      )) as typeof import('../../host/worker-host');
+      const host = createWorkerCacheHost({ scope });
+      const id = (n: number) =>
+        `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
+      const key = (n: number) => `GraphqlSoupEmailThread:${id(n)}`;
+      const query = `query MailUpdate { user { id soup(input:{initial:{limit:100,emailView:INBOX}}) { items { __typename id ... on GraphqlSoupEmailThread { inboxVisible isRead } } } } }`;
+      const write = (n: number, inboxVisible: boolean) =>
+        host.writeQuery({
+          query,
+          identity: 'offline-mail-viewer',
+          data: {
+            user: {
+              id: 'offline-mail-viewer',
+              soup: {
+                items: [
+                  {
+                    __typename: 'GraphqlSoupEmailThread',
+                    id: id(n),
+                    inboxVisible,
+                    isRead: false,
+                  },
+                ],
+              },
+            },
+          },
+        });
+      const filters = Object.fromEntries(
+        [
+          ['documentFilter', 'id'],
+          ['projectFilter', 'projectIdSelf'],
+          ['chatFilter', 'chatId'],
+          ['calendarEventFilter', 'id'],
+          ['channelFilter', 'channelId'],
+          ['channelThreadFilter', 'threadId'],
+          ['callFilter', 'callId'],
+          ['crmCompanyFilter', 'id'],
+          ['foreignEntityFilter', 'id'],
+        ].map(([field, literal]) => [field, { literal: { [literal]: id(0) } }])
+      );
+      try {
+        await write(76, true);
+        const baseline = [76, 60].map((n) => ({
+          key: key(n),
+          sortTimestamp: '2026-01-01T00:00:00Z',
+        }));
+        const read = () =>
+          host.entityFilter({
+            filters,
+            sortMethod: 'UPDATED_AT',
+            sortDirection: 'DESC',
+            limit: 10,
+            baseline,
+            mail: { view: 'INBOX' },
+          });
+        const before = await read();
+        // Unrelated cache revisions used to replace the server list with a partial local page.
+        await write(50, true);
+        const refreshed = await read();
+        await write(60, false);
+        const archived = await read();
+        if (
+          before.kind !== 'mail-page' ||
+          refreshed.kind !== 'mail-page' ||
+          archived.kind !== 'mail-page'
+        )
+          throw new Error('expected cached Mail pages');
+        return {
+          retained: before.retainedKeys,
+          visibleBefore: before.keys.includes(key(76)),
+          visibleAfterRefresh: refreshed.keys.includes(key(76)),
+          visibleAfterArchive: archived.keys.includes(key(76)),
+          archivedRemoved: !archived.keys.includes(key(60)),
+          inviteKey: key(76),
+        };
+      } finally {
+        host.dispose();
+      }
+    },
+    {
+      scope,
+      modulePath: `/@fs${fileURLToPath(new URL('../../host/worker-host.ts', import.meta.url))}`,
+    }
+  );
+  expect(result).toEqual({
+    retained: [result.inviteKey],
+    visibleBefore: true,
+    visibleAfterRefresh: true,
+    visibleAfterArchive: true,
+    archivedRemoved: true,
+    inviteKey: result.inviteKey,
+  });
+});
+
 test('delivered reminders immediately lead cached Signal, including sent-only threads', async ({
   page,
 }) => {
@@ -269,4 +376,225 @@ test('new Mail filter combinations and pagination work offline without bodies or
   } finally {
     await context.setOffline(false);
   }
+});
+
+test('retained mail applies optimistic flags, rollback and committed actions without hydration', async ({
+  page,
+}) => {
+  const scope = `retained-actions-${crypto.randomUUID()}`;
+  await page.goto(`/mail-projection.html?scope=${scope}`);
+  await expect(page.locator('#result')).toHaveAttribute(
+    'data-status',
+    'ready',
+    { timeout: 60_000 }
+  );
+  const result = await page.evaluate(
+    async ({ scope, hostPath, readerPath, selectionPath, documentsPath }) => {
+      const { createWorkerCacheHost } = (await import(
+        hostPath
+      )) as typeof import('../../host/worker-host');
+      const { readSoupPage } = (await import(
+        readerPath
+      )) as typeof import('../../../queries/soup/graphql/read-soup-page');
+      const { selectRecords } = (await import(
+        selectionPath
+      )) as typeof import('../../exchange/record-selection');
+      const { MailItemFieldsFragmentDoc } = (await import(
+        documentsPath
+      )) as typeof import('../../../service-clients/service-storage/graphql/generated/graphql');
+      const host = createWorkerCacheHost({ scope });
+      const id = '00000000-0000-0000-0000-000000000076';
+      const key = `GraphqlSoupEmailThread:${id}`;
+      const snapshot: Extract<
+        import('../../../service-clients/service-storage/graphql-soup').GraphqlSoupItem,
+        { __typename: 'GraphqlSoupEmailThread' }
+      > = {
+        __typename: 'GraphqlSoupEmailThread',
+        id,
+        entityType: 'EMAIL_THREAD',
+        displayName: 'Invitation',
+        emailName: 'Invitation',
+        providerId: null,
+        ownerId: 'offline-mail-viewer',
+        linkId: '00000000-0000-0000-0000-000000001000',
+        inboxVisible: true,
+        hasReceivedMail: true,
+        isRead: false,
+        isSignal: false,
+        isImportant: false,
+        isDraft: false,
+        isFavorited: false,
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+        viewedAt: null,
+        latestInboundMessageTs: '2026-01-01T00:00:00Z',
+        latestOutboundMessageTs: null,
+        latestNonSpamMessageTs: null,
+        reminderReturnedAt: null,
+        projectId: null,
+        cacheProjection: null,
+        frecencyScore: null,
+        snippet: 'Fetched preview',
+        senderEmail: null,
+        senderName: null,
+        senderPhotoUrl: null,
+        notifications: [],
+        participants: [],
+        attachments: [],
+        labels: [],
+        properties: [],
+        mailDraftState: null,
+        mailAllPreview: null,
+        mailDraftPreview: null,
+        mailSentPreview: null,
+      };
+      const filters = Object.fromEntries(
+        [
+          ['documentFilter', 'id'],
+          ['projectFilter', 'projectIdSelf'],
+          ['chatFilter', 'chatId'],
+          ['calendarEventFilter', 'id'],
+          ['channelFilter', 'channelId'],
+          ['channelThreadFilter', 'threadId'],
+          ['callFilter', 'callId'],
+          ['crmCompanyFilter', 'id'],
+          ['foreignEntityFilter', 'id'],
+        ].map(([field, literal]) => [
+          field,
+          { literal: { [literal]: '00000000-0000-0000-0000-000000000000' } },
+        ])
+      );
+      const read = async (unread = false) => {
+        const page = await host.entityFilter({
+          filters: {
+            ...filters,
+            ...(unread
+              ? { emailFilter: { tree: { literal: { read: false } } } }
+              : {}),
+          },
+          sortMethod: 'UPDATED_AT',
+          sortDirection: 'DESC',
+          limit: 10,
+          mail: { view: 'INBOX' },
+          baseline: [{ key, sortTimestamp: snapshot.createdAt }],
+        });
+        if (page.kind !== 'mail-page') throw new Error('expected Mail page');
+        const selected = await readSoupPage(host, {
+          page,
+          select: selectRecords(MailItemFieldsFragmentDoc),
+          baseline: [snapshot],
+          mailView: 'INBOX',
+        });
+        if (selected.kind !== 'ready')
+          throw new Error('expected coherent row selection');
+        const row = selected.records.find((row) => row.id === id);
+        return {
+          present: page.keys.includes(key),
+          isRead:
+            row?.__typename === 'GraphqlSoupEmailThread' ? row.isRead : null,
+          preview:
+            row?.__typename === 'GraphqlSoupEmailThread' ? row.emailName : null,
+        };
+      };
+      const update = async (
+        field: 'inboxVisible' | 'isRead',
+        value: boolean,
+        rollback = false
+      ) => {
+        const mutation =
+          field === 'inboxVisible'
+            ? 'setEmailThreadArchived'
+            : 'markEmailThreadSeen';
+        const query = `mutation Change { ${mutation} { __typename id ${field} } }`;
+        const data = {
+          [mutation]: {
+            __typename: 'GraphqlSoupEmailThread',
+            id,
+            [field]: value,
+          },
+        };
+        const nowMs = Date.now();
+        const queued = await host.enqueueOptimisticMutation(
+          { uuid: crypto.randomUUID(), query, data },
+          { owner: 'test', nowMs, leaseExpiresAtMs: nowMs + 60_000 }
+        );
+        if (queued.initialClaim.kind !== 'claimed')
+          throw new Error('expected mutation claim');
+        const optimistic = await read();
+        const token = {
+          owner: 'test',
+          generation: queued.initialClaim.mutation.leaseGeneration,
+        };
+        if (rollback)
+          await host.rollbackOptimisticWrite(
+            queued.transactionId,
+            token,
+            'rejected'
+          );
+        else
+          await host.commitOptimisticWrite(queued.transactionId, token, {
+            query,
+            data,
+          });
+        return { optimistic, settled: await read() };
+      };
+      try {
+        await host.writeQuery({
+          query:
+            'query Partial { user { id soup(input:{initial:{limit:1,emailView:INBOX}}) { items { __typename id ... on GraphqlSoupEmailThread { inboxVisible isRead } } } } }',
+          identity: 'offline-mail-viewer',
+          data: {
+            user: {
+              id: 'offline-mail-viewer',
+              soup: {
+                items: [
+                  {
+                    __typename: 'GraphqlSoupEmailThread',
+                    id,
+                    inboxVisible: true,
+                    isRead: false,
+                  },
+                ],
+              },
+            },
+          },
+        });
+        return {
+          initial: await read(),
+          read: await update('isRead', true),
+          unread: await read(true),
+          rollback: await update('inboxVisible', false, true),
+          archive: await update('inboxVisible', false),
+          undo: await update('inboxVisible', true),
+        };
+      } finally {
+        host.dispose();
+      }
+    },
+    {
+      scope,
+      hostPath: `/@fs${fileURLToPath(new URL('../../host/worker-host.ts', import.meta.url))}`,
+      readerPath: `/@fs${fileURLToPath(new URL('../../../queries/soup/graphql/read-soup-page.ts', import.meta.url))}`,
+      selectionPath: `/@fs${fileURLToPath(new URL('../../exchange/record-selection.ts', import.meta.url))}`,
+      documentsPath: `/@fs${fileURLToPath(new URL('../../../service-clients/service-storage/graphql/generated/graphql.ts', import.meta.url))}`,
+    }
+  );
+  expect(result.initial).toEqual({
+    present: true,
+    isRead: false,
+    preview: 'Invitation',
+  });
+  expect(result.read.optimistic).toEqual({
+    present: true,
+    isRead: true,
+    preview: 'Invitation',
+  });
+  expect(result.read.settled).toEqual(result.read.optimistic);
+  expect(result.unread.present).toBe(false);
+  expect(result.rollback.optimistic.present).toBe(false);
+  expect(result.rollback.settled).toEqual(result.read.settled);
+  expect(result.archive.optimistic.present).toBe(false);
+  expect(result.archive.settled.present).toBe(false);
+  expect(result.undo.optimistic).toEqual(result.read.settled);
+  expect(result.undo.settled).toEqual(result.read.settled);
 });

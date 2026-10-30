@@ -91,6 +91,7 @@ pub async fn run() -> anyhow::Result<()> {
         .gmail_inbox_sync_queue(&gmail_inbox_sync_queue)
         .gmail_inbox_sync_retry_queue(&gmail_inbox_sync_retry_queue)
         .gmail_ops_queue(&gmail_ops_queue)
+        .gmail_label_write_batches(config.gmail_label_write_batches_enabled)
         .email_backfill_queue(&backfill_queue)
         .email_scheduled_queue(&email_scheduled_queue)
         .sfs_uploader_queue(&sfs_uploader_queue)
@@ -327,6 +328,14 @@ pub async fn run() -> anyhow::Result<()> {
                 ),
             }),
         )),
+        message_sources: Arc::new(email::domain::message_source::MessageSourceService {
+            repository: EmailPgRepo::new(db.clone()),
+            provider: crate::outbound::message_source::ProviderMessageSource {
+                gmail: email_api.clone(),
+                outlook: outlook_api.clone(),
+            },
+            access: entity_access_service.as_ref().clone(),
+        }),
         attachment_reads: Arc::new(email::domain::attachment_access::AttachmentReadService {
             repository: EmailPgRepo::new(db.clone()),
             provider: crate::outbound::attachment_access::ProviderAttachmentBytes {
@@ -354,6 +363,16 @@ pub async fn run() -> anyhow::Result<()> {
             },
             access: entity_access_service.as_ref().clone(),
         }),
+        event_forward_sender: Arc::new(
+            email::domain::service::attachments::StagedAttachmentSender::new(
+                email_service.service(),
+                EmailPgRepo::new(db.clone()),
+                crate::outbound::draft_attachment_storage::DraftAttachmentS3 {
+                    s3: s3_client.clone(),
+                    bucket: config.attachment_bucket.to_string(),
+                },
+            ),
+        ),
         draft_attachments: Arc::new(email::domain::draft_attachments::DraftAttachmentService {
             repository: email::outbound::EmailPgRepo::new(db.clone()),
             storage: crate::outbound::draft_attachment_storage::DraftAttachmentS3 {

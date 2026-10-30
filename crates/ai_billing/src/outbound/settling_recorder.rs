@@ -9,6 +9,7 @@ use ai_usage::domain::service::UsageServiceImpl;
 use ai_usage::{UsageEvent, UsageRecorder, UsageRepo};
 use std::sync::Arc;
 use std::time::Duration;
+use tracing::Instrument;
 
 /// Pauses between attempts to land a usage row; the length is the number of
 /// retries after the first attempt.
@@ -65,46 +66,49 @@ where
         let billing = self.billing.clone();
         let trigger = self.trigger.clone();
         let should_settle = self.settlement.is_enabled() && inner.counts_usage(&event);
-        tokio::spawn(async move {
-            let user = event.user.clone();
-            let mut backoff = RECORD_RETRY_BACKOFF.iter();
-            loop {
-                let Err(e) = inner.record_now(event.clone()).await else {
-                    break;
-                };
-                match backoff.next() {
-                    Some(pause) => {
-                        tracing::warn!(error = ?e, "failed to record ai usage; retrying");
-                        tokio::time::sleep(*pause).await;
+        tokio::spawn(
+            async move {
+                let user = event.user.clone();
+                let mut backoff = RECORD_RETRY_BACKOFF.iter();
+                loop {
+                    let Err(e) = inner.record_now(event.clone()).await else {
+                        break;
+                    };
+                    match backoff.next() {
+                        Some(pause) => {
+                            tracing::warn!(error = ?e, "failed to record ai usage; retrying");
+                            tokio::time::sleep(*pause).await;
+                        }
+                        None => {
+                            tracing::error!(
+                                error = ?e,
+                                attempts = RECORD_RETRY_BACKOFF.len() + 1,
+                                model = %event.model,
+                                amount = ?event.amount,
+                                "failed to record ai usage; giving up"
+                            );
+                            return;
+                        }
                     }
-                    None => {
-                        tracing::error!(
-                            error = ?e,
-                            attempts = RECORD_RETRY_BACKOFF.len() + 1,
-                            model = %event.model,
-                            amount = ?event.amount,
-                            "failed to record ai usage; giving up"
-                        );
-                        return;
+                }
+                if !should_settle {
+                    return;
+                }
+                match billing.snapshot(&user).await {
+                    Ok(snapshot) => {
+                        if snapshot.tier.is_paid()
+                            && !snapshot.unlimited
+                            && snapshot.uncovered_cents > 0
+                        {
+                            trigger.request_settlement(snapshot.payer);
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = ?e, "failed to read ai billing position");
                     }
                 }
             }
-            if !should_settle {
-                return;
-            }
-            match billing.snapshot(&user).await {
-                Ok(snapshot) => {
-                    if snapshot.tier.is_paid()
-                        && !snapshot.unlimited
-                        && snapshot.uncovered_cents > 0
-                    {
-                        trigger.request_settlement(snapshot.payer);
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!(error = ?e, "failed to read ai billing position");
-                }
-            }
-        });
+            .in_current_span(),
+        );
     }
 }

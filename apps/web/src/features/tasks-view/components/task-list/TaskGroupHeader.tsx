@@ -6,9 +6,10 @@ import { getDisplayName, tryMacroId } from '@core/user';
 import { getPropertyOptionLabel } from '@entity';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
-import FolderIcon from '@icon/system/regular/folder-simple.svg';
+import ProjectIcon from '@icon/system/regular/stack.svg';
 import { PROPERTY_OPTION_IDS } from '@property';
 import { PropertyValueIcon } from '@property/component/propertyValue';
+import { usePropertyEntityDisplay } from '@property/hooks/usePropertyEntityDisplay';
 import { usePropertyUserDisplay } from '@property/hooks/usePropertyUserDisplay';
 import { ComposerSurface, cn, Layer } from '@ui';
 import { createMemo, Match, Show, Switch } from 'solid-js';
@@ -42,11 +43,24 @@ export function TaskGroupHeader(props: {
       ? props.row.groupId
       : ''
   );
+  // The grouped page names a project group the viewer can read; a group still
+  // labeled by its key resolves the name here.
+  const unnamedProjectId = () =>
+    props.groupBy === 'project' && props.row.label === props.row.groupId
+      ? props.row.groupId
+      : '';
+  const project = usePropertyEntityDisplay(unnamedProjectId, () =>
+    unnamedProjectId() ? 'INITIATIVE' : undefined
+  );
   const label = createMemo(() => {
     if (!props.row.groupId) return props.row.label || 'Not set';
 
     if (props.groupBy === 'status' || props.groupBy === 'priority') {
       return getPropertyOptionLabel(props.row.groupId) ?? props.row.label;
+    }
+
+    if (props.groupBy === 'project') {
+      return unnamedProjectId() ? project.name() : props.row.label;
     }
 
     if (props.groupBy === 'assignee') {
@@ -125,7 +139,7 @@ export function TaskGroupHeader(props: {
                   />
                 </Match>
                 <Match when={props.groupBy === 'project'}>
-                  <FolderIcon class="size-3.5 shrink-0" />
+                  <ProjectIcon class="size-3.5 shrink-0" />
                 </Match>
               </Switch>
               <span class="truncate">{label()}</span>

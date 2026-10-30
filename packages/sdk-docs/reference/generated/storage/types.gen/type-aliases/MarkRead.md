@@ -1,6 +1,6 @@
 # Type Alias: MarkRead
 
-> **MarkRead** = \{ `message_id`: `string`; \}
+> **MarkRead** = \{ `messageId`: `string`; \}
 
 Mark messages through this message read.
 
@@ -8,4 +8,4 @@ Mark messages through this message read.
 
 | Property | Type | Description |
 | ------ | ------ | ------ |
-| <a id="property-message_id"></a> `message_id` | `string` | Message in the addressed group. |
+| <a id="property-messageid"></a> `messageId` | `string` | Message in the addressed group. |

@@ -68,6 +68,18 @@ else
   echo "skipping smoke run: $TARGET does not execute on this runner"
 fi
 
+# A release binary carries its tag: the self-updater compares it with the
+# latest release, so a binary built without it (or served a stale tag from a
+# compiler cache) would never update, or would update forever.
+case "$RELEASE_TAG" in
+  v*)
+    if ! grep -aqF "$RELEASE_TAG" "$binary"; then
+      echo "$binary does not carry its release tag $RELEASE_TAG" >&2
+      exit 1
+    fi
+    ;;
+esac
+
 mkdir -p artifacts
 stage=$(mktemp -d)
 install -m 755 "$binary" "$stage/$executable"

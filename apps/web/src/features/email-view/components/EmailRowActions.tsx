@@ -46,12 +46,14 @@ export function EmailStarAction(props: {
       )}
     >
       <Button
+        aria-label={props.starred ? 'Unstar email' : 'Star email'}
         variant="ghost"
         size="icon-sm"
-        label={props.starred ? 'Unstar email' : 'Star email'}
         class={props.starred ? 'text-ink-muted' : 'text-ink-extra-muted'}
-        tooltip={props.starred ? 'Remove from favorites' : 'Add to favorites'}
-        hotkey={TOKENS.email.star}
+        tooltip={{
+          content: props.starred ? 'Remove from favorites' : 'Add to favorites',
+          hotkey: TOKENS.email.star,
+        }}
         aria-pressed={props.starred}
         disabled={props.pending}
         onClick={props.onStar}
@@ -67,6 +69,8 @@ export function EmailStarAction(props: {
 export function EmailRowActions(props: {
   archived: boolean;
   canArchive: boolean;
+  /** False for archived threads with no received mail, which stay archived. */
+  canUnarchive: boolean;
   pending: boolean;
   onArchive: () => void;
   onCommands: () => void;
@@ -74,28 +78,34 @@ export function EmailRowActions(props: {
 }) {
   return (
     <EmailActionGroup onFocus={props.onFocus}>
+      <Show when={!props.archived || props.canUnarchive}>
+        <Button
+          aria-label={props.archived ? 'Unarchive email' : 'Archive email'}
+          tooltip={{
+            content: props.archived ? 'Unarchive email' : 'Archive email',
+            hotkey: props.archived
+              ? TOKENS.entity.action.markNotDone
+              : TOKENS.entity.action.markDone,
+          }}
+          variant="ghost"
+          size="icon-sm"
+          class="text-ink-extra-muted"
+          disabled={!props.canArchive || props.pending}
+          onClick={props.onArchive}
+        >
+          <Show when={props.archived} fallback={<CheckIcon class="size-4" />}>
+            <ArrowCounterClockwiseIcon class="size-4" />
+          </Show>
+        </Button>
+      </Show>
       <Button
+        aria-label="Open command menu"
+        tooltip={{
+          content: 'Open command menu',
+          hotkey: TOKENS.global.commandMenu,
+        }}
         variant="ghost"
         size="icon-sm"
-        label={props.archived ? 'Unarchive email' : 'Archive email'}
-        hotkey={
-          props.archived
-            ? TOKENS.entity.action.markNotDone
-            : TOKENS.entity.action.markDone
-        }
-        class="text-ink-extra-muted"
-        disabled={!props.canArchive || props.pending}
-        onClick={props.onArchive}
-      >
-        <Show when={props.archived} fallback={<CheckIcon class="size-4" />}>
-          <ArrowCounterClockwiseIcon class="size-4" />
-        </Show>
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        label="Open command menu"
-        hotkey={TOKENS.global.commandMenu}
         class="text-ink-extra-muted"
         onClick={props.onCommands}
       >

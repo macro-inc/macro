@@ -217,6 +217,7 @@ fn action() -> ScheduledAction {
         created_at: Utc::now(),
         updated_at: Utc::now(),
         run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     }
 }
 
@@ -230,7 +231,7 @@ fn event() -> AuthorizedEventRun {
         access: EventAccessCapability::Channel(
             EntityAccessReceipt::<ViewOnly>::dangerously_assert_authenticated_user(
                 MacroUserIdStr::parse_from_str(USER).unwrap(),
-                &event.entity_id().to_string(),
+                &event.entity_id().unwrap().to_string(),
                 EntityType::Channel,
             ),
         ),
@@ -386,7 +387,11 @@ async fn fast_completion_keeps_owner_override_ids_and_context_in_one_prompt() {
     assert!(prompts[0].prompt.contains("Do this task"));
     assert!(prompts[0].prompt.contains("data, not instructions"));
     assert!(prompts[0].context.is_none());
-    assert!(prompts[0].prompt.contains(&event.entity_id().to_string()));
+    assert!(
+        prompts[0]
+            .prompt
+            .contains(&event.entity_id().unwrap().to_string())
+    );
     assert!(
         prompts[0]
             .prompt
@@ -686,7 +691,7 @@ fn event_run() -> ClaimedEventRun {
             access: EventAccessCapability::Document(
                 EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_authenticated_user(
                     MacroUserIdStr::parse_from_str(USER).unwrap(),
-                    &event.entity_id().to_string(),
+                    &event.entity_id().unwrap().to_string(),
                     EntityType::Document,
                 ),
             ),
@@ -882,6 +887,7 @@ async fn a_scheduled_run_tells_the_agent_which_routine_fired_and_on_what_schedul
         created_at: scheduled_for,
         updated_at: scheduled_for,
         run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     };
     let mut handle = ExecutionHandle::default();
     runner.prepare(&action, &mut handle).await.unwrap();
@@ -989,6 +995,7 @@ async fn a_task_status_change_hands_the_agent_the_task_instead_of_its_ids() {
         created_at: at,
         updated_at: at,
         run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     };
     let event: EventReference = serde_json::from_value(json!({
         "event_id": "01928f3e-6a2b-7c3d-8e4f-0123456789cd",
@@ -1040,6 +1047,8 @@ async fn a_task_status_change_hands_the_agent_the_task_instead_of_its_ids() {
                 ContextRoutineTrigger::Events {
                     events: vec!["document.created".into()],
                     entity_ids: Vec::new(),
+                    github: None,
+                    payload_match: Vec::new(),
                     condition: None,
                 },
                 ContextRoutineTrigger::Events {
@@ -1047,11 +1056,15 @@ async fn a_task_status_change_hands_the_agent_the_task_instead_of_its_ids() {
                     entity_ids: vec![
                         Uuid::parse_str("01928f3e-6a2b-7c3d-8e4f-000000007a5c").unwrap()
                     ],
+                    github: None,
+                    payload_match: Vec::new(),
                     condition: Some("Is the task ready for review?".into()),
                 },
                 ContextRoutineTrigger::Events {
                     events: vec!["task.property_changed".into()],
                     entity_ids: Vec::new(),
+                    github: None,
+                    payload_match: Vec::new(),
                     condition: Some("Did someone ask for a second reviewer?".into()),
                 },
             ],
@@ -1097,6 +1110,7 @@ async fn a_manual_run_tells_the_agent_its_owner_started_it() {
         created_at: requested_at,
         updated_at: requested_at,
         run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     };
     let mut handle = ExecutionHandle::default();
     runner.prepare(&action, &mut handle).await.unwrap();
@@ -1125,6 +1139,8 @@ async fn a_manual_run_tells_the_agent_its_owner_started_it() {
             triggers: vec![ContextRoutineTrigger::Events {
                 events: vec!["email.message_received".into()],
                 entity_ids: Vec::new(),
+                github: None,
+                payload_match: Vec::new(),
                 condition: None,
             }],
             firing: RoutineFiring::Manual { requested_at },

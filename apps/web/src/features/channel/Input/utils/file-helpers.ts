@@ -13,7 +13,7 @@ export type UploadFailedResult = {
 };
 
 /** A file the host stored for its own send, such as a WhatsApp group upload. */
-export type UploadStagedSuccessResult = {
+type UploadStagedSuccessResult = {
   failed: false;
   destination: 'staged';
   id: string;

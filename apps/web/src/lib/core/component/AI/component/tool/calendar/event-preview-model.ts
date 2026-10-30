@@ -10,15 +10,12 @@ import {
   NO_VIEWER_CAPABILITIES,
 } from '@app/features/calendar/types';
 import {
-  formatLocalDate,
-  parseLocalDate,
-} from '@app/features/calendar/utils/calendar-date';
-import {
   parseRecurrenceConfig,
   parseRecurrenceLines,
   type RecurrenceConfig,
   WEEKDAY_CODES,
 } from '@app/features/calendar/utils/recurrence';
+import { formatLocalDate, parseLocalDate } from '@core/util/local-date';
 import { TZDateMini } from '@date-fns/tz';
 import type { EventTime } from '@service-calendar/generated/schemas/eventTime';
 

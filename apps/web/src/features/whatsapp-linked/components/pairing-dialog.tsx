@@ -1,7 +1,8 @@
 import { ActionDialogShell, Button, Dialog } from '@ui';
-import { For, Match, Show, Switch } from 'solid-js';
+import { For, type JSX, Match, Show, Switch } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { PasskeyCeremony } from '../context/whatsapp-linked-context';
-import { formatCountdown, type PairingStep } from '../core/pairing';
+import type { PairingStep } from '../core/pairing';
 import { ConnectionCode } from './connection-code';
 
 const STEPS = [
@@ -11,35 +12,50 @@ const STEPS = [
   'Point your phone at this code',
 ];
 
+/** A square the size of the QR, so the dialog keeps its layout between codes. */
+function CodeBox(props: { children: JSX.Element; role?: 'status' }) {
+  return (
+    <div
+      role={props.role}
+      class="flex size-56 flex-col items-center justify-center gap-3 rounded-xl border border-edge-muted text-sm text-ink-muted"
+    >
+      {props.children}
+    </div>
+  );
+}
+
 function CodeSlot(props: {
   qr: string | undefined;
-  secondsLeft: number | undefined;
+  refreshing: boolean;
+  expired: boolean;
+  onRetry: () => void;
 }) {
   return (
-    <div class="flex flex-col items-center gap-2">
-      <Show
-        when={props.qr}
+    <div class="flex flex-col items-center">
+      <Switch
         fallback={
-          <div
-            role="status"
-            class="flex size-56 items-center justify-center rounded-xl border border-edge-muted text-sm text-ink-muted"
-          >
-            Preparing code…
-          </div>
+          <CodeBox role="status">
+            {props.refreshing ? 'Refreshing code…' : 'Preparing code…'}
+          </CodeBox>
         }
       >
-        {(qr) => (
-          <ConnectionCode
-            value={qr()}
-            label="Scan this code with WhatsApp on your phone"
-          />
-        )}
-      </Show>
-      <p class="h-4 text-xs text-ink-subtle">
-        <Show when={props.qr ? props.secondsLeft : undefined}>
-          {(seconds) => <>Expires in {formatCountdown(seconds())}</>}
-        </Show>
-      </p>
+        <Match when={props.qr}>
+          {(qr) => (
+            <ConnectionCode
+              value={qr()}
+              label="Scan this code with WhatsApp on your phone"
+            />
+          )}
+        </Match>
+        <Match when={props.expired}>
+          <CodeBox>
+            <p role="status">Code expired</p>
+            <Button type="button" variant="primary" onClick={props.onRetry}>
+              Show a new code
+            </Button>
+          </CodeBox>
+        </Match>
+      </Switch>
     </div>
   );
 }
@@ -125,7 +141,7 @@ function PasskeyStep(props: {
           </Show>
           <Button
             type="button"
-            variant="strong"
+            variant="primary"
             disabled={!props.challengeReady || !!running()}
             onClick={props.onConfirm}
           >
@@ -164,6 +180,31 @@ function PasskeyStep(props: {
   );
 }
 
+function description(step: PairingStep): string {
+  return match(step)
+    .with(
+      { kind: 'preparing' },
+      { kind: 'scan' },
+      { kind: 'expired' },
+      () => 'Scan this code with the phone that has your WhatsApp account.'
+    )
+    .with(
+      { kind: 'code' },
+      () => 'Enter this code on the phone that has your WhatsApp account.'
+    )
+    .with(
+      { kind: 'passkey' },
+      () => 'WhatsApp wants to confirm it’s you before linking.'
+    )
+    .with({ kind: 'connected' }, () => 'Your phone linked WhatsApp to Macro.')
+    .with(
+      { kind: 'failed' },
+      { kind: 'cancelled' },
+      () => 'Get a new code to try again.'
+    )
+    .exhaustive();
+}
+
 /**
  * Linking WhatsApp as a device. Pairing material stays inside this
  * `ph-no-capture` dialog, out of session replay.
@@ -171,7 +212,10 @@ function PasskeyStep(props: {
 export function PairingDialog(props: {
   open: boolean;
   step: PairingStep;
-  secondsLeft: number | undefined;
+  /** A code expired and its replacement is on its way. */
+  refreshing: boolean;
+  /** Asking for a new code failed; the last step stays up. */
+  retryFailed: boolean;
   passkey: PasskeyMode;
   ceremony: PasskeyCeremony;
   onConfirmPasskey: () => void;
@@ -196,20 +240,28 @@ export function PairingDialog(props: {
           <ActionDialogShell.Header>
             <ActionDialogShell.Title>Link WhatsApp</ActionDialogShell.Title>
             <ActionDialogShell.Description>
-              {props.step.kind === 'passkey'
-                ? 'WhatsApp wants to confirm it’s you before linking.'
-                : props.step.kind === 'code'
-                  ? 'Enter this code on the phone that has your WhatsApp account.'
-                  : 'Scan this code with the phone that has your WhatsApp account.'}
+              {description(props.step)}
             </ActionDialogShell.Description>
           </ActionDialogShell.Header>
+          <Show when={props.retryFailed}>
+            <p role="alert" class="text-sm text-failure-ink">
+              Couldn't get a new code. Try again.
+            </p>
+          </Show>
           <Switch>
             <Match
               when={
-                props.step.kind === 'scan' || props.step.kind === 'preparing'
+                props.step.kind === 'scan' ||
+                props.step.kind === 'preparing' ||
+                props.step.kind === 'expired'
               }
             >
-              <CodeSlot qr={qr()} secondsLeft={props.secondsLeft} />
+              <CodeSlot
+                qr={qr()}
+                refreshing={props.refreshing}
+                expired={props.step.kind === 'expired'}
+                onRetry={props.onRetry}
+              />
               <Steps />
             </Match>
             <Match when={code()}>
@@ -238,23 +290,21 @@ export function PairingDialog(props: {
             </Match>
             <Match when={props.step.kind === 'connected'}>
               <p role="status" class="text-sm text-ink-muted">
-                Linked. Loading your groups…
+                Linked. Loading your chats…
               </p>
             </Match>
             <Match
               when={
-                props.step.kind === 'expired' ||
-                props.step.kind === 'failed' ||
-                props.step.kind === 'cancelled'
+                props.step.kind === 'failed' || props.step.kind === 'cancelled'
               }
             >
               <div class="flex flex-col items-start gap-3">
                 <p role="alert" class="text-sm text-ink-muted">
-                  {props.step.kind === 'expired'
-                    ? 'This code expired before it was scanned.'
+                  {props.step.kind === 'cancelled'
+                    ? 'Linking was cancelled.'
                     : "Linking didn't finish."}
                 </p>
-                <Button type="button" variant="strong" onClick={props.onRetry}>
+                <Button type="button" variant="primary" onClick={props.onRetry}>
                   Show a new code
                 </Button>
               </div>
@@ -262,12 +312,7 @@ export function PairingDialog(props: {
           </Switch>
         </ActionDialogShell.Body>
         <ActionDialogShell.Footer>
-          <Button
-            type="button"
-            variant="ghost"
-            depth={2}
-            onClick={props.onCancel}
-          >
+          <Button type="button" variant="ghost" onClick={props.onCancel}>
             Cancel
           </Button>
         </ActionDialogShell.Footer>

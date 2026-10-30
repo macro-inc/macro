@@ -1,11 +1,11 @@
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { ImperativeDialogHost } from '@ui';
 import '@fontsource-variable/inter';
-import { InMacroGroups } from '@app/features/external-view/components/in-macro-section';
-import { WhatsAppGroupProvider } from '@app/features/whatsapp-group/context/whatsapp-group-context';
-import { createWhatsAppGroupCapabilities } from '@app/features/whatsapp-group/queries/capabilities';
-import { whatsappGroupApi } from '@app/features/whatsapp-group/queries/production-api';
-import { WhatsAppGroupView } from '@app/features/whatsapp-group/views/whatsapp-group-view';
+import { ExternalChatContextProvider } from '@app/features/external-chat/context/external-chat-context';
+import { createExternalChatCapabilities } from '@app/features/external-chat/queries/capabilities';
+import { externalChatApi } from '@app/features/external-chat/queries/production-api';
+import { ExternalChatView } from '@app/features/external-chat/views/external-chat-view';
+import { InMacroChats } from '@app/features/external-view/components/in-macro-section';
 import { getPermissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
@@ -13,7 +13,7 @@ import { useUserId } from '@core/context/user';
 import { Route, Router } from '@solidjs/router';
 import { macroDarkTheme } from '@theme/themes/macro-dark';
 import { macroLightTheme } from '@theme/themes/macro-light';
-import { themeCssVars } from '@theme/utils/themeColorTokens';
+import { themeCssVars } from '@theme/utils/themeCssVars';
 import { onMount, Show, Suspense } from 'solid-js';
 // The app's styles, so the page and its screenshots look like the app.
 import '../../../src/index.css';
@@ -21,27 +21,32 @@ import {
   type PasskeyCapability,
   WhatsAppLinkedProvider,
 } from '@app/features/whatsapp-linked/context/whatsapp-linked-context';
+import { createOpenSections } from '@app/features/whatsapp-linked/primitives/open-sections';
 import { createWhatsAppLinkedCapabilities } from '@app/features/whatsapp-linked/queries/production-capabilities';
 import { WhatsAppPage } from '@app/features/whatsapp-linked/views/whatsapp-page';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { FloatRegionHost } from '@components/app/mobile/float-regions/FloatRegionHost';
+import { SidePanel } from '@components/app/side-panel';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
+import { ChannelsContextProvider } from '@core/context/channels';
+import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
+import type { QuickAccessContextValue } from '@core/context/quickAccess/types';
 import { UserContextProvider } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { queryClient } from '@queries/client';
+import { useExternalChatsQuery } from '@queries/external-chats';
 import { queryReadyGate } from '@queries/gate';
-import { useWhatsappGroupsQuery } from '@queries/whatsapp-groups';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { ResultAsync } from 'neverthrow';
 import { render } from 'solid-js/web';
 
 declare global {
   interface Window {
-    openedGroups: string[];
+    openedChats: string[];
   }
 }
-window.openedGroups = [];
+window.openedChats = [];
 
 /** The production adapter and real queries; only the network is the test's. */
 /**
@@ -56,23 +61,40 @@ const nativePasskey: PasskeyCapability = {
   },
 };
 
-function GroupHarness(props: { groupId: string }) {
+const noQuickAccess: QuickAccessContextValue = {
+  useList: () => ({
+    error: () => undefined,
+    items: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoading: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+  }),
+  usesRecordSelection: () => false,
+  usesSearchProjection: () => false,
+  isLoading: () => false,
+  refresh: () => {},
+  getById: () => undefined,
+};
+
+function ChatHarness(props: { chatId: string }) {
   const userId = useUserId();
-  const source = createWhatsAppGroupCapabilities(
-    whatsappGroupApi,
+  const source = createExternalChatCapabilities(
+    externalChatApi,
     () => userId() ?? '',
-    () => props.groupId
+    () => props.chatId
   );
   const share = useShareModal(() => {
-    const group = source.group.data;
-    if (!group) return;
+    const chat = source.chat.data;
+    if (!chat) return;
     return {
-      id: group.id,
-      itemType: 'whatsapp_group',
-      blockAlias: 'whatsapp_group',
-      name: group.name,
-      owner: group.ownerId,
-      userPermissions: getPermissions(group.accessLevel),
+      id: chat.id,
+      itemType: 'external_chat',
+      blockAlias: 'external_chat',
+      name: chat.name,
+      owner: chat.ownerId,
+      userPermissions: getPermissions(chat.accessLevel),
     };
   });
   return (
@@ -82,37 +104,47 @@ function GroupHarness(props: { groupId: string }) {
       <Show when={isTouchDevice()}>
         <FloatRegionHost />
       </Show>
-      <WhatsAppGroupProvider value={source}>
-        <WhatsAppGroupView
-          userId={userId()}
-          share={
-            <ShareTrigger
-              onClick={share}
-              id={props.groupId}
-              blockType="whatsapp_group"
-            />
-          }
-          onConnect={() => {
-            location.search = '';
-          }}
-        />
-      </WhatsAppGroupProvider>
+      <ExternalChatContextProvider value={source}>
+        <SidePanel.Root floating defaultOpen={false}>
+          <ExternalChatView
+            userId={userId()}
+            share={
+              <ShareTrigger
+                onClick={share}
+                id={props.chatId}
+                blockType="external_chat"
+              />
+            }
+            onShare={share}
+            onConnect={() => {
+              location.search = '';
+            }}
+          />
+        </SidePanel.Root>
+      </ExternalChatContextProvider>
     </div>
   );
 }
 
-/** External's sidebar section over the real groups query. */
+/** External's sidebar section over the real chats query. */
 function InMacroHarness() {
   const userId = useUserId();
-  const groups = useWhatsappGroupsQuery(whatsappGroupApi, () => userId() ?? '');
+  const chats = useExternalChatsQuery(externalChatApi, () => userId() ?? '');
+  const sections = createOpenSections(
+    'macro:whatsapp:sidebar-sections:v2',
+    userId
+  );
   return (
     <main class="w-72 bg-panel p-2 text-ink">
-      <InMacroGroups
-        groups={queryReadyGate(groups) ? groups.data : undefined}
-        isPending={groups.isPending}
-        isError={groups.isError}
-        activeGroupId={undefined}
-        onOpenGroup={(groupId) => window.openedGroups.push(groupId)}
+      <InMacroChats
+        label="WhatsApp"
+        chats={queryReadyGate(chats) ? chats.data : undefined}
+        isPending={chats.isPending}
+        isError={chats.isError}
+        activeChatId={undefined}
+        isOpen={sections.isOpen}
+        onOpenChange={sections.setOpen}
+        onOpenChat={(chatId) => window.openedChats.push(chatId)}
         onRetry={() => {}}
       />
     </main>
@@ -131,15 +163,19 @@ function Page() {
   });
   const search = new URLSearchParams(location.search);
   if (search.get('view') === 'in-macro') return <InMacroHarness />;
-  const groupId = search.get('group');
-  if (groupId)
+  const chatId = search.get('chat');
+  if (chatId)
     return (
-      <Suspense fallback={<p>Loading group…</p>}>
-        <GroupHarness groupId={groupId} />
+      <Suspense fallback={<p>Loading chat…</p>}>
+        <ChatHarness chatId={chatId} />
       </Suspense>
     );
   const production = createWhatsAppLinkedCapabilities({
-    openGroup: (groupId) => window.openedGroups.push(groupId),
+    openChat: (chatId) => window.openedChats.push(chatId),
+    sections: createOpenSections(
+      'macro:whatsapp:chat-sections:v2',
+      useUserId()
+    ),
   });
   const capabilities =
     new URLSearchParams(location.search).get('passkey') === 'native'
@@ -164,16 +200,22 @@ render(
           <UserContextProvider>
             <Suspense fallback={<p>Loading identity…</p>}>
               <EmailLinksContextProvider>
-                <Router
-                  root={(props) => (
-                    <>
-                      {props.children}
-                      <ImperativeDialogHost />
-                    </>
-                  )}
-                >
-                  <Route path="*" component={Page} />
-                </Router>
+                {/* The app root provides Macro's items; the composer's `@` menu
+                    reads them. An external chat offers only its people. */}
+                <ChannelsContextProvider>
+                  <QuickAccessContextProvider value={noQuickAccess}>
+                    <Router
+                      root={(props) => (
+                        <>
+                          {props.children}
+                          <ImperativeDialogHost />
+                        </>
+                      )}
+                    >
+                      <Route path="*" component={Page} />
+                    </Router>
+                  </QuickAccessContextProvider>
+                </ChannelsContextProvider>
               </EmailLinksContextProvider>
             </Suspense>
           </UserContextProvider>

@@ -1,85 +1,6 @@
 use super::*;
-use chrono::Duration;
-
-fn account(state: AccountState) -> Account {
-    Account {
-        id: Uuid::from_u128(1),
-        user_id: "macro|alice@example.com".into(),
-        identity_jid: Some("15550000001@s.whatsapp.net".into()),
-        state,
-        authorization_generation: 3,
-    }
-}
-
-fn binding(state: BindingState) -> Binding {
-    Binding {
-        id: Uuid::from_u128(2),
-        group_jid: "120363000000000001@g.us".into(),
-        user_id: "macro|alice@example.com".into(),
-        state,
-        adopted_at: Utc::now(),
-    }
-}
-
-fn facts() -> SendingFacts {
-    SendingFacts {
-        observing: true,
-        remote_member: true,
-        can_post: true,
-    }
-}
-
-const ON: Features = Features {
-    pairing: true,
-    adoption: true,
-    sending: true,
-};
-
-#[test]
-fn reply_block_names_the_first_missing_fact() {
-    let active = binding(BindingState::Active);
-    let connected = account(AccountState::Connected);
-    assert_eq!(
-        reply_block(ON, Some(&connected), &active, Some(&facts())),
-        None
-    );
-    assert_eq!(
-        reply_block(
-            Features::default(),
-            Some(&connected),
-            &active,
-            Some(&facts())
-        ),
-        Some(ReplyBlock::SendingDisabled)
-    );
-    assert_eq!(
-        reply_block(ON, None, &active, None),
-        Some(ReplyBlock::NoAccount)
-    );
-    assert_eq!(
-        reply_block(ON, Some(&account(AccountState::LoggedOut)), &active, None),
-        Some(ReplyBlock::Disconnected)
-    );
-    assert_eq!(
-        reply_block(
-            ON,
-            Some(&connected),
-            &binding(BindingState::Detached),
-            Some(&facts())
-        ),
-        Some(ReplyBlock::GroupUnavailable)
-    );
-    assert_eq!(
-        reply_block(ON, Some(&connected), &active, None),
-        Some(ReplyBlock::NotObserving)
-    );
-    let mut announce = facts();
-    announce.can_post = false;
-    assert_eq!(
-        reply_block(ON, Some(&connected), &active, Some(&announce)),
-        Some(ReplyBlock::NotAllowedInGroup)
-    );
-}
+use crate::domain::jid::is_group_jid;
+use chrono::Utc;
 
 #[test]
 fn unnamed_groups_are_called_after_their_other_members() {
@@ -103,11 +24,11 @@ fn unnamed_groups_are_called_after_their_other_members() {
             person("99@lid", None),
         ],
         announce: false,
-        disappearing: false,
-        community: false,
+        disappearing_seconds: None,
+        community_parent: false,
+        community_jid: None,
+        community_announcements: false,
         observed_at: Utc::now(),
-        group: None,
-        shared: None,
     };
     assert_eq!(group.display_name(me), "Ana, +15550000003, +2");
     group.participants.truncate(3);
@@ -119,101 +40,58 @@ fn unnamed_groups_are_called_after_their_other_members() {
 }
 
 #[test]
-fn requests_are_bounded_and_operations_carry_the_right_text() {
-    let key = Uuid::from_u128(9);
-    let message = Uuid::from_u128(10);
-    let valid = [
-        ReplyContent::Text { text: "hi".into() },
-        ReplyContent::Mutation {
-            message_id: message,
-            operation: Mutation::Reaction,
-            text: Some(String::new()),
-        },
-        ReplyContent::Mutation {
-            message_id: message,
-            operation: Mutation::Edit,
-            text: Some("fixed".into()),
-        },
-        ReplyContent::Mutation {
-            message_id: message,
-            operation: Mutation::Delete,
-            text: None,
-        },
-    ];
-    for content in valid {
-        validate_request(&SendReply {
-            idempotency_key: key,
-            message: content,
-            reply_to: None,
-        })
-        .unwrap();
-    }
-    let invalid = [
-        ReplyContent::Text { text: "  ".into() },
-        ReplyContent::Text {
-            text: "x".repeat(TEXT_LIMIT_BYTES + 1),
-        },
-        ReplyContent::Mutation {
-            message_id: message,
-            operation: Mutation::Delete,
-            text: Some("not allowed".into()),
-        },
-        ReplyContent::Mutation {
-            message_id: message,
-            operation: Mutation::Edit,
-            text: None,
-        },
-    ];
-    for content in invalid {
-        assert!(
-            validate_request(&SendReply {
-                idempotency_key: key,
-                message: content,
-                reply_to: None,
-            })
-            .is_err()
-        );
-    }
-    assert!(
-        validate_request(&SendReply {
-            idempotency_key: Uuid::nil(),
-            message: ReplyContent::Text { text: "hi".into() },
-            reply_to: None,
-        })
-        .is_err()
-    );
-}
-
-#[test]
-fn only_the_author_changes_a_recent_message() {
-    let now = Utc::now();
-    let mine = MutationTarget {
-        source_at: now - Duration::minutes(1),
-        sent_by: vec!["15550000001@s.whatsapp.net".into(), "42@lid".into()],
-        deleted: false,
-    };
-    let identity = "15550000001@s.whatsapp.net";
-    authorize_mutation(Mutation::Edit, &mine, identity, now).unwrap();
-    authorize_mutation(Mutation::Delete, &mine, identity, now).unwrap();
-    assert!(matches!(
-        authorize_mutation(Mutation::Edit, &mine, "15550000002@s.whatsapp.net", now)
-            .unwrap_err()
-            .current_context(),
-        LinkedError::Forbidden
-    ));
-    authorize_mutation(Mutation::Reaction, &mine, "15550000002@s.whatsapp.net", now).unwrap();
-    let old = MutationTarget {
-        source_at: now - Duration::minutes(11),
-        ..mine
-    };
-    assert!(authorize_mutation(Mutation::Edit, &old, identity, now).is_err());
-}
-
-#[test]
 fn group_jids_are_validated_by_shape() {
     assert!(is_group_jid("120363000000000001@g.us"));
     assert!(is_group_jid("15551234567-1600000000@g.us"));
     assert!(!is_group_jid("15551234567@s.whatsapp.net"));
     assert!(!is_group_jid("@g.us"));
     assert!(!is_group_jid("abc@g.us"));
+}
+
+#[test]
+fn communities_name_their_groups_and_only_the_community_itself_is_closed() {
+    let me = "15550000001@s.whatsapp.net";
+    let parent = GroupInfo {
+        jid: "120363000000000010@g.us".into(),
+        name: "Neighbours".into(),
+        participants: vec![Participant {
+            identity: Identity {
+                jid: me.into(),
+                alternate_jid: None,
+                display_name: None,
+            },
+            admin: false,
+        }],
+        announce: false,
+        disappearing_seconds: None,
+        community_parent: true,
+        community_jid: None,
+        community_announcements: false,
+        observed_at: Utc::now(),
+    };
+    assert!(!parent.can_post(me), "a community has no chat of its own");
+    assert_eq!(parent.community(None), None);
+
+    let subgroup = GroupInfo {
+        jid: "120363000000000012@g.us".into(),
+        name: "Garden".into(),
+        community_parent: false,
+        community_jid: Some(parent.jid.clone()),
+        disappearing_seconds: Some(86_400),
+        ..parent.clone()
+    };
+    assert!(subgroup.can_post(me), "disappearing messages don't block");
+    assert_eq!(
+        subgroup.community(Some(&parent)),
+        Some(CommunityReference {
+            id: parent.jid.clone(),
+            name: "Neighbours".into(),
+            announcements: false,
+        })
+    );
+    assert_eq!(
+        subgroup.community(None).map(|community| community.name),
+        Some("WhatsApp community".into()),
+        "a community missing from the list still names itself"
+    );
 }

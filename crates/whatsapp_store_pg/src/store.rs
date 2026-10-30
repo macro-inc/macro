@@ -137,6 +137,43 @@ impl PgWhatsAppStore {
         })
     }
 
+    /// Deletes the account's device without opening it, so a device whose data
+    /// key KMS no longer unwraps can still be replaced. Every key, session
+    /// and value goes with it (they cascade); the next [`Self::open`]
+    /// generates a new data key. Returns whether there was a device.
+    ///
+    /// # Errors
+    /// [`WhatsAppStoreError::Fenced`] when the account's epoch is not
+    /// `lease_epoch`, and database errors.
+    #[tracing::instrument(
+        name = "whatsapp_store.reset_device",
+        skip(pool),
+        fields(account_id = %account_id, lease_epoch, deleted),
+        err
+    )]
+    pub async fn reset_device(
+        pool: &PgPool,
+        account_id: Uuid,
+        lease_epoch: i64,
+    ) -> Result<bool, WhatsAppStoreError> {
+        let mut transaction = pool.begin().await?;
+        check_lease(&mut transaction, account_id, lease_epoch).await?;
+        let deleted = sqlx::query!(
+            r#"
+            DELETE FROM whatsapp_device
+            WHERE account_id = $1
+            "#,
+            account_id,
+        )
+        .execute(&mut *transaction)
+        .await?
+        .rows_affected()
+            > 0;
+        transaction.commit().await?;
+        tracing::Span::current().record("deleted", deleted);
+        Ok(deleted)
+    }
+
     /// The account this store belongs to.
     pub fn account_id(&self) -> Uuid {
         self.account_id

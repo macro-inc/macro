@@ -139,6 +139,24 @@ describe('file access errors', () => {
     expect(load).toHaveBeenCalledTimes(3);
   });
 
+  it('restarts a pending load when access is confirmed during it', async () => {
+    const pending = Promise.withResolvers<Loaded>();
+    const load = vi
+      .fn<() => Promise<Loaded>>()
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValue({ userAccessLevel: 'view' });
+    const container = mount(load);
+    // The access poll answers in a later task than the one that started the load.
+    await new Promise((resolve) => setTimeout(resolve));
+
+    notifyAccess?.('view');
+    pending.resolve({ userAccessLevel: 'edit' });
+    await vi.waitFor(() =>
+      expect(container.textContent).toContain('Document content: view')
+    );
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
   it('counts an open once the document loads, not on access reloads', async () => {
     const load = vi
       .fn<() => Promise<Loaded>>()

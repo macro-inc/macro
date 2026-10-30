@@ -6,11 +6,19 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import { useInFlightEntityPropertyOptions } from '@queries/properties/in-flight-options';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
-import { Button, badgeTriggerClasses, cn, HoverCard, Layer } from '@ui';
+import {
+  type BadgeSize,
+  type BadgeVariant,
+  Button,
+  badgeTriggerClasses,
+  cn,
+  HoverCard,
+  Layer,
+} from '@ui';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { TagDot } from './TagDot';
 import { type EditableTag, TagEditorDialog } from './TagEditorDialog';
-import { TagPicker } from './TagPicker';
+import { TagPicker, TagSheetPicker } from './TagPicker';
 import { TagPill } from './TagPill';
 import { useDocTags, useSoupDocTags } from './useDocTags';
 import { type ResolvedTag, useSoupResolvedTags } from './useSoupResolvedTags';
@@ -22,8 +30,7 @@ const DEFAULT_MAX_VISIBLE = 3;
 const MAX_OVERFLOW_DOTS = 3;
 
 const hoverMenuLabelClass = 'min-w-0 max-w-[30ch] truncate';
-const hoverMenuIconButtonClass =
-  'size-5 shrink-0 p-0.5 text-ink-extra-muted [&_:where(svg)]:size-3.5';
+const hoverMenuIconButtonClass = 'size-5 shrink-0 p-0.5 text-ink-extra-muted';
 
 function HoverTagRow(props: {
   tag: ResolvedTag;
@@ -42,7 +49,6 @@ function HoverTagRow(props: {
             type="button"
             variant="ghost"
             size="icon-sm"
-            noTouchResize
             tooltip="Filter by tag"
             aria-label={`Filter by ${props.tag.label}`}
             class={hoverMenuIconButtonClass}
@@ -64,7 +70,6 @@ function HoverTagRow(props: {
         type="button"
         variant="ghost"
         size="icon-sm"
-        noTouchResize
         tooltip="Edit tag"
         aria-label={`Edit ${props.tag.label}`}
         class={hoverMenuIconButtonClass}
@@ -244,7 +249,7 @@ function TagOverflow(props: {
           createDocTags={props.createDocTags}
           triggerClass={badgeTriggerClasses({
             variant: 'outline',
-            size: 'sm',
+            size: 'xs',
             class: 'max-w-[14ch] gap-1.5',
           })}
           triggerLabel="Edit tags"
@@ -334,9 +339,11 @@ export function EntityRowTags(props: {
   );
 }
 
-export function InlineTagsPill(props: {
+type InlineTagsPillProps = {
   docTags: DocTags;
   class?: string;
+  variant?: BadgeVariant;
+  size?: BadgeSize;
   showPlaceholder?: boolean;
   showAddButton?: boolean;
   /**
@@ -345,13 +352,90 @@ export function InlineTagsPill(props: {
    * the close rather than mid-interaction, which would tear down the open menu.
    */
   onActiveChange?: (active: boolean) => void;
-}) {
-  const tags = () => props.docTags.appliedTags();
-  const first = () => tags()[0];
-  const dots = () => tags().slice(0, MAX_OVERFLOW_DOTS);
-  const label = () =>
-    `${tags().length} ${tags().length === 1 ? 'Tag' : 'Tags'}`;
+};
 
+/** The applied tags as dots and a label, shared by both tag pills. */
+function InlineTagsPillFace(props: {
+  tags: ResolvedTag[];
+  showAddButton?: boolean;
+}) {
+  const first = () => props.tags[0];
+  const dots = () => props.tags.slice(0, MAX_OVERFLOW_DOTS);
+  const label = () =>
+    `${props.tags.length} ${props.tags.length === 1 ? 'Tag' : 'Tags'}`;
+  return (
+    <>
+      <span class="inline-flex min-w-0 items-center gap-1">
+        <Switch>
+          <Match when={props.tags.length === 0 && props.showAddButton}>
+            <PlusIcon class="size-3 shrink-0" />
+            <span>Add tags</span>
+          </Match>
+          <Match when={props.tags.length === 0}>
+            <span class="inline-flex min-w-0 items-center gap-1 opacity-50">
+              <CircleDashedEmpty class="size-3 shrink-0" />
+              <span class="min-w-0 truncate @max-2xl/u-list:hidden">Tags</span>
+            </span>
+          </Match>
+          <Match when={props.tags.length === 1 && first()}>
+            {(tag) => (
+              <>
+                <TagDot color={tag().color} class="size-2.5" />
+                <span class="min-w-0 truncate @max-2xl/u-list:hidden">
+                  {tag().label}
+                </span>
+              </>
+            )}
+          </Match>
+          <Match when={props.tags.length > 1}>
+            <span class="flex items-center">
+              <For each={dots()}>
+                {(tag, index) => (
+                  <TagDot
+                    color={tag.color}
+                    class={cn(
+                      'size-2.5 ring-2 ring-surface',
+                      index() > 0 && '-ml-1'
+                    )}
+                  />
+                )}
+              </For>
+            </span>
+            <span class="min-w-0 truncate @max-2xl/u-list:hidden">
+              {label()}
+            </span>
+          </Match>
+        </Switch>
+      </span>
+      <Show when={props.tags.length > 0 || !props.showAddButton}>
+        <CaretDownIcon class="size-3 shrink-0 @max-2xl/u-list:hidden" />
+      </Show>
+    </>
+  );
+}
+
+function inlineTagsTriggerClass(props: InlineTagsPillProps, count: number) {
+  return badgeTriggerClasses({
+    variant: props.variant ?? 'outline',
+    size: props.size ?? 'xs',
+    class: cn(
+      // Capped so a long tag label truncates instead of squeezing
+      // whatever shares the row with the pill (e.g. a task title).
+      'min-w-0 max-w-35 gap-1.5 text-left',
+      count === 0 && !props.showAddButton && 'text-ink-extra-muted',
+      props.class
+    ),
+  });
+}
+
+function inlineTagsTriggerLabel(props: InlineTagsPillProps, count: number) {
+  return count === 0 && props.showAddButton
+    ? 'Add tags'
+    : 'Change or select tags';
+}
+
+export function InlineTagsPill(props: InlineTagsPillProps) {
+  const tags = () => props.docTags.appliedTags();
   return (
     <Show
       when={tags().length > 0 || props.showPlaceholder || props.showAddButton}
@@ -360,71 +444,38 @@ export function InlineTagsPill(props: {
         <TagPicker
           docTags={props.docTags}
           onActiveChange={props.onActiveChange}
-          triggerClass={badgeTriggerClasses({
-            variant: 'outline',
-            size: 'sm',
-            class: cn(
-              // Capped so a long tag label truncates instead of squeezing
-              // whatever shares the row with the pill (e.g. a task title).
-              'min-w-0 max-w-35 gap-1.5 text-left',
-              tags().length === 0 &&
-                !props.showAddButton &&
-                'text-ink-extra-muted',
-              props.class
-            ),
-          })}
-          triggerLabel={
-            tags().length === 0 && props.showAddButton
-              ? 'Add tags'
-              : 'Change or select tags'
-          }
+          triggerClass={inlineTagsTriggerClass(props, tags().length)}
+          triggerLabel={inlineTagsTriggerLabel(props, tags().length)}
         >
-          <Switch>
-            <Match when={tags().length === 0 && props.showAddButton}>
-              <PlusIcon class="size-3 shrink-0" />
-              <span>Add tags</span>
-            </Match>
-            <Match when={tags().length === 0}>
-              <span class="inline-flex min-w-0 items-center gap-1.5 opacity-50">
-                <CircleDashedEmpty class="size-3 shrink-0" />
-                <span class="min-w-0 truncate @max-2xl/u-list:hidden">
-                  Tags
-                </span>
-              </span>
-            </Match>
-            <Match when={tags().length === 1 && first()}>
-              {(tag) => (
-                <>
-                  <TagDot color={tag().color} class="size-2.5" />
-                  <span class="min-w-0 truncate @max-2xl/u-list:hidden">
-                    {tag().label}
-                  </span>
-                </>
-              )}
-            </Match>
-            <Match when={tags().length > 1}>
-              <span class="flex items-center">
-                <For each={dots()}>
-                  {(tag, index) => (
-                    <TagDot
-                      color={tag.color}
-                      class={cn(
-                        'size-2.5 ring-2 ring-surface',
-                        index() > 0 && '-ml-1'
-                      )}
-                    />
-                  )}
-                </For>
-              </span>
-              <span class="min-w-0 truncate @max-2xl/u-list:hidden">
-                {label()}
-              </span>
-            </Match>
-          </Switch>
-          <Show when={tags().length > 0 || !props.showAddButton}>
-            <CaretDownIcon class="size-3 shrink-0 @max-2xl/u-list:hidden" />
-          </Show>
+          <InlineTagsPillFace
+            tags={tags()}
+            showAddButton={props.showAddButton}
+          />
         </TagPicker>
+      </Layer>
+    </Show>
+  );
+}
+
+/** `InlineTagsPill` for a touch sheet: it picks tags in a stacked sheet. */
+export function InlineTagsSheetPill(props: InlineTagsPillProps) {
+  const tags = () => props.docTags.appliedTags();
+  return (
+    <Show
+      when={tags().length > 0 || props.showPlaceholder || props.showAddButton}
+    >
+      <Layer depth={2}>
+        <TagSheetPicker
+          docTags={props.docTags}
+          onActiveChange={props.onActiveChange}
+          triggerClass={inlineTagsTriggerClass(props, tags().length)}
+          triggerLabel={inlineTagsTriggerLabel(props, tags().length)}
+        >
+          <InlineTagsPillFace
+            tags={tags()}
+            showAddButton={props.showAddButton}
+          />
+        </TagSheetPicker>
       </Layer>
     </Show>
   );
@@ -454,6 +505,8 @@ export function InlineFetchedEntityTagsPill(props: {
   entityId: string;
   entityType: EntityType;
   class?: string;
+  variant?: BadgeVariant;
+  size?: BadgeSize;
   showAddButton?: boolean;
 }) {
   const docTags = useDocTags(props.entityId, props.entityType);
@@ -461,6 +514,8 @@ export function InlineFetchedEntityTagsPill(props: {
     <InlineTagsPill
       docTags={docTags}
       class={props.class}
+      variant={props.variant}
+      size={props.size}
       showPlaceholder={props.entityType === EntityType.TASK}
       showAddButton={props.showAddButton}
     />

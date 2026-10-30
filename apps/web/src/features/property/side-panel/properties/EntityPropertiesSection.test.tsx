@@ -86,7 +86,11 @@ vi.mock('@queries/properties/entity', () => ({
 vi.mock('@queries/properties/tags', () => ({
   useTagsQuery: () => ({ isSuccess: true, data: [] }),
 }));
-vi.mock('@ui', () => ({
+vi.mock('./entity-collection-drop', () => ({
+  createEntityCollectionDropTarget: () => undefined,
+}));
+vi.mock('@ui', async () => ({
+  ...(await import('@ui/utils/classname')),
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props} />
   ),

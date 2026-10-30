@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 
 const fixture =
   '/src/components/view-shell/browser-test/creation-and-toasts.html';
@@ -54,3 +54,71 @@ for (const viewport of [
     });
   });
 }
+
+async function swipe(page: Page, toast: Locator, deltaX: number, deltaY = 0) {
+  const bounds = await toast.boundingBox();
+  expect(bounds).not.toBeNull();
+  const x = bounds!.x + bounds!.width / 2;
+  const y = bounds!.y + bounds!.height / 2;
+  const session = await page.context().newCDPSession(page);
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x, y }],
+  });
+  for (let step = 1; step <= 4; step++) {
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: x + (deltaX * step) / 4, y: y + (deltaY * step) / 4 }],
+    });
+  }
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
+    touchPoints: [],
+  });
+  await session.detach();
+}
+
+test.describe('mobile swipe dismissal', () => {
+  test.use({
+    hasTouch: true,
+    viewport: { width: 390, height: 844 },
+    contextOptions: { reducedMotion: 'reduce' },
+  });
+
+  for (const direction of ['left', 'right'] as const) {
+    test(`dismisses notices, prompts, and reminders to the ${direction}`, async ({
+      page,
+    }) => {
+      await page.goto(fixture);
+      const deltaX = direction === 'left' ? -120 : 120;
+      const toast = page.locator('[data-macro-toast]');
+
+      await page.getByRole('button', { name: 'Show notices' }).click();
+      await expect(toast).toHaveCount(1);
+      await swipe(page, toast, 0, -70);
+      await expect(toast).toHaveCount(1);
+      await swipe(page, toast, deltaX / 4);
+      await expect(toast).toHaveCount(1);
+      await swipe(page, toast, deltaX);
+      await expect(toast).toHaveCount(0);
+
+      await page.getByRole('button', { name: 'Show prompt' }).click();
+      await toast.getByRole('button', { name: 'Review' }).click();
+      await expect(
+        page.getByText('Reviewed demo — this preview does not save data.')
+      ).toBeVisible();
+      await swipe(page, toast, deltaX);
+      await expect(toast).toHaveCount(0);
+      await expect(
+        page.getByText('Dismissals: 1', { exact: true })
+      ).toBeVisible();
+
+      await page.getByRole('button', { name: 'Show reminder' }).click();
+      await swipe(page, toast, deltaX);
+      await expect(toast).toHaveCount(0);
+      await expect(
+        page.getByText('Dismissals: 2', { exact: true })
+      ).toBeVisible();
+    });
+  }
+});

@@ -101,9 +101,13 @@ import { hasSendableInputContent } from './utils/sendable-content';
  * What the composer offers beyond text, formatting and file attachments.
  * Hosts that carry only those, such as a WhatsApp group, switch the rest off.
  */
-export type ChannelInputFeatures = {
-  /** `@` mentions of people, agents and Macro items, including Ask Macro. */
-  mentions: boolean;
+type ChannelInputFeatures = {
+  /**
+   * `@` mentions of people, agents and Macro items, including Ask Macro.
+   * `'participants'` offers only the `participants` prop: no agents, items,
+   * `@here` or mention tracking (a WhatsApp group's own members).
+   */
+  mentions: boolean | 'participants';
   /** Creating Macro items from the composer: tasks, documents, polls, forms. */
   createItems: boolean;
   gifs: boolean;
@@ -200,11 +204,8 @@ function WebDefaultActions(props: {
   );
 }
 
-function IosDefaultActions(props: {
-  input: InputData;
-  dictation: DictationController;
-  addMenu: JSX.Element;
-}) {
+// The iOS keyboard dictates on its own, so there is no microphone to place.
+function IosDefaultActions(props: { input: InputData; addMenu: JSX.Element }) {
   return (
     <>
       <Input.Layout.ActionsLeft>
@@ -214,7 +215,6 @@ function IosDefaultActions(props: {
         </Show>
       </Input.Layout.ActionsLeft>
       <Input.Layout.ActionsRight>
-        <DictationButton dictation={props.dictation} />
         <Input.SendAction />
       </Input.Layout.ActionsRight>
     </>
@@ -237,11 +237,7 @@ function DefaultActions(props: {
         />
       }
     >
-      <IosDefaultActions
-        input={props.input}
-        dictation={props.dictation}
-        addMenu={props.addMenu}
-      />
+      <IosDefaultActions input={props.input} addMenu={props.addMenu} />
     </Show>
   );
 }
@@ -257,6 +253,9 @@ export function ChannelInput(props: ChannelInputProps) {
   // Suppresses focus-out handling during clearComposer's iOS blur/refocus
   // cycle, which is not a user-intended blur.
   let isInternalRefocus = false;
+  // Assigned once applySnapshot exists. Send clears before the request, so a
+  // failure has to put the same draft back into the editor.
+  let restoreFailedSend = (_snapshot: InputSnapshot) => {};
 
   const {
     inputState,
@@ -271,6 +270,7 @@ export function ChannelInput(props: ChannelInputProps) {
     callbacks: props,
     onSendError: props.onSendError,
     clearEditor: () => clearComposer(),
+    restoreEditor: (snapshot) => restoreFailedSend(snapshot),
     trackTyping: () => acceptTyping,
     attachFiles: async (files) => {
       await uploadInputAttachments({
@@ -318,6 +318,9 @@ export function ChannelInput(props: ChannelInputProps) {
       acceptTyping = true;
     });
   };
+  restoreFailedSend = (snapshot) => {
+    applySnapshot(snapshot, { focus: false });
+  };
 
   const flushPendingRestore = () => {
     const restore = pendingRestore;
@@ -358,19 +361,25 @@ export function ChannelInput(props: ChannelInputProps) {
       : () => [];
   // Connection-prompt behavior for the built-in agents lives in
   // useAgentMentionUsers; participants and parent agents feed it here.
-  const mentionUsers = useAgentMentionUsers(() => [
-    ...(props.participants?.() ?? parentParticipants()),
-    ...(props.bots?.() ?? parentBots()),
-  ]);
-
-  const groupMentions = !props.parent || props.parent.type === 'channel';
   // The editor is configured once, at mount.
   const initialFeatures = features();
+  const participantsOnly = initialFeatures.mentions === 'participants';
+  const mentionUsers = participantsOnly
+    ? () => props.participants?.() ?? []
+    : useAgentMentionUsers(() => [
+        ...(props.participants?.() ?? parentParticipants()),
+        ...(props.bots?.() ?? parentBots()),
+      ]);
+
+  const groupMentions =
+    !participantsOnly && (!props.parent || props.parent.type === 'channel');
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     groupMentions,
     namespace: props.markdownNamespace ?? 'channel-input-markdown',
     resolveAppLink: useMacroMentionLinkResolver(),
-    enableMentions: initialFeatures.mentions,
+    enableMentions: initialFeatures.mentions !== false,
+    mentionSources: participantsOnly ? ['users'] : undefined,
+    disableMentionTracking: participantsOnly || undefined,
     composerActions: initialFeatures.createItems,
     ignoreActionIds: [
       ...(initialFeatures.createItems ? [] : CREATE_ITEM_ACTION_IDS),
@@ -487,7 +496,7 @@ export function ChannelInput(props: ChannelInputProps) {
         {
           id: 'gif',
           label: 'GIF',
-          icon: <GifIcon class="size-3.5" />,
+          icon: <GifIcon class="size-5" />,
           onSelect: () =>
             runInEditor((editor) => action.action(editor, actionContext), {
               focus: true,
@@ -496,7 +505,7 @@ export function ChannelInput(props: ChannelInputProps) {
         },
       ];
     };
-    const macro = features().mentions ? macroUser() : undefined;
+    const macro = features().mentions === true ? macroUser() : undefined;
     const startCall = props.onStartCall;
     const callInProgress = !!props.callInProgress;
     return [
@@ -507,7 +516,7 @@ export function ChannelInput(props: ChannelInputProps) {
                 {
                   id: 'mention',
                   label: 'Mention',
-                  icon: <AtIcon class="size-3.5" />,
+                  icon: <AtIcon class="size-5" />,
                   hint: '@',
                   onSelect: () =>
                     runInEditor(openMentionTypeahead, { focus: true }),
@@ -518,7 +527,7 @@ export function ChannelInput(props: ChannelInputProps) {
           {
             id: 'attach',
             label: 'Attach files',
-            icon: <PaperclipIcon class="size-3.5" />,
+            icon: <PaperclipIcon class="size-5" />,
             onSelect: () => collapsedInput.attach(),
           },
           ...gif(),
@@ -856,7 +865,6 @@ export function ChannelInput(props: ChannelInputProps) {
           getFocusTarget={() => lexicalEditor().getRootElement()}
           leadingAction={addMenu(true)}
           onOpen={collapsedInput.expand}
-          trailingAction={<DictationButton dictation={dictation} />}
           onSend={() => fireAndForget(commands.send(), 'channel-input')}
         />
       </Show>

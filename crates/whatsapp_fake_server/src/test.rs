@@ -398,3 +398,263 @@ async fn images_travel_both_ways_through_the_media_host() {
         .expect("bob's phone receives the image");
     assert_eq!(bob.download_image(&received).await.unwrap(), reply);
 }
+
+#[tokio::test]
+async fn group_changes_name_who_made_them() {
+    let server = FakeWhatsApp::start().await.unwrap();
+    let alice = server.add_user("15550000001", "Alice").await;
+    let bob = server.add_user("15550000002", "Bob").await;
+    let carol = server.add_user("15550000003", "Carol").await;
+    let dana = server.add_user("15550000004", "Dana").await;
+    let mut linked = link(&server, &alice).await;
+    let group = server.create_group("Team", &[&bob, &alice, &carol]);
+
+    server.change_group(&group, Some(&bob), GroupChange::Add(&dana));
+    let Event::GroupInfo(added) = next_event(
+        &mut linked.events,
+        |event| matches!(event, Event::GroupInfo(change) if !change.join.is_empty()),
+    )
+    .await
+    else {
+        unreachable!("matched a group change");
+    };
+    assert_eq!(added.jid, group);
+    assert_eq!(added.sender, Some(bob.lid()));
+    assert_eq!(added.sender_pn, Some(bob.jid()));
+    assert_eq!(added.join, vec![dana.lid()]);
+    dana.send_text(&group, "hi, Dana here")
+        .await
+        .expect("an added member can send to the group");
+    next_text(&mut linked.events, "hi, Dana here").await;
+
+    server.change_group(&group, Some(&dana), GroupChange::Remove(&dana));
+    let Event::GroupInfo(left) = next_event(
+        &mut linked.events,
+        |event| matches!(event, Event::GroupInfo(change) if !change.leave.is_empty()),
+    )
+    .await
+    else {
+        unreachable!("matched a group change");
+    };
+    assert_eq!(left.sender, Some(dana.lid()));
+    assert_eq!(left.leave, vec![dana.lid()]);
+
+    server.change_group(
+        &group,
+        Some(&carol),
+        GroupChange::Subject("Team, renamed".to_owned()),
+    );
+    let Event::GroupInfo(renamed) = next_event(
+        &mut linked.events,
+        |event| matches!(event, Event::GroupInfo(change) if change.name.is_some()),
+    )
+    .await
+    else {
+        unreachable!("matched a group change");
+    };
+    assert_eq!(renamed.sender, Some(carol.lid()));
+    assert_eq!(renamed.name.unwrap().name, "Team, renamed");
+
+    server.change_group(
+        &group,
+        Some(&bob),
+        GroupChange::Description("Where the team talks".to_owned()),
+    );
+    let Event::GroupInfo(described) = next_event(
+        &mut linked.events,
+        |event| matches!(event, Event::GroupInfo(change) if change.topic.is_some()),
+    )
+    .await
+    else {
+        unreachable!("matched a group change");
+    };
+    assert_eq!(described.topic.unwrap().topic, "Where the team talks");
+
+    server.change_group(&group, Some(&bob), GroupChange::Promote(&carol));
+    let Event::GroupInfo(promoted) = next_event(
+        &mut linked.events,
+        |event| matches!(event, Event::GroupInfo(change) if !change.promote.is_empty()),
+    )
+    .await
+    else {
+        unreachable!("matched a group change");
+    };
+    assert_eq!(promoted.promote, vec![carol.lid()]);
+
+    let info = linked.client.get_group_info(&group).await.unwrap();
+    assert_eq!(info.name.name, "Team, renamed");
+    assert_eq!(info.topic.topic, "Where the team talks");
+    let members: Vec<(String, bool)> = info
+        .participants
+        .iter()
+        .map(|participant| (participant.jid.user.clone(), participant.is_admin))
+        .collect();
+    assert_eq!(
+        members,
+        vec![
+            (bob.lid().user, true),
+            (alice.lid().user, false),
+            (carol.lid().user, true),
+        ]
+    );
+
+    server.change_group(&group, Some(&bob), GroupChange::Demote(&carol));
+    let Event::GroupInfo(demoted) = next_event(
+        &mut linked.events,
+        |event| matches!(event, Event::GroupInfo(change) if !change.demote.is_empty()),
+    )
+    .await
+    else {
+        unreachable!("matched a group change");
+    };
+    assert_eq!(demoted.demote, vec![carol.lid()]);
+
+    // A change WhatsApp makes names no one.
+    server.rename_group(&group, "Team, again");
+    let Event::GroupInfo(anonymous) = next_event(
+        &mut linked.events,
+        |event| matches!(event, Event::GroupInfo(change) if change.name.is_some()),
+    )
+    .await
+    else {
+        unreachable!("matched a group change");
+    };
+    assert_eq!(anonymous.sender, None);
+}
+
+#[tokio::test]
+async fn a_poll_vote_decrypts_with_the_polls_secret() {
+    let server = FakeWhatsApp::start().await.unwrap();
+    let alice = server.add_user("15550000001", "Alice").await;
+    let bob = server.add_user("15550000002", "Bob").await;
+    let carol = server.add_user("15550000003", "Carol").await;
+    let mut linked = link(&server, &alice).await;
+    let group = server.create_group("Lunch", &[&bob, &alice, &carol]);
+
+    let poll = whatsmeow::msgsecret::build_poll_creation(
+        "Where to?",
+        &["Pizza".to_owned(), "Sushi".to_owned()],
+        1,
+    );
+    let secret = poll
+        .message_context_info
+        .as_ref()
+        .and_then(|context| context.message_secret.clone())
+        .expect("a poll carries its message secret");
+    let poll_id = bob.send_message(&group, poll).await.unwrap();
+    next_event(&mut linked.events, |event| {
+        matches!(event, Event::Message(message) if message.info.id == poll_id
+            && message.message.as_ref().is_some_and(|message| message.poll_creation_message.is_some()))
+    })
+    .await;
+
+    let vote_id = carol
+        .vote(&group, &poll_id, &bob.lid(), &secret, &["Sushi"])
+        .await
+        .unwrap();
+    let Event::Message(vote) = next_event(&mut linked.events, |event| {
+        matches!(event, Event::Message(message) if message.info.id == vote_id
+            && message.message.as_ref().is_some_and(|message| message.poll_update_message.is_some()))
+    })
+    .await
+    else {
+        unreachable!("matched a message event");
+    };
+    let decrypted = linked.client.decrypt_poll_vote(&vote).await.unwrap();
+    assert_eq!(
+        decrypted.selected_options,
+        whatsmeow::msgsecret::hash_poll_options(&["Sushi".to_owned()])
+    );
+}
+
+#[tokio::test]
+async fn stickers_and_voice_notes_download_like_images() {
+    let server = FakeWhatsApp::start().await.unwrap();
+    let alice = server.add_user("15550000001", "Alice").await;
+    let bob = server.add_user("15550000002", "Bob").await;
+    let mut linked = link(&server, &alice).await;
+    let group = server.create_group("Media", &[&alice, &bob]);
+
+    let sticker = b"webp sticker frames".repeat(30);
+    let uploaded = bob
+        .upload_media(&sticker, whatsmeow::download::MediaType::Image)
+        .await
+        .unwrap();
+    let sent = bob
+        .send_message(
+            &group,
+            whatsmeow::proto::wa_e2e::Message {
+                sticker_message: Some(Box::new(whatsmeow::proto::wa_e2e::StickerMessage {
+                    url: Some(uploaded.url),
+                    direct_path: Some(uploaded.direct_path),
+                    media_key: Some(uploaded.media_key),
+                    file_enc_sha256: Some(uploaded.file_enc_sha256),
+                    file_sha256: Some(uploaded.file_sha256),
+                    file_length: Some(uploaded.file_length),
+                    mimetype: Some("image/webp".to_owned()),
+                    width: Some(512),
+                    height: Some(512),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let Event::Message(message) = next_event(&mut linked.events, |event| {
+        matches!(event, Event::Message(message) if message.info.id == sent
+            && message.message.as_ref().is_some_and(|message| message.sticker_message.is_some()))
+    })
+    .await
+    else {
+        unreachable!("matched a message event");
+    };
+    let part = message
+        .message
+        .as_ref()
+        .and_then(|message| message.sticker_message.as_deref())
+        .unwrap();
+    assert_eq!(linked.client.download(part).await.unwrap(), sticker);
+
+    let voice = b"opus voice note".repeat(30);
+    let uploaded = bob
+        .upload_media(&voice, whatsmeow::download::MediaType::Audio)
+        .await
+        .unwrap();
+    let sent = bob
+        .send_message(
+            &group,
+            whatsmeow::proto::wa_e2e::Message {
+                audio_message: Some(Box::new(whatsmeow::proto::wa_e2e::AudioMessage {
+                    url: Some(uploaded.url),
+                    direct_path: Some(uploaded.direct_path),
+                    media_key: Some(uploaded.media_key),
+                    file_enc_sha256: Some(uploaded.file_enc_sha256),
+                    file_sha256: Some(uploaded.file_sha256),
+                    file_length: Some(uploaded.file_length),
+                    mimetype: Some("audio/ogg; codecs=opus".to_owned()),
+                    ptt: Some(true),
+                    seconds: Some(4),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let Event::Message(message) = next_event(&mut linked.events, |event| {
+        matches!(event, Event::Message(message) if message.info.id == sent
+            && message.message.as_ref().is_some_and(|message| message.audio_message.is_some()))
+    })
+    .await
+    else {
+        unreachable!("matched a message event");
+    };
+    let part = message
+        .message
+        .as_ref()
+        .and_then(|message| message.audio_message.as_deref())
+        .unwrap();
+    assert_eq!(part.ptt, Some(true));
+    assert_eq!(linked.client.download(part).await.unwrap(), voice);
+}

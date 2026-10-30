@@ -123,6 +123,10 @@ fn soup_row(row: &Row) -> SoupItem<SoupPropertiesField> {
                         Cell::Number(number) => PropertyValue::Num(*number),
                         Cell::Bool(checked) => PropertyValue::Bool(*checked),
                         Cell::Date(date) => PropertyValue::Date(*date),
+                        Cell::DateRange(range) => PropertyValue::DateRange(
+                            models_properties::shared::DateRange::new(range.start, range.end)
+                                .unwrap(),
+                        ),
                         Cell::Options(ids) => PropertyValue::SelectOption(
                             ids.iter().map(|id| id.into_uuid()).collect(),
                         ),
@@ -267,6 +271,15 @@ impl SoupService for ReplaySoup {
     {
         unimplemented!("rows never read frecency")
     }
+    async fn group_labels<'a>(
+        &'a self,
+        _user_id: MacroUserIdStr<'a>,
+        _group_by: &'a soup::domain::models::grouping::GroupByField,
+        _keys: &'a [String],
+    ) -> Result<soup::domain::models::grouping::GroupLabels, SoupErr> {
+        Ok(Default::default())
+    }
+
     async fn caller_tag_sets<'a>(
         &self,
         _: MacroUserIdStr<'a>,

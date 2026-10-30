@@ -12,7 +12,7 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use uuid::Uuid;
 use whatsapp_linked::domain::session::SessionService;
-use whatsapp_linked::outbound::pg::PgLinkedRepository;
+use whatsapp_linked::outbound::pg::PgWhatsAppRepository;
 
 use super::{PgAccountDirectory, PgAccountLocks};
 use crate::domain::ports::{
@@ -70,10 +70,9 @@ async fn only_one_replica_locks_an_account_and_discovery_skips_it(
     let second = PgAccountLocks::connect(&options, KEEPALIVE, &tracker)
         .await
         .unwrap();
-    let directory = PgAccountDirectory::new(
-        pool.clone(),
-        SessionService::new(Arc::new(PgLinkedRepository::new(pool.clone()))),
-    );
+    let directory = PgAccountDirectory::new(SessionService::new(Arc::new(
+        PgWhatsAppRepository::new(pool.clone()),
+    )));
 
     sqlx::query!(
         r#"INSERT INTO whatsapp_pairing (id, account_id, user_id, generation, state, expires_at)
@@ -175,10 +174,9 @@ async fn start_replica(
     let (started_sender, started) = mpsc::unbounded_channel();
     let supervisor = Supervisor::new(
         locks,
-        PgAccountDirectory::new(
+        PgAccountDirectory::new(SessionService::new(Arc::new(PgWhatsAppRepository::new(
             pool.clone(),
-            SessionService::new(Arc::new(PgLinkedRepository::new(pool.clone()))),
-        ),
+        )))),
         Arc::new(ReportingRunner {
             started: started_sender,
         }),

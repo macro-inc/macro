@@ -161,7 +161,7 @@ export function TableInsert(
           />
         </div>
         <Button
-          variant="outline"
+          variant="secondary"
           disabled={!rows() || !cols()}
           onClick={() => handleInsertTable(rows() ?? 0, cols() ?? 0)}
         >

@@ -24,20 +24,12 @@ import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { Key } from '@solid-primitives/keyed';
-import { Checkbox, cn, Calendar as MiniCalendar } from '@ui';
+import { Button, Checkbox, cn, Calendar as MiniCalendar } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { format } from 'date-fns';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  Match,
-  on,
-  Show,
-  Switch,
-} from 'solid-js';
+import { format, getDaysInMonth } from 'date-fns';
+import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { CalendarCallSidebar } from '../calendar-call-sidebar';
+import { useCalendarFocus } from '../calendar-focus-target';
 import { CALENDAR_TOUR } from '../tour';
 import {
   CalendarCreateBookingLinkItem,
@@ -48,48 +40,41 @@ import { CalendarCreateMenu } from './CalendarCreateMenu';
 import { CalendarSearch } from './CalendarSearch';
 import { ConnectCalendarsPromotion } from './ConnectCalendarsPromotion';
 
-function CalendarMiniCalendar() {
+export function CalendarMiniCalendar() {
   const calendarView = useCalendarView();
   const calendarPager = useCalendarPager();
-  const shell = useViewShell();
   const initialDate = new Date();
-  const [focusedDay, setFocusedDay] = createSignal(initialDate);
 
   const currentDate = createMemo(
     () => calendarPager.activeDateInfo()?.view.calendar.getDate() ?? initialDate
   );
+  const [focusedDay, setFocusedDay] = createSignal(currentDate());
   const highlightedRange = createMemo(() => {
     const dateInfo = calendarPager.activeDateInfo();
     if (dateInfo?.view.type !== 'timeGridWeek') return undefined;
     return { end: dateInfo.end, start: dateInfo.start };
   });
 
-  const navigateToDate = (date: Date) => {
-    setFocusedDay(date);
-    calendarPager.gotoDate(date);
-    if (shell.aside.isOverlay()) shell.aside.collapse();
-  };
-  const navigateMonth = (month: Date) => {
-    const focused = focusedDay();
-    const sameMonth =
-      focused.getFullYear() === month.getFullYear() &&
-      focused.getMonth() === month.getMonth();
-    navigateToDate(sameMonth ? focused : month);
-  };
-  createEffect(on(currentDate, setFocusedDay));
-
+  // Keep focus local and clamp month-end dates so shorter months stay tabbable.
   return (
     <MiniCalendar
       required
       fixedWeeks
       startOfWeek={calendarView.displaySettings.weekStartsOn}
       value={currentDate()}
-      month={currentDate()}
       focusedDay={focusedDay()}
       highlightedRange={highlightedRange()}
-      onMonthChange={navigateMonth}
+      onMonthChange={(month) =>
+        setFocusedDay(
+          new Date(
+            month.getFullYear(),
+            month.getMonth(),
+            Math.min(focusedDay().getDate(), getDaysInMonth(month))
+          )
+        )
+      }
       onFocusedDayChange={setFocusedDay}
-      onValueChange={(date) => date && navigateToDate(date)}
+      onValueChange={(date) => date && calendarPager.gotoDate(date)}
     />
   );
 }
@@ -165,8 +150,49 @@ export function TeamOooUpcomingList() {
   const upcoming = useUpcomingTeamOoo();
   const windows = upcoming.windows;
   const calendarView = useCalendarView();
+  const calendarFocus = useCalendarFocus();
   const isActive = (window: TeamOooWindow) =>
     calendarView.selectedEvent()?.id === window.event.id;
+  const openWindow = (window: TeamOooWindow, row: HTMLElement) => {
+    const openOnRow = () =>
+      calendarView.selectEvent(window.event, row, 'agenda');
+    calendarPager.gotoDate(window.start);
+    // With the overlay on, the absence also renders on the grid: open it on
+    // its chip once the page shows it, as a navigation request does, so the
+    // card never opens on the row and then jumps to the chip.
+    if (calendarView.isSourceVisible(TEAM_OOO_SOURCE_ID)) {
+      calendarFocus.focusOccurrence(
+        {
+          eventId: window.eventId,
+          occurrenceKey: window.occurrenceKey,
+          date: window.start,
+        },
+        openOnRow
+      );
+    } else {
+      openOnRow();
+    }
+    if (shell.aside.isOverlay()) shell.aside.collapse();
+  };
+  // The choice outlives count changes: a list that shrinks to the cap and grows
+  // again comes back the way the person left it.
+  const [expanded, setExpanded] = createSignal(false);
+  const hiddenCount = () => windows().length - UPCOMING_SHOWN_MAX;
+  const shownWindows = () =>
+    expanded() ? windows() : windows().slice(0, UPCOMING_SHOWN_MAX);
+  let rowList: HTMLDivElement | undefined;
+  const toggleExpanded = (toggle: HTMLElement) => {
+    const anchor = calendarView.selectedEventAnchor();
+    const anchoredToRow = anchor !== undefined && rowList?.contains(anchor);
+    setExpanded((value) => !value);
+    // Show less can remove the row an open card is anchored to; a pointer
+    // press closes the card as an outside interaction, Enter does not.
+    if (anchoredToRow && !anchor.isConnected) calendarView.closeEventDetails();
+    // The section is last in the sidebar, so the longer list pushes this
+    // focused control below the fold. Its margin keeps the sidebar's bottom
+    // inset below it.
+    toggle.scrollIntoView({ block: 'nearest' });
+  };
 
   return (
     <div class="flex flex-col gap-0.5">
@@ -185,56 +211,59 @@ export function TeamOooUpcomingList() {
           </span>
         </Match>
         <Match when={windows().length > 0}>
-          <Key
-            each={windows().slice(0, UPCOMING_SHOWN_MAX)}
-            by={(window) => window.event.id}
-          >
-            {(window) => (
-              <button
-                type="button"
-                class={cn(
-                  'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs',
-                  isActive(window()) ? 'bg-active' : 'hover:bg-hover'
-                )}
-                aria-current={isActive(window()) ? 'true' : undefined}
-                onClick={(event) => {
-                  calendarPager.gotoDate(window().start);
-                  calendarView.selectEvent(
-                    window().event,
-                    event.currentTarget,
-                    'agenda'
-                  );
-                  if (shell.aside.isOverlay()) shell.aside.collapse();
-                }}
-              >
-                <UserIcon
-                  id={window().ownerId}
-                  size="md"
-                  suppressClick
-                  showTooltip={false}
-                />
-                <span class="flex min-w-0 flex-1 flex-col">
-                  <span class="flex w-full items-baseline gap-2">
-                    <span class="min-w-0 flex-1 truncate text-ink">
-                      {window().name}
-                    </span>
-                    <span class="shrink-0 text-ink-muted">
-                      {windowDateLabel(window())}
-                    </span>
-                  </span>
-                  <Show when={window().title}>
-                    <span class="w-full truncate text-ink-muted">
-                      {window().title}
-                    </span>
-                  </Show>
-                </span>
-              </button>
+          <div
+            ref={rowList}
+            class={cn(
+              'flex flex-col gap-0.5',
+              expanded() && hiddenCount() > 0 && 'max-h-120 overflow-y-auto'
             )}
-          </Key>
-          <Show when={windows().length > UPCOMING_SHOWN_MAX}>
-            <span class="px-2 py-1 text-xs text-ink-muted">
-              +{windows().length - UPCOMING_SHOWN_MAX} more
-            </span>
+          >
+            <Key each={shownWindows()} by={(window) => window.event.id}>
+              {(window) => (
+                <button
+                  type="button"
+                  class={cn(
+                    'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs',
+                    isActive(window()) ? 'bg-active' : 'hover:bg-hover'
+                  )}
+                  aria-current={isActive(window()) ? 'true' : undefined}
+                  onClick={(event) => openWindow(window(), event.currentTarget)}
+                >
+                  <UserIcon
+                    id={window().ownerId}
+                    size="md"
+                    suppressClick
+                    showTooltip={false}
+                  />
+                  <span class="flex min-w-0 flex-1 flex-col">
+                    <span class="flex w-full items-baseline gap-2">
+                      <span class="min-w-0 flex-1 truncate text-ink">
+                        {window().name}
+                      </span>
+                      <span class="shrink-0 text-ink-muted">
+                        {windowDateLabel(window())}
+                      </span>
+                    </span>
+                    <Show when={window().title}>
+                      <span class="w-full truncate text-ink-muted">
+                        {window().title}
+                      </span>
+                    </Show>
+                  </span>
+                </button>
+              )}
+            </Key>
+          </div>
+          <Show when={hiddenCount() > 0}>
+            <Button
+              variant="ghost"
+              size="xs"
+              class="self-start scroll-mb-(--sidebar-content-inset)"
+              aria-expanded={expanded()}
+              onClick={(event) => toggleExpanded(event.currentTarget)}
+            >
+              {expanded() ? 'Show less' : `+${hiddenCount()} more`}
+            </Button>
           </Show>
         </Match>
       </Switch>
@@ -252,6 +281,7 @@ function CalendarTeamOooSection() {
       <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
         <CollapsibleSection.Header>
           <Checkbox
+            size="sm"
             checked={calendarView.isSourceVisible(TEAM_OOO_SOURCE_ID)}
             onChange={(visible) =>
               calendarView.setSourceVisibility(TEAM_OOO_SOURCE_ID, visible)
@@ -259,7 +289,7 @@ function CalendarTeamOooSection() {
             title="Show on calendar"
             class="h-full shrink-0 pr-1 pl-(--sidebar-item-inset)"
           >
-            <Checkbox.Control class="size-3.5 [&_svg]:size-2.5" />
+            <Checkbox.Control />
             <Checkbox.Label class="absolute inset-0">
               <span class="sr-only">
                 Show team out of office on the calendar
@@ -284,7 +314,7 @@ function CalendarSidebarOverlayClose() {
   return (
     <Show when={shell.aside.isOverlay() && isTouchDevice()}>
       <ViewSidebar.Control
-        label="Close calendar navigation"
+        aria-label="Close calendar navigation"
         onClick={shell.aside.collapse}
       >
         <CloseIcon class="size-4" />

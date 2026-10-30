@@ -6,9 +6,15 @@ import {
   useContext,
 } from 'solid-js';
 import type { WhatsAppAccount } from '../core/account';
-import type { AdoptFailure } from '../core/adopt';
+import type { AddFailure } from '../core/add';
 import type { WhatsAppChat } from '../core/chat';
 import type { PairingStep, PasskeyChallenge } from '../core/pairing';
+
+/** Which collapsible sections of a list are open; unknown ones start open. */
+export type OpenSections = {
+  isOpen: (sectionId: string) => boolean;
+  setOpen: (sectionId: string, open: boolean) => void;
+};
 
 /** A server read as the WhatsApp page needs it; `data` is set once loaded. */
 export type SourceRead<Value> = {
@@ -69,8 +75,6 @@ export type RequestFailure = { kind: 'request-failed' };
  * shared `whatsapp-linked` queries; tests pass fakes.
  */
 export type WhatsAppLinkedCapabilities = {
-  /** The backend switches; pairing or adoption may be turned off. */
-  features: SourceRead<{ pairing: boolean; adoption: boolean }>;
   /** The person's own account, `null` when they never connected one. */
   account: SourceRead<WhatsAppAccount | null>;
   /**
@@ -89,12 +93,16 @@ export type WhatsAppLinkedCapabilities = {
   disconnect: (
     generation: number
   ) => ResultAsync<{ remoteUnlinkRequested: boolean }, RequestFailure>;
-  /** One click: the Macro group takes the WhatsApp group's name and follows it. */
-  adopt: (groupJid: string) => ResultAsync<{ groupId: string }, AdoptFailure>;
+  /** One click: the Macro chat takes the WhatsApp chat's name and follows it. */
+  add: (
+    chat: Pick<WhatsAppChat, 'jid' | 'kind'>
+  ) => ResultAsync<{ chatId: string }, AddFailure>;
   isConnecting: Accessor<boolean>;
   isDisconnecting: Accessor<boolean>;
-  /** Host action: open a group in Macro. */
-  openGroup: (groupId: string) => void;
+  /** Host action: open a chat in Macro. */
+  openChat: (chatId: string) => void;
+  /** The chat list's folded sections, remembered per person. */
+  sections: OpenSections;
 };
 
 const Context = createContext<WhatsAppLinkedCapabilities>();
