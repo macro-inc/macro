@@ -32,6 +32,7 @@ import { useSearchSoupQuery } from '@queries/soup/search';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { type Accessor, createMemo, createSignal, indexArray } from 'solid-js';
 import { match } from 'ts-pattern';
+import { canSearchEmailTab, isExcludedEmailFolder } from '../constants';
 import { EMAIL_FACETS, type EmailFacetContext } from '../filters/email-facets';
 import type { EmailTab, EmailViewState } from '../types';
 import { advanceEmptyAliasPages } from './advance-empty-alias-pages';
@@ -92,11 +93,24 @@ function emailMatchesTab(
         'calendar',
         'all',
         'focus',
+        'spam',
+        'trash',
         () => true
       )
       .exhaustive(() => true)
   );
 }
+
+// Provider-neutral folder membership needs a server lookup; arbitrary realtime
+// entities cannot establish it from labels (Outlook has no Gmail system labels).
+const rejectFolderInsert = () => false;
+const folderQueryOptions = (tab: EmailTab) =>
+  isExcludedEmailFolder(tab)
+    ? {
+        keepPreviousData: false,
+        meta: { normalize: false, insertFilter: rejectFolderInsert },
+      }
+    : {};
 
 type AdmittedEmails = {
   scope: string;
@@ -169,6 +183,8 @@ export function useEmailDataSource(
   });
   const query = useSoupAstItemsQuery(queryArgs, () => ({
     enabled: sourceEnabled(),
+    // Folder previews must not overwrite the same thread's All Mail preview.
+    ...folderQueryOptions(state.tab),
   }));
   const localDrafts = createLocalDraftSource(
     () => query.transport === 'graphql'
@@ -198,7 +214,7 @@ export function useEmailDataSource(
   // Mail search retains server relevance; recoverable local drafts are merged below.
   const search = createSearchState({
     surface: () => 'email',
-    text: () => state.search,
+    text: () => (canSearchEmailTab(state.tab) ? state.search : ''),
     enabled: () => sourceEnabled() && searchFavoritesReady(),
     disableLocalSearch: () => true,
     buildRequest: (request) =>
@@ -222,6 +238,7 @@ export function useEmailDataSource(
       () => ({
         enabled: !!state.aliasFilter && search.usesServiceSearch(),
         keepPreviousData: false,
+        ...folderQueryOptions(state.tab),
       })
     )
   );
@@ -325,6 +342,7 @@ export function useEmailDataSource(
       () => ({
         enabled:
           filtersReady() && (!search.isSearching() || !!state.aliasFilter),
+        ...folderQueryOptions(state.tab),
       })
     );
     const searchQuery = useSearchSoupQuery(

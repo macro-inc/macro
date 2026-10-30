@@ -10,6 +10,7 @@ import {
 } from '@app/features/soup';
 import type { SoupAstBody, SoupAstItemsQueryArgs } from '@queries/soup/items';
 import { match } from 'ts-pattern';
+import { isExcludedEmailFolder } from '../constants';
 import { EMAIL_FACETS, type EmailFacetContext } from '../filters/email-facets';
 import type { EmailTab } from '../types';
 
@@ -36,6 +37,8 @@ export const emailViewForTab = (tab: EmailTab): string =>
     // Soup source on drafts so its query shape remains valid while disabled.
     .with('scheduled', () => 'drafts')
     .with('sent', () => 'sent')
+    .with('spam', () => 'spam')
+    .with('trash', () => 'trash')
     .with(
       'favorites',
       'calendar',
@@ -102,6 +105,8 @@ function tabClause(context: EmailQueryContext): TargetExpr {
         'all',
         'reminders',
         'focus',
+        'spam',
+        'trash',
         anyThread
       )
       .exhaustive(anyThread)
@@ -160,7 +165,11 @@ export function buildEmailQuery(
 
   // Newest activity first: `updated_at` is the thread's latest message time.
   return {
-    ...(context.aliasFilter ? { transport: 'graphql' as const } : {}),
+    ...(isExcludedEmailFolder(context.tab)
+      ? { transport: 'rest' as const }
+      : context.aliasFilter
+        ? { transport: 'graphql' as const }
+        : {}),
     params: {
       expand: true,
       limit: 100,

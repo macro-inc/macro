@@ -36,6 +36,8 @@ export interface BaseListEntityProps<E extends EntityData = EntityData>
   hovered?: boolean;
   /** Caller-owned quick actions, revealed on pointer hover or keyboard focus. */
   actions?: JSX.Element;
+  /** Persistent controls for touch devices, before the timestamp. */
+  touchActions?: JSX.Element;
   /** Persistent status/action immediately before the timestamp. */
   leadingAction?: JSX.Element;
   /** Caller-owned marker between the icon and the title, e.g. a priority. */

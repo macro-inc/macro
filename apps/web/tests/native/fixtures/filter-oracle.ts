@@ -1,5 +1,5 @@
 import { match } from 'ts-pattern';
-import type { EmailTab } from '../../../src/features/email-view/constants';
+import type { EmailTab } from '../../../src/features/email-view/tabs';
 import { type FixtureRow, LINKS } from './filter-corpus';
 import { USER_ID } from './mail';
 
@@ -14,7 +14,13 @@ export function emailMatchesSelection(
   tab: EmailTab,
   selection: Record<string, string[]>
 ): boolean {
-  if (tab === 'scheduled' || tab === 'reminders' || tab === 'focus') {
+  if (
+    tab === 'scheduled' ||
+    tab === 'reminders' ||
+    tab === 'focus' ||
+    tab === 'spam' ||
+    tab === 'trash'
+  ) {
     throw new Error(`${tab} membership is not owned by the Soup query`);
   }
   if (row.kind !== 'email') return false;

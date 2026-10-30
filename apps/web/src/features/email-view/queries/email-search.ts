@@ -10,6 +10,7 @@ import type {
   EntityFilters,
 } from '@service-search/generated/models';
 import { match } from 'ts-pattern';
+import { isExcludedEmailFolder } from '../constants';
 import type { EmailTab } from '../types';
 import type { EmailQueryContext } from './email-query';
 
@@ -30,28 +31,32 @@ const nonEmailFilters: EntityFilters = {
 // filter archive state either, so `emailMatchesTab` trims Archived hits.
 function tabFilters(tab: EmailTab): EmailFilters {
   // Focus filters its own list on the client; this search stays dormant there.
-  return match(tab)
-    .with('important', 'focus', () => ({
-      importance: true,
-      shared: 'exclude' as const,
-    }))
-    .with('noise', () => ({ importance: false, shared: 'exclude' as const }))
-    .with('calendar', () => ({
-      calendar_only: true,
-      shared: 'exclude' as const,
-    }))
-    .with('shared', () => ({ shared: 'only' as const }))
-    .with('archived', () => ({ shared: 'exclude' as const }))
-    .with(
-      'favorites',
-      'drafts',
-      'scheduled',
-      'reminders',
-      'sent',
-      'all',
-      () => ({})
-    )
-    .exhaustive(() => ({}));
+  return (
+    match(tab)
+      .with('important', 'focus', () => ({
+        importance: true,
+        shared: 'exclude' as const,
+      }))
+      .with('noise', () => ({ importance: false, shared: 'exclude' as const }))
+      .with('calendar', () => ({
+        calendar_only: true,
+        shared: 'exclude' as const,
+      }))
+      .with('shared', () => ({ shared: 'only' as const }))
+      // These views disable service search; fail closed if called independently.
+      .with('spam', 'trash', () => ({ email_thread_ids: [NIL_UUID] }))
+      .with('archived', () => ({ shared: 'exclude' as const }))
+      .with(
+        'favorites',
+        'drafts',
+        'scheduled',
+        'reminders',
+        'sent',
+        'all',
+        () => ({})
+      )
+      .exhaustive(() => ({}))
+  );
 }
 
 const soleSelection = (selection: string[] | undefined) =>
@@ -89,8 +94,9 @@ export function buildEmailSearchRequest(
   admittedIds?: readonly string[]
 ): SearchSoupQueryArgs {
   // Both discovery and retained unread results must stay within favorites.
-  const threadIds =
-    context.tab === 'favorites'
+  const threadIds = isExcludedEmailFolder(context.tab)
+    ? [NIL_UUID]
+    : context.tab === 'favorites'
       ? (context.favoriteThreadIds ?? []).filter(
           (id) => admittedIds === undefined || admittedIds.includes(id)
         )

@@ -127,7 +127,8 @@ All registered Email and Tasks tabs must have an explicit source classification.
 The nine Soup-backed Email tabs include Favorites and Archived; the three task
 predicate tabs are My tasks, Created by me and All tasks. Scheduled email uses
 the scheduled-message service, Reminders gets membership from its reminder
-collection, and Tasks → Projects uses a project collection. Those separate
+collection, Spam and Trash use network-backed provider folder pages, and
+Tasks → Projects uses a project collection. Those separate
 surfaces are reported in `outsidePredicateMatrix`, not exercised through their
 dormant Soup queries or claimed as offline predicate coverage. They need separate
 source-specific tests. Adding an unclassified tab fails the registry guard.

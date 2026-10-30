@@ -15,6 +15,8 @@ export const PreviewViewStandardLabel = {
   drafts: 'drafts',
   starred: 'starred',
   all: 'all',
+  spam: 'spam',
+  trash: 'trash',
   important: 'important',
   other: 'other',
 } as const;

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import type { EmailTab } from '../../../src/features/email-view/constants';
+import type { EmailTab } from '../../../src/features/email-view/tabs';
 import { filterCorpus, LINKS, TAGS } from './filter-corpus';
 import { ALL_INBOXES, emailMatchesSelection } from './filter-oracle';
 import { fixtureId } from './mail';
@@ -52,7 +52,7 @@ test('All and Shared retain their distinct inbox and sharing scopes', () => {
   expect(matching('shared')).toEqual([60, 71, 72].map(fixtureId));
 });
 
-test.each(['scheduled', 'reminders'] as const)(
+test.each(['scheduled', 'reminders', 'spam', 'trash'] as const)(
   'does not pretend the dormant Soup query owns the %s collection',
   (tab) => {
     expect(() => matching(tab)).toThrow(

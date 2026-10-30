@@ -50,7 +50,10 @@ pub(super) async fn previews_for_view_cursor(
         }
         (
             view @ PreviewView::StandardLabel(
-                PreviewViewStandardLabel::Sent | PreviewViewStandardLabel::All,
+                PreviewViewStandardLabel::Sent
+                | PreviewViewStandardLabel::All
+                | PreviewViewStandardLabel::Spam
+                | PreviewViewStandardLabel::Trash,
             ),
             Either::Left(query),
         ) => {
