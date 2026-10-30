@@ -1,12 +1,20 @@
 import type { EmailMessage } from '../../email-message/core/email-message';
 import type { EmailThread } from './email-thread';
 
-/** Sender actions historically target the earliest sender other than the viewer. */
-export function selectThreadSender(thread: EmailThread, viewerEmail?: string) {
-  const viewer = viewerEmail?.toLowerCase();
+/**
+ * Sender actions historically target the earliest sender other than the
+ * viewer, at any of the viewer's addresses.
+ */
+export function selectThreadSender(
+  thread: EmailThread,
+  ...viewerEmails: (string | undefined)[]
+) {
+  const viewer = new Set(
+    viewerEmails.flatMap((email) => (email ? [email.toLowerCase()] : []))
+  );
   return selectThreadMessages(thread).messages.find(
     (message) =>
-      message.from?.email && message.from.email.toLowerCase() !== viewer
+      message.from?.email && !viewer.has(message.from.email.toLowerCase())
   )?.from?.email;
 }
 

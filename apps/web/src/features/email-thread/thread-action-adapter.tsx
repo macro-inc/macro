@@ -1,6 +1,9 @@
 import { useEmail } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
+import {
+  useEmailLinksQuery,
+  useNonPrimaryEmailLinkIdHeader,
+} from '@queries/email/link';
 import {
   blockSenderWithToast,
   markSenderNoiseWithToast,
@@ -24,10 +27,16 @@ export function createThreadActionAdapter(
   );
   const read = createThreadReadAdapter(threadId, threadSource, toHeaderLinkId);
   const currentUserEmail = useEmail();
+  const linksQuery = useEmailLinksQuery();
 
+  // A linked inbox can have an address other than the login, and mail sent
+  // from it is the viewer's own too. Until links load, no sender is known.
   const getSenderEmail = (): string | undefined => {
     const thread = threadSource();
-    return thread ? selectThreadSender(thread, currentUserEmail()) : undefined;
+    const links = linksQuery.data?.links;
+    if (!thread || !links) return undefined;
+    const inbox = links.find((link) => link.id === thread.link_id);
+    return selectThreadSender(thread, currentUserEmail(), inbox?.email_address);
   };
 
   const blockSender = () => {
