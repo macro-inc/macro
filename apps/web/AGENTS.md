@@ -252,7 +252,10 @@ Project grouping in Soup and its live cache projection uses the system Project
 property (initiative membership), with an empty key labeled No Project. The
 server labels each project group with the initiative name the viewer can read;
 headers resolve a name themselves only while a group is still labeled by its
-key, and projects sort by name with No Project last.
+key, and projects sort by name with No Project last. Data a grouped list shows
+about its groups (labels, order, membership) is computed on the server and
+mirrored by the cache's local grouping projection; never add a side cache in
+feature code to cover a remount.
 
 Keep persistent list hotkeys free of mounted-view closures, and clear
 virtualizer accessors when their view unmounts.
