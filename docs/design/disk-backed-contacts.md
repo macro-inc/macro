@@ -1,0 +1,168 @@
+# Disk-backed contacts
+
+**Status:** approved implementation direction; contact migration not started.
+**Next step:** phase 1, a bounded backend contact-read contract, followed by one
+end-to-end cached contact-search slice.
+
+## Goal and scope
+
+Support directories of 100,000 contacts without retaining the complete directory
+in JavaScript or in a Rust/WASM search catalog. Keep contact records on disk in the
+existing Turso normalized cache and materialize only bounded results and explicitly
+selected contacts.
+
+This covers the personal contact graph used for people search and recipients, not
+the separate CRM contact entity. Preserve desktop and mobile behavior, including
+custom email entry, selected recipients, keyboard interaction, and existing labels.
+
+The issue is not fully solved until the last full-directory consumer is removed.
+Migrating Quick Access alone leaves other callers retaining the entire corpus.
+
+## Foundation already implemented on the feature branch
+
+- Text matching reaches Turso as bound subsequence patterns.
+- SQL results stream into a top-K ranker; there is no retained text-search catalog.
+- Row fields are borrowed and a canonical-key buffer is reused; only winners are
+  copied into owned documents.
+- Storage schema 12 adds a covering search index. The deliberately incompatible
+  cache cutover is already implemented; do not add another rollout mechanism for
+  contacts unnecessarily.
+
+See [client cache architecture](../../crates/client/README.md#streaming-text-search)
+and [search measurements](../../crates/client/search-performance.md). These are
+branch changes, not a claim that the feature is deployed.
+
+## Current sources of retention
+
+- [`queries/contacts/contacts.ts`](../../apps/web/src/lib/queries/contacts/contacts.ts)
+  fetches all contact IDs into TanStack Query. Each `useContacts()` maps them into
+  another `IUser[]` and requests display names.
+- [`core/user/displayName.ts`](../../apps/web/src/lib/core/user/displayName.ts)
+  holds a global name store. Expiry triggers refresh, not eviction.
+- [`QuickAccessSource.tsx`](../../apps/web/src/lib/core/context/quickAccess/QuickAccessSource.tsx)
+  builds per-contact items, search strings, and indexes. The frontend projected-list
+  path currently excludes `person`, even though the core search profile has that bucket.
+- [`useCombinedRecipient.ts`](../../apps/web/src/lib/core/signal/useCombinedRecipient.ts)
+  derives additional arrays, consumed by email, sharing, invitations, and creation flows.
+- Filters, calendar editors, onboarding, imports, debug views, and the database SQL
+  `people` source also request the full directory.
+
+## Target data flow
+
+```text
+Authenticated, paginated contact reads with resolved names
+    -> bounded background hydration
+    -> normalized contact records + existing search projection in Turso
+    -> database search / bounded browse / explicit ID or email lookup
+    -> active result windows and selected contacts
+```
+
+Reuse the existing database, cache host, ownership, hydration, identity isolation,
+and generation handling. The expected local change is an additive normalized type
+and search projection, not a new database or bespoke contact-storage subsystem.
+
+## Phase 1 — bounded backend contract
+
+- [ ] Extend the existing `contacts` domain service and repository with stable,
+  keyset-paginated reads; do not load everyone before slicing a page.
+- [ ] Expose the reads under the authenticated GraphQL viewer, composing domain
+  behavior through `complete_graph` rather than embedding database queries in resolvers.
+- [ ] Return identity, email, and resolved names together, avoiding a second
+  all-contact name-fetch step.
+- [ ] Preserve name precedence: Macro profile, then the viewer's email-contact
+  name, then the existing email fallback. Preserve the current inclusion of self.
+- [ ] Define a distinct viewer-scoped contact record and stable normalized identity.
+  Do not reuse `GraphqlUser`, which is the authenticated viewer/identity witness;
+  do not merge viewer-specific names into a global public-profile record.
+- [ ] Provide bounded search and batch ID/email resolution under the same authorized
+  contract. Cached user-profile data alone must not imply contact membership.
+- [ ] Set explicit limits for read pages, search results, and lookup batches.
+  Generate GraphQL/wire types from their source of truth.
+
+Read [contacts ownership](../../crates/contacts/AGENTS.md),
+[schema conventions](../../crates/complete_graph/AGENTS.md), and the
+[GraphQL field guide](../guides/add-graphql-field.md) before implementing.
+Keep deployed full-list APIs compatible until their clients can be retired.
+
+## Phase 2 — cache ingestion and query-driven search
+
+- [ ] Hydrate one bounded page at a time, persist it, then release its payload.
+  Keep checkpoints scoped to the account and durable storage generation.
+- [ ] Do not accumulate response pages or a root record containing all contact IDs.
+  `@cacheOnly` limits returned fields; it does not by itself prevent retained page
+  wrappers. Extend the relevant hydration-retention policy deliberately.
+- [ ] Project the new contact type into `person`, using the existing covering index
+  and borrowed-row ranker. Include names and emails in matching.
+- [ ] Preserve DM recency, deduplication, and secondary-inbox exclusions. Ranking
+  facts needed to choose the top results must apply before the result limit;
+  relationship `updated_at` is not automatically equivalent to DM activity.
+- [ ] Add shared contact operations under `apps/web/src/lib/queries/contacts`:
+  bounded search, cursor-based browse, explicit ID/email resolution, and
+  loading/error/synchronization status. These replace the all-array contract.
+- [ ] Bound retained result windows and query-history caches, not just SQL result
+  counts. Keep selected contacts independently of the current suggestions.
+- [ ] For cold, disabled, or unsupported caches, use bounded server reads through
+  the same frontend contract. Never fall back to downloading the full directory.
+- [ ] Account for older native engines: runtime GraphQL metadata can accept a new
+  type, but its handwritten search projection still needs a rebuilt native binary.
+  Gate local contact-search capability rather than treating missing support as no matches.
+- [ ] Wire Quick Access `person` materialization and query-driven shared recipient
+  selection; remove global contact indexing and full-directory recipient transforms.
+
+### Synchronization: keep the first implementation small
+
+Use resumable paginated hydration and coalesced refreshes rather than introducing
+a new change-log subsystem. Existing `contacts_invalidation` notifications should
+schedule bounded work, not cause a complete 100k-contact scan on every event.
+Choose a refresh/coalescing policy that prevents continuous rescans under activity.
+
+Track cold, partial, complete, and failed synchronization distinctly. Discard stale
+async responses after account/generation changes. Interrupted or failed scans never
+prove that omitted contacts were removed.
+
+Name freshness needs an explicit policy: contact-relationship timestamps do not
+capture profile or email-contact name updates. Address this through bounded name
+refresh and directory refresh behavior; do not claim graph timestamps synchronize
+all display fields. Determine removal reconciliation from authoritative source
+semantics, not absence from an incomplete scan.
+
+## Phase 3 — eliminate remaining full-list consumers
+
+- [ ] Email recipients, channel creation/invites, sharing, calls, and other
+  `useCombinedRecipients()` consumers: query-driven suggestions and separate selection.
+- [ ] Calendar guests, event editors, participant menus, and mentions: bounded
+  search plus explicit resolution of attendees/participants already present.
+- [ ] Drive, Tasks, Soup, CRM, and calendar people filters: searchable pages plus
+  explicit resolution of persisted selected IDs.
+- [ ] Onboarding: bounded same-domain lookup instead of collecting every contact email.
+- [ ] Imports: batch exact matching of the imported assignees, plus bounded picker search.
+- [ ] Database SQL `people`: move filtering/aggregation to an appropriate execution
+  boundary. Paging everyone and concatenating the pages in JS is not a solution.
+- [ ] Debug views: counts and paginated inspection, not the full directory.
+- [ ] Bound and account-scope the shared display-name cache. Retain active/selected
+  names without creating eviction/refetch loops; TTL alone is not a size bound.
+- [ ] Remove `useContacts()`, `useContactsQuery()`, the full-list query options,
+  and obsolete derived arrays once all callers have migrated.
+
+Rediscover callers rather than treating this list as exhaustive:
+
+```sh
+rg -n 'useContacts\(|useContactsQuery\(|contactsQueryOptions\(|getContacts\(|useCombinedRecipients\(' apps/web/src
+```
+
+## Completion criteria
+
+- Retained contact data scales with bounded hydration/result buffers and active
+  selections, not total directory size, in both JS and Rust/WASM.
+- A 100k-contact corpus remains usable through initial hydration, repeated searches,
+  refreshes, scrolling, and opening/closing multiple pickers.
+- Names, self, DM ranking/deduplication, selected recipients, and custom email entry
+  preserve their existing semantics on desktop and mobile.
+- Offline/incomplete data is not presented as an authoritative absence. Account
+  switches, cache resets, disposal, and superseded searches cannot publish stale results.
+- No full-directory compatibility path or hidden side cache remains. Report memory
+  and latency separately: bounded memory alone does not guarantee fast searches.
+
+Keep each phase incremental and update this checklist as work lands. The first
+implementation slice is backend contract -> bounded hydration -> one cached contact
+search consumer; do not claim the whole-app memory issue solved at that milestone.
