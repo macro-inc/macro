@@ -96,7 +96,6 @@ import {
   type SearchLocation,
 } from '@entity';
 import type { SoupRowFamily } from '@entity/composed/list-entity/row-geometry';
-import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import ChevronRightIcon from '@icon/system/regular/caret-right.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import InfoIcon from '@icon/system/regular/info.svg';
@@ -128,6 +127,7 @@ import { makeMarkNotDoneAction } from '../actions/make-mark-not-done-action';
 import { SOUP_TOUR } from '../tour';
 import { SearchAskAiButton } from './search-ask-ai-button';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
+import { SoupGroupContinuation } from './soup-group-continuation';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 
@@ -545,7 +545,12 @@ interface SoupViewListProps {
   groupHeader?: import('solid-js').Component<
     GroupHeaderProps & { highlighted?: boolean }
   >;
-  emptyState?: () => JSX.Element;
+  emptyState?: (state: {
+    filtered: boolean;
+    clearFilters: () => void;
+  }) => JSX.Element;
+  loadingContent?: JSX.Element;
+  errorContent?: (retry: () => void) => JSX.Element;
   emptyContent?: JSX.Element;
   timestamp?: (entity: EntityData) => DateValue | null | undefined;
   navigationKey?: string;
@@ -581,6 +586,8 @@ export const SoupViewList = (props: SoupViewListProps) => (
       timestamp={props.timestamp}
       navigationKey={props.navigationKey}
       emptyState={props.emptyState}
+      loadingContent={props.loadingContent}
+      errorContent={props.errorContent}
       emptyContent={props.emptyContent}
     />
   </SoupRowMetadataProvider>
@@ -600,6 +607,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     clientSort,
     fetchNextGroupPage,
     isFetchingGroupPage,
+    groupPageError,
   } = useSoupView();
   const { hasActiveRefinements, hasHiddenItems, resetToTabDefaults } =
     useFilterRefinements();
@@ -725,6 +733,11 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     isFetchingNextPage: source.isFetchingNextPage,
     fetchNextPage: source.fetchNextPage,
     error: source.error,
+    groupPaging: {
+      load: fetchNextGroupPage,
+      isLoading: isFetchingGroupPage,
+      failed: (groupKey) => Boolean(groupPageError(groupKey)),
+    },
   });
 
   // Register entity action hotkeys
@@ -1124,7 +1137,11 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                     ref={setEmptyStateRef}
                     class="flex-1 min-h-0 flex flex-col touch:pb-(--mobile-content-inset-bottom)"
                   >
-                    <LoadErrorPanel onRetry={retryLoad} />
+                    {props.errorContent ? (
+                      props.errorContent(retryLoad)
+                    ) : (
+                      <LoadErrorPanel onRetry={retryLoad} />
+                    )}
                   </div>
                 </Match>
                 <Match
@@ -1136,7 +1153,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                         panel leaves list views unpadded so rows can
                         under-scroll the status bar. */}
                   <div class="flex-1 min-h-0 flex flex-col touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
-                    <LoadingBlock />
+                    {props.loadingContent ?? <LoadingBlock />}
                   </div>
                 </Match>
                 <Match
@@ -1157,7 +1174,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                     class="flex-1 min-h-0 flex flex-col touch:pb-(--mobile-content-inset-bottom)"
                   >
                     <Show
-                      when={!searchText() && props.emptyState}
+                      when={props.emptyState}
                       fallback={
                         <EmptyState
                           content={props.emptyContent}
@@ -1169,7 +1186,12 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                         />
                       }
                     >
-                      {(emptyState) => emptyState()()}
+                      {(emptyState) =>
+                        emptyState()({
+                          filtered: hasActiveRefinements(),
+                          clearFilters: resetToTabDefaults,
+                        })
+                      }
                     </Show>
                   </div>
                 </Match>
@@ -1281,7 +1303,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                   )}
                                 </Match>
 
-                                {/* Load more row */}
+                                {/* Group continuation row */}
                                 <Match
                                   when={
                                     row.group?.isExpanded() &&
@@ -1289,58 +1311,21 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                     row.group
                                   }
                                 >
-                                  {(group) => {
-                                    const highlighted = () => row.isFocused();
-                                    return (
-                                      <div
-                                        class={cn(
-                                          'my-1 rounded min-h-9 flex items-center justify-center',
-                                          highlighted()
-                                            ? 'w-[calc(100%-0.5rem)] mx-1 bg-active/60'
-                                            : 'mx-auto'
-                                        )}
-                                      >
-                                        <Show
-                                          when={
-                                            !isFetchingGroupPage(group().key)
-                                          }
-                                          fallback={
-                                            <Button
-                                              variant="secondary"
-                                              size="xs"
-                                              class={cn({
-                                                'bg-surface': !highlighted(),
-                                                'border-transparent':
-                                                  highlighted(),
-                                              })}
-                                              disabled
-                                            >
-                                              <Spinner class="size-3 animate-spin" />
-                                              Loading...
-                                            </Button>
-                                          }
-                                        >
-                                          <Button
-                                            variant="secondary"
-                                            size="xs"
-                                            class={cn({
-                                              'bg-surface': !highlighted(),
-                                              'border-transparent':
-                                                highlighted(),
-                                            })}
-                                            onClick={() => {
-                                              fetchNextGroupPage(
-                                                group().key
-                                              ).catch(reportSoupViewError);
-                                            }}
-                                          >
-                                            <CaretDownIcon class="size-2.5" />
-                                            Load More
-                                          </Button>
-                                        </Show>
-                                      </div>
-                                    );
-                                  }}
+                                  {(group) => (
+                                    <SoupGroupContinuation
+                                      isLoading={isFetchingGroupPage(
+                                        group().key
+                                      )}
+                                      failed={Boolean(
+                                        groupPageError(group().key)
+                                      )}
+                                      onLoad={() => {
+                                        fetchNextGroupPage(group().key).catch(
+                                          reportSoupViewError
+                                        );
+                                      }}
+                                    />
+                                  )}
                                 </Match>
 
                                 {/* Entity row */}

@@ -125,6 +125,8 @@ export type DatabaseRecordsViewProps = {
   renderTextValue?: GridCellProps['renderTextValue'];
   renderMentionPicker?: GridCellProps['renderMentionPicker'];
   renderMentionValue?: GridCellProps['renderMentionValue'];
+  /** Opens document/file references in any column, including record panel fields. */
+  onOpenDocumentMention?: (id: string) => void;
   /** Opens what a record's title mentions, such as a pipeline row's company, in place of editing it. */
   onOpenTitleMention?: (id: string, type: DatabaseEntityType) => void;
   renderRelationCell?: (props: RelationCellProps) => JSX.Element;
@@ -347,7 +349,14 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
             renderTextValue={props.renderTextValue}
             renderMentionPicker={props.renderMentionPicker}
             renderMentionValue={props.renderMentionValue}
-            onOpenMention={isTitle() ? props.onOpenTitleMention : undefined}
+            onOpenMention={
+              column().specificEntityType === 'DOCUMENT' &&
+              props.onOpenDocumentMention
+                ? props.onOpenDocumentMention
+                : isTitle()
+                  ? props.onOpenTitleMention
+                  : undefined
+            }
             onMention={(mention) =>
               writeValue(row(), column(), mention.id, undefined, {
                 dataType: 'ENTITY',

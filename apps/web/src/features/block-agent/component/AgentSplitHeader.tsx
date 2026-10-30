@@ -6,6 +6,7 @@ import {
   ResponsiveBlockToolbar,
   ToolButton,
 } from '@components/app/ResponsiveBlockToolbar';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -13,6 +14,7 @@ import {
 } from '@components/app/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
+import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { Permissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
@@ -186,6 +188,13 @@ export function AgentSplitHeader(props: {
 
       {/* Session context stays next to the grouped header actions. */}
       <SplitHeaderRight>
+        <Show when={props.session && sessionId()}>
+          {(id) => (
+            <HeaderIsland class="-order-1">
+              <BlockLiveIndicators entityId={id} />
+            </HeaderIsland>
+          )}
+        </Show>
         <div class="order-[900] flex items-center gap-2 touch:gap-1.5">
           <Show when={props.session?.taskId}>
             {(taskId) => <AgentTaskChip taskId={taskId()} />}

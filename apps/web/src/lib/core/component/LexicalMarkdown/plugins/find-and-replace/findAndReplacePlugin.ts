@@ -51,10 +51,10 @@ type FindAndReplaceProps = {
 };
 
 function shouldIgnoreNodeType(type: string) {
-  // Document mentions (task chips, doc/channel refs, …) stay searchable via
-  // getTextContent() so Ctrl+F matches their visible titles. Replace still
-  // no-ops on them because they are not TextNodes.
-  const ignoredTypes = ['user-mention', 'horizontalrule', 'equation'];
+  // Mention chips stay searchable via getTextContent() so Ctrl+F matches
+  // their visible titles. Replace still no-ops on them because they are
+  // not TextNodes.
+  const ignoredTypes = ['horizontalrule', 'equation'];
   return ignoredTypes.includes(type);
 }
 
@@ -162,6 +162,16 @@ function selectNextKey(key: NodeKey) {
   $setSelection(nodeSelection);
 }
 
+function pairKeysWithNonTextNodes(items: NodekeyOffset[]): Set<number> {
+  const skip = new Set<number>();
+  for (const item of items) {
+    if (item.pairKey === undefined) continue;
+    const node = $getNodeByKey(item.key);
+    if (!node || !$isTextNode(node)) skip.add(item.pairKey);
+  }
+  return skip;
+}
+
 function areListOffsetsEqual(left: NodekeyOffset[], right: NodekeyOffset[]) {
   if (left.length !== right.length) return false;
   for (let i = 0; i < left.length; i += 1) {
@@ -194,11 +204,17 @@ function registerFindAndReplacePlugin(
       DO_REPLACE_COMMAND,
       (payload: ReplacePayload) => {
         editor.update(() => {
+          const skipPairKeys = pairKeysWithNonTextNodes(
+            payload.nodeKeyOffsetList
+          );
           let previousNodeKey = '';
           let lengthDiff = 0;
           let replaceStart: number,
             replaceEnd: number = 0;
           payload.nodeKeyOffsetList.map((item) => {
+            if (item.pairKey !== undefined && skipPairKeys.has(item.pairKey)) {
+              return;
+            }
             if (previousNodeKey === item.key) {
               replaceStart = item.offset.start - lengthDiff;
               replaceEnd = item.offset.end - lengthDiff;
@@ -240,6 +256,9 @@ function registerFindAndReplacePlugin(
       DO_REPLACE_ONCE_COMMAND,
       (payload: ReplacePayload) => {
         editor.update(() => {
+          const skipPairKeys = pairKeysWithNonTextNodes(
+            payload.nodeKeyOffsetList
+          );
           let previousNodeKey = '';
           let lengthDiff = 0;
           let replaceStart: number,
@@ -247,6 +266,9 @@ function registerFindAndReplacePlugin(
           let replacedCount = 0;
           let nextKey = '';
           payload.nodeKeyOffsetList.map((item) => {
+            if (item.pairKey !== undefined && skipPairKeys.has(item.pairKey)) {
+              return;
+            }
             if (previousNodeKey === item.key) {
               replaceStart = item.offset.start - lengthDiff;
               replaceEnd = item.offset.end - lengthDiff;

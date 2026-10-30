@@ -92,7 +92,7 @@ function VerticalBar() {
 
 type DropdownItemProps = {
   label: string;
-  icon: Component;
+  icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   show: boolean;
   themeClass?: string;
   before?: JSX.Element;
@@ -239,7 +239,7 @@ const InlineFormatButton = (props: {
       }
       disabled={props.buttonIsDisabled()}
     >
-      <Dynamic component={icon} />
+      <Dynamic component={icon} class="size-4" />
     </Button>
   );
 };
@@ -293,7 +293,7 @@ export const ElementFormatButton = (props: {
       }
       disabled={props.buttonIsDisabled()}
     >
-      <Dynamic component={icon} />
+      <Dynamic component={icon} class="size-4" />
     </Button>
   );
 };
@@ -335,12 +335,7 @@ const ElementFormatMenuItem = (
     >
       <Show when={icon()}>
         {(IconComp) => (
-          <Dynamic
-            component={
-              IconComp() as Component<JSX.SvgSVGAttributes<SVGSVGElement>>
-            }
-            class="size-4 shrink-0"
-          />
+          <Dynamic component={IconComp()} class="size-4 shrink-0" />
         )}
       </Show>
       <span class="flex-1 truncate">{inner()}</span>
@@ -899,6 +894,7 @@ export function FormatTools(props: {
           >
             <Dynamic
               component={selection()?.hasLinks ? BrokenLinkIcon : LinkIcon}
+              class="size-4"
             />
           </Button>
           <MoreInlineDropdown />
@@ -1053,6 +1049,7 @@ export function FormatTools(props: {
             >
               <Dynamic
                 component={selection()?.hasLinks ? BrokenLinkIcon : LinkIcon}
+                class="size-4"
               />
             </Button>
             <MediaSelector buttonIsDisabled={buttonIsDisabled} />

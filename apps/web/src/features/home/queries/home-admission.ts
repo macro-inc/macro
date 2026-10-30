@@ -20,7 +20,9 @@ export const emptyHomeAdmission = (): HomeAdmission => ({
 /**
  * Apply Home's facets. Rows stay admitted after they transition from unread
  * to read, so opening a row under the Unread filter does not yank it away;
- * changing the tab or read filter starts a new admission scope.
+ * changing the tab or read filter starts a new admission scope. A source
+ * that already knows each row's state passes `isUnread`, so the read facet
+ * agrees with it; otherwise the facet reads the row's notifications.
  */
 export function admitHomeEntities(
   previous: HomeAdmission,
@@ -29,6 +31,7 @@ export function admitHomeEntities(
     tab: string;
     facets: FacetSelection;
     facetContext: HomeFacetContext;
+    isUnread?: (entity: WithNotification<EntityData>) => boolean;
   }
 ): HomeAdmission {
   const activeReadFacets = input.facets.read ?? [];
@@ -38,8 +41,14 @@ export function admitHomeEntities(
       ? new Set(previous.admittedIds)
       : new Set<string>();
 
+  const isUnread = input.isUnread;
   if (activeReadFacets.length === 0) {
     for (const entity of input.entities) admittedIds.add(entity.id);
+  } else if (isUnread) {
+    const wantsUnread = activeReadFacets.includes('unread');
+    for (const entity of input.entities) {
+      if (isUnread(entity) === wantsUnread) admittedIds.add(entity.id);
+    }
   } else {
     const readSelection = { read: activeReadFacets };
     for (const entity of input.entities) {

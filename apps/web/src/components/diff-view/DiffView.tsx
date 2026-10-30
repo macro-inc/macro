@@ -100,9 +100,7 @@ function Root(
     ready: () => parsed()?.patch === patch(),
     diffStyle: () => props.diffStyle,
     themeType: createThemeType(),
-    collapse:
-      props.collapse ??
-      createDiffCollapse(() => props.files.map((file) => file.path)),
+    collapse: props.collapse ?? createDiffCollapse(() => props.files),
     active: () => props.active,
   };
   return (

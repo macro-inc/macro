@@ -1,4 +1,11 @@
 import { DocumentOutline } from '@app/components/DocumentOutline';
+import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
+import {
+  MobileCreateMenu,
+  type MobileCreateMenuItem,
+} from '@components/app/mobile/MobileCreateMenu';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import CalendarCheck from '@icon/system/regular/calendar-check.svg';
@@ -528,6 +535,37 @@ function BuilderCanvas(
     />
   );
 
+  const addBooking = () => {
+    const existing = booking();
+    if (existing) revealBooking(existing.id);
+    else setChoosingBooking(true);
+  };
+  // Touch floats these above the dock, in place of the page's New.
+  const addActions = (): MobileCreateMenuItem[] => [
+    {
+      label: 'Section',
+      icon: Plus,
+      disabled: props.detail.tableGone,
+      onSelect: () => addSectionAndFocus('questions'),
+    },
+    {
+      label: 'Gate',
+      icon: ShieldCheck,
+      disabled: props.detail.tableGone,
+      onSelect: () => addSectionAndFocus('gate'),
+    },
+    ...(booking() || context.booking.available()
+      ? [
+          {
+            label: booking() ? 'View meeting link' : 'Meeting link',
+            icon: CalendarCheck,
+            disabled: props.detail.tableGone,
+            onSelect: addBooking,
+          },
+        ]
+      : []),
+  ];
+
   const hiddenColumnRows = () =>
     builder.hiddenColumns().map((hidden) => ({
       id: hidden.id,
@@ -1019,52 +1057,68 @@ function BuilderCanvas(
               columns={hiddenColumnRows()}
               onAdd={(columnId) => builder.addExistingColumn(columnId)}
             />
-            <div
-              class="mt-6 flex flex-wrap gap-3"
-              role="group"
-              aria-label="Add to form"
+            <Show
+              when={!isTouchDevice()}
+              fallback={
+                <FloatRegion
+                  region="accessory"
+                  active={() =>
+                    (props.active ?? true) && !virtualKeyboardVisible()
+                  }
+                >
+                  <div class="flex justify-end px-(--mobile-chrome-gutter)">
+                    <MobileCreateMenu label="Add" items={addActions()} />
+                  </div>
+                </FloatRegion>
+              }
             >
-              <Button
-                variant="secondary"
-                size="md"
-                class="h-14 flex-1 justify-start gap-2 rounded-xl px-5"
-                disabled={props.detail.tableGone}
-                onClick={() => addSectionAndFocus('questions')}
+              <div
+                class="mt-6 flex flex-wrap gap-3"
+                role="group"
+                aria-label="Add to form"
               >
-                <Plus class="size-4" />
-                Add section
-              </Button>
-              <Button
-                variant="secondary"
-                size="md"
-                class="h-14 flex-1 justify-start gap-2 rounded-xl px-5"
-                disabled={props.detail.tableGone}
-                onClick={() => addSectionAndFocus('gate')}
-              >
-                <ShieldCheck class="size-4" />
-                Add gate
-              </Button>
-              <Show when={booking() || context.booking.available()}>
                 <Button
                   variant="secondary"
                   size="md"
-                  class="h-14 flex-1 justify-start gap-2 rounded-xl px-5"
+                  class="h-14 min-w-max flex-1 justify-start gap-2 rounded-xl px-5"
                   disabled={props.detail.tableGone}
-                  onClick={(event) => {
-                    const existing = booking();
-                    if (existing) {
-                      revealBooking(existing.id);
-                    } else {
-                      dialogReturnFocus = event.currentTarget;
-                      setChoosingBooking(true);
-                    }
-                  }}
+                  onClick={() => addSectionAndFocus('questions')}
                 >
-                  <CalendarCheck class="size-4" />
-                  {booking() ? 'View meeting link' : 'Add meeting link'}
+                  <Plus class="size-4" />
+                  Add section
                 </Button>
-              </Show>
-            </div>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  class="h-14 min-w-max flex-1 justify-start gap-2 rounded-xl px-5"
+                  disabled={props.detail.tableGone}
+                  onClick={() => addSectionAndFocus('gate')}
+                >
+                  <ShieldCheck class="size-4" />
+                  Add gate
+                </Button>
+                <Show when={booking() || context.booking.available()}>
+                  <Button
+                    variant="secondary"
+                    size="md"
+                    class="h-14 min-w-max flex-1 justify-start gap-2 rounded-xl px-5"
+                    disabled={props.detail.tableGone}
+                    onClick={(event) => {
+                      const existing = booking();
+                      if (existing) {
+                        revealBooking(existing.id);
+                      } else {
+                        dialogReturnFocus = event.currentTarget;
+                        setChoosingBooking(true);
+                      }
+                    }}
+                  >
+                    <CalendarCheck class="size-4" />
+                    {booking() ? 'View meeting link' : 'Add meeting link'}
+                  </Button>
+                </Show>
+              </div>
+            </Show>
           </div>
         </div>
         <div class="pointer-events-none absolute inset-y-0 left-4 z-1 hidden w-10 @min-[880px]/builder:block">

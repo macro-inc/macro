@@ -99,6 +99,7 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
   const { userId } = options;
 
   const canExecute = (entity: EntityData): boolean => {
+    if (entity.type === 'database') return entity.grant === 'owner';
     if (entity.type === 'email') {
       return true;
     }

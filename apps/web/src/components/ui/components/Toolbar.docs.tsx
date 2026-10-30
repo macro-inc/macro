@@ -14,16 +14,16 @@ function BasicDemo() {
     <Toolbar size="icon-sm">
       <Toolbar.Group>
         <Toolbar.Button aria-label="Undo" tooltip="Undo">
-          <ArrowCounterClockwiseIcon />
+          <ArrowCounterClockwiseIcon class="size-4" />
         </Toolbar.Button>
       </Toolbar.Group>
       <Toolbar.Divider />
       <Toolbar.Group>
         <Toolbar.Button aria-label="Copy" tooltip="Copy">
-          <CopyIcon />
+          <CopyIcon class="size-4" />
         </Toolbar.Button>
         <Toolbar.Button aria-label="Copy link" tooltip="Copy link">
-          <LinkIcon />
+          <LinkIcon class="size-4" />
         </Toolbar.Button>
       </Toolbar.Group>
       <Toolbar.Divider />
@@ -32,7 +32,7 @@ function BasicDemo() {
         tooltip="Delete"
         class="text-failure-ink"
       >
-        <TrashIcon />
+        <TrashIcon class="size-4" />
       </Toolbar.Button>
     </Toolbar>
   );
@@ -56,7 +56,7 @@ function MediumDemo() {
           size="icon-md"
           onClick={() => setZoom((value) => Math.max(25, value - 25))}
         >
-          <ZoomOutIcon />
+          <ZoomOutIcon class="size-4" />
         </Toolbar.Button>
         <Toolbar.Button class="w-14 tabular-nums" onClick={() => setZoom(100)}>
           {zoom()}%
@@ -67,7 +67,7 @@ function MediumDemo() {
           size="icon-md"
           onClick={() => setZoom((value) => Math.min(200, value + 25))}
         >
-          <ZoomInIcon />
+          <ZoomInIcon class="size-4" />
         </Toolbar.Button>
       </Toolbar.Group>
     </Toolbar>

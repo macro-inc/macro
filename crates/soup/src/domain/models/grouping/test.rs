@@ -119,6 +119,7 @@ fn rest_grouped_response_remains_normalized() {
         SimpleSortMethod::ViewedUpdated,
         None,
         EntityFilterAst::default(),
+        &GroupLabels::default(),
     );
 
     assert_eq!(response.items.len(), 1);
@@ -129,4 +130,40 @@ fn rest_grouped_response_remains_normalized() {
     assert_eq!(response.groups[0].total_count, 1);
     assert_eq!(response.groups[0].item_ids, vec![id]);
     assert!(response.groups[0].next_cursor.is_none());
+}
+
+#[test]
+fn project_groups_take_the_initiative_name_the_user_can_read() {
+    let readable = "ad000000-0000-0000-0000-000000000001";
+    let unreadable = "ad000000-0000-0000-0000-000000000002";
+    let labels: GroupLabels = [(readable.to_string(), "Project One".to_string())]
+        .into_iter()
+        .collect();
+    let group = |key: &str, id: u128| ItemGroupingInfo {
+        key: key.to_string(),
+        total_group_count: 1,
+        index_in_group: 1,
+        item: project(id).map_extra(|()| SoupPropertiesField::default()),
+    };
+    let response = build_grouped_response(
+        vec![group(readable, 1), group(unreadable, 2), group("", 3)],
+        &GroupByField::Project,
+        SimpleSortMethod::ViewedUpdated,
+        None,
+        EntityFilterAst::default(),
+        &labels,
+    );
+
+    let label = |key: &str| {
+        response
+            .groups
+            .iter()
+            .find(|group| group.key == key)
+            .expect("group present")
+            .label
+            .clone()
+    };
+    assert_eq!(label(readable), "Project One");
+    assert_eq!(label(unreadable), unreadable);
+    assert_eq!(label(""), "No Project");
 }

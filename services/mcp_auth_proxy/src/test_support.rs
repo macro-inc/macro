@@ -2,7 +2,7 @@
 //! tests.
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
     time::SystemTime,
 };
@@ -13,12 +13,13 @@ use sha2::{Digest, Sha256};
 use crate::domain::{
     models::{
         AccessToken, AuthorizeRequest, CallbackRequest, ClientRegistrationRequest,
-        IssuedAuthorizationCode, PendingAuthorization, RefreshToken, RegisteredClient,
-        UpstreamTokens,
+        IssuedAuthorizationCode, PendingAuthorization, RefreshToken, RefreshTokenBinding,
+        RegisteredClient, UpstreamTokens,
     },
     ports::{
-        BoundClientIdFuture, ClientRegistrationStore, OAuthProvider, RefreshTokenBindingStore,
-        RegisteredClientFuture, StoreWriteFuture, UpstreamTokensFuture,
+        ClientRegistrationStore, GrantRevokedFuture, OAuthProvider, RefreshTokenBindingFuture,
+        RefreshTokenBindingStore, RegisteredClientFuture, StoreWriteFuture,
+        UpstreamRevocationFuture, UpstreamTokensFuture,
     },
     redirect_uri::RedirectUriPolicy,
     service::{
@@ -79,7 +80,7 @@ impl FakeInflightAuth {
 
     /// Returns the recorded upstream expiry of the only issued code, panicking
     /// unless there is exactly one.
-    pub fn only_issued_expiry(&self) -> Option<SystemTime> {
+    pub fn only_issued_expiry(&self) -> SystemTime {
         let issued = self.issued.lock().expect("issued lock");
         assert_eq!(issued.len(), 1, "expected exactly one issued code");
         issued
@@ -136,7 +137,8 @@ impl InflightAuthStore for FakeInflightAuth {
 #[derive(Default)]
 pub struct FakeClientRegistry {
     clients: Mutex<HashMap<String, RegisteredClient>>,
-    refresh_bindings: Mutex<HashMap<String, String>>,
+    refresh_bindings: Mutex<HashMap<String, RefreshTokenBinding>>,
+    revoked_grants: Mutex<HashSet<String>>,
 }
 
 impl ClientRegistrationStore for FakeClientRegistry {
@@ -166,18 +168,18 @@ impl RefreshTokenBindingStore for FakeClientRegistry {
     fn bind<'a>(
         &'a self,
         refresh_token_digest: &'a str,
-        client_id: &'a str,
+        binding: &'a RefreshTokenBinding,
     ) -> StoreWriteFuture<'a> {
         Box::pin(async move {
             self.refresh_bindings
                 .lock()
                 .expect("bindings lock")
-                .insert(refresh_token_digest.to_owned(), client_id.to_owned());
+                .insert(refresh_token_digest.to_owned(), binding.clone());
             Ok(())
         })
     }
 
-    fn bound_client<'a>(&'a self, refresh_token_digest: &'a str) -> BoundClientIdFuture<'a> {
+    fn binding<'a>(&'a self, refresh_token_digest: &'a str) -> RefreshTokenBindingFuture<'a> {
         Box::pin(async move {
             Ok(self
                 .refresh_bindings
@@ -197,11 +199,32 @@ impl RefreshTokenBindingStore for FakeClientRegistry {
             Ok(())
         })
     }
+
+    fn revoke_grant<'a>(&'a self, grant_id: &'a str) -> StoreWriteFuture<'a> {
+        Box::pin(async move {
+            self.revoked_grants
+                .lock()
+                .expect("revoked grants lock")
+                .insert(grant_id.to_owned());
+            Ok(())
+        })
+    }
+
+    fn is_grant_revoked<'a>(&'a self, grant_id: &'a str) -> GrantRevokedFuture<'a> {
+        Box::pin(async move {
+            Ok(self
+                .revoked_grants
+                .lock()
+                .expect("revoked grants lock")
+                .contains(grant_id))
+        })
+    }
 }
 
 /// Upstream provider that hands back fixed tokens, standing in for FusionAuth.
 pub struct FakeOAuthProvider {
     rotated_refresh_token: Option<String>,
+    revoked_refresh_tokens: Mutex<HashSet<String>>,
 }
 
 impl FakeOAuthProvider {
@@ -210,13 +233,23 @@ impl FakeOAuthProvider {
     pub fn new() -> Self {
         Self {
             rotated_refresh_token: None,
+            revoked_refresh_tokens: Mutex::default(),
         }
+    }
+
+    /// Returns whether the provider was asked to revoke `refresh_token`.
+    pub fn revoked(&self, refresh_token: &str) -> bool {
+        self.revoked_refresh_tokens
+            .lock()
+            .expect("revoked refresh tokens lock")
+            .contains(refresh_token)
     }
 
     /// A provider whose refresh grant issues a new refresh token.
     pub fn rotating(rotated_refresh_token: &str) -> Self {
         Self {
             rotated_refresh_token: Some(rotated_refresh_token.to_owned()),
+            revoked_refresh_tokens: Mutex::default(),
         }
     }
 }
@@ -241,6 +274,14 @@ impl OAuthProvider for FakeOAuthProvider {
         refresh_token: &'a RefreshToken,
     ) -> UpstreamTokensFuture<'a> {
         Box::pin(async move {
+            if self
+                .revoked_refresh_tokens
+                .lock()
+                .expect("revoked refresh tokens lock")
+                .contains(refresh_token.as_str())
+            {
+                anyhow::bail!("refresh token was revoked upstream");
+            }
             let next = self
                 .rotated_refresh_token
                 .clone()
@@ -250,6 +291,19 @@ impl OAuthProvider for FakeOAuthProvider {
                 refresh_token: RefreshToken::from(next),
                 expires_in: UPSTREAM_EXPIRES_IN,
             })
+        })
+    }
+
+    fn revoke_refresh_token<'a>(
+        &'a self,
+        refresh_token: &'a RefreshToken,
+    ) -> UpstreamRevocationFuture<'a> {
+        Box::pin(async move {
+            self.revoked_refresh_tokens
+                .lock()
+                .expect("revoked refresh tokens lock")
+                .insert(refresh_token.as_str().to_owned());
+            Ok(())
         })
     }
 }
@@ -263,6 +317,8 @@ pub struct Harness {
     pub inflight: Arc<FakeInflightAuth>,
     /// The client registry the service was built with.
     pub registry: Arc<FakeClientRegistry>,
+    /// The upstream provider the service was built with.
+    pub provider: Arc<FakeOAuthProvider>,
 }
 
 impl Harness {
@@ -275,19 +331,21 @@ impl Harness {
     pub fn with_provider(provider: FakeOAuthProvider) -> Self {
         let inflight = Arc::new(FakeInflightAuth::default());
         let registry = Arc::new(FakeClientRegistry::default());
+        let provider = Arc::new(provider);
         let service = McpAuthProxyServiceImpl::new(McpAuthProxyServiceDeps {
             public_url: "https://mcp.macro.com".to_owned(),
             redirect_uri_policy: RedirectUriPolicy::new(["claude.ai"]),
             inflight_auth: Arc::clone(&inflight),
             client_registrations: Arc::clone(&registry) as Arc<dyn ClientRegistrationStore>,
             refresh_token_bindings: Arc::clone(&registry) as Arc<dyn RefreshTokenBindingStore>,
-            oauth_provider: Arc::new(provider),
+            oauth_provider: Arc::clone(&provider) as Arc<dyn OAuthProvider>,
         });
 
         Self {
             service,
             inflight,
             registry,
+            provider,
         }
     }
 

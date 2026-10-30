@@ -262,6 +262,22 @@ impl MailboxContentReader for OutlookApiClientRepository {
                 message: "Microsoft Graph attachment download was interrupted".into(),
             })
     }
+
+    async fn mime(
+        &self,
+        token: &AccessToken,
+        message_id: &ProviderId,
+    ) -> Result<Vec<u8>, EmailApiError> {
+        let url = self.endpoint(&["me", "messages", message_id.as_str(), "$value"])?;
+        self.request(token, Method::GET, url, None)
+            .await?
+            .bytes()
+            .await
+            .map(|bytes| bytes.to_vec())
+            .map_err(|_| EmailApiError::Transient {
+                message: "Microsoft Graph message download was interrupted".into(),
+            })
+    }
 }
 
 fn reference_url(web_link: Option<&str>) -> String {

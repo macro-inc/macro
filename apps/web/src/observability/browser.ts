@@ -13,6 +13,7 @@ import {
 } from './desktop';
 import { startDocumentLifecycle } from './document-lifecycle';
 import { frontendInstanceId } from './frontend-instance';
+import { configureNativeCallTracing } from './native-call-tracing';
 import { startNativeDiagnostics } from './native-diagnostics';
 import { recordNativeWebviewStart } from './native-lifecycle';
 import { initializeUiOperationTelemetry } from './ui-operation';
@@ -108,6 +109,11 @@ export async function initializeBrowserObservability(): Promise<void> {
     tracingProvider: (resource, getUserId) =>
       createWebTracingProvider(telemetryConfig, resource, getUserId),
   });
+  await configureNativeCallTracing({
+    enabled: browserEnabled,
+    tracesUrl,
+    environment: telemetryConfig.environment,
+  }).catch(() => Telemetry.warn('Native call tracing configuration failed'));
   if (isTauri()) recordNativeWebviewStart(desktop, lifecycle?.attributes);
   if (recording && desktop) {
     recording.accept(desktop);

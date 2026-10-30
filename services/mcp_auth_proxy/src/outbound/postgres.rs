@@ -29,15 +29,16 @@ use zeroize::Zeroizing;
 
 use crate::domain::{
     models::{
-        AccessToken, IssuedAuthorizationCode, PendingAuthorization, RefreshToken, RegisteredClient,
+        AccessToken, IssuedAuthorizationCode, PendingAuthorization, RefreshToken,
+        RefreshTokenBinding, RegisteredClient,
     },
     ports::{
-        BoundClientIdFuture, ClientRegistrationStore, RefreshTokenBindingStore,
-        RegisteredClientFuture, StoreWriteFuture,
+        ClientRegistrationStore, GrantRevokedFuture, RefreshTokenBindingFuture,
+        RefreshTokenBindingStore, RegisteredClientFuture, StoreWriteFuture,
     },
     service::{
         AUTHORIZATION_CODE_TTL, CLIENT_REGISTRATION_TTL, InflightAuthStore, PENDING_AUTH_TTL,
-        REFRESH_TOKEN_BINDING_TTL,
+        REFRESH_TOKEN_BINDING_TTL, REVOKED_GRANT_TTL,
     },
 };
 
@@ -95,22 +96,46 @@ impl PostgresAuthStore {
     pub async fn import_binding(
         &self,
         refresh_token_digest: &str,
-        client_id: &str,
+        binding: &RefreshTokenBinding,
         remaining: Duration,
     ) -> anyhow::Result<()> {
         sqlx::query!(
             r#"
-            INSERT INTO mcp_oauth_refresh_token_bindings (refresh_token_digest, client_id, expires_at)
-            VALUES ($1, $2, $3)
+            INSERT INTO mcp_oauth_refresh_token_bindings
+                (refresh_token_digest, client_id, grant_id, expires_at)
+            VALUES ($1, $2, $3, $4)
             ON CONFLICT (refresh_token_digest) DO NOTHING
             "#,
             refresh_token_digest,
-            client_id,
+            binding.client_id,
+            binding.grant_id,
             expires_at(remaining)?,
         )
         .execute(&self.pool)
         .await
         .context("failed to import refresh token binding")?;
+        Ok(())
+    }
+
+    /// Copies a grant revocation from another store, keeping the time it had
+    /// left. An existing row wins, so a copy can never shorten a revocation.
+    pub async fn import_revoked_grant(
+        &self,
+        grant_id: &str,
+        remaining: Duration,
+    ) -> anyhow::Result<()> {
+        sqlx::query!(
+            r#"
+            INSERT INTO mcp_oauth_revoked_grants (grant_id, expires_at)
+            VALUES ($1, $2)
+            ON CONFLICT (grant_id) DO NOTHING
+            "#,
+            grant_id,
+            expires_at(remaining)?,
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to import grant revocation")?;
         Ok(())
     }
 }
@@ -191,18 +216,23 @@ impl RefreshTokenBindingStore for PostgresAuthStore {
     fn bind<'a>(
         &'a self,
         refresh_token_digest: &'a str,
-        client_id: &'a str,
+        binding: &'a RefreshTokenBinding,
     ) -> StoreWriteFuture<'a> {
         Box::pin(async move {
             sqlx::query!(
                 r#"
-                INSERT INTO mcp_oauth_refresh_token_bindings (refresh_token_digest, client_id, expires_at)
-                VALUES ($1, $2, $3)
+                INSERT INTO mcp_oauth_refresh_token_bindings
+                    (refresh_token_digest, client_id, grant_id, expires_at)
+                VALUES ($1, $2, $3, $4)
                 ON CONFLICT (refresh_token_digest)
-                DO UPDATE SET client_id = EXCLUDED.client_id, expires_at = EXCLUDED.expires_at
+                DO UPDATE SET
+                    client_id = EXCLUDED.client_id,
+                    grant_id = EXCLUDED.grant_id,
+                    expires_at = EXCLUDED.expires_at
                 "#,
                 refresh_token_digest,
-                client_id,
+                binding.client_id,
+                binding.grant_id,
                 expires_at(REFRESH_TOKEN_BINDING_TTL)?,
             )
             .execute(&self.pool)
@@ -212,11 +242,11 @@ impl RefreshTokenBindingStore for PostgresAuthStore {
         })
     }
 
-    fn bound_client<'a>(&'a self, refresh_token_digest: &'a str) -> BoundClientIdFuture<'a> {
+    fn binding<'a>(&'a self, refresh_token_digest: &'a str) -> RefreshTokenBindingFuture<'a> {
         Box::pin(async move {
-            let client_id = sqlx::query_scalar!(
+            let row = sqlx::query!(
                 r#"
-                SELECT client_id
+                SELECT client_id, grant_id
                 FROM mcp_oauth_refresh_token_bindings
                 WHERE refresh_token_digest = $1 AND expires_at > now()
                 "#,
@@ -225,7 +255,10 @@ impl RefreshTokenBindingStore for PostgresAuthStore {
             .fetch_optional(&self.pool)
             .await
             .context("failed to fetch refresh token binding")?;
-            Ok(client_id)
+            Ok(row.map(|row| RefreshTokenBinding {
+                client_id: row.client_id,
+                grant_id: row.grant_id,
+            }))
         })
     }
 
@@ -239,6 +272,42 @@ impl RefreshTokenBindingStore for PostgresAuthStore {
             .await
             .context("failed to delete refresh token binding")?;
             Ok(())
+        })
+    }
+
+    fn revoke_grant<'a>(&'a self, grant_id: &'a str) -> StoreWriteFuture<'a> {
+        Box::pin(async move {
+            sqlx::query!(
+                r#"
+                INSERT INTO mcp_oauth_revoked_grants (grant_id, expires_at)
+                VALUES ($1, $2)
+                ON CONFLICT (grant_id) DO UPDATE SET expires_at = EXCLUDED.expires_at
+                "#,
+                grant_id,
+                expires_at(REVOKED_GRANT_TTL)?,
+            )
+            .execute(&self.pool)
+            .await
+            .context("failed to persist grant revocation")?;
+            Ok(())
+        })
+    }
+
+    fn is_grant_revoked<'a>(&'a self, grant_id: &'a str) -> GrantRevokedFuture<'a> {
+        Box::pin(async move {
+            let revoked = sqlx::query_scalar!(
+                r#"
+                SELECT EXISTS (
+                    SELECT 1 FROM mcp_oauth_revoked_grants
+                    WHERE grant_id = $1 AND expires_at > now()
+                ) AS "revoked!"
+                "#,
+                grant_id,
+            )
+            .fetch_one(&self.pool)
+            .await
+            .context("failed to read grant revocation")?;
+            Ok(revoked)
         })
     }
 }
@@ -336,7 +405,7 @@ impl InflightAuthStore for PostgresAuthStore {
             ENCRYPTION_VERSION,
             issued.code_challenge,
             issued.redirect_uri,
-            issued.access_token_expires_at.map(DateTime::<Utc>::from),
+            DateTime::<Utc>::from(issued.access_token_expires_at),
             expires_at(AUTHORIZATION_CODE_TTL)?,
         )
         .execute(&self.pool)
@@ -387,7 +456,7 @@ impl InflightAuthStore for PostgresAuthStore {
             refresh_token: tokens.refresh_token,
             code_challenge: row.code_challenge,
             redirect_uri: row.redirect_uri,
-            access_token_expires_at: row.access_token_expires_at.map(SystemTime::from),
+            access_token_expires_at: SystemTime::from(row.access_token_expires_at),
         }))
     }
 
@@ -403,6 +472,12 @@ impl InflightAuthStore for PostgresAuthStore {
                 .execute(&mut *transaction)
                 .await
                 .context("failed to delete expired refresh token bindings")?
+                .rows_affected();
+        let revoked_grants =
+            sqlx::query!("DELETE FROM mcp_oauth_revoked_grants WHERE expires_at <= now()")
+                .execute(&mut *transaction)
+                .await
+                .context("failed to delete expired grant revocations")?
                 .rows_affected();
         let pending =
             sqlx::query!("DELETE FROM mcp_oauth_pending_authorizations WHERE expires_at <= now()")
@@ -420,10 +495,11 @@ impl InflightAuthStore for PostgresAuthStore {
             .commit()
             .await
             .context("failed to commit cleanup")?;
-        if clients + bindings + pending + codes > 0 {
+        if clients + bindings + revoked_grants + pending + codes > 0 {
             tracing::info!(
                 clients,
                 bindings,
+                revoked_grants,
                 pending,
                 codes,
                 "swept expired MCP OAuth state"

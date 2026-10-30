@@ -14,18 +14,31 @@ CREATE TABLE mcp_oauth_clients (
 
 CREATE INDEX mcp_oauth_clients_expires_at_idx ON mcp_oauth_clients (expires_at);
 
--- Which client each outstanding refresh token was issued to, keyed by the
--- SHA-256 digest of the token so no usable credential is stored. Not a foreign
--- key: a binding outlives neither its token nor the check it feeds, and expires
--- on its own schedule.
+-- Which client and grant each outstanding refresh token was issued to, keyed
+-- by the SHA-256 digest of the token so no usable credential is stored. Every
+-- token rotated out of one authorization code shares a `grant_id`. Not a
+-- foreign key: a binding outlives neither its token nor the check it feeds,
+-- and expires on its own schedule.
 CREATE TABLE mcp_oauth_refresh_token_bindings (
     refresh_token_digest text PRIMARY KEY,
     client_id text NOT NULL,
+    grant_id text NOT NULL,
     expires_at timestamptz NOT NULL
 );
 
 CREATE INDEX mcp_oauth_refresh_token_bindings_expires_at_idx
     ON mcp_oauth_refresh_token_bindings (expires_at);
+
+-- Grants revoked through `/revoke`. A refresh token whose binding names one is
+-- refused, so a revocation that raced a refresh still covers the token that
+-- refresh rotated to. Kept at least as long as any binding in the family.
+CREATE TABLE mcp_oauth_revoked_grants (
+    grant_id text PRIMARY KEY,
+    expires_at timestamptz NOT NULL
+);
+
+CREATE INDEX mcp_oauth_revoked_grants_expires_at_idx
+    ON mcp_oauth_revoked_grants (expires_at);
 
 -- Authorization requests waiting for the upstream login, keyed by the broker
 -- session id carried through the upstream `state`.
@@ -52,7 +65,7 @@ CREATE TABLE mcp_oauth_authorization_codes (
     encryption_version smallint NOT NULL,
     code_challenge text NOT NULL,
     redirect_uri text NOT NULL,
-    access_token_expires_at timestamptz,
+    access_token_expires_at timestamptz NOT NULL,
     expires_at timestamptz NOT NULL
 );
 

@@ -1,9 +1,22 @@
 # AI Chat (Agents)
 
+Agent session split headers show other current viewers' avatars, excluding your
+own, with up to three avatars and a count for additional viewers. Presence uses
+the resolved session ID, including sessions opened from the create menu. Open
+the same shared session in two signed-in browser contexts and check that each
+shows the other viewer; closing one session removes its avatar from the other.
+Desktop and touch headers use the same avatar group.
+
 User-sent messages in chat and agent transcripts use an ink-colored bubble with
 `InvertUtil` in light themes. Dark themes use `Layer depth={3}` for the slightly
 lighter bubble with the normal text palette. Preview Markdown and controls at
 `/app/debug/ui?ui=invert-util` under **User-sent AI message**.
+
+Prompt bubbles show only user text: the private `<m-agent-context>` prefix
+stays in the agent payload but is stripped before Markdown rendering, for both
+the optimistic echo and stored prompts after reload. Queued previews and editors
+also hide it; editing a queued prompt preserves its private prefix on save.
+Verify with a context-bearing prompt before confirmation and after reload.
 
 A prompt shows a quiet line under its bubble (`data-testid="prompt-footer"`):
 when it was posted, and, for a prompt delivered from elsewhere (a mention, a
@@ -57,8 +70,16 @@ later chunks can arrive in batches. Reasoning or a tool row should not delay the
 first prose. Verify a second prompt and a reload preserve the complete answer.
 A model selected before the first prompt is part of the create request, and the
 runtime starts on it; no model change appears in the new session's transcript.
-A selected effort is confirmed before the first prompt; settings the runtime
-already reports do not need another control request.
+Resuming or reconnecting a session also applies its saved model without a
+line — that is not a switch the user made. A selected effort is confirmed
+before the first prompt; settings the runtime already reports do not need
+another control request.
+A model the user picks mid-session is a line between turns. Work from before
+the change stays above it; anything the agent says after appears below it.
+With `enable-first-prompt-on-create` on, the default agent's first prompt rides
+on the create (`prompt` + `promptActionId`) and no `/control` request follows;
+a persona, effort, or speed keeps the control request. Either way the prompt
+shows as one bubble that the logged row confirms in place.
 
 Macro's in-process agent opens each reply with a line from a fast model
 (`gpt-5.4-mini`), usually within half a second of Enter. Small talk
@@ -69,6 +90,11 @@ blank line, with no second acknowledgement. The opener answers the user's
 words, never the prompt's hidden context. The sent prompt is fully opaque from
 the first paint, and its `Context` chip is already in place, so nothing shifts
 when the server confirms it.
+
+A session started by mentioning the agent in a thread (for example `@macro` in a
+channel) gets no opener. Its thread reply is one message that updates only as
+each passage finishes, so the line would arrive with the text after it. The
+reply starts with the chosen model's answer.
 
 Repeat from a fresh tab using Home, Agents, and a document's Chat action.
 Focusing an agent composer prepares its transcript renderer locally; focus alone
@@ -112,6 +138,13 @@ Project tools can list, read, create, update, delete, and share projects, and
 read project activity. Backend tool names use `Initiative`. These operate on the
 native Projects views in Tasks. Agents set or clear a task's project with
 `SetEntityProperty` on the task's `Project` property.
+
+In-memory agent tool rows appear as pending as soon as the model names the
+call. Partial argument previews update at most every 250 ms and stop after
+16 KiB; execution replaces the preview with the full input. Cancelling while
+the model writes arguments closes the row as failed without executing it.
+Verify with a long document creation request, cancel once mid-write, then
+reconnect after a completed call and confirm its final input and result replay.
 
 Each completed tool row has an expandable result toggle, including empty results
 and per-task failures. Project chips open the native project. Shift-click opens
@@ -260,18 +293,23 @@ or stop.
 
 **Ask AI** in desktop search (including Tab) and the command menu opens
 an agent session. A nonempty search query is sent as the first prompt once the
-session is ready; an empty search opens an empty composer. Desktop search replaces
-its current split into the Agents workspace, while command-menu actions open a new split.
+session is ready. With the Agents workspace enabled, an empty search replaces its
+split with the Agents workspace's new-conversation composer; otherwise it opens an
+empty session there. Command-menu actions open a new split.
 
 **Ask Macro** and **Chat with Agent** on documents, tasks, PDFs, DOCX files,
-code files, images, canvases, spreadsheets, email, channels, calls, and projects
-also open agent sessions. Like command-menu Ask AI, they open the bare session in
-a new split, without the Agents workspace's conversation sidebar. Their entity mention stays
-in the composer as an unsent draft. Spreadsheet mentions retain the current sheet
-and selected range; channel-message actions retain the referenced message. On
+code files, images, canvases, spreadsheets, email, channels, calls, and projects,
+and the channel message hover menu, open the Agents workspace's new-conversation
+composer in a new split, the same centered composer as Home and **Create → Agent**,
+with its Auto/Chat/Code switch and agent, model, and effort pickers. Their entity
+mention fills the composer as an unsent draft; an Agents split that is already open
+returns to its composer with that draft. Spreadsheet mentions retain the current
+sheet and selected range; channel-message actions retain the referenced message. On
 phones, the channel message long-press drawer offers the same action as **Ask Macro**.
-Add a question and press Send to submit that context. These actions do not create
-legacy cognition chats, regardless of the Agents workspace feature flag.
+Add a question and press Send to start the conversation. Handoffs that carry hidden
+instructions or a fixed model (database chat, booking-link setup, connector import)
+still open a bare session directly, as does every action while the Agents workspace
+flag is off. These actions do not create legacy cognition chats.
 
 ## Dispatching coding agents from chat
 
@@ -311,6 +349,11 @@ the shimmer.
   app authentication and disconnection), also available under Settings → Integrations.
   Home’s **Connect your tools** and agent replies’ **Connect app** chips open this
   Integrations page. It shows installed tools above the app catalog, with personal Gmail/GitHub account links in a separate section above.
+- Ask the agent to connect an MCP server by URL (for example "connect the MCP
+  server at https://mcp.example.com/mcp"). It calls **ConnectMcpServer**, which
+  adds a public `https` server to Connections and renders a **Connected MCP
+  server** card; when the server needs a sign-in, the agent asks the user to
+  click Connect next to it in Connections.
 
   In a secondary desktop split, the new-conversation page and existing chats show
   one close button beside **Show navigation** while the sidebar is collapsed.
@@ -382,7 +425,7 @@ the shimmer.
   pressed; runs of routines set to **Show runs** are always listed. Every
   routine run carries the same clock icon after its age. The list starts
   without hidden runs each time the Agents view opens.
-- The agent composer's **+ (Add)** menu offers **Add photos & files**,
+- The agent composer's **+ (Add)** menu offers **Add photos**, **Add files**,
   **Add from library** (`@` references), and **Use a skill** (`/`; sessions show
   **Skills & commands**). Desktop uses a scrollable menu; phones use a bottom
   sheet with the same actions. Selecting a reference or skill restores editor
@@ -563,7 +606,14 @@ the shimmer.
   through other hints. Clearing a draft restores the same hint.
   Coding agents show **Describe what you want to build**; phones keep the short
   **Message Macro AI** placeholder. Type `@` for
-  mentions and `/` for skills.
+  mentions and `/` for skills and connections. The **Connections** section lists enabled native
+  servers and Pipedream connectors, preferring the native connection when both
+  provide the same tools. Selecting one inserts its name as plain text
+  (`Linear MCP `) to steer the model toward those tools. Loading and failed
+  connection reads have distinct states; disabled connections are omitted.
+  See the slash menu on [desktop](media/ai-chat/slash-connections-desktop.png)
+  and [phone](media/ai-chat/slash-connections-phone.png).
+
   Check `/` with the Android software keyboard too: the skills menu should open
   and filter while typing, without sending the draft.
 - Opening a conversation updates the URL based on that conversation's kind:
@@ -626,6 +676,11 @@ the shimmer.
   changes the model of an idle native session after native confirmation and
   displays the model identified by the session (Codex's live footer, or native
   transcript metadata). Unexpected native dialogs must be completed in Herdr.
+  When a background command, subagent, or monitor that Claude Code started
+  reports back, the reply opens with a quiet one-line row per report, such as
+  `Background command "Run tests" completed (exit code 0)`, red when it failed,
+  never a prompt bubble of `<task-notification>` XML. Claude still receives the
+  full report.
   For Codex, open the current model's submenu to select **Reasoning effort**.
   Choices come from the installed Codex catalog; the selected effort is confirmed
   from the native session and shown beside the model. Local Herdr changes and
@@ -687,6 +742,13 @@ While an answer streams, resolved mention pills should keep their names and
 icons instead of flashing back to loading placeholders. Check an answer with
 multiple mentions while more text arrives and when generation finishes, in both
 chat and agent sessions. A newly encountered mention may load once.
+
+If an agent reply stops inside a Macro mention chip, its unfinished trailing
+markup stays hidden after stopping and after reload, on desktop and mobile.
+Completed chips, literal tag examples in Markdown code, and the prose before
+the unfinished chip remain visible. Verify
+with a reply containing a completed mention followed by a partial mention: stop
+it, then reload. User-authored markup remains unchanged.
 
 On mobile, only the AI/Agents view has a floating AI composer above the bottom
 dock. Its input fills the row with no separate create button. Other views keep
@@ -1060,18 +1122,22 @@ provider usage and completed writes may remain after cancellation.
 
 The public workspace MCP (`mcp-server[-dev].macro.com`) evaluates the same
 `ai-code-mode` flag for the OAuth user on `initialize`, `tools/list` and
-`tools/call`, cached per user for a minute. Enabled users see `ExecuteCode`,
-`DescribeCodeTools` and `ReadCodeDocs` in place of the SDK-covered native tools,
-and the server instructions tell the client to call `DescribeCodeTools` with a
-`task`, then `ReadCodeDocs` for the symbols it uses, before writing a program. Programs export `async function main({macro})` and return
-exactly `{data}` (an empty `reviews: []` is dropped). There is no session,
-execution journal, review stack or `execution_id`; the receipt carries status,
-observed SDK activity, result and error. Runs act as the user with no agent
-attribution and no owner approval card: the MCP client asks before each tool
-call. SDK writes, including email sends, take effect immediately. Every native
-tool stays callable; MCP clients cache tool lists, so a flag change appears after
-reconnecting. Public runs use their own Deno budget (four running, eight queued
-per replica) so external traffic cannot take agent sessions' slots.
+`tools/call`, cached per user for a minute. Enabled users see only
+`ExecuteCode`, `DescribeCodeTools` and `ReadCodeDocs` on `tools/list` — not the
+individual Macro tools — and the server instructions tell the client to call
+`DescribeCodeTools` with a `task`, then `ReadCodeDocs` for the symbols it uses,
+before writing a program. Programs export `async function main({macro})` and
+return exactly `{data}` (an empty `reviews: []` is dropped). There is no
+session, execution journal, review stack or `execution_id`; the receipt carries
+status, observed SDK activity, result and error. Runs act as the user with no
+agent attribution and no owner approval card: the MCP client asks before each
+tool call. SDK writes, including email sends, take effect immediately. Hidden
+native tools stay callable if a client already knows their names; MCP clients
+cache tool lists, so a flag change appears after reconnecting. Public runs use
+their own Deno budget (four running, eight queued per replica) so external
+traffic cannot take agent sessions' slots. Agent-session code mode is
+unchanged: it still keeps a reduced direct toolset for search, document
+editing, and other work outside the SDK.
 
 To verify locally, run Claude Code against the stack's MCP with
 `tooling/scripts/claude-local-mcp.sh --instance <name> --email <email>`. It mints
@@ -1315,10 +1381,10 @@ An agent session is `/app/agent/<uuid>`. The composer placeholder is
 **`Message the agent, @mention anything`**. Creating one (`c` then `a`, or
 `Create` → `Agent`) leaves that composer focused — on mobile that is the same
 Create-menu `triggerFocusInput` as chat, so the keyboard opens. Type `/` to
-open sections for **Skills**, **Pull requests**, and **Commands**. Skills are
-available even before the connected agent advertises commands. Select a skill
-to insert its mention, a pull request to reference it, or a harness command
-to insert `/name` as text. Search filters all sections; arrow keys move across
+open sections for **Skills**, **Connections**, **Pull requests**, and **Commands**.
+Skills are available even before the connected agent advertises commands.
+Select a skill to insert its mention, a connection to name it as text, a pull
+request to reference it, or a harness command to insert `/name` as text. Search filters all sections; arrow keys move across
 sections and Enter selects the highlighted item. Saved skills have an **Edit**
 button that opens their document editor; skills you own also have **Delete**,
 which opens the usual deletion confirmation. Built-in skills have no edit or
@@ -1342,8 +1408,8 @@ mention only notifies people who could already open it.
 In Home, a new Agents conversation, and an existing agent session, files can be
 attached to a prompt three ways: drop them anywhere on the composer (a
 "Drop files here to send them to the agent" overlay appears), paste them from the
-clipboard, or use the paperclip **`Attach files`** button. Every file uploads to the
-static file service and shows as a chip above the text (media thumbnails, document
+clipboard, or choose **Add photos** / **Add files** from the **+ (Add)** menu.
+Every file uploads to the static file service and shows as a chip above the text (media thumbnails, document
 pills with a remove `×`); **Send** is disabled while an upload is pending. The agent
 receives each file as an ACP `resource_link` (a URL it can fetch) after the prompt text,
 and the sent prompt renders its files in the transcript (image thumbnails and
@@ -1373,7 +1439,9 @@ its own session. A message that alone takes more than half of the model's
 window is refused with "This message is too long. Split it into smaller messages
 or attach it as a file." `/compact` is an ordinary message to every agent: the
 transcript shows it as sent, followed by the agent's reply; a "Context compacted"
-line appears only when the agent reports a compaction.
+line appears only when the agent reports a compaction, at the point in the reply
+where the summary landed: a summary that finishes while a tool runs splits the
+tool group, with the running call above the line and later steps below it.
 
 Cursor walkthrough files the run re-hosts appear in the transcript after the
 answer: screenshots as images, recordings as video players, and `.txt` / `.log`
@@ -1494,6 +1562,10 @@ agent as working, every Thinking label, **Calling N tools** row, shimmering
 tool title, and working row settles — earlier turns never shimmer, even ones
 the runtime cut off mid-call. Shimmer identifies current activity: an active
 tool and its containing group can shimmer together; completed rows stay still.
+Working and Thinking use the same text shimmer and keep its phase when the
+status changes. Check both labels in light and dark themes at desktop and phone
+widths: one highlight should sweep evenly across the whole label, with no
+highlight returning at the opposite edge. With reduced motion, labels stay still.
 
 ### Sharing a session
 
@@ -1550,9 +1622,10 @@ choose **Reply to this** above the selection. The composer inserts a single-line
 **Replying to** preview with the same quote-reply styling as channel replies.
 Click the preview to open the full **Referenced text** viewer. While editable,
 hover the preview for its menu: **Copy**, **Convert to text**, or **Delete**.
-A plain-text paste over 1500 characters collapses into a **pasted** chip that
-opens the same viewer, titled **Pasted text**. Text in either viewer can be
-drag-selected and copied, from the composer and from sent messages.
+A plain-text paste over 1500 characters outside a code block collapses into a
+**pasted** chip that opens the same viewer, titled **Pasted text**. Text in
+either viewer can be drag-selected and copied, from the composer and from sent
+messages.
 Selecting text in the composer or outside the transcript must not show the reply
 button; clearing the transcript selection dismisses it.
 
@@ -1669,8 +1742,10 @@ and line and marks them "sent to agent". Sending a typed composer message
 while notes are queued includes those notes in the same prompt and marks them
 sent — a second Enter does not post them again. Clicking a note's path opens
 that file in the Changes pane. Notes never go to GitHub. Collapsed files and
-unsent notes persist per session in localStorage; a new capture expands all
-files.
+unsent notes persist per session in localStorage. A fresh capture expands files
+with at most 40 changed lines (additions + deletions) and collapses larger files,
+on desktop and phones. File toggles and **Collapse all / Expand all** override
+these defaults; selecting a file in the tree expands it.
 
 The Changes pane header and sidebar totals display the linked PR's `additions`
 and `deletions` returned by the GitHub API, without summing transcript edits.
@@ -1687,6 +1762,13 @@ with `set_pull_request`, then use **Refresh changes**. An unavailable or
 oversized PR is explained in the pane; there is no branch or container fallback.
 Refresh request failures show a retry banner while keeping the last diff visible.
 The pane does not create PRs or generate their descriptions.
+
+### Failed session rows
+
+A failed agent turn shows a small red status dot in Home and Agents, including
+after reloading the list. Open the row to read the existing transcript error.
+Starting another turn clears the failure dot; unread state remains independent.
+
 ### Live development previews
 
 Coding agents can call the internal **SharePreview** tool with their local HTTP
@@ -1783,6 +1865,10 @@ must stay hidden; subsequent live messages must still appear.
   it scrolls on its own and starts scrolled to the bottom, so the next-to-send row stays
   visible. Scroll up inside the list to reach newer entries; no extra count row hides
   messages. Each prompt starts as a single-line preview, including long messages.
+  The preview is rendered markdown: links and `@` mention chips appear as they do
+  in the transcript, never as their `<m-link>` / `<m-document-mention>` markup, and
+  clicking one opens the row rather than the link. The expanded editor has the
+  composer's `@` mentions, links, emoji, and code.
   Click a preview (or press Enter/Space on it) to open its editor; opening another
   row collapses the previous one. The expanded editor scrolls within the smaller of
   32% of the viewport and 16rem. Click the preview again or press Escape to collapse
@@ -1817,8 +1903,11 @@ must stay hidden; subsequent live messages must still appear.
   A pending request shows one `Approval needed` card above the composer, with
   the command or affected file separate from the actions. The transcript does
   not repeat the pending request.
-  `Allow once` and `Deny` answer immediately; `More options` contains remembered
-  choices with the agent's full rule text. Channel Magic Chips expose the same
+  `Allow once`, `Always allow`, and `Deny` answer immediately; `Always allow`
+  shows the agent's rule text as its tooltip. `More options` holds any further
+  remembered choices with their full rule text. Native Herdr sessions (Claude
+  Code or Codex in herdr) offer `Always allow` for recognized approval
+  dialogs; see `crates/coding_agent_worker/README.md`. Channel Magic Chips expose the same
   approval card in place of their loading state, alongside existing questions.
   Only authenticated users with **Edit** or **Owner** session access may answer;
   bot, harness, and internal-service credentials cannot approve on their behalf.
@@ -1833,13 +1922,17 @@ must stay hidden; subsequent live messages must still appear.
   `Allow bypassing permission requests`, off by default. Enabling it warns that
   agents may run commands and edit files on the machine without approval.
   Macrod Quickstart and Config also offer `Full Access`, off by
-  default. The choice applies at the next pairing: off disables bypass in the
-  pairing page; on preselects bypass with a warning, and the approving user
-  can turn it off. Older daemons leave this choice to the pairing page.
+  default. Quickstart and Config give Full Access a bordered, three-line control
+  labeled `Suggested`, without enabling it. On short terminals, Config scrolls to
+  the selected setting and keeps consent warnings below it; Quickstart keeps its
+  submit button visible. The choice applies at the next pairing:
+  off disables bypass in the pairing page; on preselects bypass with a warning,
+  and the approving user can turn it off. Older daemons leave this choice to the pairing page.
 - **Agent permission policy.** Settings → Agents → Runtime shows `Always prompt`
-  and `Always bypass` only for local macrod harnesses. Macrod defaults to prompts;
-  bypass requires both harness consent and the agent's explicit choice. Built-in
-  Macro, in-memory, Cursor, and Codex runtimes always bypass and have no
+  and `Always bypass` only for local macrod harnesses. The larger `Always bypass`
+  choice is labeled `Suggested`; the label does not select it. Macrod defaults to
+  prompts; bypass requires both harness consent and the agent's explicit choice.
+  Built-in Macro, in-memory, Cursor, and Codex runtimes always bypass and have no
   permission policy selector. The backend enforces these policies.
 
 Locally sent user messages in both AI implementations enter with a short upward
@@ -1893,6 +1986,12 @@ verify that reconnecting the gateway catches up changes missed while disconnecte
 There is no periodic PR lookup polling.
 
 ### Agent reasoning effort
+
+Long model names wrap in model menus and touch sheets. Desktop composer
+triggers stay on one line within the available width; hover a truncated trigger
+to read its full model and effort in the native tooltip. Verify both ordinary
+model rows and rows that open effort submenus, including search results.
+Long runtime-provided effort names wrap within their submenu rows as well.
 
 Open the model selector and hover a model to choose its reasoning effort in the
 submenu on desktop, opened with Right Arrow. On mobile, tap a model to select it,
@@ -2012,6 +2111,18 @@ revision stale, the AI reads the latest settings and confirms a fresh proposal.
 Identical retries reuse the saved link. Old pending booking review requests can
 be dismissed so the agent can resume with conversational confirmation.
 
+## Images in Cursor sessions
+
+Paste a public PNG, JPEG, GIF, or WebP URL into a Cursor prompt. After sending,
+the URL stays in the message and an image thumbnail appears; click it to open
+the media viewer. Extensionless image URLs work too. Reopen the session and
+verify the image remains visible. Check desktop and phone layouts.
+
+Images attached as ACP image blocks are also forwarded. Each prompt sends at
+most five images of up to 15 MiB each. HTML pages, SVGs, private or loopback
+addresses, failed fetches, and oversized images stay as text links. Stop during
+image resolution must cancel the prompt without starting a remote run.
+
 ## Image attachments and model selection
 
 Attach images using the plus button, paste, or drop. Image-capable models receive
@@ -2019,7 +2130,12 @@ uploaded images as normalized inline content, including attachments from earlier
 turns. Test an image-only prompt and a text-plus-image prompt, then follow up
 without reattaching the image.
 
-Text-only model choices show a description and a composer warning. Pasted,
+Text-only model choices show a description. In the composer’s + menu, only
+**Add photos** is dimmed, with a tooltip beside the row using the model’s house
+name (`"<Model> doesn't support images"`) on hover or arrow-key focus; selecting
+it does nothing and leaves the menu open. Touch shows the reason as the row’s
+second line instead. **Add files** remains available without a tooltip, and no
+warning banner is shown. Pasted,
 dropped, and picked images should be refused before upload; document attachments
 and text should still work. If an image is already attached when switching to a
 text-only model, keep the draft and image chip but disable Send until the image

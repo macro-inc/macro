@@ -1,3 +1,4 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import {
@@ -82,7 +83,10 @@ export function CompanyHeader(props: { company?: CrmCompanyEntity }) {
           <EntityIcon targetType="crm_company" size="fill" />
         </div>
         <h1 class="min-w-0 flex-1 text-2xl font-semibold">
-          <Show when={props.company} fallback={'Loading company…'}>
+          <Show
+            when={props.company}
+            fallback={<ListSkeleton.Bar class="h-6 w-48" />}
+          >
             {(company) => <TitleEditor company={company()} />}
           </Show>
         </h1>

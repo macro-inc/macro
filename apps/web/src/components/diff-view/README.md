@@ -47,6 +47,8 @@ The host composes the rest:
 - Toolbar parts, `DiffView.CollapseAll` and `DiffView.StyleToggle`, anywhere
   inside `Root`.
 - Collapse state that persists, by passing `collapse`; the default lives in memory.
+  Files with at most 40 additions + deletions start expanded; larger files start
+  collapsed. Individual toggles and Collapse all / Expand all override defaults.
 - `DiffCounts` for compact numeric totals, or `DiffStats` for those same totals
   beside five green/red squares showing the addition/deletion proportion. A static
   diagonal hatch and inset edge give the squares texture without changing their size.

@@ -10,7 +10,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import { Dropdown } from '@ui';
-import { For, Show, useContext } from 'solid-js';
+import { children, For, Show, useContext } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
   moreMenuItems,
@@ -31,6 +31,17 @@ export function ViewSwitcher(props: ViewSwitcherProps) {
     return <>{props.fallback ?? props.children}</>;
   }
 
+  const Label = () => {
+    const label = children(() => props.children);
+    return (
+      <Show
+        when={typeof label() === 'string' || typeof label() === 'number'}
+        fallback={label()}
+      >
+        <span class="truncate">{label()}</span>
+      </Show>
+    );
+  };
   const gates = useNavItemGates();
   const layout = useSplitLayout();
   const analytics = useAnalytics();
@@ -80,19 +91,22 @@ export function ViewSwitcher(props: ViewSwitcherProps) {
     </Dropdown.Item>
   );
 
+  // Size to the view name so short labels stay whole. Cap with `max-w-full`
+  // only when the title row has a real width; a percentage `calc` treats an
+  // indefinite parent as 0 and collapses "Chat" to "C…".
   return (
     <Dropdown placement="bottom-start">
       <Dropdown.Trigger
         variant="ghost"
         size="sm"
-        class="-ml-2 min-w-0 max-w-[calc(100%+0.5rem)] shrink"
+        class="w-max min-w-0 max-w-full"
         data-view-switcher=""
       >
-        <span class="truncate text-sm font-semibold tracking-[-0.03em] text-ink">
-          {props.children}
+        <span class="flex min-w-0 items-center gap-2 text-sm font-semibold tracking-[-0.03em] text-ink">
+          <Label />
         </span>
         <Show when={props.caret}>
-          <CaretDownIcon class="size-3 transition-transform in-data-expanded:rotate-180" />
+          <CaretDownIcon class="size-3 shrink-0 transition-transform in-data-expanded:rotate-180" />
         </Show>
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-[14rem]">

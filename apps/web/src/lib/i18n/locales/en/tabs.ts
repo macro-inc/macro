@@ -9,4 +9,15 @@ export default {
     one: '{{count}} split',
     other: '{{count}} splits',
   },
+
+  // Company and contact sections.
+  recordSections: 'Switch view',
+  recordSection: 'View: {{section}}',
+  'record-overview': 'Overview',
+  'record-team': 'Team',
+  'record-emails': 'Emails',
+  'record-files': 'Files',
+  'record-tasks': 'Tasks',
+  'record-calls': 'Calls',
+  'record-databases': 'Databases',
 };

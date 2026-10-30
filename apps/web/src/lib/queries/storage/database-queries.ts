@@ -7,7 +7,7 @@ import {
 } from '@service-storage/database-queries';
 import type { SavedQuery } from '@service-storage/generated/schemas/savedQuery';
 import type { SaveQueryRequest } from '@service-storage/generated/schemas/saveQueryRequest';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
@@ -26,13 +26,17 @@ export function createSavedDatabaseQuery(
   });
 }
 
-/** A saved query's definition; its errors carry the route's codes. */
-export function useDatabaseQueryDefinition(queryId: Accessor<string>) {
-  return useQuery(() => ({
-    queryKey: savedDatabaseQueryKeys.definition(queryId()).queryKey,
-    queryFn: () => throwOnErr(() => getDatabaseQuery(queryId())),
-    enabled: !!queryId(),
+function databaseQueryDefinitionQueryOptions(queryId: string) {
+  return queryOptions({
+    queryKey: savedDatabaseQueryKeys.definition(queryId).queryKey,
+    queryFn: () => throwOnErr(() => getDatabaseQuery(queryId)),
+    enabled: !!queryId,
     staleTime: Number.POSITIVE_INFINITY,
     retry: false,
-  }));
+  });
+}
+
+/** A saved query's definition; its errors carry the route's codes. */
+export function useDatabaseQueryDefinition(queryId: Accessor<string>) {
+  return useQuery(() => databaseQueryDefinitionQueryOptions(queryId()));
 }

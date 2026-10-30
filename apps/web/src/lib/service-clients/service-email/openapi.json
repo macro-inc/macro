@@ -391,7 +391,7 @@
     "/email/calendar-events/{event_id}/forward": {
       "post": {
         "tags": ["email"],
-        "summary": "Email one of the viewer's events to people the organizer's guest list\ndoes not name: the event's iCalendar file (`METHOD:PUBLISH`, no\nattendees, no join link), sent from the inbox that holds the viewer's\ncopy, with the usual undo delay. Recipients can add the event to their\nown calendar; they are not added to the guest list and the organizer is\nnot told.",
+        "summary": "Email one of the viewer's events to people the organizer's guest list\ndoes not name, from the inbox that holds the viewer's copy, with the\nusual undo delay, carrying the copy's join link. When the copy is Google's\nprivate copy of an invitation from an organizer outside Google, it is a\nreal invitation (`METHOD:REQUEST`) naming the recipients, who answer it to\nthe organizer, who gets the email too. Otherwise it is the event's file\n(`METHOD:PUBLISH`, no attendees): recipients can add the event to their\nown calendar, are not added to the guest list, and the organizer is not\ntold.",
         "operationId": "forward_calendar_event",
         "parameters": [
           {
@@ -2700,6 +2700,97 @@
             }
           },
           "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/messages/{id}/eml": {
+      "get": {
+        "tags": ["Messages"],
+        "summary": "Download a message's original source as an `.eml` file.",
+        "operationId": "get_message_eml",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Message ID.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "message/rfc822": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmlFile"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
             "description": "",
             "content": {
               "application/json": {
@@ -5725,6 +5816,10 @@
           }
         }
       },
+      "EmlFile": {
+        "type": "string",
+        "format": "binary"
+      },
       "EmptyResponse": {
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
@@ -5900,7 +5995,7 @@
         "properties": {
           "bodyText": {
             "type": ["string", "null"],
-            "description": "The email's plain-text body. Without one, it names the event and\nsays the recipient won't be on the organizer's guest list."
+            "description": "A plain-text summary of the event the email opens with; the title\nwhen absent. The email ends with a note saying what the recipient\ncan do with the forward."
           },
           "to": {
             "type": "array",

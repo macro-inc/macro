@@ -10,13 +10,13 @@ import { createSignal, type JSX, Show } from 'solid-js';
 
 /**
  * A media toggle split from its settings menu: the left half turns the device
- * on or off, the caret opens its menu on click.
+ * on or off, the caret opens its menu on click. The toggle keeps one fill and
+ * shows its state through the icon.
  */
 function MediaSplitButton(props: {
   label: string;
   toggleLabel: string;
   menuLabel: string;
-  on: boolean;
   disabled?: boolean;
   onToggle: () => void;
   icon: JSX.Element;
@@ -29,7 +29,6 @@ function MediaSplitButton(props: {
         <ButtonGroup.Button
           aria-label={props.toggleLabel}
           tooltip={{ content: props.toggleLabel, placement: 'top' }}
-          aria-pressed={props.on}
           disabled={props.disabled}
           onClick={props.onToggle}
         >
@@ -85,7 +84,6 @@ export function CallControlBar(props: {
             props.audioMuted ? 'Unmute microphone' : 'Mute microphone'
           }
           menuLabel="Audio settings"
-          on={!props.audioMuted}
           disabled={props.disabled}
           onToggle={props.onToggleAudio}
           icon={
@@ -103,7 +101,6 @@ export function CallControlBar(props: {
           label="Camera"
           toggleLabel={props.videoMuted ? 'Turn on camera' : 'Turn off camera'}
           menuLabel="Video settings"
-          on={!props.videoMuted}
           disabled={props.disabled}
           onToggle={props.onToggleVideo}
           icon={

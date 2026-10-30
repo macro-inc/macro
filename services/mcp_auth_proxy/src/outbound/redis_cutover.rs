@@ -4,9 +4,10 @@
 //! there before the cutover is lost, and so replicas still on the Redis-only
 //! build keep working until a rolling deploy replaces them:
 //!
-//! - Registrations and refresh token bindings are written to both stores, and
-//!   read from Postgres first. A miss falls back to Redis and copies what it
-//!   finds into Postgres. [`backfill_from_redis`] copies the rest at startup.
+//! - Registrations, refresh token bindings, and grant revocations are written
+//!   to both stores, and read from Postgres first. A miss falls back to Redis
+//!   and copies what it finds into Postgres. [`backfill_from_redis`] copies
+//!   the rest at startup.
 //! - Pending authorizations and issued codes are written to Postgres only, so
 //!   upstream tokens never go to Redis again and a code can be redeemed in only
 //!   one store. A take falls back to Redis for handshakes started before the
@@ -27,12 +28,16 @@ mod test;
 use std::sync::Arc;
 
 use crate::domain::{
-    models::{IssuedAuthorizationCode, PendingAuthorization, RegisteredClient},
-    ports::{
-        BoundClientIdFuture, ClientRegistrationStore, RefreshTokenBindingStore,
-        RegisteredClientFuture, StoreWriteFuture,
+    models::{
+        IssuedAuthorizationCode, PendingAuthorization, RefreshTokenBinding, RegisteredClient,
     },
-    service::{CLIENT_REGISTRATION_TTL, InflightAuthStore, REFRESH_TOKEN_BINDING_TTL},
+    ports::{
+        ClientRegistrationStore, GrantRevokedFuture, RefreshTokenBindingFuture,
+        RefreshTokenBindingStore, RegisteredClientFuture, StoreWriteFuture,
+    },
+    service::{
+        CLIENT_REGISTRATION_TTL, InflightAuthStore, REFRESH_TOKEN_BINDING_TTL, REVOKED_GRANT_TTL,
+    },
 };
 
 use super::{
@@ -117,13 +122,13 @@ where
     fn bind<'a>(
         &'a self,
         refresh_token_digest: &'a str,
-        client_id: &'a str,
+        binding: &'a RefreshTokenBinding,
     ) -> StoreWriteFuture<'a> {
         Box::pin(async move {
-            self.postgres.bind(refresh_token_digest, client_id).await?;
+            self.postgres.bind(refresh_token_digest, binding).await?;
             if let Err(error) = self
                 .legacy_clients
-                .bind(refresh_token_digest, client_id)
+                .bind(refresh_token_digest, binding)
                 .await
             {
                 log_legacy_error("bind", &error);
@@ -132,28 +137,32 @@ where
         })
     }
 
-    fn bound_client<'a>(&'a self, refresh_token_digest: &'a str) -> BoundClientIdFuture<'a> {
+    fn binding<'a>(&'a self, refresh_token_digest: &'a str) -> RefreshTokenBindingFuture<'a> {
         Box::pin(async move {
-            if let Some(client_id) = self.postgres.bound_client(refresh_token_digest).await? {
-                return Ok(Some(client_id));
+            if let Some(binding) = self.postgres.binding(refresh_token_digest).await? {
+                return Ok(Some(binding));
             }
-            let legacy = match self.legacy_clients.bound_client(refresh_token_digest).await {
+            let legacy = match self.legacy_clients.binding(refresh_token_digest).await {
                 Ok(legacy) => legacy,
                 Err(error) => {
-                    log_legacy_error("bound_client", &error);
+                    log_legacy_error("binding", &error);
                     None
                 }
             };
-            let Some(client_id) = legacy else {
+            let Some(binding) = legacy else {
                 return Ok(None);
             };
-            tracing::info!(%client_id, "copied MCP OAuth refresh token binding from legacy Redis");
+            tracing::info!(
+                client_id = %binding.client_id,
+                grant_id = %binding.grant_id,
+                "copied MCP OAuth refresh token binding from legacy Redis"
+            );
             // A full TTL, not the Redis remainder: the refresh that asked for
             // this binding is about to re-bind its successor anyway.
             self.postgres
-                .import_binding(refresh_token_digest, &client_id, REFRESH_TOKEN_BINDING_TTL)
+                .import_binding(refresh_token_digest, &binding, REFRESH_TOKEN_BINDING_TTL)
                 .await?;
-            Ok(Some(client_id))
+            Ok(Some(binding))
         })
     }
 
@@ -165,6 +174,41 @@ where
                 log_legacy_error("unbind", &error);
             }
             self.postgres.unbind(refresh_token_digest).await
+        })
+    }
+
+    fn revoke_grant<'a>(&'a self, grant_id: &'a str) -> StoreWriteFuture<'a> {
+        Box::pin(async move {
+            self.postgres.revoke_grant(grant_id).await?;
+            // Mirrored so replicas still on the Redis-only build refuse the
+            // family too.
+            if let Err(error) = self.legacy_clients.revoke_grant(grant_id).await {
+                log_legacy_error("revoke_grant", &error);
+            }
+            Ok(())
+        })
+    }
+
+    fn is_grant_revoked<'a>(&'a self, grant_id: &'a str) -> GrantRevokedFuture<'a> {
+        Box::pin(async move {
+            if self.postgres.is_grant_revoked(grant_id).await? {
+                return Ok(true);
+            }
+            // A replica on the Redis-only build records revocations there.
+            let revoked = match self.legacy_clients.is_grant_revoked(grant_id).await {
+                Ok(revoked) => revoked,
+                Err(error) => {
+                    log_legacy_error("is_grant_revoked", &error);
+                    false
+                }
+            };
+            if revoked {
+                tracing::info!(%grant_id, "copied MCP OAuth grant revocation from legacy Redis");
+                self.postgres
+                    .import_revoked_grant(grant_id, REVOKED_GRANT_TTL)
+                    .await?;
+            }
+            Ok(revoked)
         })
     }
 }
@@ -221,8 +265,8 @@ where
     }
 }
 
-/// Copies every registration and refresh token binding still in Redis into
-/// Postgres, keeping the time each had left.
+/// Copies every registration, refresh token binding, and grant revocation
+/// still in Redis into Postgres, keeping the time each had left.
 ///
 /// Safe to run on every replica at once and to repeat: a row already in
 /// Postgres is left as it is.
@@ -230,7 +274,11 @@ where
     name = "mcp_oauth.backfill_from_redis",
     skip_all,
     err,
-    fields(clients = tracing::field::Empty, bindings = tracing::field::Empty)
+    fields(
+        clients = tracing::field::Empty,
+        bindings = tracing::field::Empty,
+        revoked_grants = tracing::field::Empty
+    )
 )]
 pub async fn backfill_from_redis(
     legacy: &RedisClientRegistry,
@@ -241,19 +289,28 @@ pub async fn backfill_from_redis(
     for (client, remaining) in clients {
         postgres.import_client(&client, remaining).await?;
     }
+    // Revocations before bindings, so no binding of a revoked family is
+    // honored in Postgres before its revocation is.
+    let revoked_grants = legacy.export_revoked_grants().await?;
+    let revoked_grant_count = revoked_grants.len();
+    for (grant_id, remaining) in revoked_grants {
+        postgres.import_revoked_grant(&grant_id, remaining).await?;
+    }
     let bindings = legacy.export_bindings().await?;
     let binding_count = bindings.len();
-    for (digest, client_id, remaining) in bindings {
+    for (digest, binding, remaining) in bindings {
         postgres
-            .import_binding(&digest, &client_id, remaining)
+            .import_binding(&digest, &binding, remaining)
             .await?;
     }
     tracing::Span::current()
         .record("clients", client_count)
-        .record("bindings", binding_count);
+        .record("bindings", binding_count)
+        .record("revoked_grants", revoked_grant_count);
     tracing::info!(
         clients = client_count,
         bindings = binding_count,
+        revoked_grants = revoked_grant_count,
         "backfilled MCP OAuth state from legacy Redis"
     );
     Ok(())

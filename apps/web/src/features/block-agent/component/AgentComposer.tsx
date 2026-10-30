@@ -1,4 +1,5 @@
 import { SpeedToggle } from '@core/component/AI/component/input/SpeedToggle';
+import { modelLabel } from '@core/component/AI/constant/model-label';
 import {
   acceleratedSpeed,
   speedForModel,
@@ -135,7 +136,9 @@ export function AgentComposer(props: {
   const busy = () => {
     const state = turn();
     return (
-      (state !== 'idle' && state !== 'disconnected' && state !== 'stopping') ||
+      state === 'starting' ||
+      state === 'running' ||
+      state === 'blocked' ||
       resuming()
     );
   };
@@ -344,6 +347,12 @@ export function AgentComposer(props: {
         onSendNext={() => {
           if (!readOnly()) sendNext();
         }}
+        modelName={modelLabel(
+          metadata()?.model ?? undefined,
+          metadata()?.supportedModels.find(
+            (model) => model.id === metadata()?.model
+          )?.name
+        )}
         supportsImages={
           metadata()?.supportedModels.find(
             (model) => model.id === metadata()?.model

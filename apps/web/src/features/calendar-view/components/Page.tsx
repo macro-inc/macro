@@ -361,6 +361,9 @@ export function Page(props: {
           onEventSelect: (event, element) => {
             if (isActive()) calendarView.selectEvent(event, element);
           },
+          onSelectedEventMount: (event, element) => {
+            if (isActive()) calendarView.reanchorSelectedEvent(event, element);
+          },
         }}
         eventTimeChangePending={updateEventTime.isPending}
         onDatesSet={handleDatesSet}

@@ -33,6 +33,17 @@ const tabIconSizes: Record<TabsSize, { square: string; labeled: string }> = {
   xl: { square: 'size-6', labeled: 'size-5' },
 };
 
+// The grouped frame adds 2px of border and 4px of padding around each tab.
+// Reserve the inset square explicitly; tooltip wrappers cannot resolve h-full
+// against a track that only has a minimum height.
+const joinedIconSizes: Record<TabsSize, string> = {
+  xs: 'size-4.5',
+  sm: 'size-5.5',
+  md: 'size-6.5',
+  lg: 'size-8.5',
+  xl: 'size-10.5',
+};
+
 function tabContentClasses(size: TabsSize) {
   return cn(labeledControlContents[size], size === 'md' && 'px-3');
 }
@@ -233,7 +244,7 @@ function PillOption<T extends string>(props: {
           (square()
             ? iconControlSizes[props.size]
             : labeledControlFrames[props.size]),
-        props.joined && square() && 'aspect-square',
+        props.joined && square() && joinedIconSizes[props.size],
         'touch:min-h-8',
         square() && 'touch:min-w-8',
         props.fullWidth && !square() && 'flex-1'
@@ -259,10 +270,7 @@ function PillOption<T extends string>(props: {
 
   return (
     <Show when={square()} fallback={item()}>
-      <Tooltip
-        label={props.option.label}
-        class={props.joined ? 'h-full' : undefined}
-      >
+      <Tooltip label={props.option.label} class="shrink-0">
         {item()}
       </Tooltip>
     </Show>

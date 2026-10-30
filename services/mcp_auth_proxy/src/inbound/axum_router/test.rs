@@ -10,7 +10,8 @@ use tower::ServiceExt;
 use super::{health, mcp_router, mount_at_root_and_prefix, oauth_router};
 use crate::test_support::{
     ATTACKER_CODE_VERIFIER, ATTACKER_REDIRECT_URI, Harness, TRUSTED_REDIRECT_URI,
-    UPSTREAM_ACCESS_TOKEN, VICTIM_CODE_VERIFIER, code_challenge_for, query_param,
+    UPSTREAM_ACCESS_TOKEN, UPSTREAM_REFRESH_TOKEN, VICTIM_CODE_VERIFIER, code_challenge_for,
+    query_param,
 };
 use axum::{Router, routing::get};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -20,6 +21,7 @@ const BODY_LIMIT: usize = 64 * 1024;
 struct Response {
     status: StatusCode,
     location: Option<String>,
+    referrer_policy: Option<String>,
     body: String,
 }
 
@@ -40,6 +42,10 @@ async fn send(harness: &Harness, request: Request<Body>) -> Response {
         .headers()
         .get(header::LOCATION)
         .map(|value| value.to_str().expect("Location is text").to_owned());
+    let referrer_policy = response
+        .headers()
+        .get(header::REFERRER_POLICY)
+        .map(|value| value.to_str().expect("Referrer-Policy is text").to_owned());
     let bytes = axum::body::to_bytes(response.into_body(), BODY_LIMIT)
         .await
         .expect("body should be readable");
@@ -47,6 +53,7 @@ async fn send(harness: &Harness, request: Request<Body>) -> Response {
     Response {
         status,
         location,
+        referrer_policy,
         body: String::from_utf8(bytes.to_vec()).expect("body should be UTF-8"),
     }
 }
@@ -154,6 +161,83 @@ async fn authorize_explains_how_to_reconnect_an_unregistered_client() {
     assert!(!harness.inflight.has_pending());
 }
 
+/// MCP Inspector on `http://127.0.0.1:6274` failed with FusionAuth's "Invalid
+/// origin uri" because the browser forwarded the inspector's Referer through
+/// this redirect. Every usable client, loopback on any port or a trusted HTTPS
+/// host, reaches FusionAuth without its origin.
+#[tokio::test]
+async fn authorize_withholds_the_client_origin_from_the_identity_provider() {
+    let harness = Harness::new();
+
+    for redirect_uri in [
+        "http://localhost:6274/oauth/callback",
+        "http://127.0.0.1:6274/oauth/callback",
+        "http://[::1]:6274/oauth/callback",
+        TRUSTED_REDIRECT_URI,
+    ] {
+        let registration = send(&harness, register_request(redirect_uri)).await;
+        assert_eq!(registration.status, StatusCode::OK, "{redirect_uri}");
+        let client_id = registration.json()["client_id"]
+            .as_str()
+            .expect("registration returns a client_id")
+            .to_owned();
+
+        let authorize = send(
+            &harness,
+            authorize_request(&client_id, redirect_uri, VICTIM_CODE_VERIFIER),
+        )
+        .await;
+
+        assert_eq!(
+            authorize.status,
+            StatusCode::TEMPORARY_REDIRECT,
+            "{redirect_uri}"
+        );
+        assert_eq!(
+            authorize.referrer_policy.as_deref(),
+            Some("no-referrer"),
+            "{redirect_uri}"
+        );
+    }
+}
+
+/// Loopback hosts are interchangeable for the policy but not for the
+/// registration: a client registered on `localhost` cannot have its code sent
+/// to `127.0.0.1`.
+#[tokio::test]
+async fn authorize_refuses_a_loopback_redirect_the_client_did_not_register() {
+    let harness = Harness::new();
+
+    let registration = send(
+        &harness,
+        register_request("http://localhost:6274/oauth/callback"),
+    )
+    .await;
+    assert_eq!(registration.status, StatusCode::OK);
+    let client_id = registration.json()["client_id"]
+        .as_str()
+        .expect("registration returns a client_id")
+        .to_owned();
+
+    let authorize = send(
+        &harness,
+        authorize_request(
+            &client_id,
+            "http://127.0.0.1:6274/oauth/callback",
+            VICTIM_CODE_VERIFIER,
+        ),
+    )
+    .await;
+
+    assert_eq!(authorize.status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        authorize.body,
+        "redirect_uri was not registered for this client"
+    );
+    assert_eq!(authorize.location, None);
+    assert!(!harness.inflight.has_pending());
+}
+
 /// The flow a real MCP client drives, from registration through to a bearer
 /// token, so the added checks are shown not to break it.
 #[tokio::test]
@@ -245,6 +329,81 @@ async fn token_endpoint_refuses_a_code_presented_by_another_client() {
     .await;
     assert_eq!(retried.status, StatusCode::BAD_REQUEST);
     assert_eq!(retried.body, "invalid or expired code");
+}
+
+fn revoke_request(form: &str) -> Request<Body> {
+    Request::builder()
+        .method("POST")
+        .uri("/revoke")
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body(Body::from(form.to_owned()))
+        .expect("request should build")
+}
+
+/// The disconnect flow over HTTP: another client is refused with an RFC 6749
+/// error body, the owner revokes, the revoked token no longer refreshes, and
+/// revoking again still succeeds.
+#[tokio::test]
+async fn client_disconnects_by_revoking_its_refresh_token() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let code = harness
+        .complete_flow_to_code(&client_id, TRUSTED_REDIRECT_URI, VICTIM_CODE_VERIFIER)
+        .await;
+    let exchange = send(
+        &harness,
+        token_request(&format!(
+            "grant_type=authorization_code&code={code}&code_verifier={VICTIM_CODE_VERIFIER}\
+             &redirect_uri={}&client_id={client_id}",
+            urlencoding::encode(TRUSTED_REDIRECT_URI)
+        )),
+    )
+    .await;
+    assert_eq!(exchange.status, StatusCode::OK);
+    assert!(
+        exchange.json()["expires_in"].is_u64(),
+        "expires_in must always be present"
+    );
+
+    let anonymous = send(
+        &harness,
+        revoke_request(&format!("token={UPSTREAM_REFRESH_TOKEN}")),
+    )
+    .await;
+    assert_eq!(anonymous.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(anonymous.json()["error"], "invalid_client");
+
+    let other_client = send(
+        &harness,
+        revoke_request(&format!(
+            "token={UPSTREAM_REFRESH_TOKEN}&token_type_hint=refresh_token&client_id=some-other-client"
+        )),
+    )
+    .await;
+    assert_eq!(other_client.status, StatusCode::BAD_REQUEST);
+    assert_eq!(other_client.json()["error"], "invalid_grant");
+
+    for _ in 0..2 {
+        let revoked = send(
+            &harness,
+            revoke_request(&format!(
+                "token={UPSTREAM_REFRESH_TOKEN}&token_type_hint=refresh_token&client_id={client_id}"
+            )),
+        )
+        .await;
+        assert_eq!(revoked.status, StatusCode::OK);
+        assert_eq!(revoked.body, "");
+    }
+
+    let refresh = send(
+        &harness,
+        token_request(&format!(
+            "grant_type=refresh_token&refresh_token={UPSTREAM_REFRESH_TOKEN}&client_id={client_id}"
+        )),
+    )
+    .await;
+    assert_eq!(refresh.status, StatusCode::BAD_REQUEST);
+    assert_eq!(refresh.body, "refresh token is not bound to a client");
 }
 
 async fn ok() -> &'static str {

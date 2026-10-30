@@ -175,7 +175,7 @@ export default defineDoc({
       id: 'icon-only',
       title: 'Icon only',
       description:
-        'A narrow header collapses labels to icons. Each label stays the accessible name and becomes the tooltip.',
+        'A narrow header collapses labels to icons. Each option keeps an inset square inside the grouped track; its label stays the accessible name and becomes the tooltip.',
       render: IconOnlyDemo,
     },
     {
