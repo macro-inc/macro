@@ -194,7 +194,7 @@ export function NotificationStack<T>(props: NotificationStackProps<T>) {
                   class="absolute inset-x-0 top-0 box-border overflow-hidden rounded-2xl border border-edge-frame shadow-sm origin-top motion-safe:transition-[top,height,transform,opacity,background-color,box-shadow] motion-safe:[transition-duration:420ms,420ms,420ms,250ms,200ms,200ms] motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
                   classList={{
                     'bg-panel': !behind(),
-                    'bg-surface': behind(),
+                    'bg-surface-3': behind(),
                     'pointer-events-none': hidden(),
                     'not-touch:hover:shadow-md': !expanded() && index() === 0,
                   }}

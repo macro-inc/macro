@@ -58,7 +58,6 @@ function timestamp(session: UpdateSession): number {
 }
 
 function summary(
-  sessionName: string,
   request: PendingInteraction,
   messages: readonly FoldedMessage[]
 ): string {
@@ -73,20 +72,20 @@ function summary(
           (part) => part.kind === 'tool_use' && part.id === permission.toolCall
         );
       if (tool?.kind !== 'tool_use')
-        return `${sessionName} wants permission to run a tool`;
+        return 'Wants permission to run a tool';
       const label =
         tool.detail.kind === 'terminal'
           ? (tool.detail.command ?? 'a command')
           : tool.name.kind === 'mcp'
             ? tool.name.tool
             : tool.name.name;
-      return `${sessionName} wants to run ${label.replace(/\s+/g, ' ')}`;
+      return `Wants to run ${label.replace(/\s+/g, ' ')}`;
     })
-    .with({ kind: 'elicitation' }, (question) => question.message)
+    .with({ kind: 'elicitation' }, () => 'Has a question')
     .with(
       { kind: 'tool_approval' },
       (approval) =>
-        `${sessionName} wants to use ${approval.toolName} from ${approval.serverName}`
+        `Wants to use ${approval.toolName} from ${approval.serverName}`
     )
     .exhaustive();
 }
@@ -126,7 +125,6 @@ export function selectAgentUpdates(
           sessionName,
           updatedAt,
           summary: summary(
-            sessionName,
             request,
             messagesBySession.get(session.id) ?? []
           ),

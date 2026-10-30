@@ -12,7 +12,7 @@ vi.mock('../primitives/create-agent-updates', () => ({
         sessionId: 'session',
         sessionName: 'Build app',
         updatedAt: Date.now(),
-        summary: 'Build app wants to run tests',
+        summary: 'Wants to run tests',
         request: {
           kind: 'permission',
           requestId: 7,

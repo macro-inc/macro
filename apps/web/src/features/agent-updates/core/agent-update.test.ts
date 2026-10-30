@@ -81,9 +81,9 @@ describe('agent updates selection', () => {
     );
     expect(updates).toHaveLength(4);
     expect(updates[0]?.sessionId).toBe('newer');
-    expect(updates.map((update) => update.summary)).toContain('Which branch?');
+    expect(updates.map((update) => update.summary)).toContain('Has a question');
     expect(updates.map((update) => update.summary)).toContain(
-      'Fix build wants to use search from Linear'
+      'Wants to use search from Linear'
     );
   });
 
