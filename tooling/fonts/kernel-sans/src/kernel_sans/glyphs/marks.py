@@ -9,12 +9,14 @@ and a little wider.
 
 Style, following DESIGN.md: acute and grave are parallelograms with flat
 (horizontal) ends like the house diagonals; circumflex and caron are chevrons
-with flat-cut tips and apex; dots are the house square dot; ring, breve and
+with flat-cut tips and apex; dots are the house square dot (p.dot, the
+lowercase ones hanging from the ascender like the i dot); ring, breve and
 tilde are squircle strokes whose free ends are cut horizontally; cedilla and
 ogonek are small squircle hooks below the baseline with chamfered tails.
 Mark strokes are a little lighter than the stems and grow more slowly with
 weight, so the small counters of ring, breve and tilde stay open at
-ExtraBold.
+ExtraBold. Breve, cedilla and ogonek share one pair of strokes (`_curve`)
+and one chamfer rule (`_mark_cut`: 0.36 of the mark's own stroke).
 """
 
 import math
@@ -107,7 +109,7 @@ def _mark(shape, p, top=None, bottom=None):
         anchors["_top"] = top
     if bottom is not None:
         anchors["_bottom"] = bottom
-    s = 40 + 0.1 * p.grow
+    s = 0.57 * p.sb  # 40 at Regular; tightens with weight like the letters
     return G(shape, l=s, r=s, anchors=anchors)
 
 
@@ -266,13 +268,13 @@ def _dot_size(p, case):
     return p.dot
 
 
-def _dot_y(p, case):
-    """Centre height of dieresis / dotaccent dots. Lowercase dots line up with
-    the i dot (top at the ascender), so i, ï and ü show one dot; .case dots
+def _dot_y(p, case, d=None):
+    """Centre height of dieresis / dotaccent dots of side d. Lowercase dots
+    hang from the ascender like the i dot, so i, ï and ü line up; .case dots
     span the .case zone (772-930) at ExtraBold."""
     if case:
         return 846 + 0.08 * p.grow
-    return P.ASC - _dot_size(p, case) / 2
+    return P.ASC - (_dot_size(p, case) if d is None else d) / 2
 
 
 def _dieresis_shape(p, case, narrow=False):
@@ -284,9 +286,10 @@ def _dieresis_shape(p, case, narrow=False):
         # by at most about half a sidebearing and clears neighbouring
         # ascenders (naïf, haïk, laïque). That fits the full house dot up to
         # Regular; towards ExtraBold, where the sidebearings are tight, the
-        # dots give up 10% of their side rather than crowd an l or k.
-        d, gap = d * (1 - 0.1 * _up(p) / 70), p.w(56, 0.1) - 0.3 * _up(p)
-    y = _dot_y(p, case)
+        # dots give up 12% of their side rather than crowd an l or k or
+        # close the gap between them (48 units at ExtraBold).
+        d, gap = d * (1 - 0.12 * _up(p) / 70), p.w(56, 0.1) - 0.21 * _up(p)
+    y = _dot_y(p, case, d)
     off = (d + gap) / 2
     return dot(-off, y, d) + dot(off, y, d)
 
