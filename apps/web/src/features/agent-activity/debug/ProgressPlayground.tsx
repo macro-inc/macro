@@ -1,11 +1,11 @@
 /**
  * Local playground for how an agent's reply reads while it works and once it
- * is done: every state as a channel message and as the agent session shows
- * it, side by side, from one set of fixture parts. Mounted at
+ * is done: every state in a DM, as a channel mention's thread reply, and in
+ * the agent session, one tab each, from one set of fixture parts. Mounted at
  * `/app/debug/agent-progress`.
  *
- * Channel messages are composed by the server's own serializer, so each is
- * the markdown a thread would store; the session column renders the same
+ * Messages are composed by the server's own serializer, so each is the
+ * markdown a conversation would store; the session tab renders the same
  * parts through the session's message renderer.
  */
 
@@ -320,7 +320,7 @@ const SCENARIOS: Scenario[] = [
   {
     id: 'thinking',
     title: 'Before the first step',
-    note: 'A thread reply shows the Thinking spinner; a DM posts nothing yet, only the typing row.',
+    note: 'A mention shows the Thinking spinner, a DM only its typing row, the session its working line.',
     parts: [],
     inFlight: true,
   },
@@ -363,7 +363,7 @@ const SCENARIOS: Scenario[] = [
   {
     id: 'streaming',
     title: 'Steps done, answer streaming',
-    note: 'The run folds; the passage being written streams in the typing row.',
+    note: 'The run folds. The passage being written is posted once finished; a DM streams it under its typing row.',
     parts: [SEARCH_DOCS, READ_DOC, text(ANSWER)],
     inFlight: true,
   },
@@ -742,10 +742,11 @@ function storedSegment(
 }
 
 /**
- * The messages a reply posts (agent_harness `present.rs`). A thread reply is
- * one message that leads with the session link and shows the spinner while
- * the turn runs. A DM posts a message per finished passage with the steps
- * after it attached, and nothing until there is something to show.
+ * The messages a reply posts (agent_harness `present.rs`). A mention's reply
+ * is one message in its thread that leads with the session link and shows
+ * the spinner while the turn runs. A DM posts a message per finished passage
+ * with the steps after it attached, and nothing until there is something to
+ * show.
  */
 function replyMessages(
   scenario: Scenario,
@@ -755,7 +756,7 @@ function replyMessages(
   const stored = segmentsOf(scenario.parts, scenario.inFlight).flatMap(
     (segment) => storedSegment(scenario, segment, reader) ?? []
   );
-  if (conversation === 'thread') {
+  if (conversation === 'mention') {
     const body: AgentChatReplyBody =
       stored.length > 0
         ? {
@@ -821,7 +822,15 @@ function channelMessage(reply: AgentChatReply, id: string): MessageData {
 type Theme = 'app' | 'light' | 'dark';
 type Viewer = 'reader' | 'member';
 type Width = 'wide' | 'phone';
-type Conversation = 'thread' | 'dm';
+type Conversation = 'dm' | 'mention';
+/** Where a reply is read: a conversation, or the agent session itself. */
+type View = Conversation | 'session';
+
+const VIEWS: readonly { value: View; label: string }[] = [
+  { value: 'dm', label: 'DM' },
+  { value: 'mention', label: 'Channel mention' },
+  { value: 'session', label: 'Agent session' },
+];
 
 function Choice<T extends string>(props: {
   label: string;
@@ -843,19 +852,22 @@ function Choice<T extends string>(props: {
   );
 }
 
-function Surface(props: { label: string; children: JSX.Element }) {
+function Frame(props: { phone: boolean; children: JSX.Element }) {
   return (
-    <div class="flex min-w-0 flex-col overflow-hidden rounded-lg border border-edge-muted bg-panel">
-      <div class="border-b border-edge-muted px-3 py-1.5 text-xs text-ink-extra-muted">
-        {props.label}
-      </div>
-      <div class="min-w-0 py-2">{props.children}</div>
+    <div
+      class="min-w-0 overflow-hidden rounded-lg border border-edge-muted bg-panel py-2"
+      classList={{ 'w-[390px]': props.phone, 'max-w-3xl': !props.phone }}
+    >
+      {props.children}
     </div>
   );
 }
 
-/** The conversation: the reply's messages, and the typing row while it runs. */
-function ChannelColumn(props: {
+/**
+ * A conversation: the reply's messages, and in a DM the typing row while it
+ * runs. A mention's reply sits in a thread, which shows no typing row.
+ */
+function ConversationView(props: {
   scenario: Scenario;
   conversation: Conversation;
   reader: boolean;
@@ -883,7 +895,7 @@ function ChannelColumn(props: {
           />
         )}
       </Index>
-      <Show when={props.scenario.inFlight}>
+      <Show when={props.conversation === 'dm' && props.scenario.inFlight}>
         <TypingRow
           avatar={
             <PersonaAvatar botId={MACRO_AGENT_BOT_ID} name="Macro" size="sm" />
@@ -900,7 +912,7 @@ function ChannelColumn(props: {
 }
 
 /** The session: the reply, or its working line before it has any parts. */
-function SessionColumn(props: { scenario: Scenario }) {
+function SessionView(props: { scenario: Scenario }) {
   return (
     <div class="px-4 pb-2">
       <Show
@@ -918,11 +930,13 @@ function SessionColumn(props: { scenario: Scenario }) {
 
 function ScenarioRow(props: {
   scenario: Scenario;
-  conversation: Conversation;
+  view: View;
   reader: boolean;
   phone: boolean;
   controls?: JSX.Element;
 }) {
+  const conversation = (): Conversation | undefined =>
+    props.view === 'session' ? undefined : props.view;
   return (
     <section
       id={props.scenario.id}
@@ -934,33 +948,25 @@ function ScenarioRow(props: {
         <p class="text-xs text-ink-muted">{props.scenario.note}</p>
         {props.controls}
       </header>
-      <div
-        class="grid gap-4"
-        classList={{
-          'grid-cols-[repeat(2,390px)]': props.phone,
-          'grid-cols-1 xl:grid-cols-2': !props.phone,
-        }}
-      >
-        <Surface label={props.conversation === 'thread' ? 'Thread' : 'DM'}>
-          <ChannelColumn
-            scenario={props.scenario}
-            conversation={props.conversation}
-            reader={props.reader}
-          />
-        </Surface>
-        <Surface label="Agent session">
-          <SessionColumn scenario={props.scenario} />
-        </Surface>
-      </div>
+      <Frame phone={props.phone}>
+        <Show
+          when={conversation()}
+          fallback={<SessionView scenario={props.scenario} />}
+        >
+          {(shown) => (
+            <ConversationView
+              scenario={props.scenario}
+              conversation={shown()}
+              reader={props.reader}
+            />
+          )}
+        </Show>
+      </Frame>
     </section>
   );
 }
 
-function ReplayRow(props: {
-  conversation: Conversation;
-  reader: boolean;
-  phone: boolean;
-}) {
+function ReplayRow(props: { view: View; reader: boolean; phone: boolean }) {
   const [frame, setFrame] = createSignal(0);
   const [playing, setPlaying] = createSignal(true);
   const timer = setInterval(() => {
@@ -976,7 +982,7 @@ function ReplayRow(props: {
   return (
     <ScenarioRow
       scenario={scenario()}
-      conversation={props.conversation}
+      view={props.view}
       reader={props.reader}
       phone={props.phone}
       controls={
@@ -1025,10 +1031,10 @@ function toggleAll(root: HTMLElement | undefined, open: boolean) {
 }
 
 export default function ProgressPlayground() {
+  const [view, setView] = createSignal<View>('dm');
   const [theme, setTheme] = createSignal<Theme>('app');
   const [viewer, setViewer] = createSignal<Viewer>('reader');
   const [width, setWidth] = createSignal<Width>('wide');
-  const [conversation, setConversation] = createSignal<Conversation>('thread');
   const phone = () => width() === 'phone';
   let scenarios: HTMLDivElement | undefined;
 
@@ -1044,6 +1050,13 @@ export default function ProgressPlayground() {
     <div class="size-full overflow-auto bg-surface text-ink">
       <div class="sticky top-0 z-10 flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-edge-muted bg-surface px-6 py-2 text-xs">
         <span class="font-medium text-ink">Agent progress</span>
+        <Tabs
+          aria-label="Surface"
+          size="sm"
+          options={VIEWS}
+          value={view()}
+          onChange={setView}
+        />
         <Choice
           label="Theme"
           value={theme()}
@@ -1054,24 +1067,18 @@ export default function ProgressPlayground() {
           ]}
           onChange={applyPreview}
         />
-        <Choice
-          label="Conversation"
-          value={conversation()}
-          options={[
-            { value: 'thread', label: 'Thread' },
-            { value: 'dm', label: 'DM' },
-          ]}
-          onChange={setConversation}
-        />
-        <Choice
-          label="Viewer"
-          value={viewer()}
-          options={[
-            { value: 'reader', label: 'Can open session' },
-            { value: 'member', label: "Can't open session" },
-          ]}
-          onChange={setViewer}
-        />
+        {/* The session shows every step in full to anyone who can open it. */}
+        <Show when={view() !== 'session'}>
+          <Choice
+            label="Viewer"
+            value={viewer()}
+            options={[
+              { value: 'reader', label: 'Can open session' },
+              { value: 'member', label: "Can't open session" },
+            ]}
+            onChange={setViewer}
+          />
+        </Show>
         <Choice
           label="Width"
           value={width()}
@@ -1112,7 +1119,7 @@ export default function ProgressPlayground() {
       </div>
       <div ref={scenarios} class="px-6 pb-16">
         <ReplayRow
-          conversation={conversation()}
+          view={view()}
           reader={viewer() === 'reader'}
           phone={phone()}
         />
@@ -1120,7 +1127,7 @@ export default function ProgressPlayground() {
           {(scenario) => (
             <ScenarioRow
               scenario={scenario}
-              conversation={conversation()}
+              view={view()}
               reader={viewer() === 'reader'}
               phone={phone()}
             />

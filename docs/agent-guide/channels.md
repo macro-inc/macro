@@ -162,8 +162,9 @@ conversation: the agent answers it only when mentioned there, in the thread,
 as in any channel.
 
 The local playground at `/app/debug/agent-progress` shows each of these states
-as a thread or DM and the agent session render it, side by side, with theme,
-conversation, viewer, and phone-width toggles and a looping replay of one turn.
+in three tabs: **DM**, **Channel mention** (the reply in its thread), and
+**Agent session**, with theme, viewer, and phone-width toggles and a looping
+replay of one turn.
 
 Each failed, stopped, or interrupted source message has its own **Retry message**
 action in the current context. Retry is explicit because an interrupted attempt
