@@ -126,6 +126,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
           status: false,
           priority: false,
           projectBeforeAssignees: true,
+          createdByLast: true,
         })}
       >
         <Show when={!props.hideCheckbox}>
@@ -232,6 +233,15 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
         </For>
 
         <Entity.Slot
+          placement="timestamp"
+          class="text-xs text-right text-ink-extra-muted font-light"
+        >
+          <Show when={!props.hasNotifications}>
+            <Entity.Timestamp entity={props.entity} />
+          </Show>
+        </Entity.Slot>
+
+        <Entity.Slot
           placement="createdBy"
           class="hidden @min-[1221px]/u-list:flex items-center justify-end min-w-0 overflow-hidden text-xs text-ink-muted ph-no-capture"
         >
@@ -240,15 +250,6 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
             viewerLabel="Me"
             iconOnly
           />
-        </Entity.Slot>
-
-        <Entity.Slot
-          placement="timestamp"
-          class="text-xs text-right text-ink-extra-muted font-light"
-        >
-          <Show when={!props.hasNotifications}>
-            <Entity.Timestamp entity={props.entity} />
-          </Show>
         </Entity.Slot>
       </Entity.Layout>
       <Suspense>

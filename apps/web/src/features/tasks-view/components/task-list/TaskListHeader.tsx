@@ -66,6 +66,7 @@ export function TaskListHeader() {
         status: false,
         priority: false,
         projectBeforeAssignees: true,
+        createdByLast: true,
       })}
     >
       <span role="columnheader" style={{ 'grid-area': 'indicator' }} />
@@ -80,17 +81,17 @@ export function TaskListHeader() {
         <SortableHeader label="Project" area="initiative" />
       </Show>
       <SortableHeader label="Assignees" area="assignees" />
-      <span
-        role="columnheader"
-        aria-label="Created by"
-        class="hidden @min-[1221px]/u-list:block"
-        style={{ 'grid-area': 'createdBy' }}
-      />
       <SortableHeader
         label="Updated"
         area="timestamp"
         sortId="updated_at"
         align="end"
+      />
+      <span
+        role="columnheader"
+        aria-label="Created by"
+        class="hidden @min-[1221px]/u-list:block"
+        style={{ 'grid-area': 'createdBy' }}
       />
     </div>
   );

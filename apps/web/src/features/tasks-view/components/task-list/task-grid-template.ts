@@ -65,6 +65,8 @@ export function taskGridTemplate(options: {
   priority?: boolean;
   /** Put task projects before assignees without reordering other grid hosts. */
   projectBeforeAssignees?: boolean;
+  /** Keep the icon-only creator last without reordering other grid hosts. */
+  createdByLast?: boolean;
 }) {
   const propertyColumns: TaskGridColumn[] = TASK_GRID_COLUMNS.filter(
     (column) =>
@@ -77,12 +79,16 @@ export function taskGridTemplate(options: {
       : propertyColumns.length;
     propertyColumns.splice(projectIndex, 0, TASK_PROJECT_COLUMN);
   }
+  const metadataColumns = [
+    { id: 'createdBy', width: CREATED_BY_COLUMN_WIDTH },
+    { id: 'timestamp', width: 'var(--task-col-timestamp, 5rem)' },
+  ];
+  if (options.createdByLast) metadataColumns.reverse();
   const columns = [
     ...(options.indicator ? [{ id: 'indicator', width: '1rem' }] : []),
     { id: 'content', width: 'minmax(0, 100%)' },
     ...propertyColumns,
-    { id: 'createdBy', width: CREATED_BY_COLUMN_WIDTH },
-    { id: 'timestamp', width: 'var(--task-col-timestamp, 5rem)' },
+    ...metadataColumns,
   ];
   return {
     'grid-template-columns': columns.map((column) => column.width).join(' '),
