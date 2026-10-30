@@ -10,7 +10,7 @@ import { type Component, createSignal, type JSX, Show } from 'solid-js';
 
 type InlinePropertyValueProps = {
   property: PropertyT;
-  /** Owning entity ID, when the pill is rendered outside its entity block. */
+  /** Owning entity ID; a composer has no entity yet, so it passes none. */
   entityId?: string;
   /** Label rendered when the property is empty. Defaults to "None". */
   emptyLabel?: JSX.Element;
@@ -88,6 +88,7 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
       class={props.class}
       emptyLabel={props.emptyLabel}
       opensProject={
+        props.entityId !== undefined &&
         ctx.entityType === 'TASK' &&
         props.property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
       }
