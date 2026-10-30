@@ -27,8 +27,7 @@ for (const format of ['plain', 'html', 'lexical'] as const) {
       await expect(editor).toBeVisible({ timeout: 60_000 });
       await expect(editor.locator('p')).toHaveCount(3);
       await editor.focus();
-      await page.keyboard.press('Control+End');
-      await page.keyboard.press('Control+Shift+Home');
+      await page.keyboard.press('ControlOrMeta+A');
       const copied = await editor.evaluate((element) => {
         const clipboardData = new DataTransfer();
         element.dispatchEvent(
@@ -178,3 +177,72 @@ test('quoting a backward selection includes the first paragraph', async ({
     fullPage: true,
   });
 });
+
+for (const { name, markdown, quoteCount } of [
+  {
+    name: 'adjacent quotes',
+    markdown: '> First original.\n\n> Middle original.\n\n> Last original.',
+    quoteCount: 2,
+  },
+  {
+    name: 'quotes separated by unquoted text',
+    markdown: '> First original.\n\nMiddle original.\n\n> Last original.',
+    quoteCount: 1,
+  },
+  {
+    name: 'unquoted paragraphs',
+    markdown: 'First original.\n\nMiddle original.\n\nLast original.',
+    quoteCount: 0,
+  },
+]) {
+  test(`pasting over ${name} respects the selected blocks`, async ({
+    page,
+    context,
+  }) => {
+    await context.route('**/*', async (route) => {
+      const url = new URL(route.request().url());
+      if (
+        url.hostname === 'localhost' &&
+        !url.pathname.includes('/__macro_dev/')
+      ) {
+        await route.continue();
+      } else {
+        await route.fulfill({ status: 401, body: '{}' });
+      }
+    });
+    await page.routeWebSocket('**/*', (socket) => socket.close());
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto(
+      `/src/lib/core/component/LexicalMarkdown/component/core/browser-test/quotes.html?${new URLSearchParams({ initial: markdown })}`
+    );
+    const editor = page.getByRole('textbox', { name: 'Message' });
+    await expect(editor).toBeVisible({ timeout: 60_000 });
+    await editor.focus();
+    await page.keyboard.press('ControlOrMeta+A');
+    await editor.evaluate((element) => {
+      const clipboardData = new DataTransfer();
+      clipboardData.setData(
+        'text/plain',
+        'First replacement.\n\nSecond replacement.'
+      );
+      element.dispatchEvent(
+        new ClipboardEvent('paste', {
+          clipboardData,
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+    });
+    await expect(editor.locator(':scope > blockquote, :scope > p')).toHaveText([
+      'First replacement.',
+      'Second replacement.',
+    ]);
+    await expect(editor.locator('blockquote')).toHaveCount(quoteCount);
+    await page.getByRole('button', { name: 'Save message' }).click();
+    await expect(page.getByTestId('saved').locator('blockquote')).toHaveCount(
+      quoteCount
+    );
+    expect(errors).toEqual([]);
+  });
+}

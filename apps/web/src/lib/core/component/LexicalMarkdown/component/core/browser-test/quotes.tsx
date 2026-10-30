@@ -38,6 +38,7 @@ function Fixture() {
         <ComposerEditor
           config={editor}
           initialValue={
+            new URLSearchParams(window.location.search).get('initial') ??
             'First paragraph with enough words to wrap onto several lines.\n\nSecond paragraph with additional words.\n\nThird paragraph finishes the message.'
           }
           ariaLabel="Message"

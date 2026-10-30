@@ -40,15 +40,12 @@ function registerMarkdownPastePlugin(editor: LexicalEditor) {
       SELECTION_INSERT_CLIPBOARD_NODES_COMMAND,
       ({ nodes, selection }) => {
         if (!$isRangeSelection(selection)) return false;
-        const quote = $findMatchingParent(
-          selection.anchor.getNode(),
-          $isQuoteNode
-        );
         if (
-          !quote ||
-          !quote.is(
-            $findMatchingParent(selection.focus.getNode(), $isQuoteNode)
-          )
+          !$findMatchingParent(selection.anchor.getNode(), $isQuoteNode) ||
+          !$findMatchingParent(selection.focus.getNode(), $isQuoteNode) ||
+          selection
+            .getNodes()
+            .some((node) => !$findMatchingParent(node, $isQuoteNode))
         ) {
           return false;
         }

@@ -163,6 +163,8 @@ the editor's actual selection direction. The Markdown core browser suite's
 `quotes.browser.e2e.ts` checks Quote through the floating toolbar and after saving.
 The same suite checks multi-paragraph plain-text, HTML, and Lexical pastes into
 empty quotes and selections within a quote on desktop, tablet, and phone.
+Selections across adjacent quotes stay quoted; ranges containing unquoted blocks
+retain normal paste behavior.
 Keep pasted paragraphs quoted through the shared clipboard insertion command.
 
 A frontend dev server runs against the **dev** backend, so this needs no local stack, Docker, Rust build, or `sudo`:

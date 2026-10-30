@@ -45,6 +45,8 @@ keeps all pasted paragraphs quoted, including HTML and text copied from another
 Macro editor. Inline formatting survives. Verify an empty quote and a selection
 within a quote, then type after the paste and save the message; every pasted
 paragraph must still have the quote styling.
+Selections across adjacent quoted paragraphs preserve quoting too. A selection
+that includes unquoted paragraphs keeps the normal paste behavior.
 The backend-free quote check is documented in the Markdown browser-test README
 linked above.
 
