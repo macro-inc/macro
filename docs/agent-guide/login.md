@@ -135,6 +135,14 @@ normalized cache and live-update session, and clear the login hints. Repeat with
 retained user-info data from an earlier successful request. A network failure or
 5xx must not end the session; successful sign-in must re-enable eligible caching.
 
+## Native sign-out
+
+In the desktop, iOS, and Android apps, Sign out reloads the webview onto the
+sign-in screen. The reloaded document must start on `#/login`, never on the
+route it signed out from: that route has no session left to load and shows
+loading placeholders indefinitely. Sign out from Settings → Account and from
+Home, and check that `native_webview_started` reports a `#/login` URL.
+
 ## Native Android
 
 If a signed-out page shows the bottom `Login` / `Sign Up` banner, both buttons

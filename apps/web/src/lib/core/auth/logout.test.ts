@@ -4,10 +4,9 @@ import { isCancelledError, QueryClient } from '@tanstack/solid-query';
 import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
-const { client, isTauri, navigate } = vi.hoisted(() => ({
+const { client, isTauri } = vi.hoisted(() => ({
   client: { current: undefined as QueryClient | undefined },
   isTauri: vi.fn(() => false),
-  navigate: vi.fn(),
 }));
 vi.mock('@queries/client', () => ({
   queryPersistence: {
@@ -22,7 +21,6 @@ vi.mock('@queries/client', () => ({
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn(), reset: vi.fn() }),
 }));
-vi.mock('@solidjs/router', () => ({ useNavigate: () => navigate }));
 vi.mock('@ui', () => ({ confirmDialog: vi.fn(async () => false) }));
 vi.mock('@queries/email/local-drafts', () => ({
   clearLocalDrafts: vi.fn(async () => {}),
@@ -167,21 +165,28 @@ describe('local draft logout warning', () => {
   // The Tauri shell, desktop included: a webview navigation to the identity
   // provider would be handed to the system browser by the navigation plugin,
   // leaving the app itself signed in.
-  it('reloads the Tauri login document only after local cleanup and navigation', async () => {
+  // The router writes a navigation's URL only once its transition settles, so
+  // the login URL must already be in place when the reload starts.
+  it('reloads the Tauri webview onto the login route after local cleanup', async () => {
     const order: string[] = [];
     client.current = new QueryClient();
     isTauri.mockReturnValue(true);
     vi.mocked(clearLocalDrafts).mockImplementationOnce(async () => {
       order.push('clear');
     });
-    navigate.mockImplementationOnce(() => {
-      order.push('navigate');
-    });
-    const reload = vi.fn(() => {
-      order.push('reload');
-    });
+    const location = {
+      hash: '#/home',
+      reload: vi.fn(() => {
+        order.push(`reload ${location.hash}`);
+      }),
+    };
+    const replaceState = vi.fn(
+      (_state: unknown, _unused: string, url: string) => {
+        location.hash = url;
+      }
+    );
     const fetchMock = vi.fn(async () => new Response());
-    vi.stubGlobal('window', { location: { reload } });
+    vi.stubGlobal('window', { location, history: { replaceState } });
     vi.stubGlobal('fetch', fetchMock);
     const { logout, dispose } = createRoot((dispose) => ({
       logout: useLogout(),
@@ -189,13 +194,12 @@ describe('local draft logout warning', () => {
     }));
     try {
       await logout();
-      expect(order).toEqual(['clear', 'navigate', 'reload']);
+      expect(order).toEqual(['clear', 'reload #/login']);
       expect(fetchMock).toHaveBeenCalledWith(
         'https://auth.example.com/oauth2/logout',
         expect.objectContaining({ credentials: 'include', mode: 'no-cors' })
       );
-      expect(navigate).toHaveBeenLastCalledWith('/login');
-      expect(reload).toHaveBeenCalledOnce();
+      expect(location.reload).toHaveBeenCalledOnce();
     } finally {
       dispose();
       isTauri.mockReturnValue(false);
