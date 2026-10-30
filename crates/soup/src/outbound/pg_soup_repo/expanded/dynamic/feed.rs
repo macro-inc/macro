@@ -208,9 +208,13 @@ impl FeedArm {
         } else {
             Driver::Sources
         };
+        // Source scans range over kind; the owner index does not, so the owner's
+        // tasks would be found among all their documents.
         let served = |conjunct: &Expr<DocumentLiteral>| match conjunct {
-            Expr::Literal(DocumentLiteral::SubType(DocumentSubType::Task))
-            | Expr::Literal(DocumentLiteral::UpdatedAt(_)) => true,
+            Expr::Literal(DocumentLiteral::SubType(DocumentSubType::Task)) => {
+                driver != Driver::Owner
+            }
+            Expr::Literal(DocumentLiteral::UpdatedAt(_)) => true,
             Expr::Not(inner) => matches!(
                 **inner,
                 Expr::Literal(DocumentLiteral::SubType(DocumentSubType::Task))
@@ -542,6 +546,24 @@ impl FeedArm {
         )
     }
 
+    /// For a document arm of one kind, tests a viewed item's kind before its `source_items`
+    /// rows: `document_sub_type` is small and decides the kind, so views of the other kind cost
+    /// no probe of the table.
+    fn viewed_kind_clause(&self, id_sql: &str) -> String {
+        let task = || {
+            format!(
+                "EXISTS (SELECT 1 FROM document_sub_type vk WHERE vk.document_id = {id_sql} AND vk.sub_type = 'task')"
+            )
+        };
+        match (self.entity, self.kinds.as_slice()) {
+            (FeedEntity::Document, ["task"]) => format!("\n                    AND {}", task()),
+            (FeedEntity::Document, ["document"]) => {
+                format!("\n                    AND NOT {}", task())
+            }
+            _ => String::new(),
+        }
+    }
+
     /// Reads the user's history of this entity type, most recent view first.
     fn viewed_scan(&self, exclude_frecency: bool) -> String {
         let id = r#"uh."itemId""#;
@@ -551,7 +573,7 @@ impl FeedArm {
                     SELECT '{item_type}'::text AS item_type, uh."itemId" AS id, uh."updatedAt"::timestamptz AS sort_ts
                     FROM "UserHistory" uh{access}{filter}
                     WHERE uh."userId" = $1
-                    AND uh."itemType" = '{item_type}'
+                    AND uh."itemType" = '{item_type}'{kind}
                     AND ($4::timestamptz IS NULL OR (uh."updatedAt", uh."itemId") < ($4::timestamp, $5)){frecency}{properties}
                     ORDER BY uh."updatedAt" DESC, uh."itemId" DESC
                     LIMIT $3
@@ -560,6 +582,7 @@ impl FeedArm {
             item_type = self.entity.item_type(),
             access = self.access_lateral(id),
             filter = self.filter_lateral(id),
+            kind = self.viewed_kind_clause(id),
             frecency = self.frecency_clause(id, exclude_frecency),
             properties = self.properties_clause(id),
         )

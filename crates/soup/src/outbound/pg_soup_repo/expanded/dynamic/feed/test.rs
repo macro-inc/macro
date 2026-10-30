@@ -574,6 +574,14 @@ fn shapes_reach_every_driver_and_phase() {
         ("unviewed", r#"SELECT 1 FROM "UserHistory" seen"#),
         ("tasks only", "AND g.kind IN ('task')"),
         ("documents only", "CROSS JOIN (VALUES ('document')) k(kind)"),
+        (
+            "viewed tasks by subtype",
+            r#"AND EXISTS (SELECT 1 FROM document_sub_type vk WHERE vk.document_id = uh."itemId""#,
+        ),
+        (
+            "viewed documents by subtype",
+            r#"AND NOT EXISTS (SELECT 1 FROM document_sub_type vk WHERE vk.document_id = uh."itemId""#,
+        ),
     ] {
         assert!(
             candidates.iter().any(|sql| sql.contains(marker)),
@@ -900,6 +908,16 @@ fn selective_filters_read_the_item_tables() {
             None,
             false,
             true,
+        ),
+        (
+            "the viewer's tasks",
+            Some(Expr::and(
+                doc(DocumentLiteral::SubType(DocumentSubType::Task)),
+                doc(DocumentLiteral::Owner(user())),
+            )),
+            None,
+            false,
+            false,
         ),
         (
             "owned by someone else",
