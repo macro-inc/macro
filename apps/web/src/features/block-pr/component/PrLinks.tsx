@@ -298,7 +298,7 @@ function ChannelOriginPills(props: {
   return (
     <Show when={props.origins.length > 0}>
       <span
-        class="group/channels flex min-w-0 shrink items-center [&>*+*]:-ml-2 hover:[&>*+*]:ml-0.5 focus-within:[&>*+*]:ml-0.5 [&>*]:relative [&>*]:transition-[margin] [&>*:hover]:z-10"
+        class="group/channels flex min-w-0 shrink items-center [&>:not(:first-child)]:-ml-2 hover:[&>:not(:first-child)]:ml-0.5 focus-within:[&>:not(:first-child)]:ml-0.5 [&>*]:relative [&>*]:transition-[margin] [&>*:hover]:z-10"
         aria-label={`Started from ${props.origins.length} channel ${
           props.origins.length === 1 ? 'message' : 'messages'
         }`}
