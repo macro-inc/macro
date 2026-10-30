@@ -1,0 +1,10 @@
+id = "clickup"
+name = "ClickUp"
+description = "Search and update tasks, lists, and docs."
+access = ["mcp"]
+mcp_url = "https://mcp.clickup.com/mcp"
+client_registration = "dcr"
+scopes = []
+pipedream_app_slugs = ["clickup"]
+status = "pending"
+probed = 2026-10-30

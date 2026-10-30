@@ -1,0 +1,10 @@
+id = "jira"
+name = "Jira"
+description = "Search, create, and update Jira issues through Atlassian's server."
+access = ["mcp"]
+mcp_url = "https://mcp.atlassian.com/v1/mcp/authv2"
+client_registration = "cimd"
+scopes = []
+pipedream_app_slugs = ["jira"]
+status = "pending"
+probed = 2026-10-30

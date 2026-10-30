@@ -1,0 +1,10 @@
+id = "todoist"
+name = "Todoist"
+description = "Read, add, and complete tasks and projects."
+access = ["mcp"]
+mcp_url = "https://ai.todoist.net/mcp"
+client_registration = "cimd"
+scopes = []
+pipedream_app_slugs = ["todoist"]
+status = "pending"
+probed = 2026-10-30

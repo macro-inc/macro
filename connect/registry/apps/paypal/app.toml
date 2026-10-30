@@ -1,0 +1,10 @@
+id = "paypal"
+name = "PayPal"
+description = "Manage invoices, orders, and transactions."
+access = ["mcp"]
+mcp_url = "https://mcp.paypal.com/mcp"
+client_registration = "dcr"
+scopes = []
+pipedream_app_slugs = ["paypal"]
+status = "pending"
+probed = 2026-10-30

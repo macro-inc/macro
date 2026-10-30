@@ -1,0 +1,10 @@
+id = "pipedrive"
+name = "Pipedrive"
+description = "Search and update deals, contacts, and activities."
+access = ["mcp"]
+mcp_url = "https://mcp.pipedrive.ai/mcp"
+client_registration = "dcr"
+scopes = []
+pipedream_app_slugs = ["pipedrive"]
+status = "pending"
+probed = 2026-10-30

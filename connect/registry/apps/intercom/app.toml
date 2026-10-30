@@ -1,0 +1,10 @@
+id = "intercom"
+name = "Intercom"
+description = "Search conversations, contacts, and help articles."
+access = ["mcp"]
+mcp_url = "https://mcp.intercom.com/mcp"
+client_registration = "dcr"
+scopes = []
+pipedream_app_slugs = ["intercom"]
+status = "pending"
+probed = 2026-10-30

@@ -1,0 +1,10 @@
+id = "webflow"
+name = "Webflow"
+description = "Manage sites, pages, and CMS collections."
+access = ["mcp"]
+mcp_url = "https://mcp.webflow.com/mcp"
+client_registration = "dcr"
+scopes = []
+pipedream_app_slugs = ["webflow"]
+status = "pending"
+probed = 2026-10-30
