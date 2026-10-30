@@ -121,6 +121,7 @@ pub(super) async fn cursor_soup(
     // id CTE, the history join, and any `Owner` literal that binds it again.
     query.push_bind(req.user_id.as_ref().to_string());
     query.push(ACCESS_SQL);
+    query.push(SESSION_GRANT_SQL);
     query.push(" AND (");
     push_filter(&mut query, filter);
     query.push(")");
@@ -166,7 +167,14 @@ pub(super) async fn by_ids(
     let mut query = QueryBuilder::<Postgres>::new(SELECT_SQL);
     query.push_bind(req.user_id.as_ref().to_string());
     query.push(ACCESS_SQL);
-    query.push(" AND s.id = ANY(");
+    // A session opened by id is also readable through its thread's parent,
+    // like the session's own REST read. Lists stay limited to session grants
+    // so every document thread's sessions do not flood Home and Recent.
+    query.push("(");
+    query.push(SESSION_GRANT_SQL);
+    query.push(" OR ");
+    query.push(PARENT_THREAD_GRANT_SQL);
+    query.push(") AND s.id = ANY(");
     query.push_bind(ids);
     query.push(") ORDER BY s.modified_at DESC, s.id DESC");
     query
@@ -226,8 +234,9 @@ const SELECT_SQL: &str = r#"
         WHERE cp.user_id = "#;
 
 /// Continues [`SELECT_SQL`] after the user id bind: the remaining source-id
-/// arms, the row projection, the history join, and the access predicate.
-/// Every `$1` here refers back to that same bind.
+/// arms, the row projection, and the history join, ending at `WHERE` so the
+/// caller appends its access predicate. Every `$1` here refers back to that
+/// same bind.
 const ACCESS_SQL: &str = r#" AND cp.left_at IS NULL
         UNION ALL
         SELECT t.team_id::text FROM team_user t WHERE t.user_id = $1
@@ -259,10 +268,27 @@ const ACCESS_SQL: &str = r#" AND cp.left_at IS NULL
         ON uh."itemId" = s.id::text
         AND uh."itemType" = 'agent_session'
         AND uh."userId" = $1
-    WHERE EXISTS (
+    WHERE "#;
+
+/// Continues [`ACCESS_SQL`]: the viewer holds a grant on the session itself.
+const SESSION_GRANT_SQL: &str = r#"EXISTS (
         SELECT 1 FROM entity_access ea
         WHERE ea.entity_id = s.id
             AND ea.entity_type = 'agent_session'
+            AND ea.source_id IN (SELECT source_id FROM user_source_ids)
+    )"#;
+
+/// The viewer holds a grant on the document or call whose live thread the
+/// session runs in. Mirrors the parent inheritance `entity_access` applies to
+/// agent sessions, over the same stored grants Soup reads for documents.
+const PARENT_THREAD_GRANT_SQL: &str = r#"EXISTS (
+        SELECT 1 FROM comms_messages m
+        JOIN comms_message_threads t ON t.root_id = m.id AND t.deleted_at IS NULL
+        JOIN entity_access ea
+            ON ea.entity_id::text = m.parent_entity_id
+            AND ea.entity_type = m.parent_entity_type
+        WHERE m.id = s.thread_id
+            AND m.parent_entity_type IN ('document', 'call')
             AND ea.source_id IN (SELECT source_id FROM user_source_ids)
     )"#;
 
