@@ -1,6 +1,8 @@
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { useIsAuthenticated } from '@core/auth';
 import { CollabMarkdownEditor } from '@core/collab-surface/CollabMarkdownEditor';
+import type { SurfaceTokenViewer } from '@core/collab-surface/token';
+import { useUserId } from '@core/context/user';
 import { Button } from '@ui';
 import { createMemo, createSignal, onCleanup, Show, Suspense } from 'solid-js';
 import { ProjectDescriptionSkeleton } from './components/project-skeletons';
@@ -8,16 +10,19 @@ import { createProductionProjectDescriptionSession } from './queries/production-
 
 function DescriptionSession(props: {
   projectId: string;
-  signedIn: boolean;
+  viewer: SurfaceTokenViewer;
   canEdit: boolean;
   onRetry(): void;
 }) {
   const session = createProductionProjectDescriptionSession(props.projectId, {
-    signedIn: props.signedIn,
+    viewer: props.viewer,
   });
   onCleanup(session.dispose);
   return (
-    <>
+    <Show
+      when={!session.absent()}
+      fallback={<p class="mt-1.5 text-base text-ink-muted">No description</p>}
+    >
       <CollabMarkdownEditor
         resolveAppLink={useMacroMentionLinkResolver()}
         sourceId={props.projectId}
@@ -39,7 +44,7 @@ function DescriptionSession(props: {
           Retry description
         </Button>
       </Show>
-    </>
+    </Show>
   );
 }
 
@@ -49,22 +54,29 @@ export function ProjectDescription(props: {
   canEdit: boolean;
 }) {
   const authenticated = useIsAuthenticated();
+  const userId = useUserId();
   const [attempt, setAttempt] = createSignal(0);
-  // Project refreshes keep the same session; only a new project, a settled
-  // sign-in state, or a retry reopens. Opening waits for sign-in to settle:
-  // only an account ensures the surface.
+  // Project refreshes keep the same session; only a new project, a new
+  // viewer, or a retry reopens. Opening waits for sign-in to settle: only an
+  // account ensures the surface, and a token serves only the viewer it names.
+  const viewer = (): SurfaceTokenViewer | undefined => {
+    const signedIn = authenticated();
+    if (signedIn === false) return null;
+    if (signedIn) return userId();
+    return undefined;
+  };
   const identity = createMemo(
     () => {
-      const signedIn = authenticated();
-      return signedIn === undefined
+      const current = viewer();
+      return current === undefined
         ? undefined
-        : { projectId: props.projectId, signedIn, attempt: attempt() };
+        : { projectId: props.projectId, viewer: current, attempt: attempt() };
     },
     undefined,
     {
       equals: (previous, next) =>
         previous?.projectId === next?.projectId &&
-        previous?.signedIn === next?.signedIn &&
+        previous?.viewer === next?.viewer &&
         previous?.attempt === next?.attempt,
     }
   );
@@ -74,7 +86,7 @@ export function ProjectDescription(props: {
         {(identity) => (
           <DescriptionSession
             projectId={identity.projectId}
-            signedIn={identity.signedIn}
+            viewer={identity.viewer}
             canEdit={props.canEdit}
             onRetry={() => setAttempt((attempt) => attempt + 1)}
           />

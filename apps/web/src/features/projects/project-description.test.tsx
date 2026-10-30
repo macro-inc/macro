@@ -4,8 +4,9 @@ import { createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 
 const sessions = vi.hoisted(() => ({
-  create: vi.fn((_projectId: string, _options: { signedIn: boolean }) => ({
+  create: vi.fn((_projectId: string, _options: { viewer: string | null }) => ({
     connectionError: () => 'offline',
+    absent: () => false,
     dispose: () => {},
   })),
 }));
@@ -13,6 +14,7 @@ const [authenticated, setAuthenticated] = createSignal<boolean | undefined>(
   true
 );
 vi.mock('@core/auth', () => ({ useIsAuthenticated: () => authenticated }));
+vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user-1' }));
 vi.mock('./queries/production-project-description', () => ({
   createProductionProjectDescriptionSession: sessions.create,
 }));
@@ -55,6 +57,6 @@ it('opens once sign-in settles, ensuring the surface only for an account', () =>
   render(() => <ProjectDescription projectId="a" canEdit={false} />);
   expect(sessions.create).not.toHaveBeenCalled();
   setAuthenticated(false);
-  expect(sessions.create.mock.calls).toEqual([['a', { signedIn: false }]]);
+  expect(sessions.create.mock.calls).toEqual([['a', { viewer: null }]]);
   setAuthenticated(true);
 });

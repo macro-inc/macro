@@ -81,7 +81,7 @@ export function createFormLayoutCollaboration(
     initialize: async () => {
       await collaborate(formId);
       // Editors only: the surface token checks the form's own access.
-      token = await getCollabSurfaceToken(formId);
+      token = await getCollabSurfaceToken(formId, userId ?? null);
       if (!token) throw new Error('This form’s editing session was refused.');
     },
     publish: async () => {
@@ -91,7 +91,7 @@ export function createFormLayoutCollaboration(
     connect: () => {
       if (!token) throw new Error('This form’s editing session was refused.');
       return createCollabSurfaceSource(formId, token, () =>
-        getCollabSurfaceToken(formId)
+        getCollabSurfaceToken(formId, userId ?? null)
       );
     },
   });
