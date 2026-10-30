@@ -473,6 +473,8 @@ month arrows, the month picker, and keyboard focus changes do not move the main
 calendar. Selecting a day navigates the main calendar without closing the narrow
 layout's navigation overlay. Main calendar navigation updates the mini calendar's
 selected day and week highlight without resetting the month being browsed.
+When browsing from a month's last day to a shorter month, keyboard focus stays
+on the shorter month's last day so Tab and arrow-key navigation remain usable.
 
 Active Quick Calls you created, participated in, or were invited to appear above your
 next five events (including ones in progress), whether or not they have call links.
