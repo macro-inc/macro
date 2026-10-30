@@ -1,9 +1,9 @@
 config:
   aws-native:region: us-east-1
   aws:region: us-east-1
-  email-service:pubsub_workers_desired_count: 16
-  email-service:pubsub_workers_min_capacity: 16
-  email-service:pubsub_workers_max_capacity: 16
+  email-service:pubsub_workers_desired_count: 8
+  email-service:pubsub_workers_min_capacity: 8
+  email-service:pubsub_workers_max_capacity: 8
   email-service:authentication_service_internal_api_key: authentication-service-internal-api-key-prod
   email-service:jwt_secret_key: fusionauth-jwt-secret-prod
   email-service:fusionauth_client_id: fusionauth-client-id-key-prod
