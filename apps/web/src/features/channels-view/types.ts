@@ -27,8 +27,6 @@ export type ChannelsViewState = {
    * split's history entry, which is too costly for a per-click filter.
    */
   threadsChannelId: string | undefined;
-  /** Show only conversations with unread activity in the rail. */
-  unreadOnly: boolean;
   sortBy: Record<ChannelsSortGroup, ChannelListSort>;
   asideWidth: number;
 };

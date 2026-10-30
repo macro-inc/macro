@@ -174,6 +174,7 @@ export default {
   toastCountNotRestored: { other: '{{count}} could not be restored.' },
   toastNotificationsNotRestored: 'Some notifications could not be restored.',
   toastWithWarnings: '{{message}}. {{warnings}}',
+  toastWaitingToSync: '{{message}}, waiting to sync',
   toastMarkedRead: 'Marked as read',
   toastMarkedReadCount: {
     one: 'Marked {{count}} item as read',

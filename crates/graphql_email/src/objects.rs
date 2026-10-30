@@ -612,6 +612,7 @@ mod tests {
                         EmailThreadMetadataLoad::Found(EmailThreadMetadata {
                             thread_id,
                             link_id: Uuid::from_u128(3),
+                            has_received_mail: true,
                             latest_inbound_message_ts: None,
                             latest_outbound_message_ts: None,
                             latest_non_spam_message_ts: None,

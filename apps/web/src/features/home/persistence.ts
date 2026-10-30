@@ -28,6 +28,10 @@ export function normalizeHomeFacets(raw: unknown) {
   if (facets.type?.includes('chats')) {
     facets.type = facets.type.map((t) => (t === 'chats' ? 'agents' : t));
   }
+  // The folder option was saved as `projects` before task projects joined.
+  if (facets.type?.includes('projects')) {
+    facets.type = facets.type.map((t) => (t === 'projects' ? 'folders' : t));
+  }
   return facets;
 }
 

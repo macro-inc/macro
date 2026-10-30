@@ -26,6 +26,44 @@ impl<R, A> EventAdmissionService<R, A> {
     }
 }
 
+impl<R: EventRunRepository, A: CurrentOwnerAccess> EventAdmissionService<R, A> {
+    /// Admit `event` to one candidate if it is eligible now. False when it is
+    /// not: disabled, changed, filtered out, or not the owner's to see.
+    async fn admit_candidate(
+        &self,
+        configuration: EventActionConfiguration,
+        event: &EventReference,
+        incoming: Option<&IncomingEvent>,
+    ) -> Result<bool, Report> {
+        let pending = PendingEventRun {
+            action_id: configuration.action_id,
+            revision: configuration.revision,
+            event: event.clone(),
+            admitted_at: Utc::now(),
+        };
+        if configuration.check_pending(&pending).is_err() {
+            return Ok(false);
+        }
+        let Owner::User(owner) = &configuration.owner else {
+            return Ok(false);
+        };
+        if incoming.is_some_and(|incoming| !incoming.is_for_owner(owner)) {
+            return Ok(false);
+        }
+        let Some(access) = self.access.authorize(owner, event).await? else {
+            return Ok(false);
+        };
+        if AuthorizedEventRun::prepare(pending, &configuration, access).is_err() {
+            return Ok(false);
+        }
+        Ok(self
+            .repository
+            .admit(configuration.action_id, configuration.revision, event)
+            .await?
+            == AdmissionResult::Admitted)
+    }
+}
+
 impl<R: EventRunRepository, A: CurrentOwnerAccess> EventIngestion for EventAdmissionService<R, A> {
     async fn ingest(&self, incoming: &IncomingEvent) -> Result<EventIngestionResult, Report> {
         let event = match incoming.normalize() {
@@ -56,32 +94,9 @@ impl<R: EventRunRepository, A: CurrentOwnerAccess> EventIngestion for EventAdmis
                     return Err(rootcause::report!("event candidate page is not ordered"));
                 }
                 after = Some(configuration.action_id);
-                let pending = PendingEventRun {
-                    action_id: configuration.action_id,
-                    revision: configuration.revision,
-                    event: event.clone(),
-                    admitted_at: Utc::now(),
-                };
-                if configuration.check_pending(&pending).is_err() {
-                    continue;
-                }
-                let Owner::User(owner) = &configuration.owner else {
-                    continue;
-                };
-                if !incoming.is_for_owner(owner) {
-                    continue;
-                }
-                let Some(access) = self.access.authorize(owner, &event).await? else {
-                    continue;
-                };
-                if AuthorizedEventRun::prepare(pending, &configuration, access).is_err() {
-                    continue;
-                }
                 if self
-                    .repository
-                    .admit(configuration.action_id, configuration.revision, &event)
+                    .admit_candidate(configuration, &event, Some(incoming))
                     .await?
-                    == AdmissionResult::Admitted
                 {
                     inserted += 1;
                 }

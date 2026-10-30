@@ -3,7 +3,6 @@ import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { markdownToPlainText } from '@macro-inc/lexical-core';
 import { committedThemeAccent } from '../theme/signals/themeSignals';
 import type { PlatformNotificationState } from './components/PlatformNotificationProvider';
-import { isEntityDiscussionEvent } from './entity-discussion';
 import { GITHUB_EVENT_TYPES } from './github-event-types';
 import {
   getNotificationAction,
@@ -48,12 +47,11 @@ export interface PlatformNotificationData {
 }
 
 const USER_NAME_FALLBACK = 'Someone';
-const DOCUMENT_NAME_FALLBACK = 'Something';
 
 /**
- * Who the notification reads as being from. Agent notifications have no user
- * sender - a bot is not a user - so the bot (or, for a mention, the author)
- * named in the metadata stands in.
+ * Who the notification reads as being from. Agent notifications and bot
+ * messages have no user sender - a bot is not a user - so the bot (or, for a
+ * mention, the author) named in the metadata stands in.
  */
 async function resolveActorName(
   notification: UnifiedNotification,
@@ -66,7 +64,7 @@ async function resolveActorName(
   ) {
     return meta.content.botName;
   }
-  if (isEntityDiscussionEvent(meta) && meta.content.senderDisplayName) {
+  if ('senderDisplayName' in meta.content && meta.content.senderDisplayName) {
     return meta.content.senderDisplayName;
   }
   if (meta.tag === 'agent_session_mentioned') {
@@ -118,14 +116,15 @@ export async function toPlatformNotificationData(
   ]);
   const actor = actorName ?? USER_NAME_FALLBACK;
 
-  const showTarget = shouldShowNotificationTarget(notification);
+  // An unresolved target is left out of the title, not shown as a placeholder.
   const targetName =
     getNotificationTargetName(notification) ??
     (await resolveDocumentName(
       notification.entity_id,
       notification.entity_type
-    )) ??
-    DOCUMENT_NAME_FALLBACK;
+    ));
+  const showTarget =
+    shouldShowNotificationTarget(notification) && targetName !== undefined;
 
   const content = getNotificationContent(notification);
   const action = getNotificationAction(notification);
@@ -157,7 +156,8 @@ export async function toPlatformNotificationData(
 export async function maybeHandlePlatformNotification(
   notification: UnifiedNotification,
   notificationInterface: PlatformNotificationState,
-  splitLayoutManager: SplitManager
+  splitLayoutManager: SplitManager,
+  delivery: { silent?: boolean } = {}
 ) {
   // Ignore notification types that should not show as browser notifications.
   // GitHub PR notifications should remain visible in-app, but should not
@@ -181,6 +181,7 @@ export async function maybeHandlePlatformNotification(
   if (platformNotificationData) {
     let notificationHandle = await notificationInterface.showNotification({
       ...platformNotificationData,
+      options: { ...platformNotificationData.options, silent: delivery.silent },
       notificationId: notification.id,
     });
     if (

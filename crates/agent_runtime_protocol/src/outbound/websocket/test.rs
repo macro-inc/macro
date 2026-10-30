@@ -210,6 +210,65 @@ async fn runtime_initiates_a_real_websocket_and_exchanges_bare_json_envelopes() 
     server_handle.abort();
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn frames_sent_before_the_peer_sees_our_close_still_arrive() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("listener should bind");
+    let address = listener.local_addr().expect("listener address");
+    // A peer that answers our last frame and only then reads our close.
+    let peer = tokio::spawn(async move {
+        let (socket, _) = listener.accept().await.expect("peer should accept");
+        let mut socket = tokio_tungstenite::accept_async(socket)
+            .await
+            .expect("peer should upgrade");
+        // Our pump pings from the start; wait past that for our last frame.
+        loop {
+            let frame = socket
+                .next()
+                .await
+                .expect("our frame should arrive")
+                .expect("our frame should read");
+            if frame.is_text() {
+                break;
+            }
+        }
+        socket
+            .send(TungsteniteMessage::Text(
+                serde_json::to_string(&acp_to_runtime()).unwrap().into(),
+            ))
+            .await
+            .expect("the peer can still send");
+        while let Some(Ok(frame)) = socket.next().await {
+            if frame.is_close() {
+                break;
+            }
+        }
+    });
+
+    let (stream, _response) = tokio_tungstenite::connect_async(format!("ws://{address}"))
+        .await
+        .expect("runtime should connect");
+    let Channel { tx, mut rx } = connect_runtime::<ToServerMessage, ToRuntimeMessage, _>(stream);
+    tx.send(event()).unwrap();
+    // Nothing more to send: the pump closes our side.
+    drop(tx);
+
+    let answer = timeout(PROMPT, rx.recv())
+        .await
+        .expect("the answer should not hang")
+        .expect("the answer sent before our close was read should arrive");
+    assert_eq!(
+        serde_json::to_value(answer).unwrap(),
+        serde_json::to_value(acp_to_runtime()).unwrap()
+    );
+    let ended = timeout(PROMPT, rx.recv())
+        .await
+        .expect("the socket should finish closing");
+    assert!(ended.is_none(), "the channel ends once the peer has closed");
+    peer.await.expect("the peer should finish");
+}
+
 struct Events(tokio::sync::mpsc::UnboundedSender<SystemEvent>);
 
 impl SystemEventHandler for Events {

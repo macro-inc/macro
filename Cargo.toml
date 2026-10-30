@@ -416,6 +416,7 @@ symphonia = { version = "0.6.1", default-features = false, features = [
   "ogg",
   "wav",
 ] }
+tar = "0.4.46"
 tempfile = "3"
 thiserror = "2.0.0"
 time = "0.3.37"

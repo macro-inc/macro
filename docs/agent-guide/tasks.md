@@ -406,8 +406,10 @@ The shared board primitives remain independent of Tasks queries and mutations.
 
 Project grouping in the task list matches the Project column: tasks group by
 their initiative Project property, with unassigned tasks under **No Project**.
-Legacy folder membership does not affect these groups. Project headers resolve
-through the same authorized identity query as the Project column. Verify two
+Legacy folder membership does not affect these groups. Projects sort by name with
+**No Project** last. Headers show the name the server labels the group with; a
+group still labeled by its key resolves the name through the same authorized
+identity query as the Project column. Verify two
 projects and an unassigned task on desktop and mobile; changing or clearing a
 task’s Project must move it to the matching group without reloading.
 
@@ -592,7 +594,10 @@ Use existing PRs and do not modify hosted data.
 ## Create a task
 
 On touch devices, task creation opens in a bottom sheet with a drag handle and
-scrollable, keyboard-aware content. Its glass pane has broad screen-scaled
+scrollable, keyboard-aware content. It opens at 70% of the screen, with the
+description filling the room above the properties; the keyboard shortens it.
+Opening it from `+ Task` or Home's `+ New` raises the keyboard with the title
+focused and the caret after any text. Its glass pane has broad screen-scaled
 corners, an 8px outer inset, and a blurred backdrop, matching the create and
 filter sheets. Its header has `Continue editing in split` on the left and
 `Create Task` on the right, with a text-only `Clear` 32px to its left once the
@@ -602,11 +607,23 @@ top of the sheet (with a solid background only while pinned over content), so
 `Create Task` stays in reach. The properties sit on a single line that scrolls
 horizontally, with the `Share with <team name>` switch below them. The sheet
 has no `Create More` switch and no similar-tasks list. `Create Task` shows no
-keyboard shortcut on touch. While the keyboard is up, the tag picker opens
-above its trigger so its search results stay above the keyboard. Desktop uses
+keyboard shortcut on touch. Assignees, Project, Tags, and Due Date open their
+pickers in a full-height sheet stacked over the composer (`PickerSheet`), with
+Cancel, the property's name, and Done: picks apply on Done, Cancel or the
+backdrop drop them, picking keeps the keyboard up, and a single-choice Project
+or a date applies its pick at once. Status and Priority keep their dropdowns,
+which leave focus in the title. Tapping a pill doesn't take focus, and closing
+a picker sheet returns it to the title or description with its caret, so the
+keyboard stays up throughout. Desktop uses
 the centered composer dialog. Both layouts are views in
 `apps/web/src/features/task-composer/views` composing the shared
 `TaskComposer` parts.
+
+After creation, the `Task created` toast shows an `Open` action. Touch devices
+omit `Open (New Split)`; desktop keeps both actions. Either action immediately dismisses the toast before opening
+the task. Verify the toast at phone and tablet widths with touch
+emulation: the message and action fit without clipping, and `Open` visits the
+created task in place.
 
 1. Click the `Task` button (or `Create` → `Task T`, or keyboard `c` then `t`).
 2. A dialog opens with the title contenteditable focused (placeholder `New task`), plus
@@ -627,6 +644,10 @@ the centered composer dialog. Both layouts are views in
 3. `type_text` the title, then press **Ctrl+Enter** to create, or tap `Create Task` on
    touch (the button enables once there is a title). Dialog also offers `Continue editing in split` to open the
    task as a full document.
+   Creating shows a `Task created` toast with `Open` (and `Open (New Split)` on
+   desktop) as soon as the server returns, then copies the task link in the
+   background. A denied or prompted clipboard write never delays or replaces
+   that toast.
 
 The property row adapts when the launching pane supplies a task-composer preset.
 The app shell's creation-context provider snapshots the focused pane's preset
@@ -756,9 +777,11 @@ shows the Projects return breadcrumb and the project name, with the same Share
 and side-panel controls as task detail. `Project actions` (the dots button
 after the name) opens the row context menu's entries for this project,
 including `Delete` for its owner. Choose Overview or Tasks using the inset
-tabs in that top bar. In Tasks, an outlined circular search button expands into
-a focused `Search in <project name>` field. Close or Escape clears the query and
-restores focus to the button. The task toolbar stays the same height and scrolls
+tabs in that top bar; below 600px they collapse to icons, with tooltips on
+desktop, and the project name truncates instead. In Tasks, an outlined
+circular search button expands into a focused `Search in <project name>` field.
+Close or Escape clears the query and restores focus to the button. The task
+toolbar stays the same height and scrolls
 horizontally in narrow splits, keeping list controls, Add existing tasks, and New
 task accessible. Opening an associated task extends the breadcrumb trail; choose
 the project breadcrumb to return, or Projects to restore the collection and its
@@ -771,6 +794,11 @@ editor inserts a project mention. A link to a project discussion stays a link.
 Project properties live in the shared floating information panel and honor
 project access. Editors can rename the project; its owner can delete it.
 Deleting a project leaves its tasks in the workspace.
+Opening a project without access shows `You don't have access to this project`
+with the same Request access row and access level as documents. The owner
+reviews it under Share's `Permission requests`, and once granted the open
+project loads in place. Losing access while the project is open switches to
+that view. A deleted project shows `Project unavailable` with Try again.
 
 Project information panels start closed and float over the content at every
 width, both in the Tasks project view and standalone initiative blocks. Opening

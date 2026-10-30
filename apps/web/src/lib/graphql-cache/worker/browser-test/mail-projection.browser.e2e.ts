@@ -418,6 +418,7 @@ test('retained mail applies optimistic flags, rollback and committed actions wit
         ownerId: 'offline-mail-viewer',
         linkId: '00000000-0000-0000-0000-000000001000',
         inboxVisible: true,
+        hasReceivedMail: true,
         isRead: false,
         isSignal: false,
         isImportant: false,

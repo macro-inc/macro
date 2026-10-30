@@ -112,6 +112,21 @@ describe('email thread sort keys', () => {
     );
   });
 
+  it.each([false, true])(
+    'keeps whether an archived row has received mail (%s)',
+    (hasReceivedMail) => {
+      const item = mapGraphqlSoupItem({
+        ...thread,
+        inboxVisible: false,
+        hasReceivedMail,
+      } as SoupItemFieldsFragment);
+      expect(item?.data).toMatchObject({
+        inboxVisible: false,
+        hasReceivedMail,
+      });
+    }
+  );
+
   it('falls back to the thread update time when the view has no key', () => {
     const bare = {
       ...thread,

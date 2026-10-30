@@ -1,5 +1,4 @@
-import { useSplitLayout } from '@components/app/split-layout/layout';
-import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import { PickerSheet } from '@components/app/mobile/PickerSheet';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
@@ -11,21 +10,13 @@ import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
 import {
   DropdownSearchInput,
   DropdownSelectableRow,
-  useDropdownSearch,
 } from '@property/editors/selectors/PropertyOptionSelector';
-import { useAddPropertyOptionMutation } from '@queries/properties/options';
-import {
-  type CreateTagResult,
-  invalidateTags,
-  useEnsureTagSetMutation,
-} from '@queries/properties/tags';
+import { useSearchInputFocus } from '@property/utils';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import type { PropertyOptionResponse } from '@service-properties/generated/schemas/propertyOptionResponse';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
-import { Button, Layer } from '@ui';
+import { Button, cn, Layer } from '@ui';
 import {
   createEffect,
-  createMemo,
   createSignal,
   For,
   type JSX,
@@ -33,39 +24,20 @@ import {
   onCleanup,
   onMount,
   Show,
-  untrack,
 } from 'solid-js';
 import { TagDot } from './TagDot';
+import { TagEditorDialog, type TagEditorDialogMode } from './TagEditorDialog';
 import {
-  type EditableTag,
-  TagEditorDialog,
-  type TagEditorDialogMode,
-} from './TagEditorDialog';
+  type CreateStep,
+  type CreateTagSuccessHandler,
+  createTagPickerSession,
+  type DocTags,
+  optionLabel,
+  type TagOptionItem,
+  type TagPickerSession,
+} from './tag-picker-session';
 import { DEFAULT_TAG_COLOR, TAG_COLOR_OPTIONS } from './tagColors';
-import { navigateToTag } from './tagNavigation';
-import type { ResolvedTag, useDocTags } from './useDocTags';
-
-type DocTags = ReturnType<typeof useDocTags>;
-
-type TagOptionItem = {
-  scope: TagScope;
-  option: PropertyOptionResponse;
-};
-
-type CreateStep = 'color' | 'scope';
-type CreateTagSuccessHandler = (
-  result: CreateTagResult
-) => void | Promise<void>;
-
-function optionLabel(option: PropertyOptionResponse): string {
-  return option.value.type === 'string' ? option.value.value : '';
-}
-
-function nextDisplayOrder(options: PropertyOptionResponse[]): number {
-  return (
-    options.reduce((max, option) => Math.max(max, option.displayOrder), -1) + 1
-  );
-}
+import type { ResolvedTag } from './useDocTags';
 
 const MAX_LIST_HEIGHT = 192;
 // The keyboard covers the layout viewport's bottom without shrinking it, so
@@ -73,7 +45,7 @@ const MAX_LIST_HEIGHT = 192;
 const pickerPlacement = () =>
   virtualKeyboardVisible() ? 'top-start' : 'bottom-start';
 const tagActionButtonClass =
-  'size-5 shrink-0 p-0.5 text-ink-extra-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100';
+  'size-5 shrink-0 p-0.5 text-ink-extra-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 touch:opacity-100';
 
 export type TagPickerSourceProps =
   | { docTags: DocTags; createDocTags?: never }
@@ -322,6 +294,92 @@ export function TagPickerPopover(props: {
   );
 }
 
+/**
+ * The tag picker for a touch sheet: its trigger opens the picker in a sheet
+ * stacked over the current one, with Cancel, the Tags title, and Done. Picks
+ * stay staged until Done; Cancel, the backdrop, or Escape drop them.
+ */
+export function TagSheetPicker(props: {
+  docTags: DocTags;
+  triggerClass?: string;
+  triggerLabel: string;
+  children: JSX.Element;
+  /** As `TagPicker`'s: a session covers the sheet and the tag editor it opens. */
+  onActiveChange?: (active: boolean) => void;
+}) {
+  const [open, setOpen] = createSignal(false);
+  const [editorMode, setEditorMode] = createSignal<TagEditorDialogMode | null>(
+    null
+  );
+  const currentTeamQuery = useCurrentTeamQuery();
+  createEffect(
+    on(
+      () => open() || editorMode() !== null,
+      (active) => props.onActiveChange?.(active),
+      { defer: true }
+    )
+  );
+
+  return (
+    <>
+      <button
+        type="button"
+        class={props.triggerClass}
+        aria-label={props.triggerLabel}
+        aria-haspopup="dialog"
+        aria-expanded={open()}
+        onClick={() => setOpen(true)}
+      >
+        {props.children}
+      </button>
+      <PickerSheet.Root open={open()} onCancel={() => setOpen(false)}>
+        <TagPickerSheetBody
+          docTags={props.docTags}
+          onClose={() => setOpen(false)}
+          onOpenEditEditor={(mode) => {
+            setEditorMode(mode);
+            setOpen(false);
+          }}
+        />
+      </PickerSheet.Root>
+      <Show when={editorMode()}>
+        <TagEditorDialog
+          open
+          mode={editorMode()}
+          teamAvailable={Boolean(currentTeamQuery.data?.team)}
+          onClose={() => setEditorMode(null)}
+        />
+      </Show>
+    </>
+  );
+}
+
+function TagPickerSheetBody(props: {
+  docTags: DocTags;
+  onClose: () => void;
+  onOpenEditEditor: (
+    mode: Extract<TagEditorDialogMode, { type: 'edit' }>
+  ) => void;
+}) {
+  const session = createTagPickerSession({
+    docTags: props.docTags,
+    onClose: props.onClose,
+    onOpenEditEditor: props.onOpenEditEditor,
+    confirmsWithDone: true,
+  });
+  return (
+    <>
+      <PickerSheet.Header
+        title="Tags"
+        onDone={() => fireAndForget(session.saveAndClose(), 'tag-picker')}
+      />
+      <PickerSheet.Body>
+        <TagPickerList session={session} fillHeight />
+      </PickerSheet.Body>
+    </>
+  );
+}
+
 function TagPickerBody(props: {
   docTags: DocTags;
   onClose: () => void;
@@ -336,21 +394,12 @@ function TagPickerBody(props: {
   suppressInitialOutsideEvents: boolean;
   withClickBlock?: boolean;
 }) {
-  const [search, setSearch] = createSignal('');
-  const [saved, setSaved] = createSignal(false);
-  const [selectedIds, setSelectedIds] = createSignal<Set<string>>(
-    new Set(props.docTags.appliedTags().map((tag) => tag.optionId))
-  );
-  const [createStep, setCreateStep] = createSignal<CreateStep | null>(null);
-  const [createDraftLabel, setCreateDraftLabel] = createSignal('');
-  const [selectedColorIndex, setSelectedColorIndex] = createSignal(0);
-  const [selectedScopeIndex, setSelectedScopeIndex] = createSignal(0);
-  const currentTeamQuery = useCurrentTeamQuery();
-  const addOption = useAddPropertyOptionMutation();
-  const ensureTagSet = useEnsureTagSetMutation();
-  const split = useSplitLayout();
-  const panel = useSplitPanel();
-  let scrollContainerRef: HTMLDivElement | undefined;
+  const session = createTagPickerSession({
+    docTags: props.docTags,
+    onClose: props.onClose,
+    onOpenEditEditor: props.onOpenEditEditor,
+    confirmsWithDone: false,
+  });
   const [initialOutsideEventGuard, setInitialOutsideEventGuard] =
     createSignal(true);
   const shouldIgnoreOutsideEvent = () =>
@@ -380,323 +429,8 @@ function TagPickerBody(props: {
     );
   };
 
-  const initialAppliedTags = createMemo(() => props.docTags.appliedTags());
-  const initialAppliedIds = createMemo(
-    () => new Set(initialAppliedTags().map((tag) => tag.optionId))
-  );
-  const initialTagState = createMemo(() => {
-    const optionScopes = new Map<string, TagScope>();
-    const optionsById = new Map<string, PropertyOptionResponse>();
-    const itemsByScope = new Map<TagScope, TagOptionItem[]>();
-
-    for (const set of props.docTags.tagSets()) {
-      for (const option of set.options) {
-        optionsById.set(option.id, option);
-      }
-
-      itemsByScope.set(
-        set.scope,
-        [...set.options]
-          .sort((a, b) => a.displayOrder - b.displayOrder)
-          .map((option) => {
-            optionScopes.set(option.id, set.scope);
-            return {
-              scope: set.scope,
-              option,
-            };
-          })
-      );
-    }
-
-    const selectedItems = initialAppliedTags().flatMap((tag) => {
-      const option = optionsById.get(tag.optionId);
-      return option ? [{ scope: tag.scope, option }] : [];
-    });
-
-    return {
-      optionScopes,
-      itemsByScope,
-      selectedItems,
-      items: [...itemsByScope.values()].flat(),
-    };
-  });
-
-  createEffect(() => {
-    const appliedTags = initialAppliedTags();
-    if (untrack(saved)) return;
-    setSelectedIds(new Set(appliedTags.map((tag) => tag.optionId)));
-  });
-
-  const isSelected = (optionId: string) => selectedIds().has(optionId);
-
-  const toggleSelected = (optionId: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(optionId)) next.delete(optionId);
-      else next.add(optionId);
-      return next;
-    });
-  };
-
-  const persistSelection = async () => {
-    if (saved()) return true;
-    setSaved(true);
-
-    try {
-      await props.docTags.setTagSelection(selectedIds());
-      return true;
-    } catch (error) {
-      setSaved(false);
-      console.error('Failed to persist tag selection', error);
-      return false;
-    }
-  };
-
-  const save = async () => {
-    return persistSelection();
-  };
-
-  const saveAndClose = async () => {
-    const savePromise = save();
-    props.onClose();
-    await savePromise;
-  };
-
-  const filteredItems = createMemo(() => {
-    const query = search().trim().toLowerCase();
-    const matchesSearch = (item: TagOptionItem) =>
-      !query || optionLabel(item.option).toLowerCase().includes(query);
-
-    const selectedAtOpen =
-      initialTagState().selectedItems.filter(matchesSearch);
-    const remainingForScope = (scope: TagScope) =>
-      (initialTagState().itemsByScope.get(scope) ?? []).filter(
-        (item) =>
-          !initialAppliedIds().has(item.option.id) && matchesSearch(item)
-      );
-
-    return [
-      ...selectedAtOpen,
-      ...remainingForScope('user'),
-      ...remainingForScope('team'),
-    ];
-  });
-
-  const selectedAtOpenItems = createMemo(() => {
-    const query = search().trim().toLowerCase();
-    return initialTagState().selectedItems.filter(
-      (item) => !query || optionLabel(item.option).toLowerCase().includes(query)
-    );
-  });
-
-  const remainingItemsForScope = (scope: TagScope) => {
-    const query = search().trim().toLowerCase();
-    return (initialTagState().itemsByScope.get(scope) ?? []).filter(
-      (item) =>
-        !initialAppliedIds().has(item.option.id) &&
-        (!query || optionLabel(item.option).toLowerCase().includes(query))
-    );
-  };
-
-  const createLabel = () => search().trim();
-  const exactTagMatchExists = () => {
-    const label = createLabel().toLowerCase();
-    return (
-      !!label &&
-      initialTagState().items.some(
-        (item) => optionLabel(item.option).toLowerCase() === label
-      )
-    );
-  };
-  const showCreateRow = () =>
-    createLabel().length > 0 && !exactTagMatchExists();
-  const showClearAllRow = () =>
-    selectedIds().size > 0 && !search().trim() && !createStep();
-  const showCreateRowDivider = () =>
-    showCreateRow() && (filteredItems().length > 0 || showClearAllRow());
-  const itemIndex = (item: TagOptionItem) => filteredItems().indexOf(item);
-  const clearAllRowIndex = () => filteredItems().length;
-  const createRowIndex = () =>
-    filteredItems().length + (showClearAllRow() ? 1 : 0);
-  const teamName = () => currentTeamQuery.data?.team.name?.trim() || 'Team';
-  const scopeOptions = createMemo<{ scope: TagScope; label: string }[]>(() => [
-    { scope: 'team', label: `Shared with ${teamName()}` },
-    { scope: 'user', label: 'Personal' },
-  ]);
-  const selectedColor = () =>
-    TAG_COLOR_OPTIONS[selectedColorIndex()]?.color ?? DEFAULT_TAG_COLOR;
-  const createItemCount = () =>
-    createStep() === 'color' ? TAG_COLOR_OPTIONS.length : scopeOptions().length;
-
-  const beginCreate = () => {
-    const label = createLabel();
-    if (!showCreateRow() || !label) return;
-    setCreateDraftLabel(label);
-    setSelectedColorIndex(0);
-    setSelectedScopeIndex(0);
-    setCreateStep('color');
-  };
-
-  const editableTagForItem = (item: TagOptionItem): EditableTag => ({
-    scope: item.scope,
-    propertyDefinitionId: item.option.propertyDefinitionId,
-    option: item.option,
-  });
-
-  const beginEdit = async (item: TagOptionItem) => {
-    if (!(await persistSelection())) return;
-    props.onOpenEditEditor({
-      type: 'edit',
-      tag: editableTagForItem(item),
-    });
-  };
-
-  const openTaggedItems = async (item: TagOptionItem) => {
-    if (!(await persistSelection())) return;
-    props.onClose();
-    navigateToTag(
-      split.openWithSplit,
-      {
-        optionId: item.option.id,
-        propertyDefinitionId: item.option.propertyDefinitionId,
-      },
-      { handle: panel?.handle }
-    );
-  };
-
-  const createTag = async (scope: TagScope) => {
-    const value = createDraftLabel().trim();
-    if (!value) return;
-
-    try {
-      if (!(await persistSelection())) return;
-
-      const provisioned = await ensureTagSet.mutateAsync({ scope });
-      if (!provisioned.definition) return;
-
-      const created = await addOption.mutateAsync({
-        propertyDefinitionId: provisioned.definition.id,
-        body: {
-          type: 'select_string',
-          option: {
-            value,
-            display_order: nextDisplayOrder(provisioned.options),
-            color: selectedColor(),
-          },
-        },
-      });
-      invalidateTags();
-      await props.docTags.applyTag(scope, created.id);
-      props.onClose();
-    } catch (error) {
-      console.error('Failed to create tag', error);
-    }
-  };
-
-  const handleCreateKeyDown = (event: KeyboardEvent) => {
-    const step = createStep();
-    if (!step) return;
-
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      event.stopPropagation();
-      if (step === 'scope') {
-        setCreateStep('color');
-        return;
-      }
-      setCreateStep(null);
-      return;
-    }
-
-    const count = createItemCount();
-    if (count === 0) return;
-
-    if (event.key === 'ArrowDown' || (event.ctrlKey && event.key === 'j')) {
-      event.preventDefault();
-      if (step === 'color') {
-        setSelectedColorIndex((prev) => (prev + 1) % count);
-      } else {
-        setSelectedScopeIndex((prev) => (prev + 1) % count);
-      }
-    } else if (
-      event.key === 'ArrowUp' ||
-      (event.ctrlKey && event.key === 'k')
-    ) {
-      event.preventDefault();
-      if (step === 'color') {
-        setSelectedColorIndex((prev) => (prev - 1 + count) % count);
-      } else {
-        setSelectedScopeIndex((prev) => (prev - 1 + count) % count);
-      }
-    } else if (event.key === 'Enter') {
-      event.preventDefault();
-      if (step === 'color') {
-        setCreateStep('scope');
-      } else {
-        const scope = scopeOptions()[selectedScopeIndex()]?.scope;
-        if (scope) fireAndForget(createTag(scope), 'tag-picker');
-      }
-    }
-  };
-
-  const dropdown = useDropdownSearch({
-    itemCount: () =>
-      filteredItems().length +
-      (showClearAllRow() ? 1 : 0) +
-      (showCreateRow() ? 1 : 0),
-    onSelect: (index, event) => {
-      if (showCreateRow() && index === createRowIndex()) {
-        beginCreate();
-        return;
-      }
-
-      if (showClearAllRow() && index === clearAllRowIndex()) {
-        setSelectedIds(new Set<string>());
-        fireAndForget(saveAndClose(), 'tag-picker');
-        return;
-      }
-
-      const item = filteredItems()[index];
-      if (!item) return;
-
-      toggleSelected(item.option.id);
-      if (!event?.shiftKey) fireAndForget(saveAndClose(), 'tag-picker');
-    },
-    onClose: saveAndClose,
-    enableNumericHotkeys: false,
-  });
-
-  // Reset selected index to top when search term or list changes.
-  createEffect(() => {
-    if (createStep()) return;
-    search();
-    filteredItems().length;
-    dropdown.setSelectedIndex(0);
-  });
-
-  createEffect(() => {
-    if (createStep()) return;
-    const index = dropdown.selectedIndex();
-    if (!dropdown.keyboardMode() || !scrollContainerRef) return;
-
-    const row = scrollContainerRef.querySelector<HTMLDivElement>(
-      `[data-tag-index="${index}"]`
-    );
-    row?.scrollIntoView({ block: 'nearest' });
-  });
-
-  const handleKeyDown = (event: KeyboardEvent) => {
-    if (saved()) return;
-    if (createStep()) {
-      handleCreateKeyDown(event);
-      return;
-    }
-    dropdown.handleKeyDown(event);
-  };
-
   onMount(() => {
-    props.registerSave(saveAndClose);
-    document.addEventListener('keydown', handleKeyDown);
+    props.registerSave(session.saveAndClose);
     const timeout = setTimeout(() => {
       setInitialOutsideEventGuard(false);
     }, 100);
@@ -705,7 +439,6 @@ function TagPickerBody(props: {
 
   onCleanup(() => {
     props.registerSave(undefined);
-    document.removeEventListener('keydown', handleKeyDown);
   });
 
   return (
@@ -725,188 +458,183 @@ function TagPickerBody(props: {
             blockDismissalClick();
           }}
         >
-          <Show
-            when={createStep()}
-            fallback={
-              <>
-                <DropdownSearchInput
-                  value={search()}
-                  placeholder="Change or add tags"
-                  onInput={(value) => {
-                    setSearch(value);
-                    dropdown.setSearchQuery(value);
-                  }}
-                />
-                <div class="p-1.5">
-                  <div
-                    ref={scrollContainerRef}
-                    class="overflow-y-auto overflow-x-hidden scrollbar-hidden"
-                    style={{ 'max-height': `${MAX_LIST_HEIGHT}px` }}
-                  >
-                    <Show
-                      when={
-                        showClearAllRow() ||
-                        filteredItems().length > 0 ||
-                        showCreateRow()
-                      }
-                      fallback={
-                        <div class="px-2 py-4 text-center text-ink-muted">
-                          {initialTagState().items.length === 0
-                            ? 'No tags available'
-                            : 'No tags match your search'}
-                        </div>
-                      }
-                    >
-                      <For each={selectedAtOpenItems()}>
-                        {(item) => (
-                          <TagPickerRow
-                            item={item}
-                            index={itemIndex(item)}
-                            teamName={teamName()}
-                            checked={isSelected(item.option.id)}
-                            selected={
-                              dropdown.selectedIndex() === itemIndex(item)
-                            }
-                            onSelect={(event) => {
-                              toggleSelected(item.option.id);
-                              if (!event.shiftKey)
-                                fireAndForget(saveAndClose(), 'tag-picker');
-                            }}
-                            onEdit={() =>
-                              fireAndForget(beginEdit(item), 'tag-picker')
-                            }
-                            onOpenTag={() =>
-                              fireAndForget(openTaggedItems(item), 'tag-picker')
-                            }
-                            onMouseEnter={() => {
-                              if (!dropdown.keyboardMode()) {
-                                dropdown.setSelectedIndex(itemIndex(item));
-                              }
-                            }}
-                          />
-                        )}
-                      </For>
-                      <Show
-                        when={
-                          selectedAtOpenItems().length > 0 &&
-                          (remainingItemsForScope('user').length > 0 ||
-                            remainingItemsForScope('team').length > 0)
-                        }
-                      >
-                        <div class="my-1 border-t border-edge-muted" />
-                      </Show>
-                      <For each={['user', 'team'] as const}>
-                        {(scope) => (
-                          <For each={remainingItemsForScope(scope)}>
-                            {(item) => (
-                              <TagPickerRow
-                                item={item}
-                                index={itemIndex(item)}
-                                teamName={teamName()}
-                                checked={isSelected(item.option.id)}
-                                selected={
-                                  dropdown.selectedIndex() === itemIndex(item)
-                                }
-                                onSelect={(event) => {
-                                  toggleSelected(item.option.id);
-                                  if (!event.shiftKey)
-                                    fireAndForget(saveAndClose(), 'tag-picker');
-                                }}
-                                onEdit={() =>
-                                  fireAndForget(beginEdit(item), 'tag-picker')
-                                }
-                                onOpenTag={() =>
-                                  fireAndForget(
-                                    openTaggedItems(item),
-                                    'tag-picker'
-                                  )
-                                }
-                                onMouseEnter={() => {
-                                  if (!dropdown.keyboardMode()) {
-                                    dropdown.setSelectedIndex(itemIndex(item));
-                                  }
-                                }}
-                              />
-                            )}
-                          </For>
-                        )}
-                      </For>
-                      <Show when={showClearAllRow()}>
-                        <div class="my-1 border-t border-edge-muted" />
-                        <div data-tag-index={clearAllRowIndex()}>
-                          <DropdownSelectableRow
-                            isSelected={
-                              dropdown.selectedIndex() === clearAllRowIndex()
-                            }
-                            onClick={() => {
-                              setSelectedIds(new Set<string>());
-                              fireAndForget(saveAndClose(), 'tag-picker');
-                            }}
-                            onMouseEnter={() => {
-                              if (!dropdown.keyboardMode()) {
-                                dropdown.setSelectedIndex(clearAllRowIndex());
-                              }
-                            }}
-                          >
-                            <CircleDashedEmpty class="size-3 shrink-0 text-ink-extra-muted" />
-                            <div class="min-w-0 flex-1 text-left">
-                              <p class="truncate text-ink-muted">
-                                Clear all tags
-                              </p>
-                            </div>
-                          </DropdownSelectableRow>
-                        </div>
-                      </Show>
-                    </Show>
-                  </div>
-                  <Show when={showCreateRow()}>
-                    <div
-                      classList={{
-                        'mt-1 border-t border-edge-muted pt-1':
-                          showCreateRowDivider(),
-                      }}
-                    >
-                      <CreateTagRow
-                        index={createRowIndex()}
-                        label={createLabel()}
-                        selected={dropdown.selectedIndex() === createRowIndex()}
-                        onClick={beginCreate}
-                        onMouseEnter={() => {
-                          if (!dropdown.keyboardMode()) {
-                            dropdown.setSelectedIndex(createRowIndex());
-                          }
-                        }}
-                      />
-                    </div>
-                  </Show>
-                </div>
-              </>
-            }
-          >
-            {(step) => (
-              <CreateTagFlow
-                step={step()}
-                label={createDraftLabel()}
-                colorOptions={TAG_COLOR_OPTIONS}
-                selectedColorIndex={selectedColorIndex()}
-                scopeOptions={scopeOptions()}
-                selectedScopeIndex={selectedScopeIndex()}
-                pending={addOption.isPending || ensureTagSet.isPending}
-                onColorMouseEnter={setSelectedColorIndex}
-                onColorSelect={(index) => {
-                  setSelectedColorIndex(index);
-                  setCreateStep('scope');
-                }}
-                onScopeMouseEnter={setSelectedScopeIndex}
-                onScopeSelect={(scope) =>
-                  fireAndForget(createTag(scope), 'tag-picker')
-                }
-              />
-            )}
-          </Show>
+          <TagPickerList session={session} />
         </Popover.Content>
       </Layer>
     </Popover.Portal>
+  );
+}
+
+/** The search, tag rows, and create flow of a picker session. */
+function TagPickerList(props: {
+  session: TagPickerSession;
+  /** Fill a sized container, such as a sheet, rather than a popover's height. */
+  fillHeight?: boolean;
+}) {
+  const session = props.session;
+  const rowProps = (item: TagOptionItem) => ({
+    item,
+    index: session.itemIndex(item),
+    teamName: session.teamName(),
+    checked: session.isSelected(item.option.id),
+    selected: session.dropdown.selectedIndex() === session.itemIndex(item),
+    onSelect: (event: MouseEvent) => session.pick(item, event),
+    onEdit: () => fireAndForget(session.beginEdit(item), 'tag-picker'),
+    onOpenTag: () => fireAndForget(session.openTaggedItems(item), 'tag-picker'),
+    onMouseEnter: () => {
+      if (!session.dropdown.keyboardMode()) {
+        session.dropdown.setSelectedIndex(session.itemIndex(item));
+      }
+    },
+  });
+  // Picking a row keeps focus in the search field, so a phone keyboard stays
+  // up; iOS devices still send mousedown after a cancelled pointerdown.
+  const keepSearchFocus = (event: Event) => event.preventDefault();
+  let searchInput: HTMLInputElement | undefined;
+  useSearchInputFocus(() => searchInput);
+
+  return (
+    <Show
+      when={session.createStep()}
+      fallback={
+        <>
+          <DropdownSearchInput
+            value={session.search()}
+            placeholder="Change or add tags"
+            onInput={session.setSearch}
+            inputRef={(element) => {
+              searchInput = element;
+            }}
+          />
+          <div
+            class={cn(
+              'p-1.5',
+              props.fillHeight && 'flex min-h-0 flex-1 flex-col'
+            )}
+            onPointerDown={keepSearchFocus}
+            onMouseDown={keepSearchFocus}
+          >
+            <div
+              ref={session.setScrollContainer}
+              class={cn(
+                'overflow-y-auto overflow-x-hidden scrollbar-hidden',
+                props.fillHeight && 'min-h-0 flex-1'
+              )}
+              style={{
+                'max-height': props.fillHeight
+                  ? undefined
+                  : `${MAX_LIST_HEIGHT}px`,
+              }}
+            >
+              <Show
+                when={
+                  session.showClearAllRow() ||
+                  session.filteredItems().length > 0 ||
+                  session.showCreateRow()
+                }
+                fallback={
+                  <div class="px-2 py-4 text-center text-ink-muted">
+                    {session.hasTags()
+                      ? 'No tags match your search'
+                      : 'No tags available'}
+                  </div>
+                }
+              >
+                <For each={session.selectedAtOpenItems()}>
+                  {(item) => <TagPickerRow {...rowProps(item)} />}
+                </For>
+                <Show
+                  when={
+                    session.selectedAtOpenItems().length > 0 &&
+                    (session.remainingItemsForScope('user').length > 0 ||
+                      session.remainingItemsForScope('team').length > 0)
+                  }
+                >
+                  <div class="my-1 border-t border-edge-muted" />
+                </Show>
+                <For each={['user', 'team'] as const}>
+                  {(scope) => (
+                    <For each={session.remainingItemsForScope(scope)}>
+                      {(item) => <TagPickerRow {...rowProps(item)} />}
+                    </For>
+                  )}
+                </For>
+                <Show when={session.showClearAllRow()}>
+                  <div class="my-1 border-t border-edge-muted" />
+                  <div data-tag-index={session.clearAllRowIndex()}>
+                    <DropdownSelectableRow
+                      isSelected={
+                        session.dropdown.selectedIndex() ===
+                        session.clearAllRowIndex()
+                      }
+                      onClick={session.clearAll}
+                      onMouseEnter={() => {
+                        if (!session.dropdown.keyboardMode()) {
+                          session.dropdown.setSelectedIndex(
+                            session.clearAllRowIndex()
+                          );
+                        }
+                      }}
+                    >
+                      <CircleDashedEmpty class="size-3 shrink-0 text-ink-extra-muted" />
+                      <div class="min-w-0 flex-1 text-left">
+                        <p class="truncate text-ink-muted">Clear all tags</p>
+                      </div>
+                    </DropdownSelectableRow>
+                  </div>
+                </Show>
+              </Show>
+            </div>
+            <Show when={session.showCreateRow()}>
+              <div
+                classList={{
+                  'mt-1 border-t border-edge-muted pt-1':
+                    session.showCreateRowDivider(),
+                }}
+              >
+                <CreateTagRow
+                  index={session.createRowIndex()}
+                  label={session.createLabel()}
+                  selected={
+                    session.dropdown.selectedIndex() ===
+                    session.createRowIndex()
+                  }
+                  onClick={session.beginCreate}
+                  onMouseEnter={() => {
+                    if (!session.dropdown.keyboardMode()) {
+                      session.dropdown.setSelectedIndex(
+                        session.createRowIndex()
+                      );
+                    }
+                  }}
+                />
+              </div>
+            </Show>
+          </div>
+        </>
+      }
+    >
+      {(step) => (
+        <CreateTagFlow
+          step={step()}
+          label={session.createDraftLabel()}
+          colorOptions={TAG_COLOR_OPTIONS}
+          selectedColorIndex={session.selectedColorIndex()}
+          scopeOptions={session.scopeOptions()}
+          selectedScopeIndex={session.selectedScopeIndex()}
+          pending={session.creating()}
+          onColorMouseEnter={session.setSelectedColorIndex}
+          onColorSelect={(index) => {
+            session.setSelectedColorIndex(index);
+            session.setCreateStep('scope');
+          }}
+          onScopeMouseEnter={session.setSelectedScopeIndex}
+          onScopeSelect={(scope) =>
+            fireAndForget(session.createTag(scope), 'tag-picker')
+          }
+        />
+      )}
+    </Show>
   );
 }
 

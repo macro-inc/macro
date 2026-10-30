@@ -654,7 +654,10 @@ pub async fn run() -> anyhow::Result<()> {
         PgGithubSyncRepo::new(db.clone()),
         GithubSyncClientImpl::default(),
         ConnectionGatewayGithubRealtime::new(conn_gateway_client.clone()),
-    );
+    )
+    .with_webhook_publisher(github::broker::BrokerGithubWebhookPublisher(
+        macro_event_broker.clone(),
+    ));
 
     let github_pull_request_index_state = PullRequestIndexRouterState {
         service: Arc::new(PullRequestIndexService::new(
@@ -1285,6 +1288,7 @@ pub async fn run() -> anyhow::Result<()> {
         SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
         PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
         message_realtime,
+        channels::outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
     );
     let message_service = Arc::new(
         messages::domain::service::MessageService::new(

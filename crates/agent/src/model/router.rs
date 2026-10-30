@@ -699,7 +699,7 @@ where
         .stream_prompt(prompt)
         .history(history)
         .max_turns(max_turns)
-        .max_invalid_tool_call_retries(crate::hook::MAX_INVALID_TOOL_CALL_RETRIES)
+        .max_invalid_tool_call_retries(crate::hook::RIG_INVALID_TOOL_CALL_RETRIES)
         .add_hook(bridge)
         .add_hook(ChatSpanHook(telemetry.clone()))
         .await;
