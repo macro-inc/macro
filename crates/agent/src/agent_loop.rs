@@ -790,7 +790,11 @@ impl HistoryTools {
                             continue;
                         };
                         call_names.insert(&call.id, &call.function.name);
-                        found.add(&call.function.name, catalog);
+                        if let Some(tool) =
+                            catalog.iter().find(|tool| tool.name == call.function.name)
+                        {
+                            found.add(tool);
+                        }
                     }
                 }
                 Message::User { content } => {
@@ -809,10 +813,16 @@ impl HistoryTools {
                                 _ => None,
                             })
                             .collect();
+                        // Every tool the call loaded, as the live turn
+                        // recorded it, even one an earlier call loaded too.
                         let loaded: Vec<SearchableTool> = tools_loaded_by(tool_name, &text)
                             .iter()
-                            .filter_map(|name| found.add(name, catalog))
+                            .filter_map(|name| catalog.iter().find(|tool| &tool.name == name))
+                            .cloned()
                             .collect();
+                        for tool in &loaded {
+                            found.add(tool);
+                        }
                         if !loaded.is_empty() {
                             // Requests are laid out under the provider's call
                             // id (see `replay_provider_ids`).
@@ -827,14 +837,10 @@ impl HistoryTools {
         found
     }
 
-    /// Adds the catalog tool `name` unless it is already in, returning it if
-    /// it was added.
-    fn add(&mut self, name: &str, catalog: &[SearchableTool]) -> Option<SearchableTool> {
-        if self.tools.iter().any(|tool| tool.name == name) {
-            return None;
+    /// Adds `tool` unless it is already in.
+    fn add(&mut self, tool: &SearchableTool) {
+        if !self.tools.iter().any(|known| known.name == tool.name) {
+            self.tools.push(tool.clone());
         }
-        let tool = catalog.iter().find(|tool| tool.name == name)?.clone();
-        self.tools.push(tool.clone());
-        Some(tool)
     }
 }

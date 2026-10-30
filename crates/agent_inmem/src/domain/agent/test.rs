@@ -56,7 +56,7 @@ impl TurnEngine for CancelledEngine {
     }
 }
 
-/// A turn whose model called a tool the loop refused.
+/// A turn whose model spoke, thought, then called a tool the loop refused.
 struct UnknownToolEngine;
 
 impl TurnEngine for UnknownToolEngine {
@@ -68,12 +68,15 @@ impl TurnEngine for UnknownToolEngine {
         &self,
         _request: TurnRequest,
     ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
-        let (parts, receiver) = tokio::sync::mpsc::channel(2);
+        let (parts, receiver) = tokio::sync::mpsc::channel(3);
         tokio::spawn(async move {
             let _ = parts
                 .send(Ok(StreamPart::Content(
                     "I'm checking your access on that project.".into(),
                 )))
+                .await;
+            let _ = parts
+                .send(Ok(StreamPart::Thinking("Read the project next.".into())))
                 .await;
             let unknown = PromptError::UnknownToolCall {
                 tool_name: "ReadInitiative".to_owned(),

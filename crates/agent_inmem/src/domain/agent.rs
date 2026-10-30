@@ -1128,10 +1128,15 @@ async fn run_turn(
     // The turn's text is the reply a channel thread reads, so it says the
     // turn failed and leaves why to the prompt's error.
     if failure.is_some() {
-        // Text the turn ended on runs on into this chunk.
-        let reply = match turn_parts.last() {
-            Some(AssistantMessagePart::Text { .. }) => format!("\n\n{TURN_FAILED_REPLY}"),
-            _ => TURN_FAILED_REPLY.to_owned(),
+        // Readers join a turn's text chunks, so set this apart from any
+        // text the turn already said.
+        let said_something = turn_parts
+            .iter()
+            .any(|part| matches!(part, AssistantMessagePart::Text { .. }));
+        let reply = if said_something {
+            format!("\n\n{TURN_FAILED_REPLY}")
+        } else {
+            TURN_FAILED_REPLY.to_owned()
         };
         let _ = connection.send_notification(SessionNotification::new(
             acp_session_id.clone(),
