@@ -1,57 +1,67 @@
-//! Postgres adapter answering what an agent session created, from the
-//! session row and the activity log.
+//! Postgres adapter answering what a bot created for a person's request,
+//! from the thread's messages and the activity log.
 
-use crate::domain::{models::ReferencedShareItem, ports::AgentSessionCreations};
+use crate::domain::{models::ReferencedShareItem, ports::AgentCreations};
 use bot_id::BotId;
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 #[cfg(test)]
 mod test;
 
-/// Reads agent sessions and their recorded creations from Postgres.
+/// Reads channel requests and bots' recorded creations from Postgres.
 #[derive(Clone)]
-pub struct PgAgentSessionCreations {
+pub struct PgAgentCreations {
     pool: PgPool,
 }
 
-impl PgAgentSessionCreations {
+impl PgAgentCreations {
     /// Create the adapter over `pool`.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 }
 
-impl AgentSessionCreations for PgAgentSessionCreations {
+impl AgentCreations for PgAgentCreations {
     type Err = sqlx::Error;
 
-    #[tracing::instrument(skip(self), err)]
-    async fn session_started_at(
+    #[tracing::instrument(skip(self, person), err)]
+    async fn request_sent_at(
         &self,
         thread_root: Uuid,
-        bot: BotId,
+        person: &MacroUserIdStr<'static>,
+        before: DateTime<Utc>,
     ) -> Result<Option<DateTime<Utc>>, Self::Err> {
-        // Served by agent_session_thread_bot_unique (thread_id, bot_id).
+        // The root by primary key, replies by the (thread_id, created_at) index.
         sqlx::query_scalar!(
             r#"
-            SELECT created_at
-            FROM agent_session
-            WHERE thread_id = $1 AND bot_id = $2
-            ORDER BY created_at DESC
-            LIMIT 1
+            SELECT max(created_at) AS "sent_at"
+            FROM (
+                SELECT created_at
+                FROM comms_messages
+                WHERE id = $1 AND sender_id = $2 AND created_at < $3
+                UNION ALL
+                SELECT created_at
+                FROM comms_messages
+                WHERE thread_id = $1 AND sender_id = $2 AND created_at < $3
+                  AND deleted_at IS NULL
+            ) request
             "#,
             thread_root,
-            bot.as_uuid(),
+            person.as_ref(),
+            before,
         )
-        .fetch_optional(&self.pool)
+        .fetch_one(&self.pool)
         .await
     }
 
-    #[tracing::instrument(skip(self, items), fields(items = items.len()), err)]
+    #[tracing::instrument(skip(self, person, items), fields(items = items.len()), err)]
     async fn created_since(
         &self,
         bot: BotId,
+        person: &MacroUserIdStr<'static>,
         since: DateTime<Utc>,
         items: Vec<ReferencedShareItem>,
     ) -> Result<Vec<ReferencedShareItem>, Self::Err> {
@@ -80,12 +90,14 @@ impl AgentSessionCreations for PgAgentSessionCreations {
                   AND event.entity_id = item.entity_id
                   AND event.action = 'created'
                   AND event.actor_id = $3
-                  AND event.occurred_at >= $4
+                  AND event.subject_id = $4
+                  AND event.occurred_at >= $5
             )
             "#,
             &entity_types,
             &entity_ids,
             actor.as_ref(),
+            person.as_ref(),
             since,
         )
         .fetch_all(&self.pool)

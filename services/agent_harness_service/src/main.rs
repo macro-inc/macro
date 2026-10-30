@@ -1078,7 +1078,7 @@ async fn run() -> anyhow::Result<()> {
                 entity_access.clone(),
             ),
             message_realtime.clone(),
-            channels::outbound::pg_agent_session_creations::PgAgentSessionCreations::new(
+            channels::outbound::pg_agent_creations::PgAgentCreations::new(
                 pool.clone(),
             ),
         ),

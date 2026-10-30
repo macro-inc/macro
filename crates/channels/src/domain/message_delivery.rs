@@ -6,8 +6,7 @@ use super::{
         ReferencedShareItem, Sender,
     },
     ports::{
-        AgentSessionCreations, ChannelEventDispatcher, ChannelReferenceSharePermissions,
-        ChannelRepo,
+        AgentCreations, ChannelEventDispatcher, ChannelReferenceSharePermissions, ChannelRepo,
     },
 };
 use bot_id::BotId;
@@ -93,22 +92,22 @@ fn record_share_outcomes(results: &[ReferenceShareResult]) {
 
 /// Share the `pending` items once their creation by `bot` is recorded, giving
 /// up on any still unrecorded after the last re-check.
-async fn recheck_session_creations<C, P>(
+async fn recheck_agent_creations<C, P>(
     creations: C,
     permissions: P,
     bot: BotId,
-    started_at: DateTime<Utc>,
+    requested_at: DateTime<Utc>,
     person: MacroUserIdStr<'static>,
     channel_id: Uuid,
     mut pending: Vec<ReferencedShareItem>,
 ) where
-    C: AgentSessionCreations,
+    C: AgentCreations,
     P: ChannelReferenceSharePermissions,
 {
     for (attempt, delay) in CREATION_RECHECK_DELAYS.into_iter().enumerate() {
         tokio::time::sleep(delay).await;
         let created = match creations
-            .created_since(bot, started_at, pending.clone())
+            .created_since(bot, &person, requested_at, pending.clone())
             .await
         {
             Ok(created) => created,
@@ -140,7 +139,7 @@ async fn recheck_session_creations<C, P>(
     }
     tracing::info!(
         unshared = pending.len(),
-        "linked items with no creation record from the agent session stay unshared"
+        "linked items the bot did not create for this request stay unshared"
     );
 }
 
@@ -154,12 +153,14 @@ where
     E: ChannelEventDispatcher,
     P: ChannelReferenceSharePermissions + Clone,
     G: MessageRealtime,
-    C: AgentSessionCreations,
+    C: AgentCreations,
 {
-    /// Share, as `person`, the linked items that `bot`'s agent session in this
-    /// thread created. Items without a creation record yet are re-checked in
-    /// the background; the rest, including anything the session did not
-    /// create, stay unshared.
+    /// Share, as `person`, the linked items that `bot` created for them since
+    /// their latest message in this thread before `replied_at`, the request
+    /// the reply answers. One bound covers classic bot replies and agent
+    /// session turns alike. Items without a creation record yet are
+    /// re-checked in the background; the rest, including anything that
+    /// existed before the request, stay unshared.
     #[tracing::instrument(
         skip(self, person, items),
         fields(
@@ -170,17 +171,18 @@ where
         ),
         err
     )]
-    async fn share_session_creations(
+    async fn share_agent_creations(
         &self,
         bot: BotId,
         person: MacroUserIdStr<'static>,
         channel_id: Uuid,
         thread_root: Uuid,
+        replied_at: DateTime<Utc>,
         items: Vec<ReferencedShareItem>,
     ) -> anyhow::Result<()> {
-        let Some(started_at) = self
+        let Some(requested_at) = self
             .creations
-            .session_started_at(thread_root, bot)
+            .request_sent_at(thread_root, &person, replied_at)
             .await
             .map_err(Into::into)?
         else {
@@ -188,7 +190,7 @@ where
         };
         let created = self
             .creations
-            .created_since(bot, started_at, items.clone())
+            .created_since(bot, &person, requested_at, items.clone())
             .await
             .map_err(Into::into)?;
         tracing::Span::current().record("created", created.len());
@@ -199,11 +201,11 @@ where
         if !pending.is_empty() {
             let pending_count = pending.len();
             tokio::spawn(
-                recheck_session_creations(
+                recheck_agent_creations(
                     self.creations.clone(),
                     self.permissions.clone(),
                     bot,
-                    started_at,
+                    requested_at,
                     person.clone(),
                     channel_id,
                     pending,
@@ -260,7 +262,7 @@ where
     E: ChannelEventDispatcher,
     P: ChannelReferenceSharePermissions + Clone,
     G: MessageRealtime,
-    C: AgentSessionCreations,
+    C: AgentCreations,
 {
     async fn publish(&self, event: MessageEvent) -> Result<(), rootcause::Report> {
         let MessageParent::Channel(channel_id) = event.parent else {
@@ -302,7 +304,7 @@ where
                 .collect::<Vec<_>>();
             if !items.is_empty() {
                 // A person shares what they link. A bot shares, as the person
-                // it posted for, only what its agent session created.
+                // it posted for, only what it created for their request.
                 let shared = if let Some(user) = actor.as_user() {
                     self.permissions
                         .update_channel_share_permissions_for_referenced_items(
@@ -316,11 +318,12 @@ where
                 } else if let Some(bot) = actor.as_bot()
                     && let Some(person) = triggering_person(message)
                 {
-                    self.share_session_creations(
+                    self.share_agent_creations(
                         bot.bot_id(),
                         person,
                         channel_id,
                         message.thread_id.unwrap_or(message.id),
+                        message.created_at,
                         items,
                     )
                     .await

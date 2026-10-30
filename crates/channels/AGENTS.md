@@ -59,10 +59,11 @@ DMs, and the shared message store other domains discuss things on.
 - Human DM messages to nonusers use immediate email, including mentions and replies; empty DM creation, bot messages, and silent/mentions-only policies do not trigger this path. Keep registered recipients on their normal notification routes.
 
 - A person's message shares every item it links; a bot message posted for a
-  person (`triggered_by`) shares, as that person, only the linked items its
-  thread's agent session created: `created` rows in `activity_events` by the
-  sending bot since `agent_session.created_at`
-  (`PgAgentSessionCreations`). Activity lands asynchronously, so misses are
+  person (`triggered_by`) shares, as that person, only the linked items the
+  sending bot created for them while answering: `created` rows in
+  `activity_events` by that bot on the person's behalf since the person's
+  latest message in the thread before the reply (`PgAgentCreations`). The same
+  bound covers classic `@Macro` and agent session turns. Activity lands asynchronously, so misses are
   re-checked after 5 s and 30 s in a spawned task. Creations recorded under
   another bot (`MACRO_AI_BOT_ID` for Claude/Codex/Cursor MCP tools) or the
   user (projects, chats, calls) never match, and fail safe as unshared.

@@ -73,31 +73,34 @@ impl ChannelReferenceSharePermissions for Log {
     }
 }
 
-/// An agent session that `session_bot` started, which recorded creating `created`.
+/// What bots created for MEMBER, who asked in the thread when `asked` is set.
 #[derive(Clone, Default)]
 struct Creations {
-    session_bot: Option<BotId>,
-    created: Arc<Mutex<Vec<ReferencedShareItem>>>,
+    asked: bool,
+    created: Arc<Mutex<Vec<(BotId, ReferencedShareItem)>>>,
     lookups: Arc<Mutex<usize>>,
 }
 
-impl AgentSessionCreations for Creations {
+impl AgentCreations for Creations {
     type Err = anyhow::Error;
-    async fn session_started_at(
+    async fn request_sent_at(
         &self,
         thread_root: Uuid,
-        bot: BotId,
+        person: &MacroUserIdStr<'static>,
+        _: DateTime<Utc>,
     ) -> Result<Option<DateTime<Utc>>, Self::Err> {
         assert_eq!(
             thread_root,
             Uuid::from_u128(1),
             "the root message is the thread"
         );
-        Ok((Some(bot) == self.session_bot).then(Utc::now))
+        assert_eq!(person.as_ref(), MEMBER);
+        Ok(self.asked.then(Utc::now))
     }
     async fn created_since(
         &self,
-        _: BotId,
+        bot: BotId,
+        _: &MacroUserIdStr<'static>,
         _: DateTime<Utc>,
         items: Vec<ReferencedShareItem>,
     ) -> Result<Vec<ReferencedShareItem>, Self::Err> {
@@ -105,7 +108,7 @@ impl AgentSessionCreations for Creations {
         let created = self.created.lock().unwrap();
         Ok(items
             .into_iter()
-            .filter(|item| created.contains(item))
+            .filter(|item| created.contains(&(bot, item.clone())))
             .collect())
     }
 }
@@ -485,18 +488,21 @@ fn agent_post(triggered_by: Option<&str>) -> MessageEvent {
     posted
 }
 
-fn session_that_created(items: Vec<ReferencedShareItem>) -> Creations {
+/// MEMBER asked in the thread, and `bot` created `items` for them since.
+fn asked_and(bot: BotId, items: Vec<ReferencedShareItem>) -> Creations {
     Creations {
-        session_bot: Some(BotId::TEST_A),
-        created: Arc::new(Mutex::new(items)),
+        asked: true,
+        created: Arc::new(Mutex::new(
+            items.into_iter().map(|item| (bot, item)).collect(),
+        )),
         ..Default::default()
     }
 }
 
 #[tokio::test(start_paused = true)]
-async fn an_agent_shares_what_its_session_created_and_not_what_already_existed() {
+async fn an_agent_shares_what_it_created_for_the_request_and_not_what_already_existed() {
     let log = Log::default();
-    let creations = session_that_created(vec![document(DOCUMENT)]);
+    let creations = asked_and(BotId::TEST_A, vec![document(DOCUMENT)]);
     let delivery = ChannelMessageDelivery::new(
         repo(),
         log.clone(),
@@ -523,7 +529,7 @@ async fn an_agent_shares_what_its_session_created_and_not_what_already_existed()
 #[tokio::test(start_paused = true)]
 async fn a_creation_recorded_after_delivery_is_shared_by_the_re_check() {
     let log = Log::default();
-    let creations = session_that_created(vec![]);
+    let creations = asked_and(BotId::TEST_A, vec![]);
     let delivery = ChannelMessageDelivery::new(
         repo(),
         log.clone(),
@@ -534,7 +540,11 @@ async fn a_creation_recorded_after_delivery_is_shared_by_the_re_check() {
 
     delivery.publish(agent_post(Some(MEMBER))).await.unwrap();
     assert!(log.shares.lock().unwrap().is_empty());
-    creations.created.lock().unwrap().push(document(DOCUMENT));
+    creations
+        .created
+        .lock()
+        .unwrap()
+        .push((BotId::TEST_A, document(DOCUMENT)));
     log.shared.notified().await;
 
     assert_eq!(
@@ -544,11 +554,29 @@ async fn a_creation_recorded_after_delivery_is_shared_by_the_re_check() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn another_bots_session_shares_nothing() {
+async fn what_another_bot_created_is_not_shared() {
+    let log = Log::default();
+    let creations = asked_and(BotId::TEST_B, vec![document(DOCUMENT)]);
+    let delivery = ChannelMessageDelivery::new(
+        repo(),
+        log.clone(),
+        log.clone(),
+        log.clone(),
+        creations.clone(),
+    );
+
+    delivery.publish(agent_post(Some(MEMBER))).await.unwrap();
+    tokio::time::sleep(Duration::from_secs(60)).await;
+
+    assert!(log.shares.lock().unwrap().is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_reply_to_no_request_from_the_person_shares_nothing() {
     let log = Log::default();
     let creations = Creations {
-        session_bot: Some(BotId::TEST_B),
-        ..session_that_created(vec![document(DOCUMENT)])
+        asked: false,
+        ..asked_and(BotId::TEST_A, vec![document(DOCUMENT)])
     };
     let delivery = ChannelMessageDelivery::new(
         repo(),
@@ -568,7 +596,7 @@ async fn another_bots_session_shares_nothing() {
 #[tokio::test(start_paused = true)]
 async fn an_agent_post_for_nobody_shares_nothing() {
     let log = Log::default();
-    let creations = session_that_created(vec![document(DOCUMENT)]);
+    let creations = asked_and(BotId::TEST_A, vec![document(DOCUMENT)]);
     let delivery = ChannelMessageDelivery::new(
         repo(),
         log.clone(),

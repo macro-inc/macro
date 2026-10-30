@@ -420,12 +420,12 @@ event without attendees creates the event right away (unlike AI chat, where crea
 for the user to confirm a composer card). For an event with attendees the bot is prompted to
 ask for confirmation in the thread first, since Google sends the invitations the moment the
 event is created — no invitation goes out from the initial request. It cannot draft or send
-email at all. An agent reply posted for a person shares, as that person, the linked items
-(chips or attachments) that the agent session in that thread created: those with a `created`
-activity row by the session's bot since the session started. Activity arrives asynchronously,
-so missing rows are re-checked after 5 and 30 seconds. Existing items it links, plain URLs,
-replies with no agent session (classic `@Macro`), and bot posts with no person behind them
-share nothing. The bot never asks whether to share; it calls `ShareWithChannel` when asked to
+email at all. A bot or agent reply posted for a person shares, as that person, the linked items
+(chips or attachments) that the replying bot created for them while answering: those with a
+`created` activity row by that bot on the person's behalf since the person's latest message in
+the thread before the reply. Activity arrives asynchronously, so missing rows are re-checked
+after 5 and 30 seconds. Existing items it links, plain URLs, and bot posts with no person
+behind them share nothing. The bot never asks whether to share; it calls `ShareWithChannel` when asked to
 share an existing item. Private and confidential calendar events stay unshared, and a
 calendar event can only be shared by someone who holds it on their own calendar.
 The bot's prompt carries the current date and time in the mentioning user's
