@@ -68,6 +68,7 @@ export const semanticTokens = [
   'success',
   'warning',
   'failure',
+  'priority-urgent',
   'chrome',
 ] as const;
 export type SemanticToken = (typeof semanticTokens)[number];

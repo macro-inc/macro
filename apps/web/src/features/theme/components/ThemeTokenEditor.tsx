@@ -90,7 +90,7 @@ const tokenSections = [
   },
   {
     label: 'Status',
-    tokens: ['success', 'warning', 'failure'] as const,
+    tokens: ['success', 'warning', 'failure', 'priority-urgent'] as const,
   },
 ] as const;
 

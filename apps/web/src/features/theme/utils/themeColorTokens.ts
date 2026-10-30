@@ -108,6 +108,7 @@ export function getDefaultSemanticColorTokens(
     success: tokenReference('green'),
     warning: tokenReference(mode === 'dark' ? 'amber' : 'yellow'),
     failure: tokenReference('red'),
+    'priority-urgent': tokenReference('orange'),
     chrome: tokenReference('surface-4'),
   };
 }

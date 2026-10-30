@@ -327,6 +327,10 @@ Macro Light uses `#F5F5F5` outside `#FCFCFC` content panels, white controls,
 `#2E2E2E` ink. Macro Light and Macro Dark share the same muted blue accent
 (`oklch(0.7 0.12 250deg)`); light mode does not switch the accent to orange.
 
+The theme editor's **Status** section exposes **Priority Urgent** separately
+from **Warning**. It defaults to the theme's orange palette color; changing it
+recolors urgent-priority badges without changing in-progress task status.
+
 ### Theme mentions
 
 Agent replies can include clickable theme mentions that let users apply a theme

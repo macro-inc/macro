@@ -157,6 +157,7 @@ body.tauri-ios {
   --invert-success: var(--color-success);
   --invert-warning: var(--color-warning);
   --invert-failure: var(--color-failure);
+  --invert-priority-urgent: var(--color-priority-urgent);
 }
 
 [data-invert] {
@@ -182,6 +183,7 @@ body.tauri-ios {
   --color-success: color-mix(in oklch, var(--invert-success) 20%, var(--invert-palette-target));
   --color-warning: color-mix(in oklch, var(--invert-warning) 20%, var(--invert-palette-target));
   --color-failure: color-mix(in oklch, var(--invert-failure) 20%, var(--invert-palette-target));
+  --color-priority-urgent: color-mix(in oklch, var(--invert-priority-urgent) 20%, var(--invert-palette-target));
   --color-accent-contrast: var(--invert-surface);
   --color-accent-contrast-muted: oklch(from var(--color-accent-contrast) l c h / 0.7);
   --theme-surface: initial;
@@ -411,6 +413,7 @@ body.tauri-ios {
   --color-success: var(--color-green);
   --color-warning: var(--color-amber);
   --color-failure: var(--color-red);
+  --color-priority-urgent: var(--color-orange);
   --color-chrome: color-mix(in oklch, var(--color-surface-3) 98%, var(--color-content-0));
 
   /* Generated compatibility tokens. */
@@ -635,6 +638,7 @@ body.tauri-ios {
    Root-only and device conditions retain their existing scope. */
 :root,
 [data-theme-light] {
+  --color-priority-urgent: var(--color-orange);
   /* Neutral borders. Focus, status, and glass edges stay independent. */
   --border-primary: oklch(1 0 0 / 16%);
   --border-secondary: oklch(1 0 0 / 12%);
