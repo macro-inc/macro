@@ -27,6 +27,8 @@ export default {
   remindMe: 'Remind me',
   addTag: 'Add tag',
   addToProject: 'Add to project…',
+  openProjectNamed: 'Open project {{name}}',
+  changeProject: 'Change project',
   moveToFolder: 'Move to folder',
   removeFromFolder: 'Remove from folder',
   duplicate: 'Duplicate',

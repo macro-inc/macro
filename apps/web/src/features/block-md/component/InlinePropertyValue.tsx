@@ -87,6 +87,10 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
       }
       class={props.class}
       emptyLabel={props.emptyLabel}
+      opensProject={
+        ctx.entityType === 'TASK' &&
+        props.property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
+      }
       hoverTrailingAction={
         <Show when={canManage()}>
           <Button
