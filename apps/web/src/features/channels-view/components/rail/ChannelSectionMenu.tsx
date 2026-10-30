@@ -1,18 +1,19 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
-import FunnelIcon from '@icon/system/regular/funnel.svg';
+import SlidersIcon from '@icon/system/regular/sliders-horizontal.svg';
 import { Dropdown, ToggleSwitch } from '@ui';
-import { For } from 'solid-js';
+import { For, type JSX } from 'solid-js';
 import type { ChannelSectionKey } from '../../types';
 import { useChannelsRail } from './ChannelsRailContext';
 
 export function ChannelSectionDropdown(props: {
   section: ChannelSectionKey;
   label: string;
+  children?: JSX.Element;
 }) {
-  const label = () =>
-    t('channelSections.sortAndFilterFor', { name: props.label });
+  const label = () => t('channelSections.optionsFor', { name: props.label });
   return (
     <Dropdown placement="bottom-end">
       <Dropdown.Trigger
@@ -21,11 +22,18 @@ export function ChannelSectionDropdown(props: {
         as={ViewSidebar.Control}
         variant="ghost"
         size="icon-sm"
+        onMouseDown={(event: MouseEvent) => event.stopPropagation()}
       >
-        <FunnelIcon class="size-3.5" />
+        <SlidersIcon class="size-3.5" />
       </Dropdown.Trigger>
-      <Dropdown.Content class="min-w-40">
+      <Dropdown.Content
+        class="min-w-44"
+        onCloseAutoFocus={(event) => {
+          if (document.querySelector('[role="dialog"]')) event.preventDefault();
+        }}
+      >
         <ChannelSectionMenuItems section={props.section} />
+        {props.children}
       </Dropdown.Content>
     </Dropdown>
   );
@@ -44,51 +52,70 @@ function ChannelSectionMenuItems(props: { section: ChannelSectionKey }) {
     { value: 'created_at' as const, label: t('channelSections.dateCreated') },
   ];
   return (
-    <>
-      <Dropdown.Group>
-        <Dropdown.GroupLabel>{t('channelSections.sortBy')}</Dropdown.GroupLabel>
-        <Dropdown.RadioGroup
-          value={preferences().sort}
-          onChange={(value) => {
-            const option = options().find((option) => option.value === value);
-            if (option)
-              rail.setSectionPreferences(props.section, { sort: option.value });
-          }}
-        >
-          <For each={options()}>
-            {(option) => (
-              <Dropdown.RadioItem closeOnSelect value={option.value}>
-                <span class="flex-1">{option.label}</span>
-                <Dropdown.ItemIndicator>
-                  <CheckIcon class="size-3.5 text-accent" />
-                </Dropdown.ItemIndicator>
-              </Dropdown.RadioItem>
-            )}
-          </For>
-        </Dropdown.RadioGroup>
-      </Dropdown.Group>
-      <Dropdown.Group>
-        <Dropdown.CheckboxItem
-          indicator={false}
-          closeOnSelect={false}
-          checked={preferences().unreadOnly ?? false}
-          onChange={(unreadOnly) =>
-            rail.setSectionPreferences(props.section, { unreadOnly })
-          }
-        >
-          <span class="flex-1">{t('channelSections.unreadOnly')}</span>
-          <span
-            inert
-            aria-hidden="true"
-            class="pointer-events-none flex shrink-0 items-center"
-          >
-            <ToggleSwitch
+    <Dropdown.Group>
+      <Dropdown.Sub>
+        <Dropdown.SubTrigger>
+          <span class="flex-1">{t('channelSections.sort')}</span>
+          <CaretRightIcon class="size-3 shrink-0 text-ink-extra-muted" />
+        </Dropdown.SubTrigger>
+        <Dropdown.SubContent class="min-w-44">
+          <Dropdown.Group>
+            <Dropdown.RadioGroup
+              value={preferences().sort}
+              onChange={(value) => {
+                const option = options().find(
+                  (option) => option.value === value
+                );
+                if (option)
+                  rail.setSectionPreferences(props.section, {
+                    sort: option.value,
+                  });
+              }}
+            >
+              <For each={options()}>
+                {(option) => (
+                  <Dropdown.RadioItem closeOnSelect value={option.value}>
+                    <span class="flex-1">{option.label}</span>
+                    <Dropdown.ItemIndicator>
+                      <CheckIcon class="size-3.5 text-accent" />
+                    </Dropdown.ItemIndicator>
+                  </Dropdown.RadioItem>
+                )}
+              </For>
+            </Dropdown.RadioGroup>
+          </Dropdown.Group>
+        </Dropdown.SubContent>
+      </Dropdown.Sub>
+      <Dropdown.Sub>
+        <Dropdown.SubTrigger>
+          <span class="flex-1">{t('channelSections.filter')}</span>
+          <CaretRightIcon class="size-3 shrink-0 text-ink-extra-muted" />
+        </Dropdown.SubTrigger>
+        <Dropdown.SubContent class="min-w-44">
+          <Dropdown.Group>
+            <Dropdown.CheckboxItem
+              indicator={false}
+              closeOnSelect={false}
               checked={preferences().unreadOnly ?? false}
-              readOnly
-            />
-          </span>
-        </Dropdown.CheckboxItem>
-      </Dropdown.Group>
-    </>
+              onChange={(unreadOnly) =>
+                rail.setSectionPreferences(props.section, { unreadOnly })
+              }
+            >
+              <span class="flex-1">{t('channelSections.unreadOnly')}</span>
+              <span
+                inert
+                aria-hidden="true"
+                class="pointer-events-none flex shrink-0 items-center"
+              >
+                <ToggleSwitch
+                  checked={preferences().unreadOnly ?? false}
+                  readOnly
+                />
+              </span>
+            </Dropdown.CheckboxItem>
+          </Dropdown.Group>
+        </Dropdown.SubContent>
+      </Dropdown.Sub>
+    </Dropdown.Group>
   );
 }

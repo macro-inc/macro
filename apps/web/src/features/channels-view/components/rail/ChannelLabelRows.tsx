@@ -1,4 +1,3 @@
-import { ViewSidebar } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
 import {
   ContextMenuContent,
@@ -9,7 +8,6 @@ import {
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ChannelEntity } from '@entity';
 import ChecksIcon from '@icon/system/regular/checks.svg';
-import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import PencilSimpleIcon from '@icon/system/regular/pencil-simple.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import TagIcon from '@icon/system/regular/tag.svg';
@@ -93,32 +91,9 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
         <ChannelSectionDropdown
           section={rowKeyForLabel(props.label.id)}
           label={props.label.name}
-        />
-        <Dropdown placement="bottom-end">
-          <Dropdown.Trigger
-            aria-label={t('channelSections.optionsFor', {
-              name: props.label.name,
-            })}
-            tooltip={t('channelSections.optionsFor', {
-              name: props.label.name,
-            })}
-            as={ViewSidebar.Control}
-            variant="ghost"
-            size="icon-sm"
-            onMouseDown={(event: MouseEvent) => event.stopPropagation()}
-          >
-            <DotsThreeIcon class="size-3.5" />
-          </Dropdown.Trigger>
-          <Dropdown.Content
-            class="min-w-44"
-            onCloseAutoFocus={(event) => {
-              if (document.querySelector('[role="dialog"]'))
-                event.preventDefault();
-            }}
-          >
-            <ChannelLabelActions label={props.label} />
-          </Dropdown.Content>
-        </Dropdown>
+        >
+          <ChannelLabelActions label={props.label} />
+        </ChannelSectionDropdown>
       </ChannelSectionHeading>
       <Show
         when={
