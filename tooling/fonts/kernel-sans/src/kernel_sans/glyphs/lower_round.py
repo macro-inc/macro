@@ -381,7 +381,7 @@ def _a_shape(p, xr, ae_e=None):
     # deeper notch reaches past its top and leaves a barb of black between
     # the curve and the cut at ExtraBold.
     d = p.trap * 0.65
-    traps = stem_trap(-xs, in_top, d) + stem_trap(-xs, in_bot, d, up=False)
+    traps = bw.traps(d)
     shape = hook + bowl.flip_x(0) + stem - traps.flip_x(0)
     return shape, cx_h, xs
 
@@ -473,7 +473,10 @@ def _s_shape(p, w):
     U = squircle(*ub, p.sq) - squircle(
         xu0 + s, sp0 + wsp, xu1 - s * 0.94, P.XH + P.OS - wt, p.sq_in
     )
-    ct = P.XH * 0.735
+    # The terminal face stays clear above the counter's right extreme (which
+    # falls as the strokes thicken), so the curve's node there is cut away
+    # at every weight instead of surviving at some as a 1-unit stub.
+    ct = max(P.XH * 0.735, (sp1 + P.XH + P.OS - wt) / 2 + 3)
     U = U - (right_of(xt) & below(ct))
     U = U - chamfer(_ox(*ub, p.sq, ct, "right"), ct, p.cut, "se")
     # Lower ring; its top stroke is the spine.

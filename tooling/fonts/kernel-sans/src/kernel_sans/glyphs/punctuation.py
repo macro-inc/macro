@@ -1078,7 +1078,7 @@ def _small_m(p, x0, y0, h, w, st):
         + right
         + [(x0 + w, top), (2 * cx - xt - hw, top), (cx, yv), (xt + hw, top), (x0, top)]
     )
-    k = st / p.cstem
+    k = st / (p.cstem * 0.92)  # M's sides are 0.92 of the capital stem
     d = 1.3 * p.trap * k
     sh = sh - stem_trap(x0 + st, yl, d, side="right", up=True)
     sh = sh - stem_trap(2 * cx - x0 - st, yl, d, side="left", up=True)
