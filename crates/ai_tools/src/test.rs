@@ -600,11 +600,7 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     let direct = tools_for_agent_code_mode();
     let sdk = code_mode_tools();
     assert!(direct.toolset.tools.len() < standard.toolset.tools.len());
-    for name in [
-        "ReadContent",
-        "RequestEntityAccess",
-        "ReadEntityAccessRequest",
-    ] {
+    for name in ["ReadContent"] {
         assert!(standard.toolset.tools.contains_key(name), "{name}");
         assert!(sdk.tools.contains_key(name), "{name}");
         assert!(!direct.toolset.tools.contains_key(name), "{name}");
@@ -706,6 +702,14 @@ fn session_reader_is_available_to_every_conversation_host_and_mcp() {
         );
     }
     assert!(subagent_toolset().tools.contains_key("ReadAgentSession"));
+    // The SDK has no access handle on external chats and does not return who a
+    // request went to, so code mode keeps the direct access-request tools.
+    for name in ["RequestEntityAccess", "ReadEntityAccessRequest"] {
+        assert!(
+            tools_for_agent_code_mode().toolset.tools.contains_key(name),
+            "{name}"
+        );
+    }
     let code_mode = tools_for_agent_code_mode();
     assert!(code_mode.toolset.tools.contains_key("ReadAgentSession"));
     assert!(

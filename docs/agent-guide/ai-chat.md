@@ -171,11 +171,11 @@ items, since these mutate real data.
 When a write fails because the user can only view the item (for example
 setting a task's `Project` to a project they can only view), the assistant says
 so and offers to ask the owner for edit access. Only after the user agrees does
-it call `RequestEntityAccess` (code mode: `<item>.access.request(level)`). The
+it call `RequestEntityAccess`, in code mode too. The
 owner receives the same access request the Share menu sends, from the user. The
 row reads **Requested edit access to** the item with its status, **pending**
 until the owner decides; nothing is granted and the failed write is not
-retried. `ReadEntityAccessRequest` (code mode: `<item>.access.state()`) reports
+retried. `ReadEntityAccessRequest` reports
 the user's access and the request's outcome; after the owner grants it in
 **Share → Permission requests**, ask the assistant to retry and confirm the
 write succeeds. The usual one-minute and 24-hour (after denial) waits apply.
