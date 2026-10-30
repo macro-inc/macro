@@ -1,19 +1,21 @@
 import { TextShimmer } from '@app/features/block-agent/ui';
 import { Key } from '@solid-primitives/keyed';
-import { Match, Show, Switch } from 'solid-js';
+import { Match, Switch } from 'solid-js';
 
-/** One step of an agent's work, as the session's fold worded it. */
+/**
+ * One step of an agent's work, as the session's fold worded it. A
+ * conversation names the step only: what it ran or read stays in the session.
+ */
 export type ActivityRowView = {
   id: string;
   label: string;
-  detail?: string | null;
   status: 'running' | 'completed' | 'failed' | 'interrupted';
 };
 
 /**
  * The steps an agent took between two passages of its reply, one quiet line
- * each like the session's tool rows: what it did, to what in a dimmer tone,
- * and how it went only when it did not simply finish.
+ * each like the session's tool rows: what it did, and how it went only when
+ * it did not simply finish.
  */
 export function ActivityRows(props: { rows: readonly ActivityRowView[] }) {
   return (
@@ -32,13 +34,6 @@ export function ActivityRows(props: { rows: readonly ActivityRowView[] }) {
                 active={row().status === 'running'}
               />
             </span>
-            <Show when={row().detail}>
-              {(detail) => (
-                <span class="min-w-0 truncate text-ink-disabled">
-                  {detail()}
-                </span>
-              )}
-            </Show>
             <Switch>
               <Match when={row().status === 'failed'}>
                 <span class="shrink-0 text-failure">Failed</span>

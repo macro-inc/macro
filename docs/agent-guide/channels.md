@@ -138,16 +138,15 @@ becomes available again so you can retry.
 The reply is posted as ordinary messages while the turn runs. Each finished
 passage becomes a message. While a run of steps between passages is open, the
 message shows it as one shimmering line, led by the working dots, naming the
-step in progress, a label
-such as `Ran`, `Read`, `Edited`, or `Searching` with a short detail like the
-command or file name for readers with session access. The next step slides in
+step in progress by its label alone, such as `Ran`, `Read`, `Edited`, or
+`Searching`; the command, query, or file stays in the session. The next step slides in
 as it starts, and steps running at the same time take turns every two seconds.
 Whenever a thread reply's turn is running with no open run, before the first
 step or while the agent writes after one, the same line reads `Thinking`.
 Once the run closes, it folds to a `Used N tools` summary (with
 `· N failed` when a step failed), with a caret after it on hover, that opens
-to compact rows like the session's tool rows: the label, the detail in a
-dimmer tone, and **Failed** or **Interrupted** when a step did not finish.
+to compact rows like the session's tool rows: the label, and **Failed** or
+**Interrupted** when a step did not finish.
 Documents, sessions, pull requests, and contacts an agent's reply mentions are
 set in the accent color.
 Stored activity snapshots keep the status and label but omit commands and tool

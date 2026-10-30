@@ -111,8 +111,8 @@ it('folds a sealed run to a summary that opens to its steps, without the session
   expect(view.queryAllByRole('listitem')).toEqual([]);
   view.getByRole('button', { name: 'Used 2 tools · 1 failed' }).click();
   expect(steps(view)).toEqual([
-    ['Rancargo', 'completed'],
-    ['Readlib.rsFailed', 'failed'],
+    ['Ran', 'completed'],
+    ['ReadFailed', 'failed'],
   ]);
 });
 
@@ -127,7 +127,7 @@ it('shows an open run as one line naming the step it is on, live from the sessio
     />
   ));
   expect(live.acquired).toEqual(['session']);
-  expect(line(view)).toEqual(['Runningcargo', 'running']);
+  expect(line(view)).toEqual(['Running', 'running']);
 
   setMessages([
     reply([
@@ -135,7 +135,7 @@ it('shows an open run as one line naming the step it is on, live from the sessio
       { id: 't2', label: 'Reading', detail: 'lib.rs', status: 'running' },
     ]),
   ]);
-  expect(line(view)).toEqual(['Readinglib.rs', 'running']);
+  expect(line(view)).toEqual(['Reading', 'running']);
   expect(view.queryAllByRole('listitem')).toEqual([]);
 
   // Between steps the line keeps the last one rather than going blank.
@@ -145,7 +145,7 @@ it('shows an open run as one line naming the step it is on, live from the sessio
       { id: 't2', label: 'Read', detail: 'lib.rs', status: 'completed' },
     ]),
   ]);
-  expect(line(view)).toEqual(['Readlib.rs', 'completed']);
+  expect(line(view)).toEqual(['Read', 'completed']);
 });
 
 it('takes turns among tools called at once, and a new call takes the line at once', () => {
@@ -291,10 +291,10 @@ it('keeps the step in place as the run paints, rather than redrawing it', () => 
       { id: 't2', label: 'Reading', detail: 'lib.rs', status: 'running' },
     ]),
   ]);
-  expect(line(view)).toEqual(['Readinglib.rs', 'running']);
+  expect(line(view)).toEqual(['Reading', 'running']);
 });
 
-it('keeps snapshots free of tool details while authorized live rows retain them', () => {
+it('names each step without what it ran or read, even to a reader of the live session', () => {
   const safe = [{ id: 't1', label: 'Ran', status: 'completed' as const }];
   const snapshotView = render(() => (
     <AgentActivity
@@ -322,5 +322,6 @@ it('keeps snapshots free of tool details while authorized live rows retain them'
   setMessages([
     reply([{ ...safe[0], detail: 'TOKEN=private-value run-report' }]),
   ]);
-  expect(line(liveView)[0]).toBe('RanTOKEN=private-value run-report');
+  expect(line(liveView)[0]).toBe('Ran');
+  expect(liveView.queryByText(/private-value/)).toBeNull();
 });
