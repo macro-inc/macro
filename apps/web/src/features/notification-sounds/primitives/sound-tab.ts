@@ -23,3 +23,17 @@ export function isNotificationSoundTab(): boolean {
     return true;
   }
 }
+
+/**
+ * Hands sound back to the other tabs when this one closes, so they don't stay
+ * silent until one of them is focused.
+ */
+export function releaseNotificationSoundTab(): void {
+  try {
+    if (localStorage.getItem(SOUND_TAB_KEY) === TAB_ID) {
+      localStorage.removeItem(SOUND_TAB_KEY);
+    }
+  } catch {
+    // Without storage every tab plays already.
+  }
+}

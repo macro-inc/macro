@@ -99,3 +99,22 @@ it('skips read notifications, muted categories, and tabs not in use', () => {
   expect(playNotificationSound).toHaveBeenCalledTimes(1);
   dispose();
 });
+
+it('hands sound to the other tabs when the playing tab closes', () => {
+  const { dispose } = mountSounds();
+  window.dispatchEvent(new Event('focus'));
+  expect(localStorage.getItem(TAB_KEY)).not.toBeNull();
+
+  window.dispatchEvent(new Event('pagehide'));
+  expect(localStorage.getItem(TAB_KEY)).toBeNull();
+  dispose();
+});
+
+it('leaves another tab playing when a background tab closes', () => {
+  const { dispose } = mountSounds();
+  localStorage.setItem(TAB_KEY, 'another-tab');
+
+  window.dispatchEvent(new Event('pagehide'));
+  expect(localStorage.getItem(TAB_KEY)).toBe('another-tab');
+  dispose();
+});

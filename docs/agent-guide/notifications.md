@@ -191,7 +191,8 @@ are no audio files. Event types map to rows in `core/categories.ts`; a new
 backend event type stays quiet until it is mapped there. Incoming calls keep
 their own ring and never use these sounds. Only unseen notifications play,
 notifications within 1.5 s of a sound share it, and only the Macro tab the
-person last focused or touched plays, so several tabs ding once. Browsers keep
+person last focused or touched plays, so several tabs ding once. Closing that
+tab hands sound back to the others until one is focused. Browsers keep
 audio suspended until the page has had a gesture; a notification before that
 stays silent rather than playing late.
 

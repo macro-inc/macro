@@ -16,6 +16,7 @@ import { readNotificationSoundSettings } from './primitives/sound-settings';
 import {
   claimNotificationSoundTab,
   isNotificationSoundTab,
+  releaseNotificationSoundTab,
 } from './primitives/sound-tab';
 
 /**
@@ -49,6 +50,7 @@ export function useNotificationSounds(
 
   if (document.hasFocus()) claimNotificationSoundTab();
   makeEventListener(window, 'focus', claimNotificationSoundTab);
+  makeEventListener(window, 'pagehide', releaseNotificationSoundTab);
   makeEventListener(
     window,
     'pointerdown',
