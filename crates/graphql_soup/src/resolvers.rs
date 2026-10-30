@@ -98,17 +98,12 @@ where
     let group_by = request.grouping.field.clone();
     let items = service.get_user_soup_grouped(request).await?;
     let groups: NestedSoupGroups<_, _> = items.collect();
-    let labels = match group_by {
-        models_grouping::GroupByField::Project => {
-            let keys: Vec<String> = groups
-                .keys()
-                .filter(|key| !key.is_empty())
-                .cloned()
-                .collect();
-            service.project_group_labels(viewer, &keys).await?
-        }
-        _ => std::collections::HashMap::new(),
-    };
+    let keys: Vec<String> = groups
+        .keys()
+        .filter(|key| !key.is_empty())
+        .cloned()
+        .collect();
+    let labels = service.group_labels(viewer, &group_by, &keys).await?;
     Ok(GroupedSoup::new(
         groups.with_next_cursors(sort_method, filters),
         &labels,

@@ -6,7 +6,8 @@ mod test;
 use super::{EnrichedSoupItem, SoupPropertiesField};
 use indexmap::IndexMap;
 use item_filters::ast::EntityFilterAst;
-use models_grouping::{GroupByField, date_bucket_label, date_bucket_order};
+pub use models_grouping::GroupByField;
+use models_grouping::{date_bucket_label, date_bucket_order};
 use models_pagination::{
     Base64Str, CursorVal, CursorWithValAndFilter, Identify, SimpleSortMethod, SortOn,
 };
@@ -15,11 +16,30 @@ use serde::Serialize;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+/// Display text for group keys the client cannot label from the key alone,
+/// resolved for the caller's grouping field and access. A key absent here
+/// keeps itself as its label.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct GroupLabels(HashMap<String, String>);
+
+impl GroupLabels {
+    /// The display text resolved for `key`, if any.
+    pub fn get(&self, key: &str) -> Option<&str> {
+        self.0.get(key).map(String::as_str)
+    }
+}
+
+impl FromIterator<(String, String)> for GroupLabels {
+    fn from_iter<I: IntoIterator<Item = (String, String)>>(iter: I) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}
+
 /// Resolve label and display order for a group key based on the grouping field.
 fn resolve_group_label_and_order(
     key: &str,
     group_by: &GroupByField,
-    labels: &HashMap<String, String>,
+    labels: &GroupLabels,
 ) -> (String, Option<i32>) {
     match group_by {
         GroupByField::Date => (
@@ -32,11 +52,7 @@ fn resolve_group_label_and_order(
         ),
         // Project keys are initiative IDs; keep the dedicated unassigned label.
         GroupByField::Project if key.is_empty() => ("No Project".to_string(), Some(i32::MAX)),
-        // The initiative name when the caller can read it; the raw key otherwise.
-        GroupByField::Project => (
-            labels.get(key).cloned().unwrap_or_else(|| key.to_string()),
-            None,
-        ),
+        GroupByField::Project => (labels.get(key).unwrap_or(key).to_string(), None),
         GroupByField::Property { .. } if key.is_empty() => ("Not Set".to_string(), Some(i32::MAX)),
         _ => (key.to_string(), None),
     }
@@ -73,15 +89,15 @@ pub struct GroupedResponse {
     pub page_cursor: Option<String>,
 }
 
-/// Build a grouped response from grouped soup items. `labels` names groups
-/// whose key is an entity id (project groups) when the caller can read them.
+/// Build a grouped response from grouped soup items, labeling groups from
+/// `labels` where the grouping field leaves the key unlabeled.
 pub fn build_grouped_response(
     items: impl IntoIterator<Item = ItemGroupingInfo<SoupPropertiesField>>,
     group_by: &GroupByField,
     sort_method: SimpleSortMethod,
     requested_group_key: Option<String>,
     filters: EntityFilterAst,
-    labels: &HashMap<String, String>,
+    labels: &GroupLabels,
 ) -> GroupedResponse {
     struct GroupData {
         total_count: u32,

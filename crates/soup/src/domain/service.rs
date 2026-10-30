@@ -1923,18 +1923,23 @@ where
     F: GithubPullRequestListing,
 {
     #[tracing::instrument(err, skip(self, keys), fields(key_count = keys.len()))]
-    async fn project_group_labels<'a>(
+    async fn group_labels<'a>(
         &'a self,
         user_id: MacroUserIdStr<'a>,
+        group_by: &'a GroupByField,
         keys: &'a [String],
-    ) -> Result<HashMap<String, String>, SoupErr> {
-        let entities: Vec<Entity<'static>> = keys
-            .iter()
-            .filter(|key| Uuid::parse_str(key).is_ok())
-            .map(|key| EntityType::Initiative.with_entity_string(key.clone()))
-            .collect();
+    ) -> Result<GroupLabels, SoupErr> {
+        let entities: Vec<Entity<'static>> = match group_by {
+            // Project keys are initiative ids; the client has no name for them.
+            GroupByField::Project => keys
+                .iter()
+                .filter(|key| Uuid::parse_str(key).is_ok())
+                .map(|key| EntityType::Initiative.with_entity_string(key.clone()))
+                .collect(),
+            _ => Vec::new(),
+        };
         if entities.is_empty() {
-            return Ok(HashMap::new());
+            return Ok(Default::default());
         }
         let items = self
             .soup_storage

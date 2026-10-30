@@ -271,12 +271,13 @@ impl SoupService for ReplaySoup {
     {
         unimplemented!("rows never read frecency")
     }
-    async fn project_group_labels<'a>(
+    async fn group_labels<'a>(
         &'a self,
         _user_id: MacroUserIdStr<'a>,
+        _group_by: &'a soup::domain::models::grouping::GroupByField,
         _keys: &'a [String],
-    ) -> Result<std::collections::HashMap<String, String>, SoupErr> {
-        Ok(std::collections::HashMap::new())
+    ) -> Result<soup::domain::models::grouping::GroupLabels, SoupErr> {
+        Ok(Default::default())
     }
 
     async fn caller_tag_sets<'a>(

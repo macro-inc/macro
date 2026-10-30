@@ -1,12 +1,11 @@
 use super::*;
 use crate::domain::models::AdvancedSortParams;
 use crate::domain::models::SoupPropertiesField;
-use crate::domain::models::grouping::{ItemGroupingInfo, build_grouped_response};
+use crate::domain::models::grouping::{GroupLabels, ItemGroupingInfo, build_grouped_response};
 use document_sub_type::DocumentSubType;
 use item_filters::ast::project::ProjectLiteral;
 use model_entity::EntityType;
 use models_soup::item::SoupItem;
-use std::collections::HashMap;
 use uuid::{Uuid, uuid};
 
 #[sqlx::test(
@@ -85,7 +84,7 @@ async fn tasks_group_by_their_project_property(pool: Pool<Postgres>) -> anyhow::
             EntityType::Initiative
                 .with_entity_string("ad000000-0000-0000-0000-000000000002".to_string()),
         ];
-        let labels: HashMap<String, String> = crate::outbound::pg_soup_repo::initiative::by_ids(
+        let labels: GroupLabels = crate::outbound::pg_soup_repo::initiative::by_ids(
             &pool,
             AdvancedSortParams {
                 entities: &keys,

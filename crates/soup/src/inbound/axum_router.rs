@@ -661,21 +661,17 @@ where
         };
 
         let items: Vec<_> = self.service.get_user_soup_grouped(req).await?.collect();
-        let labels = match group_by_field {
-            GroupByField::Project => {
-                let mut keys: Vec<String> = items
-                    .iter()
-                    .map(|item| item.key.clone())
-                    .filter(|key| !key.is_empty())
-                    .collect();
-                keys.sort_unstable();
-                keys.dedup();
-                self.service
-                    .project_group_labels(user_for_favorites.copied(), &keys)
-                    .await?
-            }
-            _ => HashMap::new(),
-        };
+        let mut keys: Vec<String> = items
+            .iter()
+            .map(|item| item.key.clone())
+            .filter(|key| !key.is_empty())
+            .collect();
+        keys.sort_unstable();
+        keys.dedup();
+        let labels = self
+            .service
+            .group_labels(user_for_favorites.copied(), &group_by_field, &keys)
+            .await?;
 
         let response = build_grouped_response(
             items,

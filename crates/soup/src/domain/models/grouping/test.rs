@@ -4,7 +4,6 @@ use model_owner::Owner;
 use models_grouping::GroupByField;
 use models_pagination::SimpleSortMethod;
 use models_soup::{item::SoupItem, project::SoupProject};
-use std::collections::HashMap;
 use uuid::Uuid;
 
 use super::*;
@@ -120,7 +119,7 @@ fn rest_grouped_response_remains_normalized() {
         SimpleSortMethod::ViewedUpdated,
         None,
         EntityFilterAst::default(),
-        &HashMap::new(),
+        &GroupLabels::default(),
     );
 
     assert_eq!(response.items.len(), 1);
@@ -137,7 +136,9 @@ fn rest_grouped_response_remains_normalized() {
 fn project_groups_take_the_initiative_name_the_user_can_read() {
     let readable = "ad000000-0000-0000-0000-000000000001";
     let unreadable = "ad000000-0000-0000-0000-000000000002";
-    let labels = HashMap::from([(readable.to_string(), "Project One".to_string())]);
+    let labels: GroupLabels = [(readable.to_string(), "Project One".to_string())]
+        .into_iter()
+        .collect();
     let group = |key: &str, id: u128| ItemGroupingInfo {
         key: key.to_string(),
         total_group_count: 1,

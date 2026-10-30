@@ -31,7 +31,8 @@ use models_soup::{
 use predicate_index::RecordKey;
 use serde_json::Value;
 use soup::domain::models::{
-    EnrichedSoupItem, SoupProjectionHydration, SoupPropertiesField, grouping::NestedSoupGroups,
+    EnrichedSoupItem, SoupProjectionHydration, SoupPropertiesField,
+    grouping::{GroupLabels, NestedSoupGroups},
 };
 use soup_filter_projection::{encode_cache_projection_supplement, project_soup_cache_supplement};
 use uuid::Uuid;
@@ -218,16 +219,14 @@ pub struct GroupedSoup<E: SoupEntityEdges> {
 }
 
 impl<E: SoupEntityEdges> GroupedSoup<E> {
-    /// Construct grouped GraphQL Soup bins from the domain grouping model.
-    pub fn new(
-        groups: NestedSoupGroups<SoupPropertiesField>,
-        labels: &std::collections::HashMap<String, String>,
-    ) -> Self {
+    /// Construct grouped GraphQL Soup bins from the domain grouping model,
+    /// labeling the bins whose key the client cannot label on its own.
+    pub fn new(groups: NestedSoupGroups<SoupPropertiesField>, labels: &GroupLabels) -> Self {
         Self {
             bins: groups
                 .into_bins()
                 .map(|(key, bin)| GraphqlSoupBin {
-                    label: labels.get(&key).cloned(),
+                    label: labels.get(&key).map(str::to_owned),
                     key,
                     total_count: bin.group_total_size(),
                     next_cursor: bin.next_cursor().map(ToOwned::to_owned),
@@ -246,11 +245,9 @@ impl<E: SoupEntityEdges> GroupedSoup<E> {
 pub struct GraphqlSoupBin<E: SoupEntityEdges> {
     /// The grouping key.
     key: String,
-    /// Display text the client cannot derive from the key alone: for a
-    /// project group, the name of the initiative the viewer can read. Null
-    /// for groupings whose key already identifies the label client side
-    /// (status and priority option ids, assignee ids, date buckets, entity
-    /// types) and for a project the viewer cannot read.
+    /// Display text for a group whose key alone does not identify it client
+    /// side, limited to what the viewer can read. Null when the client labels
+    /// the key itself or the viewer cannot read the entity behind it.
     label: Option<String>,
     /// Total number of items in this group across all pages.
     total_count: usize,
