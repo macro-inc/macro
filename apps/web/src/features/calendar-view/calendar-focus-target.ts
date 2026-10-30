@@ -91,6 +91,8 @@ export const [CalendarFocusContextProvider, useCalendarFocus] =
           if (occurrenceTarget()?.requestId === requestId) dropOccurrence();
           else setConsumedRequestId(requestId);
         },
+        /** Drops a pending in-calendar request without its fallback. */
+        cancelOccurrence: dropOccurrence,
         /**
          * Pages to an occurrence and opens its details on its chip, as a
          * navigation request does. Calls `onTimeout` instead when no page

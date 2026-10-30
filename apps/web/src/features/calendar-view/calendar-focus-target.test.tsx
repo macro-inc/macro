@@ -127,6 +127,18 @@ describe('CalendarFocusContext occurrence requests', () => {
     expect(focus().pendingTarget()).toBeUndefined();
   });
 
+  it('drops a cancelled request without falling back', () => {
+    const { focus } = renderFocus();
+    const onTimeout = vi.fn();
+
+    focus().focusOccurrence(OCCURRENCE, onTimeout);
+    focus().cancelOccurrence();
+
+    expect(focus().pendingTarget()).toBeUndefined();
+    vi.advanceTimersByTime(OCCURRENCE_FOCUS_TIMEOUT_MS);
+    expect(onTimeout).not.toHaveBeenCalled();
+  });
+
   it('never falls back after the calendar unmounts', () => {
     const { focus, unmount } = renderFocus();
     const onTimeout = vi.fn();

@@ -1,3 +1,4 @@
+import { useCalendarFocus } from '@app/features/calendar-view/calendar-focus-target';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { subscribeToTeamCalendarReset } from '@queries/calendar/team-cache';
 import {
@@ -93,6 +94,12 @@ export const [CalendarViewContextProvider, useCalendarView] =
       const selection = createCalendarEventSelection(
         props.onFocusedEventIdChange
       );
+      const calendarFocus = useCalendarFocus();
+      // A selection made while a row waits for its chip wins over that row.
+      const selectEvent: typeof selection.select = (...args) => {
+        calendarFocus.cancelOccurrence();
+        selection.select(...args);
+      };
       // A revoked OOO agenda entry can lie outside every mounted viewport.
       // Close detached selections synchronously when authorization resets data.
       const unsubscribeTeamReset = subscribeToTeamCalendarReset(() => {
@@ -218,7 +225,7 @@ export const [CalendarViewContextProvider, useCalendarView] =
         setTimeFormat: (timeFormat: CalendarTimeFormat) =>
           setPreferences('timeFormat', timeFormat),
         closeEventDetails,
-        selectEvent: selection.select,
+        selectEvent,
         reanchorSelectedEvent: selection.reanchor,
         refreshSelectedEvent: selection.refresh,
         refreshSelectedEventFromPage,
