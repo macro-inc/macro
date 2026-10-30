@@ -232,7 +232,7 @@ where
 /// Gives a user a direct grant of at least `access_level`, raising a weaker
 /// direct grant and leaving an equal or stronger one, including the owner's,
 /// untouched. It does not commit the caller's transaction.
-#[tracing::instrument(skip(executor), err)]
+#[tracing::instrument(skip(executor, user_id), err)]
 pub async fn raise_user_entity_access<'e, E>(
     executor: E,
     user_id: MacroUserIdStr<'_>,
