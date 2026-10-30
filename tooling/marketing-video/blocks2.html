@@ -226,12 +226,15 @@ function modFace(k) {
     <div class="lbl" style="color:${p.fg}">${m.name}</div></div>`;
 }
 // the core's face: the mark, and a row of twelve LEDs (one per module) that light as the system locks
-function coreFace(id, s = 300) {
+function coreMarks(id, s) {
   const u = s / 300;
-  return `<div class="fc" style="width:${s}px;height:${s}px;border-radius:${22 * u}px;background:${faceBg(PAL.ink)};box-shadow:${ring(CORE / s)}">
-    <div class="a" style="left:${s / 2 - 62 * u}px;top:${s / 2 - 62 * u}px">${markSvg(124 * u, "#f2f1ec")}</div>
+  return `<div class="a" style="left:${s / 2 - 62 * u}px;top:${s / 2 - 62 * u}px">${markSvg(124 * u, "#f2f1ec")}</div>
     ${RING.map((_, i) => `<div class="a" style="left:${s / 2 + (i - 5.5) * 11 * u - 3 * u}px;top:${s / 2 + 58 * u}px;width:${6 * u}px;height:${6 * u}px;border-radius:50%;background:#ffffff1f"></div>
-      <div class="a"${id ? ` id="${id}${i}"` : ""} style="left:${s / 2 + (i - 5.5) * 11 * u - 3 * u}px;top:${s / 2 + 58 * u}px;width:${6 * u}px;height:${6 * u}px;border-radius:50%;background:#45e08c;box-shadow:0 0 ${8 * u}px ${2 * u}px #45e08c88;opacity:0"></div>`).join("")}</div>`;
+      <div class="a"${id ? ` id="${id}${i}"` : ""} style="left:${s / 2 + (i - 5.5) * 11 * u - 3 * u}px;top:${s / 2 + 58 * u}px;width:${6 * u}px;height:${6 * u}px;border-radius:50%;background:#45e08c;box-shadow:0 0 ${8 * u}px ${2 * u}px #45e08c88;opacity:0"></div>`).join("")}`;
+}
+function coreFace(id, s = 300) {
+  return `<div class="fc" style="width:${s}px;height:${s}px;border-radius:${(22 * s) / 300}px;background:${faceBg(PAL.ink)};box-shadow:${ring(CORE / s)}">
+    ${coreMarks(id, s)}</div>`;
 }
 function toolTile(id, key) {
   return `<div class="lt" id="${id}"><div class="sh" id="${id}_sh"></div><div class="fc" style="background:linear-gradient(172deg, #ffffff, #f9f8f4 45%);box-shadow:${ring(CS / 226)}">${logoSvg(key, 56, id)}</div></div>`;
@@ -279,7 +282,7 @@ function init() {
           <div class="a t1" style="left:120px;top:30px;font-size:30px;font-weight:600;color:#f2f1ec">Macro</div>
           <div class="a t1" style="left:120px;top:70px;font-size:20px;color:#ffffff8c">Every module</div>
           <div class="a t1 slab" style="right:34px;top:32px;font-size:54px;color:#f2f1ec">$40</div></div>
-        <div class="a" id="slM_core" style="left:0;top:0;width:800px;height:118px;opacity:0"></div></div></div>`);
+        <div class="a" id="slM_core" style="left:0;top:0;width:${CORE / sk}px;height:${CORE / sk}px;opacity:0">${coreMarks(null, CORE / sk)}</div></div></div>`);
     S.total = add(LF, `<div class="a flex" id="tot" style="left:${GX - 400 * sk}px;width:${800 * sk}px;top:0;height:60px;justify-content:space-between">
       <span class="cap" style="font-size:${15 * sk}px">Per seat, per month</span><span class="slab" id="totv" style="font-size:${52 * sk}px;font-variant-numeric:tabular-nums">$0</span></div>`);
     S.note = add(LF, `<div class="a t1" id="note" style="left:${GX - 400 * sk}px;top:0;font-size:${15 * sk}px;color:var(--lab)">Business plans, billed annually. List prices checked September 2026.</div>`);
@@ -415,8 +418,8 @@ function modsFx(t) {
   let P;
   if (REPLACE) P = drop(t, B(CORE_IN.t0), B(CORE_IN.th), B(CORE_IN.t1), CORE_FROM, [GX, GY], -8);
   else { const lt = B(S.coreLift), u = (t - lt) / (B(LOCK) - lt); P = { x: GX, y: GY, r: 0, s: 1, lift: t < lt ? 0 : t < B(LOCK) - 0.07 ? 0.7 * sm(u * 2.2) : t < B(LOCK) ? 0.7 * (1 - ((t - B(LOCK) + 0.07) / 0.07) ** 2) : 0 }; if (t >= B(LOCK)) P.s = 1 - 0.012 * Math.exp(-(t - B(LOCK)) / 0.06); }
-  // (price: the slab becomes the core; its mark fades in as the shape settles)
-  const mq = PRICE ? mj((t - B(S.morph[0])) / (B(S.morph[1]) - B(S.morph[0]))) : 1, on = REPLACE ? (t >= B(CORE_IN.t0) ? 1 : 0) : sm((mq - 0.8) / 0.2);
+  // (price: the slab becomes the core, and the core takes over the moment the morph is done)
+  const on = REPLACE ? (t >= B(CORE_IN.t0) ? 1 : 0) : PRICE ? (t >= B(S.morph[1]) ? 1 : 0) : 1;
   if (show(el, on)) { place(el, sh, P.x, P.y, P.r, P.s * cs, P.lift); if (PRICE) el.style.zIndex = "60"; E.m_core_gl.style.opacity = (0.16 * bell((t - B(LOCK) - 0.02) / 0.3)).toFixed(3); }
   for (let i = 0; i < 12; i++) E["cl" + i].style.opacity = t >= ledT(i) + 0.03 ? clamp((t - ledT(i) - 0.03) / 0.05).toFixed(3) : "0";
 }
@@ -477,24 +480,27 @@ function priceFx(t) {
   fx(E.note, 0.9 * (1 - sm((t - B(S.press[0])) / 0.3)), 0, `translate3d(0,${px(tb + 66 * sk)},0)`);
   // the Macro slab: lowers into view, hovers, presses, rests; then becomes the core at the grid's center
   const el = E.slM, mIn = B(S.mIn), mH = B(S.mHov), m0 = B(S.morph[0]), m1 = B(S.morph[1]);
-  if (t < mIn || t > m1 + 0.03) { show(el, 0); show(E.slM_sh, 0); return; }
+  if (t < mIn || t >= m1) { show(el, 0); show(E.slM_sh, 0); return; }
   const restTop = base - hgt, yRest = restTop - (SLH * sk) / 2 - SLL * sk;
   let y, lift = 0;
   if (t < mH) { const u = mj((t - mIn) / (mH - mIn)); y = lerp(yRest - 900, yRest - 70, u); lift = 1; }
   else if (t < p0) { const u = t - mH; y = yRest - 70 + 2.5 * Math.sin(u * 31) * Math.exp(-u / 0.6) + 1.2 * Math.sin(u * 53); lift = 1; }
   else if (pp < 1) { const v = clamp((t - p0) / 0.25); y = lerp(yRest - 70, yRest, sm(v)) + (v >= 1 ? 0.8 * Math.sin(t * 70) : 0); lift = 1 - sm(v); }
   else y = yRest;
-  // morph: slab → square core at (GX, GY)
+  // morph: slab → square core at (GX, GY). The slab keeps an even scale while its face changes size, so the ring,
+  // gradient and shadow keep their proportions; the core's mark fades in on it, and it ends exactly as the core.
   const q = t < m0 ? 0 : mj((t - m0) / (m1 - m0));
-  const w = lerp(SLW * sk, CORE, q), h = lerp(SLH * sk, CORE, q), cy = lerp(y, GY, q);
+  const w = lerp(SLW * sk, CORE, q), h = lerp(SLH * sk, CORE, q), cy = lerp(y, GY, q), R = lerp(22, (22 * CORE) / 300, q);
+  const sl = 1 + 0.04 * lift, fw = w / sk, fh = h / sk, cs = CORE / sk;
   show(el, 1);
-  el.style.transform = `translate3d(${px(GX - 400)},${px(cy - 59)},0) scale(${(w / SLW * (1 + 0.04 * lift)).toFixed(5)},${(h / SLH * (1 + 0.04 * lift)).toFixed(5)})`;
+  el.style.transform = `translate3d(${px(GX - 400)},${px(cy - 59)},0) scale(${(sk * sl).toFixed(5)})`;
   el.style.zIndex = "40";
-  const sl = 1 + 0.04 * lift, sw = w * sl, shh = h * sl;
-  if (show(E.slM_sh, 1 - sm((q - 0.8) / 0.2))) Object.assign(E.slM_sh.style, { width: px(sw), height: px(shh), borderRadius: px(lerp(22, (22 * CORE) / 300, q) * sl),
-    transform: `translate3d(${px(GX - sw / 2)},${px(cy - shh / 2)},0)`, boxShadow: shadow(lift * 0.9, 1) });
-  E.slM_in.style.opacity = String(1 - sm(q * 2.5));
-  E.slM_fc.style.borderRadius = `${lerp(22, (22 * CORE) / 300, q) * (SLW / w)}px / ${lerp(22, (22 * CORE) / 300, q) * (SLH / h)}px`;
+  Object.assign(E.slM_fc.style, { left: px(400 - fw / 2), top: px(59 - fh / 2), width: px(fw), height: px(fh), borderRadius: px(R / sk) });
+  fx(E.slM_in, 1 - sm(q * 2.5), 0, `translate3d(${px(fw / 2 - 400)},${px(fh / 2 - 59)},0)`);
+  fx(E.slM_core, sm((q - 0.6) / 0.4), 0, `translate3d(${px(fw / 2 - cs / 2)},${px(fh / 2 - cs / 2)},0)`);
+  const sw = w * sl, shh = h * sl;
+  show(E.slM_sh, 1);
+  Object.assign(E.slM_sh.style, { width: px(sw), height: px(shh), borderRadius: px(R * sl), transform: `translate3d(${px(GX - sw / 2)},${px(cy - shh / 2)},0)`, boxShadow: shadow(lift * 0.9, 1) });
 }
 
 // ----- swap: each tool flips into its module -----
