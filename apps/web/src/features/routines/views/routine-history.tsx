@@ -11,6 +11,7 @@ import {
   Suspense,
 } from 'solid-js';
 
+import { RunDetail } from '../components/routine-run-detail';
 import type {
   HistoryRecord,
   HistoryResource,
@@ -39,6 +40,8 @@ type HistoryRowProps = {
   resource?: HistoryResource;
   metadata: HistoryMetadata;
   onOpen?: (resource: HistoryResource, newSplit: boolean) => void;
+  /** Shows what a run without a session did, step by step. */
+  onSelect?: () => void;
 };
 
 function RunOutcome(props: { record: HistoryRecord }) {
@@ -105,7 +108,18 @@ function HistoryRow(props: HistoryRowProps): JSX.Element {
       fallback={
         <div
           role="listitem"
-          class="soup-list-entity mx-1 flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm text-ink-muted"
+          tabIndex={props.onSelect ? 0 : undefined}
+          class={cn(
+            'soup-list-entity mx-1 flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm text-ink-muted outline-none',
+            props.onSelect &&
+              'hover:bg-list-hover focus-visible:bg-list-highlighted'
+          )}
+          onClick={() => props.onSelect?.()}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' || !props.onSelect) return;
+            event.preventDefault();
+            props.onSelect();
+          }}
         >
           <span class="size-4 shrink-0">
             <EntityIcon
@@ -252,6 +266,7 @@ function skipRuns(records: readonly HistoryRecord[]) {
 function StepsSummary(props: {
   record: HistoryRecord;
   describe: (step: HistoryStep) => string;
+  onSelect: () => void;
 }) {
   const failed = (step: HistoryStep) =>
     (step.kind === 'tool' || step.kind === 'agent') && Boolean(step.error);
@@ -264,7 +279,12 @@ function StepsSummary(props: {
     );
   return (
     <Show when={informative()}>
-      <p class="mx-1 -mt-1 mb-1 flex min-w-0 flex-wrap gap-x-1.5 pl-9 pr-2 text-xs text-ink-muted">
+      <button
+        type="button"
+        aria-label="Show run details"
+        class="mx-1 -mt-1 mb-1 flex min-w-0 flex-wrap gap-x-1.5 rounded-lg pl-9 pr-2 text-left text-xs text-ink-muted outline-none hover:text-ink focus-visible:underline"
+        onClick={() => props.onSelect()}
+      >
         <For each={props.record.steps ?? []}>
           {(step, index) => (
             <span class={cn('min-w-0', failed(step) && 'text-failure')}>
@@ -282,7 +302,7 @@ function StepsSummary(props: {
         >
           <span class="min-w-0 text-failure">{props.record.error}</span>
         </Show>
-      </p>
+      </button>
     </Show>
   );
 }
@@ -290,13 +310,22 @@ function StepsSummary(props: {
 function ResolvedHistoryRow(props: {
   record: HistoryRecord;
   history: RoutineHistoryProps;
+  onSelect: () => void;
 }): JSX.Element {
   return (
     <>
-      <ResourceOrRunRow record={props.record} history={props.history} />
+      <ResourceOrRunRow
+        record={props.record}
+        history={props.history}
+        onSelect={props.onSelect}
+      />
       <Show when={props.history.describeStep}>
         {(describe) => (
-          <StepsSummary record={props.record} describe={describe()} />
+          <StepsSummary
+            record={props.record}
+            describe={describe()}
+            onSelect={props.onSelect}
+          />
         )}
       </Show>
     </>
@@ -306,6 +335,7 @@ function ResolvedHistoryRow(props: {
 function ResourceOrRunRow(props: {
   record: HistoryRecord;
   history: RoutineHistoryProps;
+  onSelect: () => void;
 }): JSX.Element {
   const resource = createMemo(() => props.record.resource);
   return (
@@ -316,6 +346,7 @@ function ResourceOrRunRow(props: {
         <HistoryRow
           record={props.record}
           metadata={{ status: 'unavailable' }}
+          onSelect={props.record.steps?.length ? props.onSelect : undefined}
         />
       }
     >
@@ -346,6 +377,9 @@ function ResourceOrRunRow(props: {
 }
 
 export function RoutineHistory(props: RoutineHistoryProps): JSX.Element {
+  const [selectedId, setSelectedId] = createSignal<string>();
+  const selected = () =>
+    props.records.find((record) => record.id && record.id === selectedId());
   const [visibleCount, setVisibleCount] = createSignal(50);
   const [listElement, setListElement] = createSignal<HTMLDivElement>();
   const visibleRecords = createMemo(() =>
@@ -364,66 +398,100 @@ export function RoutineHistory(props: RoutineHistoryProps): JSX.Element {
     });
   };
   return (
-    <div ref={setListElement} class="min-h-0 flex-1 overflow-y-auto py-3">
-      <Show
-        when={props.records.length > 0}
-        fallback={
-          <div
-            role="status"
-            class="px-4 py-16 text-center text-sm text-ink-muted"
-          >
-            {props.isPending ? 'Loading…' : 'No runs yet.'}
-          </div>
-        }
+    <div class="@container/runs flex min-h-0 flex-1">
+      <div
+        ref={setListElement}
+        class={cn(
+          'min-h-0 flex-1 overflow-y-auto py-3',
+          selected() && '@max-[720px]/runs:hidden'
+        )}
       >
-        <ListLayoutProvider ref={listElement}>
-          <div role="list" aria-label="Routine runs">
-            <For each={visibleRecords()}>
-              {(record) => (
-                <Show
-                  when={record.skipped}
-                  fallback={
-                    <ResolvedHistoryRow record={record} history={props} />
-                  }
-                >
-                  {(skip) => {
-                    const run = () => runs().get(record);
-                    const grouped = () => (run()?.length ?? 1) > 1;
-                    const first = () => run()?.first === record;
-                    const open = () => {
-                      const id = run()?.first.id;
-                      return !!id && expanded().has(id);
-                    };
-                    return (
-                      <>
-                        <Show when={grouped() && first()}>
-                          <SkippedGroupToggle
-                            count={run()?.length ?? 0}
-                            open={open()}
-                            onToggle={() => toggle(run()?.first)}
-                          />
-                        </Show>
-                        <Show when={!grouped() || open()}>
-                          <SkippedRow record={record} skip={skip()} />
-                        </Show>
-                      </>
-                    );
-                  }}
-                </Show>
-              )}
-            </For>
-          </div>
-        </ListLayoutProvider>
-        <Show when={props.records.length > visibleCount()}>
-          <div class="flex justify-center p-3">
-            <Button
-              variant="secondary"
-              onClick={() => setVisibleCount((count) => count + 50)}
+        <Show
+          when={props.records.length > 0}
+          fallback={
+            <div
+              role="status"
+              class="px-4 py-16 text-center text-sm text-ink-muted"
             >
-              Load more runs
-            </Button>
-          </div>
+              {props.isPending ? 'Loading…' : 'No runs yet.'}
+            </div>
+          }
+        >
+          <ListLayoutProvider ref={listElement}>
+            <div role="list" aria-label="Routine runs">
+              <For each={visibleRecords()}>
+                {(record) => (
+                  <Show
+                    when={record.skipped}
+                    fallback={
+                      <ResolvedHistoryRow
+                        record={record}
+                        history={props}
+                        onSelect={() => setSelectedId(record.id ?? undefined)}
+                      />
+                    }
+                  >
+                    {(skip) => {
+                      const run = () => runs().get(record);
+                      const grouped = () => (run()?.length ?? 1) > 1;
+                      const first = () => run()?.first === record;
+                      const open = () => {
+                        const id = run()?.first.id;
+                        return !!id && expanded().has(id);
+                      };
+                      return (
+                        <>
+                          <Show when={grouped() && first()}>
+                            <SkippedGroupToggle
+                              count={run()?.length ?? 0}
+                              open={open()}
+                              onToggle={() => toggle(run()?.first)}
+                            />
+                          </Show>
+                          <Show when={!grouped() || open()}>
+                            <SkippedRow record={record} skip={skip()} />
+                          </Show>
+                        </>
+                      );
+                    }}
+                  </Show>
+                )}
+              </For>
+            </div>
+          </ListLayoutProvider>
+          <Show when={props.records.length > visibleCount()}>
+            <div class="flex justify-center p-3">
+              <Button
+                variant="secondary"
+                onClick={() => setVisibleCount((count) => count + 50)}
+              >
+                Load more runs
+              </Button>
+            </div>
+          </Show>
         </Show>
+      </div>
+      <Show when={selected()}>
+        {(record) => {
+          const resource = () => record().resource;
+          return (
+            <aside class="min-h-0 w-96 shrink-0 overflow-y-auto border-l border-edge-muted @max-[720px]/runs:w-full @max-[720px]/runs:border-l-0">
+              <RunDetail
+                record={record()}
+                describe={(step) => props.describeStep?.(step) ?? step.kind}
+                onOpenConversation={
+                  resource()
+                    ? () => {
+                        const target = resource();
+                        if (target) props.onOpen(target, false);
+                      }
+                    : undefined
+                }
+                onClose={() => setSelectedId(undefined)}
+              />
+            </aside>
+          );
+        }}
       </Show>
     </div>
   );

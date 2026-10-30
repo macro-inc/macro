@@ -414,5 +414,14 @@ describe('routine history steps', () => {
       'text-failure'
     );
     expect(screen.queryByText('Asked AI')).toBeNull();
+
+    fireEvent.click(screen.getByText('Ran steps'));
+    const details = within(screen.getByRole('region', { name: 'Run details' }));
+    expect(details.getByText('Failed run')).toBeTruthy();
+    expect(details.getByText('Chose Invoice')).toBeTruthy();
+    expect(details.getByText('90%')).toBeTruthy();
+    expect(details.getByText('SendChannelMessage failed')).toBeTruthy();
+    fireEvent.click(details.getByRole('button', { name: 'Close run details' }));
+    expect(screen.queryByRole('region', { name: 'Run details' })).toBeNull();
   });
 });
