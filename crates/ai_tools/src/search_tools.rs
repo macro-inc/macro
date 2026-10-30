@@ -1,34 +1,16 @@
+use ai_toolset::tool_search::{LoadToolsResponse, SearchToolsResponse, ToolMatch};
 use ai_toolset::{
     AsyncTool, RequestContext, SearchableTool, ServiceContext, ToolLoader, ToolResult,
 };
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::ToolServiceContext;
 
 #[cfg(test)]
 mod test;
-
-/// A tool surfaced by [`SearchTools`] / [`LoadTools`] — just enough for the
-/// model to decide how to call it.
-#[derive(Debug, Serialize, JsonSchema)]
-pub struct ToolMatch {
-    /// The exact name to call the tool by.
-    pub name: String,
-    /// What the tool does.
-    pub description: String,
-}
-
-impl ToolMatch {
-    fn of(tool: &SearchableTool) -> Self {
-        Self {
-            name: tool.name.clone(),
-            description: tool.description.clone(),
-        }
-    }
-}
 
 // ---------------------------------------------------------------------------
 // SearchTools — discovery + auto-loading
@@ -43,19 +25,6 @@ impl ToolMatch {
 /// Matches past the cap are still returned (as `additional_matches`) and can
 /// be loaded explicitly with [`LoadTools`].
 const MAX_AUTO_LOADED_MATCHES: usize = 8;
-
-/// Response from [`SearchTools`]: ranked matches, split into the top matches
-/// (auto-loaded, callable on the next model turn) and the remainder (loadable
-/// via [`LoadTools`]).
-#[derive(Debug, Serialize, JsonSchema)]
-pub struct SearchToolsResponse {
-    /// Top matches, ranked by relevance. These are loaded: call them by exact
-    /// name on the next step.
-    pub results: Vec<ToolMatch>,
-    /// Matches past the auto-load cap, ranked. Not callable yet — pass a name
-    /// to `LoadTools` if one of these is the tool you need.
-    pub additional_matches: Vec<ToolMatch>,
-}
 
 /// `SearchTools` discovers tools from connected integrations (MCP servers such
 /// as Slack, Gmail, Linear) that are not listed upfront, and auto-loads the top
@@ -102,16 +71,6 @@ impl AsyncTool<ToolServiceContext> for SearchTools {
 // ---------------------------------------------------------------------------
 // LoadTools — load named tools so they become callable
 // ---------------------------------------------------------------------------
-
-/// Response from [`LoadTools`]: which requested tools were loaded, and any names
-/// that weren't found.
-#[derive(Debug, Serialize, JsonSchema)]
-pub struct LoadToolsResponse {
-    /// Tools that are now loaded and callable by name.
-    pub loaded: Vec<ToolMatch>,
-    /// Requested names that don't exist (call `SearchTools` to find valid names).
-    pub not_found: Vec<String>,
-}
 
 /// `LoadTools` loads tools discovered via `SearchTools` so they become callable.
 /// Pass the exact names from the search results; after loading, call each tool

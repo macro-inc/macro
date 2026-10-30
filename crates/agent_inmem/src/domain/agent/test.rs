@@ -56,6 +56,41 @@ impl TurnEngine for CancelledEngine {
     }
 }
 
+/// A turn whose model spoke, thought, then called a tool the loop refused.
+struct UnknownToolEngine;
+
+impl TurnEngine for UnknownToolEngine {
+    fn supported_models(&self) -> &[&str] {
+        crate::testing::TEST_MODELS
+    }
+
+    fn run_turn(
+        &self,
+        _request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        let (parts, receiver) = tokio::sync::mpsc::channel(3);
+        tokio::spawn(async move {
+            let _ = parts
+                .send(Ok(StreamPart::Content(
+                    "I'm checking your access on that project.".into(),
+                )))
+                .await;
+            let _ = parts
+                .send(Ok(StreamPart::Thinking("Read the project next.".into())))
+                .await;
+            let unknown = PromptError::UnknownToolCall {
+                tool_name: "ReadInitiative".to_owned(),
+                available_tools: vec!["LoadTools".to_owned()],
+                allowed_tools: vec!["LoadTools".to_owned()],
+                chat_history: Box::default(),
+            };
+            let error = agent::AgentError::Streaming(StreamingError::Prompt(Box::new(unknown)));
+            let _ = parts.send(Err(error)).await;
+        });
+        receiver
+    }
+}
+
 /// Drive the served agent as a scripted ACP client: initialize, open a
 /// session, then hand the connection to `scenario`.
 async fn with_agent<Engine, Out>(
@@ -1705,6 +1740,30 @@ async fn engine_cancellation_is_not_rendered_as_an_error_message() {
     );
 }
 
+/// A failed turn's reply is what a channel thread posts, so it says the turn
+/// failed in words; the raw error is the prompt's.
+#[tokio::test]
+async fn a_failed_turn_says_so_without_the_raw_error() {
+    let (notifications, _config_options, response) =
+        with_agent(Arc::new(UnknownToolEngine), async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "link these tasks"))
+                .block_task()
+                .await
+        })
+        .await;
+
+    assert_eq!(
+        spoken(&notifications),
+        format!("I'm checking your access on that project.\n\n{TURN_FAILED_REPLY}")
+    );
+    let error = response.expect_err("the turn failed");
+    assert!(
+        format!("{error:?}").contains("UnknownToolCall"),
+        "{error:?}"
+    );
+}
+
 #[tokio::test]
 async fn a_prompt_for_an_unknown_session_is_refused() {
     let engine = Arc::new(ScriptedEngine::new(vec![]));
@@ -2570,11 +2629,7 @@ async fn a_silent_turn_with_no_question_out_is_stopped_by_the_idle_timeout() {
             || format!("{error:?}").contains("produced nothing"),
         "got {error:?}"
     );
-    assert!(
-        spoken(&notifications).contains("produced nothing"),
-        "got {:?}",
-        spoken(&notifications)
-    );
+    assert_eq!(spoken(&notifications), TURN_FAILED_REPLY);
 }
 
 /// An engine whose turn waits on a person for twice the idle timeout - the

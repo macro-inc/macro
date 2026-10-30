@@ -75,6 +75,10 @@ pub(crate) mod compaction;
 /// a stop, or the connection going away.
 const TURN_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
+/// What a failed turn says to the person it answers, wherever its reply is
+/// read. The failure itself goes to the prompt's error, not to them.
+const TURN_FAILED_REPLY: &str = "I ran into an error and stopped before finishing.";
+
 /// Whole milliseconds since `started`, saturating; a span field, not a clock.
 fn elapsed_ms(started: Instant) -> u64 {
     u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
@@ -1121,12 +1125,22 @@ async fn run_turn(
             )),
         ));
     }
-    if let Some(failure) = &failure {
+    // The turn's text is the reply a channel thread reads, so it says the
+    // turn failed and leaves why to the prompt's error.
+    if failure.is_some() {
+        // Readers join a turn's text chunks, so set this apart from any
+        // text the turn already said.
+        let said_something = turn_parts
+            .iter()
+            .any(|part| matches!(part, AssistantMessagePart::Text { .. }));
+        let reply = if said_something {
+            format!("\n\n{TURN_FAILED_REPLY}")
+        } else {
+            TURN_FAILED_REPLY.to_owned()
+        };
         let _ = connection.send_notification(SessionNotification::new(
             acp_session_id.clone(),
-            SessionUpdate::AgentMessageChunk(ContentChunk::new(
-                format!("The agent stopped on an error: {failure}").into(),
-            )),
+            SessionUpdate::AgentMessageChunk(ContentChunk::new(reply.into())),
         ));
     }
     state.push_turn(request_id, prompt, turn_parts);

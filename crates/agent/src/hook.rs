@@ -105,6 +105,12 @@ impl ToolLoads {
         });
     }
 
+    /// Records that the call `call_id` loaded `tools`, as an earlier turn's
+    /// history shows it.
+    pub(crate) fn record_call(&self, call_id: &str, tools: &[SearchableTool]) {
+        self.record(LoadingCall::Id(call_id.to_owned()), tools);
+    }
+
     /// The tools `call` loaded.
     pub(crate) fn loaded_by(&self, call: &rig_core::message::ToolCall) -> Vec<String> {
         self.0
