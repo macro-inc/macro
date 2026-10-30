@@ -10,7 +10,7 @@ inbound HTTP tracing for Macro Connect services.
 - `src/config.rs`: one environment snapshot and `APP_SECRETS_JSON` precedence.
 - `src/lib.rs`: default AWS SDK config loading.
 - `src/telemetry.rs`: tracing subscriber and optional OTLP export.
-- `src/http.rs`: request spans and W3C parent extraction.
+- `src/http.rs`: request spans, W3C parent extraction, and outbound trace header injection.
 
 ## Scope
 
@@ -20,7 +20,7 @@ inbound HTTP tracing for Macro Connect services.
 ## Boundaries
 
 - Depends on: third-party crates and generated `workspace-hack` only.
-- Used by: `connect_api` and future Connect services.
+- Used by: `connect_api`, `connect_client`, and future Connect services.
 
 ## Recipes
 

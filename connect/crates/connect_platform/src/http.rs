@@ -1,11 +1,20 @@
-use http::Request;
+use http::{HeaderMap, Request};
+use opentelemetry::global;
 use opentelemetry::trace::TraceContextExt as _;
+use opentelemetry_http::HeaderInjector;
 use tower_http::{
     classify::{ServerErrorsAsFailures, SharedClassifier},
     trace::{MakeSpan, TraceLayer},
 };
 use tracing::Span;
 use tracing_opentelemetry::OpenTelemetrySpanExt as _;
+
+/// Inject the current span's W3C trace context into outbound HTTP headers.
+pub fn inject_trace_headers(headers: &mut HeaderMap) {
+    global::get_text_map_propagator(|propagator| {
+        propagator.inject_context(&Span::current().context(), &mut HeaderInjector(headers));
+    });
+}
 
 /// Build a request tracing layer that adopts an inbound W3C `traceparent`.
 pub fn http_trace_layer() -> TraceLayer<SharedClassifier<ServerErrorsAsFailures>, RequestSpan> {

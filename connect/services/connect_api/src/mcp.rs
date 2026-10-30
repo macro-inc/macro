@@ -8,20 +8,13 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use bytes::Bytes;
+use connect_client::wire::McpErrorResponse;
 use futures::StreamExt as _;
-use serde::Serialize;
-use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{AppState, domain::Error};
 
 const RETRY_BODY_LIMIT: usize = 1024 * 1024;
-
-#[derive(Serialize, ToSchema)]
-pub struct McpErrorResponse {
-    error: String,
-    app_id: String,
-}
 
 fn error(status: StatusCode, code: &'static str, app_id: &str) -> Response {
     (

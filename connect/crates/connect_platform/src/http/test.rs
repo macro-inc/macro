@@ -26,5 +26,16 @@ fn adopts_remote_traceparent() {
             span.context().span().span_context().trace_id().to_string(),
             "5b8aa5a2d2c872e8321cf37308d69df2"
         );
+        let _entered = span.enter();
+        let mut outbound = http::HeaderMap::new();
+        inject_trace_headers(&mut outbound);
+        assert!(
+            outbound
+                .get("traceparent")
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .starts_with("00-5b8aa5a2d2c872e8321cf37308d69df2-")
+        );
     });
 }

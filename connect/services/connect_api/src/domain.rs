@@ -61,8 +61,7 @@ impl std::ops::Deref for CustomerApiKey {
     }
 }
 
-#[derive(Clone, Debug, Serialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug)]
 pub struct Connection {
     pub app_id: String,
     pub status: ConnectionStatus,
@@ -70,8 +69,7 @@ pub struct Connection {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, utoipa::ToSchema, strum::EnumString, strum::Display)]
-#[serde(rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug, strum::EnumString, strum::Display)]
 #[strum(serialize_all = "snake_case")]
 pub enum ConnectionStatus {
     Active,

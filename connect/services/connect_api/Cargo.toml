@@ -14,6 +14,7 @@ base64 = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
+connect_client = { path = "../../crates/connect_client" }
 connect_platform = { path = "../../crates/connect_platform" }
 connect_registry = { path = "../../crates/connect_registry" }
 futures = { workspace = true }

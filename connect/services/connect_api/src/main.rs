@@ -15,24 +15,26 @@ use axum::{
     routing::{get, post},
 };
 use clap::{Parser, Subcommand};
+use connect_client::wire::{
+    CatalogEntry, ConnectSessionRequest, ConnectSessionResponse, Connection, ConnectionStatus,
+    DeleteResponse, ErrorResponse, McpErrorResponse, TokenResponse,
+};
 use connect_platform::{ConfigLoader, Telemetry, http_trace_layer, load_aws_config};
 use connect_registry::{Access, App, ClientRegistration, Status, all_apps};
 use domain::oauth::{
-    Client, ConnectSessionResponse, OAuthService, set_redirect_origins as update_redirect_origins,
-    validate_origin,
+    Client, OAuthService, set_redirect_origins as update_redirect_origins, validate_origin,
 };
-use domain::{Connection, ConnectionStatus, Error, GrantCipher, Service};
+use domain::{ConnectionStatus as DomainConnectionStatus, Error, GrantCipher, Service};
 use outbound::{EnvelopeCipher, KmsKeyWrapper, LocalKeyWrapper, MIGRATOR, PostgresRepository};
 use outbound::{mcp::VendorMcp, oauth::VendorOAuth};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use sqlx::postgres::PgPoolOptions;
 use std::{collections::HashMap, sync::Arc};
 use tokio::net::TcpListener;
 use utoipa::{
-    Modify, OpenApi, ToSchema,
+    Modify, OpenApi,
     openapi::security::{Http, HttpAuthScheme, SecurityScheme},
 };
-use zeroize::Zeroize as _;
 
 struct Config {
     port: u16,
@@ -109,50 +111,6 @@ fn load_own_apps(
     Ok(clients)
 }
 
-#[derive(Serialize, ToSchema)]
-struct CatalogEntry {
-    id: String,
-    name: String,
-    description: String,
-    access: Vec<String>,
-    mcp_url: String,
-    icon_url: Option<String>,
-}
-
-#[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-struct TokenResponse {
-    access_token: String,
-    expires_at: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-impl Drop for TokenResponse {
-    fn drop(&mut self) {
-        self.access_token.zeroize();
-    }
-}
-
-#[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-struct DeleteResponse {
-    vendor_grant_revoked: bool,
-}
-
-#[derive(Serialize, ToSchema)]
-struct ErrorResponse {
-    error: &'static str,
-}
-
-#[derive(Deserialize, ToSchema)]
-struct ConnectSessionRequest {
-    #[serde(alias = "externalUserId")]
-    external_user_id: String,
-    #[serde(alias = "appId")]
-    app_id: String,
-    #[serde(alias = "redirectUrl")]
-    redirect_url: String,
-}
-
 #[derive(Deserialize)]
 struct CallbackQuery {
     state: String,
@@ -215,7 +173,7 @@ impl Modify for SecurityAddon {
         oauth_callback,
         mcp::proxy
     ),
-    components(schemas(CatalogEntry, Connection, ConnectionStatus, TokenResponse, DeleteResponse, ErrorResponse, mcp::McpErrorResponse, ConnectSessionRequest, ConnectSessionResponse)),
+    components(schemas(CatalogEntry, Connection, ConnectionStatus, TokenResponse, DeleteResponse, ErrorResponse, McpErrorResponse, ConnectSessionRequest, ConnectSessionResponse)),
     modifiers(&SecurityAddon)
 )]
 struct ApiDoc;
@@ -298,7 +256,12 @@ async fn create_connect_session(
             request.redirect_url,
         )
         .await
-        .map(Json)
+        .map(|session| {
+            Json(ConnectSessionResponse {
+                connect_url: session.connect_url,
+                expires_at: session.expires_at,
+            })
+        })
         .map_err(api_error)
 }
 
@@ -374,7 +337,12 @@ fn api_error(error: Error) -> (StatusCode, Json<ErrorResponse>) {
         Error::OAuth => (StatusCode::BAD_GATEWAY, "oauth_failed"),
         Error::Storage(_) | Error::Cipher => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error"),
     };
-    (status, Json(ErrorResponse { error: code }))
+    (
+        status,
+        Json(ErrorResponse {
+            error: code.to_owned(),
+        }),
+    )
 }
 
 #[utoipa::path(get, path = "/v1/users/{external_user_id}/connections", params(("external_user_id" = String, Path)), responses((status = 200, body = [Connection]), (status = 401)), security(("customer_key" = [])))]
@@ -387,7 +355,22 @@ async fn list_connections(
         .service
         .list(customer_id, &user_id)
         .await
-        .map(Json)
+        .map(|connections| {
+            Json(
+                connections
+                    .into_iter()
+                    .map(|connection| Connection {
+                        app_id: connection.app_id,
+                        status: match connection.status {
+                            DomainConnectionStatus::Active => ConnectionStatus::Active,
+                            DomainConnectionStatus::NeedsReauth => ConnectionStatus::NeedsReauth,
+                        },
+                        scopes: connection.scopes,
+                        created_at: connection.created_at,
+                    })
+                    .collect(),
+            )
+        })
         .map_err(api_error)
 }
 

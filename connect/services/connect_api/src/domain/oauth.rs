@@ -4,7 +4,6 @@ use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Duration, Utc};
 use connect_registry::{App, ClientRegistration, Status};
 use rand::RngCore as _;
-use serde::Serialize;
 use url::Url;
 use uuid::Uuid;
 use zeroize::Zeroizing;
@@ -174,8 +173,7 @@ pub enum RefreshError {
     Other(Error),
 }
 
-#[derive(Serialize, utoipa::ToSchema)]
-pub struct ConnectSessionResponse {
+pub struct CreatedSession {
     pub connect_url: String,
     pub expires_at: DateTime<Utc>,
 }
@@ -243,7 +241,7 @@ impl OAuthService {
         user_id: String,
         app_id: String,
         redirect_url: String,
-    ) -> Result<ConnectSessionResponse, Error> {
+    ) -> Result<CreatedSession, Error> {
         tracing::Span::current().record("outcome", "error");
         let app = self.app(&app_id)?;
         tracing::Span::current().record(
@@ -282,7 +280,7 @@ impl OAuthService {
         };
         self.repository.create_session(&session).await?;
         tracing::Span::current().record("outcome", "created");
-        Ok(ConnectSessionResponse {
+        Ok(CreatedSession {
             connect_url: self.route_url(&format!("/v1/connect/{}", session.token)),
             expires_at: session.expires_at,
         })

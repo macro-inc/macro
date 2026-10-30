@@ -8,7 +8,7 @@ grants in Connect's own Postgres database.
 
 ## Start here
 
-- `src/main.rs`: router, customer auth middleware, catalog response, OpenAPI, CLI, and startup.
+- `src/main.rs`: router, customer auth middleware, catalog response, OpenAPI, CLI, and startup. Customer-facing wire types come from `connect_client::wire`.
 - `src/mcp.rs`: customer-authenticated MCP gateway, streaming response, and retry handling.
 - `src/domain.rs` and `src/domain/oauth.rs`: connection and OAuth use cases,
   redirect-origin policy, grant cipher, and repository ports.
@@ -26,7 +26,7 @@ grants in Connect's own Postgres database.
 
 ## Boundaries
 
-- Depends on: `connect_registry`, `connect_platform`, third-party crates, and generated `workspace-hack`.
+- Depends on: `connect_registry`, `connect_platform`, `connect_client::wire`, third-party crates, and generated `workspace-hack`.
 - Used by: public HTTP clients.
 
 ## Recipes

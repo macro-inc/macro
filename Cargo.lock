@@ -4878,6 +4878,7 @@ dependencies = [
  "bytes",
  "chrono",
  "clap",
+ "connect_client",
  "connect_platform",
  "connect_registry",
  "futures",
@@ -4903,6 +4904,44 @@ dependencies = [
  "utoipa",
  "uuid",
  "wiremock",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
+name = "connect_client"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "connect_platform",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "url",
+ "utoipa",
+ "wiremock",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
+name = "connect_integration"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "connect_client",
+ "connect_registry",
+ "reqwest 0.13.4",
+ "rmcp",
+ "serde_json",
+ "tokio",
+ "url",
+ "uuid",
  "workspace-hack",
  "zeroize",
 ]
