@@ -16036,6 +16036,8 @@ export interface UpdateSharingResponse {
  * - Report spam: add `SPAM` (add=true) / Not spam: remove (add=false)
  * - Apply custom user label: add the label with that display name (add=true) / Remove: (add=false)
  *
+ * In an Outlook inbox the same system label names set the matching mailbox state (archive, read, flag, trash, junk); IMPORTANT has no Outlook equivalent, and other names are Outlook categories.
+ *
  * `thread_id` is the email thread UUID (the same id returned by ListEntities, search results, or GetThread). `label_id` is the UUID returned by ListLabels — NOT the label name; pass a name in `label` instead.
  */
 export interface UpdateThreadLabels {

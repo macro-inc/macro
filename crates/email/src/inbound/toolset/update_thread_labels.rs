@@ -1,6 +1,6 @@
 //! UpdateThreadLabels tool for adding or removing a label from all messages in a thread.
 
-use crate::domain::models::LinkLabel;
+use crate::domain::models::{LinkLabel, UserProvider, mailbox_action::MailboxAction};
 use crate::domain::ports::{EmailService, GmailTokenProvider};
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
@@ -41,6 +41,9 @@ Common operations:\n\
 - Report spam: add `SPAM` (add=true) / Not spam: remove (add=false)\n\
 - Apply custom user label: add the label with that display name (add=true) / Remove: (add=false)\n\
 \n\
+In an Outlook inbox the same system label names set the matching mailbox state (archive, read, \
+flag, trash, junk); IMPORTANT has no Outlook equivalent, and other names are Outlook categories.\n\
+\n\
 `thread_id` is the email thread UUID (the same id returned by ListEntities, search results, \
 or GetThread). `label_id` is the UUID returned by ListLabels — NOT the label name; pass a \
 name in `label` instead."
@@ -56,6 +59,44 @@ pub struct UpdateThreadLabels {
     pub label: Option<String>,
     /// Whether to add (true) or remove (false) the label from every message in the thread.
     pub add: bool,
+}
+
+/// The Outlook mailbox state a system label stands for: `None` for other
+/// labels (Outlook categories), an error for one Outlook has no equivalent of.
+pub(crate) fn outlook_mailbox_state(
+    label: &str,
+    add: bool,
+) -> Option<Result<MailboxAction, ToolCallError>> {
+    let state = match label.trim().to_ascii_uppercase().as_str() {
+        "INBOX" => MailboxAction::Archived(!add),
+        "UNREAD" => MailboxAction::Read(!add),
+        "STARRED" => MailboxAction::Flagged(add),
+        "TRASH" => MailboxAction::Trashed(add),
+        "SPAM" => MailboxAction::Junk(add),
+        "IMPORTANT" => {
+            return Some(Err(ToolCallError {
+                description: "Outlook has no Important label; flag the email instead.".into(),
+                internal_error: anyhow::anyhow!("IMPORTANT on an Outlook thread"),
+            }));
+        }
+        _ => return None,
+    };
+    Some(Ok(state))
+}
+
+/// What setting a system label did, for the tool's summary.
+fn outlook_done(label: &str, add: bool) -> &'static str {
+    match (label.trim().to_ascii_uppercase().as_str(), add) {
+        ("INBOX", false) => "Archived",
+        ("INBOX", true) => "Moved back to the inbox",
+        ("UNREAD", false) => "Marked as read",
+        ("UNREAD", true) => "Marked as unread",
+        ("STARRED", true) => "Flagged",
+        ("STARRED", false) => "Unflagged",
+        ("TRASH", true) => "Moved to trash",
+        ("SPAM", true) => "Moved to junk",
+        _ => "Updated",
+    }
 }
 
 /// Response from the UpdateThreadLabels tool.
@@ -114,6 +155,32 @@ where
                 description: "No accessible inbox owns this thread.".to_string(),
                 internal_error: anyhow::anyhow!("no owned link for thread"),
             })?;
+
+        // Outlook has no system labels: archive, read, flag, trash and junk
+        // are mailbox states there, so set the state instead.
+        if link.provider == UserProvider::Outlook
+            && let Some(name) = self.label.as_deref()
+            && let Some(state) = outlook_mailbox_state(name, self.add)
+        {
+            let action = state?;
+            service_context
+                .service
+                .change_thread_mailbox_state(
+                    MacroUserIdStr((*request_context.user_id).clone()),
+                    self.thread_id,
+                    action,
+                )
+                .await
+                .map_err(|e| ToolCallError {
+                    description: format!("Failed to update the thread: {e}"),
+                    internal_error: e.into(),
+                })?;
+            return Ok(UpdateThreadLabelsResponse {
+                successful_count: 1,
+                failed_count: 0,
+                summary: format!("{} the thread.", outlook_done(name, self.add)),
+            });
+        }
 
         let label_id = match (self.label_id, self.label.as_deref()) {
             (Some(id), None) => id,

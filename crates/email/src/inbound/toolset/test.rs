@@ -270,3 +270,34 @@ fn leading_whitespace_before_the_tag_still_counts_as_html() {
 
     assert!(decode_composer_html(&encoded).is_some());
 }
+
+#[test]
+fn outlook_system_labels_become_mailbox_states() {
+    use crate::domain::models::mailbox_action::MailboxAction;
+    use crate::inbound::toolset::update_thread_labels::outlook_mailbox_state;
+
+    let state = |label: &str, add: bool| outlook_mailbox_state(label, add).map(|r| r.ok());
+    assert!(matches!(
+        state("INBOX", false),
+        Some(Some(MailboxAction::Archived(true)))
+    ));
+    assert!(matches!(
+        state("unread", false),
+        Some(Some(MailboxAction::Read(true)))
+    ));
+    assert!(matches!(
+        state("STARRED", true),
+        Some(Some(MailboxAction::Flagged(true)))
+    ));
+    assert!(matches!(
+        state("SPAM", true),
+        Some(Some(MailboxAction::Junk(true)))
+    ));
+    // No Outlook equivalent: a clear failure, not "no label named".
+    assert!(matches!(
+        outlook_mailbox_state("IMPORTANT", true),
+        Some(Err(_))
+    ));
+    // Anything else is an Outlook category, labelled as before.
+    assert!(outlook_mailbox_state("Finance", true).is_none());
+}
