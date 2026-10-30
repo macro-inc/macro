@@ -173,3 +173,29 @@ it('does not show the previous document grant rows while the new document is pen
   expect(source.grants()).toEqual([]);
   pending.resolve([]);
 });
+
+it('drops a grants failure from before the viewer lost access', async () => {
+  const failed = Promise.withResolvers<void>();
+  mocks.grants.mockImplementation(() => {
+    failed.resolve();
+    return errAsync([{ code: 'FORBIDDEN', message: 'no access' }]);
+  });
+  const { source, update } = mount({ accessLevel: 'comment' });
+  await failed.promise;
+  await vi.waitFor(() =>
+    expect(source.error()).toBe('Could not load access requests.')
+  );
+  update('accessLevel', null);
+  expect(source.error()).toBeUndefined();
+  await source.refresh();
+  expect(mocks.grants).toHaveBeenCalledOnce();
+  expect(source.error()).toBeUndefined();
+});
+
+it('keeps loading while a new mount refetches a cached state', () => {
+  const { source } = mount({ accessLevel: 'view' });
+  Object.assign(snapshot, { isFetching: true, isFetchedAfterMount: false });
+  expect(source.loading()).toBe(true);
+  Object.assign(snapshot, { isFetching: false, isFetchedAfterMount: true });
+  expect(source.loading()).toBe(false);
+});

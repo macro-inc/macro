@@ -45,15 +45,15 @@ export function createSharingSource(
 ): SharingSource {
   const [offset, setOffset] = createSignal(0);
   const state = useAccessRequestState(entity, enabled, offset);
-  const grants = useQuery(() => {
+  // Direct grants are readable only with access or review authority, so a
+  // grants error from before losing access no longer applies.
+  const grantsReadable = () => {
     const current = !state.isPending ? state.data : undefined;
-    return directAccessOptions(
-      entity(),
-      enabled() &&
-        !!current &&
-        (current.accessLevel != null || current.canReview)
-    );
-  });
+    return !!current && (current.accessLevel != null || current.canReview);
+  };
+  const grants = useQuery(() =>
+    directAccessOptions(entity(), enabled() && grantsReadable())
+  );
   const mutation = useMutation(() => ({
     mutationFn: async (change: Change) => {
       const target = change.target;
@@ -106,23 +106,20 @@ export function createSharingSource(
   return {
     state: () => (state.isPending ? undefined : state.data),
     grants: () => (grants.isPending ? [] : (grants.data ?? [])),
-    loading: () => state.isLoading,
+    // A cached state can predate an access change, so each mount waits for its own refetch.
+    loading: () =>
+      state.isLoading || (state.isFetching && !state.isFetchedAfterMount),
     busy: () => mutation.isPending,
     error: () =>
       mutation.isError
         ? 'Could not update access. Refresh and try again.'
-        : state.isError || grants.isError
+        : state.isError || (grantsReadable() && grants.isError)
           ? 'Could not load access requests.'
           : undefined,
     async refresh() {
       mutation.reset();
       await state.refetch();
-      if (
-        !state.isPending &&
-        state.data &&
-        (state.data.accessLevel != null || state.data.canReview)
-      )
-        await grants.refetch();
+      if (grantsReadable()) await grants.refetch();
     },
     submit: (level, revision) => mutate({ kind: 'submit', level, revision }),
     cancel: (revision) => mutate({ kind: 'cancel', revision }),

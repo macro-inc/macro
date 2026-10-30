@@ -25,7 +25,7 @@ export function ProjectUnavailable(props: {
   );
   // Stays denied after a grant, so the request view holds until the project loads.
   const deniedId = createMemo<string | undefined>((denied) => {
-    const state = requests.state();
+    const state = requests.loading() ? undefined : requests.state();
     if (state && state.accessLevel == null) return props.projectId;
     return denied === props.projectId ? denied : undefined;
   });
