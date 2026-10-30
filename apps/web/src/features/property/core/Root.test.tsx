@@ -200,3 +200,19 @@ it('names a picked entity until its own read can answer, on its property only', 
   });
   expect(pickedName()).toBe('');
 });
+
+it('drops the picked names when their save fails', async () => {
+  const save = Promise.withResolvers<void>();
+  render(() => (
+    <Root property={project} canEdit onSave={() => save.promise}>
+      <PickProject />
+    </Root>
+  ));
+
+  fireEvent.click(screen.getByText('Pick redesign'));
+  expect(screen.getByRole('status').textContent).toBe('Website redesign');
+
+  save.reject(new Error('rejected'));
+  await expect(save.promise).rejects.toThrow('rejected');
+  expect(screen.getByRole('status').textContent).toBe('');
+});

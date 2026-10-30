@@ -102,7 +102,10 @@ export function Root(props: PropertyRootProps) {
       await onSave(saved, value);
       if (pending() === entry) setPending({ ...entry, base: local.property });
     } catch (error) {
-      if (pending() === entry) setPending(undefined);
+      if (pending() === entry) {
+        setPending(undefined);
+        setPicked(undefined);
+      }
       throw error;
     }
   };
