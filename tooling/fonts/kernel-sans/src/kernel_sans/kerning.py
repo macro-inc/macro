@@ -63,6 +63,7 @@ RIGHT = {
     "r_z": "z zcaron",
     "r_x": "x",
     "r_j": "j",
+    "r_f": "f t f_i f_l",
     "p_dot": "period comma ellipsis",
     "p_qr": "quoteright quotedblright",
     "p_ql": "quoteleft quotedblleft",
@@ -92,12 +93,19 @@ FIGURES = set("zero one two three four five six seven eight nine".split())
 # Glyph names spaced by their own extent rather than a letter band.
 PUNCT_PREFIXES = ("quote", "hyphen", "endash", "emdash", "paren", "bracket", "brace")
 
-# Figure classes are open on one side only next to a few neighbours; pairing
-# them with every class kerns ordinary strings like T1 or 2,450.
-ONLY_WITH = {"f_1": {"f_7", "p_dot"}, "f_4": {"f_7"}}
+# Classes open on one side only next to a few neighbours; pairing them with
+# every class kerns ordinary strings like T1, 2,450 or "of". The bars of f
+# and t reach left over the white, so they close up only after f and t.
+ONLY_WITH = {"f_1": {"f_7", "p_dot"}, "f_4": {"f_7"}, "r_f": {"l_f", "l_t"}}
 
 # Pairs allowed to kern apart, with their ceiling (j's tail under a bracket).
 POSITIVE = {("p_open", "r_j"): 40}
+
+# Pairs whose crossbars meet at x-height (ff, ft, tt). The area measure
+# leaves them loose, because the bars already sit closer than the floor
+# allows; they are set so the bars end this fraction of the n|n gap apart.
+BARS = {("l_f", "r_f"), ("l_t", "r_f")}
+BAR_GAP = 0.3
 
 # Overhanging capitals against round ones close up less than the measure
 # says; cap them at this fraction of the H|H gap.
@@ -277,6 +285,7 @@ def pair_values(drawn, p):
     prof = _Profiles(drawn)
     values = {}
     hh = _closest(prof, "H", "H", 0, P.CAP) if "H" in drawn else None
+    nn = _closest(prof, "n", "n", 0, P.XH) if "n" in drawn else None
     for lc, lspec in LEFT.items():
         lrep = next((g for g in _split(lspec) if g in drawn), None)
         if lrep is None:
@@ -293,7 +302,10 @@ def pair_values(drawn, p):
             rrep = next((g for g in _split(rspec) if g in drawn), None)
             if rrep is None:
                 continue
-            k = measure(prof, lrep, rrep) * TWEAKS.get((lc, rc), 1.0)
+            if (lc, rc) in BARS and nn:
+                k = BAR_GAP * nn - _closest(prof, lrep, rrep, 0, P.XH)
+            else:
+                k = measure(prof, lrep, rrep) * TWEAKS.get((lc, rc), 1.0)
             if (lc, rc) in ROUND_CAP and hh:
                 k = max(k, -ROUND_CAP_FRACTION * hh)
             hi = 0 if (lc in PUNCT or rc in PUNCT) else LIMITS[1]
