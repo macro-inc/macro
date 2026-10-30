@@ -58,8 +58,9 @@ staggered bottoms and open counters, following the familiar Phosphor silhouette.
 it is also listed in the regular icon gallery. Brand marks retain their existing assets.
 Icons introduced on main after the source PR retain their existing assets when
 this family has no matching drawing.
-Urgent priority uses a filled rounded-square exclamation badge with the dedicated
-`priority-urgent` token, mapped to the theme's orange rather than warning or accent.
+Urgent priority uses a filled rounded-square exclamation badge with a wide
+transparent stem and dot for small-size legibility. Its dedicated `priority-urgent`
+token maps to the theme's orange rather than warning or accent.
 Completed task status uses the filled check-circle through the shared property
 and task-status renderers. Empty priority uses a muted circled minus.
 Task statuses use independent `task-status-not-started`, `task-status-in-progress`,
