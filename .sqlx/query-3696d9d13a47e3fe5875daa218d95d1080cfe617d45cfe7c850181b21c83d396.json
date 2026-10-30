@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                override.on_pull_request_merged AS \"override_on_pull_request_merged?\",\n                override.on_runtime_closed AS \"override_on_runtime_closed?\",\n                COALESCE(defaults.on_pull_request_merged, false) AS \"default_on_pull_request_merged!\",\n                COALESCE(defaults.on_runtime_closed, false) AS \"default_on_runtime_closed!\",\n                archive.reason AS \"reason?\",\n                archive.archived_at AS \"archived_at?\",\n                archive.restored_at AS \"restored_at?\"\n            FROM agent_session session\n            LEFT JOIN agent_session_auto_archive_override override\n                ON override.agent_session_id = session.id\n            LEFT JOIN user_agent_session_auto_archive defaults\n                ON defaults.user_id = session.owner_id\n            LEFT JOIN agent_session_auto_archive archive\n                ON archive.agent_session_id = session.id\n            WHERE session.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "override_on_pull_request_merged?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "override_on_runtime_closed?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "default_on_pull_request_merged!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "default_on_runtime_closed!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "reason?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "archived_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "restored_at?",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      null,
+      null,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "3696d9d13a47e3fe5875daa218d95d1080cfe617d45cfe7c850181b21c83d396"
+}

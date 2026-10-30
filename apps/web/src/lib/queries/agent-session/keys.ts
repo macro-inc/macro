@@ -41,3 +41,11 @@ export const agentCodeExecutionKeys = createQueryKeys('agentCodeExecution', {
     queryKey: [sessionId, executionId],
   }),
 });
+
+/** A session's auto-archive choices, its owner's defaults, and the archive a trigger made. */
+export const agentSessionAutoArchiveKeys = createQueryKeys(
+  'agentSessionAutoArchive',
+  {
+    detail: (sessionId: string) => ({ queryKey: [sessionId] }),
+  }
+);

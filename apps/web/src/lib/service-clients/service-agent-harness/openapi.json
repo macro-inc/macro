@@ -10,6 +10,92 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/agent-auto-archive-preferences": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "Read which triggers archive the caller's sessions by default.",
+        "operationId": "get_agent_auto_archive_preferences",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoArchivePreferencesBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["agent-sessions"],
+        "summary": "Replace which triggers archive the caller's sessions by default.",
+        "operationId": "put_agent_auto_archive_preferences",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutoArchivePreferencesBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoArchivePreferencesBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-capabilities/discover": {
       "post": {
         "tags": ["agent-capabilities"],
@@ -1143,6 +1229,136 @@
           },
           "409": {
             "description": "The session answers an agent conversation",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/auto-archive": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "Read a session's auto-archive settings and whether a trigger archived it.",
+        "operationId": "get_agent_session_auto_archive",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionAutoArchiveResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["agent-sessions"],
+        "summary": "Replace a session's own auto-archive choices. Owner only.",
+        "operationId": "put_agent_session_auto_archive",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutoArchiveOverridesBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoArchiveOverridesBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
             "content": {
               "text/plain": {
                 "schema": {
@@ -3801,6 +4017,61 @@
           }
         }
       },
+      "AutoArchiveOverridesBody": {
+        "type": "object",
+        "description": "One session's choices over its owner's defaults. `null` follows the owner.",
+        "properties": {
+          "onPullRequestMerged": {
+            "type": ["boolean", "null"],
+            "description": "Archive once the session's pull requests merge, or `null` to follow the owner."
+          },
+          "onRuntimeClosed": {
+            "type": ["boolean", "null"],
+            "description": "Archive once the session's runtime session is deliberately closed, or `null` to follow\nthe owner."
+          }
+        }
+      },
+      "AutoArchivePreferencesBody": {
+        "type": "object",
+        "description": "Which triggers archive the caller's sessions when a session has no choice of its own.",
+        "required": ["onPullRequestMerged", "onRuntimeClosed"],
+        "properties": {
+          "onPullRequestMerged": {
+            "type": "boolean",
+            "description": "Archive a session once every pull request linked to it is closed and at least one merged."
+          },
+          "onRuntimeClosed": {
+            "type": "boolean",
+            "description": "Archive a session once the runtime session backing it is deliberately closed."
+          }
+        }
+      },
+      "AutoArchiveReason": {
+        "type": "string",
+        "description": "What finished a session's work.",
+        "enum": ["pull_request_merged", "runtime_closed"]
+      },
+      "AutoArchivedBody": {
+        "type": "object",
+        "description": "The time a session archived itself.",
+        "required": ["reason", "archivedAt"],
+        "properties": {
+          "archivedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it archived."
+          },
+          "reason": {
+            "$ref": "#/components/schemas/AutoArchiveReason",
+            "description": "What finished the session's work."
+          },
+          "restoredAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When a person restored it, after which the archive no longer stands."
+          }
+        }
+      },
       "BotId": {
         "type": "string"
       },
@@ -5988,6 +6259,32 @@
           "agent",
           "calendar"
         ]
+      },
+      "SessionAutoArchiveResponse": {
+        "type": "object",
+        "description": "A session's auto-archive settings and history.",
+        "required": ["overrides", "defaults"],
+        "properties": {
+          "archived": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AutoArchivedBody",
+                "description": "The archive a trigger made, if one did. A session archives itself at most once."
+              }
+            ]
+          },
+          "defaults": {
+            "$ref": "#/components/schemas/AutoArchivePreferencesBody",
+            "description": "The owner's defaults, which apply where the session has no choice of its own."
+          },
+          "overrides": {
+            "$ref": "#/components/schemas/AutoArchiveOverridesBody",
+            "description": "The session's own choices."
+          }
+        }
       },
       "SessionBot": {
         "type": "object",

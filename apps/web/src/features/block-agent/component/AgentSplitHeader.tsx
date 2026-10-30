@@ -31,6 +31,7 @@ import { useAgentSession } from '../context/AgentSessionContext';
 import { changeSessionArchiveState } from '../queries/change-session-archive-state';
 import { AgentPullRequestChip } from './AgentPullRequestChip';
 import { AgentTaskChip } from './AgentTaskChip';
+import { useAutoArchiveFileOperations } from './auto-archive-file-operations';
 import {
   harnessTitle,
   sessionHarnessTitle,
@@ -42,7 +43,8 @@ export { harnessTitle, sessionRepositoryUrl };
 export function agentSessionFileOperations(
   session: AgentSessionResponse | undefined,
   permissions: Permissions,
-  setArchived: () => void
+  setArchived: () => void,
+  autoArchive: FileOperation[]
 ): FileOperation[] {
   const repositoryUrl = sessionRepositoryUrl(session);
   return [
@@ -54,6 +56,7 @@ export function agentSessionFileOperations(
             icon: TrayIcon,
             action: setArchived,
           },
+          ...autoArchive,
         ]
       : []),
     { op: 'delete' },
@@ -169,8 +172,19 @@ export function AgentSplitHeader(props: {
     if (!id || !props.session) return;
     await changeSessionArchiveState(id, !props.session.isArchived);
   };
+  const autoArchive = useAutoArchiveFileOperations({
+    sessionId,
+    enabled: () =>
+      permissions() === Permissions.OWNER &&
+      props.session?.isArchived === false,
+  });
   const ops = () =>
-    agentSessionFileOperations(props.session, permissions(), setArchived);
+    agentSessionFileOperations(
+      props.session,
+      permissions(),
+      setArchived,
+      autoArchive()
+    );
 
   return (
     <>

@@ -57,6 +57,9 @@ vi.mock('./components/instructions-editor', () => ({
 vi.mock('./components/coding-preferences-setting', () => ({
   CodingPreferencesSetting: () => null,
 }));
+vi.mock('./components/auto-archive-setting', () => ({
+  AutoArchiveSetting: () => null,
+}));
 
 const [searchParams, updateSearchParams] = createStore<{
   createAgent?: string;

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO user_agent_session_auto_archive\n                (user_id, on_pull_request_merged, on_runtime_closed, modified_at)\n            VALUES ($1, $2, $3, NOW())\n            ON CONFLICT (user_id) DO UPDATE\n            SET on_pull_request_merged = EXCLUDED.on_pull_request_merged,\n                on_runtime_closed = EXCLUDED.on_runtime_closed,\n                modified_at = NOW()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5de6b5d1ba9a55cc5d022fbb05c14cd32880e06245078d67381c29a43016e626"
+}

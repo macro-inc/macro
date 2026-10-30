@@ -22,6 +22,8 @@ between the sandbox and the rest of the product.
 - `src/outbound/cursor/manager.rs`: compose Cursor sessions, including public
   prompt-image fetching through the `cursor_cloud_agents` image-fetcher port.
 - `src/domain/trigger_router.rs`: routes an incoming trigger to a session.
+- `src/domain/runtime_closed.rs`: the turn observer that hands a runtime's
+  `_session/closed` (a deliberate close, never a disconnect) to auto-archive.
 - `src/inbound/kafka.rs`: trigger ingestion.
 - `src/domain/mode_choice.rs` + `src/inbound/mode_choice.rs`: the agent
   composer's Auto mode, `POST /agent-mode-choice`, which asks Clef Flash
