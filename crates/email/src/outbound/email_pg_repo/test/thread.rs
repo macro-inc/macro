@@ -599,9 +599,15 @@ async fn draft_aggregate_inbox_state_matches_canonical_metadata(
     for id in ids {
         canonical.insert(id, recompute_inbox_state(&pool, id).await?);
     }
+    let owner = sqlx::query_scalar!(
+        "SELECT macro_id FROM email_links WHERE id = $1",
+        DRAFT_FIXTURE_LINK
+    )
+    .fetch_one(&pool)
+    .await?;
     let projections = EmailPgRepo::new(pool)
         .thread_mail_projections_by_ids(
-            macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user1@test.com")?,
+            macro_user_id::user_id::MacroUserIdStr::parse_from_str(&owner)?,
             &ids,
         )
         .await?;

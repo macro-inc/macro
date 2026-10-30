@@ -347,7 +347,7 @@ async fn reply_draft_to_sent_mail_inbox_state(
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let (thread_id, sent_id) = (Uuid::now_v7(), Uuid::now_v7());
     let mut contacts = Vec::new();
-    for email in ["user1@test.com", recipient] {
+    for email in ["me@example.com", recipient] {
         contacts.push(sqlx::query_scalar!(
             "INSERT INTO email_contacts (id, link_id, email_address) VALUES ($1, $2, $3)
             ON CONFLICT (link_id, email_address) DO UPDATE SET email_address = EXCLUDED.email_address RETURNING id",
@@ -395,11 +395,11 @@ async fn reply_draft_to_sent_mail_inbox_state(
 async fn a_message_sent_to_its_own_sender_counts_as_received_mail(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let to_self = reply_draft_to_sent_mail_inbox_state(&pool, "user1@test.com").await?;
+    let to_self = reply_draft_to_sent_mail_inbox_state(&pool, "me@example.com").await?;
     assert!(to_self.inbox_visible);
     assert!(to_self.latest_inbound_message_ts.is_some());
 
-    let to_other = reply_draft_to_sent_mail_inbox_state(&pool, "bob@test.com").await?;
+    let to_other = reply_draft_to_sent_mail_inbox_state(&pool, "other@example.com").await?;
     assert!(!to_other.inbox_visible);
     assert!(to_other.latest_inbound_message_ts.is_none());
     Ok(())
