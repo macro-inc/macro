@@ -11547,12 +11547,14 @@ dependencies = [
  "base64 0.22.1",
  "macro_tower_layers",
  "messages",
+ "nom 8.0.0",
  "reqwest 0.13.4",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
  "trigger_context",
+ "uuid",
  "workspace-hack",
 ]
 
