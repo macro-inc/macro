@@ -133,6 +133,9 @@ section { padding-block: clamp(48px, 8vw, 96px); border-top: 1px solid var(--rul
 }
 .mline.base { opacity: 1; }
 .mline.asc span, .mline.x span, .mline.desc span, .mline.base span { top: auto; bottom: 2px; }
+/* Ascender and x-height labels sit on the left so they never collide with
+   the cap-height label, whatever the size. */
+.mline.asc span, .mline.x span { right: auto; left: 0; }
 .word {
   font-size: var(--size);
   line-height: 1.2;
