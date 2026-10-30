@@ -53,7 +53,8 @@ the Pipedream integration (`pipedream_mcp`) is replaced by an adapter over
 | Part | Where | Does |
 | --- | --- | --- |
 | Registry | `connect/registry/apps/<id>/` | One directory per app: `app.toml` (name, description, MCP URL, access, client registration, scopes, Pipedream slugs it replaces) and `icon.svg`. Source of truth for the catalog. |
-| Connect API | `connect/services/connect_api` | Catalog, connect flow (authorize, callback), connection list and delete, token export. Its own Postgres database and Doppler project. |
+| Connect API | `connect/services/connect_api` | Catalog, connect flow (authorize, callback), connection list and delete, token export. Its own Postgres database. |
+| Hosting | `connect/infra` | Its own Pulumi project: ECS cluster, ALB and certificate (`connect-dev.macro.com`), RDS, KMS key, Secrets Manager. Touches nothing of Macro's but one DNS record. |
 | MCP gateway | in `connect_api` | Per-connection MCP endpoint: injects the vendor token, refreshes it, forwards to the vendor's server. Customers call this, as Macro called Pipedream's remote MCP. |
 | OAuth client | `connect/crates/` | Client registration in order: CIMD, DCR, then Macro Connect's own OAuth app. Ported from Macro's `mcp_client`, which already does all three. |
 | Token store | `connect_api` database | Grants stored as KMS ciphertext bound to the connection (Macro rule CS-72). |
@@ -66,6 +67,19 @@ alone: [`probing.md`](probing.md).
 
 Target: 2026-11-06. Vendor reviews run in parallel from day 1 and are the long
 pole; engineering does not wait on them.
+
+Revised 2026-10-30 (see [decisions](decisions.md)): build in vertical slices.
+
+1. **Independent backend** (first PR): Connect deployed on its own to
+   `connect-dev.macro.com`, proven by integration tests that run against the
+   local compose stack and the dev deploy: catalog, customer keys, connect
+   flow, refresh, and MCP gateway, with real vendors for the live apps.
+2. **Macro integration**: Macro uses Connect through `connect_client` behind
+   `pipedream_mcp`'s ports and a flag ([T010](../tasks/T010-macro-adapter.md)).
+3. **Migration**: reconnect prompts, then remove Pipedream per app.
+
+The day plan below predates the revision; its order still holds within each
+slice.
 
 | Day | Engineering | Vendors and operations |
 | --- | --- | --- |

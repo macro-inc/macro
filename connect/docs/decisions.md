@@ -4,6 +4,12 @@ Newest first. Each entry: date, decision, reason, who decided.
 
 ## 2026-10-30
 
+- **First pass: an entirely independent backend, not wired to Macro.** Connect
+  hosts itself (own Pulumi project in `connect/infra`, own ECS cluster, ALB,
+  RDS, KMS, Secrets Manager; `connect-dev.macro.com`) and is proven with
+  integration tests before Macro integrates. The first PR touches none of
+  Macro's deployed services, gateway, deploy pipeline, or local stack; this
+  supersedes "v1 runs on Macro's platform" below. (Eric)
 - **Connect's RDS runs PostgreSQL 17** on `db.t4g.micro` (dev) and
   `db.t4g.small` (prod). Reason: AWS documents those classes for 17, and
   Connect needs nothing from 18. (Claude, answering the T013 builder)
@@ -11,7 +17,7 @@ Newest first. Each entry: date, decision, reason, who decided.
   pass a real connect, refresh, and tool call; an app is `live` only after it
   passes conformance, the rest stay `pending`. Infra is provisioned with
   Pulumi, including Connect's own small RDS instance. (Eric)
-- **v1 runs on Macro's platform:** Macro's deploy pipeline and gateway
+- **Superseded by independent hosting (above): v1 runs on Macro's platform:** Macro's deploy pipeline and gateway
   (`/connect`), with a separate small Connect RDS instance. Runtime config lives in
   Doppler `connect-api`; `connect` keeps operations secrets. Connect's code
   still depends on no Macro crate. Reason: a separate platform is weeks of

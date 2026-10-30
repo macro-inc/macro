@@ -1,19 +1,20 @@
 # Status
 
-Last updated 2026-10-30 by Claude (planning session). Target: Macro's own
+Last updated 2026-10-30 by Claude (planning session). Slice 1: Connect as an
+independent backend with integration tests. Target: Macro's own
 users off Pipedream for catalog apps by 2026-11-06 ([plan](docs/plan.md#week-one)).
 
 ## Human queue
 
 Eric. Each item is ready for one sitting; agents prepare the rest.
 
-- [ ] **First dev deploy** (ready): follow
-      [`docs/runbooks/bootstrap.md`](docs/runbooks/bootstrap.md). You: approve
-      pushing `eric/macro-connect-plan` (rebased onto `main`); approve each
-      workflow dispatch (the first targets the global `doppler-projects` prod
-      stack); create a Doppler service token scoped to `connect-api/dev` and set
-      it with `pulumi config set --stack dev --secret doppler:dopplerToken` in
-      `infra/stacks/connect-api` (needs `PULUMI_ACCESS_TOKEN`).
+- [ ] **Review PR #9231** (Connect as an independent backend; touches none of
+      Macro's deployed services).
+- [ ] **First dev deploy** (after T016 and your review): Connect's own Pulumi
+      project in `connect/infra`, stack `dev`. You provide Pulumi access
+      (`PULUMI_ACCESS_TOKEN`) and approve `pulumi up` after seeing the preview.
+      It creates Connect-only AWS resources plus one DNS record,
+      `connect-dev.macro.com`.
 - [ ] **Test workspaces** for the first slice (Linear, Notion, PostHog,
       Sentry): accounts an agent may sign in to, or the `connect@macro.com`
       browser sign-in below so agents create free ones.
@@ -53,14 +54,17 @@ Eric. Each item is ready for one sitting; agents prepare the rest.
 
 ## In flight
 
-- [T009](tasks/T009-connect-client.md) `connect_client` and shared wire types:
-  builder, branch `connect/T009-connect-client`.
+- [T016](tasks/T016-independent-hosting.md) independent hosting in `connect/infra`,
+  local compose run, no Doppler at runtime: builder, branch
+  `connect/T016-independent-hosting` (PR #9231).
+- [T009](tasks/T009-connect-client.md) `connect_client`: built on the old base;
+  to be reviewed and brought onto PR #9231.
 
 ## Next
 
-Specced: [T010](tasks/T010-macro-adapter.md) Macro behind
-`pipedream_mcp`'s ports with flag `macro-connect` (after T009). Not yet
-specced: reconnect prompts and Pipedream account deletion (T011). Submissions wait on the company
+T017 integration tests against the local stack and the dev deploy (after T016
+and T009). Later slices: [T010](tasks/T010-macro-adapter.md) Macro integration,
+then reconnect prompts (T011). Submissions wait on the company
 facts above.
 
 ## Done
