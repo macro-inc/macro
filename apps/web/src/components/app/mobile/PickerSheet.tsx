@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { isEditableInput } from '@core/util/isEditableInput';
 import { Button } from '@ui';
@@ -159,7 +160,7 @@ function Header(props: {
         class="justify-self-start"
         onClick={sheet.onCancel}
       >
-        Cancel
+        {t('mobile.cancel')}
       </Button>
       <MobileDrawer.Title class="text-base font-semibold text-ink">
         {props.title}
@@ -170,7 +171,7 @@ function Header(props: {
         disabled={props.doneDisabled}
         onClick={props.onDone}
       >
-        Done
+        {t('mobile.done')}
       </Button>
     </div>
   );
