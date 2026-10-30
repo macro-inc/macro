@@ -307,7 +307,9 @@ def _two(p):
     ibox = (ws, yl + h, w - ws, y1 - h)
     cx = w / 2
     yt = P.CAP * 0.665
-    up = (squircle(*box, n=n) - squircle(*ibox, n=ni)) & above(cy - 1)
+    # The bowl and the spine meet edge to edge at the bowl's vertical
+    # extreme (cy), so the union leaves no sliver segments there.
+    up = (squircle(*box, n=n) - squircle(*ibox, n=ni)) & above(cy)
     up = up - (left_of(cx) & below(yt))
     up = up - chamfer(_ox(box, n, yt, "left"), yt, p.ccut, "sw")
     # Spine: the right side turns into a straight diagonal that lands on the
@@ -325,11 +327,9 @@ def _two(p):
     down, upv = (0.0, -1.0), (0.0, 1.0)
     i1, i2 = _handles((w - ws, cy), down, mi, (-d[0], -d[1]), 0.78, 0.5)
     o1, o2 = _handles(mo, d, (w, cy), upv, 0.5, 0.78)
-    e = 2.0
     spine = _path(
-        (w, cy + e),
+        (w, cy),
         [
-            (w - ws, cy + e),
             (w - ws, cy),
             (i1, i2, mi),
             bi,
@@ -910,11 +910,12 @@ def _s_shape(p, w, y0, y1, ws, wt, wb, cut_t, cut_b):
     ct = y0 + h * cut_t
     cb = y0 + h * cut_b
     up = squircle(*ub, n=n) - squircle(*ui, n=ni)
-    up = up & (above(ycu - 1) + (right_of(cxu) & above(ct)))
+    # Bowls and spine meet edge to edge at the bowls' vertical extremes.
+    up = up & (above(ycu) + (right_of(cxu) & above(ct)))
     up = up - (right_of(cxu) & below(ct))
     up = up - chamfer(_ox(ub, n, ct, "right"), ct, p.ccut, "se")
     lo = squircle(*lb, n=n) - squircle(*li, n=ni)
-    lo = lo & (below(ycl + 1) + (left_of(cxl) & below(cb)))
+    lo = lo & (below(ycl) + (left_of(cxl) & below(cb)))
     lo = lo - (left_of(cxl) & above(cb))
     lo = lo - chamfer(_ox(lb, n, cb, "left"), cb, p.ccut, "nw")
     th = math.radians(17)
@@ -941,17 +942,13 @@ def _s_shape(p, w, y0, y1, ws, wt, wb, cut_t, cut_b):
     b1b, b2b = _handles(mb1, d, b3, down, 0.62, 0.8)  # lower counter
     t1a, t2a = _handles(t0, down, mt0, d, 0.8, 0.62)  # upper counter
     t1b, t2b = _handles(mt1, d, t3, down, 0.62, 0.72)  # outer right
-    e = 2.0
     spine = _path(
-        (xul, ycu + e),
+        b0,
         [
-            (xul + ws, ycu + e),
             t0,
             (t1a, t2a, mt0),
             mt1,
             (t1b, t2b, t3),
-            (xlr, ycl - e),
-            (xlr - ws, ycl - e),
             b3,
             (b2b, b1b, mb1),
             mb0,

@@ -316,9 +316,7 @@ def m(p):
     # crotch) and the arch meet edge to edge at that edge: overlapping them
     # on the same curve left a 1-unit segment there.
     xv = x1 - s * 0.62
-    a2, obox2 = _arch_through(
-        p, x1, x2, yc, (xv, _sq_y(obox1, p.sq, xv)), crotch, x1
-    )
+    a2, obox2 = _arch_through(p, x1, x2, yc, (xv, _sq_y(obox1, p.sq, xv)), crotch, x1)
     valley = squircle(*obox2, n=p.sq) & rect(x1 - s * 0.85, yc, x1, P.XH + 50)
     shape = (
         rect(0, 0, s, P.XH, nw=p.cut)

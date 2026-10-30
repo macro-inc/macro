@@ -466,8 +466,13 @@ def _guil(p, yc, double=False):
     h, dx, w, flat = _guil_dims(p)
     shape = _chevron(0, yc, h, dx, w, flat)
     if double:
-        b = shape.bounds()
-        pitch = (b[2] - b[0]) * 0.62 + 30
+        # The white between the chevrons, measured square to the strokes:
+        # about 55 / 52 / 40 at 300 / 400 / 800, so heavy « keeps a clear
+        # gap (horizontally about 0.3 of the stroke at ExtraBold, as in
+        # Inter) instead of closing to a hairline.
+        hh = h / 2
+        slant = math.hypot(dx, hh) / hh
+        pitch = (w + 52 - 0.15 * p.grow) * slant
         shape = shape + shape.move(pitch, 0)
     return shape
 
