@@ -47,6 +47,7 @@ declare global {
   }
 }
 window.openedChats = [];
+document.documentElement.dataset.touchDevice = String(isTouchDevice());
 
 /** The production adapter and real queries; only the network is the test's. */
 /**
