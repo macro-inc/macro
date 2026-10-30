@@ -48,7 +48,17 @@ thin binary over `../src-tauri` (`app_lib::run_with`) that selects
   webview and termination details; the regular fork takes only a webview.
   Check both workspaces when changing shared callback registration.
 - Needs Rust 1.95 (the repo pins 1.94), `cmake`, and `ninja`; the first build
-  downloads about 1 GB of CEF into `~/Library/Caches/tauri-cef`.
+  downloads about 1 GB of CEF into `~/Library/Caches/tauri-cef`. That CDN build
+  has no H.264, HEVC, or AAC, so most videos won't play in a local build; set
+  `CEF_PATH` to an extracted codec distribution (below) to test media.
+- Releases embed CEF built with proprietary codecs, pinned in `cef-codecs.json`
+  and laid out by `nix/tauri-desktop.nix`; Nix evaluation fails if that pin
+  doesn't match the `cef` crate in `Cargo.lock`. To bump the `cef` crate, put
+  the new CDN version (`cefVersion`, its `g<hash>` as `cefCommit`, the Chromium
+  branch) and a new `releaseTag`/`asset` in the manifest with an empty `sha256`
+  on a PR. The `Build CEF with codecs` workflow then builds and publishes it
+  (several hours on the large Mac runner); copy the sha256 from its run summary
+  into the manifest.
 - Nix pins Rust 1.95 and the `macro-cef` Tauri CLI separately for macOS. Keep
   `nix/tauri-desktop.nix` on this workspace and CLI; the stock CLI omits the CEF
   framework and helper apps from macOS bundles.

@@ -2424,6 +2424,8 @@ nodes — use the snapshot itself to verify content. For formatting checks, run
 
 Body placeholder advertises: `/` for block commands, `@` to reference files, `;` for snippets.
 Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote).
+Pasting multiple paragraphs inside a quote keeps those paragraphs quoted;
+see [block formatting](channels.md#block-formatting) for verification.
 Imported Markdown recognizes bare URLs with the same shared matcher as messages;
 code and escaped URLs remain literal. Remove link persists through Markdown and
 editor-state saves. See [message links](channels.md#message-links) for verification.

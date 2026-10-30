@@ -1,4 +1,6 @@
 import { onElementConnect } from '@core/util/onElementConnect';
+import { Property } from '@property';
+import { InlineTagsSheetPill } from '@property/tags';
 import { cn, EntityComposer } from '@ui';
 import { createSignal, onCleanup } from 'solid-js';
 import type { TaskComposerController } from '../primitives/task-composer';
@@ -8,6 +10,9 @@ import { TaskComposer } from './task-composer-parts';
 export function MobileTaskComposer(props: {
   composer: TaskComposerController;
 }) {
+  // Opens taller than its content, the description taking the room above the
+  // properties.
+  props.composer.fillSheet();
   // The keyboard leaves too little room for the whole composer, so the header
   // pins to the top of the sheet's scroll to keep Create Task in reach. It
   // only takes a background while pinned over content; at rest it would show
@@ -27,9 +32,18 @@ export function MobileTaskComposer(props: {
       onCleanup(() => observer.disconnect());
     });
   };
+  // Tapping a pill leaves focus in the title or description, so the keyboard
+  // stays up under a menu and a picker sheet can hand it back.
+  const keepTypingFocus = (event: PointerEvent | MouseEvent) => {
+    if ((event.target as Element).closest('button')) event.preventDefault();
+  };
 
   return (
-    <TaskComposer.Root composer={props.composer}>
+    <TaskComposer.Root
+      composer={props.composer}
+      tagsPill={InlineTagsSheetPill}
+      propertyEditor={Property.SheetEditor}
+    >
       <EntityComposer.Header
         ref={observeHeader}
         class={cn(
@@ -50,9 +64,14 @@ export function MobileTaskComposer(props: {
         </div>
       </EntityComposer.Header>
       <TaskComposer.Recovery />
-      {/* The sheet sizes the composer to its content, so nothing needs
-          clipping, and the property row can scroll to the sheet's edges. */}
-      <EntityComposer.Main class="overflow-visible">
+      {/* The sheet scrolls rather than shrinking the composer below its
+          content, so nothing needs clipping, and the property row can scroll
+          to the sheet's edges. */}
+      <EntityComposer.Main
+        class="overflow-visible"
+        onPointerDown={keepTypingFocus}
+        onMouseDown={keepTypingFocus}
+      >
         <TaskComposer.Title />
         <TaskComposer.Body />
         <div class="shrink-0 flex items-center py-2">

@@ -1155,7 +1155,8 @@ their history and do not repeat.
 An `m-document-mention` with `blockName: "routine"`, the returned routine ID,
 and the saved name renders as a clickable mention in an agent reply. Once the
 routine is deleted the mention reads `Deleted` and clicking it shows a card
-instead of opening the routine. Routines do not appear in the mention menu.
+instead of opening the routine. Owners can mention their routines in channels
+(see Routine templates).
 Only the owner sees a routine's editor and can edit, enable, run, duplicate,
 delete, or view run history. Anyone else who opens a routine link sees its
 template when the owner shared one and routine sharing is enabled, and otherwise
@@ -1176,18 +1177,20 @@ already activated copies keep working. `VITE_ENABLE_ROUTINE_SHARING` overrides
 only the web gate; exercising templates needs the backend flag enabled too.
 
 A routine runs as its owner, so it is shared as a template, never directly.
-The three-dot menu's **Share as template** opens **Share: name**. It explains
-what people get, takes a **Description**, and lists **What changes for each
-person**: every mention in the instructions plus the schedules' time zone, each
-with tabs. People can be **The person activating** (the owner's own mention
-starts here), **Same for everyone**, or **They choose**; items are **Same for
-everyone** or **They choose**; the time zone is **Their time zone** or **Keep** the owner's
-zone. **Share template** publishes a snapshot of the saved routine;
-**Update template** re-snapshots it. Once shared, the dialog shows how many
-routines were activated from it, a channel-or-people picker with **Send** that
-posts the routine mention, **Copy template link** (the routine's own URL), and
-**Stop sharing**, which hides the template while activated routines keep
-running.
+The three-dot menu's **Share** opens the standard Share dialog, **Share:
+name**: a channel-or-people picker, an optional message, and **Share**, which
+posts the routine mention; below it, **Anyone with the link** shows **Just me**
+or **Shared** with the activation count, **Copy Link** (the routine's own URL),
+and, once shared, **Stop sharing**, which hides the template while activated
+routines keep running. Every Share and Copy Link first publishes a snapshot of
+the saved routine. The owner's own mention and the schedules' time zone fill in
+as whoever activates it; other references stay the same for everyone, and
+re-sharing keeps the fills an earlier template set.
+
+In a channel composer (including thread replies), the owner's routines appear
+under **Routines** in the `@` menu. Picking one publishes its template the same
+way, then inserts the mention, so everyone in the channel gets a card they can
+activate from. If publishing fails, the mention is not inserted.
 
 Opening a shared routine someone else owns shows the template laid out like a
 routine's Overview: **Activate for me** at the right of the top bar, then the

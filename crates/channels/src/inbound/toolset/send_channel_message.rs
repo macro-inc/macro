@@ -102,8 +102,7 @@ fn send_error(err: MessageError) -> ToolCallError {
     let description = match &err {
         MessageError::Invalid(message) => (*message).to_string(),
         MessageError::Forbidden => {
-            "not allowed to send this message: it attaches or mentions an item the user cannot view"
-                .to_string()
+            "not allowed to send this message: it attaches an item the user cannot view".to_string()
         }
         MessageError::NotFound => "thread not found in this channel".to_string(),
         MessageError::Conflict | MessageError::Repository(_) => {

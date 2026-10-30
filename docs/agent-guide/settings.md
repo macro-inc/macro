@@ -605,7 +605,8 @@ dot sits beside the name.
 The search filters every row by name, description and category and also searches
 the catalog. **Add custom** sits beside it. Gmail, Google Calendar and Google
 Sheets are hidden from the catalog because Macro syncs email and calendars
-natively. Scrolling toward the end loads the next catalog page; a failed page
+natively. LinkedIn never appears in the catalog or its search: the backend
+hides it. Scrolling toward the end loads the next catalog page; a failed page
 keeps loaded apps and offers Retry.
 Overlaid catalog apps (the `mcp_overlays` table, served at
 `GET /pipedream/mcp/overlays`) look the same in the catalog but never open

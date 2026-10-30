@@ -135,7 +135,11 @@ it('creates a complete standalone thread with the account classification and sta
     ownerId: 'macro|owner@example.com',
     isSignal: false,
     isRead: true,
-    inboxVisible: true,
+    // A draft with no received mail belongs in Drafts, not the Inbox.
+    inboxVisible: false,
+    hasReceivedMail: false,
+    latestInboundMessageTs: null,
+    latestNonSpamMessageTs: draft.updatedAt,
     mailAllPreview: { id: args.draftId },
     mailDraftPreview: { id: args.draftId },
     mailSentPreview: null,
@@ -276,6 +280,71 @@ it.each([args.senderLinkId, 'other-inbox'])(
       })
     );
     expect(context.linkPatches).toHaveLength(1);
+  }
+);
+
+it.each([true, false])(
+  'a reply draft returns an archived conversation to the inbox only when it has received mail (received=%s)',
+  async (hasReceivedMail) => {
+    const { draft, thread } = await standalone();
+    const archived = {
+      ...thread,
+      hasReceivedMail,
+      messages: [],
+      mailDraftState: {
+        baseline: {
+          ...thread.mailDraftState!.baseline,
+          messageCount: 1,
+          latestNonSpamMessageTs: '2026-02-01T00:00:00Z',
+        },
+        drafts: [],
+      },
+    };
+    const started = updateDraftThread(archived, draft, false);
+    const edited = updateDraftThread(
+      started,
+      { ...draft, updatedAt: '2026-09-23T12:00:00Z' },
+      false
+    );
+    for (const [state, updatedAt] of [
+      [started, draft.updatedAt],
+      [edited, '2026-09-23T12:00:00Z'],
+    ] as const) {
+      expect(state).toMatchObject({
+        inboxVisible: hasReceivedMail,
+        latestInboundMessageTs: hasReceivedMail ? updatedAt : null,
+        latestNonSpamMessageTs: updatedAt,
+      });
+    }
+  }
+);
+
+it.each([true, false])(
+  'editing a draft follows received mail that changed after the draft was saved (received=%s)',
+  async (hasReceivedMail) => {
+    const { draft, thread } = await standalone();
+    const saved = updateDraftThread(
+      {
+        ...thread,
+        hasReceivedMail: !hasReceivedMail,
+        messages: [],
+        mailDraftState: {
+          baseline: { ...thread.mailDraftState!.baseline, messageCount: 1 },
+          drafts: [],
+        },
+      },
+      draft,
+      false
+    );
+    const edited = updateDraftThread(
+      { ...saved, hasReceivedMail },
+      { ...draft, updatedAt: '2026-09-23T12:00:00Z' },
+      false
+    );
+    expect(edited).toMatchObject({
+      inboxVisible: hasReceivedMail,
+      latestInboundMessageTs: hasReceivedMail ? '2026-09-23T12:00:00Z' : null,
+    });
   }
 );
 

@@ -147,7 +147,7 @@ pub trait ConnectorDirectory: Send + Sync + 'static {
     /// the opaque pagination cursor from a previous page. Implementations
     /// return entries most-popular-first, and only apps that can actually be
     /// connected and used (i.e. apps with an auth flow and at least one
-    /// action to expose as a tool).
+    /// action to expose as a tool) and that the catalog doesn't hide.
     fn search(
         &self,
         search: Option<&str>,
@@ -158,8 +158,9 @@ pub trait ConnectorDirectory: Send + Sync + 'static {
     /// Look up one app by its name slug.
     ///
     /// `Ok(None)` when Pipedream has no connectable app under that exact slug:
-    /// unknown, or an app with no auth flow (nothing to connect). A lookup
-    /// that cannot be completed is an error, not a miss.
+    /// unknown, an app with no auth flow (nothing to connect), or one the
+    /// catalog hides. A lookup that cannot be completed is an error, not a
+    /// miss.
     fn retrieve(
         &self,
         app_slug: &str,

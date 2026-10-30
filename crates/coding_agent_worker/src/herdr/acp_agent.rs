@@ -70,6 +70,8 @@ const STATUS_EVERY: u32 = 4;
 /// Consecutive ready status checks, with no transcript ending, that end a
 /// turn anyway (slash commands and interrupted turns write no final message).
 const SETTLED_CHECKS: u32 = 3;
+/// How long the transcript must stay quiet before a ready status ends a turn.
+const SETTLED_QUIET: Duration = Duration::from_secs(3);
 /// How long a new tab's shell may take to reach its prompt.
 const SHELL_READY_TIMEOUT: Duration = Duration::from_secs(10);
 const QUIET_START: Duration = Duration::from_secs(20);
@@ -605,6 +607,11 @@ impl Adapter {
         let shutdown = self.shutdown.clone();
         tokio::spawn(async move {
             let mut ticks = 0u32;
+            // A turn started in the TUI: only its transcript or a settled
+            // native status can end it.
+            let mut open = false;
+            let mut settled = 0u32;
+            let mut last_output = Instant::now();
             loop {
                 tokio::select! {
                     () = shutdown.cancelled() => break,
@@ -624,16 +631,51 @@ impl Adapter {
                     continue;
                 };
                 ticks = ticks.wrapping_add(1);
-                if let Err(error) = adapter.forward(&session, live, &mut None) {
-                    tracing::warn!(session = %session.id, error = %error.message, "native transcript observation stopped");
-                    adapter.turn_complete(&session.id, "failed");
-                    break;
+                match adapter.forward(&session, live, &mut None) {
+                    Ok((moved, ended)) => {
+                        if moved {
+                            last_output = Instant::now();
+                            settled = 0;
+                        }
+                        open = ended.is_none() && (open || moved);
+                    }
+                    Err(error) => {
+                        tracing::warn!(session = %session.id, error = %error.message, "native transcript observation stopped");
+                        adapter.turn_complete(&session.id, "failed");
+                        break;
+                    }
                 }
                 if ticks.is_multiple_of(STATUS_EVERY) {
                     adapter.sync_model(&session, live).await;
+                    // Interrupted turns, killed CLIs, and CLI events nothing
+                    // answers write no turn end; herdr still sees the TUI idle.
+                    if open {
+                        settled = if adapter.native_idle(live).await {
+                            settled + 1
+                        } else {
+                            0
+                        };
+                        if settled >= SETTLED_CHECKS && last_output.elapsed() >= SETTLED_QUIET {
+                            tracing::info!(session = %session.id, "native turn settled without a transcript ending");
+                            adapter.turn_complete(&session.id, "end_turn");
+                            open = false;
+                            settled = 0;
+                        }
+                    }
                 }
             }
         });
+    }
+
+    /// Whether herdr reports the session's native agent done with its turn.
+    async fn native_idle(&self, live: &Live) -> bool {
+        let Some(herdr) = &self.herdr else {
+            return false;
+        };
+        herdr
+            .agent_info(&live.name)
+            .await
+            .is_ok_and(|info| matches!(info.status.as_str(), "idle" | "done"))
     }
 
     fn turn_complete(&self, session: &str, stop: &str) {
@@ -1052,9 +1094,7 @@ impl Adapter {
                 }
                 "idle" | "done" => {
                     settled += 1;
-                    if active
-                        && settled >= SETTLED_CHECKS
-                        && last_output.elapsed() >= Duration::from_secs(3)
+                    if active && settled >= SETTLED_CHECKS && last_output.elapsed() >= SETTLED_QUIET
                     {
                         self.forward(session, live, &mut open_tool)?;
                         return Ok("end_turn");

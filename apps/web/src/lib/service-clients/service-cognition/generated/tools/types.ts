@@ -1123,7 +1123,7 @@ export type SpelledColumnType = string;
 export type DiscoveryRequest =
   | {
       /**
-       * App name, e.g. "LinkedIn" or "Linear", not a task description.
+       * App name, e.g. "Notion" or "Linear", not a task description.
        */
       query: string;
       operation: 'search';

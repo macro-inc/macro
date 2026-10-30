@@ -1,4 +1,5 @@
 import { type ComponentProps, type JSX, Match, Show, Switch } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { Property } from '../property';
 import { getEntityValues, hasValue } from '../utils';
 
@@ -16,6 +17,8 @@ type PropertyValuePillProps = Pick<
   entitySelfFilter?: ComponentProps<
     typeof Property.PopoverEditor
   >['entitySelfFilter'];
+  /** The editor the pill opens; `Property.SheetEditor` inside a touch sheet. */
+  editor?: typeof Property.PopoverEditor;
 };
 
 /** Controlled property pill shared by task and project composers. */
@@ -84,7 +87,10 @@ export function PropertyValuePill(props: PropertyValuePillProps) {
                 <Property.Caret />
               </Property.Pill>
             </Property.Tooltip>
-            <Property.PopoverEditor entitySelfFilter={props.entitySelfFilter} />
+            <Dynamic
+              component={props.editor ?? Property.PopoverEditor}
+              entitySelfFilter={props.entitySelfFilter}
+            />
           </>
         );
       }}

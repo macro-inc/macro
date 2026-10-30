@@ -698,7 +698,7 @@ async fn inaccessible_references_are_rejected_before_persistence() {
 #[tokio::test]
 async fn user_mentions_do_not_require_or_grant_parent_sharing() {
     let service = MessageService::new(fixture(), Events::default());
-    let mentions = [SimpleMention {
+    let mentions = vec![SimpleMention {
         entity_type: "user".into(),
         entity_id: "macro|unshared@example.com".into(),
     }];
@@ -707,12 +707,12 @@ async fn user_mentions_do_not_require_or_grant_parent_sharing() {
     service
         .validate_references(
             &access("macro|author@example.com", "doc", AccessLevel::Comment),
-            &mentions,
+            mentions.clone(),
             &[],
         )
         .await
         .unwrap();
-    let invalid = [SimpleMention {
+    let invalid = vec![SimpleMention {
         entity_type: "user".into(),
         entity_id: "arbitrary-string".into(),
     }];
@@ -720,7 +720,7 @@ async fn user_mentions_do_not_require_or_grant_parent_sharing() {
         service
             .validate_references(
                 &access("macro|author@example.com", "doc", AccessLevel::Comment),
-                &invalid,
+                invalid,
                 &[]
             )
             .await,
@@ -778,6 +778,7 @@ impl MessageReferenceAccess for ReferenceAccess {
 #[tokio::test]
 async fn editor_reference_tags_are_authorized_for_posts_and_edits() {
     for (tag, entity_type) in [
+        ("channel", EntityType::Channel),
         ("form", EntityType::Form),
         ("thread", EntityType::EmailThread),
         ("email", EntityType::EmailThread),
@@ -792,7 +793,8 @@ async fn editor_reference_tags_are_authorized_for_posts_and_edits() {
                 allowed,
                 checked: Arc::default(),
             };
-            let service = MessageService::new(repo.clone(), Events::default())
+            let events = Events::default();
+            let service = MessageService::new(repo.clone(), events.clone())
                 .with_references(references.clone());
             let mut input = post_input();
             input.mentions = vec![SimpleMention {
@@ -812,18 +814,25 @@ async fn editor_reference_tags_are_authorized_for_posts_and_edits() {
                 )
                 .await;
             for result in [posted, edited] {
+                let message = result.unwrap();
                 if allowed {
-                    let message = result.unwrap();
                     assert_eq!(message.mentions[0].entity_type, tag);
                 } else {
-                    assert!(
-                        matches!(result, Err(MessageError::Forbidden)),
-                        "{tag}: {result:?}"
-                    );
+                    assert!(message.mentions.is_empty(), "{tag}: {message:?}");
                 }
             }
-            assert_eq!(repo.creates.lock().unwrap().len(), usize::from(allowed));
-            assert_eq!(repo.edits.lock().unwrap().len(), usize::from(allowed));
+            // Delivery shares and notifies from the event's mentions, so an unviewable
+            // mention must never reach it.
+            for event in events.0.lock().unwrap().iter() {
+                let (MessageChange::Posted { mentions, .. }
+                | MessageChange::Edited { mentions, .. }) = &event.change
+                else {
+                    panic!("expected post or edit");
+                };
+                assert_eq!(mentions.len(), usize::from(allowed), "{tag}");
+            }
+            assert_eq!(repo.creates.lock().unwrap().len(), 1);
+            assert_eq!(repo.edits.lock().unwrap().len(), 1);
             assert_eq!(
                 *references.checked.lock().unwrap(),
                 vec![(entity_type, Uuid::from_u128(30).to_string()); 2]
@@ -903,10 +912,14 @@ async fn a_group_remains_one_authored_reference_and_resolves_current_recipients_
         entity_type: "document".into(),
         entity_id: "private".into(),
     };
-    assert!(matches!(
-        service.post(channel_access(), input.clone()).await,
-        Err(MessageError::Forbidden)
-    ));
+    assert_eq!(
+        service
+            .post(channel_access(), input.clone())
+            .await
+            .unwrap()
+            .mentions,
+        input.mentions[..1]
+    );
     input.mentions = vec![
         SimpleMention {
             entity_type: "user".into(),
@@ -918,7 +931,7 @@ async fn a_group_remains_one_authored_reference_and_resolves_current_recipients_
         service.post(channel_access(), input).await,
         Err(MessageError::Invalid("too many message references"))
     ));
-    assert_eq!(repo.creates.lock().unwrap().len(), 1);
+    assert_eq!(repo.creates.lock().unwrap().len(), 2);
 }
 
 #[tokio::test]
@@ -1581,15 +1594,17 @@ async fn display_only_mention_kinds_are_stored_without_authorization() {
         entity_type: "agent_session".into(),
         entity_id: Uuid::from_u128(10).to_string(),
     });
-    assert!(matches!(
+    assert_eq!(
         service
             .post(
                 access("macro|author@example.com", "doc", AccessLevel::Comment),
-                input,
+                input.clone(),
             )
-            .await,
-        Err(MessageError::Forbidden)
-    ));
+            .await
+            .unwrap()
+            .mentions,
+        input.mentions[..2]
+    );
     assert_eq!(
         *checks.checked.lock().unwrap(),
         vec![(EntityType::AgentSession, Uuid::from_u128(10).to_string())]

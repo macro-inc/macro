@@ -594,7 +594,10 @@ Use existing PRs and do not modify hosted data.
 ## Create a task
 
 On touch devices, task creation opens in a bottom sheet with a drag handle and
-scrollable, keyboard-aware content. Its glass pane has broad screen-scaled
+scrollable, keyboard-aware content. It opens at 70% of the screen, with the
+description filling the room above the properties; the keyboard shortens it.
+Opening it from `+ Task` or Home's `+ New` raises the keyboard with the title
+focused and the caret after any text. Its glass pane has broad screen-scaled
 corners, an 8px outer inset, and a blurred backdrop, matching the create and
 filter sheets. Its header has `Continue editing in split` on the left and
 `Create Task` on the right, with a text-only `Clear` 32px to its left once the
@@ -604,11 +607,24 @@ top of the sheet (with a solid background only while pinned over content), so
 `Create Task` stays in reach. The properties sit on a single line that scrolls
 horizontally, with the `Share with <team name>` switch below them. The sheet
 has no `Create More` switch and no similar-tasks list. `Create Task` shows no
-keyboard shortcut on touch. While the keyboard is up, the tag picker opens
-above its trigger so its search results stay above the keyboard. Desktop uses
+keyboard shortcut on touch. Assignees, Project, Tags, and Due Date open their
+pickers in a full-height sheet stacked over the composer (`PickerSheet`), with
+Cancel, the property's name, and Done: picks apply on Done, Cancel or the
+backdrop drop them, picking keeps the keyboard up, and a single-choice Project
+or a date applies its pick at once. Status and Priority keep their dropdowns,
+which leave focus in the title. Tapping a pill doesn't take focus, and closing
+a picker sheet returns it to the title or description with its caret, so the
+keyboard stays up throughout. Desktop uses
 the centered composer dialog. Both layouts are views in
 `apps/web/src/features/task-composer/views` composing the shared
 `TaskComposer` parts.
+
+After creation, the `Task created` toast shows `Link copied` when copying
+succeeds and an `Open` action. Touch devices omit `Open (New Split)`; desktop
+keeps both actions. Either action immediately dismisses the toast before opening
+the task. Verify the toast at phone and tablet widths with touch
+emulation: the message and action fit without clipping, and `Open` visits the
+created task in place.
 
 1. Click the `Task` button (or `Create` → `Task T`, or keyboard `c` then `t`).
 2. A dialog opens with the title contenteditable focused (placeholder `New task`), plus
