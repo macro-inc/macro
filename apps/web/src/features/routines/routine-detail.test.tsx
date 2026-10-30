@@ -1,7 +1,13 @@
 import { toast } from '@core/component/Toast/Toast';
 import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal, type JSX, type Setter } from 'solid-js';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@solidjs/testing-library';
+import { createSignal, type JSX, type Setter, untrack } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RoutineTarget } from './core/routine-target';
 import { Routine } from './routine-detail';
@@ -176,11 +182,13 @@ vi.mock('./routine-prompt-editor', () => ({
     onChange: (value: string) => void;
   }) => {
     mocks.changePrompt = props.onChange;
+    // Like the real editor, read the initial value only once.
+    const initialValue = untrack(() => props.initialValue);
     return (
       <textarea
         aria-label="Instructions"
         disabled={props.disabled}
-        value={props.initialValue}
+        value={initialValue}
         onInput={(event) => props.onChange(event.currentTarget.value)}
       />
     );
@@ -795,6 +803,45 @@ describe('routine editor triggers', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Runs' }));
     expect(screen.getByText('Run transcript')).toBeTruthy();
   });
+  it('keeps instructions stored ahead of the prompt when steps are added', async () => {
+    setSchedules([
+      { ...events, task: { ...(events.task as object), prompt: 'Be brief.' } },
+    ]);
+    render(() => <Routine />);
+    const add = screen.getByRole('button', { name: 'Add step' });
+    add.focus();
+    fireEvent.keyDown(add, { key: 'Enter' });
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Create task' }), {
+      key: 'Enter',
+    });
+    // The closing menu can leave the page aria-hidden for a moment.
+    const agent = screen.getByRole('region', { name: 'Ask AI', hidden: true });
+    // Its card's header toggle comes first.
+    fireEvent.click(
+      within(agent).getAllByRole('button', { expanded: false, hidden: true })[0]!
+    );
+    const editor = within(agent).getByRole<HTMLTextAreaElement>('textbox', {
+      name: 'Instructions',
+      hidden: true,
+    });
+    expect(editor.value).toBe('Be brief.\n\nSummarize updates');
+    fireEvent.input(editor, { target: { value: `${editor.value} now` } });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenLastCalledWith({
+      scheduleId: 'routine-id',
+      body: expect.objectContaining({
+        task: expect.objectContaining({
+          steps: expect.arrayContaining([
+            expect.objectContaining({
+              type: 'agent',
+              instructions: 'Be brief.\n\nSummarize updates now',
+            }),
+          ]),
+        }),
+      }),
+    });
+  });
+
   it('retains cron editing, duplication, run-now, and history navigation', async () => {
     render(() => <Routine />);
     fireEvent.input(screen.getByRole('textbox', { name: 'Instructions' }), {

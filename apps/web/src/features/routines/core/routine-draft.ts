@@ -13,6 +13,7 @@ import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from './draft';
 import {
   agentStep,
   firstAgent,
+  newStepId,
   type StepDraft,
   updateStep,
   validateSteps,
@@ -84,11 +85,16 @@ export function withDraftSteps(
   return {
     ...draft,
     // The program's agent step runs with everything the single agent did,
-    // as the scheduler reads an old task.
+    // as the scheduler reads an old task. A new id remounts its editor, which
+    // otherwise keeps showing (and saving) the instructions without them.
     steps: base
       ? updateStep(steps, SINGLE_AGENT_STEP_ID, (step) =>
           step.kind === 'agent'
-            ? { ...step, instructions: `${base}\n\n${step.instructions}` }
+            ? {
+                ...step,
+                id: newStepId(),
+                instructions: `${base}\n\n${step.instructions}`,
+              }
             : step
         )
       : steps,
