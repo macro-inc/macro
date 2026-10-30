@@ -18,6 +18,10 @@ viewer pattern), which apply to every type defined here.
   serves lists. A thread shared through a team's CRM, a project, or a share
   therefore opens through `emailThread` even though it lives in a teammate's
   inbox.
+- Build `AgentSessionEntityLoader` and `PrimarySoupItemLoader` with `::new`,
+  which rechecks the viewer's team. PRs are stored for the team; without it,
+  a session row reads `pullRequestState: null` and overwrites the list's
+  state in the client cache.
 - `NOTIFIED_AT` maps to Soup's notified request, not a simple sort: `soup`
   accepts it descending only and `groupSoup` rejects it. Its continuation
   cursors carry a different sort tag, so `inputs.rs` decodes both cursor shapes.

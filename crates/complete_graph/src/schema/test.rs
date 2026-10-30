@@ -1155,6 +1155,18 @@ impl EntityAccessService for CountingEntityAccessService {
             | (EntityType::Form, form_activity::RESPONDED_FORM_ID) => Some(AccessLevel::View),
             (EntityType::Form, form_activity::EDITABLE_FORM_ID) => Some(AccessLevel::Edit),
             (EntityType::Database | EntityType::Form, _) => None,
+            (EntityType::Team, _) => {
+                return EntityAccessReceipt::try_new_authenticated_user(
+                    MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+                    entity_access::domain::models::Entity {
+                        entity_id: entity_id.to_owned(),
+                        entity_type,
+                    },
+                    EntityPermission::TeamRole {
+                        role: TeamRole::Member,
+                    },
+                );
+            }
             (EntityType::EmailThread, _) => {
                 let thread_id = Uuid::parse_str(entity_id).unwrap();
                 self.email_thread_checks.lock().unwrap().push(thread_id);
@@ -1544,19 +1556,15 @@ impl TestHarness {
                     self.thread_reader.clone(),
                 ),
             ))
-            .data(graphql_soup::AgentSessionEntityLoader(
-                graphql_soup::soup_item_loader(
-                    self.primary_soup_service.clone(),
-                    Arc::new(self.email_service.clone()),
-                    self.state.entity_access.as_ref().clone(),
-                ),
+            .data(graphql_soup::AgentSessionEntityLoader::new(
+                self.primary_soup_service.clone(),
+                Arc::new(self.email_service.clone()),
+                self.state.entity_access.as_ref().clone(),
             ))
-            .data(graphql_soup::PrimarySoupItemLoader(
-                graphql_soup::soup_item_loader(
-                    self.primary_soup_service.clone(),
-                    Arc::new(self.email_service.clone()),
-                    self.state.entity_access.as_ref().clone(),
-                ),
+            .data(graphql_soup::PrimarySoupItemLoader::new(
+                self.primary_soup_service.clone(),
+                Arc::new(self.email_service.clone()),
+                self.state.entity_access.as_ref().clone(),
             ))
             .data(graphql_properties::entity_properties_loader(
                 user_id.clone(),
@@ -1600,11 +1608,11 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
     let document_id = Uuid::from_u128(42);
     let deleted_document_id = Uuid::from_u128(43);
     soup_service.set_raw_response(vec![soup_document(document_id)]);
-    let loader = graphql_soup::PrimarySoupItemLoader(graphql_soup::soup_item_loader(
+    let loader = graphql_soup::PrimarySoupItemLoader::new(
         soup_service.clone(),
         Arc::new(NoOpEmailService),
         NoOpEntityAccessService,
-    ));
+    );
     let schema: SoupSchema<
         CountingSoupService,
         TestRealtimeSubscriptionService,
@@ -1704,6 +1712,32 @@ async fn agent_session_is_read_from_the_primary_not_the_list_replica() {
 }
 
 #[tokio::test]
+async fn agent_session_read_carries_the_viewer_team_for_its_linked_pr() {
+    let harness = harness();
+    let session_id = Uuid::from_u128(7);
+    harness
+        .primary_soup_service
+        .set_raw_response(vec![soup_agent_session(session_id)]);
+
+    let response = harness
+        .execute(&format!(
+            r#"{{ user {{ agentSession(sessionId: "{session_id}") {{ id }} }} }}"#
+        ))
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    // Linked PRs are stored for the team; without its receipt the row's PR
+    // state reads as unknown and overwrites the list's known state.
+    assert_eq!(
+        harness
+            .primary_soup_service
+            .raw_team_receipts
+            .load(Ordering::SeqCst),
+        1
+    );
+}
+
+#[tokio::test]
 async fn soup_entity_is_read_from_the_primary_not_the_list_replica() {
     let harness = harness();
     let document_id = Uuid::from_u128(8);
@@ -1785,11 +1819,11 @@ async fn agent_session_log_appended_streams_runs_for_an_accessible_session() {
     });
     let soup_service = CountingSoupService::default();
     soup_service.set_raw_response(vec![soup_agent_session(session_id)]);
-    let loader = graphql_soup::AgentSessionEntityLoader(graphql_soup::soup_item_loader(
+    let loader = graphql_soup::AgentSessionEntityLoader::new(
         soup_service.clone(),
         Arc::new(NoOpEmailService),
         NoOpEntityAccessService,
-    ));
+    );
     let schema = build_schema_with_service::<
         CountingSoupService,
         NoOpEmailService,
