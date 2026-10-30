@@ -16,5 +16,3 @@ provider ([linked devices](architecture/whatsapp-linked-devices.md)) and the
 [External view walkthrough](agent-guide/external.md).
 
 Document sync: [DSS sync router](architecture/sync-router.md).
-
-OpenSearch: [prod cost savings audit](opensearch-cost-savings.md) (2026-10-30).
