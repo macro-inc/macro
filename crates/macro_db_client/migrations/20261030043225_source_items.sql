@@ -7,25 +7,21 @@
 -- tasks from other documents.
 --
 -- Triggers keep the table equal to what entity_access, the item tables and document_sub_type say,
--- for every writer: application code, foreign-key cascades, scripts and fixtures loaded in replica
+-- for every writer: application code, foreign-key cascades, scripts, and fixtures loaded in replica
 -- mode alike. crates/source_items holds the backfill, the audit and the tests.
 --
--- Concurrency, under READ COMMITTED (the triggers refuse other isolation levels, which could not
--- see what an earlier lock holder committed):
---   * Every change locks the item before its rows are rewritten, and rewrites them in a later
---     statement, so the rewrite reads what the previous lock holder committed. Saves and deletes
---     already hold the item's row lock; grant and subtype changes take it in the mode a save takes
---     (FOR NO KEY UPDATE), in id order, so foreign-key checks are not blocked.
---   * A grant change cannot lock an item whose insert has not committed. An insert therefore holds
---     its items' advisory keys (shared) and the grants it counted (FOR SHARE) until commit. A grant
---     removed or moved away waits on those row locks; a grant added for an item it cannot see waits
---     on the keys, then looks again. Keys come in three classes, so that no transaction holds more than
---     about 5,000 of them: one per item for a transaction's first 4,096 items, then 1,024 buckets
---     for a large insert; a grant change that cannot see more than 4,096 items takes one global
---     key, which every insert holds shared. Two transactions that each insert items and then grant
---     more than 4,096 items that do not exist wait on each other there; PostgreSQL aborts one.
---   * Grant changes rewrite only the (item, source) rows they touch; inserts, saves, deletes and
---     subtype changes rewrite the item's rows.
+-- How, under READ COMMITTED (the triggers refuse other isolation levels, whose older snapshots
+-- could miss a concurrent change):
+--   * Statement triggers only record what changed in a session temporary table. They take no
+--     locks, so a writer waits on nothing it did not wait on before.
+--   * At commit, a deferred trigger locks the source_items_mutex rows of the touched items in one
+--     statement, in bucket order, then rewrites their rows in later statements, which read what the
+--     previous holder of each bucket committed. A transaction at commit waits only for other
+--     transactions at commit, which never wait on application locks, so these waits cannot form a
+--     cycle with application lock orders. Mutex rows are row locks, so no transaction can fill the
+--     shared lock table however many items it touches.
+--   * Grant changes rewrite only the (item, source) rows they touched; saves rewrite only sort keys;
+--     inserts, deletes and subtype changes rewrite the item's rows.
 SET LOCAL lock_timeout = '5s';
 
 CREATE TABLE source_items (
@@ -42,85 +38,22 @@ CREATE INDEX source_items_read
     ON source_items (source_id, kind, sort_ts DESC, entity_id DESC)
     WHERE sort_ts IS NOT NULL;
 
+-- One row per bucket of items, created when first needed; an item's bucket is
+-- source_items_bucket. 2^22 buckets keep unrelated items from sharing one, even when a single
+-- transaction touches hundreds of thousands.
+CREATE TABLE source_items_mutex (bucket int PRIMARY KEY);
+
+CREATE FUNCTION source_items_bucket(p_type text, p_id text) RETURNS int
+LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+    SELECT hashtext(p_type || ':' || p_id) & 4194303
+$$;
+
 CREATE FUNCTION source_items_require_read_committed() RETURNS void
 LANGUAGE plpgsql AS $$
 BEGIN
     IF current_setting('transaction_isolation') <> 'read committed' THEN
         RAISE EXCEPTION 'changes to source_items inputs require READ COMMITTED isolation'
             USING ERRCODE = 'invalid_transaction_state';
-    END IF;
-END $$;
-
--- Holds the advisory keys that pair an item insert with a grant change on the same item. Inserts
--- take them shared, so concurrent inserts never wait on each other; a grant change takes them
--- exclusively. 'source_items.keys' counts the per-item and bucket keys this transaction holds.
-CREATE FUNCTION source_items_take_keys(p_type text, p_ids text[], p_exclusive boolean)
-RETURNS void
-LANGUAGE plpgsql AS $$
-DECLARE
-    held int := coalesce(nullif(current_setting('source_items.keys', true), ''), '0')::int;
-    -- Tests lower the limit to reach the bucket and global keys with few items.
-    key_limit int := coalesce(nullif(current_setting('source_items.key_limit', true), ''), '4096')::int;
-    n int := cardinality(p_ids);
-BEGIN
-    IF n = 0 THEN
-        RETURN;
-    END IF;
-    IF p_exclusive THEN
-        IF held + n > key_limit THEN
-            PERFORM pg_advisory_xact_lock(1397900103, 0);
-            RETURN;
-        END IF;
-        PERFORM pg_advisory_xact_lock(1397900105, k)
-        FROM (SELECT DISTINCT hashtext(p_type || ':' || id) AS k FROM unnest(p_ids) id ORDER BY 1) x;
-        PERFORM pg_advisory_xact_lock(1397900098, k)
-        FROM (SELECT DISTINCT hashtext(p_type || ':' || id) & 1023 AS k FROM unnest(p_ids) id ORDER BY 1) x;
-    ELSE
-        PERFORM pg_advisory_xact_lock_shared(1397900103, 0);
-        IF held + n > key_limit THEN
-            PERFORM pg_advisory_xact_lock_shared(1397900098, k)
-            FROM (SELECT DISTINCT hashtext(p_type || ':' || id) & 1023 AS k FROM unnest(p_ids) id ORDER BY 1) x;
-            RETURN;
-        END IF;
-        PERFORM pg_advisory_xact_lock_shared(1397900105, k)
-        FROM (SELECT DISTINCT hashtext(p_type || ':' || id) AS k FROM unnest(p_ids) id ORDER BY 1) x;
-    END IF;
-    PERFORM set_config('source_items.keys', (held + n)::text, true);
-END $$;
-
--- Locks the visible rows of p_ids in id order and returns the ids without one.
-CREATE FUNCTION source_items_lock_rows(p_type text, p_ids text[]) RETURNS text[]
-LANGUAGE plpgsql AS $$
-DECLARE
-    locked text[];
-BEGIN
-    IF p_type = 'document' THEN
-        SELECT coalesce(array_agg(id), '{}') INTO locked
-        FROM (SELECT id FROM "Document" WHERE id = ANY (p_ids) ORDER BY id FOR NO KEY UPDATE) l;
-    ELSIF p_type = 'chat' THEN
-        SELECT coalesce(array_agg(id), '{}') INTO locked
-        FROM (SELECT id FROM "Chat" WHERE id = ANY (p_ids) ORDER BY id FOR NO KEY UPDATE) l;
-    ELSE
-        SELECT coalesce(array_agg(id), '{}') INTO locked
-        FROM (SELECT id FROM "Project" WHERE id = ANY (p_ids) ORDER BY id FOR NO KEY UPDATE) l;
-    END IF;
-    RETURN ARRAY(SELECT unnest(p_ids) EXCEPT SELECT unnest(locked));
-END $$;
-
--- Locks the items whose rows a change rewrites. p_added names the items the change may give rows
--- to; for those without a visible row it waits out any insert in flight and locks what committed.
-CREATE FUNCTION source_items_lock(p_type text, p_ids text[], p_added text[]) RETURNS void
-LANGUAGE plpgsql AS $$
-DECLARE
-    unseen text[];
-BEGIN
-    unseen := ARRAY(
-        SELECT unnest(source_items_lock_rows(p_type, p_ids)) INTERSECT SELECT unnest(p_added)
-    );
-    IF cardinality(unseen) > 0 THEN
-        PERFORM source_items_take_keys(p_type, unseen, true);
-        -- A new statement, so it sees inserts that committed while the keys were awaited.
-        PERFORM source_items_lock_rows(p_type, unseen);
     END IF;
 END $$;
 
@@ -144,8 +77,8 @@ LANGUAGE sql STABLE AS $$
     WHERE p_type = 'project' AND p.id = ANY (p_ids)
 $$;
 
--- Rewrites every row of p_ids from entity_access and the item tables. Callers lock the items first
--- and call this in a statement of its own.
+-- Rewrites every row of p_ids from entity_access and the item tables. Callers hold the items'
+-- buckets and call this in a statement of its own.
 CREATE FUNCTION source_items_rebuild(p_type text, p_ids text[]) RETURNS void
 LANGUAGE sql AS $$
     WITH wanted AS (
@@ -168,13 +101,14 @@ LANGUAGE sql AS $$
           IS DISTINCT FROM (EXCLUDED.kind, EXCLUDED.sort_ts, EXCLUDED.grants)
 $$;
 
--- Rewrites only the rows of the (p_ids[i], p_sources[i]) pairs, for grant changes, which leave an
--- item's other sources alone. Callers lock the items first and call this in a statement of its own.
+-- Rewrites only the rows of the (p_ids[i], p_sources[i]) pairs. Callers hold the items' buckets
+-- and call this in a statement of its own.
 CREATE FUNCTION source_items_rebuild_sources(p_type text, p_ids text[], p_sources text[])
 RETURNS void
 LANGUAGE sql AS $$
     WITH keys AS (
-        SELECT DISTINCT k.entity_id, k.source_id FROM unnest(p_ids, p_sources) AS k(entity_id, source_id)
+        SELECT DISTINCT k.entity_id, k.source_id
+        FROM unnest(p_ids, p_sources) AS k(entity_id, source_id)
     ), wanted AS (
         SELECT k.source_id, i.entity_id, i.kind, i.sort_ts, count(*)::int AS grants
         FROM keys k
@@ -198,149 +132,213 @@ LANGUAGE sql AS $$
           IS DISTINCT FROM (EXCLUDED.kind, EXCLUDED.sort_ts, EXCLUDED.grants)
 $$;
 
--- Locks and rewrites the rows of p_ids. The backfill calls this for every item.
+-- Rewrites the sort keys of p_ids' rows, for saves, which change neither grants nor kind. Callers
+-- hold the items' buckets and call this in a statement of its own.
+CREATE FUNCTION source_items_restate(p_type text, p_ids text[]) RETURNS void
+LANGUAGE sql AS $$
+    UPDATE source_items s
+    SET sort_ts = i.sort_ts
+    FROM source_items_state(p_type, p_ids) i
+    WHERE s.entity_type = p_type AND s.entity_id = i.entity_id
+      AND s.sort_ts IS DISTINCT FROM i.sort_ts
+$$;
+
+-- Locks the buckets of the (p_types[i], p_ids[i]) items, in bucket order, until commit. A bucket
+-- row another transaction is still creating makes this wait for it, as a held lock would.
+CREATE FUNCTION source_items_lock(p_types text[], p_ids text[]) RETURNS void
+LANGUAGE plpgsql AS $$
+DECLARE
+    buckets int[];
+BEGIN
+    buckets := ARRAY(
+        SELECT DISTINCT source_items_bucket(k.t, k.i)
+        FROM unnest(p_types, p_ids) AS k(t, i)
+        WHERE k.i IS NOT NULL
+        ORDER BY 1
+    );
+    INSERT INTO source_items_mutex
+    SELECT b FROM unnest(buckets) b ORDER BY b
+    ON CONFLICT DO NOTHING;
+    PERFORM 1 FROM source_items_mutex WHERE bucket = ANY (buckets) ORDER BY bucket FOR UPDATE;
+END $$;
+
+-- Locks and rewrites every row of p_ids. The backfill calls this for every item.
 CREATE FUNCTION source_items_refresh(p_type text, p_ids text[]) RETURNS void
 LANGUAGE plpgsql AS $$
 BEGIN
     PERFORM source_items_require_read_committed();
-    PERFORM source_items_lock(p_type, p_ids, p_ids);
+    PERFORM source_items_lock(array_fill(p_type, ARRAY[cardinality(p_ids)]), p_ids);
     PERFORM source_items_rebuild(p_type, p_ids);
 END $$;
 
--- One changed (item, source) pair of a grant statement; `added` when the statement gave it a grant.
-CREATE TYPE source_items_grant_change AS (
-    entity_type text,
-    entity_id text,
-    source_id text,
-    added boolean
-);
-
--- Grant changes, once per statement. Old and new grants are compared as multisets of (item, source)
--- rather than paired by id, so access-level changes leave the projection alone and a statement that
--- also rewrites grant ids is still seen. Types are processed in a fixed order, items in id order.
-CREATE FUNCTION source_items_grants_changed() RETURNS trigger
+-- Rewrites the rows of everything this transaction recorded. Runs once per transaction, at commit,
+-- from the deferred trigger on pg_temp.source_items_commit.
+CREATE FUNCTION source_items_apply() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
-    changes source_items_grant_change[];
     entity text;
     ids text[];
     sources text[];
 BEGIN
     PERFORM source_items_require_read_committed();
-    IF TG_OP = 'INSERT' THEN
-        changes := ARRAY(
-            SELECT ROW(entity_type, entity_id::text, source_id, true)::source_items_grant_change
-            FROM new_rows
-        );
-    ELSIF TG_OP = 'DELETE' THEN
-        changes := ARRAY(
-            SELECT ROW(entity_type, entity_id::text, source_id, false)::source_items_grant_change
-            FROM old_rows
-        );
-    ELSE
-        changes := ARRAY(
-            SELECT ROW(k.entity_type, k.entity_id::text, k.source_id, true)::source_items_grant_change
-            FROM (
-                SELECT entity_type, entity_id, source_id FROM new_rows
-                EXCEPT ALL
-                SELECT entity_type, entity_id, source_id FROM old_rows
-            ) k
-            UNION ALL
-            SELECT ROW(k.entity_type, k.entity_id::text, k.source_id, false)::source_items_grant_change
-            FROM (
-                SELECT entity_type, entity_id, source_id FROM old_rows
-                EXCEPT ALL
-                SELECT entity_type, entity_id, source_id FROM new_rows
-            ) k
-        );
-    END IF;
+    PERFORM source_items_lock(
+        ARRAY(SELECT entity_type FROM pg_temp.source_items_pending),
+        ARRAY(SELECT entity_id FROM pg_temp.source_items_pending)
+    );
+    -- Every statement from here reads what the previous holders of these buckets committed. A
+    -- truncation needs no bucket: until this transaction commits, its ACCESS EXCLUSIVE lock on the
+    -- truncated table holds back every other rewrite, since each reads that table.
+    FOR entity IN
+        SELECT DISTINCT entity_type FROM pg_temp.source_items_pending WHERE change = 'truncate'
+    LOOP
+        IF entity = 'entity_access' THEN
+            DELETE FROM source_items;
+        ELSIF entity = 'document_sub_type' THEN
+            UPDATE source_items SET kind = 'document' WHERE kind = 'task';
+        ELSE
+            DELETE FROM source_items WHERE entity_type = entity;
+        END IF;
+    END LOOP;
     FOREACH entity IN ARRAY ARRAY['chat', 'document', 'project'] LOOP
-        SELECT coalesce(array_agg(k.entity_id ORDER BY k.entity_id, k.source_id), '{}'),
-               coalesce(array_agg(k.source_id ORDER BY k.entity_id, k.source_id), '{}')
+        ids := ARRAY(
+            SELECT DISTINCT entity_id FROM pg_temp.source_items_pending
+            WHERE change = 'item' AND entity_type = entity
+        );
+        IF cardinality(ids) > 0 THEN
+            PERFORM source_items_rebuild(entity, ids);
+        END IF;
+        SELECT coalesce(array_agg(k.entity_id), '{}'), coalesce(array_agg(k.source_id), '{}')
         INTO ids, sources
         FROM (
-            SELECT DISTINCT c.entity_id, c.source_id FROM unnest(changes) c WHERE c.entity_type = entity
+            SELECT DISTINCT p.entity_id, p.source_id FROM pg_temp.source_items_pending p
+            WHERE p.change = 'grant' AND p.entity_type = entity
+              AND NOT EXISTS (
+                  SELECT 1 FROM pg_temp.source_items_pending q
+                  WHERE q.change = 'item' AND q.entity_type = entity AND q.entity_id = p.entity_id
+              )
         ) k;
-        CONTINUE WHEN cardinality(ids) = 0;
-        PERFORM source_items_lock(
-            entity,
-            ARRAY(SELECT DISTINCT unnest(ids)),
-            ARRAY(SELECT DISTINCT c.entity_id FROM unnest(changes) c WHERE c.entity_type = entity AND c.added)
+        IF cardinality(ids) > 0 THEN
+            PERFORM source_items_rebuild_sources(entity, ids, sources);
+        END IF;
+        ids := ARRAY(
+            SELECT DISTINCT p.entity_id FROM pg_temp.source_items_pending p
+            WHERE p.change = 'state' AND p.entity_type = entity
+              AND NOT EXISTS (
+                  SELECT 1 FROM pg_temp.source_items_pending q
+                  WHERE q.change = 'item' AND q.entity_type = entity AND q.entity_id = p.entity_id
+              )
         );
-        PERFORM source_items_rebuild_sources(entity, ids, sources);
+        IF cardinality(ids) > 0 THEN
+            PERFORM source_items_restate(entity, ids);
+        END IF;
     END LOOP;
+    DELETE FROM pg_temp.source_items_pending;
+    DELETE FROM pg_temp.source_items_commit;
+    PERFORM set_config('source_items.pending', '', true);
     RETURN NULL;
 END $$;
 
--- TG_ARGV[0] is the entity_type the table's rows have in entity_access.
-CREATE FUNCTION source_items_items_inserted() RETURNS trigger
-LANGUAGE plpgsql AS $$
-DECLARE
-    ids text[];
-BEGIN
-    PERFORM source_items_require_read_committed();
-    ids := ARRAY(SELECT id FROM new_rows ORDER BY id);
-    PERFORM source_items_take_keys(TG_ARGV[0], ids, false);
-    -- A grant removed or moved while this insert is in flight waits for it on these row locks.
-    -- FOR SHARE, not FOR KEY SHARE: entity_access's unique indexes are partial, so moving a grant
-    -- to another item or source is not a key update.
-    PERFORM 1 FROM entity_access
-    WHERE entity_type = TG_ARGV[0] AND entity_id::text = ANY (ids)
-    FOR SHARE;
-    PERFORM source_items_rebuild(TG_ARGV[0], ids);
-    RETURN NULL;
-END $$;
-
-CREATE FUNCTION source_items_items_deleted() RETURNS trigger
+-- Readies this session's record of changes and schedules source_items_apply for this transaction's
+-- commit. Statement triggers call it, then insert into pg_temp.source_items_pending.
+CREATE FUNCTION source_items_prepare() RETURNS void
 LANGUAGE plpgsql AS $$
 BEGIN
     PERFORM source_items_require_read_committed();
-    DELETE FROM source_items s
-    USING old_rows o
-    WHERE s.entity_type = TG_ARGV[0] AND s.entity_id = o.id;
+    IF to_regclass('pg_temp.source_items_pending') IS NULL THEN
+        -- change: 'item' rewrites the item's rows, 'grant' one (item, source) row, 'state' the
+        -- item's sort keys, 'truncate' every row of the input table named in entity_type.
+        CREATE TEMPORARY TABLE source_items_pending (
+            change text NOT NULL,
+            entity_type text NOT NULL,
+            entity_id text,
+            source_id text
+        ) ON COMMIT DELETE ROWS;
+        CREATE TEMPORARY TABLE source_items_commit (scheduled boolean) ON COMMIT DELETE ROWS;
+        CREATE CONSTRAINT TRIGGER source_items_apply AFTER INSERT ON pg_temp.source_items_commit
+            DEFERRABLE INITIALLY DEFERRED
+            FOR EACH ROW EXECUTE FUNCTION source_items_apply();
+        ALTER TABLE pg_temp.source_items_commit ENABLE ALWAYS TRIGGER source_items_apply;
+    END IF;
+    IF coalesce(current_setting('source_items.pending', true), '') = '' THEN
+        INSERT INTO pg_temp.source_items_commit VALUES (true);
+        PERFORM set_config('source_items.pending', 'scheduled', true);
+    END IF;
+END $$;
+
+-- Grant changes, once per statement. Old and new grants are compared as multisets of (item, source)
+-- rather than paired by id, so access-level changes record nothing and a statement that also
+-- rewrites grant ids is still seen.
+CREATE FUNCTION source_items_grants_changed() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM source_items_prepare();
+    IF TG_OP = 'INSERT' THEN
+        INSERT INTO pg_temp.source_items_pending
+        SELECT 'grant', entity_type, entity_id::text, source_id FROM new_rows
+        WHERE entity_type IN ('document', 'chat', 'project');
+    ELSIF TG_OP = 'DELETE' THEN
+        INSERT INTO pg_temp.source_items_pending
+        SELECT 'grant', entity_type, entity_id::text, source_id FROM old_rows
+        WHERE entity_type IN ('document', 'chat', 'project');
+    ELSE
+        INSERT INTO pg_temp.source_items_pending
+        SELECT 'grant', k.entity_type, k.entity_id::text, k.source_id
+        FROM (
+            (SELECT entity_type, entity_id, source_id FROM new_rows
+             EXCEPT ALL
+             SELECT entity_type, entity_id, source_id FROM old_rows)
+            UNION ALL
+            (SELECT entity_type, entity_id, source_id FROM old_rows
+             EXCEPT ALL
+             SELECT entity_type, entity_id, source_id FROM new_rows)
+        ) k
+        WHERE k.entity_type IN ('document', 'chat', 'project');
+    END IF;
     RETURN NULL;
 END $$;
 
--- Saves already hold the item's row lock, so the item's rows are current here. A changed id is a
--- removal of the old id and an insert of the new one.
+-- TG_ARGV[0] is the entity_type the table's rows have in entity_access. Inserts and deletes rewrite
+-- the item's rows.
+CREATE FUNCTION source_items_items_changed() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM source_items_prepare();
+    IF TG_OP = 'INSERT' THEN
+        INSERT INTO pg_temp.source_items_pending
+        SELECT 'item', TG_ARGV[0], id, NULL FROM new_rows;
+    ELSE
+        INSERT INTO pg_temp.source_items_pending
+        SELECT 'item', TG_ARGV[0], id, NULL FROM old_rows;
+    END IF;
+    RETURN NULL;
+END $$;
+
+-- A save changes the item's sort key; a changed id removes the old id and adds the new one.
 CREATE FUNCTION source_items_item_updated() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
-    PERFORM source_items_require_read_committed();
+    PERFORM source_items_prepare();
     IF NEW.id IS DISTINCT FROM OLD.id THEN
-        DELETE FROM source_items WHERE entity_type = TG_ARGV[0] AND entity_id = OLD.id;
-        PERFORM source_items_take_keys(TG_ARGV[0], ARRAY[NEW.id], false);
-        PERFORM 1 FROM entity_access
-        WHERE entity_type = TG_ARGV[0] AND entity_id::text = NEW.id
-        FOR SHARE;
-        PERFORM source_items_rebuild(TG_ARGV[0], ARRAY[NEW.id]);
+        INSERT INTO pg_temp.source_items_pending
+        VALUES ('item', TG_ARGV[0], OLD.id, NULL), ('item', TG_ARGV[0], NEW.id, NULL);
     ELSE
-        UPDATE source_items
-        SET sort_ts = CASE WHEN NEW."deletedAt" IS NULL THEN NEW."updatedAt" END
-        WHERE entity_type = TG_ARGV[0] AND entity_id = NEW.id;
+        INSERT INTO pg_temp.source_items_pending VALUES ('state', TG_ARGV[0], NEW.id, NULL);
     END IF;
     RETURN NULL;
 END $$;
 
 CREATE FUNCTION source_items_sub_type_changed() RETURNS trigger
 LANGUAGE plpgsql AS $$
-DECLARE
-    ids text[];
 BEGIN
-    PERFORM source_items_require_read_committed();
-    IF TG_OP = 'INSERT' THEN
-        ids := ARRAY(SELECT document_id FROM new_rows);
-    ELSIF TG_OP = 'DELETE' THEN
-        ids := ARRAY(SELECT document_id FROM old_rows);
-    ELSE
-        ids := ARRAY(
-            SELECT o.document_id FROM old_rows o
-            UNION
-            SELECT n.document_id FROM new_rows n
-        );
+    PERFORM source_items_prepare();
+    IF TG_OP IN ('INSERT', 'UPDATE') THEN
+        INSERT INTO pg_temp.source_items_pending
+        SELECT 'item', 'document', document_id, NULL FROM new_rows;
     END IF;
-    PERFORM source_items_lock('document', ids, ids);
-    PERFORM source_items_rebuild('document', ids);
+    IF TG_OP IN ('DELETE', 'UPDATE') THEN
+        INSERT INTO pg_temp.source_items_pending
+        SELECT 'item', 'document', document_id, NULL FROM old_rows;
+    END IF;
     RETURN NULL;
 END $$;
 
@@ -348,14 +346,8 @@ END $$;
 CREATE FUNCTION source_items_truncated() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
-    PERFORM source_items_require_read_committed();
-    IF TG_ARGV[0] = 'entity_access' THEN
-        DELETE FROM source_items;
-    ELSIF TG_ARGV[0] = 'document_sub_type' THEN
-        UPDATE source_items SET kind = 'document' WHERE kind = 'task';
-    ELSE
-        DELETE FROM source_items WHERE entity_type = TG_ARGV[0];
-    END IF;
+    PERFORM source_items_prepare();
+    INSERT INTO pg_temp.source_items_pending VALUES ('truncate', TG_ARGV[0], NULL, NULL);
     RETURN NULL;
 END $$;
 
@@ -385,10 +377,10 @@ CREATE TRIGGER source_items_truncated AFTER TRUNCATE ON document_sub_type
 
 CREATE TRIGGER source_items_inserted AFTER INSERT ON "Document"
     REFERENCING NEW TABLE AS new_rows
-    FOR EACH STATEMENT EXECUTE FUNCTION source_items_items_inserted('document');
+    FOR EACH STATEMENT EXECUTE FUNCTION source_items_items_changed('document');
 CREATE TRIGGER source_items_deleted AFTER DELETE ON "Document"
     REFERENCING OLD TABLE AS old_rows
-    FOR EACH STATEMENT EXECUTE FUNCTION source_items_items_deleted('document');
+    FOR EACH STATEMENT EXECUTE FUNCTION source_items_items_changed('document');
 CREATE TRIGGER source_items_updated AFTER UPDATE ON "Document"
     FOR EACH ROW
     WHEN (OLD.id IS DISTINCT FROM NEW.id
@@ -400,10 +392,10 @@ CREATE TRIGGER source_items_truncated AFTER TRUNCATE ON "Document"
 
 CREATE TRIGGER source_items_inserted AFTER INSERT ON "Chat"
     REFERENCING NEW TABLE AS new_rows
-    FOR EACH STATEMENT EXECUTE FUNCTION source_items_items_inserted('chat');
+    FOR EACH STATEMENT EXECUTE FUNCTION source_items_items_changed('chat');
 CREATE TRIGGER source_items_deleted AFTER DELETE ON "Chat"
     REFERENCING OLD TABLE AS old_rows
-    FOR EACH STATEMENT EXECUTE FUNCTION source_items_items_deleted('chat');
+    FOR EACH STATEMENT EXECUTE FUNCTION source_items_items_changed('chat');
 CREATE TRIGGER source_items_updated AFTER UPDATE ON "Chat"
     FOR EACH ROW
     WHEN (OLD.id IS DISTINCT FROM NEW.id
@@ -415,10 +407,10 @@ CREATE TRIGGER source_items_truncated AFTER TRUNCATE ON "Chat"
 
 CREATE TRIGGER source_items_inserted AFTER INSERT ON "Project"
     REFERENCING NEW TABLE AS new_rows
-    FOR EACH STATEMENT EXECUTE FUNCTION source_items_items_inserted('project');
+    FOR EACH STATEMENT EXECUTE FUNCTION source_items_items_changed('project');
 CREATE TRIGGER source_items_deleted AFTER DELETE ON "Project"
     REFERENCING OLD TABLE AS old_rows
-    FOR EACH STATEMENT EXECUTE FUNCTION source_items_items_deleted('project');
+    FOR EACH STATEMENT EXECUTE FUNCTION source_items_items_changed('project');
 CREATE TRIGGER source_items_updated AFTER UPDATE ON "Project"
     FOR EACH ROW
     WHEN (OLD.id IS DISTINCT FROM NEW.id

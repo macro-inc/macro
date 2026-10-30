@@ -24,12 +24,11 @@ holds the backfill, the audit and the tests.
    ```
 
    It rewrites every document, chat and project, and every id the table holds,
-   in 500-item batches through `source_items_refresh`, the function the triggers
-   use, so it is safe to run alongside writers and to interrupt and rerun. Each
-   batch locks its items like a grant change and commits; contention retries
-   after one second with a 200 ms lock timeout, and 30 failed attempts on one
-   batch stop the run. The first run writes a row lock for every item as well
-   as the new rows, so watch database load and replication lag.
+   in 500-item batches through `source_items_refresh`, which takes the items'
+   buckets as a commit does, so it is safe to run alongside writers and to
+   interrupt and rerun. Contention retries after one second with a 200 ms lock
+   timeout, and 30 failed attempts on one batch stop the run. The first run also
+   creates the mutex rows, so watch database load and replication lag.
 3. **Audit the primary and every replica soup reads:**
 
    ```sh
@@ -52,22 +51,27 @@ holds the backfill, the audit and the tests.
 
 ## Consistency and recovery
 
-Every trigger locks an item before rewriting its rows and rewrites them in a
-later statement, so it reads whatever the previous lock holder committed. Saves
-already hold the item's row lock; grant and subtype changes take it in the same
-mode (`FOR NO KEY UPDATE`), in id order. An item insert in flight cannot be
-locked by another transaction, so the insert holds advisory keys and locks the
-grants it counted; a grant written for an item it cannot see waits on those keys
-and looks again. No transaction holds more than about 5,000 advisory keys.
+Statement triggers only record what changed, in a session temporary table; they
+take no locks, so no writer waits on anything it did not wait on before. At
+commit, a deferred trigger locks a mutex row per touched item's bucket
+(`source_items_mutex`, created on first use), in bucket order and in one
+statement, then rewrites those items' rows in later statements. Each rewrite
+therefore reads what the previous committer on that item committed. A
+transaction at commit waits only for other transactions at commit, which never
+wait on application locks, so the projection cannot add a deadlock to any
+application lock order. Mutex rows are row locks, so a transaction touching any
+number of items cannot fill PostgreSQL's shared lock table.
 
-Rows are rebuilt from the inputs rather than adjusted by deltas, so a rewrite of
-an item is always exact, whatever ran before it. The triggers refuse writes
-under REPEATABLE READ or SERIALIZABLE with `25000`: an older snapshot could
-miss a concurrent change.
+Grant changes rewrite only the (item, source) rows they touched, saves only sort
+keys, and inserts, deletes and subtype changes the item's rows; rows are rebuilt
+from the inputs rather than adjusted by deltas. The triggers refuse writes under
+REPEATABLE READ or SERIALIZABLE with `25000`: an older snapshot could miss a
+concurrent change.
 
-A bulk grant change holds its items' row locks until it commits. Deleting a
-team, for example, locks every document, chat and project shared with it while
-it rewrites their rows, so saves to those items wait for it.
+A bulk change rewrites its items' rows at commit while holding their buckets, so
+another transaction's commit on one of those items waits for it. Deleting a
+team that sees 200,000 items, for example, briefly delays commits that touch
+those items; it does not block saves in the middle of a transaction.
 
 For a read regression, set `SOUP_SOURCE_ITEMS_ENABLED=false` and restart.
 Drift can only come from disabling the triggers or writing `source_items` by

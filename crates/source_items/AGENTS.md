@@ -11,12 +11,15 @@ replica-mode loads; `entity_access` and the item tables stay authoritative.
 ## Start here
 
 - `crates/macro_db_client/migrations/*_source_items.sql`: the table, its read
-  index and the triggers, with the locking protocol in its header comment.
+  index and the triggers, which record changes per statement and rewrite rows
+  at commit under per-bucket mutex rows (header comment).
 - `src/backfill.rs`: fills rows for items that predate the triggers, through the
   same `source_items_refresh` function the triggers use.
 - `src/audit.rs`, `src/audit.sql`: counts rows that differ from the inputs, in
   one read-only snapshot.
 - `src/bin/source_items.rs`: `backfill` and `audit` subcommands for rollout.
+- `src/test/concurrency.rs`: each race in every commit order, and lock orders
+  from real writers that must not wait on the projection.
 - `src/test/fuzz.rs`: concurrent random writes with audits of every snapshot.
 
 ## Scope

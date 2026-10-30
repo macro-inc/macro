@@ -474,9 +474,10 @@ async fn rollback_and_other_isolation_levels_change_nothing(
     let mut conn = pool.acquire().await?;
     insert_document(&mut conn, DOC, "2026-01-01 00:00:00").await?;
 
+    // Rows change at commit, so a rolled-back write leaves nothing behind.
     let mut tx = pool.begin().await?;
     grant(&mut tx, "document", DOC, OWNER, "user").await?;
-    assert_eq!(rows(&mut tx, DOC).await?.len(), 1);
+    assert_eq!(rows(&mut tx, DOC).await?, []);
     tx.rollback().await?;
     assert_eq!(rows(&mut conn, DOC).await?, []);
 
@@ -530,22 +531,27 @@ async fn a_grant_change_rewrites_only_its_sources_rows(pool: PgPool) -> Result<(
     grant(&mut conn, "document", DOC, TEAM, "team").await?;
 
     let mut tx = pool.begin().await?;
+    let xid = sqlx::query_scalar!(
+        r#"SELECT (pg_current_xact_id()::text::bigint % 4294967296)::text AS "xid!""#
+    )
+    .fetch_one(&mut *tx)
+    .await?;
     grant(&mut tx, "document", DOC, MEMBER, "user").await?;
     sqlx::query!("DELETE FROM entity_access WHERE source_id = $1", TEAM)
         .execute(&mut *tx)
         .await?;
-    // The owner's row was neither rewritten nor locked by this transaction.
+    tx.commit().await?;
+    // The owner's row was neither rewritten nor locked by that transaction.
     let touched = sqlx::query_scalar!(
-        r#"SELECT array_agg(source_id ORDER BY source_id) AS "sources!" FROM source_items
-           WHERE entity_id = $1
-             AND (xmin::text = (pg_current_xact_id()::text::bigint % 4294967296)::text
-                  OR xmax::text = (pg_current_xact_id()::text::bigint % 4294967296)::text)"#,
-        DOC
+        r#"SELECT coalesce(array_agg(source_id ORDER BY source_id), '{}') AS "sources!"
+           FROM source_items
+           WHERE entity_id = $1 AND (xmin::text = $2 OR xmax::text = $2)"#,
+        DOC,
+        xid,
     )
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut *conn)
     .await?;
     assert_eq!(touched, [MEMBER]);
-    tx.commit().await?;
     assert_exact(&pool).await
 }
 

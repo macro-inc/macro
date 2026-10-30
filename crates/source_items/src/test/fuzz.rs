@@ -246,7 +246,6 @@ fn expected(error: &sqlx::Error) -> Option<String> {
 async fn transaction(
     tx: &mut Transaction<'_, Postgres>,
     rng: &mut StdRng,
-    key_limit: Option<i32>,
     tally: &mut Tally,
 ) -> Result<(), sqlx::Error> {
     sqlx::query("SET LOCAL lock_timeout = '5s'")
@@ -258,17 +257,6 @@ async fn transaction(
             .execute(&mut **tx)
             .await?;
     }
-    let limit = key_limit.unwrap_or_else(|| {
-        if rng.random_bool(0.3) {
-            rng.random_range(0..3)
-        } else {
-            4096
-        }
-    });
-    sqlx::query("SELECT set_config('source_items.key_limit', $1, true)")
-        .bind(limit.to_string())
-        .execute(&mut **tx)
-        .await?;
     for _ in 0..rng.random_range(1..=4) {
         if rng.random_bool(0.15) {
             // A write undone by a savepoint takes its trigger work with it.
@@ -286,12 +274,12 @@ async fn transaction(
     Ok(())
 }
 
-async fn worker(pool: PgPool, seed: u64, key_limit: Option<i32>) -> Result<Tally, sqlx::Error> {
+async fn worker(pool: PgPool, seed: u64) -> Result<Tally, sqlx::Error> {
     let mut rng = StdRng::seed_from_u64(seed);
     let mut tally = Tally::default();
     for _ in 0..TRANSACTIONS_PER_WORKER {
         let mut tx = pool.begin().await?;
-        match transaction(&mut tx, &mut rng, key_limit, &mut tally).await {
+        match transaction(&mut tx, &mut rng, &mut tally).await {
             Ok(()) if rng.random_bool(0.85) => match tx.commit().await {
                 Ok(()) => tally.committed += 1,
                 Err(error) => {
@@ -315,7 +303,7 @@ async fn worker(pool: PgPool, seed: u64, key_limit: Option<i32>) -> Result<Tally
     Ok(tally)
 }
 
-async fn run(pool: PgPool, key_limit: Option<i32>) -> Result<(), sqlx::Error> {
+async fn run(pool: PgPool) -> Result<(), sqlx::Error> {
     let (stop, stopped) = watch::channel(false);
     let auditor = {
         let pool = pool.clone();
@@ -335,7 +323,7 @@ async fn run(pool: PgPool, key_limit: Option<i32>) -> Result<(), sqlx::Error> {
         })
     };
     let workers = (0..WORKERS)
-        .map(|seed| tokio::spawn(worker(pool.clone(), seed, key_limit)))
+        .map(|seed| tokio::spawn(worker(pool.clone(), seed)))
         .collect::<Vec<_>>();
     let mut total = Tally::default();
     for handle in workers {
@@ -368,12 +356,5 @@ async fn run(pool: PgPool, key_limit: Option<i32>) -> Result<(), sqlx::Error> {
 async fn random_concurrent_writes_keep_every_snapshot_exact(
     pool: PgPool,
 ) -> Result<(), sqlx::Error> {
-    run(pool, None).await
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn random_concurrent_writes_through_bucket_and_global_keys(
-    pool: PgPool,
-) -> Result<(), sqlx::Error> {
-    run(pool, Some(0)).await
+    run(pool).await
 }
