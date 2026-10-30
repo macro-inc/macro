@@ -3,12 +3,21 @@ import { toast } from '@core/component/Toast/Toast';
 import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { ThrownResultError } from '@core/util/result';
 import { useReauthenticateGithubMutation } from '@queries/auth';
 import { fetchGithubLinkStatus } from '@queries/auth/github-link';
 import { createSignal, onCleanup, onMount } from 'solid-js';
 
 async function checkGithubReauthenticationStatus(): Promise<boolean> {
-  return (await fetchGithubLinkStatus()).status === 'reauthentication_required';
+  try {
+    const link = await fetchGithubLinkStatus();
+    return link.status === 'reauthentication_required';
+  } catch (error) {
+    // An error answer from the auth service is not a reauthentication error;
+    // a check that got no answer still fails, so callers keep their status.
+    if (error instanceof ThrownResultError) return false;
+    throw error;
+  }
 }
 
 /**
