@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createLoroManager } from '@macro-inc/collaboration/collab/manager';
 import {
   type LiveSyncSource,
@@ -30,7 +31,7 @@ export function createTestContentSession(
   let disposed = false;
   let channel: BroadcastChannel | undefined;
   const key = `marketing-test-surface:${sourceId}`;
-  void (async () => {
+  const connect = async () => {
     try {
       if (
         new URLSearchParams(location.search).get('failContent') === 'once' &&
@@ -100,7 +101,8 @@ export function createTestContentSession(
           error instanceof Error ? error.message : String(error)
         );
     }
-  })();
+  };
+  fireAndForget(connect(), 'email-marketing.test-collaboration');
   return {
     sourceId,
     loroManager,

@@ -1,6 +1,7 @@
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import FlowArrowIcon from '@phosphor/flow-arrow.svg';
-import { ComposerSurface } from '@ui';
+import ArrowUpIcon from '@icon/system/regular/arrow-up.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import FlowArrowIcon from '@icon/system/regular/tree-structure.svg';
+import { Button, ComposerSurface, Input, inputClasses } from '@ui';
 import { For, Show } from 'solid-js';
 import type { MarketingCapabilities } from '../context/contracts';
 import type { Campaign, Sender, SequenceStep } from '../core/model';
@@ -9,8 +10,6 @@ import {
   SequenceContentEditor,
 } from './sequence-content-editor';
 
-const fieldClass =
-  'w-full rounded-lg border border-edge-muted bg-input px-3 py-2 text-sm text-ink placeholder:text-ink-placeholder focus:border-accent focus:outline-none disabled:opacity-60';
 export function SequenceEditor(props: {
   campaign: Campaign;
   senders: Sender[];
@@ -38,9 +37,8 @@ export function SequenceEditor(props: {
       <div class="grid gap-4 sm:grid-cols-2">
         <label class="space-y-2 text-xs font-medium">
           Campaign name
-          <input
+          <Input
             aria-label="Campaign name"
-            class={fieldClass}
             value={props.campaign.name}
             disabled={props.disabled}
             onInput={(event) => change({ name: event.currentTarget.value })}
@@ -50,7 +48,7 @@ export function SequenceEditor(props: {
           Send from
           <select
             aria-label="Send from"
-            class={fieldClass}
+            class={inputClasses()}
             value={props.campaign.senderId}
             disabled={props.disabled}
             onChange={(event) =>
@@ -71,9 +69,8 @@ export function SequenceEditor(props: {
       </div>
       <label class="block space-y-2 text-xs font-medium">
         Description <span class="font-normal text-ink-muted">optional</span>
-        <input
+        <Input
           aria-label="Campaign description"
-          class={fieldClass}
           value={props.campaign.description}
           disabled={props.disabled}
           placeholder="What does this sequence help people do?"
@@ -117,19 +114,21 @@ export function SequenceEditor(props: {
                       <h3 class="text-sm font-medium">Email {index() + 1}</h3>
                     </div>
                     <div class="flex items-center gap-3">
-                      <button
+                      <Button
                         type="button"
-                        class="text-xs text-ink-muted hover:text-ink"
+                        variant="ghost"
+                        size="xs"
                         onClick={() => props.onPreview(step())}
                       >
                         Preview
-                      </button>
+                      </Button>
                       <Show when={!props.disabled}>
-                        <button
+                        <Button
                           type="button"
+                          variant="ghost"
+                          size="icon-xs"
                           aria-label={`Move email ${index() + 1} up`}
                           disabled={index() === 0}
-                          class="text-xs text-ink-muted disabled:opacity-30"
                           onClick={() => {
                             const steps = [...props.campaign.steps];
                             const at = index();
@@ -140,12 +139,13 @@ export function SequenceEditor(props: {
                             change({ steps });
                           }}
                         >
-                          ↑
-                        </button>
-                        <button
+                          <ArrowUpIcon aria-hidden="true" class="size-3.5" />
+                        </Button>
+                        <Button
                           type="button"
+                          variant="danger-ghost"
+                          size="xs"
                           aria-label={`Remove email ${index() + 1}`}
-                          class="text-xs text-ink-muted hover:text-failure"
                           onClick={() =>
                             change({
                               steps: props.campaign.steps.filter(
@@ -155,19 +155,20 @@ export function SequenceEditor(props: {
                           }
                         >
                           Remove
-                        </button>
+                        </Button>
                       </Show>
                     </div>
                   </div>
                   <div class="space-y-4 px-6 pb-6 pt-4">
                     <label class="flex items-center gap-2 text-xs text-ink-muted">
                       Wait
-                      <input
+                      <Input
                         aria-label={`Email ${index() + 1} delay days`}
                         type="number"
                         min="0"
                         max="365"
-                        class="w-16 rounded-md border border-edge-muted bg-input px-2 py-1 text-ink"
+                        size="xs"
+                        class="w-16"
                         value={step().delayDays}
                         disabled={props.disabled}
                         onInput={(event) =>
@@ -264,9 +265,10 @@ export function SequenceEditor(props: {
         }}
       </For>
       <Show when={!props.disabled}>
-        <button
+        <Button
           type="button"
-          class="w-full rounded-xl border border-dashed border-edge px-4 py-3 text-sm text-ink-muted hover:border-accent hover:text-accent disabled:opacity-50"
+          variant="secondary"
+          fullWidth
           disabled={props.campaign.steps.length >= 20}
           onClick={() =>
             change({
@@ -283,7 +285,7 @@ export function SequenceEditor(props: {
           }
         >
           ＋ Add email
-        </button>
+        </Button>
       </Show>
       <div class="flex items-center gap-3 rounded-lg bg-panel/50 px-4 py-3">
         <span class="text-success">✓</span>

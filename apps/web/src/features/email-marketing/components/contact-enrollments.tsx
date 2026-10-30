@@ -1,12 +1,14 @@
 import { For, Show } from 'solid-js';
-import type { Enrollment } from '../core/model';
-import { StatusBadge } from './status-badge';
+import type { AttentionReason, Enrollment } from '../core/model';
+import { AttentionBadge, StatusBadge } from './status-badge';
 
 export function ContactEnrollments(props: {
   entries: Enrollment[];
   loading?: boolean;
   error?: string;
   onOpen?: () => void;
+  /** A problem to show instead of the stored status, when the host knows one. */
+  attention?: (entry: Enrollment) => AttentionReason | undefined;
 }) {
   return (
     <section
@@ -60,7 +62,12 @@ export function ContactEnrollments(props: {
                       scheduled emails
                     </p>
                   </div>
-                  <StatusBadge status={entry.status} />
+                  <Show
+                    when={props.attention?.(entry)}
+                    fallback={<StatusBadge status={entry.status} />}
+                  >
+                    {(reason) => <AttentionBadge reason={reason()} />}
+                  </Show>
                 </div>
               )}
             </For>

@@ -1,6 +1,9 @@
 # Email Marketing v1
 
-Email Marketing is a standalone outer-sidebar module at `/app/email-marketing`.
+Email Marketing is a standalone outer-sidebar module at `/app/email-marketing`,
+gated by the `enable-email-marketing` flag (`VITE_ENABLE_EMAIL_MARKETING`; on in
+dev). The flag hides the sidebar item, redirects the route, and hides the CRM
+contact card.
 It owns campaigns containing ordered email steps, enrolls existing Macro/Gmail
 contacts, and resolves optional CRM contact IDs by normalized email. CRM contact
 overviews render the same enrollment records. CRM is not required.
@@ -41,11 +44,21 @@ before scheduling. Partial failures attempt to cancel every created draft and
 retain a visible recovery state. A start time at least ten minutes away provides
 room for persistence and rollback. Enrollment batches are limited to fifty
 contacts in the UI. Duplicate addresses in a campaign are blocked even when the
-prior enrollment has stopped. Database conflicts are shown without silently
-retrying an insert. Pause/resume uses the enrollment's original snapshot;
-resuming never repeats a past-due step. Cancellation distinguishes the backend's
-actual delivery-started response from other failures and never deletes a sent
-message.
+prior enrollment has stopped; a failed enrollment that never queued anything is
+re-enrolled in place. Database conflicts are shown without silently retrying an
+insert. Pause/resume uses the enrollment's original snapshot, keeps the original
+calendar-day cadence, and never repeats a past-due step. A stale tab cannot turn
+a stopped enrollment back into a paused one.
+
+Each queued step stores its draft's `draft_generation`, which schedule, cancel
+and delete pass back. When the scheduler refuses a cancel, the draft is re-read
+to decide between "delivery started", a retry with the newer generation (the
+draft was touched in Mail), or needs-attention. A sent message is never deleted.
+On load, queued steps are checked against the inbox's scheduled list so failed,
+unconfirmed, or missing sends (for example after Gmail rate limits, or after the
+inbox was disconnected, which deletes its scheduled messages) show as needing
+attention instead of "Scheduled". Only databases the user owns are used, so a
+teammate's shared Email Marketing database is never adopted.
 
 ## Deliberate v1 boundaries
 
@@ -89,8 +102,7 @@ Use Bun as documented in `apps/web/AGENTS.md`:
 
 ```sh
 bunx vitest run src/features/email-marketing \
-  src/lib/service-clients/service-storage/email-marketing.test.ts \
-  src/lib/service-clients/service-email/sequence-cancellation.test.ts
+  src/lib/service-clients/service-storage/email-marketing.test.ts
 bunx playwright test --config src/features/email-marketing/browser-test/playwright.config.ts
 NODE_OPTIONS=--max-old-space-size=10000 bun run type-check
 ```

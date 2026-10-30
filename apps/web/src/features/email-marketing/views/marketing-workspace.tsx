@@ -1,20 +1,21 @@
-import { Dialog } from '@kobalte/core/dialog';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import FlowArrowIcon from '@phosphor/flow-arrow.svg';
-import GearIcon from '@phosphor/gear-six.svg';
-import UsersIcon from '@phosphor/users.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import GearIcon from '@icon/system/regular/gear-six.svg';
+import FlowArrowIcon from '@icon/system/regular/tree-structure.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
+import X from '@icon/system/regular/x.svg';
+import { ActionDialogShell, Button, Dialog, Input, inputClasses } from '@ui';
 import { createSignal, For, onMount, Show } from 'solid-js';
 import { CampaignList } from '../components/campaign-list';
 import { ContactEnrollments } from '../components/contact-enrollments';
-import {
-  EnrollmentDialog,
-  inputClass,
-  primaryButton,
-  secondaryButton,
-} from '../components/enrollment-dialog';
+import { EnrollmentDialog } from '../components/enrollment-dialog';
 import type { CompositionState } from '../components/sequence-content-editor';
 import { SequenceEditor } from '../components/sequence-editor';
-import { StatusBadge } from '../components/status-badge';
+import {
+  AttentionBadge,
+  attentionDetail,
+  StatusBadge,
+} from '../components/status-badge';
 import type { MarketingCapabilities } from '../context/contracts';
 import {
   type Campaign,
@@ -24,6 +25,41 @@ import {
   type SequenceStep,
 } from '../core/model';
 import { createMarketingWorkspace } from '../primitives/workspace';
+
+const SURFACE = 'email-marketing';
+
+function newCampaign(name: string, senderId: string, template: string) {
+  const step = (delayDays: number, subject: string, body: string) => ({
+    id: crypto.randomUUID(),
+    delayDays,
+    subject,
+    body,
+  });
+  const campaign: Campaign = {
+    id: crypto.randomUUID(),
+    name: name.trim(),
+    description: '',
+    senderId,
+    status: 'draft',
+    updatedAt: new Date().toISOString(),
+    steps:
+      template === 'welcome'
+        ? [
+            step(
+              0,
+              'Welcome, {{firstName}}',
+              'Hi {{firstName}},\n\nThanks for joining us. I’m glad you’re here.\n\nWhat are you hoping to get out of your experience? Just reply — I’d love to hear.'
+            ),
+            step(
+              2,
+              'A little help getting started',
+              'Hi {{firstName}},\n\nChecking in to see how things are going. If you have any questions, hit reply and I’ll help you get started.'
+            ),
+          ]
+        : [step(0, '', '')],
+  };
+  return campaign;
+}
 
 export function MarketingWorkspaceView(props: {
   capabilities: MarketingCapabilities;
@@ -66,7 +102,7 @@ export function MarketingWorkspaceView(props: {
         )
       ));
   onMount(() => {
-    void workspace.initialize();
+    fireAndForget(workspace.initialize(), SURFACE);
   });
   const campaigns = () =>
     workspace
@@ -151,6 +187,26 @@ export function MarketingWorkspaceView(props: {
     setSection(next);
     setFilter('');
   };
+  const createCampaign = async (event: SubmitEvent) => {
+    event.preventDefault();
+    const campaign = newCampaign(
+      newName(),
+      workspace.senders().find((sender) => sender.ready)?.id ?? '',
+      template()
+    );
+    if (
+      !(await workspace.run(
+        () => workspace.save(campaign, false),
+        'Campaign created.'
+      ))
+    )
+      return;
+    setNewOpen(false);
+    const saved = workspace
+      .snapshot()
+      .campaigns.find((item) => item.id === campaign.id);
+    if (saved) openCampaign(saved);
+  };
   const previewContact = () =>
     workspace.contacts().find((contact) => contact.email === previewEmail()) ??
     workspace.contacts()[0] ?? {
@@ -173,15 +229,16 @@ export function MarketingWorkspaceView(props: {
           </span>
         </div>
         <Show when={workspace.snapshot().databaseId}>
-          <button
+          <Button
             type="button"
-            class="text-xs text-ink-muted hover:text-ink"
+            variant="ghost"
+            size="xs"
             onClick={() =>
               props.capabilities.openDatabase(workspace.snapshot().databaseId!)
             }
           >
             Open database ↗
-          </button>
+          </Button>
         </Show>
       </header>
       <div class="flex min-h-0 flex-1 flex-col sm:flex-row">
@@ -207,7 +264,7 @@ export function MarketingWorkspaceView(props: {
                 disabled={workspace.busy()}
                 class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-ink-muted disabled:opacity-50"
                 classList={{ 'bg-page text-ink shadow-sm': section() === item }}
-                onClick={() => void go(item)}
+                onClick={() => fireAndForget(go(item), SURFACE)}
               >
                 <span class="w-4 text-base" aria-hidden="true">
                   {item === 'campaigns' ? (
@@ -249,7 +306,7 @@ export function MarketingWorkspaceView(props: {
                 type="button"
                 class="shrink-0 underline"
                 disabled={workspace.busy()}
-                onClick={() => void workspace.initialize()}
+                onClick={() => fireAndForget(workspace.initialize(), SURFACE)}
               >
                 Refresh
               </button>
@@ -294,20 +351,38 @@ export function MarketingWorkspaceView(props: {
                 {(campaign) => (
                   <>
                     <div class="shrink-0 border-b border-edge-muted px-6 pt-5">
-                      <button
+                      <Button
                         type="button"
-                        class="mb-4 text-xs text-ink-muted hover:text-ink"
+                        variant="ghost"
+                        size="xs"
+                        class="mb-4"
                         disabled={workspace.busy()}
-                        onClick={() => void go('campaigns')}
+                        onClick={() => fireAndForget(go('campaigns'), SURFACE)}
                       >
                         ← All campaigns
-                      </button>
+                      </Button>
                       <div class="flex flex-wrap items-center justify-between gap-3">
                         <div class="flex items-center gap-3">
                           <h2 class="text-xl font-semibold">
                             {campaign().name}
                           </h2>
                           <StatusBadge status={campaign().status} />
+                          <Show
+                            when={
+                              campaign().senderId &&
+                              workspace.senderStatus(campaign().senderId) !==
+                                'ready' &&
+                              workspace.senderStatus(campaign().senderId)
+                            }
+                          >
+                            {(status) => (
+                              <span class="text-xs text-failure" role="alert">
+                                {status() === 'reauth'
+                                  ? 'Reconnect this Gmail inbox in Settings before enrolling.'
+                                  : attentionDetail('disconnected')}
+                              </span>
+                            )}
+                          </Show>
                           <Show when={changed()}>
                             <span class="text-xs text-ink-muted">
                               Unsaved changes
@@ -319,28 +394,32 @@ export function MarketingWorkspaceView(props: {
                             when={campaign().status === 'active'}
                             fallback={
                               <>
-                                <button
+                                <Button
                                   type="button"
-                                  class={secondaryButton}
+                                  variant="secondary"
                                   disabled={!canEdit() || !compositionReady()}
-                                  onClick={() => void save(false)}
+                                  onClick={() =>
+                                    fireAndForget(save(false), SURFACE)
+                                  }
                                 >
                                   {workspace.busy() ? 'Saving…' : 'Save draft'}
-                                </button>
-                                <button
+                                </Button>
+                                <Button
                                   type="button"
-                                  class={primaryButton}
+                                  variant="primary"
                                   disabled={!canEdit() || !compositionReady()}
-                                  onClick={() => void save(true)}
+                                  onClick={() =>
+                                    fireAndForget(save(true), SURFACE)
+                                  }
                                 >
                                   Activate campaign
-                                </button>
+                                </Button>
                               </>
                             }
                           >
-                            <button
+                            <Button
                               type="button"
-                              class={secondaryButton}
+                              variant="secondary"
                               disabled={
                                 workspace.busy() ||
                                 !workspace.snapshot().writable
@@ -362,10 +441,10 @@ export function MarketingWorkspaceView(props: {
                               }}
                             >
                               Pause campaign
-                            </button>
-                            <button
+                            </Button>
+                            <Button
                               type="button"
-                              class={primaryButton}
+                              variant="primary"
                               disabled={
                                 workspace.busy() ||
                                 !workspace.snapshot().writable
@@ -373,7 +452,7 @@ export function MarketingWorkspaceView(props: {
                               onClick={() => setEnrollOpen(true)}
                             >
                               ＋ Enroll contacts
-                            </button>
+                            </Button>
                           </Show>
                         </div>
                       </div>
@@ -452,30 +531,47 @@ export function MarketingWorkspaceView(props: {
                                         </p>
                                       </div>
                                       <div class="flex items-center gap-2">
-                                        <StatusBadge status={entry.status} />
+                                        <Show
+                                          when={workspace.enrollmentAttention(
+                                            entry
+                                          )}
+                                          fallback={
+                                            <StatusBadge
+                                              status={entry.status}
+                                            />
+                                          }
+                                        >
+                                          {(reason) => (
+                                            <AttentionBadge reason={reason()} />
+                                          )}
+                                        </Show>
                                         <Show
                                           when={entry.status === 'scheduled'}
                                         >
-                                          <button
+                                          <Button
                                             type="button"
-                                            class={secondaryButton}
+                                            variant="secondary"
+                                            size="sm"
                                             disabled={
                                               workspace.busy() ||
                                               !workspace.snapshot().writable
                                             }
                                             onClick={() =>
-                                              void workspace.run(
-                                                () =>
-                                                  workspace.engine.stop(
-                                                    entry,
-                                                    'paused'
-                                                  ),
-                                                'Enrollment paused.'
+                                              fireAndForget(
+                                                workspace.run(
+                                                  () =>
+                                                    workspace.engine.stop(
+                                                      entry,
+                                                      'paused'
+                                                    ),
+                                                  'Enrollment paused.'
+                                                ),
+                                                SURFACE
                                               )
                                             }
                                           >
                                             Pause
-                                          </button>
+                                          </Button>
                                         </Show>
                                         <Show
                                           when={
@@ -483,45 +579,53 @@ export function MarketingWorkspaceView(props: {
                                             campaign().status === 'active'
                                           }
                                         >
-                                          <button
+                                          <Button
                                             type="button"
-                                            class={secondaryButton}
+                                            variant="secondary"
+                                            size="sm"
                                             disabled={
                                               workspace.busy() ||
                                               !workspace.snapshot().writable
                                             }
                                             onClick={() =>
-                                              void workspace.run(async () => {
-                                                await workspace.engine.resume(
-                                                  entry
-                                                );
-                                              }, 'Future emails rescheduled.')
+                                              fireAndForget(
+                                                workspace.run(async () => {
+                                                  await workspace.engine.resume(
+                                                    entry
+                                                  );
+                                                }, 'Future emails rescheduled.'),
+                                                SURFACE
+                                              )
                                             }
                                           >
                                             Resume
-                                          </button>
+                                          </Button>
                                         </Show>
                                         <Show when={entry.status !== 'stopped'}>
-                                          <button
+                                          <Button
                                             type="button"
-                                            class={secondaryButton}
+                                            variant="secondary"
+                                            size="sm"
                                             disabled={
                                               workspace.busy() ||
                                               !workspace.snapshot().writable
                                             }
                                             onClick={() =>
-                                              void workspace.run(
-                                                () =>
-                                                  workspace.engine.stop(
-                                                    entry,
-                                                    'stopped'
-                                                  ),
-                                                'Enrollment stopped. Upcoming emails canceled.'
+                                              fireAndForget(
+                                                workspace.run(
+                                                  () =>
+                                                    workspace.engine.stop(
+                                                      entry,
+                                                      'stopped'
+                                                    ),
+                                                  'Enrollment stopped. Upcoming emails canceled.'
+                                                ),
+                                                SURFACE
                                               )
                                             }
                                           >
                                             Stop
-                                          </button>
+                                          </Button>
                                         </Show>
                                       </div>
                                     </div>
@@ -532,6 +636,15 @@ export function MarketingWorkspaceView(props: {
                                             <span class="text-ink-muted">
                                               {index() + 1}. {step.subject}
                                             </span>
+                                            <Show
+                                              when={workspace.stepIssue(step)}
+                                            >
+                                              {(issue) => (
+                                                <AttentionBadge
+                                                  reason={issue()}
+                                                />
+                                              )}
+                                            </Show>
                                             <span class="text-ink-subtle">
                                               {step.status ===
                                               'delivery_started'
@@ -551,6 +664,20 @@ export function MarketingWorkspaceView(props: {
                                       >
                                         {entry.error}
                                       </p>
+                                    </Show>
+                                    <Show
+                                      when={workspace.enrollmentAttention(
+                                        entry
+                                      )}
+                                    >
+                                      {(reason) => (
+                                        <p
+                                          class="mt-3 text-xs text-failure"
+                                          role="status"
+                                        >
+                                          {attentionDetail(reason())}
+                                        </p>
+                                      )}
                                     </Show>
                                   </article>
                                 )}
@@ -623,9 +750,9 @@ export function MarketingWorkspaceView(props: {
                 <p class="mt-2 text-sm text-ink-muted">
                   Your audience, connected across Macro.
                 </p>
-                <input
+                <Input
                   aria-label="Search marketing contacts"
-                  class={`${inputClass} my-6 max-w-sm`}
+                  class="my-6 max-w-sm"
                   placeholder="Search contacts"
                   value={filter()}
                   onInput={(event) => setFilter(event.currentTarget.value)}
@@ -666,7 +793,8 @@ export function MarketingWorkspaceView(props: {
                                 .snapshot()
                                 .enrollments.filter(
                                   (entry) =>
-                                    entry.contact.email === contact.email
+                                    normalizeEmail(entry.contact.email) ===
+                                    normalizeEmail(contact.email)
                                 ).length
                             }{' '}
                             sequences
@@ -757,77 +885,27 @@ export function MarketingWorkspaceView(props: {
       </div>
       <Dialog
         open={newOpen()}
+        position="center"
+        class="w-[min(480px,calc(100vw-16px))]"
         onOpenChange={(open) => {
           if (!workspace.busy()) setNewOpen(open);
         }}
       >
-        <Dialog.Portal>
-          <Dialog.Overlay class="fixed inset-0 z-100 bg-ink/20 backdrop-blur-sm" />
-          <Dialog.Content class="fixed left-1/2 top-1/2 z-101 w-[min(480px,94vw)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-edge-muted bg-page p-6 shadow-xl">
-            <Dialog.Title class="text-lg font-semibold">
-              Create a campaign
-            </Dialog.Title>
-            <Dialog.Description class="mt-1 text-sm text-ink-muted">
-              Start with a sequence that feels like you.
-            </Dialog.Description>
-            <form
-              class="mt-6 space-y-4"
-              onSubmit={async (event) => {
-                event.preventDefault();
-                const campaign: Campaign = {
-                  id: crypto.randomUUID(),
-                  name: newName().trim(),
-                  description: '',
-                  senderId:
-                    workspace.senders().find((sender) => sender.ready)?.id ??
-                    '',
-                  status: 'draft',
-                  updatedAt: new Date().toISOString(),
-                  steps:
-                    template() === 'welcome'
-                      ? [
-                          {
-                            id: crypto.randomUUID(),
-                            delayDays: 0,
-                            subject: 'Welcome, {{firstName}}',
-                            body: 'Hi {{firstName}},\n\nThanks for joining us. I’m glad you’re here.\n\nWhat are you hoping to get out of your experience? Just reply — I’d love to hear.',
-                          },
-                          {
-                            id: crypto.randomUUID(),
-                            delayDays: 2,
-                            subject: 'A little help getting started',
-                            body: 'Hi {{firstName}},\n\nChecking in to see how things are going. If you have any questions, hit reply and I’ll help you get started.',
-                          },
-                        ]
-                      : [
-                          {
-                            id: crypto.randomUUID(),
-                            delayDays: 0,
-                            subject: '',
-                            body: '',
-                          },
-                        ],
-                };
-                if (
-                  await workspace.run(
-                    () => workspace.save(campaign, false),
-                    'Campaign created.'
-                  )
-                ) {
-                  setNewOpen(false);
-                  openCampaign(
-                    workspace
-                      .snapshot()
-                      .campaigns.find((item) => item.id === campaign.id)!
-                  );
-                }
-              }}
-            >
+        <ActionDialogShell>
+          <form class="flex min-h-0 flex-col" onSubmit={createCampaign}>
+            <ActionDialogShell.Body>
+              <ActionDialogShell.Header>
+                <ActionDialogShell.Title>
+                  Create a campaign
+                </ActionDialogShell.Title>
+                <ActionDialogShell.Description>
+                  Start with a sequence that feels like you.
+                </ActionDialogShell.Description>
+              </ActionDialogShell.Header>
               <label class="block space-y-2 text-xs font-medium">
                 Campaign name
-                <input
+                <Input
                   aria-label="New campaign name"
-                  class={inputClass}
                   value={newName()}
                   required
                   maxLength={120}
@@ -838,7 +916,7 @@ export function MarketingWorkspaceView(props: {
                 Starting point
                 <select
                   aria-label="Campaign template"
-                  class={inputClass}
+                  class={inputClasses()}
                   value={template()}
                   onChange={(event) => setTemplate(event.currentTarget.value)}
                 >
@@ -851,50 +929,56 @@ export function MarketingWorkspaceView(props: {
                   {workspace.error()}
                 </p>
               </Show>
-              <div class="flex justify-end gap-2 pt-4">
-                <button
-                  type="button"
-                  class={secondaryButton}
-                  disabled={workspace.busy()}
-                  onClick={() => setNewOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  class={primaryButton}
-                  disabled={!newName().trim() || workspace.busy()}
-                >
-                  Create campaign
-                </button>
-              </div>
-            </form>
-          </Dialog.Content>
-        </Dialog.Portal>
+            </ActionDialogShell.Body>
+            <ActionDialogShell.Footer>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={workspace.busy()}
+                onClick={() => setNewOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={!newName().trim() || workspace.busy()}
+              >
+                Create campaign
+              </Button>
+            </ActionDialogShell.Footer>
+          </form>
+        </ActionDialogShell>
       </Dialog>
       <Dialog
         open={!!preview()}
+        position="center"
+        class="w-[min(650px,calc(100vw-16px))]"
         onOpenChange={(open) => {
           if (!open) setPreview(undefined);
         }}
       >
-        <Dialog.Portal>
-          <Dialog.Overlay class="fixed inset-0 z-100 bg-ink/20 backdrop-blur-sm" />
-          <Dialog.Content class="fixed left-1/2 top-1/2 z-101 max-h-[88vh] w-[min(650px,94vw)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-edge-muted bg-page p-6 shadow-xl">
-            <div class="flex justify-between">
-              <Dialog.Title class="text-lg font-semibold">
-                Email preview
-              </Dialog.Title>
-              <Dialog.CloseButton aria-label="Close preview">
-                ✕
-              </Dialog.CloseButton>
+        <ActionDialogShell class="max-h-[88vh]">
+          <div class="flex shrink-0 items-start justify-between gap-3 border-b border-edge-divider px-5 py-4">
+            <div>
+              <ActionDialogShell.Title>Email preview</ActionDialogShell.Title>
+              <ActionDialogShell.Description class="mt-1">
+                See the personalized email your contact receives.
+              </ActionDialogShell.Description>
             </div>
-            <Dialog.Description class="mt-1 text-xs text-ink-muted">
-              See the personalized email your contact receives.
-            </Dialog.Description>
+            <Dialog.CloseButton
+              as={Button}
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Close preview"
+            >
+              <X aria-hidden="true" class="size-4" />
+            </Dialog.CloseButton>
+          </div>
+          <ActionDialogShell.Body>
             <select
               aria-label="Preview contact"
-              class={`${inputClass} mt-5`}
+              class={inputClasses()}
               value={previewEmail()}
               onChange={(event) => setPreviewEmail(event.currentTarget.value)}
             >
@@ -909,8 +993,8 @@ export function MarketingWorkspaceView(props: {
                 )}
               </For>
             </select>
-            <div class="mt-5 overflow-hidden rounded-xl border border-edge-muted">
-              <div class="space-y-2 border-b border-edge-muted bg-panel/30 p-5">
+            <div class="overflow-hidden rounded-xl border border-edge-muted">
+              <div class="space-y-2 border-b border-edge-muted p-5">
                 <p class="text-xs text-ink-muted">
                   To: {previewContact().email}
                 </p>
@@ -926,51 +1010,58 @@ export function MarketingWorkspaceView(props: {
                 </p>
               </div>
             </div>
-          </Dialog.Content>
-        </Dialog.Portal>
+          </ActionDialogShell.Body>
+        </ActionDialogShell>
       </Dialog>
       <Dialog
         open={!!contactDetail()}
+        position="center"
+        class="w-[min(520px,calc(100vw-16px))]"
         onOpenChange={(open) => {
           if (!open) setContactDetail(undefined);
         }}
       >
-        <Dialog.Portal>
-          <Dialog.Overlay class="fixed inset-0 z-100 bg-ink/20 backdrop-blur-sm" />
-          <Dialog.Content class="fixed left-1/2 top-1/2 z-101 w-[min(520px,94vw)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-edge-muted bg-page p-6 shadow-xl">
-            <div class="flex justify-between">
-              <Dialog.Title class="text-lg font-semibold">
+        <ActionDialogShell>
+          <div class="flex shrink-0 items-start justify-between gap-3 border-b border-edge-divider px-5 py-4">
+            <div class="min-w-0">
+              <ActionDialogShell.Title class="truncate">
                 {contactDetail()?.name || contactDetail()?.email}
-              </Dialog.Title>
-              <Dialog.CloseButton aria-label="Close contact">
-                ✕
-              </Dialog.CloseButton>
+              </ActionDialogShell.Title>
+              <ActionDialogShell.Description class="mt-1 truncate">
+                {contactDetail()?.email}
+              </ActionDialogShell.Description>
             </div>
-            <Dialog.Description class="mt-1 text-sm text-ink-muted">
-              {contactDetail()?.email}
-            </Dialog.Description>
-            <div class="mt-5">
-              <ContactEnrollments
-                entries={workspace
-                  .snapshot()
-                  .enrollments.filter(
-                    (entry) =>
-                      normalizeEmail(entry.contact.email) ===
-                      normalizeEmail(contactDetail()?.email ?? '')
-                  )}
-              />
-            </div>
+            <Dialog.CloseButton
+              as={Button}
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Close contact"
+            >
+              <X aria-hidden="true" class="size-4" />
+            </Dialog.CloseButton>
+          </div>
+          <ActionDialogShell.Body>
+            <ContactEnrollments
+              attention={workspace.enrollmentAttention}
+              entries={workspace
+                .snapshot()
+                .enrollments.filter(
+                  (entry) =>
+                    normalizeEmail(entry.contact.email) ===
+                    normalizeEmail(contactDetail()?.email ?? '')
+                )}
+            />
             <Show when={contactDetail()?.crmContactId}>
-              <button
+              <Button
                 type="button"
-                class={`${secondaryButton} mt-5`}
+                variant="secondary"
                 onClick={() => props.capabilities.openContact(contactDetail()!)}
               >
                 Open CRM contact ↗
-              </button>
+              </Button>
             </Show>
-          </Dialog.Content>
-        </Dialog.Portal>
+          </ActionDialogShell.Body>
+        </ActionDialogShell>
       </Dialog>
     </main>
   );

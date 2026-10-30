@@ -47,14 +47,32 @@ const tables = [
   table('Email campaigns', 'campaign-table', 7),
   table('Sequence enrollments', 'enrollment-table', 12),
 ];
+function listed(
+  id: string,
+  createdAt: string,
+  grant: string,
+  tableNames: string[]
+) {
+  return {
+    database: {
+      id,
+      name: 'Email Marketing',
+      trashed_at: null,
+      created_at: createdAt,
+      owner_id: grant === 'owner' ? 'me' : 'teammate',
+    },
+    grant,
+    tables: tableNames.map((name) => ({ name })),
+  };
+}
 beforeEach(() => {
   vi.clearAllMocks();
   client.list.mockResolvedValue(
     ok([
-      {
-        database: { id: 'database', name: 'Email Marketing', trashed_at: null },
-        tables: tables.map((table) => table.table),
-      },
+      listed('database', '2026-10-01T00:00:00Z', 'owner', [
+        'Email campaigns',
+        'Sequence enrollments',
+      ]),
     ])
   );
   client.get.mockImplementation(async () =>
@@ -144,6 +162,116 @@ describe('Macro Databases sequence records', () => {
     await expect(repository.saveCampaign(campaign)).rejects.toThrow(
       'edit access'
     );
+    expect(client.applyOps).not.toHaveBeenCalled();
+  });
+  it('only adopts a database the user owns, choosing the oldest, and ignores shared ones', async () => {
+    client.list.mockResolvedValue(
+      ok([
+        listed('shared', '2026-01-01T00:00:00Z', 'edit', ['Email campaigns']),
+        listed('newer', '2026-10-02T00:00:00Z', 'owner', [
+          'Email campaigns',
+          'Sequence enrollments',
+        ]),
+        listed('older', '2026-10-01T00:00:00Z', 'owner', [
+          'Email campaigns',
+          'Sequence enrollments',
+        ]),
+      ])
+    );
+    const snapshot = await createDatabaseMarketingRepository().load();
+    expect(snapshot.databaseId).toBe('older');
+    expect(client.get).toHaveBeenCalledWith({ id: 'older' });
+  });
+  it('creates its own database when only a shared one exists', async () => {
+    client.list
+      .mockResolvedValueOnce(
+        ok([
+          listed('shared', '2026-01-01T00:00:00Z', 'edit', [
+            'Email campaigns',
+            'Sequence enrollments',
+          ]),
+        ])
+      )
+      .mockResolvedValueOnce(
+        ok([
+          listed('shared', '2026-01-01T00:00:00Z', 'edit', [
+            'Email campaigns',
+            'Sequence enrollments',
+          ]),
+        ])
+      );
+    client.create.mockResolvedValue(ok({ id: 'database' }));
+    client.importTable.mockResolvedValue(ok({}));
+    const repository = createDatabaseMarketingRepository();
+    expect((await repository.load()).databaseId).toBeUndefined();
+    await repository.saveCampaign(campaign);
+    expect(client.create).toHaveBeenCalledTimes(1);
+    expect(client.importTable).toHaveBeenCalledTimes(2);
+  });
+  it('finishes an interrupted setup instead of failing every later load', async () => {
+    client.list.mockResolvedValue(
+      ok([listed('database', '2026-10-01T00:00:00Z', 'owner', ['Table 1'])])
+    );
+    // First read: only the starter table exists. After the imports: both tables.
+    client.get
+      .mockResolvedValueOnce(
+        ok({ database: { id: 'database' }, grant: 'owner', tables: [] })
+      )
+      .mockResolvedValueOnce(
+        ok({ database: { id: 'database' }, grant: 'owner', tables: [] })
+      );
+    client.importTable.mockResolvedValue(ok({}));
+    const repository = createDatabaseMarketingRepository();
+    const empty = await repository.load();
+    expect(empty).toMatchObject({ campaigns: [], enrollments: [] });
+    await repository.saveCampaign(campaign);
+    expect(client.create).not.toHaveBeenCalled();
+    expect(
+      client.importTable.mock.calls.map((call) => call[0].request.name)
+    ).toEqual(['Email campaigns', 'Sequence enrollments']);
+    expect(client.applyOps).toHaveBeenCalledTimes(1);
+  });
+  it('reads a missing enrollments table as empty and imports only that table on write', async () => {
+    client.get
+      .mockResolvedValueOnce(
+        ok({
+          database: { id: 'database' },
+          grant: 'owner',
+          tables: structuredClone(tables.slice(0, 1)),
+        })
+      )
+      .mockResolvedValueOnce(
+        ok({
+          database: { id: 'database' },
+          grant: 'owner',
+          tables: structuredClone(tables.slice(0, 1)),
+        })
+      );
+    client.importTable.mockResolvedValue(ok({}));
+    const repository = createDatabaseMarketingRepository();
+    const snapshot = await repository.load();
+    expect(snapshot.enrollments).toEqual([]);
+    expect(snapshot.campaigns).toHaveLength(1);
+    await repository.saveEnrollment(enrollment);
+    expect(
+      client.importTable.mock.calls.map((call) => call[0].request.name)
+    ).toEqual(['Sequence enrollments']);
+  });
+  it('refuses a write that would exceed the request size limit before sending it', async () => {
+    const repository = createDatabaseMarketingRepository();
+    await repository.load();
+    const huge: Enrollment = {
+      ...enrollment,
+      steps: Array.from({ length: 20 }, (_, index) => ({
+        id: `step-${index}`,
+        delayDays: 0,
+        subject: 'Hi',
+        body: '"'.repeat(49_000),
+        sendAt: '2026-10-03T16:00:00Z',
+        status: 'pending' as const,
+      })),
+    };
+    await expect(repository.saveEnrollment(huge)).rejects.toThrow('too large');
     expect(client.applyOps).not.toHaveBeenCalled();
   });
 });

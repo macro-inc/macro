@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from '@playwright/test';
 
@@ -8,19 +10,20 @@ export default defineConfig({
   testMatch: '*.browser.e2e.ts',
   workers: 1,
   timeout: 120_000,
-  outputDir: fileURLToPath(
-    new URL('../../../../../../work/email-marketing-browser', import.meta.url)
-  ),
+  outputDir:
+    process.env.EMAIL_MARKETING_TEST_OUTPUT ??
+    join(tmpdir(), 'email-marketing-browser'),
   use: {
     baseURL: `http://localhost:${port}`,
     headless: true,
     viewport: { width: 1440, height: 1000 },
-    video: 'on',
+    // Recording needs Playwright's ffmpeg; set EMAIL_MARKETING_TEST_VIDEO=1 for the walkthrough.
+    video: process.env.EMAIL_MARKETING_TEST_VIDEO ? 'on' : 'off',
     screenshot: 'only-on-failure',
-    launchOptions: {
-      executablePath:
-        process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ?? '/usr/bin/chromium',
-    },
+    // Set this for a system or Nix Chromium; otherwise Playwright's own browser runs.
+    launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+      ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH }
+      : {},
   },
   webServer: {
     command: `MACRO_DEV_HTTPS=false bunx vite --port ${port} --strictPort`,

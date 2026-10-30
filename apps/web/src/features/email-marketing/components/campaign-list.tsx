@@ -1,7 +1,11 @@
-import FlowArrowIcon from '@phosphor/flow-arrow.svg';
+import FlowArrowIcon from '@icon/system/regular/tree-structure.svg';
+import { Button, Input, inputClasses } from '@ui';
 import { For, Show } from 'solid-js';
-import type { Campaign, MarketingSnapshot } from '../core/model';
-import { inputClass, primaryButton } from './enrollment-dialog';
+import {
+  type Campaign,
+  type MarketingSnapshot,
+  normalizeEmail,
+} from '../core/model';
 import { StatusBadge } from './status-badge';
 
 export function CampaignList(props: {
@@ -26,14 +30,14 @@ export function CampaignList(props: {
             Build relationships, one email at a time.
           </p>
         </div>
-        <button
+        <Button
           type="button"
-          class={primaryButton}
+          variant="primary"
           disabled={!props.snapshot.writable || props.busy}
-          onClick={props.onCreate}
+          onClick={() => props.onCreate()}
         >
           ＋ New campaign
-        </button>
+        </Button>
       </div>
       <div class="my-7 grid grid-cols-3 gap-3">
         <For
@@ -43,7 +47,9 @@ export function CampaignList(props: {
               label: 'Contacts enrolled',
               value: () =>
                 new Set(
-                  props.snapshot.enrollments.map((entry) => entry.contact.email)
+                  props.snapshot.enrollments.map((entry) =>
+                    normalizeEmail(entry.contact.email)
+                  )
                 ).size,
             },
             { label: 'Upcoming emails', value: () => props.upcomingCount },
@@ -60,16 +66,16 @@ export function CampaignList(props: {
         </For>
       </div>
       <div class="mb-4 flex items-center justify-between gap-3">
-        <input
+        <Input
           aria-label="Search campaigns"
-          class={`${inputClass} max-w-72`}
-          placeholder="⌕  Search campaigns"
+          class="max-w-72"
+          placeholder="Search campaigns"
           value={props.filter}
           onInput={(event) => props.onFilter(event.currentTarget.value)}
         />
         <select
           aria-label="Filter campaign status"
-          class="rounded-lg border border-edge-muted bg-input px-3 py-2 text-xs"
+          class={inputClasses({ size: 'sm', class: 'w-auto' })}
           value={props.statusFilter}
           onChange={(event) => props.onStatusFilter(event.currentTarget.value)}
         >

@@ -1,11 +1,10 @@
-import { CollabMarkdownEditor } from '@core/collab-surface/CollabMarkdownEditor';
-import { SyncSourceStatus } from '@macro-inc/collaboration/collab/source';
 import {
-  $getRoot,
-  COMMAND_PRIORITY_HIGH,
-  KEY_ENTER_COMMAND,
-  type LexicalEditor,
-} from 'lexical';
+  type CollabMarkdownControls,
+  CollabMarkdownEditor,
+} from '@core/collab-surface/CollabMarkdownEditor';
+import { SyncSourceStatus } from '@macro-inc/collaboration/collab/source';
+import { Button } from '@ui';
+import { $getRoot, COMMAND_PRIORITY_HIGH, KEY_ENTER_COMMAND } from 'lexical';
 import {
   createEffect,
   createMemo,
@@ -13,7 +12,6 @@ import {
   on,
   onCleanup,
   Show,
-  untrack,
 } from 'solid-js';
 import type {
   MarketingCapabilities,
@@ -30,58 +28,121 @@ type Props = {
   onState(state: CompositionState): void;
 };
 
+const MARKDOWN_SPECIALS = /[\\`*_~[\]#<>|!+\-.(){}]/g;
+const MARKDOWN_ESCAPES = /\\([\\`*_~[\]#<>|!+\-.(){}])/g;
+
+/**
+ * Stored subjects and bodies are the plain text we send. The editor seeds from
+ * markdown, so escape it: a literal `*`, `_` or `#` must not become formatting.
+ */
+function escapeMarkdown(text: string) {
+  return text.replace(MARKDOWN_SPECIALS, '\\$&');
+}
+
+/** Markdown export escapes literal punctuation; the plain-text email must not. */
+function unescapeMarkdown(markdown: string) {
+  return markdown.replace(MARKDOWN_ESCAPES, '$1');
+}
+
+/** Ignore serializer-only differences (line endings, trailing space, blank runs). */
+function normalizeText(text: string) {
+  return text
+    .replace(/\r\n?/g, '\n')
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/** Plain-text email: subjects stay on one line, bodies keep URLs and list markers. */
+function serialize(
+  controls: CollabMarkdownControls,
+  field: SequenceContentOptions['field']
+) {
+  if (field === 'body') return unescapeMarkdown(controls.getMarkdown());
+  return controls
+    .getLexical()
+    .getEditorState()
+    .read(() => $getRoot().getTextContent())
+    .replace(/[\r\n]+/g, ' ');
+}
+
+/** Stops file, entity, and text drops: sequence fields are plain-text email. */
+function blockDrop(event: DragEvent) {
+  event.preventDefault();
+  event.stopPropagation();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
+}
+
 function ContentSession(props: Props & { onRetry(): void }) {
-  const session = props.composition.createSession(props.options);
-  const [ready, setReady] = createSignal(false);
-  const [editor, setEditor] = createSignal<LexicalEditor>();
+  const field = props.options.field;
+  const session = props.composition.createSession({
+    ...props.options,
+    initialText: escapeMarkdown(props.options.initialText),
+  });
+  const [editorReady, setEditorReady] = createSignal(false);
   const [editorFailed, setEditorFailed] = createSignal(false);
-  props.onState('loading');
+  const [controls, setControls] = createSignal<CollabMarkdownControls>();
   onCleanup(() => {
     session.dispose();
   });
+  const failed = () => editorFailed() || !!session.connectionError();
+  const connected = () =>
+    session.syncSource()?.status() === SyncSourceStatus.Connected;
+  // Ready only once the editor holds the shared content over a live socket,
+  // so Save and Activate never snapshot a failed or offline load.
+  const state = createMemo<CompositionState>(() => {
+    if (failed()) return 'error';
+    return editorReady() && connected() ? 'ready' : 'loading';
+  });
   const read = () => {
-    const lexical = editor();
-    if (!ready() || !lexical) return;
-    const text = lexical
-      .getEditorState()
-      .read(() => $getRoot().getTextContent());
-    if (text !== props.options.initialText) props.onChange(text);
+    const handle = controls();
+    if (!editorReady() || failed() || !handle) return;
+    const text = serialize(handle, field);
+    if (normalizeText(text) !== normalizeText(props.options.initialText))
+      props.onChange(text);
   };
-  // Connection errors are external state; keep the parent activation gate informed.
+  // The parent's Save/Activate gate is external state; flush content before
+  // reporting ready so the campaign draft already holds the shared copy.
   createEffect(
-    on(session.connectionError, (error) => {
-      if (error) props.onState('error');
+    on(state, (next) => {
+      if (next === 'ready') read();
+      props.onState(next);
     })
   );
   return (
-    <div class="relative">
+    <div
+      class="relative"
+      ref={(element) => {
+        // Capture phase, so the editor's own drop handlers never see the drag.
+        for (const type of ['dragenter', 'dragover', 'drop'] as const)
+          element.addEventListener(type, blockDrop, { capture: true });
+      }}
+    >
       <CollabMarkdownEditor
         sourceId={session.sourceId}
         session={session}
-        namespace={`sequence-${props.options.field}`}
+        namespace={`sequence-${field}`}
         label={props.label}
         canEdit={() => !props.disabled}
         canComment={() => false}
         class={
-          props.options.field === 'body'
+          field === 'body'
             ? 'min-h-36 text-sm leading-6'
             : 'min-h-6 text-sm [&_p]:m-0'
         }
         placeholder={
-          props.options.field === 'body'
-            ? 'Hi {{firstName}},'
-            : 'A subject worth opening'
+          field === 'body' ? 'Hi {{firstName}},' : 'A subject worth opening'
         }
-        onControls={(controls) => {
-          const lexical = controls.getLexical();
-          setEditor(lexical);
+        onControls={(handle) => {
+          setControls(handle);
+          const lexical = handle.getLexical();
           onCleanup(lexical.registerUpdateListener(read));
-          if (props.options.field === 'subject')
+          if (field === 'subject')
             onCleanup(
               lexical.registerCommand(
                 KEY_ENTER_COMMAND,
                 (event) => {
-                  if (controls.isInlineMenuOpen()) return false;
+                  if (handle.isInlineMenuOpen()) return false;
                   event?.preventDefault();
                   return true;
                 },
@@ -89,34 +150,25 @@ function ContentSession(props: Props & { onRetry(): void }) {
               )
             );
         }}
-        onReady={() => {
-          setReady(true);
-          untrack(() => {
-            read();
-            props.onState('ready');
-          });
-        }}
-        onError={() => {
-          setEditorFailed(true);
-          props.onState('error');
-        }}
+        onReady={() => setEditorReady(true)}
+        onError={() => setEditorFailed(true)}
       />
-      <Show when={ready() && !session.connectionError() && !editorFailed()}>
+      <Show when={editorReady() && !failed()}>
         <p class="mt-2 text-[10px] text-ink-subtle">
-          {session.syncSource()?.status() === SyncSourceStatus.Connected
-            ? 'Shared draft'
-            : 'Offline · changes queued'}
+          {connected() ? 'Shared draft' : 'Offline · changes queued'}
         </p>
       </Show>
-      <Show when={session.connectionError() || editorFailed()}>
-        <button
+      <Show when={failed()}>
+        <Button
           type="button"
+          variant="link"
+          size="xs"
+          class="mt-2"
           aria-label="Retry shared content"
-          class="mt-2 text-xs text-accent hover:underline"
-          onClick={props.onRetry}
+          onClick={() => props.onRetry()}
         >
           Retry shared content
-        </button>
+        </Button>
       </Show>
     </div>
   );

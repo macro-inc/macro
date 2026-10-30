@@ -1,19 +1,22 @@
 import { throwOnErr } from '@core/util/result';
 import { contactsClient } from '@service-contacts/client';
 import { emailClient } from '@service-email/client';
-import { storageServiceClient } from '@service-storage/client';
+import { fetchCrmContacts } from '@service-storage/crm-contacts';
 import type { MarketingCapabilities } from '../context/contracts';
 import { type MarketingContact, mergeContacts } from '../core/model';
 
-function toCrmContact(contact: {
-  email: string;
-  name?: string | null;
-  id: string;
-  companyId: string;
-}): MarketingContact {
+type CrmContact = Awaited<
+  ReturnType<typeof fetchCrmContacts>
+>['contacts'][number];
+
+/** CRM contacts are optional; GraphQL already excludes hidden ones. */
+const CRM_CONTACT_LIMIT = 500;
+const CRM_SEARCH_LIMIT = 100;
+
+function toCrmContact(contact: CrmContact): MarketingContact {
   return {
     email: contact.email,
-    name: contact.name ?? '',
+    name: contact.crmContactName ?? '',
     crmContactId: contact.id,
     companyId: contact.companyId,
   };
@@ -39,10 +42,11 @@ export function createContactQueries(
         }));
     },
     async loadContacts() {
+      // The GraphQL source spans every CRM team the viewer can see.
       const [personal, gmail, crm] = await Promise.all([
         contactsClient.getContacts(),
         emailClient.listContacts(),
-        storageServiceClient.searchContacts({ limit: 500 }),
+        fetchCrmContacts({ limit: CRM_CONTACT_LIMIT }),
       ]);
       if (personal.isErr())
         throw new Error(
@@ -55,14 +59,6 @@ export function createContactQueries(
         )
       )
         throw new Error(gmail.error.map((error) => error.message).join('; '));
-      // CRM is optional for this module. Authorization failures are not bypassed.
-      if (
-        crm.isErr() &&
-        !crm.error.every((error) =>
-          ['NOT_FOUND', 'FORBIDDEN'].includes(error.code)
-        )
-      )
-        throw new Error(crm.error.map((error) => error.message).join('; '));
       return mergeContacts([
         ...personal.value.contacts.map((id) => ({
           email: id.replace(/^macro\|/, ''),
@@ -76,18 +72,15 @@ export function createContactQueries(
                 name: contact.name ?? '',
               }))
           : []),
-        ...(crm.isOk()
-          ? crm.value.contacts
-              .filter((contact) => !contact.hidden)
-              .map(toCrmContact)
-          : []),
+        ...crm.contacts.map(toCrmContact),
       ]);
     },
     async searchCrmContacts(query) {
-      const { contacts } = await throwOnErr(() =>
-        storageServiceClient.searchContacts({ query, limit: 500 })
-      );
-      return contacts.filter((contact) => !contact.hidden).map(toCrmContact);
+      const { contacts } = await fetchCrmContacts({
+        search: query,
+        limit: CRM_SEARCH_LIMIT,
+      });
+      return contacts.map(toCrmContact);
     },
   };
 }

@@ -3,6 +3,7 @@ import '@fontsource-variable/inter';
 import { macroDarkTheme } from '@app/features/theme/themes/macro-dark';
 import { macroLightTheme } from '@app/features/theme/themes/macro-light';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
+import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
 import type { QuickAccessContextValue } from '@core/context/quickAccess/types';
@@ -11,6 +12,7 @@ import { authKeys } from '@queries/auth/keys';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import { QueryClientProvider } from '@tanstack/solid-query';
+import { DragDropProvider } from '@thisbeyond/solid-dnd';
 import { createTestContentSession } from './collaboration';
 
 const dark = new URLSearchParams(location.search).get('theme') === 'dark';
@@ -144,17 +146,17 @@ const capabilities: MarketingCapabilities = {
     async createDraft(_, email, subject, body) {
       const id = crypto.randomUUID();
       writeOutbox([...outbox(), { id, email, subject, body }]);
-      return id;
+      return { id, generation: 0 };
     },
-    async schedule(_, id, sendAt) {
+    async schedule(_, { draftId }, sendAt) {
       writeOutbox(
         outbox().map((draft) =>
-          draft.id === id ? { ...draft, sendAt } : draft
+          draft.id === draftId ? { ...draft, sendAt } : draft
         )
       );
     },
-    async cancel(_, id) {
-      writeOutbox(outbox().filter((draft) => draft.id !== id));
+    async cancel(_, { draftId }) {
+      writeOutbox(outbox().filter((draft) => draft.id !== draftId));
       return 'canceled';
     },
   },
@@ -184,8 +186,14 @@ const capabilities: MarketingCapabilities = {
 function Fixture() {
   const nav = visibleNavItems({
     showCalendar: true,
+    showScheduling: true,
     showCustomers: true,
-    showReminders: true,
+    showCalls: true,
+    showReviews: true,
+    showActivity: true,
+    showExternal: true,
+    showEmailMarketing: true,
+    prefs: { hidden: new Set(), order: [] },
   });
   return (
     <div
@@ -397,6 +405,7 @@ const emptyQuickAccess: QuickAccessContextValue = {
     hasMore: () => false,
     isLoading: () => false,
     isLoadingMore: () => false,
+    error: () => undefined,
     loadMore: async () => {},
   }),
   usesRecordSelection: () => false,
@@ -410,11 +419,16 @@ render(
     <QueryClientProvider client={queryClient}>
       <UserContextProvider>
         <AnalyticsContextProvider>
-          <ChannelsContextProvider>
-            <QuickAccessContextProvider value={emptyQuickAccess}>
-              <Fixture />
-            </QuickAccessContextProvider>
-          </ChannelsContextProvider>
+          {/* Main's collaborative editor reads feature flags and registers entity drop targets. */}
+          <PosthogProvider>
+            <ChannelsContextProvider>
+              <QuickAccessContextProvider value={emptyQuickAccess}>
+                <DragDropProvider>
+                  <Fixture />
+                </DragDropProvider>
+              </QuickAccessContextProvider>
+            </ChannelsContextProvider>
+          </PosthogProvider>
         </AnalyticsContextProvider>
       </UserContextProvider>
     </QueryClientProvider>
