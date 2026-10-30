@@ -34,6 +34,7 @@
 - [CalendarEventJoinRequestMetadata](type-aliases/CalendarEventJoinRequestMetadata.md)
 - [CalendarEventReminderMetadata](type-aliases/CalendarEventReminderMetadata.md)
 - [CallStartedMetadata](type-aliases/CallStartedMetadata.md)
+- [ChannelAccessRequestedMetadata](type-aliases/ChannelAccessRequestedMetadata.md)
 - [ChannelInviteMetadata](type-aliases/ChannelInviteMetadata.md)
 - [ChannelMentionMetadata](type-aliases/ChannelMentionMetadata.md)
 - [ChannelMessageReactionMetadata](type-aliases/ChannelMessageReactionMetadata.md)

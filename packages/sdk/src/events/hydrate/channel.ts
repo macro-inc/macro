@@ -1,4 +1,5 @@
 import { match } from 'ts-pattern';
+import { ChannelAccessRequest } from '../../entities/channels/access-request';
 import { Channel } from '../../entities/channels/channel';
 import { User } from '../../entities/users/user';
 import type { MacroClient } from '../../utils/client';
@@ -72,6 +73,20 @@ export function hydrateChannelEvent(client: MacroClient, event: ChannelEvent) {
         User.byId(client, userId),
       ),
     }))
+    .with({ event_type: 'channel.access_requested' }, ({ metadata }) => {
+      const channel = Channel.byId(client, metadata.channel_id);
+      return {
+        event_type: 'channel.access_requested' as const,
+        metadata,
+        channel,
+        request: ChannelAccessRequest.byId(
+          client,
+          channel,
+          metadata.request_id,
+        ),
+        requester: User.byId(client, metadata.requester_id),
+      };
+    })
     .exhaustive((unknown) => {
       console.warn('macro sdk: unknown channel event', unknown);
       return undefined;

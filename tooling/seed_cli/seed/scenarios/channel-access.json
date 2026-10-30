@@ -1,0 +1,126 @@
+{
+  "scenario": "channel-access",
+  "description": "Channel access test data: Alex owns the channels, Morgan is an existing participant, Riley is a teammate excluded from the three request-test channels, and Sam is an outsider. Approval, denial, and cancellation have separate private channels so manual tests do not interfere. Public, team, already-member, and DM channels provide controls. No access requests are pre-created.",
+  "users": {
+    "access-owner": {
+      "email": "owner@channel-access.seed.macro.local",
+      "first_name": "Alex",
+      "last_name": "Owner",
+      "roles": ["team_subscriber", "sub_opus"]
+    },
+    "access-member": {
+      "email": "member@channel-access.seed.macro.local",
+      "first_name": "Morgan",
+      "last_name": "Member",
+      "roles": ["team_subscriber", "sub_opus"]
+    },
+    "access-requester": {
+      "email": "requester@channel-access.seed.macro.local",
+      "first_name": "Riley",
+      "last_name": "Requester",
+      "roles": ["team_subscriber", "sub_opus"]
+    },
+    "access-outsider": {
+      "email": "outsider@channel-access.seed.macro.local",
+      "first_name": "Sam",
+      "last_name": "Outsider"
+    }
+  },
+  "teams": {
+    "access-demo": {
+      "name": "Channel Access Demo",
+      "owner": "access-owner",
+      "members": {
+        "access-member": "member",
+        "access-requester": "member"
+      }
+    }
+  },
+  "channels": {
+    "request-approve": {
+      "type": "private",
+      "owner": "access-owner",
+      "members": ["access-member"]
+    },
+    "request-deny": {
+      "type": "private",
+      "owner": "access-owner",
+      "members": ["access-member"]
+    },
+    "request-cancel": {
+      "type": "private",
+      "owner": "access-owner",
+      "members": ["access-member"]
+    },
+    "already-member": {
+      "type": "private",
+      "owner": "access-owner",
+      "members": ["access-member", "access-requester"]
+    },
+    "public-lobby": {
+      "type": "public",
+      "owner": "access-owner",
+      "members": ["access-member", "access-requester", "access-outsider"]
+    },
+    "team-lobby": {
+      "type": "team",
+      "team": "access-demo"
+    },
+    "dm-owner-member": {
+      "type": "direct_message",
+      "members": ["access-owner", "access-member"]
+    }
+  },
+  "messages": [
+    {
+      "channel": "public-lobby",
+      "from": "access-owner",
+      "text": "Welcome to the channel access demo. Alex is the owner, Morgan is an existing member, Riley is a teammate without access to the request-test channels, and Sam is outside the team."
+    },
+    {
+      "channel": "public-lobby",
+      "from": "access-member",
+      "text": "Use request-approve, request-deny, and request-cancel for independent test runs. Copy each private channel's link as Alex, then open it as Riley or Sam."
+    },
+    {
+      "channel": "request-approve",
+      "from": "access-owner",
+      "text": "Approval test: Riley and Sam start without access. After an approval, the requester should be able to read this history and participate."
+    },
+    {
+      "channel": "request-approve",
+      "from": "access-member",
+      "text": "Existing members should retain access while someone else's request is pending. This message is visible only to participants."
+    },
+    {
+      "channel": "request-deny",
+      "from": "access-owner",
+      "text": "Denial test: deny the request and confirm the requester still cannot read this channel's history or post messages."
+    },
+    {
+      "channel": "request-cancel",
+      "from": "access-owner",
+      "text": "Cancellation test: withdraw the request as Riley before the owner decides. Cancellation must not grant membership."
+    },
+    {
+      "channel": "already-member",
+      "from": "access-requester",
+      "text": "I am already a participant here. I should see the conversation and composer instead of an initial access-request screen."
+    },
+    {
+      "channel": "team-lobby",
+      "from": "access-owner",
+      "text": "Alex, Morgan, and Riley belong to Channel Access Demo. Sam does not. Team membership alone must not expose the private request-test channels."
+    },
+    {
+      "channel": "dm-owner-member",
+      "from": "access-member",
+      "text": "Private DM control: this conversation is between Alex and Morgan only."
+    },
+    {
+      "channel": "public-lobby",
+      "from": "access-owner",
+      "text": "Try these private channels:\n\n- [#request-approve](/app/channels/5eed1caf-0e0f-81b1-a8ff-62cd6a207092)\n- [#request-deny](/app/channels/5eed1caf-5bcc-8437-95a5-305f92912b19)\n- [#request-cancel](/app/channels/5eed1caf-3ae7-8cda-b1f0-e31bb5ccbbd9)\n\nOpen a link as Riley or Sam and choose Ask to join. Alex or Morgan can review the request from the destination channel."
+    }
+  ]
+}

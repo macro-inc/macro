@@ -64,6 +64,12 @@ Re-exports [ChangeColumnTypeOptions](../entities/databases/database/type-aliases
 
 ***
 
+### ChannelAccessRequest
+
+Re-exports [ChannelAccessRequest](../entities/channels/access-request/classes/ChannelAccessRequest.md)
+
+***
+
 ### ChannelActivity
 
 Re-exports [ChannelActivity](../entities/channels/activity/classes/ChannelActivity.md)

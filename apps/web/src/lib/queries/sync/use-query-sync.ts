@@ -25,6 +25,7 @@ import {
   handleAgentSessionUpdated,
   invalidateAgentSessionMetadata,
 } from '@queries/agent-session/session-metadata-sync';
+import { handleChannelAccessRequestChanged } from '@queries/channel/access-requests';
 import {
   handleChannelPictureChanged,
   invalidateChannelPictures,
@@ -127,6 +128,13 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
           data.type,
           data.data,
           handleChannelPictureChanged
+        );
+      })
+      .with({ type: 'channel_access_request_changed' }, () => {
+        withParsedWebsocketPayload(
+          data.type,
+          data.data,
+          handleChannelAccessRequestChanged
         );
       })
       // One frame appended to a live agent session's log. Routed to the

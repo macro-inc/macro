@@ -261,6 +261,20 @@ export type CallStartedMetadata = {
 };
 
 /**
+ * A person asked to join a channel the recipient participates in.
+ */
+export type ChannelAccessRequestedMetadata = CommonChannelMetadata & {
+    /**
+     * The attempt to join, which is also this notification's id.
+     */
+    requestId: string;
+    /**
+     * Optional requester profile picture URL.
+     */
+    senderProfilePictureUrl?: string | null;
+};
+
+/**
  * Metadata for when a user is invited to a channel.
  */
 export type ChannelInviteMetadata = {
@@ -1280,6 +1294,12 @@ export type NotifEvent = {
      */
     content: CalendarEventJoinRequestMetadata;
     tag: 'calendar_event_join_request';
+} | {
+    /**
+     * Someone asked to join a channel the user participates in.
+     */
+    content: ChannelAccessRequestedMetadata;
+    tag: 'channel_access_requested';
 };
 
 /**
