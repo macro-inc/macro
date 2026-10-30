@@ -10,6 +10,7 @@ type Observation = { time: number; rect?: DOMRectReadOnly };
 
 type Target = {
   publish: (visible: boolean) => void;
+  registeredAt: number;
   viewport?: Observation;
   scroller?: Observation;
   refreshing?: boolean;
@@ -57,6 +58,15 @@ export function createMessageReadVisibility(options: {
           for (const entry of entries) {
             const target = targets.get(entry.target);
             if (!target) continue;
+            if (entry.time <= target.registeredAt) {
+              // unobserve() does not discard queued entries from an old batch.
+              // Reobserve also handles a new registration in the current frame.
+              const observer =
+                kind === 'viewport' ? viewportObserver : scrollerObserver;
+              observer?.unobserve(entry.target);
+              observer?.observe(entry.target);
+              continue;
+            }
             target[kind] = {
               time: entry.time,
               rect:
@@ -143,7 +153,7 @@ export function createMessageReadVisibility(options: {
 
   return {
     observe(element: Element, publish: Target['publish']) {
-      const target: Target = { publish };
+      const target: Target = { publish, registeredAt: performance.now() };
       targets.set(element, target);
       viewportObserver?.observe(element);
       scrollerObserver?.observe(element);

@@ -33,25 +33,30 @@ export function installMessageIntersectionObserver() {
     takeRecords() {
       return [];
     }
-    deliver(visible: boolean) {
-      this.callback(
-        [...this.targets].map((target) => ({
-          target,
-          isIntersecting: visible,
-          intersectionRatio: visible ? 1 : 0,
-          intersectionRect: new DOMRect(0, 0, 200, visible ? 50 : 0),
-          boundingClientRect: new DOMRect(0, 0, 200, 50),
-          rootBounds: null,
-          time: 0,
-        })),
-        this
-      );
+    queue(visible: boolean, time: number) {
+      const entries = [...this.targets].map((target) => ({
+        target,
+        isIntersecting: visible,
+        intersectionRatio: visible ? 1 : 0,
+        intersectionRect: new DOMRect(0, 0, 200, visible ? 50 : 0),
+        boundingClientRect: new DOMRect(0, 0, 200, 50),
+        rootBounds: null,
+        time,
+      }));
+      return () => this.callback(entries, this);
     }
   }
   vi.stubGlobal('IntersectionObserver', TestObserver);
-  return (visible = true) => {
-    for (const observer of observers) observer.deliver(visible);
+  const queue = (visible = true) => {
+    const time = performance.now();
+    const deliveries = [...observers].map((observer) =>
+      observer.queue(visible, time)
+    );
+    return () => {
+      for (const deliver of deliveries) deliver();
+    };
   };
+  return Object.assign((visible = true) => queue(visible)(), { queue });
 }
 
 export function ObservedMessage(

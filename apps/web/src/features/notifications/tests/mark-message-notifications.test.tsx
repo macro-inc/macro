@@ -185,6 +185,42 @@ describe('MarkMessageNotifications', () => {
     finishMark!();
   });
 
+  it('ignores queued visibility from an earlier notification batch', async () => {
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(100);
+    const [notifications, setNotifications] = createSignal(
+      matchingNotifications
+    );
+    render(() => {
+      const index = createMemo(() =>
+        indexUnreadMessageNotifications(notifications())
+      );
+      return (
+        <MessageNotificationIndexContext.Provider value={index}>
+          <MarkMessageNotifications
+            messageId="message-1"
+            parent={{ type: 'channel', id: 'channel-1' }}
+          >
+            <span>Message</span>
+          </MarkMessageNotifications>
+        </MessageNotificationIndexContext.Provider>
+      );
+    });
+    clock.mockReturnValue(200);
+    const deliverOldVisibility = intersect.queue();
+    clock.mockReturnValue(300);
+    const incoming = [documentMentionNotification('new-offscreen-batch')];
+    setNotifications(incoming);
+    deliverOldVisibility();
+    expect(bulkMarkAsRead).not.toHaveBeenCalled();
+    clock.mockReturnValue(400);
+    intersect(false);
+    expect(bulkMarkAsRead).not.toHaveBeenCalled();
+    clock.mockReturnValue(500);
+    intersect();
+    await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledOnce());
+    expect(bulkMarkAsRead).toHaveBeenCalledWith(incoming);
+  });
+
   it('waits for foreground and a fresh observation before reading a background notification', async () => {
     const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
     const view = render(() => (
