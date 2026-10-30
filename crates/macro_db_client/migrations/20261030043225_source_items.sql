@@ -88,12 +88,14 @@ $$;
 -- Whether the (p_id, p_source) row belongs in the table: the item exists and the source holds a
 -- grant on it. Index probes, so callers test any number of rows in linear time; their arrays are
 -- parameters, whose size the plan cannot see, and a join against a set of unknown size can
--- become a nested loop over it.
+-- become a nested loop over it. Rows exist only for granted ids, which are uuids, so the grant is
+-- matched on the uuid column: every index on entity_access then probes it exactly, where a text
+-- match lets the planner scan a source's every grant through the source-first index.
 CREATE FUNCTION public.source_items_wanted(p_type text, p_id text, p_source text) RETURNS boolean
 LANGUAGE sql STABLE AS $$
     SELECT EXISTS (
                SELECT 1 FROM public.entity_access ea
-               WHERE ea.entity_id::text = p_id AND ea.entity_type = p_type AND ea.source_id = p_source
+               WHERE ea.entity_id = p_id::uuid AND ea.entity_type = p_type AND ea.source_id = p_source
            )
        AND EXISTS (SELECT 1 FROM public.source_items_state(p_type, ARRAY[p_id]))
 $$;
@@ -132,8 +134,9 @@ LANGUAGE sql AS $$
         SELECT k.source_id, i.entity_id, i.kind, i.sort_ts, count(*)::int AS grants
         FROM keys k
         CROSS JOIN LATERAL public.source_items_state(p_type, ARRAY[k.entity_id]) i
+        -- The keys come from entity_access, so they are uuids; see source_items_wanted.
         JOIN public.entity_access ea
-          ON ea.entity_id::text = k.entity_id AND ea.entity_type = p_type AND ea.source_id = k.source_id
+          ON ea.entity_id = k.entity_id::uuid AND ea.entity_type = p_type AND ea.source_id = k.source_id
         GROUP BY k.source_id, i.entity_id, i.kind, i.sort_ts
     ), stale AS (
         DELETE FROM public.source_items s
