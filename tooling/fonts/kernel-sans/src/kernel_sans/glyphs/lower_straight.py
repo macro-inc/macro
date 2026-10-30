@@ -6,7 +6,8 @@ ink traps (`geom.stem_trap`). Hooks (f t j l.ss02) share one construction,
 `_hook`: a squircle quadrant turning a stem into a horizontal stroke that ends
 in a vertical cut with its outer corner chamfered. Diagonals (k v w x y z) are
 built from their edges so the flat vertices and flat-cut ends land exactly
-where they should; their inner vertices take `geom.crotch_trap`.
+where they should; the inner vertices of v w y take `geom.crotch_trap`, and
+k's arm takes a trap along the stem edge (`_stroke_trap`).
 """
 
 import math
@@ -262,8 +263,8 @@ def i(p):
 
 def _j_body(p):
     """j without its dot, drawn with the stem's left edge at x = 0. The tail
-    reaches about p.sb + 28 left of the stem at every weight, so it never
-    overhangs the origin by more than 0.2 stem (brackets, quotes)."""
+    shortens as the stem grows, so it overhangs the origin by 25-30 units at
+    every weight (under 0.2 stem at ExtraBold) and clears brackets."""
     s = p.stem
     hook, yc, _ = _hook(
         p,

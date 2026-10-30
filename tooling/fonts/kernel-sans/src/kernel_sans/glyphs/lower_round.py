@@ -380,7 +380,7 @@ def _a_shape(p, xr, ae_e=None):
     # p.trap rule: this counter is short and leaves the stem steeply, so a
     # deeper notch reaches past its top and leaves a barb of black between
     # the curve and the cut at ExtraBold.
-    d = p.trap * 0.65
+    d = p.trap * 0.65 + 2
     traps = bw.traps(d)
     shape = hook + bowl.flip_x(0) + stem - traps.flip_x(0)
     return shape, cx_h, xs
