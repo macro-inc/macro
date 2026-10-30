@@ -19,6 +19,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use messages::domain::events::MessageEventAttachment;
 use trigger_context::TriggerContext;
+mod current_time;
+pub use current_time::CurrentTime;
 mod session_origin;
 pub use session_origin::{MentionOrigin, SessionOrigin, TaskAssignmentOrigin};
 mod coding_preferences;

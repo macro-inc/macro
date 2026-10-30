@@ -78,6 +78,7 @@ use agent_harness::outbound::github_branches::GithubRepositoryBranches;
 use agent_harness::outbound::github_repositories::GithubReachableRepositories;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::notifications::IngressAgentSessionNotifier;
+use agent_harness::outbound::primary_calendar_time_zones::PrimaryCalendarTimeZones;
 use agent_harness::outbound::prompt_mentions::{LexicalPromptMentions, PgSessionAccess};
 use agent_harness::outbound::routing::RoutedContainerManager;
 use agent_harness::outbound::runtime_registry::{HarnessKeyedConnections, RuntimeRegistry};
@@ -1129,7 +1130,12 @@ async fn run() -> anyhow::Result<()> {
         LexicalPromptMentions::new(lexical.clone(), PgSessionAccess::new(pool.clone()));
     let prompt_context =
         MessagePromptContextAdapter::new(message_service.clone(), Arc::clone(&entity_access));
-    let prompt_composer = LexicalAgentPromptComposer::new(lexical);
+    let prompt_composer = LexicalAgentPromptComposer::new(
+        lexical,
+        PrimaryCalendarTimeZones::new(calendar_events::domain::service::CalendarService::new(
+            calendar_events::outbound::pg::PgCalendarRepository::new(pool.clone()),
+        )),
+    );
 
     // One connection per harness, shared by every session of every agent
     // bound to it. Held here because the gateway puts dialed-in sockets into

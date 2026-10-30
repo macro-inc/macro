@@ -340,6 +340,19 @@ pub struct AgentContextPeople<'a> {
     pub sender: Option<AgentContextPerson<'a>>,
 }
 
+/// When a prompt was sent, as the person reading the reply keeps time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentContextCurrentTime<'a> {
+    /// ISO 8601 timestamp carrying the time zone's UTC offset.
+    pub iso: &'a str,
+    /// The same instant written out for a reader.
+    pub local: &'a str,
+    /// IANA zone `iso` is in; absent when unknown and `iso` is UTC.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time_zone: Option<&'a str>,
+}
+
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AgentContextRequest<'a> {
@@ -348,6 +361,8 @@ struct AgentContextRequest<'a> {
     instructions: Option<&'a str>,
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
     people: Option<&'a AgentContextPeople<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    current_time: Option<&'a AgentContextCurrentTime<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     trigger: Option<&'a TriggerContext>,
 }
@@ -672,12 +687,13 @@ impl LexicalClient {
     /// Sanitizes an agent prompt and optionally composes it with why the
     /// agent was called via the lexical service, so internal nodes and
     /// escaping are handled by Lexical rather than by the caller.
-    #[tracing::instrument(skip(self, prompt_markdown, trigger), err)]
+    #[tracing::instrument(skip(self, prompt_markdown, current_time, trigger), err)]
     pub async fn compose_agent_context(
         &self,
         prompt_markdown: &str,
         instructions: Option<&str>,
         people: Option<&AgentContextPeople<'_>>,
+        current_time: Option<&AgentContextCurrentTime<'_>>,
         trigger: Option<&TriggerContext>,
     ) -> Result<String> {
         let url = format!("{}/agent-context", self.url);
@@ -688,6 +704,7 @@ impl LexicalClient {
                     prompt_markdown,
                     instructions,
                     people,
+                    current_time,
                     trigger,
                 })
                 .send()
