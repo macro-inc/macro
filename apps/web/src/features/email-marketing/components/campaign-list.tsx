@@ -1,151 +1,92 @@
+import { t } from '@app/lib/i18n';
 import FlowArrowIcon from '@icon/system/regular/tree-structure.svg';
-import { Button, Input, inputClasses } from '@ui';
+import { Badge, EmptyStatePanel } from '@ui';
 import { For, Show } from 'solid-js';
-import {
-  type Campaign,
-  type MarketingSnapshot,
-  normalizeEmail,
-} from '../core/model';
+import type { Campaign } from '../core/model';
 import { StatusBadge } from './status-badge';
 
+export type CampaignRow = {
+  campaign: Campaign;
+  enrolled: number;
+  attention: number;
+};
+
 export function CampaignList(props: {
-  campaigns: Campaign[];
-  snapshot: MarketingSnapshot;
-  busy: boolean;
-  activeCount: number;
-  upcomingCount: number;
-  filter: string;
-  statusFilter: string;
-  onFilter: (value: string) => void;
-  onStatusFilter: (value: string) => void;
+  rows: CampaignRow[];
+  filtered: boolean;
+  canCreate: boolean;
   onCreate: () => void;
   onOpen: (campaign: Campaign) => void;
 }) {
   return (
-    <div class="flex-1 overflow-y-auto p-6 lg:p-9">
-      <div class="flex items-start justify-between gap-4">
-        <div>
-          <h2 class="text-2xl font-semibold tracking-tight">Campaigns</h2>
-          <p class="mt-2 text-sm text-ink-muted">
-            Build relationships, one email at a time.
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="primary"
-          disabled={!props.snapshot.writable || props.busy}
-          onClick={() => props.onCreate()}
-        >
-          ＋ New campaign
-        </Button>
-      </div>
-      <div class="my-7 grid grid-cols-3 gap-3">
-        <For
-          each={[
-            { label: 'Active campaigns', value: () => props.activeCount },
-            {
-              label: 'Contacts enrolled',
-              value: () =>
-                new Set(
-                  props.snapshot.enrollments.map((entry) =>
-                    normalizeEmail(entry.contact.email)
-                  )
-                ).size,
-            },
-            { label: 'Upcoming emails', value: () => props.upcomingCount },
-          ]}
-        >
-          {(metric) => (
-            <div class="rounded-xl border border-edge-muted px-5 py-4">
-              <p class="text-xs text-ink-muted">{metric.label}</p>
-              <p class="mt-2 text-2xl font-medium tracking-tight">
-                {metric.value()}
-              </p>
-            </div>
-          )}
-        </For>
-      </div>
-      <div class="mb-4 flex items-center justify-between gap-3">
-        <Input
-          aria-label="Search campaigns"
-          class="max-w-72"
-          placeholder="Search campaigns"
-          value={props.filter}
-          onInput={(event) => props.onFilter(event.currentTarget.value)}
-        />
-        <select
-          aria-label="Filter campaign status"
-          class={inputClasses({ size: 'sm', class: 'w-auto' })}
-          value={props.statusFilter}
-          onChange={(event) => props.onStatusFilter(event.currentTarget.value)}
-        >
-          <option value="all">All statuses</option>
-          <option value="active">Active</option>
-          <option value="draft">Draft</option>
-          <option value="paused">Paused</option>
-          <option value="archived">Archived</option>
-        </select>
-      </div>
-      <div class="overflow-hidden rounded-xl border border-edge-muted">
-        <div class="grid grid-cols-[1fr_auto] gap-4 border-b border-edge-muted bg-panel/30 px-5 py-3 text-[11px] text-ink-muted sm:grid-cols-[minmax(0,1fr)_110px_85px_85px]">
-          <span>Campaign</span>
-          <span>Status</span>
-          <span class="hidden sm:block">Sequence</span>
-          <span class="hidden sm:block">Enrolled</span>
-        </div>
-        <For each={props.campaigns}>
-          {(campaign) => (
-            <button
-              type="button"
-              class="grid w-full grid-cols-[1fr_auto] items-center gap-4 border-b border-edge-muted px-5 py-5 text-left last:border-0 hover:bg-panel/40 sm:grid-cols-[minmax(0,1fr)_110px_85px_85px]"
-              onClick={() => props.onOpen(campaign)}
-            >
-              <span class="flex min-w-0 items-center gap-3">
-                <span class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-edge-muted bg-panel/40 text-ink-muted">
-                  <FlowArrowIcon class="size-5" aria-hidden="true" />
-                </span>
-                <span class="min-w-0">
-                  <span class="block truncate text-sm font-medium">
-                    {campaign.name}
-                  </span>
-                  <span class="mt-1 block truncate text-xs text-ink-muted">
-                    {campaign.description ||
-                      'An email sequence for your contacts'}
-                  </span>
-                </span>
-              </span>
-              <StatusBadge status={campaign.status} />
-              <span class="hidden text-xs text-ink-muted sm:block">
-                {campaign.steps.length} emails
-              </span>
-              <span class="hidden text-xs text-ink-muted sm:block">
-                {
-                  props.snapshot.enrollments.filter(
-                    (entry) => entry.campaignId === campaign.id
-                  ).length
+    <Show
+      when={props.rows.length}
+      fallback={
+        <EmptyStatePanel
+          centered
+          title={
+            props.filtered
+              ? t('emailMarketing.noMatchingCampaigns')
+              : t('emailMarketing.noCampaigns')
+          }
+          description={
+            props.filtered
+              ? t('emailMarketing.noMatchingCampaignsHint')
+              : t('emailMarketing.noCampaignsHint')
+          }
+          primaryAction={
+            props.filtered || !props.canCreate
+              ? undefined
+              : {
+                  label: t('emailMarketing.newCampaign'),
+                  onClick: props.onCreate,
                 }
-              </span>
-            </button>
+          }
+        />
+      }
+    >
+      <ul
+        class="flex flex-col px-2 pb-6"
+        aria-label={t('emailMarketing.campaigns')}
+      >
+        <For each={props.rows}>
+          {(row) => (
+            <li>
+              <button
+                type="button"
+                class="flex w-full min-w-0 items-center gap-3 rounded-lg px-3 py-2.5 text-left outline-none not-touch:hover:bg-hover focus-visible:bg-hover focus-visible:outline-2 focus-visible:outline-accent touch:min-h-[44px]"
+                onClick={() => props.onOpen(row.campaign)}
+              >
+                <span class="flex size-8 shrink-0 items-center justify-center rounded-lg border border-edge-muted text-ink-muted">
+                  <FlowArrowIcon class="size-4" aria-hidden="true" />
+                </span>
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate text-sm font-medium">
+                    {row.campaign.name}
+                  </span>
+                  <span class="block truncate text-xs text-ink-muted">
+                    {row.campaign.description ||
+                      t('emailMarketing.emailCount', {
+                        count: row.campaign.steps.length,
+                      })}
+                  </span>
+                </span>
+                <Show when={row.attention}>
+                  <Badge variant="secondary" size="xs" class="text-failure">
+                    {t('emailMarketing.needAttentionCount', {
+                      count: row.attention,
+                    })}
+                  </Badge>
+                </Show>
+                <span class="hidden shrink-0 text-xs text-ink-muted sm:block">
+                  {t('emailMarketing.enrolledCount', { count: row.enrolled })}
+                </span>
+                <StatusBadge status={row.campaign.status} />
+              </button>
+            </li>
           )}
         </For>
-        <Show when={!props.campaigns.length}>
-          <div class="px-5 py-14 text-center">
-            <p class="text-base font-medium">
-              {props.filter || props.statusFilter !== 'all'
-                ? 'No matching campaigns'
-                : 'Your next conversation starts here'}
-            </p>
-            <p class="mt-2 text-sm text-ink-muted">
-              {props.filter
-                ? 'Try another search.'
-                : 'Create a campaign, write a sequence, and enroll your contacts.'}
-            </p>
-          </div>
-        </Show>
-      </div>
-      <p class="mt-4 text-xs text-ink-subtle">
-        Sequences work with your contacts, whether or not you use CRM.
-      </p>
-    </div>
+      </ul>
+    </Show>
   );
 }

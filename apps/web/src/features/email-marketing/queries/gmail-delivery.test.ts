@@ -52,14 +52,13 @@ beforeEach(() => {
 const draft = { draftId: 'draft', generation: 0, threadId: 'thread' };
 
 describe('Gmail sequence delivery', () => {
-  it('scopes drafts and scheduling to the selected inbox and keeps the server generation', async () => {
+  it('scopes drafts and scheduling to the selected inbox, keeps the server generation, and marks the send as a sequence step', async () => {
     const delivery = createGmailSequenceDelivery();
-    const handle = await delivery.createDraft(
-      'secondary-inbox',
-      'ada@example.com',
-      'Hello Ada',
-      'Welcome'
-    );
+    const handle = await delivery.createDraft('secondary-inbox', {
+      email: 'ada@example.com',
+      subject: 'Hello Ada',
+      body: 'Welcome',
+    });
     expect(handle).toEqual({ id: 'draft', generation: 3, threadId: 'thread' });
     await delivery.schedule(
       'secondary-inbox',
@@ -73,6 +72,8 @@ describe('Gmail sequence delivery', () => {
           body_text: 'Welcome',
           to: [{ email: 'ada@example.com' }],
           include_signature: false,
+          replying_to_id: undefined,
+          reuse_reply_draft: false,
         },
       },
       'secondary-inbox'
@@ -83,9 +84,22 @@ describe('Gmail sequence delivery', () => {
         draftGeneration: 3,
         send_time: '2026-10-05T16:00:00Z',
         include_signature: false,
+        source: 'sequence',
       },
       'secondary-inbox'
     );
+  });
+  it('creates a follow-up as a reply to the previous step', async () => {
+    await createGmailSequenceDelivery().createDraft('inbox', {
+      email: 'ada@example.com',
+      subject: 'Re: Hello Ada',
+      body: 'Following up',
+      replyingToId: 'first-step',
+    });
+    expect(client.createDraft.mock.calls[0][0].draft).toMatchObject({
+      subject: 'Re: Hello Ada',
+      replying_to_id: 'first-step',
+    });
   });
   it('unschedules and deletes at the stored generation', async () => {
     expect(
@@ -134,7 +148,26 @@ describe('Gmail sequence delivery', () => {
     client.unscheduleMessage.mockResolvedValue(conflict);
     await expect(
       createGmailSequenceDelivery().cancel('inbox', draft)
-    ).rejects.toThrow('Could not cancel');
+    ).rejects.toThrow(expect.objectContaining({ code: 'cancelFailed' }));
+    expect(client.deleteDraft).not.toHaveBeenCalled();
+  });
+  it('finds a sent step that inbox sync moved to another thread, instead of calling it canceled', async () => {
+    client.unscheduleMessage.mockResolvedValue(conflict);
+    client.getThread.mockImplementation(async ({ thread_id }) =>
+      thread_id === 'thread'
+        ? ok({ thread: { messages: [] } })
+        : thread({ is_sent: true })
+    );
+    client.getMessage.mockResolvedValue(
+      ok({ db_id: 'draft', draft_generation: 1, thread_db_id: 'synced' })
+    );
+    expect(await createGmailSequenceDelivery().cancel('inbox', draft)).toBe(
+      'delivery_started'
+    );
+    expect(client.getThread).toHaveBeenLastCalledWith({
+      thread_id: 'synced',
+      limit: 50,
+    });
     expect(client.deleteDraft).not.toHaveBeenCalled();
   });
   it('treats a deleted draft as canceled', async () => {
@@ -169,7 +202,9 @@ describe('Gmail sequence delivery', () => {
   it('reports stalled, failed, and removed steps from one scheduled list per inbox', async () => {
     const now = Date.now();
     client.getScheduledMessages.mockResolvedValue(
-      ok({ messages: [{ db_id: 'late' }, { db_id: 'failed' }] })
+      ok({
+        messages: [{ db_id: 'late' }, { db_id: 'failed' }, { db_id: 'orphan' }],
+      })
     );
     client.getThread.mockImplementation(async ({ thread_id }) =>
       ok({
@@ -188,17 +223,26 @@ describe('Gmail sequence delivery', () => {
     );
     const past = new Date(now - 60 * 60_000).toISOString();
     const future = new Date(now + 60 * 60_000).toISOString();
-    const issues = await createGmailSequenceDelivery().inspect!('inbox', [
-      { draftId: 'late', threadId: 'late', sendAt: past },
-      { draftId: 'failed', threadId: 'failed', sendAt: past },
-      { draftId: 'removed', sendAt: future },
-      { draftId: 'sent', sendAt: past },
-    ]);
+    const { issues, untracked } = await createGmailSequenceDelivery().inspect(
+      'inbox',
+      [
+        { draftId: 'late', threadId: 'late', sendAt: past },
+        { draftId: 'failed', threadId: 'failed', sendAt: past },
+        { draftId: 'removed', sendAt: future },
+        { draftId: 'sent', sendAt: past },
+      ]
+    );
     expect(issues).toEqual({
       late: 'stalled',
       failed: 'failed',
       removed: 'missing',
     });
+    // Scheduled, but no step accounts for it: its record is gone.
+    expect(untracked).toEqual(['orphan']);
     expect(client.getScheduledMessages).toHaveBeenCalledTimes(1);
+    // Sequence sends are left out of the default list, so ask for them.
+    expect(client.getScheduledMessages.mock.calls[0][0]).toMatchObject({
+      source: 'sequence',
+    });
   });
 });

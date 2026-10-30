@@ -177,7 +177,6 @@ export function createCollabSurfaceSession(
         'collab surface: failed to receive initial sync',
         sync.error
       );
-      setConnectionError('failed to load the shared content');
       return;
     }
     await loroManager.ingest({ kind: 'dss', snapshot: sync.value.snapshot });

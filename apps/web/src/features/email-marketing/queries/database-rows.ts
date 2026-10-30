@@ -1,20 +1,29 @@
 import { buildGraphqlEntitySoupInput } from '@queries/soup/graphql/entity-input';
-import type { OperationResult } from '@urql/core';
 import {
   DatabaseRowsDocument,
   type DatabaseRowsQuery,
   type DatabaseRowsQueryVariables,
   type SoupInput,
-} from './graphql/generated/graphql';
-import { getGraphqlSoupClient } from './graphql-soup';
+} from '@service-storage/graphql/generated/graphql';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import type { OperationResult } from '@urql/core';
+import { MarketingError } from '../core/errors';
+
+/** One row's text cells, unparsed. Missing cells are `undefined`. */
+export type MarketingRow = { rowId: string; name?: string; data?: string };
+
+type Properties = { name: string; data: string };
 
 /** Fully paginated table reads using the same authorized source as Macro Databases. */
-export async function readMarketingTable(tableId: string, propertyId: string) {
+export async function readMarketingTable(
+  tableId: string,
+  properties: Properties
+) {
   const base = buildGraphqlEntitySoupInput(
     'DATABASE_ROW',
     '00000000-0000-0000-0000-000000000000'
   )?.initial;
-  if (!base) throw new Error('Database row query is unavailable.');
+  if (!base) throw new MarketingError('storageUnavailable');
   let input: SoupInput = {
     initial: {
       ...base,
@@ -23,7 +32,7 @@ export async function readMarketingTable(tableId: string, propertyId: string) {
       filters: { ...base.filters, databaseRowFilter: { literal: { tableId } } },
     },
   };
-  const rows: { rowId: string; payload: unknown }[] = [];
+  const rows: MarketingRow[] = [];
   for (;;) {
     const result: OperationResult<
       DatabaseRowsQuery,
@@ -32,19 +41,22 @@ export async function readMarketingTable(tableId: string, propertyId: string) {
       .query(DatabaseRowsDocument, { input }, { requestPolicy: 'network-only' })
       .toPromise();
     if (result.error) throw result.error;
-    if (!result.data)
-      throw new Error('Could not read Email Marketing records.');
+    if (!result.data) throw new MarketingError('storageUnavailable');
     const page = result.data.user.soup;
     for (const item of page.items) {
       if (item.__typename !== 'GraphqlSoupDatabaseRow') continue;
-      const value = item.properties.find(
-        (property) => property.propertyDefinitionId === propertyId
-      )?.value;
-      if (!value || value.__typename !== 'GraphqlStringPropertyValue')
-        throw new Error('An Email Marketing record is missing its data.');
+      const text = (propertyId: string) => {
+        const value = item.properties.find(
+          (property) => property.propertyDefinitionId === propertyId
+        )?.value;
+        return value?.__typename === 'GraphqlStringPropertyValue'
+          ? value.stringValue
+          : undefined;
+      };
       rows.push({
         rowId: String(item.id),
-        payload: JSON.parse(value.stringValue),
+        name: text(properties.name),
+        data: text(properties.data),
       });
     }
     if (!page.nextCursor) return rows;

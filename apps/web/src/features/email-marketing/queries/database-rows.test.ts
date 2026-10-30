@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { readMarketingTable } from './email-marketing';
+import { readMarketingTable } from './database-rows';
 
 const query = vi.hoisted(() => vi.fn());
-vi.mock('./graphql-soup', () => ({ getGraphqlSoupClient: () => ({ query }) }));
+vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlSoupClient: () => ({ query }),
+}));
 describe('Email Marketing table reads', () => {
-  it('reads the generated stringValue alias and follows all pages using the server cursor', async () => {
+  it('reads name and data cells, keeps empty rows, and follows every page by the server cursor', async () => {
     query
       .mockReturnValueOnce({
         toPromise: async () => ({
@@ -16,6 +18,13 @@ describe('Email Marketing table reads', () => {
                     __typename: 'GraphqlSoupDatabaseRow',
                     id: 'row-1',
                     properties: [
+                      {
+                        propertyDefinitionId: 'name-property',
+                        value: {
+                          __typename: 'GraphqlStringPropertyValue',
+                          stringValue: 'First',
+                        },
+                      },
                       {
                         propertyDefinitionId: 'data-property',
                         value: {
@@ -41,15 +50,8 @@ describe('Email Marketing table reads', () => {
                   {
                     __typename: 'GraphqlSoupDatabaseRow',
                     id: 'row-2',
-                    properties: [
-                      {
-                        propertyDefinitionId: 'data-property',
-                        value: {
-                          __typename: 'GraphqlStringPropertyValue',
-                          stringValue: '{"id":"second"}',
-                        },
-                      },
-                    ],
+                    // A row added in the database view has no cells yet.
+                    properties: [],
                   },
                 ],
                 nextCursor: null,
@@ -58,9 +60,14 @@ describe('Email Marketing table reads', () => {
           },
         }),
       });
-    expect(await readMarketingTable('table', 'data-property')).toEqual([
-      { rowId: 'row-1', payload: { id: 'first' } },
-      { rowId: 'row-2', payload: { id: 'second' } },
+    expect(
+      await readMarketingTable('table', {
+        name: 'name-property',
+        data: 'data-property',
+      })
+    ).toEqual([
+      { rowId: 'row-1', name: 'First', data: '{"id":"first"}' },
+      { rowId: 'row-2', name: undefined, data: undefined },
     ]);
     expect(
       query.mock.calls[0][1].input.initial.filters.databaseRowFilter

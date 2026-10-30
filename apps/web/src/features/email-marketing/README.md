@@ -1,123 +1,57 @@
-# Email Marketing v1
+# Email Marketing
 
-Email Marketing is a standalone outer-sidebar module at `/app/email-marketing`,
-gated by the `enable-email-marketing` flag (`VITE_ENABLE_EMAIL_MARKETING`; on in
-dev). The flag hides the sidebar item, redirects the route, and hides the CRM
-contact card.
-It owns campaigns containing ordered email steps, enrolls existing Macro/Gmail
-contacts, and resolves optional CRM contact IDs by normalized email. CRM contact
-overviews render the same enrollment records. CRM is not required.
+Multi-step email sequences sent from the user's own Gmail inbox, at
+`/app/email-marketing` behind the `enable-email-marketing` flag (on in dev,
+PostHog in production). The flag hides the sidebar item, redirects the route
+once flags load, and hides the enrollment card on CRM contacts.
 
-## Storage and delivery
+## Storage
 
-Production uses the existing authorized Macro Databases REST ops and GraphQL
-row source. It creates an `Email Marketing` database with `Email campaigns` and
-`Sequence enrollments` tables on the first campaign write. Discovery reserves
-those names. The database remains private until the user shares it through the
-existing database permission controls. Both table versions guard enrollment
-reservations and writes, including a campaign pause racing with an enrollment.
-Human-readable name, status, and contact email columns accompany a validated
-JSON sequence snapshot. Activation saves a sending snapshot; enrollment content
-is frozen at enrollment time.
+Records live in the user's own Macro database, found by its tables
+(`Email campaigns`, `Sequence enrollments`, `Unsubscribed contacts`) and
+created on the first write. Shared databases are never adopted: delivery acts
+on the signed-in user's inbox. Each row has a `Name` label and a JSON
+`Sequence data` cell; a campaign's `Name` edited in the database view renames
+it. Rows that no longer parse are counted and block enrolling until fixed.
+Every write sends all table versions. A write that loses to an unrelated
+change retries only while its own record is untouched and what it depends on
+still holds (campaign active, address subscribed). Edits to an open campaign
+save only over the stored copy they started from.
 
-Subject and body fields use the same Lexical/Loro editor and collaboration
-provider as markdown documents. Each field has a stable collaborative surface
-ID derived from its database, campaign, step, and field. The database is the
-permission parent: its viewers/editors receive matching sync token access.
-This PR adds database parents to the existing backend surface allowlist, so the
-backend change must deploy with the frontend. No new persistence schema is needed.
-Draft content syncs live independently of the explicit metadata/sending-snapshot
-save. Both fields must initialize successfully before saving or activating;
-connection failures expose retry controls. Active cards display the frozen
-snapshot, so later edits from a stale draft tab cannot change queued messages.
+## Sending
 
-Each email card reuses `ComposerSurface`, the actual email composer's chrome,
-including its light-mode shadow and dark-mode glass rim and raised shadow.
-The editor supports markdown formatting, but v1 delivery serializes plain text;
-formatting does not imply HTML email sending. Campaign names, step order,
-delays, and enrollment controls retain database version checks rather than
-character-level collaboration.
+Enrolling freezes each personalized step, then creates and schedules one Gmail
+draft per step in order, so the server sends them with the tab closed. A
+batch that runs long starts later contacts later instead of failing.
+Scheduled steps are marked as sequence sends, which keeps them out of Mail's
+Drafts and Scheduled lists. A follow-up marked "reply in the same thread"
+replies to the previous scheduled or sent step (`Re:` plus the thread's first
+subject); with no earlier step left it starts a new thread. Pause, stop,
+delete, and unsubscribe cancel unsent drafts at their stored generation; sent
+email is never recalled.
 
-The existing Gmail draft/scheduled-message API provides server-side delivery;
-no browser timer or new sending service is needed. Draft handles are persisted
-before scheduling. Partial failures attempt to cancel every created draft and
-retain a visible recovery state. A start time at least ten minutes away provides
-room for persistence and rollback. Enrollment batches are limited to fifty
-contacts in the UI. Duplicate addresses in a campaign are blocked even when the
-prior enrollment has stopped; a failed enrollment that never queued anything is
-re-enrolled in place. Database conflicts are shown without silently retrying an
-insert. Pause/resume uses the enrollment's original snapshot, keeps the original
-calendar-day cadence, and never repeats a past-due step. A stale tab cannot turn
-a stopped enrollment back into a paused one.
+Opening the workspace or a CRM contact reads the scheduler back, so failed,
+missing, stalled, or interrupted sends and disconnected inboxes show as
+needing attention. The workspace also lists every inbox's scheduled sequence
+emails, so ones whose records were lost (a trashed database, a deleted table)
+can still be canceled, and stops enrollments whose campaign row is gone.
+Unsubscribing an address stops it in every campaign and blocks enrolling it
+again. Replies are not processed automatically.
 
-Each queued step stores its draft's `draft_generation`, which schedule, cancel
-and delete pass back. When the scheduler refuses a cancel, the draft is re-read
-to decide between "delivery started", a retry with the newer generation (the
-draft was touched in Mail), or needs-attention. A sent message is never deleted.
-On load, queued steps are checked against the inbox's scheduled list so failed,
-unconfirmed, or missing sends (for example after Gmail rate limits, or after the
-inbox was disconnected, which deletes its scheduled messages) show as needing
-attention instead of "Scheduled". Only databases the user owns are used, so a
-teammate's shared Email Marketing database is never adopted.
+## Layout
 
-## Deliberate v1 boundaries
+`core/` model, errors, and attention rules; `queries/` database, Gmail, and
+contact adapters; `primitives/` the sequence engine and workspace state;
+`components/` presentation; `views/` the workspace and campaign detail.
+User-facing text is in `lib/i18n/locales/en/email-marketing.ts`; errors carry
+codes that views translate.
 
-- Plain-text, manually enrolled sequences with day-based delays, personalized
-  subjects/body, previews, Gmail inbox selection, and pause/stop/resume controls.
-- Replies, unsubscribe requests, and delivery failures require manual handling.
-  The consent check and appended reply-unsubscribe text make that visible.
-- Scheduled/due states are not delivery receipts. No claimed open/click/reply
-  analytics, automatic stop-on-reply, webhook suppression, or global opt-out list.
-- No SendGrid credentials, bulk-sending server, billing integration, or separate
-  sequence usage meter is introduced. Delivery settings state this explicitly.
-- Database record tables are editable by permitted database editors; missing or
-  malformed sequence data causes an error rather than an empty audience.
-- This implementation has not been deployed. Production API adapters were
-  checked against the repository's current API types and backend behavior;
-  live authenticated sending was not available in the execution environment.
-
-## Provider research
-
-Google Workspace generally allows 2,000 messages per user per rolling day, with
-lower trial limits and additional recipient limits. Account-level limits apply
-to Gmail API sending too; normal inbox sends consume the same allowance. Do not
-treat a fifty-contact UI batch as an enforcement of the account's daily quota.
-Source: <https://support.google.com/a/answer/166852>.
-
-For bulk sending, implement SendGrid as a server-side delivery adapter with a
-mail-send-scoped API key, verified sending domain, unsubscribe groups and
-suppression checks, and signed event webhooks. Its `send_at` supports only
-72 hours in advance, so longer sequences need a Macro worker that submits each
-due step. HTTP 202 is acceptance, not delivery. Keep API keys off the browser;
-make billing a deliberate choice between customer-owned provider accounts and
-Macro-managed subusers with quotas/usage metering. No provider price is promised
-by this implementation.
-Sources: <https://www.twilio.com/docs/sendgrid/api-reference/mail-send/mail-send>,
-<https://www.twilio.com/docs/sendgrid/ui/sending-email/sender-verification>,
-<https://sendgrid.com/en-us/pricing>.
-
-## Verification and video
-
-Use Bun as documented in `apps/web/AGENTS.md`:
+## Checks
 
 ```sh
-bunx vitest run src/features/email-marketing \
-  src/lib/service-clients/service-storage/email-marketing.test.ts
+bunx vitest run src/features/email-marketing
 bunx playwright test --config src/features/email-marketing/browser-test/playwright.config.ts
-NODE_OPTIONS=--max-old-space-size=10000 bun run type-check
 ```
 
-The browser fixture mounts the production view, production sequence engine, and
-the actual outer-sidebar navigation definitions with isolated local storage and
-a simulated Gmail scheduler. Shared-content tests use real Loro managers,
-Lexical editors, history, and collaboration providers; browser locks and
-BroadcastChannel replace only the authenticated server transport. Its CRM panel exercises the same enrollment-card
-component mounted in the production CRM overview. The fixture is labeled and
-never sends real emails. Browser coverage includes creation, editing, adding
-steps, personalization, activation, enrollment, scheduled payloads and delays,
-CRM cross-reference, pause/resume/stop, reload persistence, duplicate blocking,
-readonly controls, a mobile viewport, two-client concurrent editing,
-unsaved-content reload persistence, focus retention during typing/reordering,
-frozen activation snapshots, dark composer shadows, and initialization retry. Unit coverage includes reservation
-conflicts, malformed records, sender routing, actual GraphQL aliases/pagination,
-partial scheduling rollback, cancellation recovery, and stale-tab actions.
+The browser fixture mounts the production view and engine over local storage
+and a simulated scheduler. It never sends email.

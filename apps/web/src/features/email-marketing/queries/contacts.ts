@@ -1,4 +1,6 @@
 import { throwOnErr } from '@core/util/result';
+import { queryClient } from '@queries/client';
+import { emailKeys } from '@queries/email/keys';
 import { contactsClient } from '@service-contacts/client';
 import { emailClient } from '@service-email/client';
 import { fetchCrmContacts } from '@service-storage/crm-contacts';
@@ -8,6 +10,15 @@ import { type MarketingContact, mergeContacts } from '../core/model';
 type CrmContact = Awaited<
   ReturnType<typeof fetchCrmContacts>
 >['contacts'][number];
+
+/** Shares Mail's cached inbox list instead of fetching it per call. */
+function emailLinksFetchOptions() {
+  return {
+    queryKey: emailKeys.links.queryKey,
+    queryFn: () => throwOnErr(() => emailClient.getLinks()),
+    staleTime: 60_000,
+  };
+}
 
 /** CRM contacts are optional; GraphQL already excludes hidden ones. */
 const CRM_CONTACT_LIMIT = 500;
@@ -30,7 +41,7 @@ export function createContactQueries(
 > {
   return {
     async loadSenders() {
-      const { links } = await throwOnErr(() => emailClient.getLinks());
+      const { links } = await queryClient.fetchQuery(emailLinksFetchOptions());
       return links
         .filter(
           (link) => link.provider === 'GMAIL' && link.macro_id === userId()

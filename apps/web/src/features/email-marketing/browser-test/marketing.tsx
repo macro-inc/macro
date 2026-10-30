@@ -4,36 +4,36 @@ import { macroDarkTheme } from '@app/features/theme/themes/macro-dark';
 import { macroLightTheme } from '@app/features/theme/themes/macro-light';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
-import { ChannelsContextProvider } from '@core/context/channels';
-import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
-import type { QuickAccessContextValue } from '@core/context/quickAccess/types';
+import { visibleNavItems } from '@components/app/sidebar-next/nav-items';
+import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { UserContextProvider } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { authKeys } from '@queries/auth/keys';
-import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import { QueryClientProvider } from '@tanstack/solid-query';
-import { DragDropProvider } from '@thisbeyond/solid-dnd';
-import { createTestContentSession } from './collaboration';
+import { Button } from '@ui';
+import { createSignal, For, Show } from 'solid-js';
+import { render } from 'solid-js/web';
+import { ContactEnrollments } from '../components/contact-enrollments';
+import type { MarketingCapabilities } from '../context/contracts';
+import {
+  type Campaign,
+  type DeliveryIssue,
+  EMPTY_SNAPSHOT,
+  type MarketingSnapshot,
+} from '../core/model';
+import { MarketingWorkspaceView } from '../views/marketing-workspace';
 
-const dark = new URLSearchParams(location.search).get('theme') === 'dark';
+const params = new URLSearchParams(location.search);
+const dark = params.get('theme') === 'dark';
 for (const [token, value] of Object.entries(
   (dark ? macroDarkTheme : macroLightTheme).colorTokens
 ))
   document.documentElement.style.setProperty(`--color-${token}`, value);
 document.documentElement.dataset.themeLight = dark ? 'false' : 'true';
 document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
-
-import { visibleNavItems } from '@components/app/sidebar-next/nav-items';
-import { createSignal, For, Show } from 'solid-js';
-import { render } from 'solid-js/web';
-import { ContactEnrollments } from '../components/contact-enrollments';
-import {
-  primaryButton,
-  secondaryButton,
-} from '../components/enrollment-dialog';
-import type { MarketingCapabilities } from '../context/contracts';
-import type { Campaign, Enrollment, MarketingSnapshot } from '../core/model';
-import { MarketingWorkspaceView } from '../views/marketing-workspace';
+// The app sets this at startup; `touch:` styles key off it.
+document.documentElement.dataset.touchDevice = String(isTouchDevice());
 
 // Real production view and workflow, with isolated storage and a simulated Gmail scheduler.
 // This fixture never connects to a user's account or sends real mail.
@@ -64,17 +64,19 @@ const campaign: Campaign = {
       id: 'welcome',
       delayDays: 0,
       subject: 'Welcome to Macro, {{firstName}}',
-      body: 'Hi {{firstName}},\n\nWelcome aboard. Your team’s work finally has a home — docs, conversations, and the people behind them.\n\nStart by connecting your inbox. If you need a hand, just reply.\n\nThe Macro team',
+      body: 'Hi {{firstName}},\n\nWelcome aboard.\n\nStart by connecting your inbox. If you need a hand, just reply.',
     },
     {
       id: 'tips',
       delayDays: 2,
-      subject: 'Your first week, a little easier',
-      body: 'Hi {{firstName}},\n\nA quick tip: keep your notes and conversations together in one project. It makes the next step easier to find.\n\nHow is your first week going?',
+      subject: '',
+      body: 'Hi {{firstName}},\n\nHow is your first week going?',
+      asReply: true,
     },
   ],
 };
 const initial: MarketingSnapshot = {
+  ...EMPTY_SNAPSHOT,
   campaigns: [
     campaign,
     {
@@ -82,12 +84,10 @@ const initial: MarketingSnapshot = {
       id: 'example-reengagement',
       name: 'A friendly check-in',
       description: 'Reconnect with people who haven’t stopped by in a while.',
-      steps: [campaign.steps[1]],
+      steps: [{ ...campaign.steps[1], subject: 'Checking in', asReply: false }],
     },
   ],
-  enrollments: [],
   databaseId: 'test-database',
-  writable: true,
 };
 function read(): MarketingSnapshot {
   return JSON.parse(
@@ -104,19 +104,26 @@ type Draft = {
   email: string;
   subject: string;
   body: string;
+  threadId: string;
+  replyingToId?: string;
   sendAt?: string;
 };
-const [outbox, setOutbox] = createSignal<Draft[]>(
-  JSON.parse(localStorage.getItem('marketing-test-outbox') ?? '[]')
-);
+function readOutbox(): Draft[] {
+  return JSON.parse(localStorage.getItem('marketing-test-outbox') ?? '[]');
+}
+const [outbox, setOutbox] = createSignal<Draft[]>(readOutbox());
 function writeOutbox(value: Draft[]) {
   localStorage.setItem('marketing-test-outbox', JSON.stringify(value));
   setOutbox(value);
 }
+/** Draft ids the simulated scheduler reports as failed sends. */
+function failed(): string[] {
+  return JSON.parse(localStorage.getItem('marketing-test-failed') ?? '[]');
+}
 const [panel, setPanel] = createSignal('email-marketing');
 const [crmEmail, setCrmEmail] = createSignal('alex@example.com');
+const [opened, setOpened] = createSignal('');
 const capabilities: MarketingCapabilities = {
-  composition: { createSession: createTestContentSession },
   repository: {
     async load() {
       return read();
@@ -126,12 +133,12 @@ const capabilities: MarketingCapabilities = {
       write({
         ...data,
         campaigns: [
-          ...data.campaigns.filter((campaign) => campaign.id !== value.id),
+          ...data.campaigns.filter((item) => item.id !== value.id),
           structuredClone(value),
         ],
       });
     },
-    async saveEnrollment(value: Enrollment) {
+    async saveEnrollment(value) {
       const data = read();
       write({
         ...data,
@@ -141,23 +148,55 @@ const capabilities: MarketingCapabilities = {
         ],
       });
     },
+    async deleteCampaign(campaignId, enrollmentIds) {
+      const data = read();
+      write({
+        ...data,
+        campaigns: data.campaigns.filter((item) => item.id !== campaignId),
+        enrollments: data.enrollments.filter(
+          (entry) => !enrollmentIds.includes(entry.id)
+        ),
+      });
+    },
+    async saveUnsubscribe(value) {
+      const data = read();
+      write({ ...data, unsubscribed: [...data.unsubscribed, value] });
+    },
   },
   delivery: {
-    async createDraft(_, email, subject, body) {
+    async createDraft(_, content) {
       const id = crypto.randomUUID();
-      writeOutbox([...outbox(), { id, email, subject, body }]);
-      return { id, generation: 0 };
+      const parent = readOutbox().find(
+        (draft) => draft.id === content.replyingToId
+      );
+      if (content.replyingToId && !parent?.sendAt)
+        throw new Error('Test: replies need a scheduled parent.');
+      const threadId = parent?.threadId ?? `thread-${id}`;
+      writeOutbox([...readOutbox(), { id, threadId, ...content }]);
+      return { id, generation: 0, threadId };
     },
     async schedule(_, { draftId }, sendAt) {
       writeOutbox(
-        outbox().map((draft) =>
+        readOutbox().map((draft) =>
           draft.id === draftId ? { ...draft, sendAt } : draft
         )
       );
     },
     async cancel(_, { draftId }) {
-      writeOutbox(outbox().filter((draft) => draft.id !== draftId));
+      writeOutbox(readOutbox().filter((draft) => draft.id !== draftId));
       return 'canceled';
+    },
+    async inspect(_, steps) {
+      const issues: Record<string, DeliveryIssue> = {};
+      for (const step of steps)
+        if (failed().includes(step.draftId)) issues[step.draftId] = 'failed';
+      const live = new Set(steps.map((step) => step.draftId));
+      return {
+        issues,
+        untracked: readOutbox()
+          .filter((draft) => draft.sendAt && !live.has(draft.id))
+          .map((draft) => draft.id),
+      };
     },
   },
   async loadContacts() {
@@ -182,7 +221,22 @@ const capabilities: MarketingCapabilities = {
   openDatabase() {
     setPanel('database');
   },
+  openThread(threadId) {
+    setOpened(threadId);
+    setPanel('outbox');
+  },
 };
+function Back() {
+  return (
+    <Button
+      type="button"
+      variant="secondary"
+      onClick={() => setPanel('email-marketing')}
+    >
+      Back to Email Marketing
+    </Button>
+  );
+}
 function Fixture() {
   const nav = visibleNavItems({
     showCalendar: true,
@@ -196,12 +250,9 @@ function Fixture() {
     prefs: { hidden: new Set(), order: [] },
   });
   return (
-    <div
-      class="flex h-screen flex-col bg-page text-ink"
-      style={{ '--font-sans': 'Inter Variable, sans-serif' }}
-    >
+    <div class="flex h-screen flex-col bg-page text-ink">
       <div class="flex h-9 shrink-0 items-center justify-between border-b border-edge-muted bg-panel/50 px-5 text-[11px] text-ink-muted">
-        <span>Macro · Email Marketing v1</span>
+        <span>Macro · Email Marketing</span>
         <span>TEST WORKSPACE · simulated Gmail · no real emails sent</span>
       </div>
       <div class="flex min-h-0 flex-1">
@@ -209,136 +260,76 @@ function Fixture() {
           class="flex w-16 shrink-0 flex-col items-center gap-2 border-r border-edge-muted bg-panel/20 py-4"
           aria-label="Outer sidebar"
         >
-          <div class="mb-4 flex size-8 items-center justify-center rounded-lg bg-ink text-page font-semibold">
-            M
-          </div>
           <For each={nav}>
             {(item) => (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-md"
                 aria-label={item.label}
-                title={item.label}
-                class="flex size-9 items-center justify-center rounded-lg text-ink-muted hover:bg-panel"
-                classList={{ 'bg-panel text-ink': panel() === item.id }}
                 onClick={() => setPanel(item.id)}
               >
                 <item.icon class="size-5" />
-              </button>
+              </Button>
             )}
           </For>
-          <button
+          <Button
             type="button"
-            class="mt-auto text-xs text-ink-muted"
-            onClick={() => setPanel('outbox')}
+            variant="ghost"
+            size="icon-md"
+            class="mt-auto"
             aria-label="Test scheduler outbox"
+            onClick={() => setPanel('outbox')}
           >
             ✉
-          </button>
+          </Button>
         </aside>
         <div class="min-h-0 min-w-0 flex-1">
           <Show when={panel() === 'email-marketing'}>
             <MarketingWorkspaceView capabilities={capabilities} />
           </Show>
           <Show when={panel() === 'companies'}>
-            <div class="mx-auto max-w-3xl p-10">
-              <div class="mb-8 flex items-center justify-between">
-                <p class="text-sm text-ink-muted">
-                  CRM / Contacts /{' '}
-                  {
-                    contacts.find((contact) => contact.email === crmEmail())
-                      ?.name
-                  }
-                </p>
-                <button
-                  type="button"
-                  class={secondaryButton}
-                  onClick={() => setPanel('email-marketing')}
-                >
-                  Back to Email Marketing
-                </button>
-              </div>
+            <div class="mx-auto max-w-3xl space-y-6 p-10">
+              <Back />
               <h1 class="text-3xl font-semibold">
                 {contacts.find((contact) => contact.email === crmEmail())?.name}
               </h1>
-              <p class="mt-3 text-sm text-ink-muted">{crmEmail()}</p>
-              <div class="mt-8">
-                <ContactEnrollments
-                  entries={snapshot().enrollments.filter(
-                    (entry) => entry.contact.email === crmEmail()
-                  )}
-                  onOpen={() => setPanel('email-marketing')}
-                />
-              </div>
-              <div class="mt-5 rounded-xl border border-edge-muted p-6">
-                <h2 class="text-sm font-medium">Contact details</h2>
-                <p class="mt-3 text-xs text-ink-muted">Company · Acme Studio</p>
-                <p class="mt-3 text-xs text-ink-muted">
-                  Source · Connected inbox
-                </p>
-              </div>
+              <ContactEnrollments
+                entries={snapshot().enrollments.filter(
+                  (entry) => entry.contact.email === crmEmail()
+                )}
+                attention={(entry) =>
+                  entry.steps.some(
+                    (step) => step.draftId && failed().includes(step.draftId)
+                  )
+                    ? 'failed'
+                    : undefined
+                }
+                onOpen={() => setPanel('email-marketing')}
+              />
             </div>
           </Show>
           <Show when={panel() === 'database'}>
-            <div class="p-8">
+            <div class="space-y-4 p-8">
               <h1 class="text-2xl font-semibold">
                 Macro Database · Email Marketing
               </h1>
-              <p class="mt-2 text-sm text-ink-muted">
-                Test records matching the production campaign and enrollment
-                data.
-              </p>
-              <div class="mt-6 overflow-x-auto rounded-xl border border-edge-muted">
-                <table class="w-full text-left text-sm">
-                  <thead class="bg-panel text-xs text-ink-muted">
-                    <tr>
-                      <th class="p-4">Campaign</th>
-                      <th>Status</th>
-                      <th>Sequence</th>
-                      <th>Enrolled</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <For each={snapshot().campaigns}>
-                      {(campaign) => (
-                        <tr class="border-t border-edge-muted">
-                          <td class="p-4">{campaign.name}</td>
-                          <td>{campaign.status}</td>
-                          <td>{campaign.steps.length} emails</td>
-                          <td>
-                            {
-                              snapshot().enrollments.filter(
-                                (entry) => entry.campaignId === campaign.id
-                              ).length
-                            }
-                          </td>
-                        </tr>
-                      )}
-                    </For>
-                  </tbody>
-                </table>
-              </div>
-              <button
-                type="button"
-                class={`${secondaryButton} mt-5`}
-                onClick={() => setPanel('email-marketing')}
-              >
-                Back to Email Marketing
-              </button>
+              <Back />
             </div>
           </Show>
           <Show when={panel() === 'outbox'}>
-            <div class="p-8">
+            <div class="space-y-4 p-8">
               <h1 class="text-2xl font-semibold">Test Gmail scheduler</h1>
-              <p class="mt-2 text-sm text-ink-muted">
-                Simulated draft and scheduling calls from the production
-                sequence engine.
+              <p class="text-sm text-ink-muted" data-testid="opened-thread">
+                {opened()}
               </p>
               <For each={outbox()}>
                 {(draft) => (
-                  <article class="my-4 rounded-xl border border-edge-muted p-5">
+                  <article class="rounded-xl border border-edge-muted p-5">
                     <p class="text-sm font-medium">{draft.subject}</p>
                     <p class="mt-2 text-xs text-ink-muted">
-                      To: {draft.email} · Scheduled: {draft.sendAt}
+                      To: {draft.email} · Scheduled: {draft.sendAt} · Thread:{' '}
+                      {draft.threadId}
                     </p>
                     <p class="mt-4 whitespace-pre-wrap text-sm leading-6">
                       {draft.body}
@@ -346,36 +337,7 @@ function Fixture() {
                   </article>
                 )}
               </For>
-              <button
-                type="button"
-                class={primaryButton}
-                onClick={() => setPanel('email-marketing')}
-              >
-                Back to Email Marketing
-              </button>
-            </div>
-          </Show>
-          <Show
-            when={
-              !['email-marketing', 'companies', 'database', 'outbox'].includes(
-                panel()
-              )
-            }
-          >
-            <div class="p-10">
-              <h1 class="text-xl font-medium">
-                {nav.find((item) => item.id === panel())?.label}
-              </h1>
-              <p class="mt-2 text-sm text-ink-muted">
-                Other modules are outside this isolated test workspace.
-              </p>
-              <button
-                type="button"
-                class={`${primaryButton} mt-6`}
-                onClick={() => setPanel('email-marketing')}
-              >
-                Open Email Marketing
-              </button>
+              <Back />
             </div>
           </Show>
         </div>
@@ -383,51 +345,22 @@ function Fixture() {
     </div>
   );
 }
-const fixturePeer =
-  new URLSearchParams(location.search).get('peer') === 'jamie'
-    ? 'jamie'
-    : 'alex';
 queryClient.setQueryData(authKeys.userInfo.queryKey, {
-  id: `macro|${fixturePeer}@example.com`,
-  email: `${fixturePeer}@example.com`,
-  name: fixturePeer === 'jamie' ? 'Jamie Chen' : 'Alex Morgan',
+  id: 'macro|alex@example.com',
+  email: 'alex@example.com',
+  name: 'Alex Morgan',
   authenticated: true,
   permissions: [],
   tutorialComplete: true,
 });
-queryClient.setQueryDefaults(channelKeys._def, { enabled: false });
-queryClient.setQueryData(channelKeys.listChannels.queryKey, []);
-queryClient.setQueryData(channelKeys.activity.queryKey, []);
-const emptyQuickAccess: QuickAccessContextValue = {
-  useList: () => ({
-    items: () => [],
-    totalCount: () => 0,
-    hasMore: () => false,
-    isLoading: () => false,
-    isLoadingMore: () => false,
-    error: () => undefined,
-    loadMore: async () => {},
-  }),
-  usesRecordSelection: () => false,
-  usesSearchProjection: () => false,
-  isLoading: () => false,
-  refresh() {},
-  getById: () => undefined,
-};
 render(
   () => (
     <QueryClientProvider client={queryClient}>
       <UserContextProvider>
         <AnalyticsContextProvider>
-          {/* Main's collaborative editor reads feature flags and registers entity drop targets. */}
           <PosthogProvider>
-            <ChannelsContextProvider>
-              <QuickAccessContextProvider value={emptyQuickAccess}>
-                <DragDropProvider>
-                  <Fixture />
-                </DragDropProvider>
-              </QuickAccessContextProvider>
-            </ChannelsContextProvider>
+            <Fixture />
+            <ToastRegion />
           </PosthogProvider>
         </AnalyticsContextProvider>
       </UserContextProvider>

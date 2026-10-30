@@ -5,6 +5,7 @@ import {
   mergeContacts,
   personalize,
   planSteps,
+  replyParent,
   validateCampaign,
 } from './model';
 
@@ -81,6 +82,91 @@ describe('sequence planning', () => {
           { id: 'two', delayDays: 1, subject: 'Again', body: half },
         ],
       })
-    ).toThrow('too long');
+    ).toThrow(expect.objectContaining({ code: 'sequenceTooLong' }));
+  });
+  it('replies in the first email’s thread and ends every email with the opt-out line', () => {
+    const steps = planSteps(
+      {
+        ...campaign,
+        optOutLine: 'Reply STOP to opt out.',
+        steps: [
+          { id: 'one', delayDays: 0, subject: 'Hi {{firstName}}', body: 'A' },
+          { id: 'two', delayDays: 1, subject: '', body: 'B', asReply: true },
+          { id: 'three', delayDays: 1, subject: 'New', body: 'C' },
+          { id: 'four', delayDays: 1, subject: '', body: 'D', asReply: true },
+        ],
+      },
+      { email: 'ada@example.com', name: 'Ada' },
+      new Date('2026-10-30T09:00:00Z')
+    );
+    expect(steps.map((step) => step.subject)).toEqual([
+      'Hi Ada',
+      'Re: Hi Ada',
+      'New',
+      'Re: New',
+    ]);
+    expect(steps[0].body).toBe('A\n\nReply STOP to opt out.');
+  });
+  it('requires subjects only where an email starts a thread', () => {
+    expect(() =>
+      validateCampaign({
+        ...campaign,
+        steps: [
+          campaign.steps[0],
+          { id: 'two', delayDays: 1, subject: '', body: 'B', asReply: true },
+        ],
+      })
+    ).not.toThrow();
+    expect(() =>
+      validateCampaign({
+        ...campaign,
+        steps: [{ ...campaign.steps[0], asReply: true, subject: '' }],
+      })
+    ).toThrow(expect.objectContaining({ code: 'subjectRequired' }));
+  });
+  it('rejects malformed personalization, including in the opt-out line', () => {
+    for (const subject of [
+      'Hi {{firstName}',
+      'Hi {{ first name }}',
+      'Hi firstName}}',
+    ])
+      expect(() =>
+        validateCampaign({
+          ...campaign,
+          steps: [{ ...campaign.steps[0], subject }],
+        })
+      ).toThrow(expect.objectContaining({ code: 'unknownPersonalization' }));
+    expect(() =>
+      validateCampaign({ ...campaign, optOutLine: 'Reply {{stop}}' })
+    ).toThrow(expect.objectContaining({ code: 'unknownPersonalization' }));
+  });
+  it('keeps a personalized subject on one line whatever the contact’s name holds', () => {
+    const [step] = planSteps(
+      {
+        ...campaign,
+        steps: [{ id: 'one', delayDays: 0, subject: 'Hi {{name}}', body: 'A' }],
+      },
+      { email: 'ada@example.com', name: 'Ada\r\nBcc: someone@example.com' },
+      new Date('2026-10-30T09:00:00Z')
+    );
+    expect(step.subject).toBe('Hi Ada Bcc: someone@example.com');
+  });
+  it('replies to the nearest earlier email that was queued or sent', () => {
+    const steps = planSteps(
+      {
+        ...campaign,
+        steps: [
+          { id: 'one', delayDays: 0, subject: 'Hi', body: 'A' },
+          { id: 'two', delayDays: 1, subject: '', body: 'B', asReply: true },
+          { id: 'three', delayDays: 1, subject: '', body: 'C', asReply: true },
+        ],
+      },
+      { email: 'ada@example.com', name: 'Ada' },
+      new Date('2026-10-30T09:00:00Z')
+    );
+    steps[0] = { ...steps[0], status: 'delivery_started', draftId: 'sent' };
+    steps[1] = { ...steps[1], status: 'canceled', draftId: 'gone' };
+    expect(replyParent(steps, 0)).toBeUndefined();
+    expect(replyParent(steps, 2)).toBe('sent');
   });
 });

@@ -1,19 +1,24 @@
 import { addDays, differenceInCalendarDays } from 'date-fns';
 import { z } from 'zod';
+import { ENROLLMENT_ERRORS, MarketingError } from './errors';
 
 export const stepSchema = z.object({
   id: z.string(),
   delayDays: z.number().int().min(0).max(365),
   subject: z.string().max(300),
   body: z.string().max(50_000),
+  /** A follow-up sent as a reply in the previous email's thread. */
+  asReply: z.boolean().optional(),
 });
 export const campaignSchema = z.object({
   id: z.string(),
   name: z.string().trim().min(1).max(120),
   description: z.string().max(500),
-  status: z.enum(['draft', 'active', 'paused', 'archived']),
+  status: z.enum(['draft', 'active', 'paused']),
   senderId: z.string(),
   steps: z.array(stepSchema).max(20),
+  /** Appended to every email. Older records use the default line. */
+  optOutLine: z.string().max(300).optional(),
   updatedAt: z.string(),
 });
 export const contactSchema = z.object({
@@ -22,12 +27,15 @@ export const contactSchema = z.object({
   crmContactId: z.string().optional(),
   companyId: z.string().optional(),
 });
+/** A frozen step: personalization can lengthen it past the template limits. */
 export const queuedStepSchema = stepSchema.extend({
+  subject: z.string().max(1_000),
+  body: z.string().max(120_000),
   sendAt: z.string(),
   draftId: z.string().optional(),
   /** The draft's server edit generation; cancel and delete must echo it. */
   draftGeneration: z.number().int().min(0).optional(),
-  /** The draft's thread, used to read its delivery state. */
+  /** The draft's thread, used to read its delivery state and to open it. */
   threadId: z.string().optional(),
   status: z.enum([
     'pending',
@@ -53,7 +61,13 @@ export const enrollmentSchema = z.object({
   steps: z.array(queuedStepSchema),
   createdAt: z.string(),
   updatedAt: z.string(),
+  /** An enrollment error code; records from before codes may hold text. */
   error: z.string().optional(),
+});
+/** An address that every campaign must skip. */
+export const unsubscribeSchema = z.object({
+  email: z.email(),
+  unsubscribedAt: z.string(),
 });
 
 export type Campaign = z.infer<typeof campaignSchema>;
@@ -61,6 +75,7 @@ export type SequenceStep = z.infer<typeof stepSchema>;
 export type MarketingContact = z.infer<typeof contactSchema>;
 export type Enrollment = z.infer<typeof enrollmentSchema>;
 export type QueuedStep = z.infer<typeof queuedStepSchema>;
+export type Unsubscribe = z.infer<typeof unsubscribeSchema>;
 export type Sender = { id: string; email: string; ready: boolean };
 /**
  * An inbox as the signed-in user sees it. `disconnected` means the id is not
@@ -78,29 +93,109 @@ export type SenderStatus = 'ready' | 'reauth' | 'disconnected';
  *   (for example deleted or sent from Drafts).
  */
 export type DeliveryIssue = 'stalled' | 'failed' | 'unconfirmed' | 'missing';
-/** Why an enrollment needs a look, beyond its stored status. */
-export type AttentionReason = DeliveryIssue | 'disconnected';
+/**
+ * Why an enrollment needs a look, beyond its stored status. `interrupted`:
+ * scheduling stopped partway, for example because the tab closed.
+ */
+export type AttentionReason = DeliveryIssue | 'disconnected' | 'interrupted';
 export type MarketingSnapshot = {
   campaigns: Campaign[];
   enrollments: Enrollment[];
+  unsubscribed: Unsubscribe[];
+  /** Records that could not be read; enrolling waits until they are fixed. */
+  unreadable: number;
   databaseId?: string;
   writable: boolean;
 };
+
+export const EMPTY_SNAPSHOT: MarketingSnapshot = {
+  campaigns: [],
+  enrollments: [],
+  unsubscribed: [],
+  unreadable: 0,
+  writable: true,
+};
+
+export const DEFAULT_OPT_OUT_LINE =
+  'If you would prefer not to receive these emails, reply "unsubscribe".';
 
 export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
+export function isUnsubscribed(snapshot: MarketingSnapshot, email: string) {
+  const address = normalizeEmail(email);
+  return snapshot.unsubscribed.some(
+    (entry) => normalizeEmail(entry.email) === address
+  );
+}
+
+/**
+ * A failed enrollment with nothing queued or delivered can be replaced by a
+ * fresh one. Paused and stopped enrollments still block, by design.
+ */
+export function isReplaceable(entry: Enrollment) {
+  return (
+    entry.status === 'needs_attention' &&
+    entry.steps.every(
+      (step) => step.status === 'pending' || step.status === 'canceled'
+    )
+  );
+}
+
+export function isEnrollmentErrorCode(
+  error: string | undefined
+): error is (typeof ENROLLMENT_ERRORS)[number] {
+  return ENROLLMENT_ERRORS.some((code) => code === error);
+}
+
+const TOKEN = /\{\{\s*(\w+)\s*\}\}/g;
+const KNOWN_TOKEN = /^\{\{\s*(firstName|name|email)\s*\}\}$/;
+/** Tokens a contact can't fill in, including malformed `{{`/`}}` pairs. */
+function unknownTokens(text: string) {
+  const unknown = (text.match(TOKEN) ?? []).filter(
+    (token) => !KNOWN_TOKEN.test(token)
+  );
+  // Once whole tokens are gone, any `{{` or `}}` left is a typo. Report the
+  // text around it; a linear scan keeps long bodies cheap.
+  const rest = text.replace(TOKEN, ' ');
+  for (const found of rest.matchAll(/\{\{|\}\}/g)) {
+    const at = found.index;
+    const fragment =
+      found[0] === '{{'
+        ? rest.slice(at, at + 24).split('\n')[0]
+        : rest
+            .slice(Math.max(0, at - 22), at + 2)
+            .split('\n')
+            .at(-1);
+    unknown.push(fragment?.trim() ?? found[0]);
+  }
+  return [...new Set(unknown)];
+}
+
 export function personalize(text: string, contact: MarketingContact) {
   const variables: Record<string, string> = {
-    firstName: contact.name.trim().split(/\s+/)[0] || 'there',
-    name: contact.name || 'there',
+    firstName: contact.name.trim().split(/[\s,]+/)[0] || 'there',
+    name: contact.name.trim() || 'there',
     email: contact.email,
   };
-  return text.replace(
-    /\{\{\s*(\w+)\s*\}\}/g,
-    (token, name) => variables[name] ?? token
-  );
+  return text.replace(TOKEN, (token, name) => variables[name] ?? token);
+}
+
+/** Follow-ups after the first email that reply in its thread. */
+export function isReplyStep(steps: SequenceStep[], index: number) {
+  return index > 0 && steps[index].asReply === true;
+}
+
+/** The subject a step is sent with: replies reuse their thread's subject. */
+export function threadSubject(steps: SequenceStep[], index: number) {
+  let root = index;
+  while (isReplyStep(steps, root)) root--;
+  return steps[root].subject;
+}
+
+export function replySubject(subject: string) {
+  return /^re:/i.test(subject.trim()) ? subject : `Re: ${subject}`;
 }
 
 /**
@@ -111,59 +206,108 @@ export function personalize(text: string, contact: MarketingContact) {
 export const MAX_SEQUENCE_CHARACTERS = 100_000;
 
 export function validateCampaign(campaign: Campaign) {
-  if (!campaign.name.trim()) throw new Error('Give your campaign a name.');
-  if (!campaign.senderId) throw new Error('Choose a connected Gmail inbox.');
-  if (!campaign.steps.length) throw new Error('Add at least one email.');
-  for (const step of campaign.steps) {
-    if (/[\r\n]/.test(step.subject))
-      throw new Error('Subjects must be a single line.');
-    if (!step.subject.trim() || !step.body.trim())
-      throw new Error('Every email needs a subject and a message.');
+  if (!campaign.name.trim()) throw new MarketingError('nameRequired');
+  if (!campaign.senderId) throw new MarketingError('senderRequired');
+  if (!campaign.steps.length) throw new MarketingError('stepsRequired');
+  const optOut = campaign.optOutLine ?? DEFAULT_OPT_OUT_LINE;
+  if (!optOut.trim()) throw new MarketingError('optOutRequired');
+  const optOutTokens = unknownTokens(optOut);
+  if (optOutTokens.length)
+    throw new MarketingError('unknownPersonalization', {
+      tokens: optOutTokens.join(', '),
+    });
+  for (const [index, step] of campaign.steps.entries()) {
+    const position = index + 1;
+    if (!isReplyStep(campaign.steps, index)) {
+      if (/[\r\n]/.test(step.subject))
+        throw new MarketingError('subjectSingleLine', { position });
+      if (!step.subject.trim())
+        throw new MarketingError('subjectRequired', { position });
+    }
+    if (!step.body.trim())
+      throw new MarketingError('bodyRequired', { position });
     if (
       !Number.isInteger(step.delayDays) ||
       step.delayDays < 0 ||
       step.delayDays > 365
     )
-      throw new Error('Delays must be whole days between 0 and 365.');
-    const unknown = `${step.subject}\n${step.body}`
-      .match(/\{\{\s*(\w+)\s*\}\}/g)
-      ?.filter(
-        (token) => !/^\{\{\s*(firstName|name|email)\s*\}\}$/.test(token)
-      );
-    if (unknown?.length)
-      throw new Error(`Unknown personalization: ${unknown.join(', ')}`);
+      throw new MarketingError('delayRange', { position });
+    const unknown = unknownTokens(`${step.subject}\n${step.body}`);
+    if (unknown.length)
+      throw new MarketingError('unknownPersonalization', {
+        tokens: unknown.join(', '),
+      });
   }
   const characters = campaign.steps.reduce(
     (total, step) => total + step.subject.length + step.body.length,
     0
   );
   if (characters > MAX_SEQUENCE_CHARACTERS)
-    throw new Error(
-      `This sequence is too long to send. Keep all emails under ${MAX_SEQUENCE_CHARACTERS.toLocaleString('en-US')} characters combined.`
-    );
+    throw new MarketingError('sequenceTooLong', {
+      max: MAX_SEQUENCE_CHARACTERS,
+    });
 }
 
 // A safety window leaves time to persist draft handles and roll back a failed enrollment.
 export const MIN_START_DELAY_MS = 10 * 60_000;
+/** Contacts enrolled per batch; each one schedules every step in order. */
+export const MAX_ENROLLMENT_BATCH = 50;
+
 export function planSteps(
   campaign: Campaign,
   contact: MarketingContact,
   startAt: Date
-) {
+): QueuedStep[] {
   if (!Number.isFinite(startAt.getTime()))
-    throw new Error('Choose a valid start time.');
+    throw new MarketingError('invalidStartTime');
+  const optOut = personalize(
+    (campaign.optOutLine ?? DEFAULT_OPT_OUT_LINE).trim(),
+    contact
+  );
   // Calendar days keep the local send time across daylight-saving changes.
   let time = startAt;
-  return campaign.steps.map((step) => {
+  return campaign.steps.map((step, index) => {
     time = addDays(time, step.delayDays);
+    // A name can carry line breaks; a subject must stay one header line.
+    const subject = personalize(
+      threadSubject(campaign.steps, index),
+      contact
+    ).replace(/[\r\n]+/g, ' ');
     return {
-      ...step,
-      subject: personalize(step.subject, contact),
-      body: `${personalize(step.body, contact)}\n\nIf you would prefer not to receive these emails, reply unsubscribe.`,
+      id: step.id,
+      delayDays: step.delayDays,
+      asReply: isReplyStep(campaign.steps, index) || undefined,
+      subject: isReplyStep(campaign.steps, index)
+        ? replySubject(subject)
+        : subject,
+      body: `${personalize(step.body, contact)}\n\n${optOut}`,
       sendAt: time.toISOString(),
       status: 'pending' as const,
     };
   });
+}
+
+/**
+ * The draft a reply step answers: the nearest earlier step that was queued
+ * or sent. `undefined` starts a new thread, for example when the earlier
+ * emails were skipped on resume.
+ */
+export function replyParent(steps: QueuedStep[], index: number) {
+  if (!steps[index]?.asReply) return undefined;
+  for (let at = index - 1; at >= 0; at--) {
+    const step = steps[at];
+    if (
+      step.draftId &&
+      (step.status === 'queued' || step.status === 'delivery_started')
+    )
+      return step.draftId;
+  }
+  return undefined;
+}
+
+/** A reply without a parent goes out as a new email under its own subject. */
+export function standaloneSubject(subject: string) {
+  return subject.replace(/^re:\s*/i, '');
 }
 
 /**
@@ -197,7 +341,7 @@ export function mergeContacts(contacts: MarketingContact[]) {
       ...previous,
       ...contact,
       email,
-      name: contact.name || previous?.name || '',
+      name: contact.name.trim() || previous?.name || '',
       crmContactId: contact.crmContactId ?? previous?.crmContactId,
       companyId: contact.companyId ?? previous?.companyId,
     });

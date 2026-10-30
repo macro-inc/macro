@@ -1,3 +1,6 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { t } from '@app/lib/i18n';
+import { Button } from '@ui';
 import { For, Show } from 'solid-js';
 import type { AttentionReason, Enrollment } from '../core/model';
 import { AttentionBadge, StatusBadge } from './status-badge';
@@ -6,6 +9,7 @@ export function ContactEnrollments(props: {
   entries: Enrollment[];
   loading?: boolean;
   error?: string;
+  unsubscribed?: boolean;
   onOpen?: () => void;
   /** A problem to show instead of the stored status, when the host knows one. */
   attention?: (entry: Enrollment) => AttentionReason | undefined;
@@ -13,20 +17,23 @@ export function ContactEnrollments(props: {
   return (
     <section
       class="rounded-xl border border-edge-muted bg-panel/30 p-4"
-      aria-label="Email Marketing enrollments"
+      aria-label={t('emailMarketing.contactEnrollments')}
     >
-      <div class="mb-3 flex items-center justify-between">
-        <h3 class="text-sm font-medium">Email Marketing</h3>
+      <div class="mb-3 flex items-center justify-between gap-3">
+        <h3 class="text-sm font-medium">{t('nav.emailMarketing')}</h3>
         <Show when={props.onOpen}>
-          <button
-            type="button"
-            onClick={props.onOpen}
-            class="text-xs text-accent hover:underline"
-          >
-            Open module ↗
-          </button>
+          {(open) => (
+            <Button type="button" variant="link" size="xs" onClick={open()}>
+              {t('emailMarketing.openModule')}
+            </Button>
+          )}
         </Show>
       </div>
+      <Show when={props.unsubscribed}>
+        <p class="mb-2 text-xs text-ink-muted">
+          {t('emailMarketing.contactUnsubscribed')}
+        </p>
+      </Show>
       <Show when={props.error}>
         <p class="text-xs text-failure" role="alert">
           {props.error}
@@ -36,7 +43,11 @@ export function ContactEnrollments(props: {
         when={!props.error && !props.loading}
         fallback={
           <Show when={props.loading}>
-            <p class="text-xs text-ink-muted">Loading enrollments…</p>
+            <ListSkeleton.Root label={t('emailMarketing.loadingEnrollments')}>
+              <ListSkeleton.Row>
+                <ListSkeleton.Bar class="h-3 w-1/2" />
+              </ListSkeleton.Row>
+            </ListSkeleton.Root>
           </Show>
         }
       >
@@ -44,22 +55,22 @@ export function ContactEnrollments(props: {
           when={props.entries.length}
           fallback={
             <p class="text-xs text-ink-muted">
-              This contact is not enrolled in any sequences.
+              {t('emailMarketing.notEnrolled')}
             </p>
           }
         >
-          <div class="flex flex-col gap-2">
+          <ul class="flex flex-col gap-2">
             <For each={props.entries}>
               {(entry) => (
-                <div class="flex items-center justify-between gap-3">
-                  <div>
-                    <p class="text-sm">{entry.campaignName}</p>
+                <li class="flex items-center justify-between gap-3">
+                  <div class="min-w-0">
+                    <p class="truncate text-sm">{entry.campaignName}</p>
                     <p class="text-xs text-ink-muted">
-                      {
-                        entry.steps.filter((step) => step.status === 'queued')
-                          .length
-                      }{' '}
-                      scheduled emails
+                      {t('emailMarketing.scheduledEmails', {
+                        count: entry.steps.filter(
+                          (step) => step.status === 'queued'
+                        ).length,
+                      })}
                     </p>
                   </div>
                   <Show
@@ -68,10 +79,10 @@ export function ContactEnrollments(props: {
                   >
                     {(reason) => <AttentionBadge reason={reason()} />}
                   </Show>
-                </div>
+                </li>
               )}
             </For>
-          </div>
+          </ul>
         </Show>
       </Show>
     </section>
