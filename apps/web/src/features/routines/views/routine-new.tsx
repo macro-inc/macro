@@ -108,6 +108,8 @@ export function RoutineNewView(props: {
             }
             decisionsEnabled={props.decisionsEnabled}
             slots={props.slots}
+            // The Steps heading carries the summary; there is no last run yet.
+            showRun={false}
           />
         </Show>
       }
