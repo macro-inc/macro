@@ -499,7 +499,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
               return (
                 <div
-                  class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0"
+                  class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0 touch:min-h-12"
                   classList={{
                     'bg-hover': isKeyboardSelected(),
                   }}
@@ -552,7 +552,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                       </Show>
                       <div
                         data-entity-index={index()}
-                        class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0"
+                        class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0 touch:min-h-12"
                         classList={{
                           'bg-hover': isKeyboardSelected(),
                         }}
@@ -645,7 +645,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
               const entity = () => customEmailEntity();
               return (
                 <div
-                  class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0"
+                  class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0 touch:min-h-12"
                   classList={{
                     'bg-hover': rowIndex() === selectedIndex(),
                   }}
