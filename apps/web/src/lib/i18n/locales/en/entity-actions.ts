@@ -192,6 +192,28 @@ export default {
     other: 'Moved {{count}} items',
   },
   toastMoveToFolderFailed: 'Failed to move to folder',
+  movePickerTitle: {
+    one: 'Move {{count}} item to folder',
+    other: 'Move {{count}} items to folder',
+  },
+  movePickerSearch: 'Search folders or name a new one…',
+  movePickerOpenInSplit: 'Open in split',
+  movePickerCreatedByYou: 'Created by you',
+  movePickerSharedWithYou: 'Shared with you',
+  movePickerCreate: 'New folder “{{name}}”',
+  movePickerLoading: 'Loading folders…',
+  movePickerEmpty: 'No folders yet. Type a name to create one.',
+  movePickerMoving: 'Moving…',
+  movePickerKeyboardHint: '↑ ↓ to choose · Enter to move · Esc to cancel',
+  movePickerTouchHint: 'Tap a folder to move here',
+  dragMoreItems: {
+    one: '+ {{count}} more item',
+    other: '+ {{count}} more items',
+  },
+  dropIntoFolder: {
+    one: 'Move {{count}} item to this folder',
+    other: 'Move {{count}} items to this folder',
+  },
   toastRemovedFromFolder: 'Removed from folder',
   toastRemovedCountFromFolder: {
     one: 'Removed {{count}} item from folder',

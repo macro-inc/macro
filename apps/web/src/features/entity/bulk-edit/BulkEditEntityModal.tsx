@@ -37,8 +37,8 @@ const BulkEditEntityModalContent = (props: {
   return (
     <Dialog
       open={props.isOpen()}
-      position="center"
-      class={props.view === 'moveToProject' ? 'w-120' : 'w-110'}
+      position={props.view === 'moveToProject' ? 'top' : 'center'}
+      class={props.view === 'moveToProject' ? 'w-140' : 'w-110'}
       onOpenChange={(open) => {
         if (!open) {
           handleCancel();
@@ -46,33 +46,37 @@ const BulkEditEntityModalContent = (props: {
         props.setIsOpen(open);
       }}
     >
-      <ActionDialogShell>
-        <Show when={props.view === 'rename'}>
-          <BulkRenameEntitiesView
-            entities={props.entities}
-            onFinish={handleFinish}
-            onCancel={handleCancel}
-            onError={handleError}
-          />
-        </Show>
-        <Show when={props.view === 'moveToProject'}>
-          <BulkMoveToProjectView
-            entities={props.entities}
-            onFinish={handleFinish}
-            onCancel={handleCancel}
-            onError={handleError}
-          />
-        </Show>
-        <Show when={props.view === 'delete'}>
-          <BulkDeleteView
-            onPartialDelete={props.onPartialDelete}
-            entities={props.entities}
-            onFinish={handleFinish}
-            onCancel={handleCancel}
-            onError={handleError}
-          />
-        </Show>
-      </ActionDialogShell>
+      <Show
+        when={props.view === 'moveToProject'}
+        fallback={
+          <ActionDialogShell>
+            <Show when={props.view === 'rename'}>
+              <BulkRenameEntitiesView
+                entities={props.entities}
+                onFinish={handleFinish}
+                onCancel={handleCancel}
+                onError={handleError}
+              />
+            </Show>
+            <Show when={props.view === 'delete'}>
+              <BulkDeleteView
+                onPartialDelete={props.onPartialDelete}
+                entities={props.entities}
+                onFinish={handleFinish}
+                onCancel={handleCancel}
+                onError={handleError}
+              />
+            </Show>
+          </ActionDialogShell>
+        }
+      >
+        <BulkMoveToProjectView
+          entities={props.entities}
+          onFinish={handleFinish}
+          onCancel={handleCancel}
+          onError={handleError}
+        />
+      </Show>
     </Dialog>
   );
 };
