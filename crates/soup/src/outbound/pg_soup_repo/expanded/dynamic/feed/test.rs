@@ -752,10 +752,17 @@ async fn non_utc_sessions_read_the_item_tables(
     .await?;
     assert_source_items_match_grants(&pool).await?;
 
+    // The excluded ids bind as an array, which the item-table rebuild must bind afresh.
     let filter = EntityFilterAst {
-        document_filter: tree(Expr::val(DocumentLiteral::UpdatedAt(
-            DateLiteral::LessThan(Utc.with_ymd_and_hms(2019, 1, 1, 0, 0, 0).unwrap()),
-        ))),
+        document_filter: tree(Expr::and(
+            Expr::val(DocumentLiteral::UpdatedAt(DateLiteral::LessThan(
+                Utc.with_ymd_and_hms(2019, 1, 1, 0, 0, 0).unwrap(),
+            ))),
+            Expr::and(
+                Expr::is_not(Expr::val(DocumentLiteral::Id(document(1)))),
+                Expr::is_not(Expr::val(DocumentLiteral::Id(document(2)))),
+            ),
+        )),
         chat_filter: tree(Expr::val(ChatLiteral::Importance(false))),
         project_filter: tree(Expr::val(ProjectLiteral::ProjectId(Uuid::nil()))),
         ..Default::default()

@@ -303,3 +303,18 @@ fn notification_conjunction_folds_to_the_side_that_implies_the_other() {
     assert!(strip(&Expr::and(state(Unseen), state(Seen))).is_none());
     assert!(strip(&Expr::and(inbox(), state(Done))).is_none());
 }
+
+#[test]
+fn scan_bound_limits_source_scans_only() {
+    let bound = |sources, utc| ScanBound { sources, utc };
+    assert!(bound(SOURCE_SCAN_SOURCES, true).allows(OrderedScans::Sources, 12));
+    assert!(!bound(SOURCE_SCAN_SOURCES + 1, true).allows(OrderedScans::Sources, 1));
+    assert!(bound(50, true).allows(OrderedScans::Sources, 100));
+    assert!(!bound(51, true).allows(OrderedScans::Sources, 100));
+    assert!(
+        bound(SOURCE_SCAN_SOURCES + 1, true).allows(OrderedScans::Owner, 500),
+        "owner scans do not read sources"
+    );
+    assert!(!bound(1, false).allows(OrderedScans::Owner, 1));
+    assert!(!bound(1, false).allows(OrderedScans::Sources, 1));
+}
