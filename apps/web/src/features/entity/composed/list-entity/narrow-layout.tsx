@@ -1,6 +1,7 @@
 import { isMobile } from '@core/mobile/isMobile';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
+import { UnreadIndicator } from '../../components/UnreadIndicator';
 import { Entity } from '../../entity';
 import { TaskPropertyControl } from '../../extractors-property/task-property-control';
 import {
@@ -39,26 +40,29 @@ export function NarrowLayout(props: LayoutProps) {
       )}
       style={{
         'grid-template-columns': compactTask()
-          ? 'minmax(0, 1fr) max-content'
+          ? '0.5rem minmax(0, 1fr) max-content'
           : 'var(--soup-row-indicator-width) 1fr max-content',
         'grid-template-rows': pullRequest() ? '44px auto' : '44px',
-        'grid-template-areas': compactTask()
-          ? '"title timestamp"'
-          : pullRequest()
-            ? '"indicator title timestamp" ". body body"'
-            : '"indicator title timestamp"',
+        'grid-template-areas': pullRequest()
+          ? '"indicator title timestamp" ". body body"'
+          : '"indicator title timestamp"',
       }}
     >
-      <Show when={!compactTask()}>
-        <Entity.Slot placement="indicator" class="relative">
-          <RowIndicator
-            checked={props.checked}
-            hideCheckbox={props.hideCheckbox}
-            onChecked={props.onChecked}
-            unread={props.unread}
-          />
-        </Entity.Slot>
-      </Show>
+      <Entity.Slot placement="indicator" class="relative">
+        <Show
+          when={compactTask()}
+          fallback={
+            <RowIndicator
+              checked={props.checked}
+              hideCheckbox={props.hideCheckbox}
+              onChecked={props.onChecked}
+              unread={props.unread}
+            />
+          }
+        >
+          <UnreadIndicator active={props.unread} />
+        </Show>
+      </Entity.Slot>
 
       <Entity.Slot
         placement="title"

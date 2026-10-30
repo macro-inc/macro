@@ -96,9 +96,10 @@ a `Project:` prefix.
 Wide desktop task rows and group headers share their leading icon alignment.
 Narrow and mobile group headers use compact independent spacing and keep the caret,
 value icon, label, and count on one line; long labels truncate. Phone task rows have
-4px list insets, 44px row height, and no unread/checkbox rail. Status and priority
-controls retain their 36px touch targets; selection highlighting and row selection
-behavior remain available.
+4px list insets, 44px row height, and an 8px unread-dot rail without a checkbox
+column. The rail stays reserved on read tasks so titles do not shift. Status and
+priority controls retain their 36px touch targets; selection highlighting and row
+selection behavior remain available.
 Click or tap the leading status or priority icon to edit without opening the task.
 Both icons are 16px on desktop and 20px on phones; phone tap targets sit edge-to-edge
 with a 16px gap between glyphs. Priority sits directly beside the title. Their pickers replace

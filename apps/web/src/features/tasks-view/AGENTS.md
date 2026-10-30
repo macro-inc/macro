@@ -19,7 +19,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Preserve project scope through detail navigation, history, pagination, and editable-filter clearing; keep project views out of task queries and saved-task-view capture.
 - Align wide desktop group-header glyphs with row status glyphs through shared Soup geometry; give narrow/mobile headers compact independent spacing, and preserve their 44px touch target and layout-neutral border.
 - Keep `soup-list` on list roots for shared row geometry; truncate long group labels instead of wrapping.
-- Render phone task rows with the narrow layout, no unread/checkbox rail, 4px outer list padding, and 44px row height; preserve row selection handlers and 36px property-editor touch targets.
+- Render phone task rows with the narrow layout, an 8px unread-only rail, no checkbox column, 4px outer list padding, and 44px row height; preserve row selection handlers and 36px property-editor touch targets.
 - Render group-header property-value icons at 16px without flex shrinking so priority badges stay legible in narrow panes.
 - Use the matching `task-status-*` theme token for each status icon and group-header tint; keep global warning, success, and accent colors independent.
 - Edit status and priority through leading `TaskPropertyControl` icons on desktop and mobile; place priority directly beside the title after the status gap, and keep separate Status/Priority columns and duplicate trailing mobile pills removed.
