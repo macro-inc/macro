@@ -401,3 +401,53 @@ fn configuration_is_validated_and_secret_header_is_sensitive() {
     let client = AgentSessionClient::new("https://example.com/agent-harness", KEY).unwrap();
     assert!(client.internal_key.is_sensitive());
 }
+
+#[tokio::test]
+async fn tool_calls_post_the_owner_and_rendered_arguments_and_return_the_outcome() {
+    let server = server(vec![
+        Reply::json(
+            200,
+            json!({ "status": "completed", "output": { "documentId": "doc" } }),
+        ),
+        Reply::json(
+            200,
+            json!({ "status": "failed", "message": "Label not found" }),
+        ),
+        Reply::json(502, json!({ "code": "operation_failed" })),
+    ])
+    .await;
+    let client = AgentSessionClient::new(&server.url, KEY).unwrap();
+    let command = CallRoutineTool {
+        owner: MacroUserIdStr::parse_from_str("macro|routine@macro.com").unwrap(),
+        tool: "CreateDocument".into(),
+        arguments: json!({ "documentName": "Follow up", "isTask": true })
+            .as_object()
+            .unwrap()
+            .clone(),
+    };
+    assert_eq!(
+        client.call_tool(command.clone()).await.unwrap(),
+        RoutineToolOutcome::Completed {
+            output: json!({ "documentId": "doc" })
+        }
+    );
+    assert_eq!(
+        client.call_tool(command.clone()).await.unwrap(),
+        RoutineToolOutcome::Failed {
+            message: "Label not found".into()
+        }
+    );
+    // An ambiguous transport failure is an error, never a retry.
+    assert_eq!(
+        client.call_tool(command.clone()).await,
+        Err(RoutineSessionError::OperationFailed)
+    );
+    let requests = server.requests.lock().unwrap();
+    assert_eq!(requests.len(), 3);
+    assert!(
+        requests[0]
+            .head
+            .starts_with("POST /internal/routine-sessions/tool HTTP/1.1\r\n")
+    );
+    assert_eq!(requests[0].body, serde_json::to_value(command).unwrap());
+}

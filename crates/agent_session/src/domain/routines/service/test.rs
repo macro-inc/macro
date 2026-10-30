@@ -740,3 +740,79 @@ async fn an_external_agent_cannot_take_routine_apps() {
         RoutineSessionError::AppsUnsupported
     );
 }
+
+#[derive(Default)]
+struct ToolRunner(Mutex<Vec<(String, String, serde_json::Value)>>);
+
+impl RoutineToolRunner for Arc<ToolRunner> {
+    async fn run(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        tool: &str,
+        arguments: serde_json::Map<String, serde_json::Value>,
+    ) -> Result<RoutineToolOutcome, RoutineSessionError> {
+        self.0.lock().unwrap().push((
+            owner.to_string(),
+            tool.to_owned(),
+            serde_json::Value::Object(arguments),
+        ));
+        Ok(RoutineToolOutcome::Completed {
+            output: serde_json::json!({ "documentId": "doc" }),
+        })
+    }
+}
+
+fn tool_call(tool: &str) -> CallRoutineTool {
+    CallRoutineTool {
+        owner: MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap(),
+        tool: tool.into(),
+        arguments: serde_json::json!({ "documentName": "Follow up" })
+            .as_object()
+            .unwrap()
+            .clone(),
+    }
+}
+
+#[tokio::test]
+async fn tool_calls_run_as_the_owner_through_the_host_runner() {
+    let runner = Arc::new(ToolRunner::default());
+    let service = Fixture::new(true).service.with_tools(Arc::clone(&runner));
+    let outcome = service
+        .call_tool(tool_call(" CreateDocument "))
+        .await
+        .unwrap();
+    assert_eq!(
+        outcome,
+        RoutineToolOutcome::Completed {
+            output: serde_json::json!({ "documentId": "doc" })
+        }
+    );
+    assert_eq!(
+        *runner.0.lock().unwrap(),
+        [(
+            "macro|owner@example.com".to_owned(),
+            "CreateDocument".to_owned(),
+            serde_json::json!({ "documentName": "Follow up" }),
+        )]
+    );
+}
+
+#[tokio::test]
+async fn blank_or_oversized_tool_names_are_invalid_and_hosts_without_tools_are_unavailable() {
+    let runner = Arc::new(ToolRunner::default());
+    let service = Fixture::new(true).service.with_tools(Arc::clone(&runner));
+    for tool in [" ".to_owned(), "x".repeat(65)] {
+        assert_eq!(
+            service.call_tool(tool_call(&tool)).await,
+            Err(RoutineSessionError::InvalidCommand)
+        );
+    }
+    assert!(runner.0.lock().unwrap().is_empty());
+    assert_eq!(
+        Fixture::new(true)
+            .service
+            .call_tool(tool_call("CreateDocument"))
+            .await,
+        Err(RoutineSessionError::RuntimeUnavailable)
+    );
+}

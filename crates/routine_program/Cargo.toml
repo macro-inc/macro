@@ -1,0 +1,19 @@
+[package]
+edition = "2024"
+name = "routine_program"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+bots = { path = "../bots", default-features = false }
+jev = { path = "../jev" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[features]
+# OpenAPI schemas for the task formats, for the scheduler's spec.
+schema = ["dep:utoipa", "bots/inbound"]

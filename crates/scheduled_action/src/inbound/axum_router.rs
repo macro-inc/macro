@@ -519,7 +519,8 @@ impl IntoResponse for ScheduledActionApiError {
                 ActionPolicyError::UpdateConflict => StatusCode::CONFLICT,
                 ActionPolicyError::NoFutureFirings
                 | ActionPolicyError::EventManagementDisabled
-                | ActionPolicyError::ConditionsDisabled => StatusCode::BAD_REQUEST,
+                | ActionPolicyError::ConditionsDisabled
+                | ActionPolicyError::ProgramNeedsEvent => StatusCode::BAD_REQUEST,
             };
             return (status, policy.to_string()).into_response();
         }
@@ -528,9 +529,9 @@ impl IntoResponse for ScheduledActionApiError {
         }
         if let Some(validation) = error.downcast_ref::<TargetValidationError>() {
             let status = match validation {
-                TargetValidationError::InvalidTask | TargetValidationError::AgentsDisabled => {
-                    StatusCode::BAD_REQUEST
-                }
+                TargetValidationError::InvalidTask
+                | TargetValidationError::InvalidProgram(_)
+                | TargetValidationError::AgentsDisabled => StatusCode::BAD_REQUEST,
                 TargetValidationError::ExplicitAgentRequired
                 | TargetValidationError::ExplicitAppsRequired => StatusCode::CONFLICT,
             };

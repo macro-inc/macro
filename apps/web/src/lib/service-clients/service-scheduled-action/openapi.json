@@ -1054,6 +1054,7 @@
       },
       "AgentTask": {
         "type": "object",
+        "description": "The single agent task: how routines were stored before they had steps,\nand still how a routine that is only an agent is saved.",
         "required": ["prompt", "user_prompt"],
         "properties": {
           "agent": {
@@ -1086,23 +1087,27 @@
             ]
           },
           "prompt": {
-            "type": "string"
+            "type": "string",
+            "description": "Instructions placed before the user's."
           },
           "user_prompt": {
-            "type": "string"
+            "type": "string",
+            "description": "What the agent should do."
           }
         }
       },
       "AgentTaskAgent": {
         "type": "object",
-        "description": "A persona selection, independent of its runtime and current default model.",
+        "description": "A selected agent (persona).",
         "required": ["bot_id"],
         "properties": {
           "bot_id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "The agent's bot id."
           }
-        }
+        },
+        "additionalProperties": false
       },
       "AiAdmissionErrorBody": {
         "type": "object",
@@ -1265,6 +1270,13 @@
               }
             ]
           },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "What each step that ran did, in order: decisions, tool calls, the agent."
+          },
           "version": {
             "type": "integer",
             "format": "int32",
@@ -1324,7 +1336,7 @@
       },
       "RoutineModelId": {
         "type": "string",
-        "description": "A nonblank model identifier. Runtime catalogs, not the scheduler, own availability."
+        "description": "A nonblank model identifier. Runtime catalogs, not the scheduler, own\nwhich models are available."
       },
       "RoutineTemplate": {
         "type": "object",

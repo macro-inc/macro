@@ -1,7 +1,12 @@
 import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
 import { describe, expect, it, vi } from 'vitest';
 import type { ScheduleDraft } from '../core/draft';
-import { createEmptyDraft, validateRoutineDraft } from '../core/routine-draft';
+import {
+  createEmptyDraft,
+  draftSteps,
+  validateRoutineDraft,
+  withDraftSteps,
+} from '../core/routine-draft';
 import {
   draftFromSchedule,
   draftToCreateBody,
@@ -499,6 +504,100 @@ describe('routine required apps', () => {
       user_prompt: 'Summarize updates',
       prompt: '',
       mcp_servers: [{ app_slug: 'slack', server_name: 'Slack' }],
+    });
+  });
+});
+
+describe('routines with steps', () => {
+  const program: ScheduledAction = {
+    ...events,
+    trigger: {
+      type: 'events',
+      filters: [{ events: ['email.message_received'] }],
+    },
+    task: {
+      steps: [
+        {
+          type: 'tool',
+          tool: 'UpdateThreadLabels',
+          arguments: {
+            thread_id: '{{trigger.entity_id}}',
+            label: 'INBOX',
+            add: false,
+          },
+        },
+        { type: 'agent', model: 'claude', instructions: 'Draft a reply' },
+      ],
+    },
+  };
+
+  it('edits a stored program and keeps its untouched task', () => {
+    const parsed = draftFromSchedule(program);
+    expect(parsed?.steps?.map((step) => step.kind)).toEqual(['tool', 'agent']);
+    expect(parsed?.prompt).toBe('Draft a reply');
+    expect(validateRoutineDraft(parsed!)).toBeNull();
+    // Unchanged steps write back the exact stored task.
+    expect(draftToUpdateBody(parsed!, program)?.task).toBe(program.task);
+    const edited = {
+      ...parsed!,
+      steps: parsed!.steps!.slice(0, 1),
+    };
+    expect(draftToUpdateBody(edited, program)?.task).toEqual({
+      steps: [
+        {
+          type: 'tool',
+          tool: 'UpdateThreadLabels',
+          arguments: {
+            thread_id: '{{trigger.entity_id}}',
+            label: 'INBOX',
+            add: false,
+          },
+        },
+      ],
+    });
+  });
+
+  it('creates programs with steps and single agents as before', () => {
+    const parsed = draftFromSchedule(program)!;
+    expect(draftToCreateBody({ ...parsed, name: '' }).task).toEqual(
+      program.task
+    );
+    expect(draftToCreateBody({ ...parsed, name: '' }).name).toBe(
+      'Draft a reply'
+    );
+    expect(draftToCreateBody(draft()).task).toEqual({
+      prompt: '',
+      user_prompt: 'Summarize updates',
+      mcp_servers: [],
+      model: 'anthropic/claude-sonnet-4-5',
+    });
+  });
+
+  it('turns a single agent routine into a program once a step is added', () => {
+    const simple = draftFromSchedule(events)!;
+    expect(simple.steps).toBeUndefined();
+    const steps = draftSteps(simple);
+    expect(withDraftSteps(simple, steps)).toBe(simple);
+    const renamed = withDraftSteps(simple, [
+      { ...steps[0]!, kind: 'agent', instructions: 'New' } as never,
+    ]);
+    expect(renamed.prompt).toBe('New');
+    expect(renamed.steps).toBeUndefined();
+    const added = withDraftSteps(simple, [
+      ...steps,
+      {
+        id: 'x',
+        kind: 'tool',
+        tool: 'CreateDocument',
+        arguments: { documentName: 'A', isTask: true },
+      },
+    ]);
+    expect(added.steps).toHaveLength(2);
+    expect(draftToUpdateBody(added, events)?.task).toMatchObject({
+      steps: [
+        { type: 'agent', instructions: 'Summarize updates' },
+        { type: 'tool' },
+      ],
     });
   });
 });

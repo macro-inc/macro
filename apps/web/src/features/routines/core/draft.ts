@@ -1,3 +1,4 @@
+import type { StepDraft } from './routine-steps';
 import type { RoutineTarget } from './routine-target';
 import type { RoutineTriggerDraft } from './routine-triggers';
 
@@ -32,6 +33,11 @@ export type ScheduleDraft = {
   target: RoutineTarget;
   /** Apps every run requires, added to the target's own. Each must be connected. */
   apps: RoutineApp[];
+  /**
+   * The routine's program. Absent for a single agent routine, which keeps its
+   * instructions in `prompt` and its model or agent in `target`.
+   */
+  steps?: StepDraft[];
   onceAt?: string;
   timezone?: string;
 };

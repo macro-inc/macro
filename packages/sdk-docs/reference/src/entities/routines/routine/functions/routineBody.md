@@ -24,6 +24,6 @@ Translate typed routine options into the generated wire contract.
 | `task.agent?` | [`AgentTaskAgent`](../../../../../generated/scheduled-action/types.gen/type-aliases/AgentTaskAgent.md) \| `null` | - | - |
 | `task.mcp_servers?` | [`AgentMcpServer`](../../../../../generated/scheduled-action/types.gen/type-aliases/AgentMcpServer.md)[] | - | Apps the routine requires on top of the agent's own. The owner must have each one connected to save the routine and for it to run. |
 | `task.model?` | `string` \| `null` | - | - |
-| `task.prompt` | `string` | - | - |
-| `task.user_prompt` | `string` | - | - |
+| `task.prompt` | `string` | - | Instructions placed before the user's. |
+| `task.user_prompt` | `string` | - | What the agent should do. |
 | `trigger` | [`ActionTrigger`](../../../../../generated/scheduled-action/types.gen/type-aliases/ActionTrigger.md) | - | - |

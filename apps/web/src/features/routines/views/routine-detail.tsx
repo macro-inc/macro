@@ -8,10 +8,19 @@ import { Button, ButtonGroup, Dropdown } from '@ui';
 import { type Accessor, createSignal, Match, Show, Switch } from 'solid-js';
 import { RoutineEditor } from '../components/routine-editor';
 import { RoutineRunButton } from '../components/routine-run-button';
+import { RoutineSteps } from '../components/routine-step-editor';
 import type { RoutineDetailSlots } from '../context/routine-slots';
 import type { RoutineDetailSource } from '../context/routine-sources';
 import type { HistoryResource } from '../core/history';
-import { createEmptyDraft, getErrorMessage } from '../core/routine-draft';
+import {
+  createEmptyDraft,
+  draftPrompt,
+  draftSteps,
+  getErrorMessage,
+  withDraftSteps,
+} from '../core/routine-draft';
+import { firstAgent, stepsNeedEvent } from '../core/routine-steps';
+import { describeHistoryStep, latestStepRun } from '../core/step-history';
 import {
   createRoutineDetail,
   RoutineConflictError,
@@ -22,6 +31,8 @@ export function RoutineDetailView(props: {
   source: RoutineDetailSource;
   userId: Accessor<string | undefined>;
   defaultModel: string;
+  /** Decisions are answered by the classifier behind trigger conditions. */
+  decisionsEnabled: boolean;
   slots: RoutineDetailSlots;
   initialTab?: 'settings' | 'history';
   onRename(name: string): void;
@@ -54,9 +65,17 @@ export function RoutineDetailView(props: {
   });
   const [tab, setTab] = createSignal(props.initialTab ?? 'settings');
   const back = () => props.onBack();
+  const prompt = () => {
+    const draft = state();
+    return draft ? draftPrompt(draft) : '';
+  };
   const copyPrompt = async () => {
-    const prompt = state()?.prompt;
-    if (prompt) await props.onCopyPrompt(prompt);
+    if (prompt()) await props.onCopyPrompt(prompt());
+  };
+  /** Manual runs have no triggering item for steps to read. */
+  const needsEvent = () => {
+    const steps = state()?.steps;
+    return steps !== undefined && stepsNeedEvent(steps);
   };
   return (
     <Show
@@ -91,9 +110,14 @@ export function RoutineDetailView(props: {
             isOwned() && (
               <RoutineRunButton
                 enabled={isActive()}
-                runDisabled={runDisabled()}
+                runDisabled={runDisabled() || needsEvent()}
+                runHint={
+                  needsEvent()
+                    ? 'This routine acts on the item that triggers it, so it runs on activity'
+                    : undefined
+                }
                 activationDisabled={activationDisabled()}
-                copyDisabled={!state()?.prompt}
+                copyDisabled={!prompt()}
                 onRun={runNow}
                 onEnabled={(enabled) => props.source.setEnabled(enabled)}
                 onCopyPrompt={() => fireAndForget(copyPrompt(), 'routines')}
@@ -152,30 +176,27 @@ export function RoutineDetailView(props: {
             </Show>
           }
           nextRun={nextRun()}
-          instructions={
-            <Show when={state()}>
-              <Show when={{ version: editorVersion() }} keyed>
-                <props.slots.PromptEditor
-                  initialValue={state()?.prompt ?? ''}
-                  disabled={!isOwned() || isRunning()}
-                  onChange={(prompt) =>
-                    setState((draft) =>
-                      draft.prompt === prompt ? draft : { ...draft, prompt }
-                    )
-                  }
-                />
-              </Show>
-            </Show>
-          }
-          executionPicker={
+          steps={
             <Show when={state()}>
               {(draft) => (
-                <props.slots.ExecutionPicker
-                  target={draft().target}
-                  onChange={(target) =>
-                    setState((current) => ({ ...current, target }))
-                  }
-                />
+                <Show when={{ version: editorVersion() }} keyed>
+                  <RoutineSteps
+                    steps={draftSteps(draft())}
+                    onChange={(steps) =>
+                      setState((current) => withDraftSteps(current, steps))
+                    }
+                    triggers={draft().triggers ?? []}
+                    defaultTarget={
+                      firstAgent(draftSteps(draft()))?.target ?? {
+                        kind: 'model',
+                        model: props.defaultModel,
+                      }
+                    }
+                    decisionsEnabled={props.decisionsEnabled}
+                    slots={props.slots}
+                    lastRun={latestStepRun(props.source.history())}
+                  />
+                </Show>
               )}
             </Show>
           }
@@ -262,6 +283,9 @@ export function RoutineDetailView(props: {
               </Show>
               <RoutineHistory
                 records={props.source.history()}
+                describeStep={(step) =>
+                  describeHistoryStep(step, state()?.steps)
+                }
                 isPending={props.source.historyLoading()}
                 createChatMetadata={props.slots.createChatMetadata}
                 createAgentMetadata={props.slots.createAgentMetadata}

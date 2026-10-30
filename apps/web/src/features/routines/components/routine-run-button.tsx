@@ -11,6 +11,8 @@ export function RoutineRunButton(props: {
   runDisabled: boolean;
   activationDisabled: boolean;
   copyDisabled: boolean;
+  /** Why "Run now" can't run this routine, shown on hover. */
+  runHint?: string;
   onRun: () => void;
   onEnabled: (enabled: boolean) => void;
   onCopyPrompt: () => void;
@@ -26,6 +28,7 @@ export function RoutineRunButton(props: {
         <ButtonGroup.Button
           variant="ghost"
           disabled={props.runDisabled}
+          title={props.runHint}
           onClick={props.onRun}
         >
           <PlayIcon class="size-3" />

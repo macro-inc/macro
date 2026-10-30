@@ -239,6 +239,8 @@ struct Runner {
     fail_cancel: bool,
     stall_cancel: bool,
     agent_resource: bool,
+    /// Programs that do not start with an agent open no transcript.
+    no_resource: bool,
     cancellations: Mutex<Vec<(Uuid, Uuid)>>,
     prepared_handles: Mutex<Vec<(Uuid, Uuid)>>,
 }
@@ -253,15 +255,17 @@ impl ScheduledAgentRunner for Runner {
         if self.stall_before_resource {
             std::future::pending::<()>().await;
         }
-        handle.resource = Some(if self.agent_resource {
-            ExecutionResource {
-                resource_type: ExecutionResourceType::Agent,
-                id: handle.session_id.to_string(),
-            }
-        } else {
-            ExecutionResource {
-                resource_type: ExecutionResourceType::Chat,
-                id: "run-chat".into(),
+        handle.resource = (!self.no_resource).then(|| {
+            if self.agent_resource {
+                ExecutionResource {
+                    resource_type: ExecutionResourceType::Agent,
+                    id: handle.session_id.to_string(),
+                }
+            } else {
+                ExecutionResource {
+                    resource_type: ExecutionResourceType::Chat,
+                    id: "run-chat".into(),
+                }
             }
         });
         if self.stall_prepare {
@@ -290,12 +294,19 @@ impl ScheduledAgentRunner for Runner {
     async fn run(
         &self,
         _: &ScheduledAction,
-        _: &ExecutionHandle,
+        handle: &mut ExecutionHandle,
         firing: RoutineRun<'_>,
     ) -> Result<()> {
         let _guard = self.dropped.clone().drop_guard();
         self.calls.fetch_add(1, Ordering::SeqCst);
         self.contexts.lock().unwrap().push(firing.event().cloned());
+        handle.steps.push(routine_program::StepRecord {
+            path: serde_json::from_value(json!("0")).unwrap(),
+            result: routine_program::StepResult::Tool {
+                tool: routine_program::RoutineTool::UpdateThreadLabels,
+                error: None,
+            },
+        });
         self.finish.cancelled().await;
         anyhow::ensure!(!self.fail_run, "agent stream failed");
         Ok(())
@@ -944,4 +955,54 @@ async fn runs_that_never_claim_are_not_reported() {
     assert!(executor.execute_action(action()).await.is_err());
     drain(&executor).await;
     assert!(observer.0.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn runs_of_only_actions_and_decisions_report_no_model_or_agent() {
+    let (executor, observer) = observed(executor(Repo::default(), Runner::default()));
+    executor.runner.finish.cancel();
+    let mut action = action();
+    action.task = json!({ "steps": [{
+        "type": "tool", "tool": "SendChannelMessage",
+        "arguments": { "channel_id": "c", "content": "Standup in 5" },
+    }] });
+    executor.execute_action(action).await.unwrap();
+    drain(&executor).await;
+    assert_eq!(
+        ends(&observer),
+        [(RunTrigger::Scheduled, RunTarget::Steps, RunEnd::Succeeded)]
+    );
+}
+
+#[tokio::test]
+async fn runs_without_a_transcript_still_announce_start_and_stop_and_keep_their_steps() {
+    let runner = Runner {
+        no_resource: true,
+        ..Default::default()
+    };
+    runner.finish.cancel();
+    let executor = executor(Repo::default(), runner);
+    let progress = executor.execute_action(action()).await.unwrap();
+    assert!(progress.resource.is_none());
+    assert!(progress.chat_id.is_none());
+    drain(&executor).await;
+    let updates = executor.live_updates.0.lock().unwrap();
+    assert!(matches!(
+        updates.as_slice(),
+        [
+            ScheduledActionUpdate::Started { resource: None, .. },
+            ScheduledActionUpdate::Stopped {
+                resource: None,
+                is_success: true,
+                ..
+            },
+        ]
+    ));
+    let records = executor.repo.records.lock().unwrap();
+    assert_eq!(records.len(), 1);
+    assert!(records[0].resource_id.is_none());
+    assert_eq!(
+        records[0].result["steps"],
+        json!([{ "path": "0", "kind": "tool", "tool": "UpdateThreadLabels" }])
+    );
 }

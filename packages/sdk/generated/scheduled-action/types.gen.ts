@@ -93,6 +93,10 @@ export type AgentMcpServer = {
     server_name: string;
 };
 
+/**
+ * The single agent task: how routines were stored before they had steps,
+ * and still how a routine that is only an agent is saved.
+ */
 export type AgentTask = {
     agent?: null | AgentTaskAgent;
     /**
@@ -101,14 +105,23 @@ export type AgentTask = {
      */
     mcp_servers?: Array<AgentMcpServer>;
     model?: null | RoutineModelId;
+    /**
+     * Instructions placed before the user's.
+     */
     prompt: string;
+    /**
+     * What the agent should do.
+     */
     user_prompt: string;
 };
 
 /**
- * A persona selection, independent of its runtime and current default model.
+ * A selected agent (persona).
  */
 export type AgentTaskAgent = {
+    /**
+     * The agent's bot id.
+     */
     bot_id: string;
 };
 
@@ -198,6 +211,12 @@ export type ExecutionResult = {
     condition?: null | ConditionResult;
     error?: string | null;
     resource?: null | ExecutionResource;
+    /**
+     * What each step that ran did, in order: decisions, tool calls, the agent.
+     */
+    steps?: Array<{
+        [key: string]: unknown;
+    }>;
     version: number;
 };
 
@@ -222,7 +241,8 @@ export type LegacyActionConfiguration = {
 };
 
 /**
- * A nonblank model identifier. Runtime catalogs, not the scheduler, own availability.
+ * A nonblank model identifier. Runtime catalogs, not the scheduler, own
+ * which models are available.
  */
 export type RoutineModelId = string;
 

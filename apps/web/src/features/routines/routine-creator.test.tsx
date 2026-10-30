@@ -72,6 +72,16 @@ vi.mock('./queries/schedules', async () => {
 
 // Keep the real trigger menu, picker, model discovery adapter, storage, and mutation
 // lifecycle. The editor double exposes initialValue and detects any remount.
+vi.mock('./routine-ai-composer', () => ({ RoutineAiComposer: () => null }));
+vi.mock('./routine-step-pickers', () => ({
+  routineToolSlots: {
+    LabelPicker: () => null,
+    TagPicker: () => null,
+    ChannelPicker: () => null,
+    AssigneePicker: () => null,
+    FolderPicker: () => null,
+  },
+}));
 vi.mock('./routine-prompt-editor', () => ({
   RoutinePromptEditor: (props: {
     initialValue: string;
@@ -163,7 +173,25 @@ async function mount(): Promise<void> {
       <RoutineCreator onCreated={host.created} />
     </QueryClientProvider>
   ));
+  // A new routine starts on the start screen; an unsent draft resumes editing.
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('button', { name: /Start blank/ }) ??
+        screen.queryByRole('textbox', { name: 'Routine name' })
+    ).toBeTruthy()
+  );
+  const blank = screen.queryByRole('button', { name: /Start blank/ });
+  if (blank) {
+    fireEvent.click(blank);
+    const add = await screen.findByRole('button', { name: 'Add step' });
+    add.focus();
+    fireEvent.keyDown(add, { key: 'Enter' });
+    fireEvent.keyDown(await screen.findByRole('menuitem', { name: 'Ask AI' }), {
+      key: 'Enter',
+    });
+  }
   await screen.findByRole('textbox', { name: 'Routine name' });
+  await screen.findByRole('textbox', { name: 'Instructions' });
 }
 
 function inputPrompt(value = 'Summarize updates'): HTMLTextAreaElement {
@@ -403,6 +431,8 @@ describe('routine composer execution selection', () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(loadRoutineComposerDraft()).toBeNull();
     cleanup();
+    // Nothing was kept, so the next routine starts fresh.
+    vi.useRealTimers();
     await mount();
     expect(
       screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Instructions' })
@@ -680,5 +710,35 @@ describe('routine composer execution selection', () => {
     expect(loadRoutineComposerDraft()?.triggers).toMatchObject([
       { kind: 'event', events: ['document.created'] },
     ]);
+  });
+});
+
+describe('routine composer start', () => {
+  it('opens the editor from a starting point, ready to review', async () => {
+    const client = new QueryClient();
+    render(() => (
+      <QueryClientProvider client={client}>
+        <RoutineCreator onCreated={host.created} />
+      </QueryClientProvider>
+    ));
+    expect(
+      await screen.findByRole('heading', {
+        name: 'What should this routine do?',
+      })
+    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Create routine' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Morning brief/ }));
+    expect(
+      (
+        await screen.findByRole<HTMLInputElement>('textbox', {
+          name: 'Routine name',
+        })
+      ).value
+    ).toBe('Morning brief');
+    expect(
+      screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Instructions' })
+        .value
+    ).toMatch(/Summarize my day/);
+    expect(screen.getByRole('button', { name: 'Create routine' })).toBeTruthy();
   });
 });

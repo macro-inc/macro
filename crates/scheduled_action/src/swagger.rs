@@ -19,10 +19,10 @@ use crate::inbound::template_router::{
 
 use crate::domain::event_trigger::{ActionTrigger, EventFilter, EventFilters, EventName};
 use crate::domain::models::{
-    ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionKind, AgentTask,
-    AgentTaskAgent, CreateScheduledAction, ExecutionResource, ExecutionResourceType,
-    ExecutionResult, InProgressExecution, LegacyActionConfiguration, RoutineModelId, Schedule,
-    ScheduledAction, ScheduledActionUpdate, UpdateScheduledAction,
+    ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionKind,
+    CreateScheduledAction, ExecutionResource, ExecutionResourceType, ExecutionResult,
+    InProgressExecution, LegacyActionConfiguration, Schedule, ScheduledAction,
+    ScheduledActionUpdate, UpdateScheduledAction,
 };
 use ai_billing::inbound::admission::AiAdmissionErrorBody;
 use model::response::EmptyResponse;
@@ -68,9 +68,6 @@ use model::response::EmptyResponse;
             SetScheduledActionEnabled,
             Schedule,
             ActionKind,
-            AgentTask,
-            AgentTaskAgent,
-            RoutineModelId,
             ExecutionResource,
             ExecutionResourceType,
             ExecutionResult,
@@ -82,6 +79,9 @@ use model::response::EmptyResponse;
             crate::domain::templates::ShareRoutineTemplate,
             crate::domain::templates::TemplateVariable,
             crate::domain::templates::VariableFill,
+            routine_program::AgentTask,
+            routine_program::AgentSelection,
+            routine_program::RoutineModelId,
         ),
     ),
     tags(

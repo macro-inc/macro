@@ -1,6 +1,5 @@
 use anyhow::Result;
 use bot_id::BotId;
-use bots::domain::models::AgentMcpServer;
 use chrono::{DateTime, Duration, Utc};
 use chrono_tz::Tz;
 use cron::Schedule as CronSchedule;
@@ -13,6 +12,7 @@ use std::str::FromStr;
 use utoipa::ToSchema;
 
 use agent_session::domain::model::SessionVisibility;
+use routine_program::{AgentStep, StepRecord};
 
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
@@ -101,68 +101,39 @@ impl From<RunVisibility> for SessionVisibility {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-pub struct AgentTask {
-    /// Required for model targets; overrides the persona default for agent targets.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub model: Option<RoutineModelId>,
-    /// Absent when using Macro's agent-session runtime with a selected model.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub agent: Option<AgentTaskAgent>,
-    /// Apps the routine requires on top of the agent's own. The owner must
-    /// have each one connected to save the routine and for it to run.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub mcp_servers: Vec<AgentMcpServer>,
-    pub prompt: String,
-    pub user_prompt: String,
-}
-
-/// A persona selection, independent of its runtime and current default model.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, ToSchema)]
-pub struct AgentTaskAgent {
-    #[schema(value_type = String, format = Uuid)]
-    pub bot_id: BotId,
-}
-
-/// A nonblank model identifier. Runtime catalogs, not the scheduler, own availability.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, ToSchema)]
-#[serde(try_from = "String")]
-pub struct RoutineModelId(String);
-
-impl TryFrom<String> for RoutineModelId {
-    type Error = TaskTargetError;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        if value.trim().is_empty() {
-            return Err(TaskTargetError::BlankModel);
-        }
-        Ok(Self(value))
-    }
-}
-
-impl RoutineModelId {
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
 /// Validated execution choice. Callers must not fall back from an agent to a model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResolvedTaskTarget<'a> {
     Model {
-        model: &'a RoutineModelId,
+        model: &'a str,
     },
     Agent {
         bot_id: BotId,
         /// None means use the selected persona's default at execution time.
-        model: Option<&'a RoutineModelId>,
+        model: Option<&'a str>,
     },
 }
 
 impl<'a> ResolvedTaskTarget<'a> {
+    /// Resolve an agent step's target once. A supplied model must be nonblank.
+    pub fn of(step: &'a AgentStep) -> Result<Self, TaskTargetError> {
+        let model = match step.model.as_deref() {
+            Some(model) if model.trim().is_empty() => return Err(TaskTargetError::BlankModel),
+            model => model,
+        };
+        match (step.agent, model) {
+            (Some(agent), model) => Ok(Self::Agent {
+                bot_id: BotId::new_from_uuid(agent.bot_id),
+                model,
+            }),
+            (None, Some(model)) => Ok(Self::Model { model }),
+            (None, None) => Err(TaskTargetError::MissingTarget),
+        }
+    }
+
     /// Use the same Macro runtime as the new AI composer for model selections.
     /// Explicit agent selections keep their own runtime and optional model override.
-    pub fn session_target(self) -> (BotId, Option<&'a RoutineModelId>) {
+    pub fn session_target(self) -> (BotId, Option<&'a str>) {
         match self {
             Self::Model { model } => (bot_id::MACRO_NEW_BOT_ID, Some(model)),
             Self::Agent { bot_id, model } => (bot_id, model),
@@ -176,20 +147,6 @@ pub enum TaskTargetError {
     BlankModel,
     #[error("a task must select a model or an agent")]
     MissingTarget,
-}
-
-impl AgentTask {
-    /// Resolve target policy once, without interpreting either prompt as configuration.
-    pub fn resolve_target(&self) -> Result<ResolvedTaskTarget<'_>, TaskTargetError> {
-        match (&self.agent, &self.model) {
-            (Some(agent), model) => Ok(ResolvedTaskTarget::Agent {
-                bot_id: agent.bot_id,
-                model: model.as_ref(),
-            }),
-            (None, Some(model)) => Ok(ResolvedTaskTarget::Model { model }),
-            (None, None) => Err(TaskTargetError::MissingTarget),
-        }
-    }
 }
 
 /// Canonical client configuration. Ownership and execution state are server-owned.
@@ -315,6 +272,10 @@ pub enum ActionPolicyError {
     ConditionsDisabled,
     #[error("scheduled action changed or is running; reload before updating")]
     UpdateConflict,
+    #[error(
+        "steps that decide about or read the item that triggered the routine need activity triggers only; remove its schedules or those steps"
+    )]
+    ProgramNeedsEvent,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
@@ -407,6 +368,10 @@ pub struct ExecutionResult {
     /// Present when an event trigger's condition stopped the run from starting.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub condition: Option<ConditionResult>,
+    /// What each step that ran did, in order: decisions, tool calls, the agent.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schema(value_type = Vec<Object>)]
+    pub steps: Vec<StepRecord>,
 }
 
 impl ExecutionResult {
@@ -416,7 +381,13 @@ impl ExecutionResult {
             resource,
             error,
             condition: None,
+            steps: Vec::new(),
         }
+    }
+
+    pub fn with_steps(mut self, steps: Vec<StepRecord>) -> Self {
+        self.steps = steps;
+        self
     }
 
     /// A run its trigger's condition kept from starting. No agent ran.

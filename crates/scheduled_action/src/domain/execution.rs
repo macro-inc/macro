@@ -6,15 +6,17 @@ use std::{sync::Arc, time::Duration};
 use ai_billing::{AiAdmissionError, AiAdmissionService, DisabledAiAdmissionService};
 use ai_usage::AiFeature;
 use anyhow::{Context, Result};
+use bot_id::BotId;
 use chrono::{DateTime, Utc};
 use macro_uuid::{Uuid, generate_uuid_v7};
+use routine_program::{RoutineProgram, StepRecord};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 use crate::domain::event_runs::{
     ClaimedEventRun, EventExecutionResult, EventExecutor, EventRunOutcome,
 };
 use crate::domain::models::{
-    ActionExecutionRecord, AgentTask, ExecutionResource, ExecutionResult, InProgressExecution,
+    ActionExecutionRecord, ExecutionResource, ExecutionResult, InProgressExecution,
     MAX_ACTION_TIME, ResolvedTaskTarget, ScheduledAction, ScheduledActionUpdate,
 };
 use crate::domain::ports::{
@@ -31,9 +33,17 @@ pub struct ExecutionHandle {
     /// Caller-generated initial action ID for prompt delivery and status checks.
     pub action_id: Uuid,
     /// Set as soon as resource existence is established, even if preparation later fails.
+    /// Runs whose steps never reach an agent have no transcript.
     pub resource: Option<ExecutionResource>,
+    /// The persona whose session this run opened or tried to open, for cleanup.
+    /// At most one agent runs per run, under the preallocated ids above.
+    pub agent: Option<BotId>,
+    /// What each step did so far, kept even when the run fails or is cut short.
+    pub steps: Vec<StepRecord>,
     // Cancellation during admission must not contact a runner that never started.
     preparation_started: bool,
+    // Started was published, so Stopped must follow even without a transcript.
+    announced: bool,
 }
 
 impl Default for ExecutionHandle {
@@ -42,7 +52,10 @@ impl Default for ExecutionHandle {
             session_id: generate_uuid_v7(),
             action_id: generate_uuid_v7(),
             resource: None,
+            agent: None,
+            steps: Vec::new(),
             preparation_started: false,
+            announced: false,
         }
     }
 }
@@ -112,31 +125,36 @@ where
         self
     }
 
+    /// Admit Macro-funded model work, open a leading agent's transcript, and
+    /// announce the run. Programs without a leading agent start with none.
     async fn prepare(
         &self,
         action: &ScheduledAction,
         handle: &mut ExecutionHandle,
-    ) -> Result<ExecutionResource> {
+    ) -> Result<Option<ExecutionResource>> {
         let owner = action.owner_user()?.clone();
         let action_id = action.id.context("persisted action required")?;
-        let task: AgentTask =
-            serde_json::from_value(action.task.clone()).context("invalid agent task definition")?;
-        if matches!(task.resolve_target()?, ResolvedTaskTarget::Model { .. }) {
+        let program =
+            RoutineProgram::from_task(&action.task).context("invalid routine task definition")?;
+        if program.agent_steps().into_iter().any(|step| {
+            matches!(
+                ResolvedTaskTarget::of(step),
+                Ok(ResolvedTaskTarget::Model { .. })
+            )
+        }) {
             self.admission.admit(&owner, AiFeature::Automation).await?;
         }
         handle.preparation_started = true;
         self.runner.prepare(action, handle).await?;
         // Retain the resource even if publishing Started stalls or is cancelled.
-        let resource = handle
-            .resource
-            .clone()
-            .context("runner prepared no resource")?;
+        let resource = handle.resource.clone();
+        handle.announced = true;
         self.live_updates
             .publish_update(ScheduledActionUpdate::Started {
                 owner,
                 action_id,
-                chat_id: resource.chat_id(),
-                resource: Some(resource.clone()),
+                chat_id: resource.as_ref().and_then(ExecutionResource::chat_id),
+                resource: resource.clone(),
             })
             .await;
         Ok(resource)
@@ -164,19 +182,19 @@ where
         }
     }
 
-    async fn stopped(
-        &self,
-        action: &ScheduledAction,
-        resource: ExecutionResource,
-        is_success: bool,
-    ) {
+    /// Close a run that was announced or established a transcript.
+    async fn stopped(&self, action: &ScheduledAction, handle: &ExecutionHandle, is_success: bool) {
+        if !handle.announced && handle.resource.is_none() {
+            return;
+        }
         if let (Ok(owner), Some(action_id)) = (action.owner_user(), action.id) {
+            let resource = handle.resource.clone();
             self.live_updates
                 .publish_update(ScheduledActionUpdate::Stopped {
                     owner: owner.clone(),
                     action_id,
-                    chat_id: resource.chat_id(),
-                    resource: Some(resource),
+                    chat_id: resource.as_ref().and_then(ExecutionResource::chat_id),
+                    resource,
                     is_success,
                 })
                 .await;
@@ -215,15 +233,17 @@ fn finished_run(
     started_at: DateTime<Utc>,
     result: &Result<()>,
 ) -> Option<FinishedRoutineRun> {
-    let target = serde_json::from_value::<AgentTask>(action.task.clone())
-        .ok()
-        .and_then(|task| {
-            task.resolve_target().ok().map(|target| match target {
-                ResolvedTaskTarget::Model { .. } => RunTarget::Model,
-                ResolvedTaskTarget::Agent { .. } => RunTarget::Agent,
-            })
-        })
-        .unwrap_or(RunTarget::Unknown);
+    let target = match RoutineProgram::from_task(&action.task) {
+        Ok(program) => match program.agent_steps().first() {
+            Some(step) => match ResolvedTaskTarget::of(step) {
+                Ok(ResolvedTaskTarget::Model { .. }) => RunTarget::Model,
+                Ok(ResolvedTaskTarget::Agent { .. }) => RunTarget::Agent,
+                Err(_) => RunTarget::Unknown,
+            },
+            None => RunTarget::Steps,
+        },
+        Err(_) => RunTarget::Unknown,
+    };
     let end = match result {
         Ok(()) => RunEnd::Succeeded,
         Err(error) if error.is::<ExecutionCancelled>() => RunEnd::Interrupted,
@@ -244,10 +264,11 @@ fn finished_run(
 
 fn execution_record(
     action: &ScheduledAction,
-    resource: Option<ExecutionResource>,
+    handle: &ExecutionHandle,
     started_at: DateTime<Utc>,
     result: &Result<()>,
 ) -> ActionExecutionRecord {
+    let resource = handle.resource.clone();
     let end_time = Utc::now();
     ActionExecutionRecord {
         id: None,
@@ -256,10 +277,10 @@ fn execution_record(
         start_time: started_at,
         end_time,
         is_success: result.is_ok(),
-        result: serde_json::to_value(ExecutionResult::new(
-            resource,
-            result.as_ref().err().map(ToString::to_string),
-        ))
+        result: serde_json::to_value(
+            ExecutionResult::new(resource, result.as_ref().err().map(ToString::to_string))
+                .with_steps(handle.steps.clone()),
+        )
         .expect("execution metadata is JSON serializable"),
         created_at: end_time,
     }
@@ -315,11 +336,11 @@ where
                 if let Some(ready_tx) = ready_tx.take() {
                     let _ = ready_tx.send(Ok(InProgressExecution {
                         action_id: id,
-                        chat_id: resource.chat_id(),
-                        resource: Some(resource),
+                        chat_id: resource.as_ref().and_then(ExecutionResource::chat_id),
+                        resource,
                     }));
                 }
-                executor.runner.run(&action, &handle, firing).await
+                executor.runner.run(&action, &mut handle, firing).await
             })
             .await;
             if let Err(error) = &result {
@@ -332,7 +353,7 @@ where
             if let Some(run) = finished_run(&action, trigger, start_time, &result) {
                 executor.observer.run_finished(run);
             }
-            let record = execution_record(&action, handle.resource.clone(), start_time, &result);
+            let record = execution_record(&action, &handle, start_time, &result);
             let end_time = record.end_time;
             let bookkeeping = async {
                 let _ = executor.repo.create_execution_record(record).await.inspect_err(|error| {
@@ -356,13 +377,11 @@ where
                 Ok(Err(error)) => tracing::error!(?error, action_id=?id, "failed to release action claim"),
                 Err(error) => tracing::error!(?error, action_id=?id, "claim release timed out"),
             }
-            if let Some(resource) = handle.resource {
-                let _ = tokio::time::timeout(
-                    BOOKKEEPING_TIMEOUT,
-                    executor.stopped(&action, resource, result.is_ok()),
-                )
-                .await;
-            }
+            let _ = tokio::time::timeout(
+                BOOKKEEPING_TIMEOUT,
+                executor.stopped(&action, &handle, result.is_ok()),
+            )
+            .await;
             if let Err(error) = result {
                 tracing::error!(?error, action_id=?id, "scheduled action execution failed");
                 if let Some(ready_tx) = ready_tx {
@@ -398,7 +417,7 @@ where
         let result = bounded(deadline, shutdown, async {
             self.prepare(&run.action, &mut handle).await?;
             self.runner
-                .run(&run.action, &handle, RoutineRun::Event(&run.run))
+                .run(&run.action, &mut handle, RoutineRun::Event(&run.run))
                 .await
         })
         .await;
@@ -409,19 +428,12 @@ where
         if let Some(finished) = finished_run(&run.action, trigger, run.started_at, &result) {
             self.observer.run_finished(finished);
         }
-        let record = execution_record(
-            &run.action,
-            handle.resource.clone(),
-            run.started_at,
-            &result,
-        );
-        if let Some(resource) = handle.resource {
-            let _ = tokio::time::timeout(
-                BOOKKEEPING_TIMEOUT,
-                self.stopped(&run.action, resource, result.is_ok()),
-            )
-            .await;
-        }
+        let record = execution_record(&run.action, &handle, run.started_at, &result);
+        let _ = tokio::time::timeout(
+            BOOKKEEPING_TIMEOUT,
+            self.stopped(&run.action, &handle, result.is_ok()),
+        )
+        .await;
         // No claim/release or history writes here: the worker finalizes with
         // run.token in the same transaction as the terminal queue transition.
         EventExecutionResult {

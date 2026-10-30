@@ -15,8 +15,14 @@ use macro_user_id::user_id::MacroUserIdStr;
 use pipedream_mcp::domain::ports::ConnectionStore;
 
 use crate::external_session_requests::BrokerExternalSessionRequests;
+use crate::routine_tools::CatalogRoutineTools;
 
-/// Reuse live harness/session instances and the existing external-request adapter.
+/// Reuse live harness/session instances, the existing external-request
+/// adapter, and the in-process tool catalog for routine tool steps.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the composition root hands over each live capability the service composes"
+)]
 pub fn router<Bots, Harness, Sessions, Broker, Repo, Connections, Auth>(
     bots: Bots,
     harness: Harness,
@@ -24,6 +30,7 @@ pub fn router<Bots, Harness, Sessions, Broker, Repo, Connections, Auth>(
     broker: Broker,
     repo: Repo,
     connections: Connections,
+    tools: CatalogRoutineTools,
     authorization: MacroAuthorizationState<Auth>,
 ) -> Router
 where
@@ -42,7 +49,8 @@ where
         sessions,
         harness,
         PipedreamConnectedApps(connections),
-    );
+    )
+    .with_tools(tools);
     routine_sessions_router(RoutineSessionsState::new(Arc::new(service), authorization))
 }
 

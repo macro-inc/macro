@@ -195,7 +195,7 @@ impl ScheduledAgentRunner for FakeRunner {
     async fn run(
         &self,
         action: &ScheduledAction,
-        _: &ExecutionHandle,
+        _: &mut ExecutionHandle,
         firing: RoutineRun<'_>,
     ) -> anyhow::Result<()> {
         let event = firing.event();

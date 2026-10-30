@@ -150,6 +150,21 @@ vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({
     );
   },
 }));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: (flag: { key: string }) => () => ({
+    enabled: flag.key === 'enable-routine-conditions',
+  }),
+}));
+vi.mock('./routine-ai-composer', () => ({ RoutineAiComposer: () => null }));
+vi.mock('./routine-step-pickers', () => ({
+  routineToolSlots: {
+    LabelPicker: () => null,
+    TagPicker: () => null,
+    ChannelPicker: () => null,
+    AssigneePicker: () => null,
+    FolderPicker: () => null,
+  },
+}));
 vi.mock('./routine-prompt-editor', () => ({
   RoutinePromptEditor: (props: {
     initialValue: string;

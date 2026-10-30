@@ -4,7 +4,9 @@ use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use model_owner::Owner;
 
 use super::status::action_status;
-use super::{ConnectedApps, RoutineSessions, models::*};
+use super::{
+    ConnectedApps, NoRoutineTools, RoutineSessions, RoutineToolRunner, RoutineTools, models::*,
+};
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::{AgentMcpServer, AgentMcpServers, AgentSession, AgentSessionId};
 use crate::domain::ports::{
@@ -14,21 +16,34 @@ use crate::domain::ports::{
 };
 use crate::domain::service::AgentSessionService;
 
+/// Longest catalog tool name a routine may call.
+const MAX_TOOL_NAME_CHARS: usize = 64;
+
 /// Domain orchestration using the same provisioning and controls as interactive sessions.
 #[derive(Clone)]
-pub struct RoutineSessionsService<Bots, Opener, External, Sessions, Controls, Apps> {
+pub struct RoutineSessionsService<
+    Bots,
+    Opener,
+    External,
+    Sessions,
+    Controls,
+    Apps,
+    Tools = NoRoutineTools,
+> {
     bots: Bots,
     opener: Opener,
     external: External,
     sessions: Sessions,
     controls: Controls,
     apps: Apps,
+    tools: Tools,
 }
 
 impl<Bots, Opener, External, Sessions, Controls, Apps>
     RoutineSessionsService<Bots, Opener, External, Sessions, Controls, Apps>
 {
     /// Compose existing capabilities; no new runtime or persistence implementation.
+    /// Tool calls stay unavailable until [`Self::with_tools`].
     pub fn new(
         bots: Bots,
         opener: Opener,
@@ -44,12 +59,58 @@ impl<Bots, Opener, External, Sessions, Controls, Apps>
             sessions,
             controls,
             apps,
+            tools: NoRoutineTools,
         }
     }
 }
 
-impl<Bots, Opener, External, Sessions, Controls, Apps>
-    RoutineSessionsService<Bots, Opener, External, Sessions, Controls, Apps>
+impl<Bots, Opener, External, Sessions, Controls, Apps, Tools>
+    RoutineSessionsService<Bots, Opener, External, Sessions, Controls, Apps, Tools>
+{
+    /// Run routine tool steps through `tools`.
+    pub fn with_tools<T: RoutineToolRunner>(
+        self,
+        tools: T,
+    ) -> RoutineSessionsService<Bots, Opener, External, Sessions, Controls, Apps, T> {
+        RoutineSessionsService {
+            bots: self.bots,
+            opener: self.opener,
+            external: self.external,
+            sessions: self.sessions,
+            controls: self.controls,
+            apps: self.apps,
+            tools,
+        }
+    }
+}
+
+impl<Bots, Opener, External, Sessions, Controls, Apps, Tools> RoutineTools
+    for RoutineSessionsService<Bots, Opener, External, Sessions, Controls, Apps, Tools>
+where
+    Bots: Send + Sync + 'static,
+    Opener: Send + Sync + 'static,
+    External: Send + Sync + 'static,
+    Sessions: Send + Sync + 'static,
+    Controls: Send + Sync + 'static,
+    Apps: Send + Sync + 'static,
+    Tools: RoutineToolRunner,
+{
+    async fn call_tool(
+        &self,
+        command: CallRoutineTool,
+    ) -> Result<RoutineToolOutcome, RoutineSessionError> {
+        let tool = command.tool.trim();
+        if tool.is_empty() || tool.chars().count() > MAX_TOOL_NAME_CHARS {
+            return Err(RoutineSessionError::InvalidCommand);
+        }
+        self.tools
+            .run(&command.owner, tool, command.arguments)
+            .await
+    }
+}
+
+impl<Bots, Opener, External, Sessions, Controls, Apps, Tools>
+    RoutineSessionsService<Bots, Opener, External, Sessions, Controls, Apps, Tools>
 where
     Bots: BotDirectory,
     Sessions: AgentSessionService,
@@ -140,8 +201,8 @@ where
     }
 }
 
-impl<Bots, Opener, External, Sessions, Controls, Apps> RoutineSessions
-    for RoutineSessionsService<Bots, Opener, External, Sessions, Controls, Apps>
+impl<Bots, Opener, External, Sessions, Controls, Apps, Tools> RoutineSessions
+    for RoutineSessionsService<Bots, Opener, External, Sessions, Controls, Apps, Tools>
 where
     Bots: BotDirectory,
     Opener: SessionOpener,
@@ -149,6 +210,7 @@ where
     Sessions: AgentSessionService,
     Controls: AgentSessionNotificationRecipient,
     Apps: ConnectedApps,
+    Tools: Send + Sync + 'static,
 {
     async fn validate(
         &self,

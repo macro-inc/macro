@@ -14,6 +14,10 @@ each run.
   and the ports its adapters implement.
 - `src/domain/event_trigger.rs` + `src/domain/target_runner.rs`: how an event
   (Kafka or polled) turns into a dispatched run.
+- `src/domain/program_runner.rs`: runs a routine's steps (`crates/routine_program`):
+  one classifier call for its decisions, tool steps through the harness, and
+  at most one agent step through `target_runner.rs`. An old single-agent task
+  runs as one agent step.
 - `src/inbound/axum_router.rs`, `src/inbound/kafka_consumer.rs`,
   `src/inbound/event_run_worker.rs`: the three inbound adapters.
 - `src/domain/templates.rs` + `src/inbound/template_router.rs`: sharing a
@@ -69,10 +73,11 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
 
 ## Gotchas
 
-- A task's `mcp_servers` are apps the routine requires. The owner must have
-  each connected: `TargetValidation` checks on save and
-  `RoutineSessions::prepare` checks again on every run, then adds them to an
-  agent limited to selected apps. An update that omits the key is rejected
+- A task's `mcp_servers` (beside a program's `steps`, or on an old
+  single-agent task) are apps the routine requires, handed to its agent step;
+  a program with apps needs one. The owner must have each connected:
+  `TargetValidation` checks on save and `RoutineSessions::prepare` checks
+  again on every run, then adds them to an agent limited to selected apps. An update that omits the key is rejected
   when the stored task has apps (`require_explicit_selection`).
 
 - `TODO.md` tracks open follow-ups (unified history list, delete schedules,

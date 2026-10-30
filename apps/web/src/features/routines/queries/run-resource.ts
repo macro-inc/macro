@@ -3,7 +3,7 @@ import type {
   ExecutionResult,
 } from '@service-scheduled-action/generated/schemas';
 import { z } from 'zod';
-import type { HistoryRecord, HistorySkip } from '../core/history';
+import type { HistoryRecord, HistorySkip, HistoryStep } from '../core/history';
 
 const resourceSchema = z.object({
   type: z.enum(['chat', 'agent']),
@@ -19,6 +19,44 @@ const conditionSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('not_met'), probability: z.number() }),
   z.object({ status: z.literal('unavailable') }),
 ]);
+
+const stepSchema = z.discriminatedUnion('kind', [
+  z.object({
+    path: z.string(),
+    kind: z.literal('if'),
+    answer: z.boolean(),
+    probability: z.number(),
+  }),
+  z.object({
+    path: z.string(),
+    kind: z.literal('choose'),
+    choices: z.array(z.string()).optional(),
+    probability: z.number().optional(),
+  }),
+  z.object({
+    path: z.string(),
+    kind: z.literal('tool'),
+    tool: z.string(),
+    error: z.string().optional(),
+  }),
+  z.object({
+    path: z.string(),
+    kind: z.literal('agent'),
+    error: z.string().optional(),
+  }),
+]);
+const stepsSchema = z.object({ steps: z.array(stepSchema) });
+const errorSchema = z.object({ error: z.string() });
+
+/** What each step of a run did; unknown or older results have none. */
+function getHistorySteps(record: {
+  result: unknown;
+}): HistoryStep[] | undefined {
+  const parsed = stepsSchema.safeParse(record.result);
+  return parsed.success && parsed.data.steps.length
+    ? parsed.data.steps
+    : undefined;
+}
 
 /** A run its trigger's condition skipped; old and unknown results are runs. */
 export function getHistorySkip(record: {
@@ -92,5 +130,7 @@ export function toHistoryRecord(record: {
     endedAt: record.end_time,
     success: record.is_success,
     skipped: getHistorySkip(record),
+    steps: getHistorySteps(record),
+    error: errorSchema.safeParse(record.result).data?.error,
   };
 }

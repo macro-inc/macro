@@ -31,12 +31,22 @@ Useful one-offs include checking an incident again in an hour, preparing tomorro
 customer meeting, asking a release agent for a post-release summary, or delegating
 a follow-up to a specialist agent after the current session ends.
 
-Agents can use `CreateRoutine` with `target: {"type":"agent","agentId":"…"}`
-(the persona `bot.botId` from `ListAgents`) and
-`schedule: {"type":"once","at":"2030-10-03T09:00:00-04:00"}`. To schedule
-itself, an agent selects its own persona ID. The authenticated user owns the
-routine, and the scheduler validates access to the selected agent. Recurring
-routines use `{"type":"cron","expression":"0 0 9 * * 2-6","timezone":"America/New_York"}`.
-Use `ListRoutines` to avoid duplicates, `ReadRoutine` to inspect settings/results,
-and `UpdateRoutine` to pause or change future work. A routine should not create
-a replacement of itself on each run.
+Agents can use `CreateRoutine` with a name, `triggers` and `steps` (a JSON
+array encoded as a string). To delegate, add an agent step,
+`{"type":"agent","agent":{"bot_id":"…"},"instructions":"…"}`, with the persona
+`bot.botId` from `ListAgents`; to schedule itself, an agent selects its own
+persona ID. One-offs use `{"type":"once","at":"2030-10-03T09:00:00-04:00"}` and
+recurring routines `{"type":"cron","expression":"0 0 9 * * 2-6","timezone":"America/New_York"}`.
+The authenticated user owns the routine, and the scheduler validates access to
+the selected agent. Use `ListRoutines` to avoid duplicates, `ReadRoutine` to
+inspect settings/results, and `UpdateRoutine` to pause or change future work. A
+routine should not create a replacement of itself on each run.
+
+Routines can also act without an agent: activity triggers such as a new email
+or a created task can run deterministic tool steps (label, archive, tag, set
+status, move to a folder, create a task, post in a channel), and `if` / `choose`
+steps branch on yes/no or multiple-choice questions about the triggering item.
+A `choose` with `"multiple": true` runs every option that fits, so a choice
+whose options each apply one label lets the classifier label email by topic.
+Steps can also act on a task an earlier step created (`{{steps.task.documentId}}`),
+which works on schedules too.

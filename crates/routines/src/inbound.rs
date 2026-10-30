@@ -48,10 +48,10 @@ pub fn routine_toolset() -> AsyncToolCollection<RoutineToolContext> {
 #[derive(Deserialize, JsonSchema)]
 #[schemars(
     title = "CreateRoutine",
-    description = r#"Schedule recurring or one-off work for a model or agent. To schedule yourself, use your persona/bot ID as the agent target; to delegate, select an accessible agent from ListAgents using its bot.botId. Routines run as the authenticated user after this session ends, using the selected agent’s tools and configuration. Use Once with a future RFC3339 timestamp for a single run; use Cron for repetition. Returns the saved routine ID and next firing. In Macro app replies, mention the created routine as `<m-document-mention>{"documentId":"ID","documentName":"NAME","blockName":"routine"}</m-document-mention>`, replacing ID with the returned ID and NAME with the saved routine name. In external MCP replies, follow the MCP item-linking instructions. Do not use reminders for work that should execute. Do not automatically create a new routine on every run of an existing routine."#
+    description = include_str!("create_routine.md")
 )]
 pub struct CreateRoutine {
-    /// Name, instructions, target, and schedule.
+    /// Name, triggers and steps.
     pub configuration: RoutineConfiguration,
 }
 impl ToolAnnotated for CreateRoutine {
@@ -154,7 +154,7 @@ pub enum RoutineChange {
         /// New activation state.
         enabled: bool,
     },
-    /// Replace the saved name, instructions, target and schedule. Read first; activation is preserved.
+    /// Replace the saved name, triggers and steps. Read first; activation is preserved.
     Configuration {
         /// Complete replacement configuration.
         configuration: RoutineConfiguration,
@@ -165,7 +165,7 @@ pub enum RoutineChange {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "UpdateRoutine",
-    description = "Pause/resume or replace the configuration of a routine owned by the authenticated user. ReadRoutine first before replacing configuration. Select an agent to delegate the routine or a model to run as Macro. Does not change ownership. A running routine can be paused but cannot be reconfigured until it finishes."
+    description = "Pause/resume or replace the configuration of a routine owned by the authenticated user. ReadRoutine first, then send the complete configuration (name, triggers and steps, as CreateRoutine describes them): it replaces the saved one. Routines saved before steps existed read back as a single agent step. Does not change ownership. A running routine can be paused but cannot be reconfigured until it finishes."
 )]
 pub struct UpdateRoutine {
     /// Routine UUID.

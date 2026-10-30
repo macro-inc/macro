@@ -25,6 +25,7 @@ use super::ports::{
     ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService, TaskTargetValidator,
 };
 use super::target_validation::{ModelOnlyTargets, require_explicit_selection};
+use routine_program::RoutineProgram;
 
 #[cfg(test)]
 pub(crate) mod test;
@@ -138,6 +139,23 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
         Ok(())
     }
 
+    /// A program's decisions and trigger reads need an event to be about, and
+    /// its decisions need the classifier behind trigger conditions. Call after
+    /// target validation, which reports malformed programs.
+    fn check_program(&self, trigger: &ActionTrigger, task: &serde_json::Value) -> Result<()> {
+        let Ok(Ok(summary)) = RoutineProgram::from_task(task).map(|program| program.validate())
+        else {
+            return Ok(());
+        };
+        if summary.questions > 0 && !self.conditions_enabled {
+            return Err(ActionPolicyError::ConditionsDisabled.into());
+        }
+        if summary.needs_event() && (trigger.has_schedule() || trigger.event_filters().is_none()) {
+            return Err(ActionPolicyError::ProgramNeedsEvent.into());
+        }
+        Ok(())
+    }
+
     async fn create(
         &self,
         principal: &CreationPrincipal,
@@ -155,6 +173,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
         self.check_event_management(&input.trigger)?;
         self.check_conditions(&input.trigger)?;
         self.targets.validate_task(&input.task, owner_user).await?;
+        self.check_program(&input.trigger, &input.task)?;
         let now = Utc::now();
         let next_run_at = next_run(&input.trigger)?;
         let event_activated_at = input.trigger.event_filters().is_some().then_some(now);
@@ -216,6 +235,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
             self.targets
                 .validate_task(&input.task, action.owner_user()?)
                 .await?;
+            self.check_program(&input.trigger, &input.task)?;
             if trigger_changed || (!action.enabled && input.enabled) {
                 action.next_run_at = next_run(&input.trigger)?;
             }

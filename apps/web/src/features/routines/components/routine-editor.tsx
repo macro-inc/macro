@@ -8,6 +8,14 @@ import { For, type JSX, Show } from 'solid-js';
 import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from '../core/draft';
 import { RoutineRunVisibility } from './routine-run-visibility';
 
+function SectionLabel(props: { children: JSX.Element }) {
+  return (
+    <h2 class="mb-2 mt-6 text-xs font-medium text-ink-extra-muted">
+      {props.children}
+    </h2>
+  );
+}
+
 /** A project-style overview and full-width run list, inside the current pane. */
 export function RoutineEditor(props: {
   draft: ScheduleDraft;
@@ -18,8 +26,8 @@ export function RoutineEditor(props: {
   onBack: () => void;
   enabled: boolean;
   runActions?: JSX.Element;
-  instructions: JSX.Element;
-  executionPicker: JSX.Element;
+  /** What the routine does: its agent's instructions or its steps. */
+  steps: JSX.Element;
   apps?: JSX.Element;
   triggerContent?: JSX.Element;
   nextRun: string;
@@ -143,7 +151,6 @@ export function RoutineEditor(props: {
               class="mt-3 min-w-0"
             >
               <EntityComposer.Properties aria-label="Routine properties">
-                {props.executionPicker}
                 <RoutineRunVisibility
                   value={props.draft.runVisibility ?? DEFAULT_RUN_VISIBILITY}
                   onChange={(runVisibility) =>
@@ -154,10 +161,11 @@ export function RoutineEditor(props: {
                 {props.apps}
               </EntityComposer.Properties>
             </fieldset>
+            <SectionLabel>When</SectionLabel>
             <Layer depth={1}>
               <section
                 aria-label="Routine triggers"
-                class="mt-4 rounded-xl border border-edge-muted bg-surface"
+                class="rounded-xl border border-edge-muted bg-surface"
               >
                 <div class="flex items-start gap-4 p-4">
                   <fieldset
@@ -196,13 +204,14 @@ export function RoutineEditor(props: {
                 </div>
               </section>
             </Layer>
+            <SectionLabel>Then</SectionLabel>
             <fieldset
               disabled={props.disabled}
               inert={props.disabled}
-              class="mt-6 min-w-0"
-              aria-label="Routine instructions"
+              class="min-w-0"
+              aria-label="Routine steps"
             >
-              {props.instructions}
+              <Layer depth={1}>{props.steps}</Layer>
             </fieldset>
             <div class="mt-4 grid gap-2">{props.feedback}</div>
           </div>

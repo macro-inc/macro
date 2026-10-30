@@ -8,6 +8,7 @@
 import type { ExecutionResultCondition } from './executionResultCondition';
 import type { ExecutionResultError } from './executionResultError';
 import type { ExecutionResultResource } from './executionResultResource';
+import type { ExecutionResultStepsItem } from './executionResultStepsItem';
 
 /**
  * Version 1 execution metadata stored in the existing JSON result column.
@@ -17,6 +18,8 @@ export interface ExecutionResult {
   condition?: ExecutionResultCondition;
   error?: ExecutionResultError;
   resource?: ExecutionResultResource;
+  /** What each step that ran did, in order: decisions, tool calls, the agent. */
+  steps?: ExecutionResultStepsItem[];
   /** @minimum 0 */
   version: number;
 }

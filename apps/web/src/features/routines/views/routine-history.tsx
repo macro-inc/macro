@@ -15,6 +15,7 @@ import type {
   HistoryRecord,
   HistoryResource,
   HistorySkip,
+  HistoryStep,
 } from '../core/history';
 
 export type { HistoryRecord } from '../core/history';
@@ -29,6 +30,8 @@ type RoutineHistoryProps = {
   createChatMetadata: (id: string) => Accessor<HistoryMetadata>;
   createAgentMetadata: (id: string) => Accessor<HistoryMetadata>;
   onOpen: (resource: HistoryResource, newSplit: boolean) => void;
+  /** Describes what a run did at a step, for routines with steps. */
+  describeStep?: (step: HistoryStep) => string;
 };
 
 type HistoryRowProps = {
@@ -113,7 +116,9 @@ function HistoryRow(props: HistoryRowProps): JSX.Element {
           <span class="min-w-0 flex-1 truncate">
             {props.metadata.status === 'pending'
               ? 'Loading…'
-              : 'Run unavailable'}
+              : props.record.steps
+                ? 'Ran steps'
+                : 'Run unavailable'}
           </span>
           <RunOutcome record={props.record} />
           <span class="ml-2 text-xs text-ink-extra-muted">
@@ -243,7 +248,62 @@ function skipRuns(records: readonly HistoryRecord[]) {
   return runs;
 }
 
+/** What each step of a run did, under its row. */
+function StepsSummary(props: {
+  record: HistoryRecord;
+  describe: (step: HistoryStep) => string;
+}) {
+  const failed = (step: HistoryStep) =>
+    (step.kind === 'tool' || step.kind === 'agent') && Boolean(step.error);
+  // A run that only ran its agent says nothing its session doesn't.
+  const informative = () =>
+    props.record.steps?.some((step) => step.kind !== 'agent' || step.error) ||
+    // Without a transcript to open, the error is the only explanation.
+    Boolean(
+      !props.record.success && props.record.error && !props.record.resource
+    );
+  return (
+    <Show when={informative()}>
+      <p class="mx-1 -mt-1 mb-1 flex min-w-0 flex-wrap gap-x-1.5 pl-9 pr-2 text-xs text-ink-muted">
+        <For each={props.record.steps ?? []}>
+          {(step, index) => (
+            <span class={cn('min-w-0', failed(step) && 'text-failure')}>
+              {index() > 0 ? '→ ' : ''}
+              {props.describe(step)}
+            </span>
+          )}
+        </For>
+        <Show
+          when={
+            !props.record.success &&
+            props.record.error &&
+            !props.record.steps?.some(failed)
+          }
+        >
+          <span class="min-w-0 text-failure">{props.record.error}</span>
+        </Show>
+      </p>
+    </Show>
+  );
+}
+
 function ResolvedHistoryRow(props: {
+  record: HistoryRecord;
+  history: RoutineHistoryProps;
+}): JSX.Element {
+  return (
+    <>
+      <ResourceOrRunRow record={props.record} history={props.history} />
+      <Show when={props.history.describeStep}>
+        {(describe) => (
+          <StepsSummary record={props.record} describe={describe()} />
+        )}
+      </Show>
+    </>
+  );
+}
+
+function ResourceOrRunRow(props: {
   record: HistoryRecord;
   history: RoutineHistoryProps;
 }): JSX.Element {

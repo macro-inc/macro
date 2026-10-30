@@ -362,3 +362,57 @@ describe('skipped runs', () => {
     ]);
   });
 });
+
+describe('routine history steps', () => {
+  it('lists what each step did and keeps agent-only runs quiet', () => {
+    const triage = toHistoryRecord({
+      id: 'run-steps',
+      result: {
+        version: 1,
+        resource: null,
+        error: 'SendChannelMessage failed: No access',
+        steps: [
+          { path: '0', kind: 'choose', choices: ['Invoice'], probability: 0.9 },
+          { path: '0.options.0.0', kind: 'tool', tool: 'UpdateThreadLabels' },
+          {
+            path: '0.options.0.1',
+            kind: 'tool',
+            tool: 'SendChannelMessage',
+            error: 'No access',
+          },
+        ],
+      },
+      start_time: '2026-10-09T10:00:00Z',
+      is_success: false,
+    });
+    const agentOnly = record('agent', 'agent-run', {
+      result: {
+        version: 1,
+        resource: { type: 'agent', id: 'agent-run' },
+        steps: [{ path: '0', kind: 'agent' }],
+      },
+    });
+    render(() => (
+      <RoutineHistory
+        records={[triage, agentOnly]}
+        isPending={false}
+        {...sources()}
+        onOpen={vi.fn()}
+        describeStep={(step) =>
+          step.kind === 'tool'
+            ? `${step.tool}${step.error ? ' failed' : ''}`
+            : step.kind === 'choose'
+              ? `Chose ${step.choices?.join(', ')}`
+              : 'Asked AI'
+        }
+      />
+    ));
+    expect(screen.getByText('Ran steps')).toBeTruthy();
+    expect(screen.getByText('Chose Invoice')).toBeTruthy();
+    expect(screen.getByText('→ UpdateThreadLabels')).toBeTruthy();
+    expect(screen.getByText('→ SendChannelMessage failed').className).toContain(
+      'text-failure'
+    );
+    expect(screen.queryByText('Asked AI')).toBeNull();
+  });
+});

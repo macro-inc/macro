@@ -1,8 +1,15 @@
 import {
   buildCron,
+  deriveRoutineName,
   deriveScheduleName,
   parseCron,
 } from '../core/routine-draft';
+import {
+  firstAgent,
+  type StepDraft,
+  stepsFromTask,
+  stepsToWire,
+} from '../core/routine-steps';
 import {
   onceFromCron,
   parseRoutineTriggers,
@@ -11,6 +18,7 @@ import {
 
 export { onceFromCron } from './routine-trigger-mapping';
 
+import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { getDefaultTimezone } from '@core/util/cron';
 import type {
   CreateScheduledAction,
@@ -28,19 +36,29 @@ import {
 } from '../core/routine-target';
 import { getCronTrigger } from './triggers';
 
+const routineAppsSchema = z
+  .array(z.object({ app_slug: z.string(), server_name: z.string() }))
+  .optional();
+
 const agentTaskSchema = z
   .looseObject({
     agent: z.looseObject({ bot_id: routineAgentIdSchema }).nullish(),
     model: routineModelSchema.nullish(),
-    mcp_servers: z
-      .array(z.object({ app_slug: z.string(), server_name: z.string() }))
-      .optional(),
+    mcp_servers: routineAppsSchema,
     prompt: z.string(),
     user_prompt: z.string(),
   })
   .refine((task) => task.agent != null || task.model != null);
 
 type RoutineTask = z.infer<typeof agentTaskSchema>;
+
+/** The apps a program requires, stored beside its steps. */
+const programAppsSchema = z.looseObject({ mcp_servers: routineAppsSchema });
+
+function programApps(task: unknown): ScheduleDraft['apps'] {
+  const parsed = programAppsSchema.safeParse(task);
+  return parsed.success ? (parsed.data.mcp_servers ?? []) : [];
+}
 
 function getAgentTask(schedule: ScheduledAction): RoutineTask | undefined {
   if (schedule.kind !== 'Agent') return undefined;
@@ -72,6 +90,32 @@ function targetFromTask(task: RoutineTask): RoutineTarget {
   return { kind: 'model', model: routineModelSchema.parse(task.model) };
 }
 
+/** A routine with steps, edited as its program. */
+function programDraft(
+  schedule: ScheduledAction,
+  steps: StepDraft[],
+  triggers: ScheduleDraft['triggers']
+): ScheduleDraft | undefined {
+  // Steps need the trigger editor; legacy cron-only drafts have no steps.
+  if (!triggers) return undefined;
+  const agent = firstAgent(steps);
+  const parsed = parseCron('0 0 9 * * *');
+  return {
+    id: schedule.id ?? undefined,
+    name: schedule.name,
+    prompt: agent?.instructions ?? '',
+    frequency: parsed.frequency,
+    time: parsed.time,
+    daysOfWeek: parsed.daysOfWeek,
+    dayOfMonth: parsed.dayOfMonth,
+    target: agent?.target ?? { kind: 'model', model: DEFAULT_MODEL },
+    runVisibility: schedule.run_visibility,
+    apps: programApps(schedule.task),
+    triggers,
+    steps,
+  };
+}
+
 export function draftFromSchedule(
   schedule: ScheduledAction
 ): ScheduleDraft | undefined {
@@ -81,6 +125,9 @@ export function draftFromSchedule(
     ? parseRoutineTriggers(sourceTrigger)
     : undefined;
   if (!trigger && !triggers) return undefined;
+  const steps =
+    schedule.kind === 'Agent' ? stepsFromTask(schedule.task) : undefined;
+  if (steps) return programDraft(schedule, steps, triggers);
   const parsed = trigger
     ? parseCron(trigger.schedule)
     : parseCron('0 0 9 * * *');
@@ -131,14 +178,91 @@ function buildAgentTask(draft: ScheduleDraft): RoutineTask {
   return task;
 }
 
+function buildTask(draft: ScheduleDraft) {
+  const [only, ...rest] = draft.steps ?? [];
+  // A routine that is only an agent saves in the simple form, however its
+  // step was added.
+  if (only?.kind === 'agent' && !rest.length)
+    return buildAgentTask({
+      ...draft,
+      prompt: only.instructions,
+      target: only.target,
+    });
+  return draft.steps
+    ? programTaskFor(draft.steps, draft.apps)
+    : buildAgentTask(draft);
+}
+
+/**
+ * A program task. Apps are sent when there are some, or when `clearsApps`:
+ * the scheduler rejects an update that drops stored apps without saying so.
+ */
+function programTaskFor(
+  steps: StepDraft[],
+  apps: ScheduleDraft['apps'],
+  clearsApps = false
+) {
+  return {
+    steps: stepsToWire(steps),
+    ...(apps.length || clearsApps ? { mcp_servers: apps } : {}),
+  };
+}
+
 export function draftToCreateBody(draft: ScheduleDraft): CreateScheduledAction {
   return {
-    name: draft.name.trim() || deriveScheduleName(draft.prompt),
+    name: draft.name.trim() || deriveRoutineName(draft),
     trigger: triggerFromDraft(draft),
     kind: 'Agent',
-    task: buildAgentTask(draft),
+    task: buildTask(draft),
     enabled: draft.enabled ?? true,
     run_visibility: draft.runVisibility ?? DEFAULT_RUN_VISIBILITY,
+  };
+}
+
+/** Keep the stored task when the edited steps write the same program. */
+function programTask(draft: ScheduleDraft, previous: ScheduledAction) {
+  const previousApps = programApps(previous.task);
+  const clearsApps = previousApps.length > 0;
+  const task = draft.steps
+    ? programTaskFor(draft.steps, draft.apps, clearsApps)
+    : buildTask(draft);
+  const previousSteps = stepsFromTask(previous.task);
+  return previousSteps &&
+    JSON.stringify(task) ===
+      JSON.stringify(programTaskFor(previousSteps, previousApps, clearsApps))
+    ? previous.task
+    : task;
+}
+
+function serializedTrigger(
+  draft: ScheduleDraft & { triggers: NonNullable<ScheduleDraft['triggers']> },
+  previous: ScheduledAction
+) {
+  return previous.trigger &&
+    JSON.stringify(serializeTriggers(draft.triggers)) ===
+      JSON.stringify(
+        serializeTriggers(parseRoutineTriggers(previous.trigger) ?? [])
+      )
+    ? previous.trigger
+    : serializeTriggers(draft.triggers);
+}
+
+/** A routine with steps always edits through the trigger editor. */
+function programUpdateBody(
+  draft: ScheduleDraft,
+  previous: ScheduledAction
+): UpdateScheduledAction | undefined {
+  const { triggers } = draft;
+  if (!triggers) return undefined;
+  return {
+    name:
+      draft.name === previous.name
+        ? previous.name
+        : draft.name.trim() || deriveRoutineName(draft),
+    trigger: serializedTrigger({ ...draft, triggers }, previous),
+    kind: previous.kind,
+    task: programTask(draft, previous),
+    run_visibility: draft.runVisibility ?? previous.run_visibility,
   };
 }
 
@@ -146,6 +270,7 @@ export function draftToUpdateBody(
   draft: ScheduleDraft,
   previous: ScheduledAction
 ): UpdateScheduledAction | undefined {
+  if (draft.steps) return programUpdateBody(draft, previous);
   const trigger = getCronTrigger(previous);
   const previousTask = getAgentTask(previous);
   const target = routineTargetSchema.safeParse(draft.target);
@@ -177,14 +302,10 @@ export function draftToUpdateBody(
         draft.name === previous.name
           ? previous.name
           : draft.name.trim() || 'Untitled',
-      trigger:
-        previous.trigger &&
-        JSON.stringify(serializeTriggers(draft.triggers)) ===
-          JSON.stringify(
-            serializeTriggers(parseRoutineTriggers(previous.trigger) ?? [])
-          )
-          ? previous.trigger
-          : serializeTriggers(draft.triggers),
+      trigger: serializedTrigger(
+        { ...draft, triggers: draft.triggers },
+        previous
+      ),
       kind: previous.kind,
       task,
       run_visibility: runVisibility,

@@ -29,6 +29,8 @@ export function createRoutineComposer(
         }
       : { ...createEmptyDraft(defaultModel), triggers: [], enabled: true }
   );
+  // Bumped when the whole draft is replaced, so uncontrolled editors remount.
+  const [version, setVersion] = createSignal(0);
   const [attempted, setAttempted] = createSignal(false);
   const [submitError, setSubmitError] = createSignal<string>();
   const formError = () =>
@@ -42,6 +44,16 @@ export function createRoutineComposer(
     if (next === draft()) return;
     setDraft(next);
     dirty = true;
+    setSubmitError(undefined);
+    save(next);
+  }
+  /** Swap in a whole new draft, e.g. one drafted by AI from a description. */
+  function replace(next: ScheduleDraft) {
+    if (source.pending()) return;
+    setDraft(next);
+    setVersion((value) => value + 1);
+    dirty = true;
+    setAttempted(false);
     setSubmitError(undefined);
     save(next);
   }
@@ -65,5 +77,16 @@ export function createRoutineComposer(
     storage.clear();
     onCreated(id);
   }
-  return { draft, change, attempted, formError, submitError, create };
+  return {
+    draft,
+    /** Whether an unsent draft was restored, so editing resumes at once. */
+    restored: Boolean(restored),
+    change,
+    replace,
+    version,
+    attempted,
+    formError,
+    submitError,
+    create,
+  };
 }

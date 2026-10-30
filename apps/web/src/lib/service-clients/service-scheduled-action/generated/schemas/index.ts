@@ -48,6 +48,7 @@ export * from './executionResult';
 export * from './executionResultCondition';
 export * from './executionResultError';
 export * from './executionResultResource';
+export * from './executionResultStepsItem';
 export * from './inProgressExecution';
 export * from './inProgressExecutionChatId';
 export * from './inProgressExecutionResource';

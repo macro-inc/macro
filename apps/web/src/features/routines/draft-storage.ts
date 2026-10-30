@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { ScheduleDraft } from './core/draft';
+import { stepDraftSchema } from './core/routine-steps';
 import { routineModelSchema, routineTargetSchema } from './core/routine-target';
 import { routineTriggerSchema } from './core/routine-triggers';
 
@@ -9,6 +10,7 @@ const EXPIRY_TIME_MS = 3 * 60 * 1000;
 const draftFields = {
   id: z.string().optional(),
   triggers: z.array(routineTriggerSchema).max(16).optional(),
+  steps: z.array(stepDraftSchema).optional(),
   name: z.string(),
   prompt: z.string(),
   frequency: z.enum(['week', 'month', 'once']),

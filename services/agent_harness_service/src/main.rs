@@ -24,6 +24,7 @@ mod permission_policy;
 mod preview;
 mod public_mcp;
 mod routine_sessions;
+mod routine_tools;
 mod runtime_commands;
 mod scheduling;
 mod trigger;
@@ -782,6 +783,8 @@ async fn run() -> anyhow::Result<()> {
         Arc::new(McpToolCatalog::new(Arc::clone(&mcp_connector)));
     let sessions = sessions.with_tool_catalog(Arc::clone(&tool_catalog));
 
+    // Routine tool steps run the same catalog as the owner, outside any session.
+    let routine_tools = routine_tools::CatalogRoutineTools::new(tool_context.clone());
     let mut inmem_engine =
         RigTurnEngine::new(pool.clone(), tool_context.clone()).with_gate(owner_tool_gate);
     if let Some(selector) = &code_mode_selector {
@@ -1471,6 +1474,7 @@ async fn run() -> anyhow::Result<()> {
         broker.clone(),
         session_repo.clone(),
         PgConnectionRepo::new(pool.clone()),
+        routine_tools,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let coding_agents = coding_agents::router(

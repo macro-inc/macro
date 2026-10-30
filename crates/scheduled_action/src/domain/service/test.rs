@@ -10,7 +10,7 @@ use crate::domain::models::{
 };
 use crate::domain::{
     execution::ExecutionHandle,
-    ports::{ScheduledActionReadService, ScheduledAgentRunner},
+    ports::{RoutineAgents, ScheduledActionReadService},
     read_service::ScheduledActionReadServiceImpl,
     target_runner::TargetRunner,
     target_validation::{
@@ -525,25 +525,21 @@ async fn preparation_reauthorizes_previously_saved_selection_after_deletion_or_r
             .unwrap();
         assert!(sessions.preparations.lock().unwrap().is_empty());
         *sessions.error.lock().unwrap() = Some(denial);
-        let runner = TargetRunner::new(sessions.clone(), Arc::new(UnreadEvents));
+        let runner = TargetRunner::new(sessions.clone());
         let mut handle = ExecutionHandle::default();
-        let error = runner.prepare(&created, &mut handle).await.unwrap_err();
+        let program = routine_program::RoutineProgram::from_task(&created.task).unwrap();
+        let error = runner
+            .prepare(
+                &created,
+                program.agent_steps()[0],
+                &program.mcp_servers,
+                &mut handle,
+            )
+            .await
+            .unwrap_err();
         assert_eq!(error.downcast_ref(), Some(&denial));
         assert!(handle.resource.is_none());
         assert_eq!(sessions.preparations.lock().unwrap().len(), 1);
-    }
-}
-
-/// Preparation never reads the triggering event.
-struct UnreadEvents;
-
-impl crate::domain::ports::RoutineEventReader for UnreadEvents {
-    async fn read_event(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: &crate::domain::event_runs::AuthorizedEventRun,
-    ) -> std::result::Result<trigger_context::RoutineEvent, rootcause::Report> {
-        panic!("preparation must not read the triggering event")
     }
 }
 
@@ -1397,5 +1393,124 @@ fn conditions_are_trimmed_bounded_and_round_trip() {
     assert_eq!(
         serde_json::to_value(&unconditional).unwrap(),
         json!([{"events": ["document.created"]}])
+    );
+}
+
+fn program_configuration(
+    trigger: serde_json::Value,
+    steps: serde_json::Value,
+) -> ActionConfiguration {
+    ActionConfiguration {
+        trigger: serde_json::from_value(trigger).unwrap(),
+        task: json!({ "steps": steps }),
+        ..configuration(true)
+    }
+}
+
+#[tokio::test]
+async fn programs_that_read_their_trigger_need_activity_triggers_and_decisions_need_a_classifier() {
+    let cron = json!({"type": "cron", "schedule": "0 0 9 * * *", "timezone": "UTC"});
+    let email = json!({"type": "events", "filters": [{"events": ["email.message_received"]}]});
+    let mixed = json!({"type": "multiple", "triggers": [cron.clone(), email.clone()]});
+    let archive = json!([{ "type": "tool", "tool": "UpdateThreadLabels", "arguments": {
+        "thread_id": "{{trigger.entity_id}}", "label_id": "inbox", "add": false
+    } }]);
+    let triage = json!([{ "type": "if", "condition": "Is this a newsletter?", "then": archive }]);
+    let digest = json!([{ "type": "tool", "tool": "SendChannelMessage", "arguments": {
+        "channel_id": "c", "content": "Daily reminder"
+    } }]);
+
+    let without = service(true);
+    for trigger in [cron.clone(), mixed] {
+        assert_policy(
+            without
+                .create_action(
+                    &user_principal(),
+                    CreateScheduledAction::Canonical(program_configuration(
+                        trigger,
+                        archive.clone(),
+                    )),
+                )
+                .await,
+            ActionPolicyError::ProgramNeedsEvent,
+        );
+    }
+    assert_policy(
+        without
+            .create_action(
+                &user_principal(),
+                CreateScheduledAction::Canonical(program_configuration(
+                    email.clone(),
+                    triage.clone(),
+                )),
+            )
+            .await,
+        ActionPolicyError::ConditionsDisabled,
+    );
+    // Steps that don't read a trigger run on any schedule.
+    without
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(program_configuration(cron.clone(), digest)),
+        )
+        .await
+        .unwrap();
+    let archived = without
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(program_configuration(email.clone(), archive)),
+        )
+        .await
+        .unwrap();
+    // Updates are held to the same rule.
+    assert_policy(
+        without
+            .update_action(
+                edit_receipt(archived.id.unwrap()),
+                update(program_configuration(
+                    cron,
+                    json!([{ "type": "if", "condition": "Urgent?" }]),
+                )),
+            )
+            .await,
+        ActionPolicyError::ConditionsDisabled,
+    );
+
+    let with = TestService::new(
+        without.repo.clone(),
+        without.executor.clone(),
+        without.dispatcher_tx.clone(),
+        grants(&without.repo),
+    )
+    .with_event_management_enabled(true)
+    .with_conditions_enabled(true);
+    let created = with
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(program_configuration(email, triage.clone())),
+        )
+        .await
+        .unwrap();
+    assert_eq!(created.task, json!({ "steps": triage }));
+}
+
+#[tokio::test]
+async fn structurally_invalid_programs_are_rejected_with_the_broken_rule() {
+    let svc = service(true);
+    let error = svc
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(program_configuration(
+                json!({"type": "events", "filters": [{"events": ["email.message_received"]}]}),
+                json!([{ "type": "choose", "options": [{ "label": "Only one" }] }]),
+            )),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error
+            .downcast_ref::<TargetValidationError>()
+            .map(ToString::to_string),
+        Some("a choice needs between 2 and 8 options".to_owned())
     );
 }

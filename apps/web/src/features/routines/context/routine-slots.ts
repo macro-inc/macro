@@ -1,10 +1,11 @@
 import type { Accessor, Component } from 'solid-js';
+import type { RoutineToolSlots } from '../components/routine-tool-step';
 import type { RoutineApp } from '../core/draft';
 import type { RoutineTarget } from '../core/routine-target';
 import type { RoutineTriggerDraft } from '../core/routine-triggers';
 import type { HistoryMetadata } from './history';
 
-export type RoutineEditorSlots = {
+export type RoutineEditorSlots = RoutineToolSlots & {
   PromptEditor: Component<{
     initialValue: string;
     disabled?: boolean;

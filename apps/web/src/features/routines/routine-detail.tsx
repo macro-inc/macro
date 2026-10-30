@@ -7,7 +7,10 @@ import { useHasPaidAccess } from '@core/auth/license';
 import { useBlockId } from '@core/block';
 import { defaultModelForPlan } from '@core/component/AI/constant';
 import { toast } from '@core/component/Toast/Toast';
-import { enableRoutineSharing } from '@core/constant/featureFlags';
+import {
+  enableRoutineConditions,
+  enableRoutineSharing,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { getOwner, onMount, Show } from 'solid-js';
@@ -21,6 +24,7 @@ import { createRoutineDetailSource } from './queries/routine-sources';
 import { createRoutineConnectedApps, RoutineApps } from './routine-apps';
 import { RoutineExecutionPicker } from './routine-execution-picker';
 import { RoutinePromptEditor } from './routine-prompt-editor';
+import { routineToolSlots } from './routine-step-pickers';
 import {
   openShareTemplateDialog,
   RoutineTemplatePage,
@@ -55,6 +59,7 @@ export function RoutineDetail(props: {
   const userId = useUserId();
   const hasPaidAccess = useHasPaidAccess();
   const sharing = useFeatureFlag(enableRoutineSharing);
+  const decisions = useFeatureFlag(enableRoutineConditions);
   const back = () =>
     props.onBack ? props.onBack() : openAgentsPage(layout, 'routines');
   const open = (id: string) =>
@@ -113,6 +118,7 @@ export function RoutineDetail(props: {
         source={source}
         userId={userId}
         defaultModel={defaultModelForPlan(hasPaidAccess())}
+        decisionsEnabled={decisions().enabled}
         initialTab={props.initialTab}
         onBack={back}
         onDelete={remove}
@@ -138,6 +144,7 @@ export function RoutineDetail(props: {
           Triggers: RoutineTriggers,
           Apps: RoutineApps,
           createConnectedApps: createRoutineConnectedApps,
+          ...routineToolSlots,
           createChatMetadata: createChatHistoryMetadata,
           createAgentMetadata: createAgentHistoryMetadata,
         }}
