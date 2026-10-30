@@ -1104,22 +1104,22 @@ export function DatabaseTable(props: DatabaseTableProps) {
                                       column
                                     )}
                                   >
-                                  {props.renderCell(row, column, {
-                                    onReady: (editor) =>
-                                      register(rowId, columnId, editor),
-                                    onNavigate: (direction) =>
-                                      navigate(
-                                        row().rowId,
-                                        column().id,
-                                        direction
-                                      ),
-                                    onNavigateRow: (direction) =>
-                                      navigateRow(
-                                        row().rowId,
-                                        column().id,
-                                        direction
-                                      ),
-                                  })}
+                                    {props.renderCell(row, column, {
+                                      onReady: (editor) =>
+                                        register(rowId, columnId, editor),
+                                      onNavigate: (direction) =>
+                                        navigate(
+                                          row().rowId,
+                                          column().id,
+                                          direction
+                                        ),
+                                      onNavigateRow: (direction) =>
+                                        navigateRow(
+                                          row().rowId,
+                                          column().id,
+                                          direction
+                                        ),
+                                    })}
                                   </Show>
                                   <Show when={presence().length}>
                                     <span class="pointer-events-none absolute top-0 left-0 z-1 flex gap-px">
