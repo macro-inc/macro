@@ -827,3 +827,7 @@ Keep existing tags and apply to the selected rows when the drop row is selected.
 Use the shared scoped drag helpers and overlayIcon for the tag chip.
 The backend-free browser regression is
 `bunx playwright test --config src/features/property/tags/browser-test/playwright.config.ts`.
+
+Use `features/channel/channel-icon.tsx` for conversation identity in rows,
+favorites, and headers: channel pictures or hashtags, human/self-DM avatars,
+and bot personas share one renderer; keep surface sizing in the caller.

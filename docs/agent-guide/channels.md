@@ -867,7 +867,10 @@ that order. `Team channels` lists team channels; `Channels` lists every other
 non-DM channel (public and private). Each section collapses on its own and
 keeps its own sort; open sections split the column evenly, and the bottom-most
 open one takes any remaining height. Favorites appears when
-the user has channel favorites and only lists channels. Channel favorites open
+the user has channel favorites and only lists channels. Favorites show a custom
+channel picture when set; otherwise all non-DM channels use a hashtag, including
+team channels. Favorites, regular rows, and headers share the same channel/DM
+icon renderer, including participant avatars, self-DMs, and bot personas. Channel favorites open
 in the shared channel detail. Shift-clicking a favorite, channel, or DM opens that
 conversation in a new split instead. Shift-click refreshes the notification
 selection and opens at latest. Split opens mark top-level notifications seen,
@@ -903,7 +906,10 @@ with the same sort and `+` controls as the All tab's sections. Conversations
 lists only channels and DMs that hold threads the user takes part in; it pages
 through the user's threads and loads their channels, so scrolling the section
 reveals more. Selecting a row filters the main pane instead of opening the
-conversation. `All threads` clears the filter.
+conversation. `All threads` clears the filter. At desktop width the rail stays
+docked on Threads with no **Hide navigation** control. In narrow splits the tab
+neither opens nor closes the slide-over, so switching between `Threads`, `All`,
+and `Recent` inside it keeps it open.
 
 The main pane is a virtualized list of channel threads the user takes part in,
 newest reply first. It loads more as it nears the end and returns to the top
