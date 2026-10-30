@@ -195,7 +195,7 @@ vi.mock('./channels-view-context', () => ({
   }),
 }));
 vi.mock('./queries', () => ({
-  createRetainedSelectionSource: (source: unknown) => source,
+  createUnreadListSource: (source: unknown) => source,
   filterChannelsForScope: (_scope: string, channels: ChannelEntity[]) =>
     channels,
   deduplicateChannels: (collections: ChannelEntity[][]) => [

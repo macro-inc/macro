@@ -69,7 +69,7 @@ import { resolveChannelLabelMemberships } from '../../core/smart-tags';
 import {
   type ChannelsSourceScope,
   type ChannelsSources,
-  createRetainedSelectionSource,
+  createUnreadListSource,
   deduplicateChannels,
   resolveReferencedChannels,
   useChannelsByIdsQuery,
@@ -320,12 +320,6 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const channelCalls = useChannelCalls();
 
-  const unreadSource = createRetainedSelectionSource(
-    props.sources.unread,
-    () => selectedChannel()?.id
-  );
-  const sources: ChannelsSources = { ...props.sources, unread: unreadSource };
-
   // A disabled list keeps its last page, so the active tab's rows must win
   // the dedupe: its copies carry the live unread witnesses.
   const channels = createMemo(() => {
@@ -334,7 +328,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
       props.sources.channels.items(),
       props.sources.direct_messages.items(),
     ];
-    const unread = unreadSource.items();
+    const unread = props.sources.unread.items();
     return deduplicateChannels(
       tab() === 'unread'
         ? [unread, ...browse, props.sources.search.items()]
@@ -424,6 +418,13 @@ export function ChannelsRail(props: ChannelsRailProps) {
     referencedChannels().find((channel) => channel.id === channelId);
 
   const channelActivity = useChannelRailActivity(allChannels, channelCalls);
+
+  const unreadSource = createUnreadListSource(
+    props.sources.unread,
+    () => selectedChannel()?.id,
+    (channelId) => channelActivity.unreadChannelIds().has(channelId)
+  );
+  const sources: ChannelsSources = { ...props.sources, unread: unreadSource };
 
   const isLabelOpen = (labelId: string) =>
     !state.collapsedLabels.includes(labelId);

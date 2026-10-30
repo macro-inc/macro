@@ -173,7 +173,7 @@ vi.mock('../../channels-view-context', () => ({
   }),
 }));
 vi.mock('../../queries', () => ({
-  createRetainedSelectionSource: (source: unknown) => source,
+  createUnreadListSource: (source: unknown) => source,
   deduplicateChannels: (collections: ChannelEntity[][]) => [
     ...new Map(
       collections.flat().map((channel) => [channel.id, channel])

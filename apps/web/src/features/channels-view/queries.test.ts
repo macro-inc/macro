@@ -47,7 +47,7 @@ vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user-1' }));
 import { useChannelByIdQuery } from '@channel/Channel/channel-entity';
 import {
   channelsQueryArgs,
-  createRetainedSelectionSource,
+  createUnreadListSource,
   filterChannelsForScope,
   resolveReferencedChannels,
   useChannelsSources,
@@ -189,7 +189,8 @@ describe('Unread list', () => {
         unread('c', 'n3'),
       ]);
       const [selected, setSelected] = createSignal<string | undefined>();
-      const source = createRetainedSelectionSource(
+      const [dots, setDots] = createSignal(new Set(['a', 'b', 'c']));
+      const source = createUnreadListSource(
         {
           items,
           isLoading: () => false,
@@ -200,21 +201,26 @@ describe('Unread list', () => {
           loadMore: async () => {},
           refresh: async () => {},
         },
-        selected
+        selected,
+        (id) => dots().has(id)
       );
       const ids = () => source.items().map((channel) => channel.id);
 
       setSelected('b');
-      // Reading b removes it from the server's unread set.
+      // Reading b clears its dot and, later, removes it from the server page.
+      setDots(new Set(['a', 'c']));
+      expect(ids()).toEqual(['a', 'b', 'c']);
       setItems([unread('a', 'n1'), unread('c', 'n3')]);
       expect(ids()).toEqual(['a', 'b', 'c']);
       expect(source.items()[1].unreadNotifications).toEqual([]);
 
       // A new message puts b back; the server copy wins over the retained one.
+      setDots(new Set(['a', 'b', 'c']));
       setItems([unread('b', 'n4'), unread('a', 'n1'), unread('c', 'n3')]);
       expect(ids()).toEqual(['b', 'a', 'c']);
       expect(source.items()[0].unreadNotifications).toHaveLength(1);
 
+      setDots(new Set(['a', 'c']));
       setItems([unread('a', 'n1'), unread('c', 'n3')]);
       expect(ids()).toEqual(['b', 'a', 'c']);
 
@@ -225,6 +231,35 @@ describe('Unread list', () => {
       // A selection that was never unread is not added.
       setSelected('z');
       expect(ids()).toEqual(['a', 'c']);
+      dispose();
+    });
+  });
+
+  it('drops a row whose dot cleared elsewhere before the page refreshes', () => {
+    createRoot((dispose) => {
+      const [items] = createSignal<ChannelEntity[]>([
+        channelEntity('a'),
+        channelEntity('b'),
+      ]);
+      const [dots, setDots] = createSignal(new Set(['a', 'b']));
+      const source = createUnreadListSource(
+        {
+          items,
+          isLoading: () => false,
+          isFetching: () => false,
+          error: () => undefined,
+          hasMore: () => false,
+          isLoadingMore: () => false,
+          loadMore: async () => {},
+          refresh: async () => {},
+        },
+        () => undefined,
+        (id) => dots().has(id)
+      );
+      expect(source.items().map((channel) => channel.id)).toEqual(['a', 'b']);
+      // Read on another device: the dot clears first, the server page later.
+      setDots(new Set(['b']));
+      expect(source.items().map((channel) => channel.id)).toEqual(['b']);
       dispose();
     });
   });

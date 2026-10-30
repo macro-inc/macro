@@ -380,14 +380,19 @@ function useChannelsDataSource(
 }
 
 /**
- * Keep the selected conversation in an unread list after it is read. Opening
- * a row marks it read, which would otherwise pull it out from under the
- * pointer; it leaves once another conversation is selected. The retained copy
- * shows no unread dot, since it is kept only because it was read.
+ * The Unread list as shown: the server's unread page kept consistent with the
+ * rows' dots, plus the selected conversation.
+ *
+ * A row whose dot the local read state has already cleared (read here or on
+ * another device) leaves at once instead of waiting for the page to refresh.
+ * The selected conversation is the exception: opening a row marks it read,
+ * which would otherwise pull it out from under the pointer, so it stays in
+ * place without a dot until another conversation is selected.
  */
-export function createRetainedSelectionSource(
+export function createUnreadListSource(
   source: ChannelsDataSource,
-  selectedChannelId: Accessor<string | undefined>
+  selectedChannelId: Accessor<string | undefined>,
+  hasUnread: (channelId: string) => boolean
 ): ChannelsDataSource {
   const retained = createMemo<
     { channel: ChannelEntity; index: number } | undefined
@@ -400,13 +405,16 @@ export function createRetainedSelectionSource(
     return previous?.channel.id === id ? previous : undefined;
   });
   const items = createMemo<ChannelEntity[]>(() => {
-    const loaded = source.items();
+    const selected = selectedChannelId();
+    const shown = source
+      .items()
+      .filter((channel) => channel.id === selected || hasUnread(channel.id));
     const kept = retained();
-    if (!kept || loaded.some((channel) => channel.id === kept.channel.id))
-      return [...loaded];
+    if (!kept || shown.some((channel) => channel.id === kept.channel.id))
+      return shown;
     const read = { ...kept.channel, unreadNotifications: [] };
-    const at = Math.min(kept.index, loaded.length);
-    return [...loaded.slice(0, at), read, ...loaded.slice(at)];
+    const at = Math.min(kept.index, shown.length);
+    return [...shown.slice(0, at), read, ...shown.slice(at)];
   });
   return { ...source, items };
 }
