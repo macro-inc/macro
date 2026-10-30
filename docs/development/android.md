@@ -372,22 +372,62 @@ administrator must extend that condition with narrowly scoped alternatives:
   main subject, for `schedule` or `workflow_dispatch` events.
 - Permit the specific approved `refs/pull/<PR_NUMBER>/merge` only for
   `pull_request` events, the `repo:macro-inc/macro:pull_request` subject,
-  `base_ref == 'main'`, and these exact workflow paths at that same merge ref:
+  `base_ref == 'main'`, the reviewed merge commit in `assertion.sha`, and these
+  exact workflow paths at that same merge ref:
   `web-app-check-main.yml`, `android-play-release.yml`, and
   `android-release-drift.yml` under `macro-inc/macro/.github/workflows/`.
 
-Check the PR's head repository before granting its merge ref. Do not replace the
-approved PR ref with a wildcard over all PRs: PR workflows execute the proposed
-code with the publishing identity. The grant follows later revisions of that PR,
-so remove its alternative after the PR merges or closes. Keep the main watcher
-permission so it can verify releases and rerun native gates.
+Check the PR's head repository and review its merge commit before granting access.
+Do not replace the approved PR ref or SHA with a wildcard: PR workflows execute
+the proposed code with the publishing identity. For `pull_request` workflows,
+`assertion.sha` identifies the event's merge commit, not the PR head. A later push
+or base-branch update creates a different merge commit; review the changes before
+updating the grant. Reruns retain the original event SHA, and release jobs request
+credentials after building. Retain each reviewed event SHA in an explicit
+`assertion.sha in [...]` allowlist while its approved gate, release, or drift run
+still needs credentials, then remove it. Remove the PR's alternative after it
+merges or closes. Keep the main watcher permission so it can verify releases and
+rerun native gates.
 
-Back up the existing provider before applying the reviewed CEL condition:
+Back up the existing provider, then create the complete condition below. Replace
+`<PR_NUMBER>` and `<REVIEWED_MERGE_SHA>` with the approved PR number and full
+40-character merge commit SHA. This example preserves the initial publisher and
+adds the watcher; preserve any other independently approved grants already in
+`provider-before.json` instead of overwriting them.
 
 ```sh
 gcloud iam workload-identity-pools providers describe macro \
   --project=macro-435922 --location=global \
   --workload-identity-pool=github-play --format=json > provider-before.json
+
+cat > approved-play-condition.cel <<'CEL'
+assertion.repository_id == '1092407718' &&
+assertion.repository_owner_id == '65687018' &&
+(
+  (
+    assertion.workflow_ref == 'macro-inc/macro/.github/workflows/publish-android-play.yml@refs/heads/main' &&
+    assertion.sub == 'repo:macro-inc/macro:ref:refs/heads/main'
+  ) ||
+  (
+    assertion.workflow_ref == 'macro-inc/macro/.github/workflows/android-release-watch.yml@refs/heads/main' &&
+    assertion.ref == 'refs/heads/main' &&
+    assertion.sub == 'repo:macro-inc/macro:ref:refs/heads/main' &&
+    assertion.event_name in ['schedule', 'workflow_dispatch']
+  ) ||
+  (
+    assertion.event_name == 'pull_request' &&
+    assertion.sub == 'repo:macro-inc/macro:pull_request' &&
+    assertion.ref == 'refs/pull/<PR_NUMBER>/merge' &&
+    assertion.base_ref == 'main' &&
+    assertion.sha == '<REVIEWED_MERGE_SHA>' &&
+    assertion.workflow_ref in [
+      'macro-inc/macro/.github/workflows/web-app-check-main.yml@refs/pull/<PR_NUMBER>/merge',
+      'macro-inc/macro/.github/workflows/android-play-release.yml@refs/pull/<PR_NUMBER>/merge',
+      'macro-inc/macro/.github/workflows/android-release-drift.yml@refs/pull/<PR_NUMBER>/merge'
+    ]
+  )
+)
+CEL
 
 gcloud iam workload-identity-pools providers update-oidc macro \
   --project=macro-435922 --location=global \
