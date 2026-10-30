@@ -189,6 +189,50 @@ describe('history loading ahead of scrolling', () => {
     expect(f.paginate).toHaveBeenCalledTimes(3);
   });
 
+  it.each([true, false])(
+    'measures rows taller than the estimate ahead of a gesture (safari=%s)',
+    async (safari) => {
+      platform.safari = safari;
+      // Browsers report an observed element once, which is how rows mounted
+      // during a scroll get measured.
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          constructor(readonly callback: ResizeObserverCallback) {}
+          observe(target: Element) {
+            queueMicrotask(() =>
+              this.callback(
+                [{ target } as ResizeObserverEntry],
+                this as unknown as ResizeObserver
+              )
+            );
+          }
+          unobserve() {}
+          disconnect() {}
+        }
+      );
+      // Rows three times the estimate, as long agent transcripts are: a
+      // fling over unmeasured rows hits the native top while history remains.
+      const keys = Array.from({ length: 40 }, (_, index) => String(index));
+      for (const key of keys) rowHeights.set(key, 300);
+      const { container } = render(() => (
+        <ThreadList keys={() => keys}>{({ id }) => <div>{id}</div>}</ThreadList>
+      ));
+      const mounted = () =>
+        [...container.querySelectorAll('[data-index]')].map((row) =>
+          Number(row.getAttribute('data-index'))
+        );
+      // Rows 38-39 fill the viewport. Safari holds at least six viewports
+      // (2400px, rows 30-37) of measured rows above them; elsewhere the
+      // default overscan of six.
+      await waitFor(() => expect(mounted()).toContain(32));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      if (safari) expect(Math.min(...mounted())).toBeLessThanOrEqual(30);
+      else expect(Math.min(...mounted())).toBe(32);
+      expect(Math.max(...mounted())).toBe(39);
+    }
+  );
+
   it('does not repeat a request for an unchanged boundary', async () => {
     const f = setup();
     await waitFor(() => expect(f.paginate).toHaveBeenCalledOnce());

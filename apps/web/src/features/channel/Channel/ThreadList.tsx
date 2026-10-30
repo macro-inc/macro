@@ -220,6 +220,42 @@ export function ThreadList(props: ThreadListProps) {
     },
   });
 
+  // Assigned once the virtualizer exists; its first range is computed inside
+  // the constructor, before the binding below is initialized.
+  let measured: { instance: typeof virtualizer } | undefined;
+
+  // A WebKit gesture cannot move the native top boundary, so rows above that
+  // are taller than their estimate grow only the visual adjustment, and a
+  // fling stops at scrollTop 0 with history still above it. Keep the history
+  // buffer mounted and measured before a gesture reaches it, a few
+  // unmeasured rows per pass, so the native extent above is the real one.
+  function withMeasuredHistory(range: Range): number[] {
+    const indexes = defaultRangeExtractor(range);
+    const instance = measured?.instance;
+    const first = indexes[0];
+    const visibleStart = instance?.measurementsCache[range.startIndex]?.start;
+    if (
+      !scrollCompensation ||
+      !instance ||
+      first === undefined ||
+      visibleStart === undefined
+    )
+      return indexes;
+    const buffer = viewportSize() * historyBufferViewports;
+    const added: number[] = [];
+    let unmeasured = 0;
+    let top = instance.measurementsCache[first]?.start ?? visibleStart;
+    for (let index = first - 1; index >= 0; index--) {
+      const item = instance.measurementsCache[index];
+      if (!item || visibleStart - top >= buffer || unmeasured >= OVERSCAN)
+        break;
+      added.unshift(index);
+      top = item.start;
+      if (!instance.itemSizeCache.has(item.key)) unmeasured += 1;
+    }
+    return added.length === 0 ? indexes : [...added, ...indexes];
+  }
+
   const virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
     // Do not consume initialOffset against an empty query result. Enabling
     // with the first page lets TanStack render the latest rows immediately.
@@ -293,7 +329,7 @@ export function ThreadList(props: ThreadListProps) {
           ? -1
           : props.keys().indexOf(props.targetId);
       return (range: Range) => {
-        const indexes = defaultRangeExtractor(range);
+        const indexes = withMeasuredHistory(range);
         if (index < 0 || index >= range.count || indexes.includes(index))
           return indexes;
         return [...indexes, index].sort((a, b) => a - b);
@@ -369,6 +405,8 @@ export function ThreadList(props: ThreadListProps) {
       }),
     onChange: scheduleScrollState,
   });
+
+  measured = { instance: virtualizer };
 
   function writeScroll(...[offset, options, instance]: Parameters<ScrollToFn>) {
     // Size corrections happen before the Solid adapter publishes its new
