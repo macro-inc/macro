@@ -37,7 +37,7 @@ function RepositoryScopeLabel(props: { trigger: EventTriggerDraft }) {
 export function RoutineTriggers(props: {
   triggers: RoutineTriggerDraft[];
   onChange: (triggers: RoutineTriggerDraft[]) => void;
-  layout?: 'rows' | 'inline';
+  layout?: 'rows' | 'add' | 'inline';
 }) {
   const conditions = useFeatureFlag(enableRoutineConditions);
   const github = createGithubConnection();

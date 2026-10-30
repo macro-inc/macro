@@ -1088,9 +1088,10 @@ after the last edit, so reloading `/app/routines/new` resumes it. A routine
 whose only step is **Ask AI** saves in the original single-agent form.
 
 **Steps.** A routine runs its steps in order and stops at the first failed step.
-**+ Step** (under the last step, and inside each branch, where it reads **Add
-step to “Yes”** to screen readers) opens a searchable list, plain actions first,
-then AI steps:
+**Add step** (in the tray under the last step card, like the tray under
+Home's composer; on its own before there are steps) and **+ Step** inside each
+branch (read as **Add step to “Yes”** by screen readers) open a searchable list,
+plain actions first, then AI steps:
 
 - **Email** (email triggers): **Add label** / **Remove label** (a label name,
   suggested from the inbox and matched in each thread's own inbox), **Archive**,
@@ -1162,8 +1163,8 @@ another event (keeping what still applies), with **Remove trigger** at the end;
 a schedule token opens its panel, where **Done** applies changes, **Cancel**
 leaves it unchanged and **Remove trigger** removes it. Filters hang below on a
 connector: **✦ Only if | question | ×** for an AI check, or **+ Filter** to add
-one. Triggers are separated by **or**, and a ghost **Add trigger** ends the
-card. New routine shows the same triggers as a row of tokens.
+one. Triggers are separated by **or**. **Add trigger** sits in the tray under
+the card (on its own before there are triggers).
 
 The event menu groups Macro activity triggers by surface:
 
@@ -1236,7 +1237,7 @@ connections added** with **Add connection**; and **Runs & notifications** has
 **Show runs in Home and Agents** and **Runs as** (the owner, whose access steps
 and AI use). The details panel, like a task's or document's, holds Owner,
 Created, Next run and **Last 7 days** (runs, skipped, failed, from the loaded
-history), then a **Template** section (**Not shared · Share…**, or **Created
+history) on a card, then a **Template** section (**Not shared · Share…**, or **Created
 from template ↗**). It is a column beside the page when the pane is at least
 1224px wide (the shared side panel's split width), open by default and
 remembered; narrower panes float it over the page from the toggle, as tasks and

@@ -57,7 +57,7 @@ import { copyStep, wrapInIf } from '../core/step-edits';
 import { stepHeadline } from '../core/step-headline';
 import { AddStep } from './routine-add-step';
 import { DecisionBody, DecisionBranches } from './routine-decision-step';
-import { RoutineSurface } from './routine-editor';
+import { RoutineSurface, RoutineTray } from './routine-editor';
 import {
   menuMount,
   type RoutineToolSlots,
@@ -240,16 +240,35 @@ export function StepList(props: {
           );
         }}
       </For>
-      <div class="flex min-w-0 items-center gap-2">
-        <Show when={props.doNothing && !shown().length}>
-          <DoNothing />
-        </Show>
-        <AddStep
-          place={props.place}
-          scope={scopeAt(props.steps.length)}
-          onAdd={(step) => props.onChange([...props.steps, step])}
-        />
-      </div>
+      <Show
+        when={!props.path}
+        fallback={
+          <div class="flex min-w-0 items-center gap-2">
+            <Show when={props.doNothing && !shown().length}>
+              <DoNothing />
+            </Show>
+            <AddStep
+              place={props.place}
+              scope={scopeAt(props.steps.length)}
+              onAdd={(step) => props.onChange([...props.steps, step])}
+            />
+          </div>
+        }
+      >
+        {/* The routine's own list adds steps from a tray under its last card. */}
+        <RoutineTray
+          attached={shown().length > 0}
+          // Into the list's gap, and behind the last card's corners.
+          class={shown().length > 0 ? '-mt-5' : undefined}
+        >
+          <AddStep
+            variant="tray"
+            place={props.place}
+            scope={scopeAt(props.steps.length)}
+            onAdd={(step) => props.onChange([...props.steps, step])}
+          />
+        </RoutineTray>
+      </Show>
     </div>
   );
 }

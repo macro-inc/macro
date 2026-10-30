@@ -26,8 +26,12 @@ import { actionIcon, useSteps } from './routine-steps';
  * exact and free, then steps where AI decides, then handing off to an agent.
  */
 export function AddStep(props: {
-  /** `step` is the dashed "+ Step"; `icon` a small + beside a choice's row. */
-  variant?: 'step' | 'icon';
+  /**
+   * `step` is the dashed "+ Step" in a branch; `tray` the routine's own
+   * "+ Add step" in the tray under its steps; `icon` a small + beside a
+   * choice's row.
+   */
+  variant?: 'step' | 'tray' | 'icon';
   /** Names where the step goes, e.g. a branch, for its accessible name. */
   place?: string;
   scope: StepScope;
@@ -124,15 +128,23 @@ export function AddStep(props: {
     <SearchMenu
       label={props.place ? `Add step to ${props.place}` : 'Add step'}
       title={props.variant === 'icon' ? 'Also do something' : undefined}
-      triggerVariant={props.variant === 'icon' ? 'ghost' : 'outline'}
+      triggerVariant={
+        props.variant === 'icon' || props.variant === 'tray'
+          ? 'ghost'
+          : 'outline'
+      }
       triggerSize={props.variant === 'icon' ? 'icon-sm' : 'sm'}
       triggerClass={
-        props.variant === 'icon' ? undefined : 'w-fit border-dashed'
+        props.variant === 'icon' || props.variant === 'tray'
+          ? undefined
+          : 'w-fit border-dashed'
       }
       trigger={
         <>
           <PlusIcon class="size-3.5" />
-          <Show when={props.variant !== 'icon'}>Step</Show>
+          <Show when={props.variant !== 'icon'}>
+            {props.variant === 'tray' ? 'Add step' : 'Step'}
+          </Show>
         </>
       }
       placeholder="Search steps"

@@ -17,7 +17,11 @@ import UserIcon from '@icon/system/regular/user.svg';
 import { Button, Dropdown, ToggleSwitch } from '@ui';
 import { type Accessor, createSignal, Match, Show, Switch } from 'solid-js';
 import { ConnectionRows } from '../components/routine-connections';
-import { RoutineEditor, RoutineSettingRow } from '../components/routine-editor';
+import {
+  RoutineEditor,
+  RoutineSettingRow,
+  RoutineSurface,
+} from '../components/routine-editor';
 import { RoutineRunButton } from '../components/routine-run-button';
 import {
   RoutineSteps,
@@ -262,19 +266,22 @@ export function RoutineDetailView(props: {
           details={
             <>
               <SidePanel.Footer>
-                <EntityMetadata
-                  ownerId={routine().ownerId}
-                  createdAt={routine().createdAt}
-                >
-                  <EntityMetadataRow label="Next run">
-                    {nextRun()}
-                  </EntityMetadataRow>
-                  <Show when={isOwned() && !props.source.historyLoading()}>
-                    <EntityMetadataRow label="Last 7 days">
-                      {lastWeek(props.source.history())}
+                {/* The routine's facts on a card, like the page's sections. */}
+                <RoutineSurface class="px-4 py-3">
+                  <EntityMetadata
+                    ownerId={routine().ownerId}
+                    createdAt={routine().createdAt}
+                  >
+                    <EntityMetadataRow label="Next run">
+                      {nextRun()}
                     </EntityMetadataRow>
-                  </Show>
-                </EntityMetadata>
+                    <Show when={isOwned() && !props.source.historyLoading()}>
+                      <EntityMetadataRow label="Last 7 days">
+                        {lastWeek(props.source.history())}
+                      </EntityMetadataRow>
+                    </Show>
+                  </EntityMetadata>
+                </RoutineSurface>
               </SidePanel.Footer>
               <Show when={props.onOpenTemplate || props.onShare}>
                 <SidePanel.Section
@@ -470,6 +477,20 @@ export function RoutineDetailView(props: {
               {(draft) => (
                 <props.slots.Triggers
                   layout="rows"
+                  triggers={draft().triggers ?? []}
+                  onChange={(triggers) =>
+                    setState((current) => ({ ...current, triggers }))
+                  }
+                />
+              )}
+            </Show>
+          }
+          hasTriggers={!state() || (state()?.triggers ?? []).length > 0}
+          triggerAdd={
+            <Show when={state()}>
+              {(draft) => (
+                <props.slots.Triggers
+                  layout="add"
                   triggers={draft().triggers ?? []}
                   onChange={(triggers) =>
                     setState((current) => ({ ...current, triggers }))

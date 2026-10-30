@@ -895,10 +895,11 @@ export function RoutineTriggers(
     onChange: (triggers: RoutineTriggerDraft[]) => void;
     /**
      * `rows`: the routine page's trigger card, each trigger a sentence of
-     * tokens with its filters below. `inline` (default): tokens in a row,
-     * as in the composer.
+     * tokens with its filters below. `add`: only the page's Add trigger, for
+     * the tray under that card. `inline` (default): tokens in a row, as in
+     * the composer.
      */
-    layout?: 'rows' | 'inline';
+    layout?: 'rows' | 'add' | 'inline';
   }
 ) {
   const ids = () => props.triggers.map((trigger) => trigger.id);
@@ -920,68 +921,72 @@ export function RoutineTriggers(
     renderEventGroup: props.renderEventGroup,
   });
   return (
-    <Show
-      when={props.layout === 'rows'}
-      fallback={
-        <>
-          <For each={ids()}>
-            {(id) => (
-              <Show when={find(id)}>
-                {(trigger) => (
-                  <InlineToken
-                    {...slots()}
-                    trigger={trigger()}
-                    onSave={(value) => replace(id, value)}
-                    onRemove={() => remove(id)}
-                  />
-                )}
-              </Show>
-            )}
-          </For>
-          <AddTrigger
-            {...slots()}
-            label="Add trigger"
-            variant="outline"
-            size="sm"
-            onAdd={add}
-          />
-        </>
-      }
-    >
-      <div class="flex min-w-0 flex-col gap-3.5">
-        <For each={ids()}>
-          {(id, index) => (
-            <Show when={find(id)}>
-              {(trigger) => (
-                <>
-                  <Show when={index() > 0}>
-                    <div class="flex items-center gap-2.5 text-xs text-ink-extra-muted">
-                      <span class="h-px flex-1 bg-edge-divider" />
-                      or
-                      <span class="h-px flex-1 bg-edge-divider" />
-                    </div>
+    <Switch>
+      <Match when={props.layout === 'add'}>
+        <AddTrigger
+          {...slots()}
+          label="Add trigger"
+          variant="ghost"
+          size="sm"
+          onAdd={add}
+        />
+      </Match>
+      <Match when={true}>
+        <Show
+          when={props.layout === 'rows'}
+          fallback={
+            <>
+              <For each={ids()}>
+                {(id) => (
+                  <Show when={find(id)}>
+                    {(trigger) => (
+                      <InlineToken
+                        {...slots()}
+                        trigger={trigger()}
+                        onSave={(value) => replace(id, value)}
+                        onRemove={() => remove(id)}
+                      />
+                    )}
                   </Show>
-                  <TriggerSentence
-                    {...slots()}
-                    trigger={trigger()}
-                    onSave={(value) => replace(id, value)}
-                    onRemove={() => remove(id)}
-                  />
-                </>
+                )}
+              </For>
+              <AddTrigger
+                {...slots()}
+                label="Add trigger"
+                variant="outline"
+                size="sm"
+                onAdd={add}
+              />
+            </>
+          }
+        >
+          <div class="flex min-w-0 flex-col gap-3.5">
+            <For each={ids()}>
+              {(id, index) => (
+                <Show when={find(id)}>
+                  {(trigger) => (
+                    <>
+                      <Show when={index() > 0}>
+                        <div class="flex items-center gap-2.5 text-xs text-ink-extra-muted">
+                          <span class="h-px flex-1 bg-edge-divider" />
+                          or
+                          <span class="h-px flex-1 bg-edge-divider" />
+                        </div>
+                      </Show>
+                      <TriggerSentence
+                        {...slots()}
+                        trigger={trigger()}
+                        onSave={(value) => replace(id, value)}
+                        onRemove={() => remove(id)}
+                      />
+                    </>
+                  )}
+                </Show>
               )}
-            </Show>
-          )}
-        </For>
-        <div>
-          <AddTrigger
-            {...slots()}
-            label="Add trigger"
-            variant="ghost"
-            size="sm"
-            onAdd={add}
-          />
-        </div>
-      </div>
-    </Show>
+            </For>
+          </div>
+        </Show>
+      </Match>
+    </Switch>
   );
 }

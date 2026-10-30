@@ -27,23 +27,38 @@ const email: RoutineTriggerDraft = {
 function renderRows(initial: RoutineTriggerDraft[]) {
   const [triggers, setTriggers] = createSignal(initial);
   const onChange = vi.fn(setTriggers);
+  const slots = {
+    renderEventLabel: () => <>Your inbox</>,
+    renderEventScope: () => null,
+    renderEventCondition: (
+      trigger: () => Extract<RoutineTriggerDraft, { kind: 'event' }>,
+      change: (condition: string | undefined) => void
+    ) => (
+      <label>
+        Only run if AI says yes
+        <textarea
+          value={trigger().condition ?? ''}
+          onInput={(event) => change(event.currentTarget.value)}
+        />
+      </label>
+    ),
+  };
+  // As on the routine's page: the card, then Add trigger in the tray below.
   render(() => (
-    <RoutineTriggers
-      layout="rows"
-      triggers={triggers()}
-      onChange={onChange}
-      renderEventLabel={() => <>Your inbox</>}
-      renderEventScope={() => null}
-      renderEventCondition={(trigger, change) => (
-        <label>
-          Only run if AI says yes
-          <textarea
-            value={trigger().condition ?? ''}
-            onInput={(event) => change(event.currentTarget.value)}
-          />
-        </label>
-      )}
-    />
+    <>
+      <RoutineTriggers
+        layout="rows"
+        triggers={triggers()}
+        onChange={onChange}
+        {...slots}
+      />
+      <RoutineTriggers
+        layout="add"
+        triggers={triggers()}
+        onChange={onChange}
+        {...slots}
+      />
+    </>
   ));
   return { triggers, onChange };
 }

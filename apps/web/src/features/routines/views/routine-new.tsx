@@ -75,9 +75,19 @@ export function RoutineNewView(props: {
           onChange={(enabled) => change((current) => ({ ...current, enabled }))}
         />
       }
+      hasTriggers={(draft().triggers ?? []).length > 0}
       triggerContent={
         <props.slots.Triggers
           layout="rows"
+          triggers={draft().triggers ?? []}
+          onChange={(triggers) =>
+            change((current) => ({ ...current, triggers }))
+          }
+        />
+      }
+      triggerAdd={
+        <props.slots.Triggers
+          layout="add"
           triggers={draft().triggers ?? []}
           onChange={(triggers) =>
             change((current) => ({ ...current, triggers }))

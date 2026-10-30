@@ -19,12 +19,35 @@ export function RoutineSurface(props: ParentProps<{ class?: string }>) {
     <ComposerSurface
       as="div"
       class={cn(
-        'relative min-w-0 rounded-xl touch:rounded-xl touch:border touch:border-edge-muted touch:bg-composer touch:text-composer-ink',
+        'relative z-[1] min-w-0 rounded-xl touch:rounded-xl touch:border touch:border-edge-muted touch:bg-composer touch:text-composer-ink',
         props.class
       )}
     >
       {props.children}
     </ComposerSurface>
+  );
+}
+
+/**
+ * The strip under a surface that holds its add action, like the tray under
+ * Home's composer: inset, tucked behind the surface's bottom corners, and a
+ * shade off the page. Standalone (nothing above it yet) it is a full panel.
+ */
+export function RoutineTray(
+  props: ParentProps<{ attached: boolean; class?: string }>
+) {
+  return (
+    <div
+      class={cn(
+        'relative flex min-h-12 min-w-0 items-center gap-2 bg-[color-mix(in_srgb,var(--color-panel)_99%,var(--color-ink))] px-2',
+        props.attached
+          ? 'mx-3 rounded-b-xl pb-1.5 pt-[calc(0.375rem+12px)]'
+          : 'rounded-xl py-1.5',
+        props.class
+      )}
+    >
+      {props.children}
+    </div>
   );
 }
 
@@ -108,6 +131,10 @@ export function RoutineEditor(props: {
   stepsAside?: JSX.Element;
   /** The Trigger surface's content: triggers and their filters. */
   triggerContent?: JSX.Element;
+  /** Under the Trigger surface, in its tray: the action that adds one. */
+  triggerAdd?: JSX.Element;
+  /** Whether the Trigger surface has anything; without, only its tray shows. */
+  hasTriggers?: boolean;
   /** Under the title: Enabled, owner, last run. */
   meta?: JSX.Element;
   /** The Connections surface's rows; the section shows only with them. */
@@ -294,16 +321,28 @@ export function RoutineEditor(props: {
                     label="Trigger"
                     aside={props.nextRun && `Next run: ${props.nextRun}`}
                   >
-                    <RoutineSurface class="px-6 py-5 @max-[600px]/routine:px-4">
-                      <fieldset
-                        aria-label="Routine triggers"
-                        disabled={props.disabled}
-                        inert={props.disabled}
-                        class="min-w-0"
-                      >
-                        {props.triggerContent}
-                      </fieldset>
-                    </RoutineSurface>
+                    <fieldset
+                      aria-label="Routine triggers"
+                      disabled={props.disabled}
+                      inert={props.disabled}
+                      class="grid min-w-0"
+                    >
+                      <Show when={props.hasTriggers !== false}>
+                        <RoutineSurface class="px-6 py-5 @max-[600px]/routine:px-4">
+                          {props.triggerContent}
+                        </RoutineSurface>
+                      </Show>
+                      <Show when={props.triggerAdd}>
+                        <RoutineTray
+                          attached={props.hasTriggers !== false}
+                          class={
+                            props.hasTriggers !== false ? '-mt-3' : undefined
+                          }
+                        >
+                          {props.triggerAdd}
+                        </RoutineTray>
+                      </Show>
+                    </fieldset>
                   </RoutineSection>
                   <RoutineSection label="Steps" aside={props.stepsAside}>
                     {/* Each step is its own card. */}
