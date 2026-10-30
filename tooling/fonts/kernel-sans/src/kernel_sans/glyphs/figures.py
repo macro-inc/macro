@@ -511,12 +511,16 @@ def _seven(p):
 
 
 def _eight(p):
+    """Two stacked bowls. Four round corners meet at the waist, so the 8 is
+    the darkest figure: its sides and waist are a little thinner than the
+    other figures' strokes (ink about 1.25 of the mean tabular figure, like
+    Inter's 1.15-1.23)."""
     n, ni = _n(p), _ni(p)
-    ws = p.fstem * 1.0
+    ws = p.fstem * 0.96
     h = _fh(p)
     wl = p.w(480, 0.6)
     wu = p.w(436, 0.55)
-    ym, hm = _waist(p, 0.94)
+    ym, hm = _waist(p, 0.9)
     lb = (0, -P.COS, wl, ym + hm / 2)
     li = (ws * 1.03, lb[1] + h, wl - ws * 1.03, lb[3] - hm)
     xu0 = (wl - wu) / 2

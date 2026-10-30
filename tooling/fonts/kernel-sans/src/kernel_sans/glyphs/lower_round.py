@@ -87,6 +87,11 @@ def _quadrant(box, n, which):
     ]
 
 
+def _heavy(p):
+    """0 up to Regular, 1 at ExtraBold: how far above Regular the weight is."""
+    return max(0.0, p.grow) / (P.STEMS[800] - P.REGULAR_STEM)
+
+
 def _bez(pts, t):
     (x0, y0), (x1, y1), (x2, y2), (x3, y3) = pts
     m = 1 - t
@@ -187,7 +192,9 @@ def _bowl_joins(p):
 
 
 def _b_width(p):
-    return p.w(496, 1.0)
+    # A bowl on one stem widens like o (k ~0.6), so heavy weights gain
+    # colour rather than width.
+    return p.w(496, 0.6)
 
 
 def _b_body(p, stem_y0, stem_y1, nw=0, sw=0):
@@ -381,7 +388,7 @@ def _a_shape(p, xr, ae_e=None):
 
 @glyph("a", 0x0061)
 def a(p):
-    xr = p.w(448, 0.9)
+    xr = p.w(448, 0.6)
     shape, cx_h, _ = _a_shape(p, xr)
     # Accents centre on the hook; an ogonek hangs from the stem.
     return G(
@@ -400,7 +407,7 @@ def _e_shape(p, x0, w, ws=None):
     """e filling x0..x0+w, carved out of its outer squircle (eye, lower
     counter and aperture removed in one go, so no two edges coincide)."""
     ws = p.stem * 1.02 if ws is None else ws
-    heavy = max(0.0, p.grow) / 70  # 0 up to Regular, 1 at ExtraBold
+    heavy = _heavy(p)
     wt = p.hair * (1.04 - 0.04 * heavy)
     x1 = x0 + w
     y0, y1 = -P.OS, P.XH + P.OS
@@ -426,7 +433,7 @@ def _e_shape(p, x0, w, ws=None):
 def e(p):
     # The bar ends flush with the right extreme, so the right side reads
     # nearly as full as o's and gets almost a round sidebearing.
-    return G(_e_shape(p, 0, p.w(476, 1.0)), l=p.sbr, r=p.sbr * 0.92)
+    return G(_e_shape(p, 0, p.w(476, 0.6)), l=p.sbr, r=p.sbr * 0.92)
 
 
 # ---------------------------------------------------------------------------
@@ -440,7 +447,7 @@ def _s_shape(p, w):
     The upper ring is a touch narrower; the terminals are cut horizontally
     (top at right, bottom at left) with chamfered outer corners."""
     s = p.stem
-    heavy = max(0.0, p.grow) / 70  # 0 up to Regular, 1 at ExtraBold
+    heavy = _heavy(p)
     # All three horizontals follow p.hair (which thins relative to the stem
     # above Regular), so the counters stay open at ExtraBold instead of
     # closing to slits. The spine is placed so the upper counter keeps the
@@ -473,7 +480,7 @@ def _s_shape(p, w):
 
 @glyph("s", 0x0073)
 def s_(p):
-    return G(_s_shape(p, p.w(434, 1.0)), l=p.sbr * 0.92, r=p.sbr * 0.92)
+    return G(_s_shape(p, p.w(434, 0.6)), l=p.sbr * 0.92, r=p.sbr * 0.92)
 
 
 # ---------------------------------------------------------------------------
@@ -485,9 +492,9 @@ def ae(p):
     # The e's left side sits inside the a's stem (never tangent to its edge)
     # and its counter starts just right of it.
     s = p.stem
-    xr = p.w(436, 0.9)
+    xr = p.w(436, 0.6)
     xs = xr - s
-    ex0, we, ws_e = xs + s * 0.06, p.w(452, 1.0), s
+    ex0, we, ws_e = xs + s * 0.06, p.w(452, 0.6), s
     ebox = (ex0, -P.OS, ex0 + we, P.XH + P.OS)
     a_shape, _, _ = _a_shape(p, xr, ae_e=(ebox, ex0 + ws_e))
     e_shape = _e_shape(p, ex0, we, ws=ws_e)
@@ -498,10 +505,10 @@ def ae(p):
 def oe(p):
     # The e's left side overlaps the o's right side; neither curve touches
     # the other's counter.
-    wo = p.w(466, 1.0)
+    wo = p.w(466, 0.6)
     ws = p.stem * 1.04
     o_shape = ring(0, -P.OS, wo, P.XH + P.OS, ws, p.hair, n=p.sq, n_in=p.sq_in)
-    e_shape = _e_shape(p, wo - ws * 0.92, p.w(456, 1.0), ws=ws)
+    e_shape = _e_shape(p, wo - ws * 0.92, p.w(456, 0.6), ws=ws)
     return G(o_shape + e_shape, l=p.sbr, r=p.sbr * 0.92)
 
 
@@ -526,7 +533,7 @@ def eth(p):
     # The bowl is a little lower than o so the crossing stroke clears it at
     # every weight (it must never touch the bowl, or the masters would stop
     # matching).
-    w = p.w(478, 1.0)
+    w = p.w(478, 0.6)
     ws = p.stem * 1.04
     bt = P.XH * 0.95 + P.OS
     bowl = ring(0, -P.OS, w, bt, ws, p.hair, n=p.sq, n_in=p.sq_in)
@@ -536,7 +543,7 @@ def eth(p):
     # the ring's top point.
     yc = (bt - P.OS) / 2
     top = P.ASC + P.OS * 0.8
-    heavy = max(0.0, p.grow) / 70  # 0 up to Regular, 1 at ExtraBold
+    heavy = _heavy(p)
     wr = p.hair * (0.82 - 0.06 * heavy)
     xR0 = -w * 0.15  # a wide ring, so the ascender leans and the hook opens
     cxR, rxR = (xR0 + w) / 2, (w - xR0) / 2
@@ -576,7 +583,9 @@ def germandbls(p):
     W = p.w(508, 0.9)
     top = P.ASC + P.OS * 0.8
     hw = p.hair
-    gap = s * 0.42
+    # Wide enough that the terminal never reads as touching the stem at
+    # Light and Regular (B-like) at text sizes.
+    gap = p.w(62, 0.1)
     x_end = s + gap  # free ends of the waist and the bottom stroke
     # Lower bowl, its top stroke is the waist.
     yl1 = P.ASC * 0.565 + hw / 2
