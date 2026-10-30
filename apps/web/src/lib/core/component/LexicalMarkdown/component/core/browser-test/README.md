@@ -41,3 +41,11 @@ ribbon on phones. It checks the first paragraph's quote styling and the saved
 message. Run just this case by adding `quotes.browser.e2e.ts` to the command above.
 
 Screenshots: [desktop](proof/quotes-desktop.png) and [phone](proof/quotes-mobile.png).
+
+## Date chips
+
+`date-chips.browser.e2e.ts` renders a whole-day chip (`"date":"2026-09-24"`)
+and a timed chip in `America/Los_Angeles` at 1:03 PM that day, and checks both
+read Today. A bare date read as UTC midnight shows Yesterday west of
+Greenwich. Run just this case by adding `date-chips.browser.e2e.ts` to the
+command above.
