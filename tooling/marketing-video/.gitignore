@@ -8,3 +8,6 @@ vo/models/
 vo/lines/
 vo/cache/
 /macro-explainer*.mp4
+audio/blocks-*.json
+/macro-blocks*.mp4
+audio/__pycache__/

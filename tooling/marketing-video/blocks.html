@@ -1,0 +1,779 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Macro blocks</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+/* Block ads. Macro's modules are primary-colored blocks on an off-white table. They snap together into one system around
+   the Macro core, with a close, tactile sound on every snap (audio/bmix.py). Three routes to the same system:
+     merge: "Replace 27+ apps": 27 app tiles snap into eight module blocks, then the core locks them into one system.
+     chain: "One call updates everything": the call runs block by block through CRM, task, calendar, agent, email, chat, doc.
+     fit:   "Your tools weren't built to fit together": two grey tools clunk; Macro's tabbed blocks drop in and click.
+   ?v=merge|chain|fit  &fmt=916|45|11 */
+@font-face { font-family: "Inter"; src: url("fonts/inter-variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
+@font-face { font-family: "display"; src: url("fonts/roboto-slab-variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
+:root { --bg: #f4f3ef; --ink: #161616; --body: #4b4a46; --lab: #74736e; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); }
+body { display: flex; align-items: center; justify-content: center; min-height: 100vh; overflow: hidden; }
+html.render body { display: block; min-height: 0; }
+#stage { position: relative; overflow: hidden; flex: none; background: var(--bg); color: var(--ink);
+  font-family: "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision; font-feature-settings: "cv11", "ss01"; }
+#world, #screen, .layer { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
+.a { position: absolute; }
+.flex { display: flex; align-items: center; }
+.t1 { line-height: 1; white-space: nowrap; }
+.slab { font-family: display; font-weight: 360; letter-spacing: -0.03em; line-height: 1; color: var(--ink); white-space: nowrap; }
+.w { display: inline-block; }
+/* a block is 300×300 design units, scaled to the grid. .sh casts its shadow; .fc is the face; the lip (the block's front
+   side) is a solid 9px offset below the face. Tabbed blocks (fit) draw face and lip as SVG paths instead. */
+.blk { position: absolute; left: 0; top: 0; width: 300px; height: 300px; transform-origin: 150px 150px; }
+.sh { position: absolute; left: 0; top: 0; width: 300px; height: 309px; border-radius: 26px; }
+.fc { position: absolute; left: 0; top: 0; width: 300px; height: 300px; border-radius: 26px; }
+.sv { position: absolute; left: -60px; top: -60px; overflow: visible; }
+.ico { position: absolute; left: 26px; top: 26px; }
+.lbl { position: absolute; left: 26px; top: 238px; font-size: 30px; font-weight: 600; letter-spacing: -0.012em; line-height: 30px; white-space: nowrap; }
+.gl { position: absolute; left: 0; top: 0; width: 300px; height: 300px; border-radius: 26px; background: #fff; opacity: 0; pointer-events: none; }
+.tile { position: absolute; left: 0; top: 0; }
+.tile .sh, .tile .fc { width: 100%; border-radius: 24px; }
+.tile .fc { height: 100%; display: flex; align-items: center; justify-content: center; }
+.tile .sh { height: calc(100% + 6px); }
+.seam { position: absolute; left: 0; top: 0; pointer-events: none; border-radius: 4px; }
+.tok { position: absolute; left: -17px; top: -17px; width: 34px; height: 34px; border-radius: 10px; background: #fff;
+  box-shadow: 0 6px 14px -4px #16161659, inset 0 0 0 1px #1616160f; display: flex; align-items: center; justify-content: center; }
+.tok i { width: 12px; height: 12px; border-radius: 4px; }
+/* chain: the live content inside each block (design units) */
+.mu { position: absolute; left: 26px; width: 248px; white-space: nowrap; line-height: 1; }
+.row { position: absolute; left: 26px; width: 248px; height: 34px; display: flex; align-items: center; justify-content: space-between; font-size: 16px; }
+.pl { display: inline-flex; align-items: center; height: 28px; padding: 0 11px; border-radius: 9px; font-size: 15px; font-weight: 600; white-space: nowrap; }
+.card { position: absolute; left: 22px; width: 256px; border-radius: 12px; display: flex; align-items: center; gap: 10px; padding: 0 12px; white-space: nowrap; }
+.bar { position: absolute; left: 26px; height: 10px; border-radius: 5px; transform-origin: 0 50%; }
+.av { border-radius: 50%; flex: none; background-size: cover; background-position: center; }
+/* end card */
+.key { position: absolute; left: 50%; top: 0; transform: translateX(-50%); }
+.keyf { display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(#2a2a28, #161616 45%); color: #fff; font-weight: 600; white-space: nowrap; }
+.prow { display: inline-flex; align-items: center; gap: 9px; white-space: nowrap; color: var(--body); }
+</style>
+<script src="icons.js"></script>
+<script src="phx.js"></script>
+<script src="phx2.js"></script>
+</head>
+<body>
+<div id="stage"><div id="world"></div><div id="screen"></div></div>
+<script>
+"use strict";
+// ---------- format and variant ----------
+// The canvas is 1080 wide (AH tall). World px equal canvas px while the camera rests; the grid sits below the headline.
+const Q = new URLSearchParams(location.search);
+const FMT = Q.get("fmt") || "45", V = Q.get("v") || "merge";
+const [W, H] = { "916": [1080, 1920], "45": [1080, 1350], "11": [1440, 1440] }[FMT];
+const K = W / 1080, AH = H / K;
+const MERGE = V === "merge", CHAIN = V === "chain", FIT = V === "fit";
+
+// ---------- tempo ----------
+// A synthesized bed at 100 BPM (audio/bmix.py), four beats a bar. Every variant locks the core on the downbeat of bar 5
+// (beat 16) and lands the end card after it. 24 beats = 14.4 s.
+const BPM = 100, SPB = 60 / BPM, BEATS = 24, T = BEATS * SPB;
+const B = (b) => b * SPB;
+const LOCK = 16, ENDB = 17.5;   // the core locks; the end card starts
+
+// ---------- math ----------
+const clamp = (x, a = 0, b = 1) => (x < a ? a : x > b ? b : x);
+const lerp = (a, b, p) => a + (b - a) * p;
+const sm = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
+const TAU = Math.PI * 2;
+// Closed-form unit step response of a damped spring. resp = undamped period (s), damp = damping ratio.
+function spr(t, resp = 0.42, damp = 0.82) {
+  if (t <= 0) return 0;
+  const w = TAU / resp;
+  if (damp >= 1) { const e = Math.exp(-w * t); return 1 - e * (1 + w * t); }
+  const wd = w * Math.sqrt(1 - damp * damp), e = Math.exp(-damp * w * t);
+  return 1 - e * (Math.cos(wd * t) + (damp * w / wd) * Math.sin(wd * t));
+}
+const mj = (x) => { x = clamp(x); return x * x * x * (10 + x * (-15 + 6 * x)); };   // minimum jerk
+const eo3 = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const bell = (x) => (x <= 0 || x >= 1 ? 0 : 16 * x * x * (1 - x) * (1 - x));
+// a value that changes target several times: one spring per change
+function Tr(evs) {
+  const E = evs.map(([b, v, r, d]) => ({ t: B(b), v, r: r ?? 0.8, d: d ?? 0.9 }));
+  return (t) => { let v = E[0].v; for (let i = 1; i < E.length; i++) v += (E[i].v - E[i - 1].v) * spr(t - E[i].t, E[i].r, E[i].d); return v; };
+}
+function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+
+// ---------- icons and the logo ----------
+const pxb = (n, size, color = "currentColor") => `<svg width="${size}" height="${size}" viewBox="0 0 256 256" fill="${color}" style="display:block">${window.PHX[n]}</svg>`;
+const pxk = (n, size, color, sw = 7) => `<svg width="${size}" height="${size}" viewBox="0 0 256 256" fill="${color}" stroke="${color}" stroke-width="${sw}" stroke-linejoin="round" style="display:block;overflow:visible">${window.PHX[n]}</svg>`;
+const ic = (name, size, color = "currentColor") => `<span style="display:inline-block;width:${size}px;height:${size}px;color:${color}">${window.ICONS[name]}</span>`;
+// the real logo (img/macro-logo.svg): the mark's three pieces and the MACRO letterforms, 126.4 units tall
+const LOGO_MARK = ["M0 47.151L16.199 40.81C22.551 47.236 34.299 57.491 39.832 63.809L39.88 99.564C39.876 105.615 40.12 114.034 39.774 119.931C34.433 121.982 29.103 124.064 23.786 126.177C19.631 122.268 1.946 106.135 0 102.379L0 47.151Z", "M47.632 0L48.504 0C50.116 1.598 52.174 3.051 53.824 4.712C73.817 24.845 95.62 43.76 115.445 63.991C115.552 66.818 115.592 69.696 115.513 72.523C115.075 88.301 115.701 104.194 115.444 119.951C111.602 121.871 103.313 124.848 99.214 126.339C94.102 120.866 86.899 114.298 81.323 109.052C71.856 100.234 62.526 91.27 53.337 82.163C50.385 79.209 45.332 75.304 43.124 72.361C43.132 68.995 43.082 65.629 42.976 62.264C40.676 59.71 35.402 55.12 32.496 52.172C32.501 37.889 32.044 20.249 32.654 6.207C36.92 4.311 43.939 2.079 47.632 0Z", "M123.569 0L124.699 0C128.214 3.816 134.12 9.106 138.047 12.948L177.874 51.237C181.701 54.971 188.687 60.396 191.23 64.633L191.308 120.003C187.261 121.904 179.556 124.694 175.227 126.234C171.746 123.787 160.568 112.286 156.725 108.629C144.592 97.087 130.339 84.409 118.9 72.353C118.953 69.16 118.982 65.966 118.986 62.772C117.614 60.894 110.311 54.369 108.016 51.991C107.405 39.273 107.793 19.202 108.018 6.291C111.901 4.493 120.969 1.705 123.569 0Z"];
+const LOGO_TYPE = ["M300.92 74.009C303.615 65.501 314.262 28.568 318.438 24.27C319.069 23.621 320.033 23.468 320.898 23.383C325.453 22.938 330.369 23.327 334.959 23.34C344.903 23.418 354.847 23.409 364.79 23.313C365.435 28.476 365.159 47.453 365.049 53.72C364.76 70.195 365.603 88.708 364.891 104.92C359.092 104.67 351.994 104.855 346.096 104.868C345.405 87.158 345.97 65.92 345.975 47.942L345.975 42.119C342.414 41.927 334.922 41.484 331.931 42.955C329.991 45.279 313.144 97.492 310.719 104.744C304.754 105.034 297.264 104.878 291.222 104.896C288.559 98.001 272.305 45.132 269.992 43.053C267.621 40.923 258.972 42.055 255.716 42.198C256.161 48.995 255.924 58.249 255.925 65.211L255.935 104.789C249.665 104.935 243.166 104.872 236.878 104.882C236.574 94.772 236.811 83.325 236.808 73.094L236.883 23.444C243.865 23.268 278.739 22.963 283.378 24.014C285.689 24.538 298.601 67.413 300.92 74.009Z", "M395.967 23.803C398.277 23.364 414.299 23.575 417.612 23.582C433.177 23.668 448.746 23.647 464.311 23.52C472.343 23.502 477.848 23.959 484.031 29.966C492.494 38.188 490.209 52.684 490.192 63.875L490.197 104.955L471.479 104.952C470.916 96.84 471.623 88.213 470.997 79.669C463.765 79.265 453.206 79.593 445.779 79.594L396.684 79.632C397.07 86.718 396.698 97.491 396.691 104.932L377.688 104.949C376.997 94.08 377.811 80.689 377.521 69.546C377.662 60.66 377.214 51.725 377.742 42.859C378.359 32.511 386.5 25.768 395.967 23.803ZM396.525 60.895C420.379 60.944 446.825 61.49 470.481 60.867C471.86 59.149 471.627 45.245 470.358 43.104C467.556 41.2 405.961 41.902 397.844 42.391C395.636 44.958 396.866 56.326 396.525 60.895Z", "M522.79 23.419C530.395 23.053 539.793 23.502 547.572 23.38C569.962 23.031 593.076 23.871 615.412 23.271C615.78 28.658 615.585 36.536 615.598 42.116C587.143 41.263 557.796 42.418 529.26 42.034C527.259 42.007 524.432 42.404 522.595 43.18C522.35 43.559 522.164 43.976 522.054 44.415C521.047 48.287 522.375 75.786 521.774 81.689C521.69 82.522 522.126 84.198 522.6 85.003C525.249 86.762 554.977 86.034 560.504 86.019L615.56 85.992C615.606 92.272 615.602 98.552 615.547 104.832L553.729 104.862C542.096 104.861 522.286 106.802 512.392 101.015C500.895 93.871 502.35 80.027 502.761 68.524C503.463 48.961 497.044 28.443 522.79 23.419Z", "M628.023 23.423L687.86 23.349C698.415 23.346 709.045 23.201 719.557 23.509C732.988 23.902 740.546 34.132 740.72 46.907C740.927 62.171 741.52 71.402 725.794 78.315C729.671 87.236 734.935 96.141 738.536 104.878L726.814 104.839L718.021 104.824C713.247 97.434 708.766 87.719 705.08 79.668C686.032 79.254 665.821 79.606 646.685 79.619L646.702 104.947C640.54 104.716 634.082 104.833 627.913 104.9C627.35 85.968 628.179 66.507 627.828 47.527C627.688 39.873 627.578 31.009 628.023 23.423ZM646.664 60.92L694.437 60.958C699.456 60.961 718.131 61.618 721.579 59.898C722.324 56.863 722.193 46.423 721.11 43.41C718.778 41.117 699.087 41.949 694.809 41.951L651.996 42.012C650.307 42.034 648.619 42.078 646.926 42.142C646.414 44.538 646.642 57.699 646.664 60.92Z", "M773.622 23.423C792.145 23.184 810.799 23.439 829.33 23.344C835.53 23.761 843.447 22.578 849.478 24.136C867.501 28.796 866.367 45.886 865.766 60.547C865.419 69.063 866.756 79.557 865.355 87.263C864.767 90.557 863.405 93.663 861.378 96.322C857.285 101.702 852.11 103.801 845.635 104.68C842.406 104.992 836.566 104.83 833.075 104.831L810.418 104.85L787.359 104.857C778.899 104.852 768.629 105.79 761.651 100.217C756.805 96.65 752.548 88.79 753.115 82.502C754.203 70.468 751.507 52.227 753.72 40.77C754.359 37.381 755.802 34.196 757.927 31.481C762.07 26.201 767.198 24.208 773.622 23.423ZM844.027 86.04C848.128 83.916 847.248 78.015 846.799 73.885C846.13 67.731 848.28 47.736 846.075 43.201C843.6 41.958 837.946 41.865 835.064 41.967C815.382 42.661 794.384 41.048 774.816 42.108C773.724 42.46 773 42.546 772.425 43.642C771.354 45.694 771.507 81.49 772.332 83.863C772.569 84.54 772.759 85.098 773.432 85.431C776.398 86.889 835.593 85.87 844.027 86.04Z"];
+const markSvg = (w, c) => `<svg width="${w}" height="${(w * 126.4) / 191.3}" viewBox="0 0 191.3 126.4" fill="${c}" style="display:block">${LOGO_MARK.map((d) => `<path d="${d}"/>`).join("")}</svg>`;
+const lockup = (h, c, id = "") => { const k = h / 126.4; return `<div class="flex"${id ? ` id="${id}"` : ""} style="gap:${(44.7 * k).toFixed(2)}px">${markSvg(191.3 * k, c)}<svg width="${(630.7 * k).toFixed(2)}" height="${h}" viewBox="236 0 630.7 126.4" fill="${c}" style="display:block">${LOGO_TYPE.map((d) => `<path d="${d}"/>`).join("")}</svg></div>`; };
+
+// ---------- palette: primary blocks on an off-white table ----------
+const PAL = {
+  red:    { face: "#e5402d", hi: "#ef5d49", lip: "#b32d1e", fg: "#ffffff", sub: "#ffffffc4", line: "#ffffff3d", chip: "#ffffff2b" },
+  yellow: { face: "#f7c427", hi: "#fbd457", lip: "#c6960b", fg: "#161616", sub: "#161616a8", line: "#16161626", chip: "#1616161a" },
+  blue:   { face: "#2558e3", hi: "#3d6dee", lip: "#1a3ea9", fg: "#ffffff", sub: "#ffffffc4", line: "#ffffff3d", chip: "#ffffff2b" },
+  white:  { face: "#ffffff", hi: "#ffffff", lip: "#d8d7d0", fg: "#161616", sub: "#161616a0", line: "#1616161f", chip: "#16161610" },
+  ink:    { face: "#1c1c1b", hi: "#2e2e2c", lip: "#020202", fg: "#ffffff", sub: "#ffffffb3", line: "#ffffff2e", chip: "#ffffff1f" },
+  grey:   { face: "#e3e2dd", hi: "#ebeae6", lip: "#c4c3bc", fg: "#9a9993", sub: "#9a9993", line: "#16161614", chip: "#1616160a" },
+};
+// the eight modules around the core, clockwise from the top left
+const MODS = {
+  calls:    { name: "Calls",    icon: "phone-call",      col: "red",    cell: [0, 0] },
+  crm:      { name: "CRM",      icon: "building-office", col: "yellow", cell: [1, 0] },
+  tasks:    { name: "Tasks",    icon: "check-square",    col: "blue",   cell: [2, 0] },
+  calendar: { name: "Calendar", icon: "calendar-blank",  col: "red",    cell: [2, 1] },
+  agents:   { name: "Agents",   icon: "sparkle",         col: "white",  cell: [2, 2] },
+  email:    { name: "Email",    icon: "envelope",        col: "blue",   cell: [1, 2] },
+  chat:     { name: "Chat",     icon: "chats",           col: "yellow", cell: [0, 2] },
+  docs:     { name: "Docs",     icon: "file-text",       col: "white",  cell: [0, 1] },
+};
+const RING = Object.keys(MODS);
+
+// ---------- layout (canvas px) ----------
+// lockup center y and height; headline x, size and baselines; the band that keeps the headline clear; the grid (cell size,
+// gap, center y); f: the area a camera shot frames below the headline.
+const LY = {
+  "45":  { lockY: 84, ms: 30, hx: 64, hfs: 70, hb: [206, 284], band: 330, cs: 296, g: 14, gy: 826, f: [40, 352, 1040, 1300] },
+  "916": { lockY: 318, ms: 34, hx: 64, hfs: 76, hb: [446, 530], band: 574, cs: 296, g: 14, gy: 1064, f: [40, 590, 1040, 1520], zmax: 2.5 },
+  "11":  { lockY: 58, ms: 26, hx: 60, hfs: 56, hb: [160, 222], band: 252, cs: 244, g: 12, gy: 652, f: [40, 270, 1040, 1046] },
+}[FMT];
+// end card: emblem center and size, headline, sub, CTA, demo link, proof row
+const EL = {
+  "45":  { em: 372, es: 330, hfs: 74, hb: [664, 744], sfs: 25, sub: 788, slh: 38, cta: 904, ch: 94, cfs: 29, demo: 1036, dfs: 21, proof: 1144, pfs: 19 },
+  "916": { em: 520, es: 300, hfs: 80, hb: [770, 856], sfs: 27, sub: 900, slh: 41, cta: 1018, ch: 98, cfs: 31, demo: 1150, dfs: 23, proof: 1216, pfs: 20 },
+  "11":  { em: 262, es: 236, hfs: 62, hb: [500, 568], sfs: 22, sub: 606, slh: 34, cta: 704, ch: 82, cfs: 25, demo: 816, dfs: 19, proof: 904, pfs: 17 },
+}[FMT];
+const CS = LY.cs, G0 = LY.g, GL = 4, GX = 540, GY = LY.gy, SC = CS / 300;
+const cellAt = (k, gap) => { const [c, r] = k === "core" ? [1, 1] : MODS[k].cell; return [GX + (c - 1) * (CS + gap), GY + (r - 1) * (CS + gap)]; };
+
+// =====================================================================
+// the story, per variant (beats)
+// =====================================================================
+// Block arrivals. slide: from [x, y, rot] it eases out to a hover point d px short of its cell, then the last d px snap in
+// (dir is the approach); drop: it flies in lifted, hovers over its cell, then presses down. t1 is the contact.
+const ARR = {}, NUDGE = [], SEAMS = [], LINES = [];
+const SNAPS = [];                                   // every block contact, for sound: [t, key, kind]
+const CORE = { from: [GX, GY + AH * 0.85, -10], t0: 13.7, th: 14.65, t1: LOCK };   // the core rises in from below and hovers
+const HOOK = {};
+if (MERGE) {
+  // 27 app tiles (Phosphor glyphs in their module's color) in a pile on the table. The pile sorts itself: each tile
+  // slides to a loose spot inside its module's cell. Then, module by module, the tiles snap into a little bento of
+  // slots and fuse into the module block.
+  HOOK.order = ["calls", "crm", "tasks", "docs", "calendar", "chat", "email", "agents"];
+  HOOK.apps = { calls: ["phone-call", "video-camera", "microphone", "waveform"], crm: ["building-office", "users", "funnel-simple"],
+    tasks: ["check-square", "kanban", "list-checks"], docs: ["file-text", "notepad", "folder", "table"],
+    calendar: ["calendar-blank", "clock", "calendar-plus"], chat: ["chats", "hash", "chat-circle-dots"],
+    email: ["envelope", "envelope-open", "paper-plane-right"], agents: ["sparkle", "robot", "magnifying-glass", "terminal-window"] };
+  HOOK.fuse = (i) => 3.5 + 1.375 * i;
+  LINES.push({ l: 0, w: "Replace 27+ apps", tin: -1, tout: ENDB }, { l: 1, w: "with a single system.", tin: LOCK + 0.05, tout: ENDB });
+}
+if (FIT) {
+  // tabs (+1) and notches (−1) on [top, right, bottom, left]: each ring block passes a tab clockwise, the edge blocks take
+  // the core's four tabs
+  Object.assign(HOOK, { c1: 0.55, c2: 1.5, out: 2.3 });
+  HOOK.edges = { calls: [0, 1, -1, 0], crm: [0, 1, -1, -1], tasks: [0, 0, 1, -1], calendar: [-1, 0, 1, -1], agents: [-1, 0, 0, 1],
+    email: [-1, -1, 0, 1], chat: [1, -1, 0, 0], docs: [1, -1, -1, 0], core: [1, 1, 1, 1] };
+  RING.forEach((k, i) => {
+    const [c, r] = MODS[k].cell, [x, y] = cellAt(k, G0), dx = c - 1, dy = r - 1, n = Math.hypot(dx, dy);
+    const t1 = 4 + 1.25 * i;
+    ARR[k] = { kind: "drop", t0: t1 - 1.45, th: t1 - 0.55, t1, from: [x + (dx / n) * 900, y + (dy / n) * 900 + (dy ? 0 : 120), (dx || -dy) * 14] };
+  });
+  LINES.push({ l: 0, w: "Your tools weren't built", tin: -1, tout: 2.6 }, { l: 1, w: "to fit together.", tin: -1, tout: 2.6 },
+    { l: 0, w: "Macro was.", tin: 2.75, tout: LOCK - 0.1 }, { l: 0, w: "One system.", tin: LOCK + 0.05, tout: ENDB });
+}
+if (CHAIN) {
+  // the call runs clockwise: each block slides in against the last one, a token carries what changed across the seam
+  HOOK.s = { callEnd: 0.9, tok: [["calls", "crm", 2.1], ["crm", "tasks", 3.6], ["tasks", "calendar", 5.1], ["calls", "agents", 6.45], ["crm", "agents", 6.6], ["tasks", "agents", 6.75],
+    ["calendar", "agents", 6.9], ["agents", "email", 8.4], ["email", "chat", 11.2], ["chat", "docs", 12.7]],
+    stage: 2.75, seats: 3.05, taskIn: 4.05, evIn: 5.55, chips: [6.9, 7.05, 7.2, 7.35], drafting: 7.45, ready: 8.3,
+    typing: [8.85, 9.95], send: 10.3, msg1: 11.6, msg2: 12.15, write: [13.05, 13.9], done: LOCK + 0.55 };
+  const off = (k, dx, dy, d = 760) => { const [x, y] = cellAt(k, G0); return [x + dx * d, y + dy * d, 0]; };
+  ARR.crm = { kind: "slide", t0: 1.15, t1: 2.0, from: off("crm", 1, 0), dir: [-1, 0], lift: 0.3 };
+  ARR.tasks = { kind: "slide", t0: 2.75, t1: 3.5, from: off("tasks", 1, 0), dir: [-1, 0], lift: 0.3 };
+  ARR.calendar = { kind: "slide", t0: 4.25, t1: 5.0, from: off("calendar", 0, 1), dir: [0, -1], lift: 0.3 };
+  ARR.agents = { kind: "slide", t0: 5.75, t1: 6.5, from: off("agents", 0, 1), dir: [0, -1], lift: 0.3 };
+  ARR.email = { kind: "slide", t0: 7.35, t1: 8.1, from: off("email", -1, 0, 1000), dir: [1, 0], lift: 0.3 };
+  ARR.chat = { kind: "slide", t0: 10.35, t1: 11.1, from: off("chat", -1, 0), dir: [1, 0], lift: 0.3 };
+  ARR.docs = { kind: "drop", t0: 11.6, th: 12.15, t1: 12.6, from: off("docs", -1, 0.3, 700) };
+  LINES.push({ l: 0, w: "One call", tin: -1, tout: 5.85 }, { l: 1, w: "updates everything.", tin: -1, tout: 5.85 },
+    { l: 0, w: "Agents draft", tin: 6.0, tout: 10.3 }, { l: 1, w: "the follow-up.", tin: 6.0, tout: 10.3 },
+    { l: 0, w: "Your team", tin: 10.45, tout: LOCK - 0.1 }, { l: 1, w: "stays in sync.", tin: 10.45, tout: LOCK - 0.1 },
+    { l: 0, w: "One system.", tin: LOCK + 0.05, tout: ENDB });
+}
+// neighbors a block touches when it lands (for the nudge, the seam flash and the sound)
+const NB = (k) => { const [c, r] = k === "core" ? [1, 1] : MODS[k].cell; return [...RING, "core"].filter((j) => { const [c2, r2] = j === "core" ? [1, 1] : MODS[j].cell; return Math.abs(c - c2) + Math.abs(r - r2) === 1; }); };
+const placedAt = (k) => (k === "core" ? LOCK : MERGE ? HOOK.fuse(HOOK.order.indexOf(k)) + 0.1 : ARR[k] ? ARR[k].t1 : -1);
+[...RING, "core"].forEach((k) => {
+  const t1 = placedAt(k);
+  if (t1 < 0 || MERGE && k !== "core") return;
+  const m = k === "core" ? { kind: "drop" } : ARR[k];
+  NB(k).forEach((j) => {
+    if (placedAt(j) >= t1) return;                  // only blocks already down
+    const [x1, y1] = cellAt(k, G0), [x2, y2] = cellAt(j, G0), ux = Math.sign(x2 - x1), uy = Math.sign(y2 - y1);
+    NUDGE.push({ t: B(t1) + 0.008, k: j, dx: ux * (m.kind === "drop" ? 1.6 : 3.2), dy: uy * (m.kind === "drop" ? 1.6 : 3.2) });
+    SEAMS.push({ t: B(t1), a: k, b: j });
+  });
+});
+const CAMK = [];   // camera keys: [beat, cx, cy, z, sy, resp, damp]
+{
+  const fit = (keys, zmax, bias) => {
+    const P = keys.map((k) => cellAt(k, G0)), x0 = Math.min(...P.map((p) => p[0])) - CS / 2, x1 = Math.max(...P.map((p) => p[0])) + CS / 2;
+    const y0 = Math.min(...P.map((p) => p[1])) - CS / 2, y1 = Math.max(...P.map((p) => p[1])) + CS / 2 + 9, f = LY.f;
+    const z = Math.min(zmax, (f[2] - f[0]) / (x1 - x0 + 70), (f[3] - f[1]) / (y1 - y0 + 70));
+    const [bx, by] = bias ? cellAt(bias, G0) : [(x0 + x1) / 2, (y0 + y1) / 2];
+    return [lerp((x0 + x1) / 2, bx, 0.06), lerp((y0 + y1) / 2, by, 0.06), z, (f[1] + f[3]) / 2];
+  };
+  const rest = [GX, GY, 1, GY];
+  if (CHAIN) {
+    const shots = [[0, ["calls"], LY.zmax || 2.05], [1.15, ["calls", "crm"], 1.75, "crm"], [2.75, ["crm", "tasks"], 1.75, "tasks"], [4.25, ["tasks", "calendar"], 1.75, "calendar"],
+      [5.75, ["calendar", "agents"], 1.75, "agents"], [7.35, ["agents", "email"], 1.75, "email"], [10.35, ["email", "chat"], 1.75, "chat"], [11.75, ["chat", "docs"], 1.75, "docs"]];
+    shots.forEach(([b, keys, zm, bias], i) => CAMK.push([b - 0.15, ...fit(keys, zm, bias), 0.62, 0.92]));
+    CAMK.push([13.1, ...rest, 1.0, 0.95]);
+  } else CAMK.push([0, ...rest]);
+  CAMK.push([ENDB, GX, GY, EL.es / (3 * CS + 2 * GL), EL.em, 0.85, 0.86]);
+}
+const CXT = Tr(CAMK.map((k) => [k[0], k[1], k[5], k[6]])), CYT = Tr(CAMK.map((k) => [k[0], k[2], k[5], k[6]]));
+const LZT = Tr(CAMK.map((k) => [k[0], Math.log(k[3]), k[5], k[6]])), SYT = Tr(CAMK.map((k) => [k[0], k[4], k[5], k[6]]));
+let CAM = { cx: GX, cy: GY, z: 1, sy: GY, dx: 0, dy: 0 };
+const toS = (x, y) => [(x - CAM.cx) * CAM.z + 540 + CAM.dx, (y - CAM.cy) * CAM.z + CAM.sy + CAM.dy];   // world → canvas
+
+// =====================================================================
+// DOM
+// =====================================================================
+const $ = (id) => document.getElementById(id);
+const stage = $("stage"), world = $("world"), scr = $("screen");
+stage.style.width = W + "px"; stage.style.height = H + "px";
+scr.style.transform = `scale(${K})`;
+const add = (parent, html) => { const d = document.createElement("div"); d.innerHTML = html.trim(); const n = d.firstElementChild; parent.appendChild(n); return n; };
+const LT = add(world, `<div class="layer" id="LT"></div>`), LB = add(world, `<div class="layer" id="LB"></div>`), LF = add(world, `<div class="layer" id="LF"></div>`);
+const LH = add(scr, `<div class="layer" id="LH"></div>`), LX = add(scr, `<div class="layer" id="LX"></div>`), LL = add(scr, `<div class="layer" id="LL"></div>`);
+
+// a tabbed outline (300-unit design space): rectangular tabs (+1) or notches (−1) on [top, right, bottom, left]
+const TAB = { w: 104, out: 36, cut: 40, r: 10, f: 8, clr: 4 };
+function tabPath(edges, R = 26) {
+  const S = 300, C = [[0, 0], [S, 0], [S, S], [0, S]], N = [[0, -1], [1, 0], [0, 1], [-1, 0]], D = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+  const f2 = (v) => v.toFixed(2);
+  let d = `M ${R} 0`;
+  for (let i = 0; i < 4; i++) {
+    const [ax, ay] = C[i], [dx, dy] = D[i], [nx, ny] = N[i];
+    const P = (s, o) => `${f2(ax + dx * s + nx * o)} ${f2(ay + dy * s + ny * o)}`;
+    const e = edges[i];
+    if (e) {
+      const sg = e > 0 ? 1 : -1, hw = (e > 0 ? TAB.w : TAB.w + 2 * TAB.clr) / 2, dep = e > 0 ? TAB.out : TAB.cut, r = TAB.r, f = TAB.f, m = S / 2;
+      d += ` L ${P(m - hw - f, 0)} Q ${P(m - hw, 0)} ${P(m - hw, sg * f)} L ${P(m - hw, sg * (dep - r))} Q ${P(m - hw, sg * dep)} ${P(m - hw + r, sg * dep)}`;
+      d += ` L ${P(m + hw - r, sg * dep)} Q ${P(m + hw, sg * dep)} ${P(m + hw, sg * (dep - r))} L ${P(m + hw, sg * f)} Q ${P(m + hw, 0)} ${P(m + hw + f, 0)}`;
+    }
+    const [bx, by] = C[(i + 1) % 4], [ex, ey] = D[(i + 1) % 4];
+    d += ` L ${P(S - R, 0)} Q ${f2(bx)} ${f2(by)} ${f2(bx + ex * R)} ${f2(by + ey * R)}`;
+  }
+  return d + " Z";
+}
+const faceBg = (p) => `linear-gradient(${p.hi}, ${p.face} 42%)`;
+// the standard face: a big glyph at the top left, the module's name at the bottom left
+const stdFace = (k) => {
+  const p = PAL[MODS[k].col];
+  return `<div class="ico">${pxk(MODS[k].icon, 56, p.fg)}</div><div class="lbl" style="color:${p.fg}">${MODS[k].name}</div>`;
+};
+const coreFace = () => `<div class="a" style="left:0;top:0;width:300px;height:300px;display:flex;align-items:center;justify-content:center">${markSvg(150, "#ffffff")}</div>`;
+// one block: shadow, face (div or tabbed SVG), content, glint
+function blockEl(id, col, inner, edges) {
+  const p = PAL[col];
+  let face;
+  if (edges) {
+    const d = tabPath(edges);
+    face = `<svg class="sv" width="420" height="420" viewBox="-60 -60 420 420"><defs><linearGradient id="g_${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${p.hi}"/><stop offset=".42" stop-color="${p.face}"/></linearGradient></defs>
+      <path d="${d}" transform="translate(0 9)" fill="${p.lip}"/><path d="${d}" fill="url(#g_${id})"${col === "white" || col === "grey" ? ' stroke="#16161612" stroke-width="1.5"' : ""}/></svg><div class="fc" style="background:none">${inner}</div>`;
+  } else {
+    face = `<div class="fc" id="${id}_fc" style="background:${faceBg(p)};box-shadow:0 9px 0 ${p.lip}${col === "white" ? ", inset 0 0 0 1.5px #16161610, 0 9px 0 1.5px #16161608" : ""}, inset 0 2px 0 #ffffff30">${inner}</div>`;
+  }
+  return `<div class="blk" id="${id}"><div class="sh" id="${id}_sh"></div>${face}<div class="gl" id="${id}_gl"></div></div>`;
+}
+const BL = {};   // block elements by key
+
+// ----- chain: what each block shows while the call runs through it (design units) -----
+const julia = (s) => `<div class="av" style="width:${s}px;height:${s}px;background-image:url(img/julia.webp)"></div>`;
+const MU = {
+  calls: () => `<div class="mu t1" style="top:98px;font-size:21px;font-weight:600;color:#fff">Demo · Northwind</div>
+    <div class="mu flex t1" style="top:128px;gap:8px;font-size:17px;font-weight:600;color:#ffffffd0;font-variant-numeric:tabular-nums"><span id="cRec" style="width:11px;height:11px;border-radius:50%;background:#fff"></span><span id="cTime">12:04</span><span id="cEnd" style="opacity:0">Call ended</span></div>
+    <div class="a" id="cWave" style="left:26px;top:160px;width:248px;height:64px">${Array.from({ length: 15 }, (_, i) => `<div class="a" id="cw${i}" style="left:${i * 17}px;top:0;width:7px;height:64px;border-radius:4px;background:#fff;transform-origin:50% 50%"></div>`).join("")}</div>
+    <div class="a flex" id="cTr" style="left:26px;top:172px;height:38px;padding:0 13px 0 10px;gap:8px;border-radius:11px;background:#fff;color:#c7341f;font-size:16px;font-weight:600;white-space:nowrap">${pxb("file-text", 20, "#c7341f")}Transcript${pxb("check", 16, "#c7341f")}</div>`,
+  crm: () => `<div class="mu t1" style="top:96px;font-size:21px;font-weight:600">Northwind</div>
+    <div class="row" style="top:126px;border-top:1.5px solid #16161622"><span style="color:#161616a8">Stage</span><span class="pl" id="rStage" style="background:#161616;color:#fff;position:relative;overflow:hidden;width:78px;justify-content:center"><span id="rS0" class="a" style="left:0;width:100%;text-align:center">Demo</span><span id="rS1" class="a" style="left:0;width:100%;text-align:center">Proposal</span></span></div>
+    <div class="row" style="top:166px;border-top:1.5px solid #16161622"><span style="color:#161616a8">Seats</span><span style="position:relative;width:60px;height:28px;font-size:18px;font-weight:700"><span id="rN0" class="a" style="right:2px;top:5px">–</span><span id="rN1" class="a" style="right:4px;top:5px">6</span></span></div>`,
+  tasks: () => `<div class="card t1" style="top:94px;height:46px;background:#ffffff26;font-size:17px;font-weight:500;color:#ffffffb0">${pxb("check-circle-fill", 22, "#ffffffb0")}<span style="text-decoration:line-through;text-decoration-color:#ffffff80">Prep the demo</span></div>
+    <div class="card t1" id="tNew" style="top:150px;height:46px;background:#fff;font-size:17px;font-weight:600;color:#1a3ea9"><span id="tBox" style="position:relative;width:22px;height:22px;flex:none"><span class="a" style="inset:0;border-radius:50%;box-shadow:inset 0 0 0 2px #2558e3"></span><span class="a" id="tChk" style="inset:0">${pxb("check-circle-fill", 22, "#2558e3")}</span></span>Send pricing<span style="margin-left:auto;font-size:14px;color:#2558e3b0;font-weight:600">Thu</span></div>`,
+  calendar: () => `<div class="a t1" style="right:26px;top:38px;font-size:17px;font-weight:600;color:#ffffffc4">Thursday</div>
+    ${["9", "10", "11"].map((h, i) => `<div class="a t1" style="left:26px;top:${100 + i * 44}px;font-size:14px;font-weight:600;color:#ffffffa8">${h}</div><div class="a" style="left:56px;top:${107 + i * 44}px;width:218px;height:1.5px;background:#ffffff3d"></div>`).join("")}
+    <div class="a flex t1" id="kEv" style="left:62px;top:146px;width:212px;height:40px;padding:0 12px;border-radius:10px;background:#fff;color:#c7341f;font-size:16px;font-weight:600;box-shadow:0 5px 0 #f0c9c2">Onboarding · 10:00</div>`,
+  agents: () => `<div class="a" style="left:26px;top:94px;width:248px;height:84px">${[["phone-call", "Call"], ["building-office", "CRM"], ["check-square", "Task"], ["calendar-blank", "Event"]].map(([n, l], i) =>
+      `<div class="a flex t1" id="aC${i}" style="left:${(i % 2) * 126}px;top:${Math.floor(i / 2) * 44}px;height:36px;padding:0 11px 0 9px;gap:7px;border-radius:10px;background:#16161610;font-size:15px;font-weight:600">${pxb(n, 18, "#161616")}${l}</div>`).join("")}</div>
+    <div class="mu flex t1" style="top:192px;gap:9px;font-size:17px;font-weight:600"><span id="aSpk" style="display:inline-block">${pxb("sparkle", 22, "#161616")}</span><span id="aDr">Drafting the reply</span><span id="aRd" class="a" style="left:31px">Draft ready</span></div>`,
+  email: () => `<div class="mu t1" style="top:96px;font-size:16px;color:#ffffffb8">To <span style="color:#fff;font-weight:600">Dana Whitfield</span></div>
+    <div class="mu" style="top:124px;font-size:20px;font-weight:600;line-height:26px;white-space:normal;color:#fff"><span id="eTy"></span><span id="eCar" style="display:inline-block;width:2px;height:21px;vertical-align:-3px;background:#fff;margin-left:1px"></span></div>
+    <div class="a" id="eBtn" style="left:166px;top:186px;width:108px;height:44px"><div class="a flex t1" id="eBf" style="left:0;top:0;width:108px;height:40px;justify-content:center;gap:7px;border-radius:12px;background:#fff;color:#2558e3;font-size:17px;font-weight:700;box-shadow:0 6px 0 #c9d6f7">Send${pxb("paper-plane-right", 17, "#2558e3")}</div></div>
+    <div class="a flex t1" id="eSent" style="left:166px;top:194px;gap:6px;font-size:17px;font-weight:700;color:#fff">${pxb("check-circle-fill", 20, "#fff")}Sent</div>`,
+  chat: () => `<div class="mu t1" style="top:96px;font-size:19px;font-weight:600"># deals</div>
+    <div class="a flex" id="hM1" style="left:22px;top:124px;gap:9px;align-items:flex-start"><div class="av flex" style="width:30px;height:30px;justify-content:center;background:#161616">${pxb("sparkle", 16, "#fff")}</div><div style="background:#fff;border-radius:4px 12px 12px 12px;padding:8px 11px;font-size:15px;line-height:19px;font-weight:500;width:206px">Pricing sent to Northwind. Onboarding is Thursday.</div></div>
+    <div class="a flex" id="hM2" style="left:22px;top:192px;gap:9px;align-items:flex-start">${julia(30)}<div style="background:#fff;border-radius:4px 12px 12px 12px;padding:8px 11px;font-size:15px;line-height:19px;font-weight:500;white-space:nowrap">On it. Starting the rollout doc.</div></div>`,
+  docs: () => `<div class="mu t1" style="top:96px;font-size:20px;font-weight:600">Northwind rollout</div>
+    ${[232, 196, 218, 138].map((w, i) => `<div class="bar" id="dL${i}" style="top:${132 + i * 24}px;width:${w}px;background:#16161624"></div>`).join("")}`,
+};
+
+function init() {
+  // ----- the blocks -----
+  RING.forEach((k) => {
+    const inner = stdFace(k) + (CHAIN ? `<div class="a" id="mu_${k}" style="left:0;top:0;width:300px;height:300px">${MU[k]()}</div>` : "");
+    BL[k] = add(LB, blockEl("b_" + k, MODS[k].col, inner, FIT ? HOOK.edges[k] : null));
+  });
+  BL.core = add(LB, blockEl("b_core", "ink", coreFace(), FIT ? HOOK.edges.core : null));
+  if (CHAIN) RING.forEach((k) => { $("b_" + k).querySelector(".ico").style.transform = "scale(.72)"; $("b_" + k).querySelector(".ico").style.transformOrigin = "0 0"; });
+  // seams: a bright line where two blocks meet, flashed on contact
+  SEAMS.forEach((s, i) => { s.el = add(LF, `<div class="seam" id="sm${i}"></div>`); });
+  if (MERGE) {
+    const R = rng(27), GS = 3 * CS + 2 * G0, TS = 0.39 * CS;
+    const slots = [];
+    [6, 5, 6, 5, 5].forEach((n, j) => { for (let i = 0; i < n; i++) slots.push([GX - GS / 2 + (i + (n === 6 ? 0.5 : 1)) * (GS / 6) + (R() - 0.5) * 0.22 * (GS / 6), GY - GS / 2 + (j + 0.5) * (GS / 5) + (R() - 0.5) * 0.2 * (GS / 5)]); });
+    for (let i = slots.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [slots[i], slots[j]] = [slots[j], slots[i]]; }
+    const SUB = { 3: [[0, 0, 147, 300], [153, 0, 147, 147], [153, 153, 147, 147]], 4: [[0, 0, 147, 147], [153, 0, 147, 147], [0, 153, 147, 147], [153, 153, 147, 147]] };
+    HOOK.tiles = [];
+    let s = 0;
+    HOOK.order.forEach((k, gi) => {
+      const apps = HOOK.apps[k], n = apps.length, [cx, cy] = cellAt(k, G0), tf = B(HOOK.fuse(gi)), col = MODS[k].col;
+      apps.forEach((icon, i) => {
+        const [sx, sy] = slots[s++], sz = TS * (0.92 + 0.16 * R()), sl = SUB[n][i];
+        const tl = tf - (n - i) * B(0.25);
+        const T0 = { x: sx, y: sy, r: (R() - 0.5) * 34, w: sz, h: sz };
+        const T1 = { x: cx - CS / 2 + (sl[0] + sl[2] / 2) * SC, y: cy - CS / 2 + (sl[1] + sl[3] / 2) * SC, r: 0, w: sl[2] * SC, h: sl[3] * SC };
+        const TC = { x: T1.x + (R() - 0.5) * 0.2 * T1.w, y: T1.y + (R() - 0.5) * 0.14 * T1.h, r: (R() - 0.5) * 26, w: sz * 0.94, h: sz * 0.94 };
+        const s0 = 0.3 + gi * 0.11 + R() * 0.34, s1 = s0 + 0.4 + 0.06 * R();
+        const el = add(LT, `<div class="tile" id="tl${s}"><div class="sh"></div><div class="fc" style="background:linear-gradient(#ffffff, #fbfaf8);box-shadow:0 6px 0 #d8d7d0, inset 0 0 0 1.5px #16161610">${pxk(icon, Math.round(TS * 0.44), col === "white" ? "#161616" : col === "yellow" ? "#e3a50c" : PAL[col].face, 8)}</div></div>`);
+        HOOK.tiles.push({ el, k, gi, i, n, T0, TC, T1, s0, s1, t0: tl - 0.27, tl, tf, ph: R() * TAU, last: i === n - 1 });
+      });
+    });
+  }
+  if (FIT) {
+    // the two grey tools: tab against tab
+    HOOK.g = [add(LB, blockEl("gA", "grey", `<div class="ico">${pxk("envelope", 56, PAL.grey.fg)}</div>`, [0, 1, 0, 0])),
+      add(LB, blockEl("gB", "grey", `<div class="ico">${pxk("building-office", 56, PAL.grey.fg)}</div>`, [0, 0, 0, 1]))];
+  }
+  if (CHAIN) {
+    HOOK.toks = HOOK.s.tok.map(([a, b, at], i) => ({ a, b, at: B(at), el: add(LF, `<div class="tok" id="tk${i}"><i style="background:${PAL[MODS[a].col].face === "#ffffff" ? "#161616" : PAL[MODS[a].col].face}"></i></div>`) }));
+    HOOK.typed = "Pricing for your team of six";
+  }
+
+  // ----- header: band, lockup, headline lines -----
+  add(LH, `<div class="a" id="band" style="left:-20px;top:-20px;width:1120px;height:${LY.band + 70}px;background:linear-gradient(to bottom, var(--bg) 0, var(--bg) ${LY.band - 10}px, #f4f3ef00 ${LY.band + 50}px)"></div>`);
+  add(LH, `<div class="a" id="lock" style="left:${LY.hx}px;top:${LY.lockY - LY.ms / 2}px">${lockup(LY.ms, "#161616")}</div>`);
+  LINES.forEach((ln, i) => {
+    const ws = ln.w.split(" ").map((w, j) => `<span class="w" id="hl${i}w${j}">${w}</span>`).join(" ");
+    ln.el = add(LH, `<div class="a slab" id="hl${i}" style="left:${LY.hx}px;top:${(LY.hb[ln.l] - 0.89 * LY.hfs).toFixed(2)}px;font-size:${LY.hfs}px">${ws}</div>`);
+    ln.words = [...ln.el.querySelectorAll(".w")];
+  });
+
+  // ----- end card -----
+  const slabC = (id, words, base, fs) => `<div class="a slab" id="${id}" style="left:-160px;width:1400px;text-align:center;top:${(base - 0.89 * fs).toFixed(2)}px;font-size:${fs}px">${words.map((w, j) => `<span class="w" id="${id}w${j}">${w}</span>`).join(" ")}</div>`;
+  add(LX, slabC("xh0", ["Replace", "27+", "apps"], EL.hb[0], EL.hfs));
+  add(LX, slabC("xh1", ["with", "a", "single", "system."], EL.hb[1], EL.hfs));
+  add(LX, `<div class="a" id="xsub" style="left:40px;width:1000px;top:${EL.sub}px;text-align:center;font-size:${EL.sfs}px;line-height:${EL.slh}px;color:var(--body)">Email, chat, docs, tasks, CRM and agents<br>in one workspace, for <span style="color:var(--ink);font-weight:600">$40 a seat</span>.</div>`);
+  const kh = EL.ch - 10;
+  add(LX, `<div class="a" id="xcta" style="left:0;width:1080px;top:${EL.cta}px;height:${EL.ch}px"><div class="key" id="xkey"><div class="keyf" id="xkf" style="height:${kh}px;padding:0 ${Math.round(kh * 0.5)}px;gap:14px;border-radius:${Math.round(kh * 0.3)}px;font-size:${EL.cfs}px;box-shadow:0 10px 0 #000, 0 22px 30px -16px #16161680">Get started at macro.com<span id="xarr" style="display:inline-flex">${pxb("arrow-right", Math.round(EL.cfs * 1.05), "#fff")}</span></div></div></div>`);
+  add(LX, `<div class="a t1" id="xdemo" style="left:0;width:1080px;top:${EL.demo}px;text-align:center;font-size:${EL.dfs}px;color:var(--lab)">or <span style="color:var(--body);text-decoration:underline;text-underline-offset:4px;text-decoration-color:#16161640">book a demo</span></div>`);
+  const PROOF = [`${pxb("trend-up", 20, "var(--body)")}Backed by a16z`, `${pxb("shield-check", 20, "var(--body)")}SOC 2 Type II · ISO 27001`, `${ic("icon-github", 19, "var(--body)")}Fully open source`];
+  add(LX, `<div class="a flex" id="xproof" style="left:0;width:1080px;top:${EL.proof - 14}px;height:28px;justify-content:center;gap:24px;font-size:${EL.pfs}px">${PROOF.map((p, i) => `${i ? `<span id="xs${i}" style="width:1px;height:20px;background:#16161626"></span>` : ""}<span class="prow" id="xp${i}">${p}</span>`).join("")}</div>`);
+  // the thumb (a touch indicator) that presses buttons
+  add(LL, `<div class="a" id="tring" style="left:-32px;top:-32px;width:64px;height:64px;border-radius:50%;box-shadow:inset 0 0 0 2.5px #fff, 0 0 0 1px #16161614"></div>`);
+  add(LL, `<div class="a" id="touch" style="left:-32px;top:-32px;width:64px;height:64px;border-radius:50%;background:rgba(30,30,28,.55);box-shadow:inset 0 0 0 3px #fff, 0 6px 16px -4px rgba(22,22,22,.35)"></div>`);
+  document.querySelectorAll("#stage [id]").forEach((n) => { E[n.id] = n; });
+  buildCues();
+}
+const E = {};
+
+// =====================================================================
+// motion
+// =====================================================================
+const px = (v) => v.toFixed(3) + "px";
+function show(n, o) { if (o <= 0.002) { n.style.display = "none"; return false; } n.style.display = ""; n.style.opacity = Math.min(1, o).toFixed(4); return true; }
+function fx(n, o, blur, tr) { if (!show(n, o)) return false; n.style.filter = blur > 0.04 ? `blur(${blur.toFixed(3)}px)` : "none"; n.style.transform = tr || "none"; return true; }
+function rise(n, t, tin, tout, dy = 30, blur = 8, resp = 0.36, damp = 0.66) {
+  if (t < tin) { show(n, 0); return; }
+  const p = spr(t - tin, resp, damp), q = tout == null ? 0 : sm((t - tout) / 0.2);
+  fx(n, clamp(spr(t - tin, 0.24, 1) * 1.3) * (1 - q), (1 - clamp(p)) * blur + q * blur, `translate3d(0,${px((1 - p) * dy - q * dy * 0.6)},0)`);
+}
+// The pose of a block arriving at (tx, ty). The snap is the payoff: the block eases to a hover just short of its spot, the
+// last few px snap in with acceleration, and on contact it squashes along the approach and springs back.
+const SNAP = 0.065;
+function arrive(m, t, tx, ty) {
+  const P = { x: tx, y: ty, r: 0, lift: 0, sx: 1, sy: 1, s: 1 };
+  if (!m) return P;
+  const t0 = B(m.t0), t1 = B(m.t1), [fx0, fy0, fr0] = m.from;
+  if (m.kind === "slide") {
+    const [dx, dy] = m.dir, d = m.d ?? 30, hx = tx - dx * d, hy = ty - dy * d;
+    if (t < t1 - SNAP) {
+      const p = eo3((t - t0) / (t1 - SNAP - t0));
+      return { ...P, x: lerp(fx0, hx, p), y: lerp(fy0, hy, p), r: lerp(fr0, 0, p), lift: lerp(m.lift ?? 0.3, 0.12, p) };
+    }
+    if (t < t1) { const v = (t - (t1 - SNAP)) / SNAP; return { ...P, x: hx + dx * d * v * v, y: hy + dy * d * v * v, lift: 0.12 * (1 - v) }; }
+    const u = t - t1, k = Math.exp(-u / 0.05), b = 3.6 * k * Math.sin((TAU * u) / 0.11), q = k * Math.cos((TAU * u) / 0.14);
+    return { ...P, x: tx + dx * b, y: ty + dy * b, sx: dx ? 1 - 0.03 * q : 1 + 0.02 * q, sy: dy ? 1 - 0.03 * q : 1 + 0.02 * q };
+  }
+  // drop
+  const th = B(m.th);
+  if (t < th) {
+    const p = mj((t - t0) / (th - t0));
+    return { ...P, x: lerp(fx0, tx, p), y: lerp(fy0, ty, p) - 26 * Math.sin(Math.PI * p), r: lerp(fr0, 0, eo3((t - t0) / (th - t0))), lift: 1 };
+  }
+  if (t < t1 - SNAP) {
+    const u = t - th, h = (t - th) / (t1 - SNAP - th), wob = Math.exp(-u / 0.22);
+    return { ...P, x: tx + 3 * wob * Math.sin(u * 17), y: ty - 4 * wob * Math.sin(u * 13), r: 1.6 * wob * Math.sin(u * 11), lift: lerp(1, 0.78, sm(h)) };
+  }
+  if (t < t1) { const v = (t - (t1 - SNAP)) / SNAP; return { ...P, lift: 0.78 * (1 - v * v) }; }
+  const u = t - t1, k = Math.exp(-u / 0.06), q = k * Math.cos((TAU * u) / 0.14);
+  return { ...P, s: 1 - 0.028 * q };
+}
+// the shadow a block casts at a given height (0 = resting on the table, 1 = held up)
+const shadow = (lift, o = 1) => `0 ${px(3 + 30 * lift)} ${px(5 + 50 * lift)} ${px(-1 - 8 * lift)} rgba(24,23,20,${((0.26 - 0.1 * lift) * o).toFixed(3)}), 0 ${px(1 + 2 * (1 - lift))} ${px(2)} 0 rgba(24,23,20,${(0.14 * (1 - lift) * o).toFixed(3)})`;
+function place(el, sh, x, y, r, s, sx, sy, lift, scale = SC) {
+  const sc = scale * s * (1 + 0.075 * lift);
+  el.style.transform = `translate3d(${px(x - 150)},${px(y - 150)},0) rotate(${r.toFixed(3)}deg) scale(${(sc * sx).toFixed(5)},${(sc * sy).toFixed(5)})`;
+  el.style.zIndex = lift > 0.02 ? String(10 + Math.round(lift * 50)) : "1";
+  sh.style.boxShadow = shadow(lift);
+}
+// once the core is in, the ring pulls tight around it (each block a few ms after the last: a ripple of clicks)
+const tightQ = (i, t) => spr(t - B(LOCK) - 0.03 - i * 0.026, 0.2, 0.52);
+function gridPos(k, t) {
+  if (k === "core") return [GX, GY];
+  const i = RING.indexOf(k), [c, r] = MODS[k].cell, q = tightQ(i, t);
+  return [GX + (c - 1) * (CS + G0 - (G0 - GL) * q), GY + (r - 1) * (CS + G0 - (G0 - GL) * q)];
+}
+function nudge(k, t) {
+  let x = 0, y = 0;
+  for (const n of NUDGE) {
+    if (n.k !== k) continue;
+    const u = t - n.t;
+    if (u <= 0 || u > 0.5) continue;
+    const a = Math.exp(-u / 0.05) * Math.sin((TAU * u) / 0.12);
+    x += n.dx * a; y += n.dy * a;
+  }
+  return [x, y];
+}
+// after the lock: a light sweeps around the ring
+const sweep = (i, t) => 0.3 * bell((t - B(LOCK) - 0.3 - i * 0.05) / 0.32);
+
+// ----- the blocks, every frame -----
+function blocksFx(t) {
+  const keys = [...RING, "core"];
+  for (const k of keys) {
+    const el = BL[k], sh = E[`b_${k}_sh`], gl = E[`b_${k}_gl`], [gx, gy] = gridPos(k, t);
+    let m = k === "core" ? { kind: "drop", t0: CORE.t0, th: CORE.th, t1: CORE.t1, from: CORE.from } : ARR[k];
+    // when each block is on the table
+    let on = true;
+    if (MERGE && k !== "core") on = t >= B(HOOK.fuse(HOOK.order.indexOf(k)));
+    else if (m) on = t >= B(m.t0);
+    if (!show(el, on ? 1 : 0)) continue;
+    const P = arrive(m, t, gx, gy), [nx, ny] = nudge(k, t);
+    let s = P.s;
+    if (MERGE && k !== "core") {
+      // the fuse: the module's color floods out from the last tile, with a little pop
+      const tf = B(HOOK.fuse(HOOK.order.indexOf(k))), u = t - tf, w = eo3(u / 0.22);
+      const lt = HOOK.tiles.find((x) => x.k === k && x.last), ox = (lt.T1.x - (gx - CS / 2)) / SC, oy = (lt.T1.y - (gy - CS / 2)) / SC;
+      const fc = E[`b_${k}_fc`];
+      fc.style.clipPath = w >= 1 ? "none" : `circle(${(w * 440).toFixed(2)}px at ${ox.toFixed(1)}px ${oy.toFixed(1)}px)`;
+      sh.style.opacity = w.toFixed(3);
+      s *= 1 + 0.04 * Math.exp(-u / 0.07) * Math.sin((TAU * u) / 0.16);
+    }
+    place(el, sh, P.x + nx, P.y + ny, P.r, s, P.sx, P.sy, P.lift);
+    let g = k === "core" ? 0.22 * bell((t - B(LOCK) - 0.02) / 0.3) : sweep(RING.indexOf(k), t);
+    if (MERGE && k !== "core") g += 0.35 * Math.exp(-Math.max(0, t - B(HOOK.fuse(HOOK.order.indexOf(k)))) / 0.12) * (t >= B(HOOK.fuse(HOOK.order.indexOf(k))) ? 1 : 0);
+    gl.style.opacity = g.toFixed(3);
+  }
+  // seam flashes
+  for (const s of SEAMS) {
+    const u = t - s.t;
+    if (u < -0.01 || u > 0.45) { s.el.style.display = "none"; continue; }
+    const [ax, ay] = gridPos(s.a, t), [bx, by] = gridPos(s.b, t), mx = (ax + bx) / 2, my = (ay + by) / 2, vert = Math.abs(ax - bx) > 1;
+    const o = clamp(u / 0.02) * Math.exp(-Math.max(0, u) / 0.12), len = CS * (0.35 + 0.55 * eo3(u / 0.16));
+    s.el.style.display = "";
+    s.el.style.opacity = o.toFixed(3);
+    const wd = vert ? 6 : len, ht = vert ? len : 6;
+    s.el.style.width = px(wd); s.el.style.height = px(ht);
+    s.el.style.background = vert ? "linear-gradient(#fff0, #fff 30%, #fff 70%, #fff0)" : "linear-gradient(90deg, #fff0, #fff 30%, #fff 70%, #fff0)";
+    s.el.style.boxShadow = "0 0 12px 2px #ffffffb0";
+    s.el.style.transform = `translate3d(${px(mx - wd / 2)},${px(my - ht / 2)},0)`;
+  }
+}
+
+// ----- merge: the app tiles -----
+function tilesFx(t) {
+  for (const T of HOOK.tiles) {
+    const { el } = T, sh = el.firstElementChild;
+    if (t >= T.tf + 0.24) { show(el, 0); continue; }
+    show(el, 1);
+    let x, y, r, w, h, lift = 0, sx = 1, sy = 1;
+    const A = T.TC, dx = T.T1.x - A.x, dy = T.T1.y - A.y, dn = Math.hypot(dx, dy) || 1, d = 10;
+    if (t < T.s0) {
+      // the pile: each tile breathes on its own phase
+      const a = Math.sin(t * 2.3 + T.ph), b = Math.sin(t * 1.7 + T.ph * 1.7);
+      x = T.T0.x + 2.2 * a; y = T.T0.y + 2.2 * b; r = T.T0.r + 1.2 * Math.sin(t * 1.9 + T.ph * 2.3); w = T.T0.w; h = T.T0.h;
+    } else if (t < T.s1) {
+      // sorting: slide to a loose spot in its module's cell
+      const u = (t - T.s0) / (T.s1 - T.s0), p = mj(u);
+      x = lerp(T.T0.x, A.x, p); y = lerp(T.T0.y, A.y, p); r = lerp(T.T0.r, A.r, p); w = lerp(T.T0.w, A.w, p); h = lerp(T.T0.h, A.h, p); lift = 0.22 * Math.sin(Math.PI * u);
+    } else if (t < T.t0) {
+      const u = t - T.s1;
+      x = A.x; y = A.y; r = A.r + 3 * Math.exp(-u / 0.06) * Math.sin(u * 60); w = A.w; h = A.h;
+    } else if (t < T.tl - SNAP) {
+      const u = (t - T.t0) / (T.tl - SNAP - T.t0), p = mj(u);
+      x = lerp(A.x, T.T1.x - (dx / dn) * d, p); y = lerp(A.y, T.T1.y - (dy / dn) * d, p); r = lerp(A.r, 0, p);
+      w = lerp(A.w, T.T1.w, sm(u * 1.2)); h = lerp(A.h, T.T1.h, sm(u * 1.2)); lift = 0.3 * Math.sin(Math.PI * clamp(u * 1.1));
+    } else if (t < T.tl) {
+      const v = (t - (T.tl - SNAP)) / SNAP, e = d * (1 - v * v);
+      x = T.T1.x - (dx / dn) * e; y = T.T1.y - (dy / dn) * e; r = 0; w = T.T1.w; h = T.T1.h;
+    } else {
+      const u = t - T.tl, k = Math.exp(-u / 0.045), q = k * Math.cos((TAU * u) / 0.12), hor = Math.abs(dx) > Math.abs(dy);
+      x = T.T1.x; y = T.T1.y; r = 0; w = T.T1.w; h = T.T1.h; sx = hor ? 1 - 0.05 * q : 1 + 0.03 * q; sy = hor ? 1 + 0.03 * q : 1 - 0.05 * q;
+    }
+    el.style.width = px(w); el.style.height = px(h);
+    el.style.transform = `translate3d(${px(x - w / 2)},${px(y - h / 2)},0) rotate(${r.toFixed(3)}deg) scale(${((1 + 0.08 * lift) * sx).toFixed(4)},${((1 + 0.08 * lift) * sy).toFixed(4)})`;
+    el.style.zIndex = lift > 0.02 ? "20" : "1";
+    sh.style.boxShadow = shadow(lift * 0.8);
+  }
+}
+
+// ----- fit: the two grey tools clunk tab against tab, then get pushed off the table -----
+function greyFx(t) {
+  const s = 1.22, half = (150 + TAB.out) * SC * s, y0 = GY - 60 * SC;
+  // gap between the tab tips: closing in, two clunks with recoil, then flung apart
+  const c1 = B(HOOK.c1), c2 = B(HOOK.c2), out = B(HOOK.out);
+  let gap, wob = 0, tilt = 0;
+  if (t < c1) gap = 210 * Math.pow(1 - t / c1, 1.6);
+  else if (t < c2 - 0.36) { const u = t - c1; gap = 46 * spr(u, 0.34, 0.55) ; wob = Math.exp(-u / 0.08) * Math.sin(u * 70); tilt = 3.5 * (1 - Math.exp(-u / 0.1)); }
+  else if (t < c2) { const u = (t - (c2 - 0.36)) / 0.36; gap = lerp(46, 0, u * u * u) + 22 * Math.sin(Math.PI * clamp(u * 1.6)) * (u < 0.6 ? 1 : 0); tilt = 3.5 * (1 - u); }
+  else { const u = t - c2; gap = 64 * spr(u, 0.3, 0.5); wob = 1.6 * Math.exp(-u / 0.09) * Math.sin(u * 80); tilt = 9 * (1 - Math.exp(-u / 0.08)) * (1 - 0.3 * Math.exp(-u / 0.4)); }
+  const fl = t < out ? 0 : eo3((t - out) / 0.55) * 900 + (t - out) * 160;
+  HOOK.g.forEach((el, i) => {
+    const sg = i ? 1 : -1, si = i ? 1.02 : s, hi = (150 + TAB.out) * SC * si;
+    const x = GX + 30 * SC + sg * (hi + gap / 2 + fl) - (i ? half - hi : 0) * 0 + wob * 3 * sg, y = y0 - (i ? 52 * SC : 0) - (t > out ? 30 * eo3((t - out) / 0.4) : 0);
+    if (!show(el, x > -400 && x < 1480 ? 1 : 0)) return;
+    place(el, E[i ? "gB_sh" : "gA_sh"], x, y, (i ? -4 : 0) + sg * -tilt * 0.5 + (t > out ? sg * 22 * eo3((t - out) / 0.6) : 0), si, 1, 1, t > out ? 0.5 * eo3((t - out) / 0.3) : 0.05);
+  });
+}
+
+// ----- chain: tokens and the live content inside each block -----
+function tokPos(a, b, u, t) {
+  const [ax, ay] = gridPos(a, t), [bx, by] = gridPos(b, t), adj = Math.abs(ax - bx) + Math.abs(ay - by) < 1.5 * (CS + G0);
+  // adjacent blocks: hop across the seam between their centers; far ones: arc over the board
+  const sx = adj ? lerp(ax, bx, 0.28) : ax, sy = adj ? lerp(ay, by, 0.28) : ay, ex = adj ? lerp(ax, bx, 0.72) : lerp(ax, bx, 0.86), ey = adj ? lerp(ay, by, 0.72) : lerp(ay, by, 0.86);
+  const p = mj(u), lx = -(ey - sy), ly = ex - sx, n = Math.hypot(lx, ly) || 1, arc = (adj ? 46 : 120) * Math.sin(Math.PI * p);
+  return [lerp(sx, ex, p) + (lx / n) * arc * -1, lerp(sy, ey, p) + (ly / n) * arc * -1];
+}
+function chainFx(t) {
+  const S = HOOK.s;
+  HOOK.toks.forEach((k) => {
+    const dur = 0.42, u = (t - k.at) / dur;
+    if (u < 0 || u > 1.15) { k.el.style.display = "none"; return; }
+    const [x, y] = tokPos(k.a, k.b, clamp(u), t), o = clamp(u * 6) * (1 - sm((u - 0.92) / 0.2));
+    k.el.style.display = ""; k.el.style.opacity = o.toFixed(3); k.el.style.zIndex = "60";
+    k.el.style.transform = `translate3d(${px(x)},${px(y)},0) scale(${(0.7 + 0.45 * Math.sin(Math.PI * clamp(u))).toFixed(3)})`;
+  });
+  // calls: the waveform runs, then the call ends and the transcript is ready
+  const ce = B(S.callEnd);
+  for (let i = 0; i < 15; i++) {
+    const n = 0.5 + 0.5 * Math.sin(t * 13.1 + i * 1.7) * Math.sin(t * 7.3 + i * 0.9 + 1.3), env = 1 - sm((t - ce) / 0.25);
+    const h = (0.12 + 0.88 * Math.abs(n) * (0.45 + 0.55 * Math.sin(Math.PI * (i + 0.5) / 15))) * env + 0.11 * (1 - env);
+    E["cw" + i].style.transform = `scaleY(${h.toFixed(4)})`;
+    E["cw" + i].style.opacity = (1 - 0.6 * sm((t - ce - 0.15) / 0.3)).toFixed(3);
+  }
+  show(E.cWave, 1 - sm((t - ce - 0.25) / 0.2));
+  E.cTime.textContent = t < ce ? `12:${String(4 + Math.floor(t)).padStart(2, "0")}` : "12:05";
+  E.cRec.style.opacity = t < ce ? (0.55 + 0.45 * Math.cos(t * 6.5)).toFixed(3) : "0.45";
+  show(E.cTime, t < ce ? 1 : 0); show(E.cEnd, t < ce ? 0 : 1);
+  fx(E.cTr, t < ce + 0.3 ? 0 : clamp((t - ce - 0.3) / 0.12), 0, `translate3d(0,${px((1 - spr(t - ce - 0.3, 0.3, 0.6)) * 14)},0)`);
+  // crm: stage flips to Proposal, seats fill in
+  const st = B(S.stage), ps = t < st ? 0 : spr(t - st, 0.3, 0.7);
+  E.rStage.style.width = px(lerp(78, 104, clamp(ps)));
+  fx(E.rS0, 1 - clamp(ps * 1.6), 0, `translate3d(0,${px(-ps * 22)},0)`);
+  fx(E.rS1, clamp(ps * 1.6), 0, `translate3d(0,${px((1 - ps) * 22)},0)`);
+  const se = B(S.seats), pn = t < se ? 0 : spr(t - se, 0.3, 0.7);
+  fx(E.rN0, 1 - clamp(pn * 1.6), 0, `translate3d(0,${px(-pn * 18)},0)`);
+  fx(E.rN1, clamp(pn * 1.6), 0, `translate3d(0,${px((1 - pn) * 18)},0) scale(${(0.6 + 0.4 * pn).toFixed(3)})`);
+  // tasks: the new task drops in; on the lock it checks itself
+  const ti = B(S.taskIn);
+  fx(E.tNew, t < ti ? 0 : clamp((t - ti) / 0.1), 0, `translate3d(0,${px((1 - spr(t - ti, 0.3, 0.6)) * -26)},0)`);
+  const dn = B(S.done);
+  E.tChk.style.opacity = t < dn ? "0" : "1"; E.tChk.style.transform = `scale(${t < dn ? 0 : (0.4 + 0.6 * spr(t - dn, 0.24, 0.5)).toFixed(3)})`;
+  // calendar: the onboarding lands in its slot
+  const ev = B(S.evIn), pe = t < ev ? 0 : spr(t - ev, 0.26, 0.55);
+  fx(E.kEv, t < ev - 0.2 ? 0 : clamp((t - ev + 0.2) / 0.12), 0, `translate3d(0,${px((1 - pe) * -40)},0) scale(${(1 + 0.08 * (1 - clamp((t - ev + 0.2) / 0.2))).toFixed(3)})`);
+  // agents: the context arrives chip by chip, it drafts, the draft is ready
+  S.chips.forEach((c, i) => { const a = B(c); fx(E["aC" + i], t < a ? 0 : clamp((t - a) / 0.08), 0, `scale(${t < a ? 0 : (0.5 + 0.5 * spr(t - a, 0.24, 0.55)).toFixed(3)})`); });
+  const dr = B(S.drafting), rd = B(S.ready);
+  show(E.aDr, t < dr ? 0.35 : t < rd ? 0.55 + 0.45 * Math.cos((t - dr) * 9) : 0);
+  show(E.aRd, t < rd ? 0 : clamp((t - rd) / 0.12));
+  E.aSpk.style.transform = `rotate(${(t < dr ? 0 : t < rd ? (t - dr) * 260 : (rd - dr) * 260 + 90 * spr(t - rd, 0.4, 0.7)).toFixed(2)}deg)`;
+  // email: the reply types itself; the thumb presses Send
+  const [ty0, ty1] = S.typing.map(B), n = Math.floor(clamp((t - ty0) / (ty1 - ty0)) * HOOK.typed.length);
+  E.eTy.textContent = HOOK.typed.slice(0, n);
+  const sd = B(S.send);
+  show(E.eCar, t > ty0 - 0.3 && t < sd ? (Math.floor(t * 3.2) % 2 === 0 || (t > ty0 && t < ty1) ? 1 : 0) : 0);
+  const pr = t >= sd - 0.04 && t < sd + 0.16 ? 1 : 0;
+  show(E.eBtn, t < sd + 0.22 ? 1 : 1 - clamp((t - sd - 0.22) / 0.1));
+  E.eBf.style.transform = `translateY(${px(pr * 5)})`; E.eBf.style.boxShadow = `0 ${px(6 - pr * 5)} 0 #c9d6f7`;
+  fx(E.eSent, t < sd + 0.25 ? 0 : clamp((t - sd - 0.25) / 0.1), 0, `scale(${t < sd + 0.25 ? 0 : (0.6 + 0.4 * spr(t - sd - 0.25, 0.26, 0.55)).toFixed(3)})`);
+  // chat and docs
+  [["hM1", S.msg1], ["hM2", S.msg2]].forEach(([id, b]) => { const a = B(b); fx(E[id], t < a ? 0 : clamp((t - a) / 0.08), 0, `translate3d(0,${px((1 - spr(t - a, 0.28, 0.6)) * 16)},0) scale(${t < a ? 0 : (0.85 + 0.15 * spr(t - a, 0.28, 0.6)).toFixed(3)})`); });
+  const [w0, w1] = S.write.map(B);
+  for (let i = 0; i < 4; i++) { const a = w0 + (i * (w1 - w0)) / 4, p = clamp((t - a) / ((w1 - w0) / 4)); E["dL" + i].style.transform = `scaleX(${p.toFixed(4)})`; }
+}
+
+// ----- header and end card -----
+function wordsFx(ln, t) {
+  ln.words.forEach((w, j) => {
+    const a = B(ln.tin) + j * 0.055, b = B(ln.tout) + j * 0.025;
+    if (ln.tin < 0) { const q = sm((t - b) / 0.2); fx(w, 1 - q, q * 8, `translate3d(0,${px(-q * 18)},0)`); return; }
+    rise(w, t, a, b, 0.42 * LY.hfs, 8, 0.34, 0.6);
+  });
+}
+function headerFx(t) {
+  LINES.forEach((ln) => { if (show(ln.el, t >= B(ln.tin) - 0.01 && t < B(ln.tout) + 0.6 ? 1 : 0)) wordsFx(ln, t); });
+  const e = B(ENDB), lw = (LY.ms * (191.3 + 44.7 + 630.7)) / 126.4;
+  show(E.band, 1 - sm((t - e) / 0.3));
+  E.lock.style.transform = `translate3d(${px((540 - lw / 2 - LY.hx) * spr(t - e - 0.1, 0.7, 0.85))},0,0)`;
+}
+function endFx(t) {
+  const e = B(ENDB) + 0.45;
+  if (!show(LX, t >= e - 0.05 ? 1 : 0)) return;
+  ["Replace 27+ apps", "with a single system."].forEach((l, r) => l.split(" ").forEach((_, j) => rise(E[`xh${r}w${j}`], t, e + r * 0.12 + j * 0.05, null, 32, 10, 0.36, 0.62)));
+  rise(E.xsub, t, e + 0.55, null, 16, 6);
+  // the CTA is a key: it drops onto the table, then the thumb presses it
+  const ka = e + 0.95, pd = B(20), pu = pd + 0.16;
+  if (t < ka) show(E.xkey, 0);
+  else {
+    const p = spr(t - ka, 0.3, 0.55), press = t < pd - 0.03 ? 0 : t < pu ? sm((t - pd + 0.03) / 0.05) : 1 - spr(t - pu, 0.18, 0.5);
+    fx(E.xkey, clamp((t - ka) / 0.08), 0, `translateX(-50%) translate3d(0,${px((1 - p) * -30 + press * 7)},0) scale(${(1.06 - 0.06 * clamp(p)).toFixed(4)})`);
+    E.xkf.style.boxShadow = `0 ${px(10 - press * 7)} 0 #000, 0 ${px(22 - press * 12)} ${px(30 - press * 14)} -16px #16161680`;
+  }
+  E.xarr.style.transform = `translateX(${px(5 * Math.max(0, Math.sin((t - pu - 0.2) * 3.4)) * clamp((t - pu - 0.2) / 0.3))})`;
+  rise(E.xdemo, t, e + 1.25, null, 12, 6);
+  [0, 1, 2].forEach((i) => { rise(E["xp" + i], t, e + 1.45 + i * 0.1, null, 10, 6); if (i) show(E["xs" + i], clamp((t - e - 1.45 - i * 0.1) / 0.2)); });
+}
+// a thumb tap at a screen point: down at td, up 0.16 s later
+function thumb(t, td, x, y) {
+  const tu = td + 0.16;
+  if (t < td - 0.12 || t > tu + 0.36) return false;
+  const appear = clamp((t - (td - 0.12)) / 0.1), lift = sm((t - tu) / 0.16), held = t >= td && t <= tu ? 1 : 0;
+  fx(E.touch, appear * (1 - lift), 0, `translate3d(${px(x)},${px(y)},0) scale(${((1.25 - 0.25 * sm(appear)) * (1 - 0.1 * held) * (1 + 0.15 * lift)).toFixed(4)})`);
+  if (t > tu) { const u = (t - tu) / 0.36; fx(E.tring, (1 - sm(u)) * 0.9, 0, `translate3d(${px(x)},${px(y)},0) scale(${(1 + 1.3 * mj(u)).toFixed(4)})`); } else show(E.tring, 0);
+  return true;
+}
+function handsFx(t) {
+  let on = false;
+  if (CHAIN) { const [x, y] = toS(...gridPos("email", t)); on = thumb(t, B(HOOK.s.send), x + (220 - 150) * SC * CAM.z, y + (208 - 150) * SC * CAM.z); }
+  if (!on) on = thumb(t, B(20), 540 + 150, EL.cta + EL.ch / 2);
+  if (!on) { show(E.touch, 0); show(E.tring, 0); }
+}
+
+// =====================================================================
+// sound: every snap, slide and press gets a cue; audio/bmix.py synthesizes them and the bed
+// =====================================================================
+const CUES = [];
+const MUSIC = { bpm: BPM, beats: BEATS, lock: LOCK, end: ENDB };
+function buildCues() {
+  const cueT = (t, type, gain = 1, extra = {}) => CUES.push({ t, type, gain, ...extra });
+  const pan = (x) => clamp((x - 540) / 540, -1, 1) * 0.55;
+  let seq = 0;
+  // block contacts
+  [...RING, "core"].forEach((k) => {
+    const m = k === "core" ? { kind: "drop", t1: LOCK, t0: CORE.t0, th: CORE.th } : ARR[k];
+    if (!m || MERGE && k !== "core") return;
+    const [x] = cellAt(k, G0);
+    if (k === "core") return;
+    cueT(B(m.t0) + 0.02, m.kind === "drop" ? "lift" : "slide", m.kind === "drop" ? 0.5 : 0.45, { pan: pan(x), dur: B(m.t1) - B(m.t0) });
+    cueT(B(m.t1), "snap", 0.95, { pan: pan(x), seq: seq++ });
+  });
+  if (MERGE) {
+    HOOK.tiles.forEach((T) => {
+      cueT(T.s0 + 0.01, "slide", 0.16, { pan: pan(T.T0.x), dur: T.s1 - T.s0 });
+      cueT(T.s1, "tak", 0.32, { pan: pan(T.TC.x), seed: T.gi * 4 + T.i });
+      cueT(T.tl, "tock", 0.62 + 0.1 * T.i, { pan: pan(T.T1.x), seq: T.i });
+    });
+    HOOK.order.forEach((k, gi) => { const [x] = cellAt(k, G0); cueT(B(HOOK.fuse(gi)), "fill", 0.8, { pan: pan(x), seq: gi }); });
+  }
+  if (FIT) {
+    cueT(B(HOOK.c1), "clunk", 0.9, { pan: 0 }); cueT(B(HOOK.c2), "clunk", 1.0, { pan: 0, hard: 1 });
+    cueT(B(HOOK.out) + 0.04, "whoosh", 0.55, { pan: -0.4 }); cueT(B(HOOK.out) + 0.08, "whoosh", 0.45, { pan: 0.4 });
+  }
+  if (CHAIN) {
+    const S = HOOK.s;
+    cueT(0.02, "rec", 0.5, { pan: -0.3 });
+    cueT(B(S.callEnd), "blip", 0.45, { pan: -0.3 });
+    HOOK.toks.forEach((k) => { const [x] = cellAt(k.b, G0); cueT(k.at + 0.02, "swish", 0.22, { pan: pan(x) }); cueT(k.at + 0.4, "tick", 0.36, { pan: pan(x), pitch: 1.5 }); });
+    cueT(B(S.stage), "toggle", 0.5, { pan: 0 }); cueT(B(S.seats), "tick", 0.4, { pitch: 1.26 });
+    cueT(B(S.taskIn), "pop", 0.5, { pitch: 1.2, pan: 0.4 }); cueT(B(S.evIn), "tock", 0.6, { seq: 9, pan: 0.4 });
+    S.chips.forEach((c, i) => cueT(B(c), "pop", 0.32, { pitch: 1.12 + 0.12 * i, pan: 0.4 }));
+    cueT(B(S.ready), "chime", 0.32, { pan: 0.4 });
+    const [a, b] = S.typing.map(B), n = HOOK.typed.length;
+    for (let i = 0; i < n; i++) if (HOOK.typed[i] !== " " || i % 2) cueT(a + ((i + 0.5) / n) * (b - a) + (i % 3) * 0.006, "key", 0.34, { seed: i, pan: 0.05 });
+    cueT(B(S.send), "press", 0.85, { pan: 0.1 }); cueT(B(S.send) + 0.16, "release", 0.6, { pan: 0.1 }); cueT(B(S.send) + 0.26, "chime", 0.45, { pan: 0.1 });
+    cueT(B(S.msg1), "pop", 0.5, { pitch: 1.15, pan: -0.4 }); cueT(B(S.msg2), "pop", 0.5, { pitch: 1.3, pan: -0.4 });
+    for (let i = 0; i < 4; i++) cueT(B(S.write[0]) + (i * (B(S.write[1]) - B(S.write[0]))) / 4, "scribble", 0.3, { pan: -0.4, seed: i });
+    cueT(B(S.done), "tick", 0.4, { pitch: 1.682, pan: 0.4 });
+  }
+  // the core: rises, hovers (a soft riser), locks; the ring pulls tight in a ripple of clicks
+  cueT(B(CORE.t0) + 0.05, "lift", 0.6, { pan: 0 });
+  cueT(B(CORE.th) - 0.2, "riser", 0.55, { dur: B(LOCK) - B(CORE.th) + 0.2 });
+  cueT(B(LOCK), "thock", 1.0, { pan: 0 });
+  RING.forEach((k, i) => { const [x] = cellAt(k, G0); cueT(B(LOCK) + 0.03 + i * 0.026 + 0.05, "click", 0.42, { pan: pan(x), seed: i }); });
+  RING.forEach((k, i) => { const [x] = cellAt(k, G0); cueT(B(LOCK) + 0.3 + i * 0.05 + 0.1, "tick", 0.16, { pan: pan(x), pitch: [1, 1.122, 1.26, 1.498, 1.682, 2, 2.245, 2.52][i] }); });
+  // end card
+  const e = B(ENDB) + 0.45;
+  cueT(B(ENDB) - 0.02, "whoosh", 0.35, { pan: 0 });
+  cueT(e + 0.95 + 0.1, "snap", 0.7, { pan: 0, seq: 12 });
+  cueT(B(20), "press", 1.0, { pan: 0.15 }); cueT(B(20) + 0.16, "release", 0.7, { pan: 0.15 });
+}
+
+// =====================================================================
+// seek(t)
+// =====================================================================
+function seek(tIn) {
+  const t = clamp(tIn, 0, T);
+  // camera: springs between shots, a breath of handheld drift, a punch when the core locks
+  {
+    const env = CHAIN ? 1 : 0.5;
+    const dx = env * (1.2 * Math.sin(t * 0.83 + 1.1) + 0.5 * Math.sin(t * 1.97 + 0.4)), dy = env * (1.0 * Math.sin(t * 0.61 + 2.3) + 0.4 * Math.sin(t * 1.49 + 1.7));
+    let z = Math.exp(LZT(t));
+    const u = t - B(LOCK); if (u >= 0) z *= 1 + 0.018 * clamp(u / 0.02) * Math.exp(-u / 0.14);
+    let sx = 0, sy = 0;
+    if (FIT) for (const c of [B(HOOK.c1), B(HOOK.c2)]) { const v = t - c; if (v >= 0) { const a = (c > 1 ? 5 : 3) * Math.exp(-v / 0.07); sx += a * Math.sin(v * 95); sy += a * 0.5 * Math.sin(v * 71 + 1); } }
+    CAM = { cx: CXT(t), cy: CYT(t), z, sy: SYT(t), dx: dx + sx, dy: dy + sy };
+    world.style.transform = `translate(${((540 + CAM.dx) * K).toFixed(3)}px,${((CAM.sy + CAM.dy) * K).toFixed(3)}px) scale(${(K * z).toFixed(5)}) translate(${(-CAM.cx).toFixed(3)}px,${(-CAM.cy).toFixed(3)}px)`;
+  }
+  if (MERGE) tilesFx(t);
+  if (FIT) greyFx(t);
+  blocksFx(t);
+  if (CHAIN) chainFx(t);
+  headerFx(t);
+  endFx(t);
+  handsFx(t);
+}
+
+// ---------- boot ----------
+window.seek = seek; window.DURATION = T; window.CUES = CUES; window.B = B; window.MUSIC = MUSIC; window.FMT = [W, H];
+window.ready = Promise.all(['400 20px "Inter"', '500 20px "Inter"', '600 20px "Inter"', '700 20px "Inter"', '360 40px "display"'].map((f) => document.fonts.load(f)))
+  .then(() => document.fonts.ready)
+  .then(() => new Promise((r) => { const i = new Image(); i.onload = i.onerror = r; i.src = "img/julia.webp"; }))
+  .then(() => { init(); seek(0); return true; });
+const params = new URLSearchParams(location.search);
+if (params.has("render")) document.documentElement.classList.add("render");
+else {
+  const fit = () => { const k = Math.min(innerWidth / W, innerHeight / H); Object.assign(stage.style, { position: "fixed", left: "50%", top: "50%", transformOrigin: "50% 50%", transform: `translate(-50%,-50%) scale(${k})` }); };
+  addEventListener("resize", fit); fit();
+  const at = params.has("t") ? parseFloat(params.get("t")) : null;
+  window.ready.then(() => { if (at != null) { seek(at); return; } const t0 = performance.now(); const loop = () => { seek(((performance.now() - t0) / 1000) % T); requestAnimationFrame(loop); }; requestAnimationFrame(loop); });
+}
+</script>
+</body>
+</html>
