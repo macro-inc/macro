@@ -17,7 +17,7 @@ async fn provider_folders_match_messages_before_pagination(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = EmailPgRepo::new(pool.clone());
-    let viewer = MacroUserIdStr::parse_from_str("macro|user1@test.com")?;
+    let viewer = MacroUserIdStr::parse_from_str("macro|mail@example.com")?;
     for (link, prefix) in [
         (uuid::uuid!("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), 100u128),
         (uuid::uuid!("0a000000-0000-0000-0000-000000000001"), 200u128),
