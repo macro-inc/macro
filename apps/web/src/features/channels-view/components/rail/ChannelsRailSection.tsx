@@ -37,7 +37,7 @@ export function ChannelSectionHeading(props: {
   focused: boolean;
   unreadCount: number;
   onToggle: () => void;
-  icon?: JSX.Element;
+  badge?: JSX.Element;
   children?: JSX.Element;
 }) {
   return (
@@ -55,8 +55,8 @@ export function ChannelSectionHeading(props: {
         )}
         onClick={props.onToggle}
       >
-        {props.icon}
         <span class="truncate">{props.label}</span>
+        {props.badge}
         <CaretDownIcon
           class={cn(
             'size-3 shrink-0 transition-transform',

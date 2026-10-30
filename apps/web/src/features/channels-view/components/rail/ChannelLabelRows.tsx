@@ -20,12 +20,10 @@ import SlidersIcon from '@icon/system/regular/sliders-horizontal.svg';
 import TagIcon from '@icon/system/regular/tag.svg';
 import TagSimpleIcon from '@icon/system/regular/tag-simple.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
-import UserIcon from '@icon/system/regular/user.svg';
-import UsersIcon from '@icon/system/regular/users.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import { createDroppable } from '@thisbeyond/solid-dnd';
-import { cn, Dropdown, Tooltip } from '@ui';
+import { Badge, cn, Dropdown } from '@ui';
 import { type Component, For, type JSX, Show } from 'solid-js';
 import { canLabelChannel } from '../../core/channel-label-eligibility';
 import {
@@ -76,10 +74,6 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
     const target = rail.activeDropTarget();
     return target?.kind === 'label' && target.labelId === props.label.id;
   };
-  const scopeLabel = () =>
-    props.label.teamId
-      ? t('channelSections.shared')
-      : t('channelSections.personal');
 
   return (
     <div
@@ -103,17 +97,12 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
         focused={state().focused}
         unreadCount={state().unreadCount}
         onToggle={() => rail.activateRow(rowKeyForLabel(props.label.id))}
-        icon={
-          <Tooltip label={scopeLabel()} class="flex shrink-0">
-            <span role="img" aria-label={scopeLabel()} data-icon-motion="none">
-              <Show
-                when={props.label.teamId}
-                fallback={<UserIcon class="size-3.5" />}
-              >
-                <UsersIcon class="size-3.5" />
-              </Show>
-            </span>
-          </Tooltip>
+        badge={
+          <Show when={props.label.teamId}>
+            <Badge variant="secondary" size="xs">
+              {t('channelSections.sharedShort')}
+            </Badge>
+          </Show>
         }
       >
         <Dropdown placement="bottom-end">

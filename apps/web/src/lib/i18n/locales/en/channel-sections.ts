@@ -4,6 +4,7 @@ export default {
   search: 'Search conversations',
   favorites: 'Favorites',
   team_channels: 'Team channels',
+  namedTeamChannels: '{{name}} channels',
   channels: 'Channels',
   direct_messages: 'Direct messages',
   empty: 'No conversations yet',

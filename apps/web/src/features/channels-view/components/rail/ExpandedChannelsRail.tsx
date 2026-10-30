@@ -8,6 +8,8 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { type ChannelEntity, Entity } from '@entity';
 import CheckIcon from '@icon/system/regular/check.svg';
 import SortIcon from '@icon/system/regular/sort-ascending.svg';
+import { queryReadyGate } from '@queries/gate';
+import { useCurrentTeamQuery } from '@queries/team/teams';
 import {
   createDraggable,
   createDroppable,
@@ -383,7 +385,16 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
 
 function SectionHeading(props: { group: 'favorites' | ChannelsGroup }) {
   const rail = useChannelsRail();
-  const title = () => t(`channelSections.${props.group}`);
+  const team = useCurrentTeamQuery(() => props.group === 'team_channels');
+  const title = () => {
+    const teamName =
+      props.group === 'team_channels' && queryReadyGate(team)
+        ? team.data?.team.name
+        : undefined;
+    return teamName
+      ? t('channelSections.namedTeamChannels', { name: teamName })
+      : t(`channelSections.${props.group}`);
+  };
   const open = () => rail.isGroupOpen(props.group);
   const key = () => rowKeyForSection(props.group);
   const channelGroup = () =>
@@ -395,6 +406,7 @@ function SectionHeading(props: { group: 'favorites' | ChannelsGroup }) {
   return (
     <ChannelSectionHeading
       id={domIdForRow(rail.railId, key())}
+      title={title()}
       label={title()}
       open={open()}
       focused={rail.list.focus.key() === key()}

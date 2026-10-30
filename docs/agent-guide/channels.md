@@ -885,15 +885,17 @@ slide-over opens on its own and closes once a conversation is picked; the
 backdrop or `Escape` still dismisses it. There is no separate skinny sidebar mode.
 
 On desktop, Chat has one conversation sidebar, without All, Recent, or Threads
-view tabs. Favorites and Team channels appear first, followed by custom sections.
+view tabs. Favorites and the team's channels appear first, followed by custom
+sections. The team heading is **[Team name] channels**, with **Team channels**
+as the fallback while the name is unavailable.
 Other joined public and private channels remain in Channels until assigned to a
 personal section. Each custom section is a top-level heading, independent of the
 Team channels disclosure. Empty sections remain visible with a short hint; empty
 Favorites explains how to add a favorite. Private conversations use a lock icon in
 the sidebar and mobile feed, including favorited private conversations.
 All section headers share the same compact styling, and channel rows align across
-sections. Personal sections show a person icon; team-shared sections show a group
-icon to the left of the name.
+sections. Team-shared sections show a neutral Shared badge to the right of the
+name. Personal sections have no scope icon or badge.
 
 The upper sidebar uses one virtualized scroll area instead of dividing available
 height between sections. Direct messages have a separate collapsible panel fixed
