@@ -1,5 +1,6 @@
 import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
-import { cn } from '@ui';
+import UserPlusIcon from '@icon/system/regular/user-plus.svg';
+import { cn, Tooltip } from '@ui';
 import { Show } from 'solid-js';
 import { useTasksView } from '../../tasks-view-context';
 import type { TaskSortId } from '../../types';
@@ -90,9 +91,13 @@ export function TaskListHeader() {
       <span
         role="columnheader"
         aria-label="Created by"
-        class="hidden @min-[1221px]/u-list:block"
+        class="hidden @min-[1221px]/u-list:flex items-center justify-end"
         style={{ 'grid-area': 'createdBy' }}
-      />
+      >
+        <Tooltip label="Created by" as="span" tabIndex={0}>
+          <UserPlusIcon class="size-4" role="img" aria-label="Created by" />
+        </Tooltip>
+      </span>
     </div>
   );
 }

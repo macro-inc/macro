@@ -94,9 +94,10 @@ to read the full value.
 Desktop task-list columns place Project before Assignees; mobile property order is unchanged.
 The 80px Updated column keeps its label and sort arrow visible without truncation,
 and its timestamps stay on one line. Created by is the final column, with a 16px
-avatar and a 16px gap after Updated. Its header stays hidden. Owner names and the
-column label stay accessible; names remain available on hover. Its narrow-container
-visibility is unchanged.
+avatar and a 16px gap after Updated. Its header shows a matching-size user-plus
+icon with a “Created by” tooltip on hover or focus. Owner names and the column label
+stay accessible; names remain available on hover. Its narrow-container visibility
+is unchanged.
 The project pill beneath a task title shows the project icon and name without
 a `Project:` prefix.
 Wide desktop task rows and group headers share their leading icon alignment.
