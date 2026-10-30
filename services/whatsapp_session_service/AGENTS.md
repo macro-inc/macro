@@ -100,13 +100,14 @@ current, ingests the traffic of added chats (`external_chat`) through `whatsapp_
   (`events::lookup_answer` names it like any chat). Only explicit owner
   lookups, rate-limited in DSS: WhatsApp bans bulk usync. On-demand history answers are parsed with
   `Client::parse_web_message`, ingested as history events through the inbound
-  gate, then reported as a `HistoryPage`. The runner's `backfill` asks the
-  phone for pages of added groups (`request_history`, plus `request_message`
-  for an anchor that predates adoption), marks a group with no anchor
-  `waiting_for_message` (an `update_chats` that gives it one returns true and
-  the runner imports at once), marks unanswered requests
-  `waiting_for_phone` after `backfill_timeout` and retries after
-  `backfill_retry` or on reconnect.
+  gate, then reported as a `HistoryPage`. The runner's `backfill`
+  (`domain/account/backfill.rs`) only continues imports the owner started
+  (`pending`, on `whatsapp_history_requested`, connect and tick): it asks the
+  phone for pages (`request_history`, plus `request_message` for an anchor
+  that predates adoption), the next one as each answer lands, and marks a
+  request unanswered after `backfill_timeout` `waiting_for_phone`. It never
+  asks the phone on its own: each request wakes WhatsApp on the phone (on
+  iOS, a "syncing stopped" notification when it can't finish).
 - QR pairing: whatsmeow rotates codes (60 s, then 20 s each) and then
   times out; that timeout ends the pairing as `expired`
   (`SessionEvent::PairExpired`), not `failed`, so the web starts a new one.

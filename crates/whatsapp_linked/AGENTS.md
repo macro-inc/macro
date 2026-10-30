@@ -41,10 +41,13 @@ They share no HTTP: only MacroDB rows and `NOTIFY` (`external_chat`'s
   added chats (`backfill_*` columns on `external_chat`; limits
   `BACKFILL_MESSAGE_LIMIT` / `BACKFILL_MAX_AGE_DAYS` in `models.rs`). The
   anchor is the chat's `whatsapp_chat.anchor`, else the newest stored message
-  the account saw; without one a group is `waiting_for_message` until a chat
-  update brings one, and a direct chat (a saved contact, a looked-up number)
-  is added `done`, reopened to `pending` only by an anchor older than its
-  adoption while nothing was imported. Saved contacts are chat-list rows with no activity. History
+  the account saw; with one a chat waits for the owner's Import
+  (`waiting_for_phone`; `POST /whatsapp/history-import` → `pending` +
+  `whatsapp_history_requested`), without one a group is
+  `waiting_for_message` until a chat update brings one, and a direct chat (a
+  saved contact, a looked-up number) is added `done`, made
+  `waiting_for_phone` only by an anchor older than its adoption while nothing
+  was imported. The phone is never asked without that Import. Saved contacts are chat-list rows with no activity. History
   messages skip the adoption-time boundary but only reach the account owner's
   own groups (`observed_bindings_in`).
 - `src/outbound/pg/lookups.rs`: phone-number lookups (`whatsapp_lookup`,
