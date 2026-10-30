@@ -970,14 +970,17 @@
           cef = lib.findFirst (p: p.name == "cef") null lock.package;
         in
         lib.last (lib.splitString "+" cef.version);
+      # An empty sha256 means the codec build for a new CEF version is still
+      # pending; build with the CDN CEF meanwhile rather than block releases.
+      cefCodecsPinned =
+        assert lib.assertMsg (cefCodecsVersion == cefCrateVersion)
+          "desktop-cef loads CEF ${cefCrateVersion} but cef-codecs.json pins ${cefCodecsVersion}; update the manifest and rebuild";
+        lib.warnIf (cefCodecs.sha256 == "")
+          "apps/web/tauri/desktop-cef/cef-codecs.json has no sha256; building with the CDN CEF, which cannot play H.264, HEVC, or AAC"
+          (cefCodecs.sha256 != "");
       cefCodecsArchive = pkgs.fetchurl {
         url = "https://github.com/macro-inc/macro/releases/download/${cefCodecs.releaseTag}/${cefCodecs.asset}";
-        sha256 =
-          assert lib.assertMsg (cefCodecsVersion == cefCrateVersion)
-            "desktop-cef loads CEF ${cefCrateVersion} but cef-codecs.json pins ${cefCodecsVersion}; update the manifest and rebuild";
-          assert lib.assertMsg (cefCodecs.sha256 != "")
-            "apps/web/tauri/desktop-cef/cef-codecs.json has no sha256; run the `Build CEF with codecs` workflow and pin its output";
-          cefCodecs.sha256;
+        inherit (cefCodecs) sha256;
       };
       cefCodecsDistribution = pkgs.runCommand "cef-codecs-${cefCodecsVersion}" { } ''
         tar -xjf ${cefCodecsArchive}
@@ -1017,9 +1020,13 @@
         preBuild = ''
           export PATH="$PATH:/usr/bin:/bin:/usr/sbin:/sbin"
           export CEF_PATH="$TMPDIR/tauri-cef"
+        ''
+        + lib.optionalString cefCodecsPinned ''
           mkdir -p "$CEF_PATH"
           cp -R ${cefCodecsDistribution}/. "$CEF_PATH/"
           chmod -R u+w "$CEF_PATH"
+        ''
+        + ''
           cp ${../apps/web/package.json} apps/web/package.json
           rm -rf apps/web/dist
           cp -r ${frontend} apps/web/dist
