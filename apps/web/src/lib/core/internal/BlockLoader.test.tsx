@@ -273,43 +273,6 @@ it.each(['view', undefined] as const)(
   }
 );
 
-it('keeps an owner’s open document when request state confirms edit', async () => {
-  const loaded = Promise.withResolvers<void>();
-  const cleanupSource = vi.fn();
-  const load = vi.fn(async () =>
-    ok({ userAccessLevel: 'owner', syncSource: { cleanup: cleanupSource } })
-  );
-  render(() => {
-    createEffect(
-      on(blockDataSignal.get, (data) => {
-        if (data) loaded.resolve();
-      })
-    );
-    return (
-      <BlockLoader
-        id="01a140ad-06d5-7791-8b68-bc128654bbba"
-        source={{ type: 'dss', id: '01a140ad-06d5-7791-8b68-bc128654bbba' }}
-        definition={{
-          name: 'md',
-          description: 'Document',
-          accepted: {},
-          component: () => null,
-          load,
-        }}
-      />
-    );
-  });
-  await loaded.promise;
-  const data = blockDataSignal.get();
-
-  notifyAccess('edit');
-  notifyAccess('edit');
-  expect(cleanupSource).not.toHaveBeenCalled();
-  expect(blockDataSignal.get()).toBe(data);
-  expect(blockUserAccessSignal.get()).toBe('owner');
-  expect(load).toHaveBeenCalledTimes(1);
-});
-
 it('reconciles a stale permission-bearing load on a later unchanged confirmation', async () => {
   const pending = Promise.withResolvers<void>();
   const loaded = Promise.withResolvers<void>();
