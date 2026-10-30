@@ -78,6 +78,14 @@ describe('RecipientSelector typed addresses', () => {
     expect(emails()).toEqual(['a@example.com', 'b@example.com']);
   });
 
+  it('clears an address that is already a recipient', () => {
+    const { input, emails } = renderSelector();
+    fireEvent.input(input, { target: { value: 'ana@example.org;' } });
+    fireEvent.input(input, { target: { value: 'Ana@example.org;' } });
+    expect(emails()).toEqual(['ana@example.org']);
+    expect(input.value).toBe('');
+  });
+
   it('keeps an address typed straight after picking a suggestion', async () => {
     const user = userEvent.setup();
     const { input, emails } = renderSelector();

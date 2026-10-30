@@ -748,6 +748,12 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     const pending = emails.filter(
       (email) => !selectedEmails().has(email.toLowerCase())
     );
+    // Every address is already a recipient: setting the same selection again
+    // still makes Kobalte clear the text instead of leaving it in the field.
+    if (pending.length === 0) {
+      handleChange([...(props.selectedOptions as CombinedRecipientItem[])]);
+      return true;
+    }
     if (props.allowCustomRecipients === false && !pending.every(findKnown))
       return false;
     const added = pending.map(
@@ -759,7 +765,6 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
           invalid: false,
         })
     );
-    if (added.length === 0) return false;
     handleChange([
       ...(props.selectedOptions as CombinedRecipientItem[]),
       ...added,
