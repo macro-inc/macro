@@ -758,8 +758,8 @@ shows the Projects return breadcrumb and the project name, with the same Share
 and side-panel controls as task detail. `Project actions` (the dots button
 after the name) opens the row context menu's entries for this project,
 including `Delete` for its owner. Choose Overview or Tasks using the inset
-tabs in that top bar; below 600px they collapse to icons with tooltips and the
-project name truncates instead of the tabs clipping. In Tasks, an outlined
+tabs in that top bar; below 600px they collapse to icons, with tooltips on
+desktop, and the project name truncates instead. In Tasks, an outlined
 circular search button expands into a focused `Search in <project name>` field.
 Close or Escape clears the query and restores focus to the button. The task
 toolbar stays the same height and scrolls

@@ -3,6 +3,7 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
 import {
   type Accessor,
+  createMemo,
   createSignal,
   type JSX,
   type ParentProps,
@@ -24,7 +25,9 @@ export function EntityDetailTopBar(
 ) {
   const [topBar, setTopBar] = createSignal<HTMLDivElement>();
   const size = createElementSize(topBar);
-  const compact = () => (size.width ?? Infinity) < COMPACT_NAVIGATION_WIDTH;
+  const compact = createMemo(
+    () => (size.width ?? Infinity) < COMPACT_NAVIGATION_WIDTH
+  );
   return (
     <ViewShell.TopBar
       ref={setTopBar}

@@ -5,6 +5,7 @@ import {
   makeCopyLinkAction,
 } from '@app/features/next-soup/actions';
 import type { ComposeTaskProps } from '@app/features/task-composer/core/types';
+import { t } from '@app/lib/i18n';
 import { useNavigate } from '@app/lib/split-router';
 import {
   projectDetailRoute,
@@ -259,18 +260,18 @@ function ProjectDetailHost(props: ProjectDetailProps) {
         }
         navigation={(compact) => (
           <Tabs
-            aria-label="Project sections"
+            aria-label={t('tabs.projectSections')}
             touch="inset"
             class="shrink-0"
             options={[
               {
                 value: 'overview',
-                label: 'Overview',
+                label: t('tabs.project-overview'),
                 icon: compact() ? SquaresFourIcon : undefined,
               },
               {
                 value: 'tasks',
-                label: 'Tasks',
+                label: t('tabs.project-tasks'),
                 icon: compact() ? getIconConfig('task').icon : undefined,
               },
             ]}
