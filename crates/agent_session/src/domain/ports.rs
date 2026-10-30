@@ -459,6 +459,11 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Record who prompted the turn `id` is about to run.
+    ///
+    /// When the acting user is not the owner, the same write grants them
+    /// [`JOINED_PROMPTER_ACCESS`](crate::domain::sharing::JOINED_PROMPTER_ACCESS)
+    /// on the session, never lowering a grant they hold, and records it in
+    /// their history.
     fn set_turn_prompter(
         &self,
         id: AgentSessionId,

@@ -4,6 +4,7 @@ mod queue;
 mod recovery;
 mod search;
 mod session_task;
+mod turn_prompter;
 mod user_cleanup;
 mod working_branch;
 use crate::domain::model::{

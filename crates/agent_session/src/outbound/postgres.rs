@@ -841,16 +841,50 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
     }
 
     async fn set_turn_prompter(&self, id: AgentSessionId, prompter: &TurnPrompter) -> Result<()> {
-        sqlx::query!(
-            "UPDATE agent_session SET turn_action_id = $2, turn_prompter = $3, turn_prompter_kind = $4 WHERE id = $1",
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .context("begin recording the turn prompter")?;
+        let owner_id = sqlx::query_scalar!(
+            "UPDATE agent_session SET turn_action_id = $2, turn_prompter = $3, turn_prompter_kind = $4 WHERE id = $1 RETURNING owner_id",
             id.as_uuid(),
             prompter.action_id.as_uuid(),
-            prompter.user.as_ref().filter(|_| prompter.kind != crate::domain::model::PrompterKind::System).map(|user| user.as_ref()),
+            prompter.acting_user().map(|user| user.as_ref()),
             prompter.kind.as_ref(),
         )
-        .execute(&self.pool)
+        .fetch_optional(&mut *transaction)
         .await
         .context("failed to record the turn prompter")?;
+
+        if let (Some(owner_id), Some(user)) = (owner_id, prompter.acting_user())
+            && owner_id != user.as_ref()
+        {
+            sqlx::query!(
+                r#"
+                INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+                VALUES ($1, 'agent_session', $2, 'user', $3)
+                ON CONFLICT (entity_id, entity_type, source_id, source_type)
+                WHERE granted_from_project_id IS NULL
+                DO UPDATE SET access_level = EXCLUDED.access_level, updated_at = NOW()
+                WHERE entity_access.access_level < EXCLUDED.access_level
+                "#,
+                id.as_uuid(),
+                user.as_ref(),
+                crate::domain::sharing::JOINED_PROMPTER_ACCESS as _,
+            )
+            .execute(&mut *transaction)
+            .await
+            .context("failed to grant the prompter access to the agent session")?;
+            upsert_user_history(&mut transaction, user.as_ref(), &id.as_uuid())
+                .await
+                .context("failed to record the agent session in the prompter's history")?;
+        }
+
+        transaction
+            .commit()
+            .await
+            .context("commit the turn prompter")?;
         Ok(())
     }
 

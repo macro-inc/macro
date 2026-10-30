@@ -43,6 +43,13 @@ pub fn originating_channel_access(bot: SessionBotOwnership) -> AccessLevel {
     }
 }
 
+/// The access a person gets to someone else's session once their prompt joins
+/// it, such as by mentioning the agent in the thread the session runs in.
+///
+/// They could already steer it through that thread; a grant on the session
+/// itself is what lists it for them.
+pub const JOINED_PROMPTER_ACCESS: AccessLevel = AccessLevel::Edit;
+
 /// Persistence capability for session sharing, independent of transport.
 pub trait SessionSharingRepo: Send + Sync + 'static {
     /// Whether the session belongs to a private user-persona conversation.
