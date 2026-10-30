@@ -105,6 +105,7 @@ function FolderQueryFixture() {
                   <EmailRowActions
                     archived
                     canArchive={false}
+                    canUnarchive={false}
                     pending={pending()}
                     onArchive={() => {}}
                     onFocus={() => {}}

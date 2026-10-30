@@ -31,6 +31,7 @@ describe('email row actions', () => {
         <EmailRowActions
           archived
           canArchive={false}
+          canUnarchive={false}
           pending={false}
           restore={{ label: 'Not spam', run: restore }}
           onArchive={vi.fn()}
