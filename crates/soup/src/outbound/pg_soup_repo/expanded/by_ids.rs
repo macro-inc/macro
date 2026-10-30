@@ -12,18 +12,30 @@ use std::str::FromStr;
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
-/// Returns objects that a user has EXPLICIT and IMPLICIT access to by their IDs, excluding project items.
+/// Which access predicate a by-ID read applies.
+#[derive(Clone, Copy, Debug)]
+enum ByIdAccess {
+    /// The listing's grants: items the viewer reaches through `entity_access`.
+    Listing,
+    /// None: the caller holds an entity access receipt for every id.
+    Receipted,
+}
+
+/// Returns documents and chats by their IDs, excluding project items.
 ///
-/// This function returns all requested items the user can access, including those with inherited
-/// permissions through project hierarchy. If a user has access to a project that contains
-/// the requested items, those items WILL be included in the results even if the user doesn't
-/// have explicit permissions on them. Project items themselves are excluded from results -
-/// only documents and chats are returned. Result order is unspecified.
+/// Under [`ByIdAccess::Listing`] it returns the requested items the user can
+/// access, including those with inherited permissions through project
+/// hierarchy: if a user has access to a project that contains the requested
+/// items, those items WILL be included even without explicit permissions on
+/// them. Under [`ByIdAccess::Receipted`] it returns every requested item, and
+/// `viewer` only scopes view history and task importance. Project items
+/// themselves are excluded from results. Result order is unspecified.
 #[tracing::instrument(err, skip(db, entities))]
 async fn expanded_soup_by_ids_hydrated<'a>(
     db: &PgPool,
-    user_id: MacroUserIdStr<'_>,
+    viewer: Option<MacroUserIdStr<'_>>,
     entities: impl IntoIterator<Item = &'a Entity<'a>>,
+    access: ByIdAccess,
 ) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
     let mut document_ids = Vec::new();
     let mut chat_ids = Vec::new();
@@ -137,12 +149,12 @@ async fn expanded_soup_by_ids_hydrated<'a>(
             ) di ON true
             WHERE d."deletedAt" IS NULL
             AND d.id = ANY($2::text[])
-            AND EXISTS (
+            AND ($7 OR EXISTS (
                 SELECT 1 FROM entity_access ea
                 WHERE ea.entity_id::text = d.id
                     AND ea.entity_type = 'document'
                     AND ea.source_id = ANY(ARRAY(SELECT source_id FROM user_source_ids))
-            )
+            ))
 
             UNION ALL
         
@@ -176,22 +188,23 @@ async fn expanded_soup_by_ids_hydrated<'a>(
                 AND uh."userId" = $1
             WHERE c."deletedAt" IS NULL
             AND c.id = ANY($3::text[])
-            AND EXISTS (
+            AND ($7 OR EXISTS (
                 SELECT 1 FROM entity_access ea
                 WHERE ea.entity_id::text = c.id
                     AND ea.entity_type = 'chat'
                     AND ea.source_id = ANY(ARRAY(SELECT source_id FROM user_source_ids))
-            )
+            ))
         )
         SELECT * 
         FROM Combined
         "#,
-        user_id.as_ref(),        // $1
-        document_ids.as_slice(), // $2
-        chat_ids.as_slice(),     // $3
-        completed_option_id,     // $4
-        status_property_id,      // $5
-        assignees_property_id,   // $6
+        viewer.as_ref().map(|user| user.as_ref()), // $1
+        document_ids.as_slice(),                   // $2
+        chat_ids.as_slice(),                       // $3
+        completed_option_id,                       // $4
+        status_property_id,                        // $5
+        assignees_property_id,                     // $6
+        matches!(access, ByIdAccess::Receipted),   // $7
     )
     .try_map(map_soup_projection_hydration!())
     .fetch_all(db)
@@ -207,7 +220,18 @@ pub async fn expanded_soup_by_ids_with_projection<'a>(
     user_id: MacroUserIdStr<'_>,
     entities: impl IntoIterator<Item = &'a Entity<'a>>,
 ) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
-    expanded_soup_by_ids_hydrated(db, user_id, entities).await
+    expanded_soup_by_ids_hydrated(db, Some(user_id), entities, ByIdAccess::Listing).await
+}
+
+/// Returns documents and chats the caller holds view receipts for, by ID,
+/// with optional document server facts. Applies no access predicate.
+#[tracing::instrument(err, skip(db, entities))]
+pub async fn expanded_viewable_by_ids<'a>(
+    db: &PgPool,
+    viewer: Option<MacroUserIdStr<'_>>,
+    entities: impl IntoIterator<Item = &'a Entity<'a>>,
+) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
+    expanded_soup_by_ids_hydrated(db, viewer, entities, ByIdAccess::Receipted).await
 }
 
 /// Returns expanded authorized items by ID without projection metadata.
@@ -218,9 +242,11 @@ pub async fn expanded_soup_by_ids<'a>(
     user_id: MacroUserIdStr<'_>,
     entities: impl IntoIterator<Item = &'a Entity<'a>>,
 ) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
-    Ok(expanded_soup_by_ids_hydrated(db, user_id, entities)
-        .await?
-        .into_iter()
-        .map(|hydration| hydration.item)
-        .collect())
+    Ok(
+        expanded_soup_by_ids_hydrated(db, Some(user_id), entities, ByIdAccess::Listing)
+            .await?
+            .into_iter()
+            .map(|hydration| hydration.item)
+            .collect(),
+    )
 }

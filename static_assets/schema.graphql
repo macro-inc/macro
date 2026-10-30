@@ -8897,6 +8897,12 @@ type GraphqlSoupInitiative implements GraphqlSoupEntity {
 	"""
 	activity(limit: Int): [GraphqlActivityEvent!]!
 	"""
+	The associated tasks this viewer may view, from the same access walk
+	as `taskIds` and in its order. A public link opens each task the same
+	way it opens the project, so a caller with no account reads them too.
+	"""
+	tasks: [GraphqlSoupEntity!]!
+	"""
 	Collaborators, independent of assignees.
 	"""
 	memberIds: [String!]!

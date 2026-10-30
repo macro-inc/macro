@@ -22,6 +22,10 @@ viewer pattern), which apply to every type defined here.
   viewer is optional: a caller with no account reads exactly these types, and
   nothing that needs an inbox or a listing. To open another type to links,
   add it to `hydrates_through_receipts` and to Soup's viewable hydration.
+  Documents and chats hydrate through receipts only where an earlier read
+  already holds them (`SoupItemDataLoader::hydrate_receipted`, as a
+  project's `tasks` does): routing every document load through per-item
+  access checks would multiply the cost of realtime document patches.
 - `NOTIFIED_AT` maps to Soup's notified request, not a simple sort: `soup`
   accepts it descending only and `groupSoup` rejects it. Its continuation
   cursors carry a different sort tag, so `inputs.rs` decodes both cursor shapes.

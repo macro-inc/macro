@@ -65,13 +65,13 @@ pub trait SoupRepo: Send + Sync + 'static {
     /// Fetch expanded items by id with no listing policy: the caller already
     /// holds an entity access receipt for every id. `viewer` scopes per-viewer
     /// columns such as view history, and is `None` for a caller with no
-    /// account. Initiatives and agent sessions hydrate here; other types are
-    /// omitted.
+    /// account. Documents, chats, initiatives and agent sessions hydrate
+    /// here; other types are omitted.
     fn expanded_viewable_by_ids<'a>(
         &self,
         viewer: Option<MacroUserIdStr<'a>>,
         entities: &'a [Entity<'a>],
-    ) -> impl Future<Output = Result<Vec<SoupItem<()>>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<SoupProjectionHydration>, Self::Err>> + Send;
 
     /// Fetch unexpanded soup items for an explicit list of entity ids.
     fn unexpanded_soup_by_ids<'a>(
@@ -345,8 +345,8 @@ pub trait SoupService: Send + Sync + 'static {
     /// or team link opens resolves although Soup's listings never enumerate
     /// it. Every receipt belongs to the same viewer, signed in or not;
     /// `team_receipt` is that viewer's team, which scopes agent sessions' pull
-    /// request facts. Initiatives and agent sessions hydrate; other types are
-    /// omitted.
+    /// request facts. Documents, chats, initiatives and agent sessions
+    /// hydrate; other types are omitted.
     ///
     /// Services without single-item hydration reject the request. The
     /// production service overrides this method.

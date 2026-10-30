@@ -260,9 +260,20 @@ impl SoupRepo for PgSoupRepo {
         &self,
         viewer: Option<MacroUserIdStr<'a>>,
         entities: &'a [Entity<'a>],
-    ) -> Result<Vec<SoupItem<()>>, Self::Err> {
-        let mut items = initiative::viewable_by_ids(&self.pool.0, viewer.clone(), entities).await?;
-        items.extend(agent_session::viewable_by_ids(&self.pool.0, viewer, entities).await?);
+    ) -> Result<Vec<SoupProjectionHydration>, Self::Err> {
+        let mut items =
+            expanded::by_ids::expanded_viewable_by_ids(&self.pool.0, viewer.clone(), entities)
+                .await?;
+        items.extend(
+            initiative::viewable_by_ids(&self.pool.0, viewer.clone(), entities)
+                .await?
+                .into_iter()
+                .chain(agent_session::viewable_by_ids(&self.pool.0, viewer, entities).await?)
+                .map(|item| SoupProjectionHydration {
+                    item,
+                    document_server_facts: None,
+                }),
+        );
         Ok(items)
     }
 

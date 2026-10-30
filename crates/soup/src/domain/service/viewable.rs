@@ -51,7 +51,7 @@ where
 
         let mut candidates = items
             .into_iter()
-            .map(SoupCandidate::plain)
+            .map(SoupCandidate::from_projection_hydration)
             .collect::<Vec<_>>();
         // Pull request facts are scoped to the viewer's own and team sources;
         // a caller with no account sees none.
@@ -76,7 +76,7 @@ where
             .into_iter()
             .map(|candidate| SoupProjectionHydration {
                 item: candidate.item,
-                document_server_facts: None,
+                document_server_facts: candidate.document_server_facts,
             })
             .collect())
     }
