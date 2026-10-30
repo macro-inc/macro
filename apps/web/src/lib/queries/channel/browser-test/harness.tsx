@@ -26,6 +26,7 @@ function Harness() {
   });
   const [history, setHistory] = createSignal<string[]>([]);
   const [error, setError] = createSignal('');
+  const [completed, setCompleted] = createSignal(0);
   createEffect(() => {
     const status = detail.view().status;
     setHistory((previous) => [...previous, status]);
@@ -44,6 +45,7 @@ function Harness() {
   const run = (action: () => Promise<unknown>) => async () => {
     try {
       await action();
+      setCompleted((count) => count + 1);
     } catch (error) {
       setError(String(error));
     }
@@ -87,6 +89,7 @@ function Harness() {
       </section>
       <output aria-label="State history">{history().join(' → ')}</output>
       <output aria-label="Fixture error">{error()}</output>
+      <output aria-label="Completed actions">{completed()}</output>
     </main>
   );
 }
