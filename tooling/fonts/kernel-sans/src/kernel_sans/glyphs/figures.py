@@ -1027,8 +1027,9 @@ def sterling(p):
     hook = (squircle(*box, n=n) - squircle(*ibox, n=ni)) & above(min(cy, yt) - 1)
     hook = hook - (right_of(cxh) & below(yt))
     hook = hook - chamfer(_ox(box, n, yt, "right"), yt, p.ccut, "se")
-    hook = hook & (above(cy - 1) + right_of(cxh))
-    stem = rect(xs, h - 1, xs + s, cy + 1)
+    # Hook and stem meet edge to edge at the hook's vertical extreme (cy).
+    hook = hook & (above(cy) + right_of(cxh))
+    stem = rect(xs, h - 1, xs + s, cy)
     base = rect(0, 0, w, h)
     bar_y = P.CAP * 0.42
     bt = h * (0.9 - 0.08 * g)

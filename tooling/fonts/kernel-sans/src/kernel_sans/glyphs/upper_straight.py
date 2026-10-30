@@ -192,7 +192,7 @@ def F(p):
     s = p.cstem
     w = p.w(455, 0.6)
     h = p.chair
-    mid_y = CAP * 0.49
+    mid_y = CAP * 0.42
     shape = (
         rect(0, 0, s, CAP)
         + rect(s * 0.5, CAP - h, w, CAP)
@@ -480,7 +480,7 @@ def Z(p):
 def AE(p):
     s = p.cstem
     h = p.chair
-    xs = p.w(450, 0.9)  # left edge of the E stem
+    xs = p.w(420, 1.0)  # left edge of the E stem
     # The A's thin up-stroke runs from the baseline at x = 0 into the E stem,
     # crossing the stem's left edge clearly below the top arm (an apex crotch
     # like A's); the top arm caps it like A's flat apex.
@@ -488,7 +488,7 @@ def AE(p):
     ew = p.w(420, 0.55)  # E arms, measured from the stem
     # One bar serves as A crossbar and E middle arm: lower than E's so the A
     # counter above it stays open.
-    mid_y = CAP * 0.44
+    mid_y = CAP * 0.42
     shape = (
         dg.shape()
         + rect(xs, 0, xs + s, CAP)
