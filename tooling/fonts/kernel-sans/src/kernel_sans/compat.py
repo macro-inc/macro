@@ -267,30 +267,77 @@ def _align(ref, other, angle):
     return best[1]
 
 
+def _frame(contours):
+    """Glyph bounding box (x0, y0, w, h) used to compare positions across
+    weights, since contours drift apart as a glyph gets wider."""
+    xs = [p[0] for c in contours for s in c for p in s[1:]]
+    ys = [p[1] for c in contours for s in c for p in s[1:]]
+    if not xs:
+        return 0.0, 0.0, 1.0, 1.0
+    return min(xs), min(ys), max(max(xs) - min(xs), 1.0), max(max(ys) - min(ys), 1.0)
+
+
+def _rel(pt, frame):
+    x0, y0, w, h = frame
+    return ((pt[0] - x0) / w, (pt[1] - y0) / h)
+
+
+def _assign(cost):
+    """Minimum-cost perfect matching for a square matrix whose entries may be
+    None (not allowed). Returns a list col[i] or None when impossible.
+    Exhaustive for small sizes, greedy otherwise."""
+    import itertools
+
+    n = len(cost)
+    if n <= 7:
+        best = None
+        for perm in itertools.permutations(range(n)):
+            total = 0.0
+            for i, j in enumerate(perm):
+                c = cost[i][j]
+                if c is None:
+                    break
+                total += c
+            else:
+                if best is None or total < best[0]:
+                    best = (total, perm)
+        return list(best[1]) if best else None
+    taken, out = set(), []
+    for i in range(n):
+        opts = [(cost[i][j], j) for j in range(n) if j not in taken and cost[i][j] is not None]
+        if not opts:
+            return None
+        c, j = min(opts)
+        taken.add(j)
+        out.append(j)
+    return out
+
+
 def _match_contours(ref_contours, other_contours, label, angle):
     if len(ref_contours) != len(other_contours):
         raise IncompatibleGlyph(f"{len(ref_contours)} contours at the default weight, {len(other_contours)} at {label}")
-    remaining = list(range(len(other_contours)))
-    out = []
+    fr, fo = _frame(ref_contours), _frame(other_contours)
+    sig_o = [(len(_corners(c, angle)), _area(c) > 0) for c in other_contours]
+    cost = []
     for rc in ref_contours:
-        ncr = len(_corners(rc, angle))
-        sign = _area(rc) > 0
+        ncr, sign = len(_corners(rc, angle)), _area(rc) > 0
         cx, cy, w, h = _centre(rc)
-        cands = [j for j in remaining if len(_corners(other_contours[j], angle)) == ncr and (_area(other_contours[j]) > 0) == sign]
-        if not cands:
-            raise IncompatibleGlyph(
-                f"contour with {ncr} corners near ({cx:.0f}, {cy:.0f}) has no counterpart at {label} "
-                f"(corner counts there: {sorted(len(_corners(other_contours[j], angle)) for j in remaining)})"
-            )
-
-        def cost(j):
-            ox, oy, ow, oh = _centre(other_contours[j])
-            return (ox - cx) ** 2 + (oy - cy) ** 2 + 0.25 * ((ow - w) ** 2 + (oh - h) ** 2)
-
-        j = min(cands, key=cost)
-        remaining.remove(j)
-        out.append(other_contours[j])
-    return out
+        (rx, ry), (rw, rh) = _rel((cx, cy), fr), (w / fr[2], h / fr[3])
+        row = []
+        for j, oc in enumerate(other_contours):
+            if sig_o[j] != (ncr, sign):
+                row.append(None)
+                continue
+            ox, oy, ow, oh = _centre(oc)
+            (qx, qy), (qw, qh) = _rel((ox, oy), fo), (ow / fo[2], oh / fo[3])
+            row.append((qx - rx) ** 2 + (qy - ry) ** 2 + 0.25 * ((qw - rw) ** 2 + (qh - rh) ** 2))
+        cost.append(row)
+    perm = _assign(cost)
+    if perm is None:
+        counts_r = sorted(len(_corners(c, angle)) for c in ref_contours)
+        counts_o = sorted(n for n, _ in sig_o)
+        raise IncompatibleGlyph(f"corner counts per contour differ: {counts_r} at the default weight, {counts_o} at {label}")
+    return [other_contours[j] for j in perm]
 
 
 def _fractions(run):
@@ -355,27 +402,29 @@ def _exact(parsed, default):
             continue
         if len(contours) != len(ref):
             return None
-        remaining = list(range(len(contours)))
-        matched = []
+        fr, fo = _frame(ref), _frame(contours)
+        cost, rots = [], []
         for rc in ref:
-            sig = tuple(s[0] for s in rc)
-            best = None
-            for j in remaining:
-                oc = contours[j]
-                if len(oc) != len(rc):
-                    continue
-                for k in range(len(oc)):
-                    rot = oc[k:] + oc[:k]
-                    if tuple(s[0] for s in rot) != sig:
-                        continue
-                    cost = sum(_dist(a[1], b[1]) ** 2 for a, b in zip(rc, rot))
-                    if best is None or cost < best[0]:
-                        best = (cost, j, rot)
-            if best is None:
-                return None
-            remaining.remove(best[1])
-            matched.append(best[2])
-        out[w] = matched
+            sig = tuple(seg[0] for seg in rc)
+            row, rrow = [], []
+            for oc in contours:
+                best = None
+                if len(oc) == len(rc):
+                    for k in range(len(oc)):
+                        rot = oc[k:] + oc[:k]
+                        if tuple(seg[0] for seg in rot) != sig:
+                            continue
+                        c = sum(_dist(_rel(a[1], fr), _rel(b[1], fo)) ** 2 for a, b in zip(rc, rot))
+                        if best is None or c < best[0]:
+                            best = (c, rot)
+                row.append(best[0] if best else None)
+                rrow.append(best[1] if best else None)
+            cost.append(row)
+            rots.append(rrow)
+        perm = _assign(cost)
+        if perm is None:
+            return None
+        out[w] = [rots[i][j] for i, j in enumerate(perm)]
     return out
 
 

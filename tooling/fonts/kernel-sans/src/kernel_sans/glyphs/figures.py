@@ -5,7 +5,13 @@ math operators, degree, mu and the ordinals.
 Figures sit on the cap height (720) with the capital overshoot `P.COS`, use
 `p.fstem` / `p.fhair` and the capital squircle exponents, and share one
 tabular advance (`_fw`): each is drawn from x = 0 and centred in it by `_fit`.
-Math operators share that advance and centre on `P.AXIS`.
+6 and 9 have straight tails (DIN-like) blended into the bowl. Math operators
+share that advance and centre on `P.AXIS`; their `.case` forms sit on
+`P.CASE_AXIS`. Superiors, fraction parts and the ordinals are the full
+shapes drawn 150 weight units heavier and scaled by `SUP`.
+
+Ink traps at diagonal crotches use `_crotch`, a V-notch whose shape scales
+with its depth (minimum 8 units) so every master keeps the same corners.
 """
 
 import math
@@ -26,11 +32,9 @@ from ..geom import (
     right_of,
     ring,
     squircle,
-    stem_trap,
     stroke,
-    trap,
 )
-from . import G, glyph
+from . import G, glyph, ref
 from .parts import arch, outer_x
 
 PROOF_TEXT = [
@@ -114,34 +118,6 @@ def _unit(a_deg):
     return (math.cos(a), math.sin(a))
 
 
-def _line_cross_sq(p0, d, box, n, lo=0.0, hi=2000.0):
-    """First point along p0 + t*d (t in lo..hi) that lies inside the squircle
-    filling box; used to find where a straight stroke edge meets a bowl."""
-    x0, y0, x1, y1 = box
-    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-    rx, ry = (x1 - x0) / 2, (y1 - y0) / 2
-
-    def inside(t):
-        x, y = p0[0] + d[0] * t, p0[1] + d[1] * t
-        return (abs(x - cx) / rx) ** n + (abs(y - cy) / ry) ** n <= 1
-
-    steps = 400
-    prev = lo
-    for i in range(1, steps + 1):
-        t = lo + (hi - lo) * i / steps
-        if inside(t):
-            a, b = prev, t
-            for _ in range(40):
-                m = (a + b) / 2
-                if inside(m):
-                    b = m
-                else:
-                    a = m
-            return (p0[0] + d[0] * b, p0[1] + d[1] * b)
-        prev = t
-    return None
-
-
 def _crotch(x, y, a1, a2, depth):
     """Ink trap at a crotch (x, y) whose two edges leave it into the white at
     angles a1 and a2 (degrees): the wedge points into the black, opposite
@@ -214,15 +190,6 @@ def _tangent(q, box, n, pick):
     if (a[i] > b[i]) == (pick in ("left", "low")):
         a, b = b, a
     return a
-
-
-def _inward(pt, box, d=1.5):
-    """Nudge a point on a squircle d units towards its centre, so a line
-    through it crosses the outline cleanly instead of grazing it."""
-    cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
-    vx, vy = cx - pt[0], cy - pt[1]
-    m = math.hypot(vx, vy)
-    return (pt[0] + vx / m * d, pt[1] + vy / m * d)
 
 
 def _ray_hit_sq(p0, d, box, n):
@@ -551,59 +518,139 @@ FIGS = {
 NUDGE = {"one": 28, "four": -6, "seven": 6}
 
 
-@glyph("zero", 0x0030)
+@glyph("zero.tf")
 def zero(p):
     return _fit(p, _zero(p))
 
 
-@glyph("zero.zero")
+@glyph("zero.tf.zero")
 def zero_zero(p):
     return _fit(p, _zero(p) + _zero_slash(p))
 
 
-@glyph("one", 0x0031)
+@glyph("one.tf")
 def one(p):
     return _fit(p, _one(p), NUDGE["one"])
 
 
-@glyph("two", 0x0032)
+@glyph("two.tf")
 def two(p):
     return _fit(p, _two(p))
 
 
-@glyph("three", 0x0033)
+@glyph("three.tf")
 def three(p):
     return _fit(p, _three(p))
 
 
-@glyph("four", 0x0034)
+@glyph("four.tf")
 def four(p):
     return _fit(p, _four(p), NUDGE["four"])
 
 
-@glyph("five", 0x0035)
+@glyph("five.tf")
 def five(p):
     return _fit(p, _five(p))
 
 
-@glyph("six", 0x0036)
+@glyph("six.tf")
 def six(p):
     return _fit(p, _six(p))
 
 
-@glyph("seven", 0x0037)
+@glyph("seven.tf")
 def seven(p):
     return _fit(p, _seven(p), NUDGE["seven"])
 
 
-@glyph("eight", 0x0038)
+@glyph("eight.tf")
 def eight(p):
     return _fit(p, _eight(p))
 
 
-@glyph("nine", 0x0039)
+@glyph("nine.tf")
 def nine(p):
     return _fit(p, _nine(p))
+
+
+# ---------------------------------------------------------------------------
+# Proportional figures, the default: the tabular outlines above respaced with
+# their own sidebearings (multiples of p.csbr), so "1" doesn't leave a hole in
+# running text. The tabular forms stay available through tnum (.tf).
+
+PROP_SB = {
+    "zero": (0.9, 0.9),
+    "one": (0.45, 1.25),
+    "two": (0.8, 0.8),
+    "three": (0.7, 0.85),
+    "four": (0.55, 0.75),
+    "five": (0.85, 0.8),
+    "six": (0.9, 0.8),
+    "seven": (0.6, 0.5),
+    "eight": (0.85, 0.85),
+    "nine": (0.8, 0.9),
+}
+
+
+def _prop(p, name, tabular=None):
+    g = ref(tabular or name + ".tf")
+    lk, rk = PROP_SB[name]
+    return G(g.shape, l=lk * p.csbr, r=rk * p.csbr)
+
+
+@glyph("zero", 0x0030)
+def zero_prop(p):
+    return _prop(p, "zero")
+
+
+@glyph("zero.zero")
+def zero_zero_prop(p):
+    return _prop(p, "zero", "zero.tf.zero")
+
+
+@glyph("one", 0x0031)
+def one_prop(p):
+    return _prop(p, "one")
+
+
+@glyph("two", 0x0032)
+def two_prop(p):
+    return _prop(p, "two")
+
+
+@glyph("three", 0x0033)
+def three_prop(p):
+    return _prop(p, "three")
+
+
+@glyph("four", 0x0034)
+def four_prop(p):
+    return _prop(p, "four")
+
+
+@glyph("five", 0x0035)
+def five_prop(p):
+    return _prop(p, "five")
+
+
+@glyph("six", 0x0036)
+def six_prop(p):
+    return _prop(p, "six")
+
+
+@glyph("seven", 0x0037)
+def seven_prop(p):
+    return _prop(p, "seven")
+
+
+@glyph("eight", 0x0038)
+def eight_prop(p):
+    return _prop(p, "eight")
+
+
+@glyph("nine", 0x0039)
+def nine_prop(p):
+    return _prop(p, "nine")
 
 
 # ---------------------------------------------------------------------------
@@ -709,9 +756,9 @@ def fraction(p):
 # Percent and per mille: small squircle rings either side of a slash.
 
 
-def _pct_ring(p):
+def _pct_ring(p, narrow=1.0):
     g = max(0.0, p.grow) / 70
-    rw, rh = p.w(250, 1.4), P.CAP * 0.46
+    rw, rh = p.w(262, 1.4) * narrow, P.CAP * 0.46
     ws, h = p.fstem * (0.84 - 0.22 * g), _fh(p) * (0.8 - 0.18 * g)
     os_ = P.COS * 0.7
     sh = ring(0, -os_, rw, rh + os_, ws, h, n=_n(p), n_in=_ni(p))
@@ -719,11 +766,13 @@ def _pct_ring(p):
 
 
 def _pct_rings(p, k):
-    r = _pct_ring(p)
     if k == 1:
-        return r
+        return _pct_ring(p)
+    # Per mille: the pair below is a little narrower, so the sign stays
+    # compact.
+    r = _pct_ring(p, 0.9)
     rw = r.bounds()[2] - r.bounds()[0]
-    return r + r.move(rw + p.w(40, 0.2), 0)
+    return r + r.move(rw + p.w(36, 0.2), 0)
 
 
 @glyph("percent", 0x0025)
@@ -1050,7 +1099,7 @@ def _wave(p, cx, cy, half_w, amp, t=None):
     ae = math.radians(62)
     de = (math.cos(ae), math.sin(ae))  # end direction, towards the crest
     he = we / (2 * math.sin(ae))
-    phi = math.atan2(2.0 * amp, half_w * 0.88)
+    phi = math.radians(47)  # the middle runs steeply, so crest and trough stay round
     dm = (math.cos(phi), -math.sin(phi))
     nm = (math.sin(phi), math.cos(phi))
     k = 0.64

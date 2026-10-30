@@ -5,6 +5,7 @@ registering a glyph with the right suffix:
 
     a.ss01           -> ss01 (stylistic set 1)
     zero.zero        -> zero (slashed zero)
+    one.tf           -> tnum (tabular figures; the defaults are proportional)
     parenleft.case   -> case (case-sensitive forms)
     f_i              -> liga (ligature of f and i)
 """
@@ -50,9 +51,15 @@ def feature_code(drawn, p):
 
     sets = {}
     for n in sorted(names):
+        parts = n.split(".")
+        if "tf" in parts[1:]:
+            base = ".".join(x for i, x in enumerate(parts) if not (i and x == "tf"))
+            if base in names:
+                sets.setdefault("tnum", []).append((base, n))
         m = re.match(r"^(.+)\.(ss\d\d|zero|case)$", n)
         if m and m.group(1) in names:
             sets.setdefault(m.group(2), []).append((m.group(1), n))
-    for tag in sorted(sets):
+    # tnum first, so zero then finds the tabular zero to slash.
+    for tag in sorted(sets, key=lambda t: (t != "tnum", t)):
         out.append(_sub_feature(tag, sets[tag], STYLISTIC_SET_NAMES.get(tag)))
     return "\n\n".join(x for x in out if x) + "\n"

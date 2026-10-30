@@ -373,6 +373,7 @@ footer { border-top: 1px solid var(--rule); padding-block: 28px 40px; color: var
         <button class="toggle" type="button" data-feat="ss01" aria-pressed="false">ss01 single-storey a</button>
         <button class="toggle" type="button" data-feat="zero" aria-pressed="false">zero slashed</button>
         <button class="toggle" type="button" data-feat="case" aria-pressed="false">case forms</button>
+        <button class="toggle" type="button" data-feat="tnum" aria-pressed="false">tnum tabular</button>
       </div>
     </div>
     <div class="tester" id="tester" contenteditable="true" spellcheck="false">Quarterly sync: 1,024 nodes online — latency 0.42 ms (−18%). Ship the build at 09:30?</div>
@@ -415,7 +416,7 @@ footer { border-top: 1px solid var(--rule); padding-block: 28px 40px; color: var
     <div class="section-head">
       <span class="label">In use · sample data</span>
       <h2>Built for interfaces</h2>
-      <p>Figures are tabular by default, so numbers line up in tables and counters without extra settings.</p>
+      <p>Figures are proportional in running text. Tables and counters turn on <code>tnum</code> (<code>font-variant-numeric: tabular-nums</code>) so columns line up.</p>
     </div>
     <div class="ui">
       <div class="ui-head"><h3>Build pipeline</h3><span class="mono">Last 24 hours</span></div>
@@ -465,6 +466,7 @@ body {
           <tr><td>liga</td><td>fi and fl ligatures</td></tr>
           <tr><td>ss01</td><td>Single-storey a</td></tr>
           <tr><td>zero</td><td>Slashed zero</td></tr>
+          <tr><td>tnum</td><td>Tabular figures for tables and counters</td></tr>
           <tr><td>case</td><td>Brackets, dashes and guillemets raised for capitals</td></tr>
           <tr><td>wght</td><td>Variable weight 300–800; named instances Light to ExtraBold</td></tr>
         </tbody>

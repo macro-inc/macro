@@ -9,6 +9,8 @@ guillemet tips are cut flat across their point.
 
 import math
 
+import pathops
+
 from .. import params as P
 from ..geom import (
     Shape,
@@ -26,7 +28,6 @@ from ..geom import (
     right_of,
     ring,
     squircle,
-    stem_trap,
     stroke,
 )
 from . import G, glyph, ref
@@ -64,6 +65,15 @@ def _sq_y(x0, y0, x1, y1, n, x, side="top"):
     return cy + dy if side == "top" else cy - dy
 
 
+def _ring_part(x0, y0, x1, y1, ix0, iy0, ix1, iy1, n, n_in, clip):
+    """(outer squircle - inner squircle) & clip, for building curves from
+    quadrants whose inner box is not simply inset. Join such pieces where
+    their tangents agree, touching exactly or with the curve overlapping:
+    pathops drops pieces when a rectangle overlaps a squircle just past its
+    tangent point."""
+    return (squircle(x0, y0, x1, y1, n) - squircle(ix0, iy0, ix1, iy1, n_in)) & clip
+
+
 def _comma(p, x0, y0):
     """The comma: the period's square at (x0, y0) with a wedge tail growing
     down and to the left from its bottom edge."""
@@ -83,8 +93,24 @@ def _comma(p, x0, y0):
     ])
 
 
-def _comma_depth(p):
-    return p.dot * 0.55 + 85
+def _lr(shape):
+    """The shape with its contours in reading order (left to right, then
+    bottom to top). compat.py pairs contours across masters greedily by
+    nearest centre in path order; for repeated parts that move apart as the
+    glyph widens (the dots of …, the marks of " and ”) a right-to-left order
+    pairs the wrong copies and the variable font garbles them in between."""
+    contours = sorted(shape.path.contours, key=lambda c: ((c.bounds[0] + c.bounds[2]) / 2, (c.bounds[1] + c.bounds[3]) / 2))
+    out = pathops.Path()
+    for c in contours:
+        out.addPath(c)
+    return Shape(out)
+
+
+def _damp(v, v400, k):
+    """Grow a stroke more slowly than the letters do above Regular (k < 1),
+    where small counters (© ® ™, the asterisk hub, §) would close up.
+    Lighter weights keep the plain value."""
+    return v if v <= v400 else v400 + k * (v - v400)
 
 
 def _gap(p):
@@ -92,20 +118,17 @@ def _gap(p):
     return p.dot * 0.3 + 60
 
 
-def _chevron(tip_x, yc, h, dx, w, flat, pointing="left"):
-    """A guillemet chevron: two diagonal strokes of perpendicular thickness
-    w meeting at a point at (tip_x, yc), ends cut horizontally at
-    yc +- h/2, the point cut flat by `flat`."""
+def _chevron(tip_x, yc, h, dx, w, flat):
+    """A left-pointing guillemet chevron: two diagonal strokes of
+    perpendicular thickness w meeting at a point at (tip_x, yc), ends cut
+    horizontally at yc +- h/2, the point cut flat by `flat`."""
     hh = h / 2
     k = 4.0
     xiv = tip_x + w * math.hypot(dx, hh) / hh  # inner vertex
     outer = poly([(tip_x, yc), (tip_x + k * dx, yc + k * hh), (tip_x + k * dx, yc - k * hh)])
     inner = poly([(xiv, yc), (xiv + k * dx, yc + k * hh), (xiv + k * dx, yc - k * hh)])
     shape = (outer - inner) & band(yc - hh, yc + hh)
-    shape = shape - left_of(tip_x + flat)
-    if pointing == "right":
-        shape = shape.flip_x(tip_x)
-    return shape
+    return shape - left_of(tip_x + flat)
 
 
 def _arrow(p, length, heads=(True, False)):
@@ -143,8 +166,21 @@ def _arrow(p, length, heads=(True, False)):
     return shape + rect(s0, -t / 2, s1, t / 2)
 
 
-def _rotate_arrow(shape, deg):
-    return shape.rotate(deg, 0, 0)
+def _pair(left, right, codes, draw, sb):
+    """Register `left` drawn by draw(p) and `right` as its mirror image with
+    the sidebearings swapped. codes: (left code point, right code point) or
+    () for unencoded alternates."""
+
+    def draw_left(p):
+        lsb, rsb = sb(p)
+        return G(_lr(draw(p)), l=lsb, r=rsb)
+
+    def draw_right(p):
+        lsb, rsb = sb(p)
+        return G(_lr(draw(p).flip_x(0)), l=rsb, r=lsb)
+
+    glyph(left, *codes[:1])(draw_left)
+    glyph(right, *codes[1:])(draw_right)
 
 
 # ---------------------------------------------------------------------------
@@ -184,7 +220,7 @@ def ellipsis(p):
     shape = Shape()
     for i in range(3):
         shape = shape + dot(sb + s / 2 + i * pitch, s / 2, s)
-    return G(shape, width=2 * sb + 2 * pitch + s)
+    return G(_lr(shape), width=2 * sb + 2 * pitch + s)
 
 
 @glyph("exclam", 0x0021)
@@ -203,12 +239,6 @@ def exclamdown(p):
     b = g.shape.bounds()
     shape = g.shape.rotate180((b[0] + b[2]) / 2, P.XH / 2)
     return G(shape, width=g.width)
-
-
-def _ring_part(x0, y0, x1, y1, ix0, iy0, ix1, iy1, n, n_in, clip):
-    """(outer squircle - inner squircle) & clip, for building curves from
-    quadrants whose inner box is not simply inset."""
-    return (squircle(x0, y0, x1, y1, n) - squircle(ix0, iy0, ix1, iy1, n_in)) & clip
 
 
 def _question(p):
@@ -283,44 +313,44 @@ def _qsb(p):
 
 @glyph("quoteright", 0x2019)
 def quoteright(p):
-    l, r = _qsb(p)
-    return G(_quote(p, 0), l=l, r=r)
+    lsb, rsb = _qsb(p)
+    return G(_quote(p, 0), l=lsb, r=rsb)
 
 
 @glyph("quoteleft", 0x2018)
 def quoteleft(p):
-    l, r = _qsb(p)
+    lsb, rsb = _qsb(p)
     sh = _quote(p, 0)
     b = sh.bounds()
-    return G(sh.rotate180((b[0] + b[2]) / 2, (b[1] + b[3]) / 2), l=l, r=r)
+    return G(sh.rotate180((b[0] + b[2]) / 2, (b[1] + b[3]) / 2), l=lsb, r=rsb)
 
 
 @glyph("quotesinglbase", 0x201A)
 def quotesinglbase(p):
-    l, r = _qsb(p)
-    return G(_comma(p, 0, 0), l=l, r=r)
+    lsb, rsb = _qsb(p)
+    return G(_comma(p, 0, 0), l=lsb, r=rsb)
 
 
 @glyph("quotedblright", 0x201D)
 def quotedblright(p):
-    l, r = _qsb(p)
+    lsb, rsb = _qsb(p)
     sh = _quote(p, 0) + _quote(p, _quote_pitch(p))
-    return G(sh, l=l, r=r)
+    return G(_lr(sh), l=lsb, r=rsb)
 
 
 @glyph("quotedblleft", 0x201C)
 def quotedblleft(p):
-    l, r = _qsb(p)
+    lsb, rsb = _qsb(p)
     sh = _quote(p, 0) + _quote(p, _quote_pitch(p))
     b = sh.bounds()
-    return G(sh.rotate180((b[0] + b[2]) / 2, (b[1] + b[3]) / 2), l=l, r=r)
+    return G(_lr(sh.rotate180((b[0] + b[2]) / 2, (b[1] + b[3]) / 2)), l=lsb, r=rsb)
 
 
 @glyph("quotedblbase", 0x201E)
 def quotedblbase(p):
-    l, r = _qsb(p)
+    lsb, rsb = _qsb(p)
     sh = _comma(p, 0, 0) + _comma(p, _quote_pitch(p), 0)
-    return G(sh, l=l, r=r)
+    return G(_lr(sh), l=lsb, r=rsb)
 
 
 def _tick(p, x0):
@@ -348,7 +378,7 @@ def quotesingle(p):
 @glyph("quotedbl", 0x0022)
 def quotedbl(p):
     pitch = p.stem + p.stem * 0.6 + 60
-    return G(_tick(p, 0) + _tick(p, pitch), l=p.sb * 1.25, r=p.sb * 1.25)
+    return G(_lr(_tick(p, 0) + _tick(p, pitch)), l=p.sb * 1.25, r=p.sb * 1.25)
 
 
 # ---------------------------------------------------------------------------
@@ -363,16 +393,13 @@ def _guil_dims(p):
     return h, dx, w, flat
 
 
-def _guil(p, yc, double=False, pointing="left"):
+def _guil(p, yc, double=False):
     h, dx, w, flat = _guil_dims(p)
     shape = _chevron(0, yc, h, dx, w, flat)
     if double:
         b = shape.bounds()
         pitch = (b[2] - b[0]) * 0.62 + 30
         shape = shape + shape.move(pitch, 0)
-    if pointing == "right":
-        b = shape.bounds()
-        shape = shape.flip_x((b[0] + b[2]) / 2)
     return shape
 
 
@@ -380,52 +407,9 @@ def _guil_sb(p):
     return p.sb * 0.75, p.sb * 0.6
 
 
-@glyph("guilsinglleft", 0x2039)
-def guilsinglleft(p):
-    l, r = _guil_sb(p)
-    return G(_guil(p, P.AXIS), l=l, r=r)
-
-
-@glyph("guilsinglright", 0x203A)
-def guilsinglright(p):
-    l, r = _guil_sb(p)
-    return G(_guil(p, P.AXIS, pointing="right"), l=r, r=l)
-
-
-@glyph("guillemotleft", 0x00AB)
-def guillemotleft(p):
-    l, r = _guil_sb(p)
-    return G(_guil(p, P.AXIS, double=True), l=l, r=r)
-
-
-@glyph("guillemotright", 0x00BB)
-def guillemotright(p):
-    l, r = _guil_sb(p)
-    return G(_guil(p, P.AXIS, double=True, pointing="right"), l=r, r=l)
-
-
-@glyph("guilsinglleft.case")
-def guilsinglleft_case(p):
-    l, r = _guil_sb(p)
-    return G(_guil(p, P.CASE_AXIS), l=l, r=r)
-
-
-@glyph("guilsinglright.case")
-def guilsinglright_case(p):
-    l, r = _guil_sb(p)
-    return G(_guil(p, P.CASE_AXIS, pointing="right"), l=r, r=l)
-
-
-@glyph("guillemotleft.case")
-def guillemotleft_case(p):
-    l, r = _guil_sb(p)
-    return G(_guil(p, P.CASE_AXIS, double=True), l=l, r=r)
-
-
-@glyph("guillemotright.case")
-def guillemotright_case(p):
-    l, r = _guil_sb(p)
-    return G(_guil(p, P.CASE_AXIS, double=True, pointing="right"), l=r, r=l)
+for _sfx, _yc, _codes in (("", P.AXIS, (0x2039, 0x203A, 0x00AB, 0x00BB)), (".case", P.CASE_AXIS, ())):
+    _pair("guilsinglleft" + _sfx, "guilsinglright" + _sfx, _codes[:2], lambda p, yc=_yc: _guil(p, yc), _guil_sb)
+    _pair("guillemotleft" + _sfx, "guillemotright" + _sfx, _codes[2:], lambda p, yc=_yc: _guil(p, yc, True), _guil_sb)
 
 
 # ---------------------------------------------------------------------------
@@ -500,28 +484,8 @@ def _paren_sb(p):
     return p.sbr * 1.35, p.sbr * 0.7
 
 
-@glyph("parenleft", 0x0028)
-def parenleft(p):
-    l, r = _paren_sb(p)
-    return G(_paren(p), l=l, r=r)
-
-
-@glyph("parenright", 0x0029)
-def parenright(p):
-    l, r = _paren_sb(p)
-    return G(_paren(p).flip_x(0), l=r, r=l)
-
-
-@glyph("parenleft.case")
-def parenleft_case(p):
-    l, r = _paren_sb(p)
-    return G(_paren(p, CASE_SHIFT), l=l, r=r)
-
-
-@glyph("parenright.case")
-def parenright_case(p):
-    l, r = _paren_sb(p)
-    return G(_paren(p, CASE_SHIFT).flip_x(0), l=r, r=l)
+_pair("parenleft", "parenright", (0x0028, 0x0029), _paren, _paren_sb)
+_pair("parenleft.case", "parenright.case", (), lambda p: _paren(p, CASE_SHIFT), _paren_sb)
 
 
 def _bracket(p, dy=0):
@@ -536,28 +500,8 @@ def _bracket_sb(p):
     return p.sb * 1.35, p.sb * 0.75
 
 
-@glyph("bracketleft", 0x005B)
-def bracketleft(p):
-    l, r = _bracket_sb(p)
-    return G(_bracket(p), l=l, r=r)
-
-
-@glyph("bracketright", 0x005D)
-def bracketright(p):
-    l, r = _bracket_sb(p)
-    return G(_bracket(p).flip_x(0), l=r, r=l)
-
-
-@glyph("bracketleft.case")
-def bracketleft_case(p):
-    l, r = _bracket_sb(p)
-    return G(_bracket(p, CASE_SHIFT), l=l, r=r)
-
-
-@glyph("bracketright.case")
-def bracketright_case(p):
-    l, r = _bracket_sb(p)
-    return G(_bracket(p, CASE_SHIFT).flip_x(0), l=r, r=l)
+_pair("bracketleft", "bracketright", (0x005B, 0x005D), _bracket, _bracket_sb)
+_pair("bracketleft.case", "bracketright.case", (), lambda p: _bracket(p, CASE_SHIFT), _bracket_sb)
 
 
 def _brace(p, dy=0):
@@ -604,28 +548,8 @@ def _brace_sb(p):
     return p.sb * 0.9, p.sb * 0.75
 
 
-@glyph("braceleft", 0x007B)
-def braceleft(p):
-    l, r = _brace_sb(p)
-    return G(_brace(p), l=l, r=r)
-
-
-@glyph("braceright", 0x007D)
-def braceright(p):
-    l, r = _brace_sb(p)
-    return G(_brace(p).flip_x(0), l=r, r=l)
-
-
-@glyph("braceleft.case")
-def braceleft_case(p):
-    l, r = _brace_sb(p)
-    return G(_brace(p, CASE_SHIFT), l=l, r=r)
-
-
-@glyph("braceright.case")
-def braceright_case(p):
-    l, r = _brace_sb(p)
-    return G(_brace(p, CASE_SHIFT).flip_x(0), l=r, r=l)
+_pair("braceleft", "braceright", (0x007B, 0x007D), _brace, _brace_sb)
+_pair("braceleft.case", "braceright.case", (), lambda p: _brace(p, CASE_SHIFT), _brace_sb)
 
 
 # ---------------------------------------------------------------------------
@@ -710,7 +634,7 @@ def daggerdbl(p):
 
 
 def _bullet(p, yc):
-    side = p.dot + 110
+    side = p.dot * 1.3 + 66  # the period's square, scaled up
     return dot(0, yc, side)
 
 
@@ -885,12 +809,6 @@ def paragraph(p):
 # © ® ™
 
 
-def _damp(v, v400, k):
-    """Grow a stroke more slowly than the letters do above Regular, for the
-    small letters inside © ® ™ whose counters would close up."""
-    return v if v <= v400 else v400 + k * (v - v400)
-
-
 def _ring_mark(p, x0, y0, size, damp=1.0):
     t = _damp(p.hair * 0.92, P.params(400).hair * 0.92, damp)
     return ring(x0, y0, x0 + size, y0 + size, t, t, n=p.sq * 0.92, n_in=p.sq_in * 0.95)
@@ -1012,13 +930,13 @@ def arrowboth(p):
 
 @glyph("arrowup", 0x2191)
 def arrowup(p):
-    sh = _rotate_arrow(_arrow(p, P.CAP), 90)
+    sh = _arrow(p, P.CAP).rotate(90)
     return G(sh, l=_arrow_sb(p), r=_arrow_sb(p))
 
 
 @glyph("arrowdown", 0x2193)
 def arrowdown(p):
-    sh = _rotate_arrow(_arrow(p, P.CAP), -90).move(0, P.CAP)
+    sh = _arrow(p, P.CAP).rotate(-90).move(0, P.CAP)
     return G(sh, l=_arrow_sb(p), r=_arrow_sb(p))
 
 
@@ -1026,7 +944,7 @@ def _diag_arrow(p, deg):
     side = 560 + 0.3 * p.grow
     t = p.hair * 1.1
     length = (side - t * 0.36) * SQ2
-    sh = _rotate_arrow(_arrow(p, length), deg)
+    sh = _arrow(p, length).rotate(deg)
     b = sh.bounds()
     cy = (P.CAP) / 2 - 30
     return sh.move(0, cy - (b[1] + b[3]) / 2)
