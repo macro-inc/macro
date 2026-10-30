@@ -77,6 +77,11 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - `expanded/` vs `unexpanded/` queries exist because hydrating full entities
   is expensive — don't widen `unexpanded` to return hydrated data; add a new
   `expanded` path instead.
+- With `with_source_items_enabled`, flat listings read document, chat and
+  project candidates from the trigger-maintained `source_items` table
+  (`expanded/dynamic/feed.rs`) instead of the item tables. Both paths must
+  return identical pages: the query test helper runs every case on both and
+  audits the table. Rollout: `SOURCE_ITEMS_ROLLOUT.md`.
 - `candidate_gates.rs` encodes access-gate SQL shared across repo queries;
   changing it changes what every entity kind can return.
 - Keep the notified feed's notification lookup behind a lateral `OFFSET 0`
