@@ -557,6 +557,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
         routine_event(&event, content).unwrap(),
         RoutineEvent::ChannelMessagePosted {
             discussion: DiscussionContext {
+                agent_request: None,
                 surface: DiscussionSurface::Channel {
                     id: channel_id,
                     name: Some("eng".into()),

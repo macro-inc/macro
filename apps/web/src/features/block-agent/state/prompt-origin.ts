@@ -371,13 +371,28 @@ export function promptOrigin(contextText: string): PromptOrigin | undefined {
     };
   };
 
+  // An agent that asked on a person's behalf names both, ahead of the place.
+  const request = discussion && child(discussion, 'agent_request');
+  const asker = discussion && attribute(child(discussion, 'sender'), 'name');
+  const person = attribute(request && child(request, 'on_behalf_of'), 'name');
+  const agentLead =
+    request && asker && person
+      ? (verb: string) => `${verb} by ${asker} for ${person} in`
+      : undefined;
+
   return match(attribute(trigger, 'kind'))
-    .with('mentioned', () => fromDiscussion('via @mention in'))
+    .with('mentioned', () =>
+      fromDiscussion(agentLead?.('Started') ?? 'via @mention in')
+    )
     .with('follow_up', () =>
-      match(attribute(trigger, 'addressed_by'))
-        .with('explicit_reply', () => fromDiscussion('via reply in'))
-        .with('inferred', () => fromDiscussion('via message in', '(inferred)'))
-        .otherwise(() => fromDiscussion('via @mention in'))
+      agentLead
+        ? fromDiscussion(agentLead('Asked'))
+        : match(attribute(trigger, 'addressed_by'))
+            .with('explicit_reply', () => fromDiscussion('via reply in'))
+            .with('inferred', () =>
+              fromDiscussion('via message in', '(inferred)')
+            )
+            .otherwise(() => fromDiscussion('via @mention in'))
     )
     .with('conversation', () => fromDiscussion('via message in'))
     .with('task_assigned', () => {
