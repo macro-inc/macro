@@ -43,8 +43,12 @@ pub const CURSOR_API_KEY_KMS_ALIAS: &str = "alias/macro-local-cursor-api-key";
 /// Dedicated envelope-encryption key for local ChatGPT account connections.
 pub const CODEX_OAUTH_KMS_ALIAS: &str = "alias/macro-local-codex-oauth";
 
-/// The WhatsApp session service's key for per-account data keys.
-pub const WHATSAPP_SESSION_KMS_ALIAS: &str = "alias/macro-local-whatsapp-session";
+/// Key the public MCP OAuth broker encrypts its authorization codes' tokens with.
+pub const MCP_OAUTH_KMS_ALIAS: &str = "alias/macro-local-mcp-oauth";
+
+/// The WhatsApp session service's key for per-account data keys. The service
+/// computes this name from `ENVIRONMENT` (`SessionKmsKey` in its `config.rs`).
+pub const WHATSAPP_SESSION_KMS_ALIAS: &str = "alias/whatsapp-session-service-local";
 
 /// The full LocalStack URL for `queue` (docker-network host — services run in
 /// containers and reach LocalStack by its compose alias).

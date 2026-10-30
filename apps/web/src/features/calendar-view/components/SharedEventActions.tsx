@@ -108,12 +108,12 @@ export function SharedEventActions(props: {
         </Match>
         <Match when={props.canRequestToJoin}>
           <Button
-            variant="outline"
+            variant="secondary"
             size="xs"
             disabled={requestToJoin.isPending}
             onClick={() => requestToJoin.mutate(props.eventId)}
           >
-            <UserPlusIcon />
+            <UserPlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
             Ask to join
           </Button>
         </Match>
@@ -141,7 +141,7 @@ export function SharedEventActions(props: {
           )
         }
       >
-        <DownloadSimpleIcon />
+        <DownloadSimpleIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
         Download .ics
       </Button>
       <Switch>

@@ -4,9 +4,10 @@ import type { EntityData } from '@entity';
 import type { EntityActionListState } from './entity-action-context';
 
 export const makeCopyEntityIdAction = () => {
-  const canExecute = (_entity: EntityData): boolean => {
-    return true;
-  };
+  // A channel message or thread row's id joins its channel's and its own, so
+  // it names nothing a user can look up.
+  const canExecute = (entity: EntityData): boolean =>
+    entity.type !== 'channel_message' && entity.type !== 'channel_thread';
 
   /** Copying an id needs nothing but the id, so callers that only have one
    *  (e.g. a block, which is keyed by its entity id) can skip resolving the

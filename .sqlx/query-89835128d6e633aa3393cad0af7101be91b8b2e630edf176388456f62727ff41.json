@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT item.entity_type AS \"entity_type!\", item.entity_id AS \"entity_id!\"\n            FROM UNNEST($1::text[], $2::text[]) AS item(entity_type, entity_id)\n            WHERE EXISTS (\n                SELECT 1\n                FROM activity_events event\n                WHERE event.entity_type = item.entity_type\n                  AND event.entity_id = item.entity_id\n                  AND event.action = 'created'\n                  AND event.actor_id = $3\n                  AND event.subject_id = $4\n                  AND event.occurred_at >= $5\n            )\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "89835128d6e633aa3393cad0af7101be91b8b2e630edf176388456f62727ff41"
+}

@@ -35,7 +35,8 @@ decides who may respond.
 
 Editors see **Build**, **Responses** (with its count), and **Settings** in the
 shared pill tab selector beside the form title in the top bar, kept per split (a split opened with
-`params.view` `responses` or `share` starts there). Viewers (respondents) land on the respond page
+`params.view` `responses` or `share` starts there). On touch devices the tabs sit at the top
+of the page, below the floating header. Viewers (respondents) land on the respond page
 instead. The header's primary button, for owners, is **Publish** (opens sharing)
 until someone responds or the form is shared (public, a channel, the team),
 then **Open form** (respond view in a new split); other editors always see
@@ -54,7 +55,8 @@ question or existing database field to that section, regardless of the current
 selection. Three visible actions sit below the canvas: **Add section** adds a
 question section directly, **Add gate** adds a gate with its inline rule editor
 open, and **Add meeting link** opens the booking-link picker (when scheduling is
-available). Hover a question boundary to reveal a plus that inserts a question
+available). On touch devices these three float above the dock as an **Add**
+menu (Section, Gate, Meeting link) in place of New. Hover a question boundary to reveal a plus that inserts a question
 at that position. Hover between sections to insert a **Section** or **Gate**.
 These controls also appear on keyboard focus and stay visible while their menus
 are open. Meeting links can only be added at the end; adding other sections later

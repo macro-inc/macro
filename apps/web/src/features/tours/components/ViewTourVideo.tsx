@@ -33,12 +33,13 @@ export function ViewTourVideo(props: { video: Video }) {
             {props.video.title}
           </span>
           <Button
+            aria-label="Close video"
+            tooltip="Close video"
             variant="ghost"
             size="icon-sm"
-            label="Close video"
             onClick={() => setPlaying(false)}
           >
-            <XIcon />
+            <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </div>
         <iframe

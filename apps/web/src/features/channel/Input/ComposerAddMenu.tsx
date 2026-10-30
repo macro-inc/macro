@@ -15,6 +15,11 @@ export type ComposerAddMenuItem = {
   onSelect: () => void;
   disabled?: boolean;
   /**
+   * Grays the item out and says why: beside the row on hover or focus, as
+   * its second line on touch.
+   */
+  disabledReason?: string;
+  /**
    * The item puts the caret in the editor (a mention, an inserted card), so
    * the editor takes focus as the menu closes instead of the +.
    */
@@ -57,8 +62,8 @@ export function ComposerAddMenu(props: {
     >
       <Button
         variant="ghost"
-        size="icon-composer"
-        class={cn('touch:size-6', props.class)}
+        size="icon-md"
+        class={props.class}
         aria-label="Add"
         aria-haspopup="dialog"
         disabled={props.disabled}
@@ -69,7 +74,7 @@ export function ComposerAddMenu(props: {
         }}
         onClick={() => props.onOpenDrawer()}
       >
-        <PlusIcon />
+        <PlusIcon class="size-5 touch:size-6 shrink-0 pointer-events-none" />
       </Button>
     </Show>
   );
@@ -94,14 +99,15 @@ function AddDropdown(props: {
   return (
     <Dropdown placement={props.placement ?? 'top-start'} gutter={8}>
       <Dropdown.Trigger
+        tooltip="Add"
+        data-composer-menu-anchor
         variant="ghost"
-        size="icon-composer"
-        class={cn('touch:size-6', props.class)}
+        size="icon-md"
+        class={props.class}
         aria-label="Add"
-        label="Add"
         disabled={props.disabled}
       >
-        <PlusIcon />
+        <PlusIcon class="size-5 touch:size-6 shrink-0 pointer-events-none" />
       </Dropdown.Trigger>
       <Dropdown.Content
         class={cn('min-w-56', props.contentClass)}
@@ -123,6 +129,7 @@ function AddDropdown(props: {
                 {(item) => (
                   <Dropdown.Item
                     disabled={item.disabled}
+                    disabledReason={item.disabledReason}
                     onSelect={() => select(item)}
                     class={
                       item.description
@@ -130,7 +137,7 @@ function AddDropdown(props: {
                         : undefined
                     }
                   >
-                    <span class="flex size-3.5 shrink-0 items-center justify-center text-ink-muted">
+                    <span class="flex size-5 shrink-0 items-center justify-center text-ink-muted">
                       {item.icon}
                     </span>
                     <span class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">
@@ -195,7 +202,7 @@ export function ComposerAddDrawer(props: {
                     <For each={group.items}>
                       {(item) => (
                         <MobileDrawer.Item
-                          disabled={item.disabled}
+                          disabled={item.disabled || !!item.disabledReason}
                           data-composer-add-item={item.id}
                           ref={(el) => {
                             if (item.focusesEditor)
@@ -214,10 +221,15 @@ export function ComposerAddDrawer(props: {
                           </span>
                           <span class="min-w-0 flex-1">
                             <span class="block">{item.label}</span>
-                            <Show when={item.description}>
-                              <span class="block text-xs text-ink-muted font-normal">
-                                {item.description}
-                              </span>
+                            {/* No hover on a phone: the reason is the line. */}
+                            <Show
+                              when={item.disabledReason ?? item.description}
+                            >
+                              {(line) => (
+                                <span class="block text-xs text-ink-muted font-normal">
+                                  {line()}
+                                </span>
+                              )}
                             </Show>
                           </span>
                         </MobileDrawer.Item>

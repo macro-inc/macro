@@ -31,7 +31,7 @@ export function commandSearchResultKey(
 }
 
 function directMessagesByUser(
-  directMessages: readonly QuickAccessItem[],
+  directMessages: readonly CommandMenuItem[],
   viewerId: string | undefined
 ) {
   const byUser = new Map<string, EntityItem>();
@@ -49,7 +49,11 @@ export function mergeCommandPeople<T extends CommandMenuItem>(
   directMessages: readonly QuickAccessItem[],
   viewerId: string | undefined
 ): (T | EntityItem)[] {
-  const conversations = directMessagesByUser(directMessages, viewerId);
+  // Typed search can find DMs outside the bounded recent list.
+  const conversations = directMessagesByUser(
+    [...directMessages, ...items],
+    viewerId
+  );
   const merged = new Map<string, T | EntityItem>();
   for (const item of items) {
     if (item.kind === 'user' && item.id === viewerId) continue;

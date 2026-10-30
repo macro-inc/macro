@@ -14,9 +14,9 @@ use sqlx::postgres::{PgConnectOptions, PgListener, PgPoolOptions};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
+use external_chat::signals::trace_context;
 use whatsapp_linked::signals::{
     ACCOUNT_CHANGED, ACCOUNT_RELEASED, GROUPS_REQUESTED, PAIRING_REQUESTED, SEND_REQUESTED,
-    trace_context,
 };
 
 use crate::domain::ports::Traced;
@@ -105,7 +105,7 @@ impl SignalListener {
 /// Maps one notification to a signal and the sender's trace context; `None`
 /// for unknown channels or payloads.
 pub fn parse(channel: &str, payload: &str) -> Option<(Signal, Option<String>)> {
-    let payload = whatsapp_linked::signals::Signal::parse(payload)?;
+    let payload = external_chat::signals::Signal::parse(payload)?;
     let id = payload.id;
     let signal = match channel {
         ACCOUNT_RELEASED => Some(Signal::AccountReleased(id)),

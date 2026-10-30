@@ -122,6 +122,7 @@ function DesktopChannelThreads(props: { sources: ChannelsSources }) {
       new Map(
         deduplicateChannels([
           props.sources.threads.items(),
+          props.sources.team_channels.items(),
           props.sources.channels.items(),
           props.sources.direct_messages.items(),
           props.sources.recents.items(),
@@ -173,9 +174,11 @@ function ChannelsViewRoot() {
                   <ViewShell.Root
                     asidePreferenceKey="channels"
                     // The empty state only points at the rail, so keep it open.
-                    asideRequired={
-                      threadsTab() || selectedChannel() === undefined
-                    }
+                    asideRequired={selectedChannel() === undefined}
+                    // Keep the tab out of asideRequired: every change to it
+                    // resets a narrow overlay, so switching tabs inside the
+                    // overlay would close it.
+                    asidePinned={threadsTab()}
                     aside={{
                       width: state.asideWidth,
                       preserveDuringResize: false,
@@ -288,6 +291,7 @@ function ChannelDetailRouteContent() {
       channelId(),
       sources
         ? deduplicateChannels([
+            sources.team_channels.items(),
             sources.channels.items(),
             sources.direct_messages.items(),
             sources.recents.items(),

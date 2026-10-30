@@ -210,6 +210,31 @@ export type AgentConversationsDto = {
 };
 
 /**
+ * Which kind of agent a prompt is sent to.
+ */
+export type AgentMode = 'chat' | 'code';
+
+/**
+ * Request body for `POST /agent-mode-choice`.
+ */
+export type AgentModeChoiceRequest = {
+    /**
+     * The prompt the composer is about to send.
+     */
+    prompt: string;
+};
+
+/**
+ * Response body for `POST /agent-mode-choice`.
+ */
+export type AgentModeChoiceResponse = {
+    /**
+     * Which kind of agent should receive the prompt.
+     */
+    mode: AgentMode;
+};
+
+/**
  * One model picker option.
  */
 export type AgentModelDto = {
@@ -1053,6 +1078,12 @@ export type CreateAgentSessionRequest = {
      * control endpoint. Omitted, the session opens idle.
      */
     prompt?: string | null;
+    promptActionId?: null | AgentActionId;
+    /**
+     * Files `prompt` refers to, in the order the user attached them.
+     * Requires `prompt`.
+     */
+    promptAttachments?: Array<PromptAttachment>;
     /**
      * Starting branch for a managed coding session's selected repository.
      * Omitted, the session starts on the repository's default branch.
@@ -2593,6 +2624,45 @@ export type RetryAgentConversationTurnResponses = {
 };
 
 export type RetryAgentConversationTurnResponse = RetryAgentConversationTurnResponses[keyof RetryAgentConversationTurnResponses];
+
+export type ChooseAgentModeData = {
+    body: AgentModeChoiceRequest;
+    path?: never;
+    query?: never;
+    url: '/agent-mode-choice';
+};
+
+export type ChooseAgentModeErrors = {
+    /**
+     * The prompt is blank
+     */
+    400: unknown;
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * The caller cannot start new AI work
+     */
+    402: unknown;
+    /**
+     * Auto mode is not enabled for the caller
+     */
+    403: unknown;
+    /**
+     * The classifier is unconfigured, failed, or timed out
+     */
+    503: unknown;
+};
+
+export type ChooseAgentModeResponses = {
+    /**
+     * The kind of agent the prompt goes to
+     */
+    200: AgentModeChoiceResponse;
+};
+
+export type ChooseAgentModeResponse = ChooseAgentModeResponses[keyof ChooseAgentModeResponses];
 
 export type LoadAgentModelsHandlerData = {
     body: LoadAgentModelsRequest;

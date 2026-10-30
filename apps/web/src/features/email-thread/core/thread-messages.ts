@@ -1,13 +1,36 @@
 import type { EmailMessage } from '../../email-message/core/email-message';
+import { isViewerAddress } from '../../email-message/core/email-user';
 import type { EmailThread } from './email-thread';
 
-/** Sender actions historically target the earliest sender other than the viewer. */
 export function selectThreadSender(thread: EmailThread, viewerEmail?: string) {
-  const viewer = viewerEmail?.toLowerCase();
+  if (!viewerEmail) return undefined;
   return selectThreadMessages(thread).messages.find(
     (message) =>
-      message.from?.email && message.from.email.toLowerCase() !== viewer
+      message.from?.email && !isViewerAddress(message.from.email, viewerEmail)
   )?.from?.email;
+}
+
+/**
+ * The message a thread downloads as `.eml`: the newest one sent or received,
+ * which quotes the conversation before it. Drafts and sends still on their
+ * way have no provider copy yet.
+ */
+export function selectEmlMessage(thread: EmailThread) {
+  let newest: EmailMessage | undefined;
+  for (const message of selectThreadMessages(thread).messages) {
+    if (message.is_draft || !message.provider_id) continue;
+    if (!newest || messageTime(message) >= messageTime(newest)) {
+      newest = message;
+    }
+  }
+  return newest;
+}
+
+/** When a message happened, falling back to when Macro first saw it. */
+function messageTime(message: EmailMessage) {
+  return Date.parse(
+    message.internal_date_ts ?? message.sent_at ?? message.created_at
+  );
 }
 
 /** Select chronological messages and reply drafts without mutating the source. */

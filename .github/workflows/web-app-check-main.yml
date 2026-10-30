@@ -110,6 +110,15 @@ jobs:
         bun scripts/android-version-check.mjs "$base"
       shell: bash
       working-directory: apps/web
+    - name: Keep the Android native build floor without a release
+      if: steps.labels.outputs.skip == 'true'
+      run: |
+        set -euo pipefail
+        base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | head -1)
+        git fetch -q --depth=1 origin "$base"
+        bun scripts/android-version-check.mjs --skip-release "$base"
+      shell: bash
+      working-directory: apps/web
     - id: auth
       name: Authenticate to Google Play
       if: steps.android-version.outputs.changed == 'true' && steps.labels.outputs.skip != 'true'

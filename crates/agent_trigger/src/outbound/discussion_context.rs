@@ -16,6 +16,7 @@ use initiative::domain::{lookup::InitiativeReader, models::InitiativeId};
 use lexical_client::LexicalClient;
 use lexical_client::parse_markdown::ExtractedExplicitReply;
 use macro_uuid::Uuid;
+use messages::domain::agent_hops::agent_hops;
 use messages::domain::{
     api::MessageReader,
     events::MessagePostedMetadata,
@@ -24,8 +25,8 @@ use messages::domain::{
     service::MessageView,
 };
 use trigger_context::{
-    ChannelType, CommentAnchor, ContextMessage, ContextPerson, ContextThread, DiscussionContext,
-    DiscussionSurface, MarkedPassage, ReplyTarget,
+    AgentRequest, ChannelType, CommentAnchor, ContextAttachment, ContextMessage, ContextPerson,
+    ContextThread, DiscussionContext, DiscussionSurface, MarkedPassage, ReplyTarget,
 };
 
 use crate::domain::{
@@ -321,6 +322,20 @@ where
         }
         let quoted = quote.as_ref().and_then(|quote| quote.message.as_ref());
 
+        let on_behalf_of = prompt.sender_id.as_bot().and(prompt.triggered_by.clone());
+        let hops = match &discussion {
+            Some(discussion) => agent_hops(
+                std::iter::once(&discussion.root)
+                    .chain(&discussion.replies)
+                    .take_while(|message| message.id != prompt.id)
+                    .chain(std::iter::once(&prompt))
+                    .map(|message| &message.sender_id)
+                    .collect::<Vec<_>>()
+                    .into_iter(),
+            ),
+            None => agent_hops(std::iter::once(&prompt.sender_id)),
+        };
+
         let authors: Vec<&Message> = std::iter::once(&prompt)
             .chain(
                 thread
@@ -334,7 +349,9 @@ where
             )
             .chain(quoted)
             .collect();
-        let people = self.people_of(&authors).await?;
+        let people = self
+            .people_of(&authors, on_behalf_of.iter().cloned())
+            .await?;
 
         let reply_target = match quote {
             Some(quote) => ReplyTarget::Quote {
@@ -353,6 +370,10 @@ where
             surface: surface(parent, name, anchor)?,
             prompt_message_id: prompt.id,
             sender: people.author(&prompt),
+            agent_request: on_behalf_of.map(|id| AgentRequest {
+                on_behalf_of: people.person(id),
+                hops,
+            }),
             reply_target,
             thread: thread.map(|thread| people.thread(thread)),
             channel: channel
@@ -365,12 +386,18 @@ where
 
 impl<People: PeopleDirectory, Names, Lexical> MessageDiscussionReader<People, Names, Lexical> {
     /// Everyone who wrote one of `messages`, named once each.
-    async fn people_of(&self, messages: &[&Message]) -> Result<Authors> {
+    async fn people_of(
+        &self,
+        messages: &[&Message],
+        others: impl Iterator<Item = String>,
+    ) -> Result<Authors> {
         let mut ids: Vec<String> = Vec::new();
-        for message in messages {
-            if let Some(id) = directory_id(message)
-                && !ids.contains(&id)
-            {
+        for id in messages
+            .iter()
+            .filter_map(|message| directory_id(message))
+            .chain(others)
+        {
+            if !ids.contains(&id) {
                 ids.push(id);
             }
         }
@@ -651,7 +678,11 @@ impl Authors {
                 email: None,
             };
         }
-        // Every author was named before any message is built.
+        self.person(id)
+    }
+
+    /// A person by directory id. Everyone was named before any message is built.
+    fn person(&self, id: String) -> ContextPerson {
         self.0.get(&id).cloned().unwrap_or(ContextPerson {
             name: id.clone(),
             id,
@@ -665,6 +696,15 @@ impl Authors {
             author: self.author(message),
             content: message.content.trim().to_owned(),
             posted_at: message.created_at,
+            attachments: message
+                .attachments
+                .iter()
+                .map(|attachment| ContextAttachment {
+                    entity_type: attachment.entity_type.clone(),
+                    entity_id: attachment.entity_id.clone(),
+                    url: None,
+                })
+                .collect(),
         }
     }
 

@@ -1,6 +1,5 @@
-import CheckIcon from '@icon/system/regular/check.svg';
-import { cn } from '@ui';
-import { Show } from 'solid-js';
+import { t } from '@app/lib/i18n';
+import { cn, InlineCheckbox } from '@ui';
 
 interface MultiSelectCheckboxProps {
   checked?: boolean;
@@ -9,15 +8,17 @@ interface MultiSelectCheckboxProps {
 }
 
 /**
- * Multi-select checkbox component with responsive behavior:
- * - Desktop: Always visible checkbox in left column
- * - Mobile/narrow: Icon by default, checkbox on hover or when checked
- * - Shows unread indicator when not checked
+ * List selection toggle with a shared checkbox indicator. Layouts decide when
+ * it replaces the row icon or unread indicator; the button keeps the full-cell
+ * hit target and forwards shift-click selection.
  */
 export function MultiSelectCheckbox(props: MultiSelectCheckboxProps) {
   return (
     <button
       type="button"
+      role="checkbox"
+      aria-checked={!!props.checked}
+      aria-label={t('common.selectItem')}
       class="size-full relative group/button flex items-center justify-center"
       onMouseDown={(e) => {
         e.stopPropagation();
@@ -28,19 +29,16 @@ export function MultiSelectCheckbox(props: MultiSelectCheckboxProps) {
       }}
       data-blocks-navigation
     >
-      <div
+      <span
         class={cn(
-          'size-4 p-0.5 flex items-center justify-center rounded-xs group-hover/button:border-accent group-hover/button:border pointer-events-none',
-          {
-            'border border-edge': props.showBorder,
-            'bg-accent border border-accent': props.checked,
-          }
+          'pointer-events-none flex items-center justify-center',
+          !props.checked &&
+            !props.showBorder &&
+            'opacity-0 group-hover/button:opacity-100 group-focus-visible/button:opacity-100'
         )}
       >
-        <Show when={props.checked}>
-          <CheckIcon class="size-full text-surface" />
-        </Show>
-      </div>
+        <InlineCheckbox checked={!!props.checked} size="md" />
+      </span>
     </button>
   );
 }

@@ -4,7 +4,10 @@ import { children, Show, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Button, type ButtonProps } from './Button';
 
-export type SendButtonProps = Omit<ButtonProps, 'size' | 'variant'> & {
+export type SendButtonProps = Omit<
+  ButtonProps,
+  'size' | 'variant' | 'appearance'
+> & {
   appearance?: 'default' | 'composer';
   /**
    * Empty composer with a queue waiting: the same send control, ringed so it
@@ -35,10 +38,8 @@ export function SendButton(props: SendButtonProps) {
 
   return (
     <Button
-      depth={4}
-      variant="strong"
-      glass={false}
-      size={local.appearance === 'composer' ? 'icon-composer' : 'icon-sm'}
+      variant="primary"
+      size="icon-md"
       draggable={false}
       aria-label={
         local['aria-label'] ??
@@ -50,22 +51,17 @@ export function SendButton(props: SendButtonProps) {
       }
       data-intent={local.intent === 'flush' ? 'flush' : undefined}
       class={cn(
-        'border-0 bg-ink text-surface-4 touch:size-7.5',
-        'not-touch:not-disabled:hover:text-surface-4',
+        'border-0',
         local.intent === 'flush' && 'ring-2 ring-accent/60',
-        local.appearance === 'composer'
-          ? cn(
-              'not-touch:not-disabled:bg-composer-action not-touch:not-disabled:text-composer-action-ink not-touch:not-disabled:hover:text-composer-action-ink not-touch:light-mode:shadow-none not-touch:light-mode:backdrop-filter-none not-touch:light-mode:after:hidden',
-              local.actionLabel &&
-                'not-touch:w-auto! not-touch:aspect-auto! not-touch:px-3 not-touch:gap-1.5'
-            )
-          : 'size-7',
+        local.appearance === 'composer' &&
+          local.actionLabel &&
+          'not-touch:w-auto! not-touch:aspect-auto! not-touch:px-3 not-touch:gap-1.5',
         'transition-transform ease-in-out duration-150',
         'data-disabled:opacity-100 data-disabled:text-ink-extra-muted! data-disabled:bg-ink-muted/5',
         'active:not-disabled:scale-95',
         // Out of the flow, not just invisible: a transparent send button
-        // holds its slot and strands whatever sits before it (the dictation
-        // button) well short of the composer's edge.
+        // holds its slot and strands whatever sits before it well short of
+        // the composer's edge.
         local.hidden && 'hidden',
         local.class
       )}
@@ -73,11 +69,13 @@ export function SendButton(props: SendButtonProps) {
     >
       <Show
         when={!local.pending}
-        fallback={<SpinnerIcon class="animate-spin" />}
+        fallback={
+          <SpinnerIcon class="size-5 shrink-0 animate-spin touch:size-6" />
+        }
       >
         {resolved() ?? (
           <>
-            <ArrowUp />
+            <ArrowUp class="size-5 shrink-0 touch:size-6" />
             <Show when={local.actionLabel}>
               <span class="hidden whitespace-nowrap text-sm font-medium not-touch:inline">
                 {local.actionLabel}

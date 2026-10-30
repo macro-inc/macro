@@ -9,7 +9,7 @@ A community reference as a handle on the community's own chat.
 | Parameter | Type |
 | ------ | ------ |
 | `client` | `MacroClient` |
-| `record` | [`LinkedCommunityReference`](../../../../../generated/storage/types.gen/type-aliases/LinkedCommunityReference.md) |
+| `record` | [`ExternalChatCommunity`](../../../../../generated/storage/types.gen/type-aliases/ExternalChatCommunity.md) |
 
 ## Returns
 

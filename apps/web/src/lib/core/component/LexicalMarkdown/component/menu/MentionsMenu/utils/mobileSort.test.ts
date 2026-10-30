@@ -208,14 +208,14 @@ describe('sortMobileMentions', () => {
     expect(result[0].id).toBe('d1');
   });
 
-  test('groups appear when matched by query but stay below users with stronger boost', () => {
+  test('an exact group alias beats a partial user-name match', () => {
     const now = new Date();
     const here = groupItem('here');
     const user = userItem('u1', 'here-user', now);
 
     const result = sortMobileMentions([here, user], 'here');
 
-    expect(result.indexOf(user)).toBeLessThan(result.indexOf(here));
+    expect(result.indexOf(here)).toBeLessThan(result.indexOf(user));
   });
 
   test('items with no timestamp (groups, dates) sink without a query', () => {

@@ -26,9 +26,9 @@ pub enum ShareEntityType {
     EmailThread,
     /// Agent conversations.
     AgentSession,
-    /// Adopted WhatsApp conversations.
-    #[serde(rename = "whatsapp_group")]
-    WhatsAppGroup,
+    /// External chats added to Macro.
+    #[serde(rename = "external_chat")]
+    ExternalChat,
 }
 impl From<ShareEntityType> for EntityType {
     fn from(value: ShareEntityType) -> Self {
@@ -41,7 +41,7 @@ impl From<ShareEntityType> for EntityType {
             ShareEntityType::Call => Self::Call,
             ShareEntityType::EmailThread => Self::EmailThread,
             ShareEntityType::AgentSession => Self::AgentSession,
-            ShareEntityType::WhatsAppGroup => Self::WhatsAppGroup,
+            ShareEntityType::ExternalChat => Self::ExternalChat,
         }
     }
 }

@@ -38,6 +38,23 @@ pub struct Config {
     /// Native Herdr defaults shared by this macrod instance.
     #[serde(default)]
     pub herdr: HerdrSettings,
+    /// Whether a released macrod keeps itself up to date.
+    #[serde(default)]
+    pub update: UpdateSettings,
+}
+
+/// Self-update preferences. `MACROD_NO_UPDATE=1` turns updating off too.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct UpdateSettings {
+    /// Install newer releases automatically. On by default.
+    pub auto: bool,
+}
+
+impl Default for UpdateSettings {
+    fn default() -> Self {
+        Self { auto: true }
+    }
 }
 
 /// One native launch configuration, shared by all new sessions.

@@ -1,6 +1,6 @@
 import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
-import { themeCssVars } from '../../theme/utils/themeColorTokens';
+import { themeCssVars } from '../../theme/utils/themeCssVars';
 import { BookingReceiptView } from '../views/booking-receipt-view';
 import { FixtureCalendars } from './calendars';
 import '@fontsource-variable/inter';
@@ -78,6 +78,7 @@ function Fixture() {
       isDark ? '#171717' : '#ffffff'
     );
     document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+    document.documentElement.dataset.themeLight = String(!isDark);
   };
   onMount(() => applyTheme(false));
   const [screen, setScreen] = createSignal<

@@ -28,7 +28,7 @@ async function fetchDocumentAccessLevel(
   return result.value.userAccessLevel;
 }
 
-function documentMetadataQueryOptions(documentId: string) {
+export function documentMetadataQueryOptions(documentId: string) {
   return queryOptions({
     queryKey: entityKeys.documentMetadata(documentId).queryKey,
     queryFn: () => fetchDocumentMetadata(documentId),

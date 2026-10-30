@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            event.conference_url,\n            event.conference_provider,\n            -- Google's own flag, kept in the payload it sent. Every source\n            -- must be a Google private copy: an Outlook copy, or a source\n            -- stored before Macro kept Google's whole payload, is no evidence.\n            -- A source without the key counts as false, since bool_and skips\n            -- NULLs.\n            COALESCE(\n                bool_and(\n                    COALESCE(\n                        source.source_kind = 'google'\n                            AND source.raw_payload->>'privateCopy' = 'true',\n                        false\n                    )\n                ),\n                false\n            ) AS \"google_private_copy!\",\n            event.is_snapshot\n                OR COALESCE(\n                    bool_or(source.normalized_payload->'event'->>'isSnapshot' = 'true'),\n                    false\n                ) AS \"is_snapshot!\"\n        FROM calendar_events event\n        LEFT JOIN calendar_event_sources source ON source.event_id = event.id\n        WHERE event.id = $1\n          AND event.owner_id = $2\n          AND event.status <> 'cancelled'\n        GROUP BY event.id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "conference_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "conference_provider",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "google_private_copy!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "is_snapshot!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "28e3f84f2421bec4125d4852436ed2567d684f63c7eed1070806de1a05013d7d"
+}

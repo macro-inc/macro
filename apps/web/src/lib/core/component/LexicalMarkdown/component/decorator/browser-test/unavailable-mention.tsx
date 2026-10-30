@@ -108,6 +108,12 @@ const mentions = [
     blockName: 'routine',
     preview: { type: 'routine', access: 'no_access' },
   },
+  {
+    label: 'Hidden channel',
+    id: '01a16d55-0000-7000-8000-00000000000f',
+    blockName: 'channel',
+    preview: { type: 'channel', access: 'no_access' },
+  },
 ] as const satisfies ReadonlyArray<{
   label: string;
   id: string;
@@ -214,7 +220,7 @@ declare global {
   }
 }
 
-/** An editable editor holding the deleted document's chip. */
+/** An editable editor holding the deleted document's and hidden channel's chips. */
 function Composer() {
   const wrapper = createLexicalWrapper({
     type: 'chat',
@@ -228,7 +234,11 @@ function Composer() {
       documentId: mentions[1].id,
       blockName: mentions[1].blockName,
       documentName: 'Planning',
-    })}</m-document-mention> after`
+    })}</m-document-mention> after <m-document-mention>${JSON.stringify({
+      documentId: mentions[11].id,
+      blockName: mentions[11].blockName,
+      documentName: 'Planning',
+    })}</m-document-mention> end`
   );
   // Selects the chip as a node, as arrowing onto it in a composer does.
   window.selectComposerMention = () =>

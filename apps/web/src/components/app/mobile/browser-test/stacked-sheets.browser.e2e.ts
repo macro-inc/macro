@@ -14,6 +14,51 @@ async function settled(sheet: Locator) {
 
 const pressed = (page: Page) => page.getByRole('status', { name: 'Pressed' });
 
+/** A finger dragging the sheet down by its top edge, past the break point. */
+async function dragDown(page: Page, sheet: Locator) {
+  const box = await sheet.boundingBox();
+  if (!box) throw new Error('The sheet is not rendered');
+  const x = box.x + box.width / 2;
+  const y = box.y + 12;
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x, y }],
+  });
+  for (let step = 1; step <= 10; step += 1)
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x, y: y + (box.height * step) / 10 }],
+    });
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
+    touchPoints: [],
+  });
+}
+
+test('a sheet its owner keeps open returns into view after a drag down', async ({
+  page,
+}) => {
+  await page.goto('/?scenario=discard');
+  const share = page.getByRole('dialog', { name: 'Share to Macro' });
+  await settled(share);
+
+  await dragDown(page, share);
+
+  const confirm = page.getByRole('dialog', { name: 'Discard this share?' });
+  await settled(confirm);
+  await settled(share);
+  await tap(page, confirm.getByRole('button', { name: 'Keep editing' }));
+  await expect(confirm).toHaveCount(0);
+  await tap(page, share.getByRole('button', { name: 'Send' }));
+  await expect(pressed(page)).toHaveText('Send');
+
+  await dragDown(page, share);
+  await settled(confirm);
+  await tap(page, confirm.getByRole('button', { name: 'Discard' }));
+  await expect(share).toHaveCount(0);
+});
+
 test('a pointerdown dismissal does not dismiss the parent on pointerup', async ({
   page,
 }) => {

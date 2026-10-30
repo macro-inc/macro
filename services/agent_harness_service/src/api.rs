@@ -79,6 +79,7 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     routine_sessions: Router,
     coding_agents: Router,
     capabilities: Router,
+    mode_choice: Router,
     conversations: Router,
     pull_requests: Router,
     tool_approvals: Router,
@@ -118,6 +119,7 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             routine_sessions: Router::new(),
             coding_agents: Router::new(),
             capabilities: Router::new(),
+            mode_choice: Router::new(),
             conversations: Router::new(),
             pull_requests: Router::new(),
             tool_approvals: Router::new(),
@@ -173,6 +175,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     /// Attach model-specific harness capability discovery routes.
     pub fn with_capabilities(mut self, router: Router) -> Self {
         self.capabilities = router;
+        self
+    }
+
+    /// Attach the composer's Auto mode choice.
+    pub fn with_mode_choice(mut self, router: Router) -> Self {
+        self.mode_choice = router;
         self
     }
 
@@ -355,6 +363,7 @@ where
         .merge(states.routine_sessions)
         .merge(states.coding_agents)
         .merge(states.capabilities)
+        .merge(states.mode_choice)
         .merge(states.conversations)
         .nest("/universal_input", states.universal_input)
         .nest("/runtime", runtime_gateway_router(states.gateway))

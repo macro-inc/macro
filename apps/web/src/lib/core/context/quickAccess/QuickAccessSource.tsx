@@ -13,6 +13,7 @@ import {
   enableDatabases,
   enableForms,
   enableGraphqlSoup,
+  enableProjects,
 } from '@core/constant/featureFlags';
 import {
   useChannelsContext,
@@ -31,6 +32,7 @@ import type {
   CrmContactEntity,
   DatabaseEntity,
   FormEntity,
+  InitiativeEntity,
   SkillEntity,
   SnippetEntity,
 } from '@entity';
@@ -47,6 +49,7 @@ import {
 import { queryReadyGate } from '@queries/gate';
 import { materializeCachedGraphqlHistoryItems } from '@queries/history/graphql';
 import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
+import { materializeCachedGraphqlInitiatives } from '@queries/soup/graphql/initiatives';
 import { useQuickAccessAgentSessionsQuery } from '@queries/soup/quick-access-agent-sessions';
 import { useQuickAccessInitiativesQuery } from '@queries/soup/quick-access-initiatives';
 import { useQuickAccessSkillsQuery } from '@queries/soup/quick-access-skills';
@@ -245,6 +248,25 @@ function channelToQuickAccessItem(
   };
 }
 
+function initiativeToQuickAccessItem(
+  initiative: InitiativeEntity,
+  viewedAt: DateValue | null | undefined
+): QuickAccessItem {
+  return {
+    kind: 'entity',
+    id: initiative.id,
+    bucket: 'initiative',
+    searchText: initiative.name,
+    sortTimestamp: toTimestamp(viewedAt) || toTimestamp(initiative.updatedAt),
+    timestamps: {
+      viewedAt,
+      updatedAt: initiative.updatedAt,
+      createdAt: initiative.createdAt,
+    },
+    data: { ...initiative, viewedAt },
+  };
+}
+
 function equalActivityMaps(
   previous: Map<string, DateValue>,
   next: Map<string, DateValue>
@@ -262,13 +284,6 @@ function getHistoryItemVersion(
   viewedAt?: DateValue | null
 ): string {
   return `${item.name}|${item.updatedAt}|${viewedAt}|${item.deletedAt}`;
-}
-
-function getChannelVersion(
-  channel: CachedGraphqlChannel,
-  viewedAt?: string
-): string {
-  return `${channel.name}|${channel.updatedAt}|${viewedAt}`;
 }
 
 function getUserVersion(
@@ -384,6 +399,7 @@ function sortIndexEntries(entries: IndexEntry[]): IndexEntry[] {
 /** Builds Quick Access from history and its supporting entity sources. */
 export function createQuickAccessValue(): QuickAccessContextValue {
   const crmFlag = useFeatureFlag(enableCrm);
+  const projectsFlag = useFeatureFlag(enableProjects);
   const graphqlFlag = useFeatureFlag(enableGraphqlSoup);
   // queries
   const historyQuery = useHistoryQuery();
@@ -519,22 +535,37 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   });
 
   const channelEntries = createLazyMemo(() => {
+    const startedAt = performance.now();
     const viewedAtMap = soupViewedAtMap();
     const allEntries: IndexEntry[] = [];
-
-    // The GraphQL cache is authoritative while enabled. Otherwise preserve the
-    // existing channel-list source unchanged.
-    const usesCache = cacheHost() !== undefined;
-    const channelData = usesCache
-      ? queryReadyGate(cachedChannelsQuery)
+    const completeChannels = channels();
+    const cachedChannels =
+      cacheHost() && queryReadyGate(cachedChannelsQuery)
         ? cachedChannelsQuery.data
-        : []
-      : channels().map(apiChannelToQuickAccessChannel);
-    for (const sourceChannel of channelData) {
+        : [];
+
+    // A partial cache must not hide channels already available in the complete
+    // channel list. Cached metadata wins for duplicates, retaining newer views.
+    const channelData = new Map(
+      completeChannels.map((channel) => [
+        channel.id,
+        apiChannelToQuickAccessChannel(channel),
+      ])
+    );
+    for (const channel of cachedChannels) {
+      channelData.set(channel.id, {
+        ...channel,
+        viewedAt: latestDate(
+          channelData.get(channel.id)?.viewedAt,
+          channel.viewedAt
+        ),
+      });
+    }
+    for (const sourceChannel of channelData.values()) {
       const recentlyViewedAt = viewedAtMap.get(sourceChannel.id);
       const viewedAt = latestDate(recentlyViewedAt, sourceChannel.viewedAt);
       const channel = { ...sourceChannel, viewedAt };
-      const version = getChannelVersion(channel, viewedAt);
+      const version = JSON.stringify(channel);
       const cached = itemCache.get(channel.id);
 
       if (!cached || cached.version !== version) {
@@ -554,7 +585,13 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       }
     }
 
-    return sortIndexEntries(allEntries);
+    const entries = sortIndexEntries(allEntries);
+    return {
+      entries,
+      completeCount: completeChannels.length,
+      cachedCount: cachedChannels.length,
+      buildDurationMs: performance.now() - startedAt,
+    };
   });
 
   const contactEntries = createLazyMemo(() => {
@@ -923,30 +960,17 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const entries: IndexEntry[] = [];
     for (const initiative of initiativesAccessor()) {
       const viewedAt = viewedAtMap.get(initiative.id) ?? initiative.viewedAt;
-      const sortTimestamp =
-        toTimestamp(viewedAt) || toTimestamp(initiative.updatedAt);
-      const entity = { ...initiative, viewedAt };
-      const version = JSON.stringify(entity);
+      const item = initiativeToQuickAccessItem(initiative, viewedAt);
+      const version = JSON.stringify(item.data);
       const cached = itemCache.get(initiative.id);
       if (!cached || cached.version !== version) {
-        itemCache.set(initiative.id, {
-          version,
-          item: {
-            kind: 'entity',
-            id: initiative.id,
-            bucket: 'initiative',
-            searchText: initiative.name,
-            sortTimestamp,
-            timestamps: {
-              viewedAt,
-              updatedAt: initiative.updatedAt,
-              createdAt: initiative.createdAt,
-            },
-            data: entity,
-          },
-        });
+        itemCache.set(initiative.id, { version, item });
       }
-      entries.push({ id: initiative.id, bucket: 'initiative', sortTimestamp });
+      entries.push({
+        id: initiative.id,
+        bucket: 'initiative',
+        sortTimestamp: item.sortTimestamp,
+      });
     }
     return sortIndexEntries(entries);
   });
@@ -954,7 +978,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   const processedData = createLazyMemo(() => {
     const allEntries = mergeMultipleSortedIndices([
       historyEntries().entries,
-      channelEntries(),
+      channelEntries().entries,
       contactEntries(),
       crmCompanyEntries(),
       crmContactEntries(),
@@ -1076,8 +1100,9 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const projectedBuckets = createMemo(() =>
       (buckets.length ? buckets : BUCKET_COMBINATIONS.all).filter(
         (bucket) =>
-          (bucket !== 'crm_company' && bucket !== 'crm_contact') ||
-          crmFlag().enabled
+          ((bucket !== 'crm_company' && bucket !== 'crm_contact') ||
+            crmFlag().enabled) &&
+          (bucket !== 'initiative' || projectsFlag().enabled)
       )
     );
     const baseList = createLazyMemo(() => {
@@ -1144,6 +1169,19 @@ export function createQuickAccessValue(): QuickAccessContextValue {
               projectedBuckets().length > 0 && options.enabled?.() !== false,
             existingItems: localItems,
             filterPreviousItems: filterQuickAccessItems,
+            sourceAttributes: () => {
+              const channelIndex = channelEntries();
+              return {
+                'search.channel_index.complete_count':
+                  channelIndex.completeCount,
+                'search.channel_index.cached_recent_count':
+                  channelIndex.cachedCount,
+                'search.channel_index.merged_count':
+                  channelIndex.entries.length,
+                'search.channel_index.last_build_ms':
+                  channelIndex.buildDurationMs,
+              };
+            },
             materialize: async (documents) => {
               const idOf = (recordKey: string) =>
                 recordKey.slice(recordKey.indexOf(':') + 1);
@@ -1156,12 +1194,14 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                 cachedCompanies,
                 cachedContacts,
                 cachedEmails,
+                cachedInitiatives,
               ] = await Promise.all([
                 materializeCachedGraphqlHistoryItems(projectionHost, missing),
-                materializeCachedGraphqlChannels(projectionHost, missing),
+                materializeCachedGraphqlChannels(projectionHost, documents),
                 materializeCachedGraphqlCrmCompanies(projectionHost, missing),
                 materializeCachedGraphqlCrmContacts(projectionHost, missing),
                 materializeCachedEmailItems(projectionHost, documents),
+                materializeCachedGraphqlInitiatives(projectionHost, documents),
               ]);
               const historyById = new Map(
                 historyItems.map((item) => [item.id, item])
@@ -1178,11 +1218,38 @@ export function createQuickAccessValue(): QuickAccessContextValue {
               const emailsById = new Map(
                 cachedEmails.map((item) => [item.id, item])
               );
+              const initiativesById = new Map(
+                cachedInitiatives.map((initiative) => [
+                  initiative.id,
+                  initiative,
+                ])
+              );
               return documents.flatMap((document): QuickAccessItem[] => {
                 const id = idOf(document.recordKey);
                 if (document.bucket === 'email') {
                   const email = emailsById.get(id);
                   return email ? [email] : [];
+                }
+                const channel = channelsById.get(id);
+                if (channel) {
+                  return [
+                    channelToQuickAccessItem({
+                      ...channel,
+                      viewedAt: latestDate(
+                        soupViewedAtMap().get(id),
+                        channel.viewedAt
+                      ),
+                    }),
+                  ];
+                }
+                const initiative = initiativesById.get(id);
+                if (initiative) {
+                  return [
+                    initiativeToQuickAccessItem(
+                      initiative,
+                      soupViewedAtMap().get(id)
+                    ),
+                  ];
                 }
                 const cached = itemCache.get(id)?.item;
                 if (cached) return [cached];
@@ -1236,8 +1303,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                     },
                   ];
                 }
-                const channel = channelsById.get(id);
-                return channel ? [channelToQuickAccessItem(channel)] : [];
+                return [];
               });
             },
           })
@@ -1259,7 +1325,30 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       const ranked = projected
         .items()
         .filter((item) => !localDraftIds.has(item.id))
-        .map((item) => itemCache.get(item.id)?.item ?? item);
+        .map((item) => {
+          const cached = itemCache.get(item.id)?.item;
+          if (!cached) return item;
+          // Projected channels and projects carry current cache metadata even
+          // when their REST list still has an older name. Only overlay newer
+          // views.
+          if (
+            item.kind === 'entity' &&
+            (item.data.type === 'channel' || item.data.type === 'initiative')
+          ) {
+            const viewedAt = latestDate(
+              item.timestamps.viewedAt,
+              cached.timestamps.viewedAt
+            );
+            return {
+              ...item,
+              sortTimestamp:
+                toTimestamp(viewedAt) || toTimestamp(item.timestamps.updatedAt),
+              timestamps: { ...item.timestamps, viewedAt },
+              data: { ...item.data, viewedAt },
+            };
+          }
+          return cached;
+        });
       const seen = new Set(ranked.map((item) => item.id));
       const combined = ranked.concat(
         local.filter((item) => !seen.has(item.id))

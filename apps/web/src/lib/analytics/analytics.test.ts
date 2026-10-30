@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   groups: {} as Record<string, string>,
   unregister: vi.fn(),
   reset: vi.fn(),
+  setPersonProperties: vi.fn(),
   gtag: vi.fn(),
   fbq: vi.fn(),
 }));
@@ -36,6 +37,7 @@ vi.mock('posthog-js', () => ({
     getGroups = () => mocks.groups;
     unregister = mocks.unregister;
     reset = mocks.reset;
+    setPersonProperties = mocks.setPersonProperties;
   },
 }));
 
@@ -250,6 +252,32 @@ describe('PostHog exception frames', () => {
     expect(
       await sendException(['https://macro.com/app/app-gifhAVYj.js'])
     ).toEqual(['https://macro.com/app/app-gifhAVYj.js']);
+  });
+});
+
+describe('interface language', () => {
+  it('records the language once, and again when it changes', async () => {
+    const { analytics } = await import('./analytics');
+
+    analytics.setInterfaceLanguage('de');
+    analytics.setInterfaceLanguage('de');
+    analytics.setInterfaceLanguage('ja');
+
+    expect(mocks.setPersonProperties.mock.calls).toEqual([
+      [{ interface_language: 'de' }],
+      [{ interface_language: 'ja' }],
+    ]);
+  });
+
+  it('records the same language again after logout resets PostHog', async () => {
+    const { analytics } = await import('./analytics');
+
+    analytics.setInterfaceLanguage('de');
+    analytics.reset();
+    analytics.setInterfaceLanguage('de');
+
+    expect(mocks.reset).toHaveBeenCalledTimes(1);
+    expect(mocks.setPersonProperties).toHaveBeenCalledTimes(2);
   });
 });
 

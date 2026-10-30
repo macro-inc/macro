@@ -21,10 +21,12 @@ semantic control islands on the right. Collection headers use `ListHeader`:
 filters, view options, New, then expandable Search. Related detail actions share
 a `HeaderActionGroup`; keep sharing, item navigation, and detail/view toggles in
 separate groups. View tabs (channel, CRM record, and project sections, Signal and
-Noise) are `Tabs`: separate 32px pills, never inside a group. Groups use the
-canonical elevated surface, fully rounded ends, 32px controls, and 8px gaps.
-A group owns its frame; its child buttons stay flat and do not get extra borders
-or shadows. Nested shared actions reuse the containing group rather than adding
+Noise) are `Tabs`: separate 32px pills, never inside a group. Action groups use
+`variant="secondary" finish="raised"`, fully rounded ends, `sm`/`icon-sm` segments
+(28px controls), and 8px gaps. Tabs, New, and Search retain `md` sizing.
+Compose their actions with `ButtonGroup.Button`; the group shares Button's frame
+materials while each segment keeps its own interaction states. Standalone Buttons
+remain independent. Nested shared actions reuse the containing group rather than adding
 another frame, and a group with no visible actions renders nothing. Keep
 tooltips on icon-only controls and collapse labels as a pane narrows (`Tabs
 iconOnly`, then a menu). Preserve specialized editor toolbars and touch
@@ -34,19 +36,25 @@ keeps its full-width field with facet chips under it. Inputs, search fields,
 and filter chips are pills on the control frame. The [design system rule](../../.agents/rules/web/design-system.md)
 lists which control to use for each role.
 
+Desktop view-sidebar header actions use `size="icon-xs"` (24px) with 16px
+glyphs for search, close, and collapse. Preserve each action's icon and the
+shared Button touch targets; do not resize these controls through classes.
 On touch devices, low-emphasis header actions remain borderless with their
 existing hover and pressed states. Emphasized variants retain their treatment,
 including an active call's green ink. Button size does not change variant colors
-or framing. Use `glass={false}` for an explicitly flat frame. Inline
-calendar-invitation text actions remove the transparent border to keep alignment.
+or framing. Primary, accent, secondary, danger, and success Buttons automatically use raised desktop styling and glass on touch. Use `finish="flat"` to opt out, or `finish="raised"` to frame a ghost/link action. Outline Buttons always stay flat, including when a finish is supplied.
+Primary Buttons use solid monochrome emphasis (black in light themes, white in dark themes) for main actions such as create, save, submit, invite, and continue. Do not use accent merely because an action is primary. Accent Buttons use the theme accent and its resolved contrast color; accent emphasis is always explicit. Omitted variants use primary, and secondary remains the softer neutral action. Current Button usages trial secondary instead of outline; the outline API and canonical gallery examples remain available.
+Button API and composition details live in the
+[shared primitive contract](../../.agents/rules/web/ui-primitives.md#button-and-buttongroup).
+Inline calendar-invitation text actions remove the transparent border to keep alignment.
 
 ## Canonical desktop surfaces
 
-Use `not-touch:elevated` for desktop control surfaces. Buttons, button groups,
-inputs, and unselected tab pills share the same `shadow-elevated` treatment as
-composers, menus, settings cards, and dialogs: a fine outer outline, faint inner
-edge, brighter top edge, and compact shadow. Keep semantic fills and component
-geometry; a button group owns the frame so its child buttons remain flat.
+Use `not-touch:elevated` for existing desktop control surfaces other than Button
+and ButtonGroup. Button applies its raised desktop recipe and the shared touch
+glass utility automatically; ButtonGroup applies the same material once to its
+frame. Explicit segments remain flat. Inputs and unselected tab pills retain
+their existing surfaces.
 In dark mode, compact controls use thinner, lower-opacity edges than composers
 and floating panels. Keep desktop shadows close and faint, with only a slight top
 highlight, and define the border with subtle edge contrast.
@@ -59,7 +67,16 @@ draw a full 1px frame edge, menus keep the glass cast shadow, and
 `ComposerSurface` (composers and settings cards) keeps the wide `composer-shadow`
 halo. Touch surfaces retain their existing shadows.
 
-Desktop view tabs share one rounded track, with a small inset and a fully rounded selected pill. The selected pill uses the pressed fill and a subtle edge; tabs have no internal dividers. Wrapping preset choices can remain separate pills. Keep the existing touch-specific tab treatment and the agent composer's sliding track.
+Desktop view tabs share one flat rounded track, with a small inset and a fully
+rounded selected pill. Use borders and selected fills without raised edges,
+gradients, or shadows. Buttons use variant-specific pressed fills. Wrapping
+preset choices can remain separate pills. Keep each surface's existing touch
+treatment and the agent composer's sliding track (`variant="track"`).
+
+Mobile chrome marks selection in ink, never the accent: the selected pill tab
+fills with ink, the current dock icon and drawer row stay at full ink while
+their siblings dim, and a checked filter option gets an ink check. The accent
+stays for attention — unread dots and filter counts.
 
 Reuse `Button`, `Input`, `InputGroup`, `Tabs`, `ComposerSurface`, `menu-surface`, and
 `elevated-surface` instead of introducing one-off surface styling. Every menu,
@@ -85,6 +102,20 @@ On touch, glass rims stay highlighted around most of the perimeter, with short s
 at the top-right and bottom-left corners. Light themes keep a soft highlight
 through those corners so they are only slightly dimmer. The iOS app also uses shared
 [glass press feedback](navigation.md#mobile-glass-feedback).
+
+## Selection controls
+
+Unchecked checkboxes and radios have transparent faces. Selected controls use the
+accent fill and a contrasting mark; a partially selected checkbox uses a dash.
+Checkbox marks animate on both selection and deselection. Switches have an accent
+on-state and a larger rounded thumb that widens only while pressed. Reduced-motion
+preferences suppress these transitions.
+
+Use the root size prop rather than overriding the box or its glyph. Checkbox and
+radio defaults stay 16px; compact list controls stay 14px. Switch toolbar and
+settings sizes retain their existing geometry. Native keyboard behavior, form
+values, labels, disabled/read-only state, and surrounding row hit targets stay
+unchanged. See the [selection-control API contract](../../.agents/rules/web/ui-primitives.md#selection-controls).
 
 ## Multiselect dropdowns
 
@@ -121,10 +152,62 @@ single-select rows keep their rounded shape.
 
 ## Dialog actions
 
-Cancel uses a ghost button. Confirm, save, and create actions use strong: the
-outline surface and border with semibold text, without inverted colors. Disabled
-and pending primary actions retain the strong variant. Mobile confirmation drawers
-use the same action hierarchy.
+Cancel uses a ghost button. Use primary for the main confirm, save, or create
+action; it uses the theme accent. Use neutral for solid monochrome emphasis and
+secondary for softer neutral actions. Loading actions use `loading`. Mobile
+confirmation drawers use the same action hierarchy.
+
+## Property collections
+
+Use a 4px vertical gap between all property rows, including inline Tags and
+transitions between regular fields and collection fields.
+Separate populated property lists from the bottom Add property action by 16px,
+using list bottom spacing rather than an action margin so empty lists leave no gap.
+Keep property names on one line. Let collection headers use available space up
+to their actions before truncating; value rows retain the shared label column.
+
+Empty multi-entity collections show only their property header, without a
+placeholder or reserved content area. Align their labeled ghost Add button with
+the shared value-selector column, allowing longer names to borrow available
+space. Populated collections use an icon-only ghost
+Add button at the right, immediately before the pin action. Keep Add actions
+extra-muted until hovered or keyboard-focused.
+While dragging a compatible app item, tint the property name and show a small
+tray-arrow drop icon without expanding the row. Hovering a populated property highlights
+its existing item list as the dashed dropzone, without a separate box or layout
+shift. Empty properties reveal a full-width dashed dropzone below the field label.
+Use 300ms transitions with reduced-motion support; this first pass does not use
+pointer proximity. Hide collection Add buttons during app-item drags while
+preserving their layout space. Incompatible or unavailable collections retain
+their height and show no rejection feedback. Dropping adds a reference without
+moving the original item.
+Existing references stay in place. Duplicate references, the owning entity's
+matching type-and-ID pair, unsupported item types, and types outside the property's
+restriction are ignored. Read-only, metadata, loading, saving, and open-editor
+states reject drops. Picker saves, drops, chip removal, and row removal share a
+busy state through save and refresh, preventing stale references from replacing
+newly selected values.
+New references appear immediately in the collection as pending chips with an
+inline spinner through saving and refresh. Use the dragged item's label while
+its preview metadata loads. Failed saves clear pending chips through the existing
+error flow. Pending chips cannot be opened or removed. A persistently
+mounted status region announces additions, including picker saves. Removed
+references disappear immediately and are restored from the last confirmed values
+if saving fails. A failed refresh does not undo a successful save: keep confirmed
+edits visible until the query reflects them, and base subsequent edits on those
+values. Other values remain visible; further edits and drops stay locked during
+that operation. Add and value edits also remain disabled while the initial
+collection loads.
+
+The empty dedicated Tags section uses a compact, tag-icon Add tags outline button,
+without a separate message, card, title, or description. Keep the button
+permission-gated and connected to the existing tag picker; read-only sections
+show “No tags added yet” instead.
+Inline Tags property rows remain compact.
+
+The **Add** action remains the keyboard/touch alternative. This target does not
+upload files dragged from the computer. A persisted drop changes property data;
+use only disposable items and properties when that mutation is authorized.
 
 ## List-item sharing
 
@@ -140,8 +223,8 @@ data unless authorized.
 Avatar and user-mention cards open on hover on pointer devices and as a bottom
 sheet on touch devices. With a keyboard on a touch device, Tab to the trigger and
 press Enter or Space; verify focus enters the sheet and returns to the opener
-after dismissal or copying, including after reopening. DM, Open contact, and
-Assign task should leave focus in their destination when the sheet closes.
+after dismissal or copying, including after reopening. DM, Open contact, Assign
+task, and Settings should leave focus in their destination when the sheet closes.
 On pointer devices, avatars should stay out of the Tab order while still opening
 their cards on hover. Copy email/name confirms only after the clipboard
 write succeeds: the hover card shows a checkmark, while the sheet closes. A failed
@@ -155,10 +238,20 @@ information panels. Markdown/tasks include Ask Macro and document/task dispatch;
 includes Ask Macro and Create task; PDF and calls include Ask Macro. Native
 projects put Delete in the `Project actions` menu after the project title.
 
-Standard metadata is quiet, non-collapsible text at the bottom of each panel,
-separated by a muted divider. Owner and available timestamps share one format;
-Markdown adds word/character counts. There is no standard Details or Stats
+Standard metadata appears at the top of each panel, before the interactive
+sections and separated by a muted divider. Each row places its label without an
+icon in a left column sized by `--sidepanel-label-width`, followed by a nearby
+left-aligned value. Metadata, property grids, and inline Tags share this column
+and 12px label-to-value gap; metadata rows retain their 8px vertical gaps.
+Word and character counts appear last. There is no standard Details or Stats
 disclosure. Agent runtime information remains in its dedicated Session section.
+Section headers and bodies use 12px horizontal insets, with 12px bottom padding
+on the body. Collapsible headers place the shared view-sidebar caret immediately
+after the section name, with matching hover and focus treatment rather than an
+underline. Editable Properties and Tags headers have a right-aligned, icon-only
+Add action, visible whenever the section is expanded, that opens the existing
+picker. Compose actions natively with the section and their owning state;
+do not mount them through a portal. Keep read-only sections free of Add actions.
 
 Block information panels float over the right side of the block without changing
 the content width or its centered position. A single rounded bubble fits its

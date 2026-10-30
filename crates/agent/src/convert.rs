@@ -221,8 +221,8 @@ fn model_view(limit: Option<&ToolResultLimit>, id: &str, text: String) -> String
 
 /// `call_id` replayed to the provider for a persisted tool call or result.
 ///
-/// The persisted id is the provider call id when one exists (OpenAI's
-/// `call_…`) or an internal nanoid otherwise. OpenAI's Responses API pairs a
+/// The persisted id is the provider call id (or a streamed item's `fc_…`
+/// id), falling back to rig's correlation id when no provider id is available. OpenAI's Responses API pairs a
 /// call to its result through `call_id` and rejects ids ending in a separator,
 /// and a nanoid can end in `_` or `-` — so trim the trailing separator(s). A
 /// call and its result both run through this with the same `id`, so trimming

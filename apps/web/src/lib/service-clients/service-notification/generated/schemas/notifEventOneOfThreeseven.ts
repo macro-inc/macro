@@ -4,15 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { ExternalChatMessageMetadata } from './externalChatMessageMetadata';
 import type { NotifEventOneOfThreesevenTag } from './notifEventOneOfThreesevenTag';
-import type { WhatsappGroupMessageMetadata } from './whatsappGroupMessageMetadata';
 
 /**
- * A live message in a shared WhatsApp group.
+ * A live message in a shared external chat.
  */
 export type NotifEventOneOfThreeseven = {
-  /** A live message in a shared WhatsApp group. */
-  content: WhatsappGroupMessageMetadata;
+  /** A live message in a shared external chat. */
+  content: ExternalChatMessageMetadata;
   tag: NotifEventOneOfThreesevenTag;
 };

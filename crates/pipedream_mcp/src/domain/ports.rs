@@ -1,7 +1,32 @@
 use super::models::{
-    CatalogEntry, CatalogPage, ConnectToken, MacroUserIdStr, McpServer, PipedreamAccount,
-    PipedreamConnection,
+    CatalogEntry, CatalogPage, ConnectToken, ConnectorOverlay, MacroUserIdStr, McpServer,
+    PipedreamAccount, PipedreamConnection,
 };
+
+/// The catalog apps that connect through the native MCP stack instead of
+/// Pipedream.
+pub trait ConnectorOverlays: Send + Sync + 'static {
+    /// Every overlaid app.
+    fn overlays(&self) -> impl Future<Output = anyhow::Result<Vec<ConnectorOverlay>>> + Send;
+
+    /// The overlay for `app_slug`, if the app is overlaid.
+    fn overlay(
+        &self,
+        app_slug: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<ConnectorOverlay>>> + Send;
+}
+
+/// A user's connections to overlaid apps, which live on the native MCP stack
+/// rather than in Pipedream.
+pub trait OverlayConnections: Send + Sync + 'static {
+    /// The display name of `user`'s enabled, authorized connection to
+    /// `overlay`'s MCP server, if they hold one.
+    fn connected_name(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        overlay: &ConnectorOverlay,
+    ) -> impl Future<Output = anyhow::Result<Option<String>>> + Send;
+}
 
 /// Cross-user lookup for background integrations that follow a connected app.
 pub trait AppConnections: Send + Sync + 'static {
@@ -13,6 +38,10 @@ pub trait AppConnections: Send + Sync + 'static {
 }
 
 /// Port for persisting Pipedream-connected apps, keyed by user and app slug.
+///
+/// Reads never return a connection to an overlaid app (see
+/// [`ConnectorOverlays`]): once an app is overlaid, a Pipedream grant for it
+/// stops reaching tools, imports, and sandboxes everywhere at once.
 pub trait ConnectionStore: Send + Sync + 'static {
     /// Error type for store operations.
     type Err: Send + std::fmt::Debug;
