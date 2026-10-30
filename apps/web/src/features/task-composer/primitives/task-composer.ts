@@ -349,22 +349,24 @@ export function createTaskComposer(
     }
 
     const task = { id: documentId, optimisticSnapshot };
-    toast.success('Task created', {
+    const openTask = (newSplit: boolean) => {
+      if (toastId !== undefined) toast.dismiss(toastId);
+      host.openTask(task, { newSplit, referredFrom: null });
+    };
+    const toastId = toast.success('Task created', {
       subtext: linkCopied ? 'Link copied' : undefined,
       actions: [
         {
           label: 'Open',
           icon: ArrowSquareOutIcon,
-          onClick: () =>
-            host.openTask(task, { newSplit: false, referredFrom: null }),
+          onClick: () => openTask(false),
         },
         ...(!isTouchDevice()
           ? [
               {
                 label: 'Open (New Split)',
                 icon: SplitIcon,
-                onClick: () =>
-                  host.openTask(task, { newSplit: true, referredFrom: null }),
+                onClick: () => openTask(true),
               },
             ]
           : []),

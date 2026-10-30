@@ -612,7 +612,8 @@ the centered composer dialog. Both layouts are views in
 
 After creation, the `Task created` toast shows `Link copied` when copying
 succeeds and an `Open` action. Touch devices omit `Open (New Split)`; desktop
-keeps both actions. Verify the toast at phone and tablet widths with touch
+keeps both actions. Either action immediately dismisses the toast before opening
+the task. Verify the toast at phone and tablet widths with touch
 emulation: the message and action fit without clipping, and `Open` visits the
 created task in place.
 
