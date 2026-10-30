@@ -5,10 +5,28 @@ fragment ContactDirectoryFields on GraphqlContact {
   name
 }
 
-query ContactDirectoryPage($limit: Int, $after: String) {
+query ContactDirectoryByUserIds($userIds: [ID!]!) {
   user {
     id
-    contacts(limit: $limit, after: $after) {
+    contactsByUserIds(userIds: $userIds) {
+      ...ContactDirectoryFields
+    }
+  }
+}
+
+query ContactDirectoryByEmails($emails: [String!]!) {
+  user {
+    id
+    contactsByEmails(emails: $emails) {
+      ...ContactDirectoryFields
+    }
+  }
+}
+
+query ContactDirectoryPage($limit: Int, $after: String, $search: String) {
+  user {
+    id
+    contacts(limit: $limit, after: $after, search: $search) {
       nodes {
         ...ContactDirectoryFields
       }

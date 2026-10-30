@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
+use subsequence_match::{normalize_text as normalize_search_text, subsequence_score};
 use thiserror::Error;
 
 mod changes;
@@ -197,7 +198,7 @@ pub const QUICK_ACCESS_TYPENAMES: &[&str] = &[
 /// Maximum number of compact documents returned by one RPC.
 pub const MAX_SEARCH_LIMIT: usize = 500;
 /// Maximum accepted query length in bytes.
-pub const MAX_SEARCH_QUERY_BYTES: usize = 512;
+pub const MAX_SEARCH_QUERY_BYTES: usize = subsequence_match::MAX_QUERY_BYTES;
 /// Restores the Quick Access preference for matching direct messages.
 const DM_SEARCH_BOOST: f64 = 1.8;
 
@@ -372,14 +373,6 @@ impl SearchQuery {
     }
 }
 
-fn normalize_search_text(value: &str) -> String {
-    value
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_lowercase()
-}
-
 fn quick_access_timestamp(typename: &str, record: &Record) -> i64 {
     // Initiatives keep their timestamps in an embedded metadata object.
     if typename == "GraphqlSoupInitiative" {
@@ -514,33 +507,6 @@ fn score_normalized_query(
     } else {
         score
     })
-}
-
-fn subsequence_score(haystack: &str, needle: &str) -> Option<f64> {
-    if let Some(start) = haystack.find(needle) {
-        let prefix = start == 0
-            || haystack[..start]
-                .chars()
-                .next_back()
-                .is_some_and(|character| !character.is_alphanumeric());
-        return Some(if prefix { 1.0 } else { 0.9 });
-    }
-    let mut chars = needle.chars();
-    let mut wanted = chars.next()?;
-    let mut first = None;
-    for (position, character) in haystack.chars().enumerate() {
-        if character == wanted {
-            first.get_or_insert(position);
-            match chars.next() {
-                Some(next) => wanted = next,
-                None => {
-                    let span = position.saturating_sub(first.unwrap_or(position)) + 1;
-                    return Some((needle.chars().count() as f64 / span as f64).clamp(0.1, 0.8));
-                }
-            }
-        }
-    }
-    None
 }
 
 fn parse_rfc3339_millis(value: &str) -> Option<i64> {

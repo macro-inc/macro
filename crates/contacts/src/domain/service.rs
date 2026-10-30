@@ -3,6 +3,7 @@ use crate::domain::models::messages::{
     ContactConnection, ContactConnections, ContactsMessage, ContactsNodes,
 };
 use crate::domain::models::page::{ContactCursor, ContactIdPage, ContactPageSize};
+use crate::domain::models::query::ContactLookup;
 use crate::domain::ports::{
     ContactsBackfillOutboxRepo, ContactsIngress, ContactsIngressQueue, ContactsNotifier,
     ContactsOutboxService, ContactsPageRepository, ContactsPageService, ContactsRepository,
@@ -99,6 +100,15 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsService for ContactsDom
 impl<R: ContactsPageRepository, N: ContactsNotifier> ContactsPageService
     for ContactsDomainService<R, N>
 {
+    #[tracing::instrument(name = "contacts.lookup", skip_all, fields(count = lookup.ids().len()), err)]
+    async fn lookup_contact_ids(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        lookup: &ContactLookup,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        self.repository.lookup_contact_ids(viewer, lookup).await
+    }
+
     #[tracing::instrument(name = "contacts.page", skip_all, fields(limit = limit.get(), has_cursor = after.is_some()), err)]
     async fn contact_id_page(
         &self,

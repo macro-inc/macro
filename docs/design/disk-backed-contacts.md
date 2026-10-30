@@ -1,11 +1,10 @@
 # Disk-backed contacts
 
-**Status:** phase 1 in progress. Bounded pages now include viewer-scoped names and
-identities and are exposed as `user.contacts(limit, after)` through GraphQL. The
-frontend still uses the full directory; the generated page operation has no UI
-consumer yet.
-**Next step:** add bounded search and exact ID/email resolution, then connect the
-first cached search consumer with hydration-page retention handled explicitly.
+**Status:** phase 1 backend contract implemented: enriched pages, bounded search,
+and membership-scoped exact ID/email lookup. The frontend still uses the full
+directory; the generated operations have no UI consumer yet.
+**Next step:** phase 2, bounded hydration and the first cached search consumer,
+with hydration-page retention handled explicitly.
 
 ## Goal and scope
 
@@ -85,10 +84,13 @@ and search projection, not a new database or bespoke contact-storage subsystem.
   target. Names do not affect identity.
   Do not reuse `GraphqlUser`, which is the authenticated viewer/identity witness;
   do not merge viewer-specific names into a global public-profile record.
-- [ ] Provide bounded search and batch ID/email resolution under the same authorized
-  contract. Cached user-profile data alone must not imply contact membership.
-- [ ] Set explicit limits for search results and lookup batches; the enriched read
-  page limit is already 500 (default 100).
+- [x] Provide bounded search and batch ID/email resolution under the same authorized
+  contract. `user.contacts(search, limit, after)` filters names/emails using the same
+  matcher as cache search. `contactsByUserIds` / `contactsByEmails` resolve only
+  requested graph members or self, in first-requested order; unknown people are
+  omitted and empty input returns nothing. Cached profiles never imply membership.
+- [x] Bound read/search results and raw lookup inputs to 500 (page default 100),
+  before lookup deduplication. Search text is capped at 512 UTF-8 bytes.
 - [x] Generate the SDL, `ContactDirectoryPage` operation types, and cache entity
   metadata from their source of truth. Do not use this foreground page operation
   for full background ingestion until phase 2 omits retained page wrappers.
@@ -97,6 +99,22 @@ Read [contacts ownership](../../crates/contacts/AGENTS.md),
 [schema conventions](../../crates/complete_graph/AGENTS.md), and the
 [GraphQL field guide](../guides/add-graphql-field.md) before implementing.
 Keep deployed full-list APIs compatible until their clients can be retired.
+
+### Server search contract
+
+Server search is source-ID-ordered pagination, not the cache's ranked top-K search.
+Each nonempty search enriches at most four batches of 500 source rows; pagination
+also reads one lookahead ID per batch. Reaching this work budget can return an
+empty or short page with a continuation. Only `nextCursor: null` proves exhaustion.
+Callers must follow continuations for more matches, reset them when the query
+changes, and never turn a budget-limited empty page into "no matches."
+
+Per-row cursors preserve original database positions independently of canonical
+user IDs, so stopping inside a batch cannot skip case-normalized legacy rows.
+The shared dependency-free `subsequence_match` crate keeps Unicode normalization
+and token eligibility identical on the server and in the native/WASM cache;
+ranking policy remains in the owning consumer. Exact lookup uses indexed,
+bounded point reads before resolving names.
 
 ## Phase 2 — cache ingestion and query-driven search
 

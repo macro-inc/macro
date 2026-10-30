@@ -135,6 +135,7 @@ members = [
   "crates/properties_service",
   "crates/reminders",
   "crates/search_service",
+  "crates/subsequence_match",
   "crates/skills",
   "crates/slack_integration",
   "crates/soup_filter_cache_adapter",

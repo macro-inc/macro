@@ -871,6 +871,22 @@ fn contacts_reads_have_viewer_scoped_entity_keys() {
         panic!("query root")
     };
     assert!(!root.fields.contains_key("contacts"));
+    assert!(!root.fields.contains_key("contactsByUserIds"));
+    assert!(!root.fields.contains_key("contactsByEmails"));
+    assert_eq!(
+        viewer.fields["contactsByUserIds"].ty.to_string(),
+        "[GraphqlContact!]!"
+    );
+    assert_eq!(
+        viewer.fields["contactsByEmails"].ty.to_string(),
+        "[GraphqlContact!]!"
+    );
+    assert!(
+        field
+            .arguments
+            .iter()
+            .any(|argument| argument.name == "search" && argument.ty.to_string() == "String")
+    );
 }
 
 #[test]

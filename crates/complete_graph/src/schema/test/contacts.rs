@@ -3,6 +3,7 @@ use ::contacts::domain::{
     models::{
         contact::{Contact, ContactId, ContactPage},
         page::{ContactCursor, ContactPageSize},
+        query::{ContactLookup, ContactSearch},
     },
     ports::ContactDirectory,
 };
@@ -11,6 +12,25 @@ use graphql_contacts::ContactsGraphqlContext;
 #[derive(Default)]
 struct Directory(Mutex<Vec<String>>);
 impl ContactDirectory for Directory {
+    async fn search_contacts(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        _search: &ContactSearch,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> Result<ContactPage, Report> {
+        self.contact_page(viewer, after, limit).await
+    }
+    async fn lookup_contacts(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        _lookup: &ContactLookup,
+    ) -> Result<Vec<Contact>, Report> {
+        Ok(self
+            .contact_page(viewer, None, ContactPageSize::DEFAULT)
+            .await?
+            .contacts)
+    }
     async fn contact_page(
         &self,
         viewer: MacroUserIdStr<'_>,
@@ -35,7 +55,10 @@ async fn contacts_are_read_from_request_data_only_for_the_authenticated_viewer()
     let harness = harness();
     let directory = Arc::new(Directory::default());
     let context = ContactsGraphqlContext::new(directory.clone());
-    let query = "{ user { id contacts(limit: 2) { nodes { id userId email name } nextCursor } } }";
+    let query = r#"{ user { id contacts(limit: 2, search: "person") { nodes { id userId email name } nextCursor }
+        contactsByUserIds(userIds: ["macro|person@example.com"]) { id }
+        contactsByEmails(emails: ["person@example.com"]) { id }
+    } }"#;
     // The enclosing user authentication gate runs before the directory resolver.
     for parts in [
         HttpRequest::builder()
@@ -70,5 +93,8 @@ async fn contacts_are_read_from_request_data_only_for_the_authenticated_viewer()
         data["user"]["contacts"]["nodes"][0]["userId"],
         "macro|person@example.com"
     );
-    assert_eq!(*directory.0.lock().unwrap(), [VALID_USER_ID.to_owned()]);
+    assert_eq!(
+        *directory.0.lock().unwrap(),
+        vec![VALID_USER_ID.to_owned(); 3]
+    );
 }

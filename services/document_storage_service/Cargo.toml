@@ -106,6 +106,7 @@ connection = { path = "../../crates/connection", default-features = false, featu
 ] }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 contacts = { path = "../../crates/contacts", features = ["directory-names"] }
+cowlike = { path = "../../crates/cowlike" }
 channel_labels = { path = "../../crates/channel_labels", features = [
   "inbound",
   "postgres",

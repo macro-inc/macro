@@ -34,7 +34,11 @@ async fn pages_include_self_once_and_only_the_viewers_neighbors(pool: PgPool) {
             .contact_id_page(viewer.clone(), after.as_ref(), limit)
             .await
             .unwrap();
-        let ids: Vec<_> = page.contacts.iter().map(|id| id.as_ref()).collect();
+        let ids: Vec<_> = page
+            .contacts
+            .iter()
+            .map(|row| row.user_id.as_ref())
+            .collect();
         assert_eq!(ids, expected);
         found.extend(page.contacts);
         after = page.next_cursor;
@@ -55,7 +59,13 @@ async fn pages_include_self_once_and_only_the_viewers_neighbors(pool: PgPool) {
         .contact_id_page(unrelated.clone(), Some(&foreign_cursor), limit)
         .await
         .unwrap();
-    assert_eq!(own.contacts, vec![unrelated]);
+    assert_eq!(
+        own.contacts
+            .into_iter()
+            .map(|row| row.user_id)
+            .collect::<Vec<_>>(),
+        vec![unrelated]
+    );
     assert!(own.next_cursor.is_none());
 }
 
@@ -91,11 +101,61 @@ async fn full_final_page_has_no_cursor_and_bad_rows_do_not_strand_pagination(poo
     assert_eq!(
         rest.contacts
             .iter()
-            .map(|id| id.as_ref())
+            .map(|row| row.user_id.as_ref())
             .collect::<Vec<_>>(),
         ["macro|a@example.com", "macro|m@example.com"]
     );
     assert!(rest.next_cursor.is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn exact_lookup_checks_membership_and_preserves_requested_order(pool: PgPool) {
+    sqlx::query!(
+        "INSERT INTO contacts_connections(user1, user2) VALUES
+        ('macro|a@example.com', 'macro|m@example.com'),
+        ('macro|m@example.com', 'macro|z@example.com'),
+        ('macro|b@example.com', 'macro|c@example.com')"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repository = DbContactsRepository::new(pool);
+    let viewer = MacroUserIdStr::try_from_email("m@example.com").unwrap();
+    let lookup = ContactLookup::new(
+        [
+            "Z@example.com",
+            "c@example.com",
+            "m@example.com",
+            "a@example.com",
+            "z@example.com",
+        ]
+        .map(|email| MacroUserIdStr::try_from_email(email).unwrap())
+        .to_vec(),
+    )
+    .unwrap();
+    let found = repository
+        .lookup_contact_ids(viewer, &lookup)
+        .await
+        .unwrap();
+    assert_eq!(
+        found.iter().map(|id| id.email_str()).collect::<Vec<_>>(),
+        ["z@example.com", "m@example.com", "a@example.com"]
+    );
+    let other = MacroUserIdStr::try_from_email("other@example.com").unwrap();
+    assert!(
+        repository
+            .lookup_contact_ids(other.clone(), &lookup)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        repository
+            .lookup_contact_ids(other, &ContactLookup::new(vec![]).unwrap())
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -115,6 +175,33 @@ async fn deep_pages_seek_both_directions_without_scanning_the_directory(pool: Pg
         .execute(&pool)
         .await
         .unwrap();
+    let requested: Vec<_> = (1..=500)
+        .map(|i| format!("macro|z{i:06}@example.com"))
+        .collect();
+    let explain = format!(
+        "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) {}",
+        include_str!("../lookup.sql")
+    );
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "EXPLAIN wraps the production lookup SQL and returns planner JSON"
+    )]
+    let (lookup_plan,): (serde_json::Value,) = sqlx::query_as(&explain)
+        .bind("macro|m@example.com")
+        .bind(&requested)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let plan = &lookup_plan[0]["Plan"];
+    let reads = plan["Shared Hit Blocks"].as_u64().unwrap_or(0)
+        + plan["Shared Read Blocks"].as_u64().unwrap_or(0);
+    assert!(reads < 5_000, "lookup scanned the directory: {lookup_plan}");
+    assert_eq!(plan["Actual Rows"].as_f64(), Some(500.0));
+    assert!(
+        !lookup_plan.to_string().contains("Seq Scan"),
+        "{lookup_plan}"
+    );
+
     let mut connection = pool.acquire().await.unwrap();
     let prepare = format!(
         "PREPARE contacts_page(text, text, bigint) AS {}",

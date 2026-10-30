@@ -124,7 +124,9 @@ deprecation (`Remove after YYYY-MM-DD`, at least 30 days out).
 `cargo x graphql-schema-compat` checks the SDL against `origin/main`, and CI runs
 it; see [step 8 of the field guide](../../docs/guides/add-graphql-field.md#8-compatibility-and-rollout).
 
-Personal contact pages flatten `graphql_contacts` under authenticated `GraphqlUser`.
+Personal contact pages/search and exact ID/email lookups flatten `graphql_contacts`
+under authenticated `GraphqlUser`. Search pages can be empty with a continuation;
+only null means exhausted.
 `GraphqlContact.id` identifies the viewer/person pair, not the target user; names
 can differ by viewer. Keep the bounded read context in DSS HTTP and websocket
 request data and run the `contacts` schema tests after changes.
