@@ -18,18 +18,40 @@ from . import params as P
 
 TEMPLATE = os.path.join(os.path.dirname(__file__), "specimen_template.html")
 
-# Close-ups of the cyber details: (glyph, weight, viewBox in font units
-# (x, y-top, w, h) with y up, title, caption).
+# Close-ups of the cyber details: (glyph, weight, framing, title, caption).
+# Framing is computed from the outline and the weight's parameters in
+# _detail_view; captions take numbers from the same parameters.
 DETAILS = [
-    ("o", 800, None, "Squircle curves",
-     "Every round contour is a superellipse (exponent 3.0 outside, 2.7 in the counter): the squared-off roundness of SF Pro pushed further."),
-    ("n", 800, (-10, 760, 470, 470), "Chamfered stroke ends",
-     "Free stem tops and curve terminals are clipped at 45°. The leg is 0.36 of the stem, so the cut keeps its proportion at every weight."),
-    ("n", 800, (40, 560, 330, 330), "Ink traps",
-     "Acute joins are notched. The trap grows with weight (0 at Light, 37 units at ExtraBold) so heavy text keeps its crotches open."),
-    ("i", 800, (-20, 800, 300, 300), "Square dots",
+    ("o", 800, "full", "Squircle curves",
+     "Every round contour is a superellipse (exponent {sq:.1f} outside, {sq_in:.1f} in the counter): the squared-off roundness of SF Pro pushed further."),
+    ("n", 800, "chamfer", "Chamfered stroke ends",
+     "Free stem tops and curve terminals are clipped at 45°. The leg is 0.36 of the stem ({cut:.0f} units at ExtraBold), so the cut keeps its proportion at every weight."),
+    ("n", 800, "trap", "Ink traps",
+     "Acute joins are notched. The trap grows with weight, from {trap_light:.0f} units at Light to {trap_bold:.0f} at ExtraBold, so heavy text keeps its crotches open."),
+    ("i", 800, "dot", "Square dots",
      "Dots are squares with two opposing chamfers, shared by i, j and all punctuation."),
 ]
+
+
+def _detail_view(font, name, framing, p):
+    """viewBox (x, y-top, w, h) in font units, y up."""
+    from fontTools.pens.boundsPen import BoundsPen
+
+    bp = BoundsPen(font.getGlyphSet())
+    font.getGlyphSet()[name].draw(bp)
+    x0, y0, x1, y1 = bp.bounds
+    if framing == "chamfer":
+        size = 2.6 * p.stem
+        return (x0 - 0.35 * size, P.XH + 0.3 * size, size, size)
+    if framing == "trap":
+        cx, cy = x0 + p.stem, P.XH - p.hair - 0.17 * P.XH
+        size = 1.9 * p.stem
+        return (cx - size / 2, cy + size * 0.6, size, size)
+    if framing == "dot":
+        size = (y1 - (P.XH - 140)) + 80
+        cx = (x0 + x1) / 2
+        return (cx - size / 2, y1 + 40, size, size)
+    return None
 
 
 def _glyph_svg(font, name, view=None, pad=40):
@@ -68,9 +90,9 @@ def _glyph_svg(font, name, view=None, pad=40):
     parts = [f'<svg viewBox="{x} {-ytop} {w} {h}" role="img" aria-label="Outline of {html.escape(name)}">']
     parts.append('<g class="metrics">')
     for y, label in ((P.ASC, "asc"), (P.CAP, "cap"), (P.XH, "x"), (0, "base"), (P.DESC, "desc")):
-        parts.append(f'<line x1="{x}" x2="{x + w}" y1="{-y}" y2="{-y}"/>')
-    parts.append(f'<line class="adv" x1="0" x2="0" y1="{-ytop}" y2="{-ytop + h}"/>')
-    parts.append(f'<line class="adv" x1="{adv}" x2="{adv}" y1="{-ytop}" y2="{-ytop + h}"/>')
+        parts.append(f'<line x1="{x - w}" x2="{x + 2 * w}" y1="{-y}" y2="{-y}"/>')
+    parts.append(f'<line class="adv" x1="0" x2="0" y1="{-ytop - h}" y2="{-ytop + 2 * h}"/>')
+    parts.append(f'<line class="adv" x1="{adv}" x2="{adv}" y1="{-ytop - h}" y2="{-ytop + 2 * h}"/>')
     parts.append("</g>")
     parts.append(f'<g transform="scale(1,-1)"><path class="ink" d="{d}"/>')
     parts.append('<g class="handles">' + "".join(
@@ -125,10 +147,18 @@ def build_specimen(fonts_dir, out_html, embed=False):
         font_url = os.path.relpath(vf_path, os.path.dirname(out_html)).replace("[", "%5B").replace("]", "%5D")
 
     details = []
-    for name, w, view, title, caption in DETAILS:
+    numbers = {
+        "sq": P.params(400).sq,
+        "sq_in": P.params(400).sq_in,
+        "cut": P.params(800).cut,
+        "trap_light": P.params(300).trap * 1.3,
+        "trap_bold": P.params(800).trap * 1.3,
+    }
+    for name, w, framing, title, caption in DETAILS:
         if name not in static[w].getGlyphOrder():
             continue
-        svg = _glyph_svg(static[w], name, view)
+        caption = caption.format(**numbers)
+        svg = _glyph_svg(static[w], name, _detail_view(static[w], name, framing, P.params(w)))
         details.append(
             f'<figure class="detail"><div class="outline">{svg}</div>'
             f'<figcaption><h3>{html.escape(title)}</h3><p>{html.escape(caption)}</p>'

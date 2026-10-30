@@ -1,0 +1,702 @@
+<title>Kernel Sans</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@300..800&display=swap">
+<style>
+@font-face {
+  font-family: "Kernel Sans";
+  src: url("../fonts/variable/KernelSans%5Bwght%5D.woff2") format("woff2");
+  font-weight: 300 800;
+  font-style: normal;
+  font-display: block;
+}
+
+/* Layout: a font-editor sheet. Metric lines, unit labels and point markers
+   run through every section; the specimen font sets all text. */
+:root {
+  --paper: #eef1f5;
+  --panel: #ffffff;
+  --ink: #0b0e15;
+  --muted: #586174;
+  --rule: #d3d9e3;
+  --metric: #3461f0;
+  --advance: #e2474d;
+  --sel: rgba(52, 97, 240, 0.12);
+  --font-display: "Kernel Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --step--1: 0.8125rem;
+  --step-0: 1rem;
+  --step-1: 1.25rem;
+  --step-2: 1.75rem;
+  --step-3: 2.75rem;
+  --radius: 4px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0c0f14;
+    --panel: #141922;
+    --ink: #e7ebf2;
+    --muted: #8d96a8;
+    --rule: #252c39;
+    --metric: #7395ff;
+    --advance: #ff6d72;
+    --sel: rgba(115, 149, 255, 0.16);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0c0f14;
+  --panel: #141922;
+  --ink: #e7ebf2;
+  --muted: #8d96a8;
+  --rule: #252c39;
+  --metric: #7395ff;
+  --advance: #ff6d72;
+  --sel: rgba(115, 149, 255, 0.16);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: var(--step-0);
+  line-height: 1.5;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.mono, code, pre, output, .tag, .label {
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  letter-spacing: 0.01em;
+}
+.label { text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+h2 {
+  font-size: var(--step-3);
+  font-weight: 650;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+}
+h3 { font-size: var(--step-1); font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+p { margin: 0; max-width: 62ch; }
+section { padding-block: clamp(48px, 8vw, 96px); border-top: 1px solid var(--rule); }
+.section-head { display: grid; gap: 12px; margin-bottom: 32px; }
+.section-head .label { display: flex; gap: 12px; }
+:focus-visible { outline: 2px solid var(--metric); outline-offset: 2px; }
+
+/* Top bar */
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-block: 18px;
+}
+.top strong { font-weight: 650; font-size: var(--step-1); letter-spacing: -0.01em; }
+.top .mono { color: var(--muted); }
+
+/* Hero: the word sits on real metric lines */
+.hero { border-top: 0; padding-block: 8px 56px; }
+.stage {
+  --size: clamp(76px, 21vw, 248px);
+  position: relative;
+  overflow: hidden;
+  border-block: 1px solid var(--rule);
+}
+.mline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px solid var(--metric);
+  opacity: 0.55;
+  pointer-events: none;
+}
+.mline span {
+  position: absolute;
+  right: 0;
+  top: 2px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--metric);
+}
+.mline.base { opacity: 1; }
+.mline.asc span, .mline.x span, .mline.desc span, .mline.base span { top: auto; bottom: 2px; }
+.word {
+  font-size: var(--size);
+  line-height: 1.2;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+  outline: none;
+  position: relative;
+  caret-color: var(--advance);
+}
+.hero-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 32px;
+  align-items: end;
+  margin-top: 28px;
+}
+.lede { font-size: var(--step-2); line-height: 1.25; letter-spacing: -0.015em; font-weight: 400; text-wrap: balance; }
+.control { display: grid; gap: 8px; }
+.control-row { display: flex; align-items: center; gap: 12px; }
+input[type="range"] { width: 100%; accent-color: var(--metric); }
+output { min-width: 9ch; text-align: right; color: var(--muted); }
+
+/* Details */
+.details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.detail { margin: 0; background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius); display: grid; grid-template-rows: auto 1fr; }
+.outline { border-bottom: 1px solid var(--rule); }
+.outline svg { display: block; width: 100%; height: auto; aspect-ratio: 1 / 1; max-height: 420px; }
+.outline .metrics line { stroke: var(--metric); stroke-width: 1; vector-effect: non-scaling-stroke; opacity: 0.6; }
+.outline .metrics line.adv { stroke: var(--advance); }
+.outline .ink { fill: var(--ink); fill-opacity: 0.08; stroke: var(--ink); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.outline .handles line { stroke: var(--muted); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.outline .off circle { fill: var(--panel); stroke: var(--advance); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.outline .on rect { fill: var(--metric); }
+.detail figcaption { padding: 18px 20px 20px; display: grid; gap: 8px; align-content: start; }
+.detail p { color: var(--muted); }
+.tag { color: var(--muted); }
+
+/* Weights */
+.waterfall { list-style: none; margin: 0; padding: 0; display: grid; }
+.waterfall li {
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr);
+  gap: 16px;
+  align-items: baseline;
+  padding-block: 14px;
+  border-bottom: 1px solid var(--rule);
+}
+.waterfall .sample { font-size: clamp(1.5rem, 3.6vw, 2.75rem); line-height: 1.1; letter-spacing: -0.02em; overflow-wrap: anywhere; min-width: 0; }
+.waterfall .meta { display: grid; gap: 2px; }
+.waterfall .meta b { font-family: var(--font-display); font-size: var(--step-0); font-weight: 600; }
+
+/* Tester */
+.tester-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) auto; gap: 20px 28px; align-items: end; margin-bottom: 20px; }
+.toggles { display: flex; flex-wrap: wrap; gap: 8px; }
+.toggle {
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  padding: 7px 11px;
+  border: 1px solid var(--rule);
+  background: var(--panel);
+  color: var(--ink);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.toggle[aria-pressed="true"] { border-color: var(--metric); background: var(--sel); color: var(--metric); }
+.tester {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 24px;
+  min-height: 12rem;
+  line-height: 1.15;
+  outline: none;
+  overflow-wrap: anywhere;
+}
+.tester:focus { border-color: var(--metric); }
+
+/* Compare */
+.compare { display: grid; }
+.compare .row { display: grid; grid-template-columns: 11rem minmax(0, 1fr); gap: 16px; align-items: baseline; padding-block: 14px; border-bottom: 1px solid var(--rule); }
+.compare .text { font-size: clamp(1.6rem, 4.6vw, 3.4rem); line-height: 1.1; letter-spacing: -0.02em; overflow-wrap: anywhere; min-width: 0; }
+.compare .row.kernel .text { font-family: var(--font-display); }
+.compare .row.inter .text { font-family: "Inter", sans-serif; }
+.compare .row.system .text { font-family: system-ui, -apple-system, sans-serif; }
+.weight-pick { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Glyphs */
+.glyph-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; align-items: start; }
+.glyph-groups { display: grid; gap: 28px; min-width: 0; }
+.glyph-group h3 { margin-bottom: 10px; font-size: var(--step-0); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); border-left: 1px solid var(--rule); border-top: 1px solid var(--rule); }
+.cell {
+  font: inherit;
+  font-family: var(--font-display);
+  font-size: 26px;
+  aspect-ratio: 1 / 1;
+  border: 0;
+  border-right: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  min-width: 0;
+}
+.cell:hover { background: var(--sel); }
+.cell[aria-pressed="true"] { background: var(--metric); color: var(--panel); }
+.inspector {
+  position: sticky;
+  top: calc(env(safe-area-inset-top, 0px) + 16px);
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  display: grid;
+}
+.inspector svg { display: block; width: 100%; height: auto; border-bottom: 1px solid var(--rule); }
+.inspector svg line { stroke: var(--metric); stroke-width: 1; vector-effect: non-scaling-stroke; opacity: 0.6; }
+.inspector svg line.adv { stroke: var(--advance); opacity: 0.9; }
+.inspector svg text.g { fill: var(--ink); font-family: var(--font-display); }
+.inspector svg text.ml { fill: var(--metric); font-family: var(--font-mono); font-size: 34px; }
+.inspector dl { margin: 0; padding: 16px 18px 18px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 16px; }
+.inspector dt { color: var(--muted); font-family: var(--font-mono); font-size: var(--step--1); }
+.inspector dd { margin: 0; font-family: var(--font-mono); font-size: var(--step--1); overflow-wrap: anywhere; }
+.inspector .weight-pick { padding: 0 18px 18px; }
+
+/* In use */
+.ui {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.ui-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; padding: 18px 20px; border-bottom: 1px solid var(--rule); }
+.ui-head h3 { font-size: var(--step-1); }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid var(--rule); }
+.stat { padding: 18px 20px; display: grid; gap: 4px; border-right: 1px solid var(--rule); min-width: 0; }
+.stat:last-child { border-right: 0; }
+.stat .v { font-size: var(--step-3); font-weight: 600; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.stat .k { color: var(--muted); font-size: var(--step--1); }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; min-width: 560px; }
+th, td { text-align: left; padding: 11px 20px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th { font-weight: 500; color: var(--muted); font-size: var(--step--1); }
+td.num, th.num { text-align: right; }
+tr:last-child td { border-bottom: 0; }
+.pill { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: var(--step--1); font-weight: 500; border: 1px solid currentColor; }
+.pill.ok { color: var(--metric); }
+.pill.bad { color: var(--advance); }
+
+/* Install */
+.install { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.code { position: relative; background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius); }
+.code pre { margin: 0; padding: 20px; overflow-x: auto; line-height: 1.6; }
+.code .copy { position: absolute; top: 10px; right: 10px; }
+.features { width: 100%; min-width: 0; }
+.features td:first-child { font-family: var(--font-mono); font-size: var(--step--1); color: var(--metric); }
+.features td { white-space: normal; padding: 10px 12px 10px 0; }
+footer { border-top: 1px solid var(--rule); padding-block: 28px 40px; color: var(--muted); }
+
+@media (max-width: 860px) {
+  .hero-row, .tester-controls, .install, .glyph-layout { grid-template-columns: minmax(0, 1fr); }
+  .details { grid-template-columns: minmax(0, 1fr); }
+  .inspector { position: static; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stat:nth-child(2) { border-right: 0; }
+  .stat:nth-child(-n+2) { border-bottom: 1px solid var(--rule); }
+}
+@media (max-width: 560px) {
+  .waterfall li, .compare .row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <strong>Kernel Sans</strong>
+    <span class="mono">v1.000 · 300–800 · 295 glyphs</span>
+  </header>
+
+  <section class="hero" aria-label="Kernel Sans">
+    <div class="stage" id="stage">
+      <div class="mline asc" data-m="760"><span>asc 760</span></div>
+      <div class="mline cap" data-m="720"><span>cap 720</span></div>
+      <div class="mline x" data-m="540"><span>x 540</span></div>
+      <div class="mline base" data-m="0"><span>0</span></div>
+      <div class="mline desc" data-m="-200"><span>desc −200</span></div>
+      <div class="word" id="heroWord" contenteditable="true" spellcheck="false" aria-label="Editable sample word">Kernel</div>
+    </div>
+    <div class="hero-row">
+      <p class="lede">A neo-grotesque in the Inter and SF Pro mould, cut with squircle curves, 45° chamfers, ink traps and square dots.</p>
+      <div class="control">
+        <label class="label" for="heroW">Weight</label>
+        <div class="control-row">
+          <input type="range" id="heroW" min="300" max="800" step="1" value="400">
+          <output id="heroWOut" for="heroW">400 Regular</output>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="details">
+    <div class="section-head">
+      <span class="label">Construction · ExtraBold outlines</span>
+      <h2>Four details on a familiar skeleton</h2>
+      <p>The proportions follow Inter and SF Pro: a 540-unit x-height on a 720 cap height, flat horizontal terminals and nearly even strokes. Everything that makes it feel engineered comes from four rules.</p>
+    </div>
+    <div class="details">
+<figure class="detail"><div class="outline"><svg viewBox="-40 -660 750 720" role="img" aria-label="Outline of o"><g class="metrics"><line x1="-40" x2="710" y1="-760" y2="-760"/><line x1="-40" x2="710" y1="-720" y2="-720"/><line x1="-40" x2="710" y1="-540" y2="-540"/><line x1="-40" x2="710" y1="0" y2="0"/><line x1="-40" x2="710" y1="200" y2="200"/><line class="adv" x1="0" x2="0" y1="-660" y2="60"/><line class="adv" x1="670" x2="670" y1="-660" y2="60"/></g><g transform="scale(1,-1)"><path class="ink" d="M613 270C613 489 553 550 335 550C117 550 57 489 57 270C57 51 117 -10 335 -10C553 -10 613 51 613 270ZM455 270C455 157 422 115 335 115C248 115 215 157 215 270C215 383 248 425 335 425C422 425 455 383 455 270Z"/><g class="handles"><line x1="613" y1="270" x2="613" y2="489"/><line x1="553" y1="550" x2="335" y2="550"/><line x1="335" y1="550" x2="117" y2="550"/><line x1="57" y1="489" x2="57" y2="270"/><line x1="57" y1="270" x2="57" y2="51"/><line x1="117" y1="-10" x2="335" y2="-10"/><line x1="335" y1="-10" x2="553" y2="-10"/><line x1="613" y1="51" x2="613" y2="270"/><line x1="455" y1="270" x2="455" y2="157"/><line x1="422" y1="115" x2="335" y2="115"/><line x1="335" y1="115" x2="248" y2="115"/><line x1="215" y1="157" x2="215" y2="270"/><line x1="215" y1="270" x2="215" y2="383"/><line x1="248" y1="425" x2="335" y2="425"/><line x1="335" y1="425" x2="422" y2="425"/><line x1="455" y1="383" x2="455" y2="270"/></g><g class="off"><circle cx="613" cy="489" r="5.5"/><circle cx="553" cy="550" r="5.5"/><circle cx="117" cy="550" r="5.5"/><circle cx="57" cy="489" r="5.5"/><circle cx="57" cy="51" r="5.5"/><circle cx="117" cy="-10" r="5.5"/><circle cx="553" cy="-10" r="5.5"/><circle cx="613" cy="51" r="5.5"/><circle cx="455" cy="157" r="5.5"/><circle cx="422" cy="115" r="5.5"/><circle cx="248" cy="115" r="5.5"/><circle cx="215" cy="157" r="5.5"/><circle cx="215" cy="383" r="5.5"/><circle cx="248" cy="425" r="5.5"/><circle cx="422" cy="425" r="5.5"/><circle cx="455" cy="383" r="5.5"/></g><g class="on"><rect x="606.2" y="263.2" width="13.6" height="13.6"/><rect x="328.2" y="543.2" width="13.6" height="13.6"/><rect x="50.2" y="263.2" width="13.6" height="13.6"/><rect x="328.2" y="-16.8" width="13.6" height="13.6"/><rect x="606.2" y="263.2" width="13.6" height="13.6"/><rect x="448.2" y="263.2" width="13.6" height="13.6"/><rect x="328.2" y="108.2" width="13.6" height="13.6"/><rect x="208.2" y="263.2" width="13.6" height="13.6"/><rect x="328.2" y="418.2" width="13.6" height="13.6"/><rect x="448.2" y="263.2" width="13.6" height="13.6"/></g></g></svg></div><figcaption><h3>Squircle curves</h3><p>Every round contour is a superellipse (exponent 3.0 outside, 2.7 in the counter): the squared-off roundness of SF Pro pushed further.</p><span class="tag">o · ExtraBold 800</span></figcaption></figure>
+<figure class="detail"><div class="outline"><svg viewBox="-66.32 -658.56 395.2 395.2" role="img" aria-label="Outline of n"><g class="metrics"><line x1="-66.32" x2="328.88" y1="-760" y2="-760"/><line x1="-66.32" x2="328.88" y1="-720" y2="-720"/><line x1="-66.32" x2="328.88" y1="-540" y2="-540"/><line x1="-66.32" x2="328.88" y1="0" y2="0"/><line x1="-66.32" x2="328.88" y1="200" y2="200"/><line class="adv" x1="0" x2="0" y1="-658.56" y2="-263.35999999999996"/><line class="adv" x1="673" x2="673" y1="-658.56" y2="-263.35999999999996"/></g><g transform="scale(1,-1)"><path class="ink" d="M72 0H224V315L214 372L242 375C261 409 291 423 336 423C422 423 454 370 454 227V0H606V227C606 478 553 548 362 548C304 548 259 542 224 526V540H127L72 485Z"/><g class="handles"><line x1="242" y1="375" x2="261" y2="409"/><line x1="291" y1="423" x2="336" y2="423"/><line x1="336" y1="423" x2="422" y2="423"/><line x1="454" y1="370" x2="454" y2="227"/><line x1="606" y1="227" x2="606" y2="478"/><line x1="553" y1="548" x2="362" y2="548"/><line x1="362" y1="548" x2="304" y2="548"/><line x1="259" y1="542" x2="224" y2="526"/></g><g class="off"><circle cx="261" cy="409" r="2.9"/><circle cx="291" cy="423" r="2.9"/><circle cx="422" cy="423" r="2.9"/><circle cx="454" cy="370" r="2.9"/><circle cx="606" cy="478" r="2.9"/><circle cx="553" cy="548" r="2.9"/><circle cx="304" cy="548" r="2.9"/><circle cx="259" cy="542" r="2.9"/></g><g class="on"><rect x="68.4" y="-3.6" width="7.2" height="7.2"/><rect x="220.4" y="-3.6" width="7.2" height="7.2"/><rect x="220.4" y="311.4" width="7.2" height="7.2"/><rect x="210.4" y="368.4" width="7.2" height="7.2"/><rect x="238.4" y="371.4" width="7.2" height="7.2"/><rect x="332.4" y="419.4" width="7.2" height="7.2"/><rect x="450.4" y="223.4" width="7.2" height="7.2"/><rect x="450.4" y="-3.6" width="7.2" height="7.2"/><rect x="602.4" y="-3.6" width="7.2" height="7.2"/><rect x="602.4" y="223.4" width="7.2" height="7.2"/><rect x="358.4" y="544.4" width="7.2" height="7.2"/><rect x="220.4" y="522.4" width="7.2" height="7.2"/><rect x="220.4" y="536.4" width="7.2" height="7.2"/><rect x="123.4" y="536.4" width="7.2" height="7.2"/><rect x="68.4" y="481.4" width="7.2" height="7.2"/></g></g></svg></div><figcaption><h3>Chamfered stroke ends</h3><p>Free stem tops and curve terminals are clipped at 45°. The leg is 0.36 of the stem (55 units at ExtraBold), so the cut keeps its proportion at every weight.</p><span class="tag">n · ExtraBold 800</span></figcaption></figure>
+<figure class="detail"><div class="outline"><svg viewBox="79.6 -496.84000000000003 288.8 288.8" role="img" aria-label="Outline of n"><g class="metrics"><line x1="79.6" x2="368.4" y1="-760" y2="-760"/><line x1="79.6" x2="368.4" y1="-720" y2="-720"/><line x1="79.6" x2="368.4" y1="-540" y2="-540"/><line x1="79.6" x2="368.4" y1="0" y2="0"/><line x1="79.6" x2="368.4" y1="200" y2="200"/><line class="adv" x1="0" x2="0" y1="-496.84000000000003" y2="-208.04000000000002"/><line class="adv" x1="673" x2="673" y1="-496.84000000000003" y2="-208.04000000000002"/></g><g transform="scale(1,-1)"><path class="ink" d="M72 0H224V315L214 372L242 375C261 409 291 423 336 423C422 423 454 370 454 227V0H606V227C606 478 553 548 362 548C304 548 259 542 224 526V540H127L72 485Z"/><g class="handles"><line x1="242" y1="375" x2="261" y2="409"/><line x1="291" y1="423" x2="336" y2="423"/><line x1="336" y1="423" x2="422" y2="423"/><line x1="454" y1="370" x2="454" y2="227"/><line x1="606" y1="227" x2="606" y2="478"/><line x1="553" y1="548" x2="362" y2="548"/><line x1="362" y1="548" x2="304" y2="548"/><line x1="259" y1="542" x2="224" y2="526"/></g><g class="off"><circle cx="261" cy="409" r="2.4"/><circle cx="291" cy="423" r="2.4"/><circle cx="422" cy="423" r="2.4"/><circle cx="454" cy="370" r="2.4"/><circle cx="606" cy="478" r="2.4"/><circle cx="553" cy="548" r="2.4"/><circle cx="304" cy="548" r="2.4"/><circle cx="259" cy="542" r="2.4"/></g><g class="on"><rect x="69.0" y="-3.0" width="6.0" height="6.0"/><rect x="221.0" y="-3.0" width="6.0" height="6.0"/><rect x="221.0" y="312.0" width="6.0" height="6.0"/><rect x="211.0" y="369.0" width="6.0" height="6.0"/><rect x="239.0" y="372.0" width="6.0" height="6.0"/><rect x="333.0" y="420.0" width="6.0" height="6.0"/><rect x="451.0" y="224.0" width="6.0" height="6.0"/><rect x="451.0" y="-3.0" width="6.0" height="6.0"/><rect x="603.0" y="-3.0" width="6.0" height="6.0"/><rect x="603.0" y="224.0" width="6.0" height="6.0"/><rect x="359.0" y="545.0" width="6.0" height="6.0"/><rect x="221.0" y="523.0" width="6.0" height="6.0"/><rect x="221.0" y="537.0" width="6.0" height="6.0"/><rect x="124.0" y="537.0" width="6.0" height="6.0"/><rect x="69.0" y="482.0" width="6.0" height="6.0"/></g></g></svg></div><figcaption><h3>Ink traps</h3><p>Acute joins are notched. The trap grows with weight, from 4 units at Light to 49 at ExtraBold, so heavy text keeps its crotches open.</p><span class="tag">n · ExtraBold 800</span></figcaption></figure>
+<figure class="detail"><div class="outline"><svg viewBox="-71.5 -800 440 440" role="img" aria-label="Outline of i"><g class="metrics"><line x1="-71.5" x2="368.5" y1="-760" y2="-760"/><line x1="-71.5" x2="368.5" y1="-720" y2="-720"/><line x1="-71.5" x2="368.5" y1="-540" y2="-540"/><line x1="-71.5" x2="368.5" y1="0" y2="0"/><line x1="-71.5" x2="368.5" y1="200" y2="200"/><line class="adv" x1="0" x2="0" y1="-800" y2="-360"/><line class="adv" x1="297" x2="297" y1="-800" y2="-360"/></g><g transform="scale(1,-1)"><path class="ink" d="M72 0H224V540H127L72 485ZM63 590H182L234 641V760H114L63 709Z"/><g class="handles"></g><g class="off"></g><g class="on"><rect x="68.0" y="-4.0" width="8.0" height="8.0"/><rect x="220.0" y="-4.0" width="8.0" height="8.0"/><rect x="220.0" y="536.0" width="8.0" height="8.0"/><rect x="123.0" y="536.0" width="8.0" height="8.0"/><rect x="68.0" y="481.0" width="8.0" height="8.0"/><rect x="59.0" y="586.0" width="8.0" height="8.0"/><rect x="178.0" y="586.0" width="8.0" height="8.0"/><rect x="230.0" y="637.0" width="8.0" height="8.0"/><rect x="230.0" y="756.0" width="8.0" height="8.0"/><rect x="110.0" y="756.0" width="8.0" height="8.0"/><rect x="59.0" y="705.0" width="8.0" height="8.0"/></g></g></svg></div><figcaption><h3>Square dots</h3><p>Dots are squares with two opposing chamfers, shared by i, j and all punctuation.</p><span class="tag">i · ExtraBold 800</span></figcaption></figure>
+    </div>
+  </section>
+
+  <section id="weights">
+    <div class="section-head">
+      <span class="label">Weights</span>
+      <h2>Six weights, one variable axis</h2>
+      <p>Every outline is computed from the stem width, so the static weights and the variable font come from the same drawing.</p>
+    </div>
+    <ol class="waterfall" id="waterfall"></ol>
+  </section>
+
+  <section id="tester-section">
+    <div class="section-head">
+      <span class="label">Type tester</span>
+      <h2>Try it</h2>
+    </div>
+    <div class="tester-controls">
+      <div class="control">
+        <label class="label" for="tSize">Size</label>
+        <div class="control-row"><input type="range" id="tSize" min="14" max="160" value="56"><output id="tSizeOut" for="tSize">56 px</output></div>
+      </div>
+      <div class="control">
+        <label class="label" for="tWeight">Weight</label>
+        <div class="control-row"><input type="range" id="tWeight" min="300" max="800" value="400"><output id="tWeightOut" for="tWeight">400</output></div>
+      </div>
+      <div class="toggles" role="group" aria-label="OpenType features">
+        <button class="toggle" type="button" data-feat="ss01" aria-pressed="false">ss01 single-storey a</button>
+        <button class="toggle" type="button" data-feat="zero" aria-pressed="false">zero slashed</button>
+        <button class="toggle" type="button" data-feat="case" aria-pressed="false">case forms</button>
+        <button class="toggle" type="button" data-feat="tnum" aria-pressed="false">tnum tabular</button>
+      </div>
+    </div>
+    <div class="tester" id="tester" contenteditable="true" spellcheck="false">Quarterly sync: 1,024 nodes online — latency 0.42 ms (−18%). Ship the build at 09:30?</div>
+  </section>
+
+  <section id="compare">
+    <div class="section-head">
+      <span class="label">Next to its references</span>
+      <h2>Close to Inter and SF Pro, sharper at the edges</h2>
+      <p>The third row uses your system UI face, which is SF Pro on Apple devices.</p>
+    </div>
+    <div class="compare">
+      <div class="row kernel"><span class="label">Kernel Sans</span><span class="text">Hamburgefonstiv 2048</span></div>
+      <div class="row inter"><span class="label">Inter</span><span class="text">Hamburgefonstiv 2048</span></div>
+      <div class="row system"><span class="label">System UI</span><span class="text">Hamburgefonstiv 2048</span></div>
+    </div>
+  </section>
+
+  <section id="glyphs">
+    <div class="section-head">
+      <span class="label">Character set · 239 encoded</span>
+      <h2>Glyphs</h2>
+      <p>Basic Latin, Latin-1, Windows-1252 punctuation, arrows and math. Select a glyph to see it on its metrics.</p>
+    </div>
+    <div class="glyph-layout">
+      <div class="glyph-groups" id="glyphGroups"></div>
+      <aside class="inspector" aria-live="polite">
+        <svg id="inspSvg" viewBox="-80 -1000 900 1300" role="img" aria-label="Selected glyph on its metrics"></svg>
+        <dl>
+          <dt>Name</dt><dd id="iName"></dd>
+          <dt>Unicode</dt><dd id="iCode"></dd>
+          <dt>Advance</dt><dd id="iAdv"></dd>
+        </dl>
+        <div class="weight-pick" id="inspWeights" role="group" aria-label="Inspector weight"></div>
+      </aside>
+    </div>
+  </section>
+
+  <section id="use">
+    <div class="section-head">
+      <span class="label">In use · sample data</span>
+      <h2>Built for interfaces</h2>
+      <p>Figures are proportional in running text. Tables and counters turn on <code>tnum</code> (<code>font-variant-numeric: tabular-nums</code>) so columns line up.</p>
+    </div>
+    <div class="ui">
+      <div class="ui-head"><h3>Build pipeline</h3><span class="mono">Last 24 hours</span></div>
+      <div class="stats">
+        <div class="stat"><span class="k">Builds</span><span class="v">1,284</span></div>
+        <div class="stat"><span class="k">Pass rate</span><span class="v">98.6%</span></div>
+        <div class="stat"><span class="k">p95 duration</span><span class="v">4:17</span></div>
+        <div class="stat"><span class="k">Queue</span><span class="v">07</span></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Run</th><th>Branch</th><th>Status</th><th class="num">Duration</th><th class="num">Tests</th></tr></thead>
+          <tbody>
+            <tr><td>#40918</td><td>main</td><td><span class="pill ok">Passed</span></td><td class="num">3:42</td><td class="num">11,806</td></tr>
+            <tr><td>#40917</td><td>feat/search-index</td><td><span class="pill ok">Passed</span></td><td class="num">4:09</td><td class="num">11,794</td></tr>
+            <tr><td>#40916</td><td>fix/offline-sync</td><td><span class="pill bad">Failed</span></td><td class="num">1:58</td><td class="num">6,210</td></tr>
+            <tr><td>#40915</td><td>main</td><td><span class="pill ok">Passed</span></td><td class="num">3:51</td><td class="num">11,790</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="section-head">
+      <span class="label">Install</span>
+      <h2>Use it on the web</h2>
+      <p>Files live in <code>tooling/fonts/kernel-sans/fonts/</code>: the variable font in <code>variable/</code> and each static weight as <code>otf/</code>, <code>ttf/</code> and <code>woff2/</code>.</p>
+    </div>
+    <div class="install">
+      <div class="code">
+        <pre id="cssSnippet">@font-face {
+  font-family: "Kernel Sans";
+  src: url("KernelSans[wght].woff2") format("woff2");
+  font-weight: 300 800;
+  font-display: swap;
+}
+
+body {
+  font-family: "Kernel Sans", system-ui, sans-serif;
+}</pre>
+        <button class="toggle copy" type="button" id="copyCss">Copy</button>
+      </div>
+      <table class="features">
+        <tbody>
+          <tr><td>kern</td><td>Class kerning</td></tr>
+          <tr><td>liga</td><td>fi and fl ligatures</td></tr>
+          <tr><td>ss01</td><td>Single-storey a</td></tr>
+          <tr><td>zero</td><td>Slashed zero</td></tr>
+          <tr><td>tnum</td><td>Tabular figures for tables and counters</td></tr>
+          <tr><td>case</td><td>Brackets, dashes and guillemets raised for capitals</td></tr>
+          <tr><td>wght</td><td>Variable weight 300–800; named instances Light to ExtraBold</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <p class="mono">Kernel Sans 1.000 · generated by tooling/fonts/kernel-sans</p>
+  </footer>
+</div>
+
+<script id="data" type="application/json">{"weights":{"300":"Light","400":"Regular","500":"Medium","600":"SemiBold","700":"Bold","800":"ExtraBold"},"stems":{"300":56,"400":82,"500":98,"600":114,"700":132,"800":152},"metrics":{"upm":1000,"cap":720,"xh":540,"asc":760,"desc":-200},"glyphs":[{"n":"exclam","u":33,"w":{"300":178,"400":213,"500":235,"600":257,"700":281,"800":308}},{"n":"quotedbl","u":34,"w":{"300":356,"400":430,"500":476,"600":522,"700":573,"800":631}},{"n":"numbersign","u":35,"w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"dollar","u":36,"w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"percent","u":37,"w":{"300":640,"400":746,"500":811,"600":876,"700":950,"800":1031}},{"n":"ampersand","u":38,"w":{"300":601,"400":620,"500":632,"600":643,"700":656,"800":670}},{"n":"quotesingle","u":39,"w":{"300":206,"400":239,"500":259,"600":279,"700":302,"800":328}},{"n":"parenleft","u":40,"w":{"300":282,"400":298,"500":307,"600":317,"700":327,"800":339}},{"n":"parenright","u":41,"w":{"300":282,"400":298,"500":307,"600":317,"700":327,"800":339}},{"n":"asterisk","u":42,"w":{"300":391,"400":429,"500":451,"600":472,"700":496,"800":522}},{"n":"plus","u":43,"w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"comma","u":44,"w":{"300":178,"400":213,"500":235,"600":257,"700":281,"800":308}},{"n":"hyphen","u":45,"w":{"300":301,"400":319,"500":330,"600":341,"700":354,"800":368}},{"n":"period","u":46,"w":{"300":178,"400":213,"500":235,"600":257,"700":281,"800":308}},{"n":"slash","u":47,"w":{"300":382,"400":421,"500":444,"600":468,"700":495,"800":525}},{"n":"zero","u":48,"w":{"300":541,"400":576,"500":598,"600":619,"700":643,"800":670}},{"n":"one","u":49,"w":{"300":337,"400":379,"500":405,"600":431,"700":461,"800":493}},{"n":"two","u":50,"w":{"300":519,"400":554,"500":575,"600":596,"700":620,"800":647}},{"n":"three","u":51,"w":{"300":513,"400":545,"500":564,"600":583,"700":605,"800":629}},{"n":"four","u":52,"w":{"300":553,"400":584,"500":603,"600":623,"700":644,"800":668}},{"n":"five","u":53,"w":{"300":516,"400":545,"500":563,"600":581,"700":600,"800":622}},{"n":"six","u":54,"w":{"300":540,"400":574,"500":596,"600":617,"700":641,"800":668}},{"n":"seven","u":55,"w":{"300":494,"400":522,"500":539,"600":557,"700":576,"800":598}},{"n":"eight","u":56,"w":{"300":547,"400":582,"500":603,"600":625,"700":649,"800":676}},{"n":"nine","u":57,"w":{"300":540,"400":574,"500":596,"600":617,"700":641,"800":668}},{"n":"colon","u":58,"w":{"300":178,"400":213,"500":235,"600":257,"700":281,"800":308}},{"n":"semicolon","u":59,"w":{"300":178,"400":213,"500":235,"600":257,"700":281,"800":308}},{"n":"less","u":60,"w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"equal","u":61,"w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"greater","u":62,"w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"question","u":63,"w":{"300":451,"400":495,"500":522,"600":549,"700":580,"800":613}},{"n":"at","u":64,"w":{"300":885,"400":940,"500":974,"600":1007,"700":1045,"800":1087}},{"n":"A","u":65,"w":{"300":654,"400":686,"500":706,"600":726,"700":748,"800":773}},{"n":"B","u":66,"w":{"300":616,"400":644,"500":661,"600":678,"700":698,"800":719}},{"n":"C","u":67,"w":{"300":682,"400":710,"500":727,"600":744,"700":763,"800":784}},{"n":"D","u":68,"w":{"300":679,"400":710,"500":729,"600":748,"700":769,"800":793}},{"n":"E","u":69,"w":{"300":568,"400":589,"500":602,"600":614,"700":629,"800":645}},{"n":"F","u":70,"w":{"300":549,"400":568,"500":580,"600":592,"700":605,"800":620}},{"n":"G","u":71,"w":{"300":709,"400":741,"500":760,"600":780,"700":802,"800":826}},{"n":"H","u":72,"w":{"300":693,"400":724,"500":743,"600":762,"700":784,"800":808}},{"n":"I","u":73,"w":{"300":219,"400":252,"500":272,"600":292,"700":315,"800":341}},{"n":"J","u":74,"w":{"300":540,"400":560,"500":572,"600":584,"700":598,"800":613}},{"n":"K","u":75,"w":{"300":640,"400":674,"500":695,"600":716,"700":740,"800":767}},{"n":"L","u":76,"w":{"300":519,"400":537,"500":547,"600":558,"700":571,"800":584}},{"n":"M","u":77,"w":{"300":822,"400":874,"500":906,"600":938,"700":974,"800":1014}},{"n":"N","u":78,"w":{"300":708,"400":744,"500":766,"600":789,"700":814,"800":842}},{"n":"O","u":79,"w":{"300":737,"400":770,"500":790,"600":810,"700":833,"800":858}},{"n":"P","u":80,"w":{"300":601,"400":628,"500":644,"600":661,"700":679,"800":700}},{"n":"Q","u":81,"w":{"300":737,"400":770,"500":790,"600":810,"700":833,"800":858}},{"n":"R","u":82,"w":{"300":602,"400":630,"500":647,"600":665,"700":684,"800":706}},{"n":"S","u":83,"w":{"300":607,"400":634,"500":650,"600":666,"700":684,"800":704}},{"n":"T","u":84,"w":{"300":603,"400":620,"500":631,"600":642,"700":654,"800":667}},{"n":"U","u":85,"w":{"300":695,"400":726,"500":745,"600":764,"700":786,"800":810}},{"n":"V","u":86,"w":{"300":654,"400":686,"500":706,"600":726,"700":748,"800":773}},{"n":"W","u":87,"w":{"300":888,"400":946,"500":982,"600":1018,"700":1058,"800":1103}},{"n":"X","u":88,"w":{"300":624,"400":656,"500":676,"600":696,"700":718,"800":743}},{"n":"Y","u":89,"w":{"300":626,"400":656,"500":674,"600":693,"700":713,"800":736}},{"n":"Z","u":90,"w":{"300":598,"400":624,"500":640,"600":655,"700":673,"800":693}},{"n":"bracketleft","u":91,"w":{"300":315,"400":334,"500":346,"600":358,"700":372,"800":387}},{"n":"backslash","u":92,"w":{"300":382,"400":421,"500":444,"600":468,"700":495,"800":525}},{"n":"bracketright","u":93,"w":{"300":315,"400":334,"500":346,"600":358,"700":372,"800":387}},{"n":"asciicircum","u":94,"w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"underscore","u":95,"w":{"300":492,"400":500,"500":505,"600":510,"700":515,"800":521}},{"n":"grave","u":96,"w":{"300":223,"400":248,"500":263,"600":279,"700":296,"800":315}},{"n":"a","u":97,"w":{"300":527,"400":556,"500":574,"600":592,"700":612,"800":634}},{"n":"b","u":98,"w":{"300":578,"400":610,"500":630,"600":649,"700":671,"800":695}},{"n":"c","u":99,"w":{"300":490,"400":517,"500":532,"600":548,"700":566,"800":586}},{"n":"d","u":100,"w":{"300":578,"400":610,"500":630,"600":649,"700":671,"800":695}},{"n":"e","u":101,"w":{"300":538,"400":568,"500":587,"600":606,"700":628,"800":651}},{"n":"f","u":102,"w":{"300":242,"400":286,"500":313,"600":340,"700":370,"800":404}},{"n":"g","u":103,"w":{"300":578,"400":610,"500":630,"600":649,"700":671,"800":695}},{"n":"h","u":104,"w":{"300":555,"400":587,"500":607,"600":626,"700":648,"800":673}},{"n":"i","u":105,"w":{"300":178,"400":210,"500":230,"600":250,"700":272,"800":297}},{"n":"j","u":106,"w":{"300":178,"400":210,"500":230,"600":250,"700":272,"800":297}},{"n":"k","u":107,"w":{"300":450,"400":503,"500":536,"600":569,"700":606,"800":646}},{"n":"l","u":108,"w":{"300":178,"400":210,"500":230,"600":250,"700":272,"800":297}},{"n":"m","u":109,"w":{"300":839,"400":879,"500":903,"600":928,"700":955,"800":986}},{"n":"n","u":110,"w":{"300":555,"400":587,"500":607,"600":626,"700":648,"800":673}},{"n":"o","u":111,"w":{"300":555,"400":586,"500":605,"600":624,"700":646,"800":670}},{"n":"p","u":112,"w":{"300":578,"400":610,"500":630,"600":649,"700":671,"800":695}},{"n":"q","u":113,"w":{"300":578,"400":610,"500":630,"600":649,"700":671,"800":695}},{"n":"r","u":114,"w":{"300":342,"400":375,"500":396,"600":416,"700":439,"800":464}},{"n":"s","u":115,"w":{"300":493,"400":517,"500":532,"600":547,"700":563,"800":580}},{"n":"t","u":116,"w":{"300":252,"400":297,"500":324,"600":352,"700":383,"800":417}},{"n":"u","u":117,"w":{"300":555,"400":587,"500":607,"600":626,"700":648,"800":673}},{"n":"v","u":118,"w":{"300":480,"400":505,"500":521,"600":536,"700":554,"800":573}},{"n":"w","u":119,"w":{"300":700,"400":741,"500":766,"600":791,"700":820,"800":851}},{"n":"x","u":120,"w":{"300":456,"400":482,"500":498,"600":514,"700":532,"800":553}},{"n":"y","u":121,"w":{"300":480,"400":505,"500":521,"600":536,"700":554,"800":573}},{"n":"z","u":122,"w":{"300":445,"400":470,"500":486,"600":501,"700":518,"800":538}},{"n":"braceleft","u":123,"w":{"300":294,"400":337,"500":364,"600":390,"700":420,"800":454}},{"n":"bar","u":124,"w":{"300":234,"400":267,"500":288,"600":308,"700":331,"800":357}},{"n":"braceright","u":125,"w":{"300":294,"400":337,"500":364,"600":390,"700":420,"800":454}},{"n":"asciitilde","u":126,"w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"exclamdown","u":161,"w":{"300":178,"400":213,"500":235,"600":257,"700":281,"800":308}},{"n":"cent","u":162,"w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"sterling","u":163,"w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"currency","u":164,"w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"yen","u":165,"w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"brokenbar","u":166,"w":{"300":234,"400":267,"500":288,"600":308,"700":331,"800":357}},{"n":"section","u":167,"w":{"300":478,"400":520,"500":546,"600":571,"700":600,"800":632}},{"n":"dieresis","u":168,"w":{"300":290,"400":339,"500":369,"600":400,"700":434,"800":472}},{"n":"copyright","u":169,"w":{"300":848,"400":852,"500":854,"600":857,"700":859,"800":862}},{"n":"ordfeminine","u":170,"w":{"300":381,"400":400,"500":416,"600":435,"700":447,"800":451}},{"n":"guillemotleft","u":171,"w":{"300":425,"400":473,"500":502,"600":531,"700":563,"800":600}},{"n":"logicalnot","u":172,"w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"registered","u":174,"w":{"300":665,"400":667,"500":669,"600":670,"700":672,"800":674}},{"n":"macron","u":175,"w":{"300":295,"400":316,"500":329,"600":342,"700":356,"800":372}},{"n":"degree","u":176,"w":{"300":334,"400":360,"500":376,"600":392,"700":409,"800":429}},{"n":"plusminus","u":177,"w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"twosuperior","u":178,"w":{"300":384,"400":400,"500":410,"600":419,"700":430,"800":442}},{"n":"threesuperior","u":179,"w":{"300":384,"400":400,"500":410,"600":419,"700":430,"800":442}},{"n":"acute","u":180,"w":{"300":223,"400":248,"500":263,"600":279,"700":296,"800":315}},{"n":"mu","u":181,"w":{"300":555,"400":587,"500":607,"600":626,"700":648,"800":673}},{"n":"paragraph","u":182,"w":{"300":498,"400":577,"500":625,"600":673,"700":727,"800":787}},{"n":"periodcentered","u":183,"w":{"300":178,"400":213,"500":235,"600":257,"700":281,"800":308}},{"n":"cedilla","u":184,"w":{"300":195,"400":224,"500":242,"600":259,"700":279,"800":301}},{"n":"onesuperior","u":185,"w":{"300":384,"400":400,"500":410,"600":419,"700":430,"800":442}},{"n":"ordmasculine","u":186,"w":{"300":401,"400":416,"500":430,"600":445,"700":455,"800":459}},{"n":"guillemotright","u":187,"w":{"300":425,"400":473,"500":502,"600":531,"700":563,"800":600}},{"n":"onequarter","u":188,"w":{"300":861,"400":900,"500":924,"600":948,"700":975,"800":1005}},{"n":"onehalf","u":189,"w":{"300":861,"400":900,"500":924,"600":948,"700":975,"800":1005}},{"n":"threequarters","u":190,"w":{"300":861,"400":900,"500":924,"600":948,"700":975,"800":1005}},{"n":"questiondown","u":191,"w":{"300":451,"400":495,"500":522,"600":549,"700":580,"800":613}},{"n":"Agrave","u":192,"w":{"300":654,"400":686,"500":706,"600":726,"700":748,"800":773}},{"n":"Aacute","u":193,"w":{"300":654,"400":686,"500":706,"600":726,"700":748,"800":773}},{"n":"Acircumflex","u":194,"w":{"300":654,"400":686,"500":706,"600":726,"700":748,"800":773}},{"n":"Atilde","u":195,"w":{"300":654,"400":686,"500":706,"600":726,"700":748,"800":773}},{"n":"Adieresis","u":196,"w":{"300":654,"400":686,"500":706,"600":726,"700":748,"800":773}},{"n":"Aring","u":197,"w":{"300":654,"400":686,"500":706,"600":726,"700":748,"800":773}},{"n":"AE","u":198,"w":{"300":802,"400":855,"500":887,"600":920,"700":956,"800":996}},{"n":"Ccedilla","u":199,"w":{"300":682,"400":710,"500":727,"600":744,"700":763,"800":784}},{"n":"Egrave","u":200,"w":{"300":568,"400":589,"500":602,"600":614,"700":629,"800":645}},{"n":"Eacute","u":201,"w":{"300":568,"400":589,"500":602,"600":614,"700":629,"800":645}},{"n":"Ecircumflex","u":202,"w":{"300":568,"400":589,"500":602,"600":614,"700":629,"800":645}},{"n":"Edieresis","u":203,"w":{"300":568,"400":589,"500":602,"600":614,"700":629,"800":645}},{"n":"Igrave","u":204,"w":{"300":219,"400":252,"500":272,"600":292,"700":315,"800":341}},{"n":"Iacute","u":205,"w":{"300":219,"400":252,"500":272,"600":292,"700":315,"800":341}},{"n":"Icircumflex","u":206,"w":{"300":219,"400":252,"500":272,"600":292,"700":315,"800":341}},{"n":"Idieresis","u":207,"w":{"300":219,"400":252,"500":272,"600":292,"700":315,"800":341}},{"n":"Eth","u":208,"w":{"300":691,"400":728,"500":751,"600":775,"700":801,"800":829}},{"n":"Ntilde","u":209,"w":{"300":708,"400":744,"500":766,"600":789,"700":814,"800":842}},{"n":"Ograve","u":210,"w":{"300":737,"400":770,"500":790,"600":810,"700":833,"800":858}},{"n":"Oacute","u":211,"w":{"300":737,"400":770,"500":790,"600":810,"700":833,"800":858}},{"n":"Ocircumflex","u":212,"w":{"300":737,"400":770,"500":790,"600":810,"700":833,"800":858}},{"n":"Otilde","u":213,"w":{"300":737,"400":770,"500":790,"600":810,"700":833,"800":858}},{"n":"Odieresis","u":214,"w":{"300":737,"400":770,"500":790,"600":810,"700":833,"800":858}},{"n":"multiply","u":215,"w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"Oslash","u":216,"w":{"300":737,"400":770,"500":790,"600":810,"700":833,"800":858}},{"n":"Ugrave","u":217,"w":{"300":695,"400":726,"500":745,"600":764,"700":786,"800":810}},{"n":"Uacute","u":218,"w":{"300":695,"400":726,"500":745,"600":764,"700":786,"800":810}},{"n":"Ucircumflex","u":219,"w":{"300":695,"400":726,"500":745,"600":764,"700":786,"800":810}},{"n":"Udieresis","u":220,"w":{"300":695,"400":726,"500":745,"600":764,"700":786,"800":810}},{"n":"Yacute","u":221,"w":{"300":626,"400":656,"500":674,"600":693,"700":713,"800":736}},{"n":"Thorn","u":222,"w":{"300":593,"400":620,"500":637,"600":653,"700":672,"800":693}},{"n":"germandbls","u":223,"w":{"300":593,"400":622,"500":640,"600":658,"700":678,"800":700}},{"n":"agrave","u":224,"w":{"300":527,"400":556,"500":574,"600":592,"700":612,"800":634}},{"n":"aacute","u":225,"w":{"300":527,"400":556,"500":574,"600":592,"700":612,"800":634}},{"n":"acircumflex","u":226,"w":{"300":527,"400":556,"500":574,"600":592,"700":612,"800":634}},{"n":"atilde","u":227,"w":{"300":527,"400":556,"500":574,"600":592,"700":612,"800":634}},{"n":"adieresis","u":228,"w":{"300":527,"400":556,"500":574,"600":592,"700":612,"800":634}},{"n":"aring","u":229,"w":{"300":527,"400":556,"500":574,"600":592,"700":612,"800":634}},{"n":"ae","u":230,"w":{"300":871,"400":901,"500":919,"600":937,"700":958,"800":981}},{"n":"ccedilla","u":231,"w":{"300":490,"400":517,"500":532,"600":548,"700":566,"800":586}},{"n":"egrave","u":232,"w":{"300":538,"400":568,"500":587,"600":606,"700":628,"800":651}},{"n":"eacute","u":233,"w":{"300":538,"400":568,"500":587,"600":606,"700":628,"800":651}},{"n":"ecircumflex","u":234,"w":{"300":538,"400":568,"500":587,"600":606,"700":628,"800":651}},{"n":"edieresis","u":235,"w":{"300":538,"400":568,"500":587,"600":606,"700":628,"800":651}},{"n":"igrave","u":236,"w":{"300":178,"400":210,"500":230,"600":250,"700":272,"800":297}},{"n":"iacute","u":237,"w":{"300":178,"400":210,"500":230,"600":250,"700":272,"800":297}},{"n":"icircumflex","u":238,"w":{"300":178,"400":210,"500":230,"600":250,"700":272,"800":297}},{"n":"idieresis","u":239,"w":{"300":178,"400":210,"500":230,"600":250,"700":272,"800":297}},{"n":"eth","u":240,"w":{"300":547,"400":578,"500":597,"600":616,"700":638,"800":662}},{"n":"ntilde","u":241,"w":{"300":555,"400":587,"500":607,"600":626,"700":648,"800":673}},{"n":"ograve","u":242,"w":{"300":555,"400":586,"500":605,"600":624,"700":646,"800":670}},{"n":"oacute","u":243,"w":{"300":555,"400":586,"500":605,"600":624,"700":646,"800":670}},{"n":"ocircumflex","u":244,"w":{"300":555,"400":586,"500":605,"600":624,"700":646,"800":670}},{"n":"otilde","u":245,"w":{"300":555,"400":586,"500":605,"600":624,"700":646,"800":670}},{"n":"odieresis","u":246,"w":{"300":555,"400":586,"500":605,"600":624,"700":646,"800":670}},{"n":"divide","u":247,"w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"oslash","u":248,"w":{"300":555,"400":586,"500":605,"600":624,"700":646,"800":670}},{"n":"ugrave","u":249,"w":{"300":555,"400":587,"500":607,"600":626,"700":648,"800":673}},{"n":"uacute","u":250,"w":{"300":555,"400":587,"500":607,"600":626,"700":648,"800":673}},{"n":"ucircumflex","u":251,"w":{"300":555,"400":587,"500":607,"600":626,"700":648,"800":673}},{"n":"udieresis","u":252,"w":{"300":555,"400":587,"500":607,"600":626,"700":648,"800":673}},{"n":"yacute","u":253,"w":{"300":480,"400":505,"500":521,"600":536,"700":554,"800":573}},{"n":"thorn","u":254,"w":{"300":578,"400":610,"500":630,"600":649,"700":671,"800":695}},{"n":"ydieresis","u":255,"w":{"300":480,"400":505,"500":521,"600":536,"700":554,"800":573}},{"n":"dotlessi","u":305,"w":{"300":178,"400":210,"500":230,"600":250,"700":272,"800":297}},{"n":"OE","u":338,"w":{"300":957,"400":995,"500":1018,"600":1042,"700":1069,"800":1098}},{"n":"oe","u":339,"w":{"300":904,"400":936,"500":956,"600":975,"700":997,"800":1022}},{"n":"Scaron","u":352,"w":{"300":607,"400":634,"500":650,"600":666,"700":684,"800":704}},{"n":"scaron","u":353,"w":{"300":493,"400":517,"500":532,"600":547,"700":563,"800":580}},{"n":"Ydieresis","u":376,"w":{"300":626,"400":656,"500":674,"600":693,"700":713,"800":736}},{"n":"Zcaron","u":381,"w":{"300":598,"400":624,"500":640,"600":655,"700":673,"800":693}},{"n":"zcaron","u":382,"w":{"300":445,"400":470,"500":486,"600":501,"700":518,"800":538}},{"n":"florin","u":402,"w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"uni0237","u":567,"w":{"300":178,"400":210,"500":230,"600":250,"700":272,"800":297}},{"n":"circumflex","u":710,"w":{"300":299,"400":330,"500":349,"600":368,"700":390,"800":414}},{"n":"caron","u":711,"w":{"300":299,"400":330,"500":349,"600":368,"700":390,"800":414}},{"n":"breve","u":728,"w":{"300":271,"400":300,"500":318,"600":335,"700":355,"800":377}},{"n":"dotaccent","u":729,"w":{"300":135,"400":160,"500":175,"600":190,"700":207,"800":226}},{"n":"ring","u":730,"w":{"300":233,"400":250,"500":260,"600":271,"700":282,"800":296}},{"n":"ogonek","u":731,"w":{"300":210,"400":230,"500":242,"600":255,"700":269,"800":284}},{"n":"tilde","u":732,"w":{"300":314,"400":350,"500":372,"600":395,"700":420,"800":448}},{"n":"hungarumlaut","u":733,"w":{"300":348,"400":394,"500":423,"600":451,"700":483,"800":519}},{"n":"endash","u":8211,"w":{"300":495,"400":500,"500":503,"600":506,"700":510,"800":514}},{"n":"emdash","u":8212,"w":{"300":1000,"400":1000,"500":1000,"600":1000,"700":1000,"800":1000}},{"n":"quoteleft","u":8216,"w":{"300":170,"400":206,"500":228,"600":251,"700":276,"800":304}},{"n":"quoteright","u":8217,"w":{"300":170,"400":206,"500":228,"600":251,"700":276,"800":304}},{"n":"quotesinglbase","u":8218,"w":{"300":170,"400":206,"500":228,"600":251,"700":276,"800":304}},{"n":"quotedblleft","u":8220,"w":{"300":298,"400":378,"500":427,"600":476,"700":531,"800":593}},{"n":"quotedblright","u":8221,"w":{"300":298,"400":378,"500":427,"600":476,"700":531,"800":593}},{"n":"quotedblbase","u":8222,"w":{"300":298,"400":378,"500":427,"600":476,"700":531,"800":593}},{"n":"dagger","u":8224,"w":{"300":407,"400":432,"500":448,"600":464,"700":482,"800":502}},{"n":"daggerdbl","u":8225,"w":{"300":407,"400":432,"500":448,"600":464,"700":482,"800":502}},{"n":"bullet","u":8226,"w":{"300":294,"400":339,"500":367,"600":395,"700":426,"800":461}},{"n":"ellipsis","u":8230,"w":{"300":494,"400":597,"500":660,"600":723,"700":795,"800":874}},{"n":"perthousand","u":8240,"w":{"300":851,"400":991,"500":1078,"600":1164,"700":1261,"800":1369}},{"n":"guilsinglleft","u":8249,"w":{"300":275,"400":306,"500":325,"600":344,"700":365,"800":389}},{"n":"guilsinglright","u":8250,"w":{"300":275,"400":306,"500":325,"600":344,"700":365,"800":389}},{"n":"fraction","u":8260,"w":{"300":405,"400":416,"500":428,"600":441,"700":448,"800":448}},{"n":"Euro","u":8364,"w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"trademark","u":8482,"w":{"300":624,"400":660,"500":683,"600":705,"700":731,"800":759}},{"n":"arrowleft","u":8592,"w":{"300":769,"400":788,"500":800,"600":812,"700":825,"800":840}},{"n":"arrowup","u":8593,"w":{"300":399,"400":455,"500":486,"600":517,"700":550,"800":586}},{"n":"arrowright","u":8594,"w":{"300":769,"400":788,"500":800,"600":812,"700":825,"800":840}},{"n":"arrowdown","u":8595,"w":{"300":399,"400":455,"500":486,"600":517,"700":550,"800":586}},{"n":"arrowboth","u":8596,"w":{"300":929,"400":948,"500":960,"600":972,"700":985,"800":1000}},{"n":"uni2197","u":8599,"w":{"300":682,"400":700,"500":712,"600":723,"700":735,"800":749}},{"n":"uni2198","u":8600,"w":{"300":682,"400":700,"500":712,"600":723,"700":735,"800":749}},{"n":"minus","u":8722,"w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"infinity","u":8734,"w":{"300":649,"400":680,"500":703,"600":727,"700":755,"800":787}},{"n":"approxequal","u":8776,"w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"notequal","u":8800,"w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"lessequal","u":8804,"w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"greaterequal","u":8805,"w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"f_i","u":64257,"w":{"300":420,"400":496,"500":543,"600":590,"700":642,"800":701}},{"n":"f_l","u":64258,"w":{"300":420,"400":496,"500":543,"600":590,"700":642,"800":701}}],"alternates":[{"n":"a.ss01","u":97,"f":"ss01","w":{"300":578,"400":610,"500":630,"600":649,"700":671,"800":695}},{"n":"zero.tf","u":48,"f":"tnum","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"one.tf","u":49,"f":"tnum","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"two.tf","u":50,"f":"tnum","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"three.tf","u":51,"f":"tnum","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"four.tf","u":52,"f":"tnum","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"five.tf","u":53,"f":"tnum","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"six.tf","u":54,"f":"tnum","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"seven.tf","u":55,"f":"tnum","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"eight.tf","u":56,"f":"tnum","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"nine.tf","u":57,"f":"tnum","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"zero.zero","u":48,"f":"zero","w":{"300":541,"400":576,"500":598,"600":619,"700":643,"800":670}},{"n":"plus.case","u":43,"f":"case","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"minus.case","u":8722,"f":"case","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"multiply.case","u":215,"f":"case","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"divide.case","u":247,"f":"case","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"equal.case","u":61,"f":"case","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"plusminus.case","u":177,"f":"case","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"less.case","u":60,"f":"case","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"greater.case","u":62,"f":"case","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"lessequal.case","u":8804,"f":"case","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"greaterequal.case","u":8805,"f":"case","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"notequal.case","u":8800,"f":"case","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"asciitilde.case","u":126,"f":"case","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"approxequal.case","u":8776,"f":"case","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"logicalnot.case","u":172,"f":"case","w":{"300":577,"400":600,"500":614,"600":629,"700":645,"800":663}},{"n":"guilsinglleft.case","u":8249,"f":"case","w":{"300":275,"400":306,"500":325,"600":344,"700":365,"800":389}},{"n":"guilsinglright.case","u":8250,"f":"case","w":{"300":275,"400":306,"500":325,"600":344,"700":365,"800":389}},{"n":"guillemotleft.case","u":171,"f":"case","w":{"300":425,"400":473,"500":502,"600":531,"700":563,"800":600}},{"n":"guillemotright.case","u":187,"f":"case","w":{"300":425,"400":473,"500":502,"600":531,"700":563,"800":600}},{"n":"hyphen.case","u":45,"f":"case","w":{"300":301,"400":319,"500":330,"600":341,"700":354,"800":368}},{"n":"endash.case","u":8211,"f":"case","w":{"300":495,"400":500,"500":503,"600":506,"700":510,"800":514}},{"n":"emdash.case","u":8212,"f":"case","w":{"300":1000,"400":1000,"500":1000,"600":1000,"700":1000,"800":1000}},{"n":"parenleft.case","u":40,"f":"case","w":{"300":282,"400":298,"500":307,"600":317,"700":327,"800":339}},{"n":"parenright.case","u":41,"f":"case","w":{"300":282,"400":298,"500":307,"600":317,"700":327,"800":339}},{"n":"bracketleft.case","u":91,"f":"case","w":{"300":315,"400":334,"500":346,"600":358,"700":372,"800":387}},{"n":"bracketright.case","u":93,"f":"case","w":{"300":315,"400":334,"500":346,"600":358,"700":372,"800":387}},{"n":"braceleft.case","u":123,"f":"case","w":{"300":294,"400":337,"500":364,"600":390,"700":420,"800":454}},{"n":"braceright.case","u":125,"f":"case","w":{"300":294,"400":337,"500":364,"600":390,"700":420,"800":454}},{"n":"bullet.case","u":8226,"f":"case","w":{"300":294,"400":339,"500":367,"600":395,"700":426,"800":461}},{"n":"grave.case","u":96,"f":"case","w":{"300":234,"400":260,"500":276,"600":292,"700":310,"800":330}},{"n":"acute.case","u":180,"f":"case","w":{"300":234,"400":260,"500":276,"600":292,"700":310,"800":330}},{"n":"circumflex.case","u":710,"f":"case","w":{"300":335,"400":366,"500":385,"600":404,"700":426,"800":450}},{"n":"caron.case","u":711,"f":"case","w":{"300":335,"400":366,"500":385,"600":404,"700":426,"800":450}},{"n":"tilde.case","u":732,"f":"case","w":{"300":336,"400":372,"500":394,"600":417,"700":442,"800":470}},{"n":"dieresis.case","u":168,"f":"case","w":{"300":298,"400":346,"500":376,"600":405,"700":438,"800":475}},{"n":"dotaccent.case","u":729,"f":"case","w":{"300":133,"400":157,"500":172,"600":186,"700":203,"800":221}},{"n":"macron.case","u":175,"f":"case","w":{"300":319,"400":340,"500":353,"600":366,"700":380,"800":396}},{"n":"ring.case","u":730,"f":"case","w":{"300":233,"400":254,"500":267,"600":280,"700":294,"800":310}},{"n":"breve.case","u":728,"f":"case","w":{"300":295,"400":324,"500":342,"600":359,"700":379,"800":401}},{"n":"hungarumlaut.case","u":733,"f":"case","w":{"300":369,"400":417,"500":447,"600":476,"700":509,"800":546}}]}</script>
+<script>
+(function () {
+  var data = JSON.parse(document.getElementById("data").textContent);
+  var M = data.metrics;
+  var WEIGHTS = Object.keys(data.weights).map(Number).sort(function (a, b) { return a - b; });
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function weightName(w) {
+    var best = WEIGHTS[0];
+    WEIGHTS.forEach(function (k) { if (Math.abs(k - w) < Math.abs(best - w)) best = k; });
+    return Math.abs(best - w) < 1 ? data.weights[best] : "";
+  }
+
+  /* Hero metric lines: the word's line box is 1.2em with the baseline 0.96em down. */
+  var stage = document.getElementById("stage");
+  var word = document.getElementById("heroWord");
+  function placeLines() {
+    var size = parseFloat(getComputedStyle(word).fontSize);
+    stage.querySelectorAll(".mline").forEach(function (el) {
+      var m = Number(el.dataset.m);
+      el.style.top = (size * (0.96 - m / 1000)) + "px";
+    });
+  }
+  placeLines();
+  window.addEventListener("resize", placeLines);
+
+  var heroW = document.getElementById("heroW");
+  var heroOut = document.getElementById("heroWOut");
+  function setHero(w) {
+    word.style.fontWeight = w;
+    heroW.value = w;
+    var n = weightName(w);
+    heroOut.textContent = Math.round(w) + (n ? " " + n : "");
+  }
+  heroW.addEventListener("input", function () { setHero(Number(heroW.value)); });
+  setHero(400);
+  if (!reduceMotion) {
+    var t0 = null;
+    var keys = [[0, 400], [0.15, 300], [0.55, 800], [1, 400]];
+    var dur = 2600;
+    var stopped = false;
+    heroW.addEventListener("pointerdown", function () { stopped = true; });
+    var ease = function (t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
+    requestAnimationFrame(function step(ts) {
+      if (stopped) return;
+      if (t0 === null) t0 = ts;
+      var t = Math.min(1, (ts - t0) / dur);
+      for (var i = 0; i < keys.length - 1; i++) {
+        if (t >= keys[i][0] && t <= keys[i + 1][0]) {
+          var u = (t - keys[i][0]) / (keys[i + 1][0] - keys[i][0]);
+          setHero(keys[i][1] + (keys[i + 1][1] - keys[i][1]) * ease(u));
+        }
+      }
+      if (t < 1) requestAnimationFrame(step); else setHero(400);
+    });
+  }
+
+  /* Weights */
+  var wf = document.getElementById("waterfall");
+  WEIGHTS.forEach(function (w) {
+    var li = document.createElement("li");
+    li.innerHTML = '<span class="meta"><b></b><span class="mono"></span></span><span class="sample">Packets drift through quiet fiber at 02:47</span>';
+    li.querySelector("b").textContent = data.weights[w];
+    li.querySelector(".mono").textContent = w + " · stem " + data.stems[w];
+    li.querySelector(".sample").style.fontWeight = w;
+    wf.appendChild(li);
+  });
+
+  /* Tester */
+  var tester = document.getElementById("tester");
+  var tSize = document.getElementById("tSize"), tSizeOut = document.getElementById("tSizeOut");
+  var tWeight = document.getElementById("tWeight"), tWeightOut = document.getElementById("tWeightOut");
+  var feats = {};
+  function applyTester() {
+    tester.style.fontSize = tSize.value + "px";
+    tSizeOut.textContent = tSize.value + " px";
+    tester.style.fontWeight = tWeight.value;
+    var n = weightName(Number(tWeight.value));
+    tWeightOut.textContent = tWeight.value + (n ? " " + n : "");
+    var on = Object.keys(feats).filter(function (k) { return feats[k]; });
+    tester.style.fontFeatureSettings = on.length ? on.map(function (k) { return '"' + k + '" 1'; }).join(", ") : "normal";
+  }
+  tSize.addEventListener("input", applyTester);
+  tWeight.addEventListener("input", applyTester);
+  document.querySelectorAll(".toggle[data-feat]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var on = b.getAttribute("aria-pressed") !== "true";
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      feats[b.dataset.feat] = on;
+      applyTester();
+    });
+  });
+  applyTester();
+
+  /* Glyph set */
+  var groups = [
+    ["Uppercase", function (c) { return /^[A-Z]$/.test(c); }],
+    ["Lowercase", function (c) { return /^[a-z]$/.test(c); }],
+    ["Figures", function (c) { return /^[0-9]$/.test(c); }],
+    ["Accented and extended letters", function (c) { return /\p{L}/u.test(c); }],
+    ["Punctuation, symbols and arrows", function () { return true; }],
+  ];
+  var items = data.glyphs.map(function (g) { return { g: g, c: String.fromCodePoint(g.u), feat: null }; });
+  var alts = data.alternates.map(function (g) { return { g: g, c: String.fromCodePoint(g.u), feat: g.f }; });
+  var host = document.getElementById("glyphGroups");
+  var cells = [];
+  var assigned = new Set();
+  function addGroup(title, list) {
+    if (!list.length) return;
+    var sec = document.createElement("div");
+    sec.className = "glyph-group";
+    var h = document.createElement("h3");
+    h.textContent = title + " · " + list.length;
+    var grid = document.createElement("div");
+    grid.className = "grid";
+    list.forEach(function (it) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "cell";
+      b.textContent = it.c;
+      if (it.feat) b.style.fontFeatureSettings = '"' + it.feat + '" 1';
+      b.setAttribute("aria-label", it.g.n);
+      b.setAttribute("aria-pressed", "false");
+      b.addEventListener("click", function () { select(it, b); });
+      grid.appendChild(b);
+      cells.push(b);
+    });
+    sec.appendChild(h);
+    sec.appendChild(grid);
+    host.appendChild(sec);
+  }
+  groups.forEach(function (gr) {
+    var list = items.filter(function (it) { return !assigned.has(it) && gr[1](it.c); });
+    list.forEach(function (it) { assigned.add(it); });
+    addGroup(gr[0], list);
+  });
+  addGroup("Alternates", alts);
+
+  var inspWeight = 400, current = null, currentBtn = null;
+  var svg = document.getElementById("inspSvg");
+  var NS = "http://www.w3.org/2000/svg";
+  function el(name, attrs, text) {
+    var e = document.createElementNS(NS, name);
+    Object.keys(attrs).forEach(function (k) { e.setAttribute(k, attrs[k]); });
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function select(it, btn) {
+    current = it;
+    if (currentBtn) currentBtn.setAttribute("aria-pressed", "false");
+    currentBtn = btn;
+    if (btn) btn.setAttribute("aria-pressed", "true");
+    drawInspector();
+  }
+  function drawInspector() {
+    if (!current) return;
+    var adv = current.g.w[String(inspWeight)];
+    var W = Math.max(adv + 300, 1100);
+    var x0 = (W - adv) / 2;
+    svg.setAttribute("viewBox", "0 -1000 " + W + " 1300");
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    [[M.asc, "asc"], [M.cap, "cap"], [M.xh, "x"], [0, "0"], [M.desc, "desc"]].forEach(function (m) {
+      svg.appendChild(el("line", { x1: 0, x2: W, y1: -m[0], y2: -m[0] }));
+      svg.appendChild(el("text", { "class": "ml", x: 8, y: -m[0] - 8 }, m[1]));
+    });
+    svg.appendChild(el("line", { "class": "adv", x1: x0, x2: x0, y1: -1000, y2: 300 }));
+    svg.appendChild(el("line", { "class": "adv", x1: x0 + adv, x2: x0 + adv, y1: -1000, y2: 300 }));
+    var t = el("text", { "class": "g", x: x0, y: 0, "font-size": 1000 }, current.c);
+    t.style.fontWeight = inspWeight;
+    if (current.feat) t.style.fontFeatureSettings = '"' + current.feat + '" 1';
+    svg.appendChild(t);
+    document.getElementById("iName").textContent = current.g.n;
+    document.getElementById("iCode").textContent = current.feat
+      ? "U+" + current.g.u.toString(16).toUpperCase().padStart(4, "0") + " + " + current.feat
+      : "U+" + current.g.u.toString(16).toUpperCase().padStart(4, "0");
+    document.getElementById("iAdv").textContent = adv + " units at " + inspWeight + " " + data.weights[inspWeight];
+  }
+  var pick = document.getElementById("inspWeights");
+  WEIGHTS.forEach(function (w) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "toggle";
+    b.textContent = w;
+    b.setAttribute("aria-pressed", w === inspWeight ? "true" : "false");
+    b.addEventListener("click", function () {
+      inspWeight = w;
+      pick.querySelectorAll("button").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      drawInspector();
+    });
+    pick.appendChild(b);
+  });
+  var startIdx = items.findIndex(function (it) { return it.c === "a"; });
+  var start = startIdx >= 0 ? startIdx : 0;
+  if (items.length) {
+    var firstBtn = cells.find(function (c) { return c.getAttribute("aria-label") === items[start].g.n; });
+    select(items[start], firstBtn);
+  }
+
+  /* Copy */
+  var copyBtn = document.getElementById("copyCss");
+  copyBtn.addEventListener("click", function () {
+    var text = document.getElementById("cssSnippet").textContent;
+    function selectIt() {
+      var r = document.createRange();
+      r.selectNodeContents(document.getElementById("cssSnippet"));
+      var s = window.getSelection();
+      s.removeAllRanges();
+      s.addRange(r);
+      copyBtn.textContent = "Selected";
+    }
+    try {
+      navigator.clipboard.writeText(text).then(function () { copyBtn.textContent = "Copied"; }, selectIt);
+    } catch (e) { selectIt(); }
+    setTimeout(function () { copyBtn.textContent = "Copy"; }, 1800);
+  });
+})();
+</script>

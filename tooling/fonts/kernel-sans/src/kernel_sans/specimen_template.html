@@ -137,7 +137,7 @@ section { padding-block: clamp(48px, 8vw, 96px); border-top: 1px solid var(--rul
   font-size: var(--size);
   line-height: 1.2;
   white-space: nowrap;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.01em;
   outline: none;
   position: relative;
   caret-color: var(--advance);
@@ -180,7 +180,7 @@ output { min-width: 9ch; text-align: right; color: var(--muted); }
   padding-block: 14px;
   border-bottom: 1px solid var(--rule);
 }
-.waterfall .sample { font-size: clamp(1.5rem, 4.2vw, 3.25rem); line-height: 1.1; letter-spacing: -0.02em; overflow-wrap: anywhere; min-width: 0; }
+.waterfall .sample { font-size: clamp(1.5rem, 3.6vw, 2.75rem); line-height: 1.1; letter-spacing: -0.02em; overflow-wrap: anywhere; min-width: 0; }
 .waterfall .meta { display: grid; gap: 2px; }
 .waterfall .meta b { font-family: var(--font-display); font-size: var(--step-0); font-weight: 600; }
 
@@ -637,7 +637,7 @@ body {
   function drawInspector() {
     if (!current) return;
     var adv = current.g.w[String(inspWeight)];
-    var W = Math.max(adv + 160, 700);
+    var W = Math.max(adv + 300, 1100);
     var x0 = (W - adv) / 2;
     svg.setAttribute("viewBox", "0 -1000 " + W + " 1300");
     while (svg.firstChild) svg.removeChild(svg.firstChild);
