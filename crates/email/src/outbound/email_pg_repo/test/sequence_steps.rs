@@ -22,6 +22,14 @@ const REPLY_DRAFT: Uuid = uuid::uuid!("ee000002-0000-0000-0000-000000000002");
 /// A local draft that is the only message in its thread: a first step.
 const STEP: Uuid = uuid::uuid!("ee000004-0000-0000-0000-000000000004");
 const STEP_THREAD: Uuid = uuid::uuid!("33333333-3333-3333-3333-333333333333");
+/// The lists a local draft shows in when its thread has no received mail.
+const DRAFT_LISTS: [&str; 5] = [
+    "drafts",
+    "drafts_dynamic",
+    "all",
+    "important",
+    "important_dynamic",
+];
 
 fn actor() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap()
@@ -149,17 +157,7 @@ async fn fail_delivery(pool: &Pool<Postgres>, message: Uuid) -> anyhow::Result<(
 async fn pending_sequence_step_stays_out_of_mail_lists(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = EmailPgRepo::new(pool.clone());
     recompute(&pool, STEP_THREAD).await?;
-    // A local draft shows in Drafts, Inbox, All Mail and Important.
-    let every_draft_list = vec![
-        "drafts",
-        "drafts_dynamic",
-        "inbox",
-        "inbox_dynamic",
-        "all",
-        "important",
-        "important_dynamic",
-    ];
-    assert_eq!(lists(&pool).await?.showing(STEP_THREAD), every_draft_list);
+    assert_eq!(lists(&pool).await?.showing(STEP_THREAD), DRAFT_LISTS);
 
     repo.change_schedule(
         LINK,
@@ -199,7 +197,7 @@ async fn pending_sequence_step_stays_out_of_mail_lists(pool: Pool<Postgres>) -> 
     // Unscheduling returns the draft to the user's lists for cleanup.
     repo.change_schedule(LINK, STEP, &actor(), ScheduleChange::Cancel, None, 0)
         .await?;
-    assert_eq!(lists(&pool).await?.showing(STEP_THREAD), every_draft_list);
+    assert_eq!(lists(&pool).await?.showing(STEP_THREAD), DRAFT_LISTS);
     Ok(())
 }
 
@@ -220,10 +218,7 @@ async fn failed_sequence_step_shows_again(pool: Pool<Postgres>) -> anyhow::Resul
     .await?;
     fail_delivery(&pool, STEP).await?;
     recompute(&pool, STEP_THREAD).await?;
-    let lists = lists(&pool).await?;
-    assert!(lists.drafts.contains(&STEP_THREAD));
-    assert!(lists.drafts_dynamic.contains(&STEP_THREAD));
-    assert!(lists.inbox.contains(&STEP_THREAD));
+    assert_eq!(lists(&pool).await?.showing(STEP_THREAD), DRAFT_LISTS);
     Ok(())
 }
 

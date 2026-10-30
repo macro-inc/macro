@@ -413,10 +413,11 @@ async fn failed_sequence_step_rejoins_its_thread(pool: PgPool) -> anyhow::Result
         .await?
         .ok_or_else(|| anyhow::anyhow!("expected a delivery claim"))?;
     pause_delivery(&pool, &claim, false, 300).await?;
+    // Like any draft that doesn't reply to received mail, it stays out of the Inbox.
     assert_eq!(
         thread_visibility(&pool, thread).await?,
         ThreadVisibility {
-            inbox_visible: true,
+            inbox_visible: false,
             in_all_mail: true,
         }
     );

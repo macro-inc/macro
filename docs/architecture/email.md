@@ -539,8 +539,8 @@ thread projection (`recompute_thread_metadata`) and the GraphQL mail-cache
 projection leave it out, and so does `GET /email/drafts/scheduled`, whose
 `source=sequence` filter instead lists only sequence sends that are still unsent,
 in every delivery state. The thread page still shows a step with its
-scheduled-send status. A failed step reappears everywhere so the user can fix it, and a sent step
-is an ordinary sent message. Writers that change a schedule's source or failure
+scheduled-send status. A failed step shows again wherever any draft would, so
+the user can fix it, and a sent step is an ordinary sent message. Writers that change a schedule's source or failure
 (`change_schedule`, `pause_delivery`) recompute the thread projection.
 
 Later steps are replies. `replying_to_id` may name a draft only when that draft
