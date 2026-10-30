@@ -5,7 +5,7 @@ const OUTLOOK_LINK: Uuid = uuid::uuid!("0190a000-0000-7000-8000-000000000001");
 const GMAIL_LINK: Uuid = uuid::uuid!("0190a000-0000-7000-8000-000000000002");
 
 const QUOTED_PREVIEW: &str =
-    "Tell gab I said hello From: Teo Sent: Tuesday To: Gab Subject: Hello Original message";
+    "Tell sam I said hello From: Riley Sent: Tuesday To: Sam Subject: Hello Original message";
 
 async fn seed(db: &PgPool) {
     let thread = uuid::uuid!("0190a000-0000-7000-8000-0000000000a1");
@@ -29,12 +29,12 @@ async fn seed(db: &PgPool) {
     .await
     .unwrap();
     let reply_html = email_utils::sanitize_email_html(concat!(
-        "<html><body><div>Tell gab   I said\nhello</div>",
+        "<html><body><div>Tell sam   I said\nhello</div>",
         "<div id=\"appendonsend\"></div><hr><div id=\"divRplyFwdMsg\">",
-        "<b>From:</b> Teo<br><b>Sent:</b> Tuesday<br><b>To:</b> Gab<br>",
+        "<b>From:</b> Riley<br><b>Sent:</b> Tuesday<br><b>To:</b> Sam<br>",
         "<b>Subject:</b> Hello</div><div>Original message</div></body></html>"
     ));
-    let reply_text = "Tell gab I said hello\n**From:** Teo\n**Sent:** Tuesday\n**To:** Gab\n**Subject:** Hello\nOriginal message";
+    let reply_text = "Tell sam I said hello\n**From:** Riley\n**Sent:** Tuesday\n**To:** Sam\n**Subject:** Hello\nOriginal message";
     for (link, thread, provider_id, is_draft, html, text, snippet) in [
         (
             OUTLOOK_LINK,
@@ -52,10 +52,10 @@ async fn seed(db: &PgPool) {
             false,
             None,
             Some(
-                "Me too\n\nOn Tue, Oct 20, 2026 at 3:00 PM Teo <teo@example.com> wrote:\n> God I love outlook",
+                "Me too\n\nOn Tue, Oct 20, 2026 at 3:00 PM Riley <riley@example.com> wrote:\n> God I love outlook",
             ),
             Some(
-                "Me too On Tue, Oct 20, 2026 at 3:00 PM Teo <teo@example.com> wrote: > God I love outlook",
+                "Me too On Tue, Oct 20, 2026 at 3:00 PM Riley <riley@example.com> wrote: > God I love outlook",
             ),
         ),
         (
@@ -135,7 +135,7 @@ async fn rewrites_only_outlook_replies_that_have_a_body(db: PgPool) {
             (Some("gmail-reply".into()), Some(QUOTED_PREVIEW.into())),
             (
                 Some("outlook-html-reply".into()),
-                Some("Tell gab I said hello".into())
+                Some("Tell sam I said hello".into())
             ),
             (
                 Some("outlook-no-body".into()),
