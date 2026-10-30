@@ -107,8 +107,9 @@ export function TaskGroupHeader(props: {
             class={cn(
               'group/header relative mr-1 my-0.5 w-[calc(100%-0.5rem)] rounded-xl text-ink-muted hover:bg-active',
               !isMobile() && 'ml-(--soup-row-gutter)',
+              // Paint the touch border without shifting the shared row geometry.
               isTouchDevice() &&
-                'rounded-lg border border-edge-muted bg-surface',
+                'rounded-lg border-edge-muted bg-surface after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:border after:border-inherit',
               statusTint(),
               props.focused && 'bg-active'
             )}
