@@ -1,4 +1,3 @@
-import { FREE_DEFAULT_MODEL } from '@core/component/AI/constant';
 import { describe, expect, it } from 'vitest';
 import { createEmptyDraft } from './routine-draft';
 import {
@@ -158,7 +157,10 @@ describe('fillTemplateTrigger', () => {
 
 describe('templateShareBody', () => {
   it('keeps the shared template’s fills and description for references the routine still has', () => {
-    const draft = createEmptyDraft(FREE_DEFAULT_MODEL);
+    const draft = {
+      ...createEmptyDraft(''),
+      target: { kind: 'agent' as const, agentId: 'agent-1' },
+    };
     expect(
       templateShareBody({
         draft: { ...draft, prompt: PROMPT, timezone: CRON.timezone },

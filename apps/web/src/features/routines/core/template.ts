@@ -107,7 +107,7 @@ export function extractTemplateVariables(args: {
 }
 
 /** The time zone a routine's schedules run in; absent for event-only routines. */
-export function routineTimezone(draft: ScheduleDraft | undefined) {
+function routineTimezone(draft: ScheduleDraft | undefined) {
   const schedule = draft?.triggers?.find(
     (trigger) => trigger.kind === 'schedule'
   );
