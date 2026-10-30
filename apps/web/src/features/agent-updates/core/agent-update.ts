@@ -121,7 +121,7 @@ export function selectAgentUpdates(
       return (pendingBySession.get(session.id) ?? []).toReversed().map(
         (request): AgentUpdate => ({
           kind: 'interaction',
-          id: `${session.id}:${request.kind}:${request.kind === 'tool_approval' ? request.approvalId : request.requestId}`,
+          id: `${session.id}:${request.turn}:${request.kind}:${request.kind === 'tool_approval' ? request.approvalId : request.requestId}`,
           sessionId: session.id,
           sessionName,
           updatedAt,

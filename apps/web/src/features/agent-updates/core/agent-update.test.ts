@@ -110,4 +110,34 @@ describe('agent updates selection', () => {
     expect(updates.map((update) => update.sessionId)).toEqual(['stalled']);
     expect(updates[0]?.summary).toBe('No activity for 23 minutes');
   });
+
+  it('keeps requests with a reused request id distinct across turns', () => {
+    const updates = selectAgentUpdates(
+      [mine],
+      new Map([
+        [
+          'mine',
+          [
+            {
+              kind: 'permission',
+              requestId: 1,
+              turn: 1,
+              toolCall: 'first',
+              options: [],
+            },
+            {
+              kind: 'permission',
+              requestId: 1,
+              turn: 2,
+              toolCall: 'second',
+              options: [],
+            },
+          ],
+        ],
+      ]),
+      new Map(),
+      now
+    );
+    expect(new Set(updates.map((update) => update.id)).size).toBe(2);
+  });
 });
