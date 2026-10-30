@@ -9215,7 +9215,6 @@ dependencies = [
  "macro_user_id",
  "models_pagination",
  "rootcause",
- "serde_json",
  "tokio",
  "tracing",
  "workspace-hack",

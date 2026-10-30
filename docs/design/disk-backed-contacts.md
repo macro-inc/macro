@@ -106,7 +106,9 @@ Keep deployed full-list APIs compatible until their clients can be retired.
   `@cacheOnly` limits returned fields; it does not by itself prevent retained page
   wrappers. Extend the relevant hydration-retention policy deliberately.
 - [ ] Project the new contact type into `person`, using the existing covering index
-  and borrowed-row ranker. Include names and emails in matching.
+  and borrowed-row ranker. Include names and emails in matching. Materialized
+  `IUser.id` must remain the target `userId`; the viewer-scoped `GraphqlContact.id`
+  is the normalized cache key, not a DM/navigation target.
 - [ ] Preserve DM recency, deduplication, and secondary-inbox exclusions. Ranking
   facts needed to choose the top results must apply before the result limit;
   relationship `updated_at` is not automatically equivalent to DM activity.

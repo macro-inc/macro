@@ -15,5 +15,4 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 graphql_common = { path = "../graphql_common" }
-serde_json = { workspace = true }
 tokio = { workspace = true }

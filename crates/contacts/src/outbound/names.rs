@@ -14,7 +14,7 @@ pub struct DbContactNames {
 }
 
 impl DbContactNames {
-    /// Read names using the same pool/snapshot source as directory membership.
+    /// Use the same database source as directory membership reads.
     pub fn new(db: PgPool) -> Self {
         Self { db }
     }

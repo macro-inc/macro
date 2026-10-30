@@ -37,12 +37,22 @@ async fn contacts_are_read_from_request_data_only_for_the_authenticated_viewer()
     let context = ContactsGraphqlContext::new(directory.clone());
     let query = "{ user { id contacts(limit: 2) { nodes { id userId email name } nextCursor } } }";
     // The enclosing user authentication gate runs before the directory resolver.
-    let response = harness
-        .schema
-        .execute(async_graphql::Request::new(query).data(context.clone()))
-        .await;
-    assert!(!response.errors.is_empty());
-    assert!(directory.0.lock().unwrap().is_empty());
+    for parts in [
+        HttpRequest::builder()
+            .uri("/")
+            .body(())
+            .unwrap()
+            .into_parts()
+            .0,
+        bearer_parts("invalid"),
+    ] {
+        let response = harness
+            .schema
+            .execute(harness.request(query, parts).data(context.clone()))
+            .await;
+        assert!(!response.errors.is_empty());
+        assert!(directory.0.lock().unwrap().is_empty());
+    }
 
     let id_only = harness
         .schema
