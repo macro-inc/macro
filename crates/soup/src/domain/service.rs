@@ -1,3 +1,4 @@
+use crate::domain::models::grouping::{GroupByField, GroupLabels};
 use crate::domain::{
     models::{
         AdvancedSortParams, EnrichedSoupItem, FrecencyQueryInner, GetCrmCompaniesRequest,

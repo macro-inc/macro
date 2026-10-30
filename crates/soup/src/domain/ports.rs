@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use GroupLabels;
-
 use crate::domain::models::grouping::{GroupByField, GroupLabels};
 use crate::domain::models::{
     AdvancedSortParams, CrmPropertyEdge, EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst,
