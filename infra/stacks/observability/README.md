@@ -512,6 +512,11 @@ server; see [MCP servers](../../../docs/development/mcp-servers.md#goalert).
 - A nightly timer dumps the database to `s3://<logs bucket>/goalert/`, one object
   per weekday. The dump goes to a file first, so a failed dump never replaces a
   good backup.
+- GoAlert's escalation steps post to `services/bots/goalert-bot`, a Cloudflare
+  Worker that posts each alert to Macro Alerts and threads acknowledgements,
+  closes and reminders under it. GoAlert's webhook allow-list
+  (`goalert.nix`) permits its URL; the secret path segment lives only in the
+  escalation step. The loopback relay below stays allowed as a fallback target.
 - `macro-alerts-relay` on `127.0.0.1:8090` turns GoAlert webhooks into Macro
   channel posts and adds the channel's bot token; GoAlert webhooks cannot set
   headers. Each post starts with `---`, then the page or notify marker and the
