@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_lookup SET state = $3, chat_jid = $4, completed_at = now()\n        WHERE id = $1 AND account_id = $2 AND state = 'pending'\n          AND created_at > now() - make_interval(secs => $5)\n        RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "ce3c6028020a7520656f55d00c373864657a8c71bbc1b6cd32b9d5d658028966"
+}

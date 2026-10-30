@@ -7,7 +7,7 @@
 //! `NOTIFY` inside the same transaction, so a signal is never sent for a change
 //! that did not commit.
 
-use super::{events::*, models::*};
+use super::{events::*, jid::PhoneNumber, models::*};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use external_chat::domain::{
@@ -69,9 +69,23 @@ pub trait AccountRepository: Send + Sync {
     ) -> ExternalChatResult<bool>;
     /// The Macro user who linked this account.
     async fn account_owner(&self, account: Uuid) -> ExternalChatResult<Option<String>>;
-    /// Delete participant receipts older than [`RECEIPT_RETENTION_DAYS`] and
-    /// pairings consumed over a day ago (they keep the expected identity).
+    /// Delete participant receipts older than [`RECEIPT_RETENTION_DAYS`],
+    /// pairings consumed over a day ago (they keep the expected identity) and
+    /// lookups older than [`LOOKUP_WINDOW_MINUTES`].
     async fn expire_retained(&self) -> ExternalChatResult<u64>;
+    /// Start asking whether `phone` has a WhatsApp account, for the connected
+    /// account at its current generation (`Disconnected` otherwise). Returns
+    /// the account's pending lookup of the same number when there is one;
+    /// otherwise `RateLimited` once [`LOOKUP_LIMIT`] lookups started within
+    /// [`LOOKUP_WINDOW_MINUTES`]. Signals `whatsapp_lookup_requested`.
+    async fn begin_lookup(
+        &self,
+        account: &Account,
+        phone: &PhoneNumber,
+    ) -> ExternalChatResult<Lookup>;
+    /// The account's lookup; one pending past [`LOOKUP_EXPIRY_SECONDS`] reads
+    /// as `failed`. `NotFound` for another account's.
+    async fn lookup(&self, account: Uuid, lookup: Uuid) -> ExternalChatResult<Lookup>;
 }
 
 /// An external chat bound to a remote chat, as one viewer can see it.
@@ -343,6 +357,21 @@ pub trait SessionRepository: Send + Sync {
 
     /// The account owner's groups still importing earlier messages.
     async fn backfill_work(&self, scope: SessionScope) -> ExternalChatResult<Vec<BackfillWork>>;
+
+    /// Lookups waiting for this account's answer, started within
+    /// [`LOOKUP_EXPIRY_SECONDS`].
+    async fn pending_lookups(&self, scope: SessionScope) -> ExternalChatResult<Vec<LookupWork>>;
+
+    /// Record WhatsApp's answer to a pending lookup; a found number's direct
+    /// chat joins the chat list (named when given, never renamed by a lookup
+    /// that has no name). Ignores a lookup that is no longer pending.
+    /// Signals the owner's chat list.
+    async fn complete_lookup(
+        &self,
+        scope: SessionScope,
+        lookup: Uuid,
+        answer: &LookupAnswer,
+    ) -> ExternalChatResult<()>;
 
     /// No message of the chat is known to start from (`waiting_for_message`).
     async fn backfill_waiting_for_message(

@@ -375,6 +375,26 @@ impl AccountRepository for PgWhatsAppRepository {
         .await
         .map_err(failure)?
         .rows_affected();
-        Ok(receipts + pairings)
+        let lookups = sqlx::query!(
+            "DELETE FROM whatsapp_lookup WHERE created_at < now() - make_interval(mins => $1)",
+            crate::domain::models::LOOKUP_WINDOW_MINUTES
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(failure)?
+        .rows_affected();
+        Ok(receipts + pairings + lookups)
+    }
+
+    async fn begin_lookup(
+        &self,
+        account: &Account,
+        phone: &crate::domain::jid::PhoneNumber,
+    ) -> ExternalChatResult<Lookup> {
+        lookups::begin_lookup(&self.pool, account, phone).await
+    }
+
+    async fn lookup(&self, account: Uuid, lookup: Uuid) -> ExternalChatResult<Lookup> {
+        lookups::lookup_of(&self.pool, account, lookup).await
     }
 }

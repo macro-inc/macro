@@ -509,6 +509,32 @@ impl SessionRepository for PgWhatsAppRepository {
         tx.commit().await.map_err(failure)
     }
 
+    async fn pending_lookups(&self, scope: SessionScope) -> ExternalChatResult<Vec<LookupWork>> {
+        let mut tx = self.pool.begin().await.map_err(failure)?;
+        let account = fence_in(&mut tx, scope).await?;
+        if account.state != AccountState::Connected {
+            return Ok(vec![]);
+        }
+        let work = lookups::pending_lookups_in(&mut tx, &account).await?;
+        tx.commit().await.map_err(failure)?;
+        Ok(work)
+    }
+
+    async fn complete_lookup(
+        &self,
+        scope: SessionScope,
+        lookup: Uuid,
+        answer: &LookupAnswer,
+    ) -> ExternalChatResult<()> {
+        let mut tx = self.pool.begin().await.map_err(failure)?;
+        let account = fence_in(&mut tx, scope).await?;
+        if account.state != AccountState::Connected {
+            return Ok(());
+        }
+        lookups::complete_lookup_in(&mut tx, &account, lookup, answer).await?;
+        tx.commit().await.map_err(failure)
+    }
+
     async fn backfill_requested(&self, scope: SessionScope, group: Uuid) -> ExternalChatResult<()> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;

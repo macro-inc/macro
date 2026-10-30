@@ -1,7 +1,7 @@
 //! Owner-bound account lifecycle and the WhatsApp chat list, as served by DSS.
 //! Added chats are `external_chat`'s; [`super::provider`] adds and sends.
 
-use super::{models::*, ports::*};
+use super::{jid::PhoneNumber, models::*, ports::*};
 use external_chat::domain::{models::*, ports::ExternalChatResult};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
@@ -153,6 +153,7 @@ impl WhatsAppService {
                 } else {
                     name
                 },
+                phone_number: super::jid::phone_number(&chat.jid),
                 jid: chat.jid,
                 kind: chat.kind,
                 last_activity_at: chat.last_activity_at,
@@ -173,6 +174,7 @@ impl WhatsAppService {
                         jid: info.jid.clone(),
                         kind: ExternalChatKind::Group,
                         name: String::new(),
+                        phone_number: None,
                         last_activity_at: None,
                         archived: false,
                         pinned: false,
@@ -214,7 +216,51 @@ impl WhatsAppService {
         Ok(ChatList { chats })
     }
 
-    /// Delete old participant receipts and old consumed pairings.
+    /// Ask whether a phone number has a WhatsApp account, to start a direct
+    /// chat with someone not in the chat list. Only on the owner's explicit
+    /// action (a human session): WhatsApp bans accounts that query many
+    /// numbers, so lookups are also limited per account.
+    #[tracing::instrument(
+        name = "whatsapp.linked.lookup",
+        skip_all,
+        err,
+        fields(lookup_id, account_id)
+    )]
+    pub async fn lookup(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        phone_number: &str,
+        authority: SendAuthority,
+    ) -> ExternalChatResult<Lookup> {
+        human(authority)?;
+        let phone = PhoneNumber::parse(phone_number).ok_or(ExternalChatError::Invalid(
+            "enter the phone number with its country code, starting with +",
+        ))?;
+        let (account, _) = connected(self.accounts.as_ref(), user).await?;
+        let lookup = self.accounts.begin_lookup(&account, &phone).await?;
+        let span = tracing::Span::current();
+        span.record("lookup_id", tracing::field::display(lookup.id));
+        span.record("account_id", tracing::field::display(account.id));
+        Ok(lookup)
+    }
+
+    /// Poll the owner's lookup.
+    pub async fn lookup_state(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        lookup: Uuid,
+        authority: SendAuthority,
+    ) -> ExternalChatResult<Lookup> {
+        human(authority)?;
+        let account = self
+            .accounts
+            .owned_account(user)
+            .await?
+            .ok_or(ExternalChatError::NotFound)?;
+        self.accounts.lookup(account.id, lookup).await
+    }
+
+    /// Delete old participant receipts, old consumed pairings and lookups.
     pub async fn expire_retained(&self) -> ExternalChatResult<u64> {
         self.accounts.expire_retained().await
     }
