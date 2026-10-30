@@ -46,6 +46,11 @@ replica-mode loads; `entity_access` and the item tables stay authoritative.
   edit is drift that only the backfill repairs.
 - Name every permanent object with its schema in the migration's functions; they
   run at COMMIT under whatever search_path the writer set.
+- The rewrite functions take id arrays as parameters, whose size their plans
+  cannot see. Reach grants and items only through index probes (one-id lateral
+  calls, `source_items_wanted`, grants matched on the uuid column), never by
+  joining against an unindexed set, or a bulk change goes quadratic.
+  `bulk_grant_changes_commit_in_linear_time` forces nested loops to catch it.
 - Writers of the inputs cannot use `PREPARE TRANSACTION` (the change record is a
   temporary table), and `SET CONSTRAINTS ALL IMMEDIATE` rewrites rows per
   statement, holding buckets for the rest of the transaction.
