@@ -603,3 +603,124 @@ async fn backfill_repairs_drift_across_batches_and_reruns(pool: PgPool) -> Resul
     assert_eq!(backfill::run(&pool).await?, 1200);
     assert_exact(&pool).await
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn immediate_constraints_apply_each_statement(pool: PgPool) -> Result<(), sqlx::Error> {
+    let mut conn = pool.acquire().await?;
+    insert_document(&mut conn, DOC, "2026-01-01 00:00:00").await?;
+
+    // Immediate before the session's first write, several writes, then back to deferred.
+    let mut tx = pool.begin().await?;
+    sqlx::query!("SET CONSTRAINTS ALL IMMEDIATE")
+        .execute(&mut *tx)
+        .await?;
+    grant(&mut tx, "document", DOC, OWNER, "user").await?;
+    assert_eq!(rows(&mut tx, DOC).await?.len(), 1);
+    grant(&mut tx, "document", DOC, MEMBER, "user").await?;
+    sqlx::query!(
+        r#"UPDATE "Document" SET "updatedAt" = '2026-02-01' WHERE id = $1"#,
+        DOC
+    )
+    .execute(&mut *tx)
+    .await?;
+    assert_eq!(rows(&mut tx, DOC).await?.len(), 2);
+    sqlx::query!("SET CONSTRAINTS ALL DEFERRED")
+        .execute(&mut *tx)
+        .await?;
+    grant(&mut tx, "document", DOC, TEAM, "team").await?;
+    tx.commit().await?;
+    assert_eq!(rows(&mut conn, DOC).await?.len(), 3);
+    assert_exact(&pool).await?;
+
+    // A write staged, flushed by switching to immediate, then another write.
+    let mut tx = pool.begin().await?;
+    grant(&mut tx, "document", DOC, CHANNEL, "channel").await?;
+    sqlx::query!("SET CONSTRAINTS ALL IMMEDIATE")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query!(
+        r#"UPDATE "Document" SET "updatedAt" = '2026-03-01' WHERE id = $1"#,
+        DOC
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    assert!(
+        rows(&mut conn, DOC)
+            .await?
+            .iter()
+            .all(|row| row.sort_ts.as_deref() == Some("2026-03-01 00:00:00"))
+    );
+    assert_exact(&pool).await
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn one_apply_is_scheduled_per_transaction(pool: PgPool) -> Result<(), sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    for n in 0..50 {
+        insert_document(
+            &mut tx,
+            &format!("10000000-0000-4000-8000-{n:012}"),
+            "2026-01-01 00:00:00",
+        )
+        .await?;
+        grant(
+            &mut tx,
+            "document",
+            &format!("10000000-0000-4000-8000-{n:012}"),
+            OWNER,
+            "user",
+        )
+        .await?;
+    }
+    // A session temporary table, so the query cannot be checked at compile time.
+    let scheduled: i64 = sqlx::query_scalar("SELECT count(*) FROM pg_temp.source_items_commit")
+        .fetch_one(&mut *tx)
+        .await?;
+    assert_eq!(scheduled, 1);
+    tx.commit().await?;
+    assert_exact(&pool).await
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_callers_search_path_changes_nothing(pool: PgPool) -> Result<(), sqlx::Error> {
+    let mut conn = pool.acquire().await?;
+    sqlx::query!("SET search_path = pg_catalog")
+        .execute(&mut *conn)
+        .await?;
+    sqlx::query!(
+        r#"INSERT INTO public."Document" (id, name, owner, "updatedAt") VALUES ($1, 'Document', $2, '2026-01-01')"#,
+        DOC,
+        OWNER,
+    )
+    .execute(&mut *conn)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO public.entity_access (entity_id, entity_type, source_id, source_type, access_level)
+           VALUES ($1::text::uuid, 'document', $2, 'user', 'owner')"#,
+        DOC,
+        OWNER,
+    )
+    .execute(&mut *conn)
+    .await?;
+    sqlx::query!("RESET search_path").execute(&mut *conn).await?;
+    assert_eq!(rows(&mut conn, DOC).await?.len(), 1);
+    assert_exact(&pool).await
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn discarding_temporary_tables_mid_transaction_fails_safely(
+    pool: PgPool,
+) -> Result<(), sqlx::Error> {
+    let mut conn = pool.acquire().await?;
+    insert_document(&mut conn, DOC, "2026-01-01 00:00:00").await?;
+    let mut tx = pool.begin().await?;
+    grant(&mut tx, "document", DOC, OWNER, "user").await?;
+    assert!(sqlx::query!("DISCARD TEMP").execute(&mut *tx).await.is_err());
+    tx.rollback().await?;
+    // Between transactions the session's tables can go and come back.
+    sqlx::query!("DISCARD TEMP").execute(&mut *conn).await?;
+    grant(&mut conn, "document", DOC, OWNER, "user").await?;
+    assert_eq!(rows(&mut conn, DOC).await?.len(), 1);
+    assert_exact(&pool).await
+}

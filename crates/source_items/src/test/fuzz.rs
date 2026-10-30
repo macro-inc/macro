@@ -322,6 +322,23 @@ async fn run(pool: PgPool) -> Result<(), sqlx::Error> {
             }
         })
     };
+    // The backfill runs alongside the writers too, as it does during rollout.
+    let backfill = {
+        let pool = pool.clone();
+        let mut stopped = stopped.clone();
+        tokio::spawn(async move {
+            let mut runs = 0;
+            loop {
+                tokio::select! {
+                    _ = stopped.changed() => return Ok::<_, sqlx::Error>(runs),
+                    done = crate::backfill::run(&pool) => {
+                        done?;
+                        runs += 1;
+                    }
+                }
+            }
+        })
+    };
     let workers = (0..WORKERS)
         .map(|seed| tokio::spawn(worker(pool.clone(), seed)))
         .collect::<Vec<_>>();
@@ -339,7 +356,8 @@ async fn run(pool: PgPool) -> Result<(), sqlx::Error> {
     }
     let _ = stop.send(true);
     let audits = auditor.await.expect("auditor panicked")?;
-    println!("{total:#?}\nconcurrent audits: {audits}");
+    let backfills = backfill.await.expect("backfill panicked")?;
+    println!("{total:#?}\nconcurrent audits: {audits}, backfills: {backfills}");
     assert!(
         total.committed > (WORKERS as usize * TRANSACTIONS_PER_WORKER) / 3,
         "too few commits to mean anything: {total:?}"

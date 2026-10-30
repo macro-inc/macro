@@ -314,6 +314,8 @@ async fn wait_for_lock_waiters(pool: &PgPool) -> Result<(), sqlx::Error> {
                  WHERE datname = current_database() AND wait_event_type = 'Lock'
              ) LOOP
                  PERFORM pg_sleep(0.005);
+                 -- pg_stat_activity is read once per transaction unless cleared.
+                 PERFORM pg_stat_clear_snapshot();
              END LOOP;
          END $$"
     )
@@ -356,5 +358,107 @@ async fn large_writes_take_no_advisory_locks(pool: PgPool) -> Result<(), sqlx::E
         .fetch_one(&pool)
         .await?;
     assert_eq!(projected, 5_000);
+    assert_exact(&pool).await
+}
+
+/// A deferred constraint check queued after a write must run before the commit takes buckets:
+/// here it waits for a row another transaction holds while that transaction commits a write to the
+/// same item.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn deferred_checks_run_before_the_commit_takes_buckets(
+    pool: PgPool,
+) -> Result<(), sqlx::Error> {
+    {
+        let mut conn = pool.acquire().await?;
+        insert(&mut conn).await?;
+        insert_document(&mut conn, DOC_2, "2026-01-01 00:00:00").await?;
+        sqlx::query!(
+            r#"CREATE TABLE deferred_reference (
+                   document_id text REFERENCES "Document" (id) DEFERRABLE INITIALLY DEFERRED
+               )"#
+        )
+        .execute(&mut *conn)
+        .await?;
+    }
+    let mut holder = pool.begin().await?;
+    sqlx::query!(r#"SELECT id FROM "Document" WHERE id = $1 FOR UPDATE"#, DOC_2)
+        .fetch_one(&mut *holder)
+        .await?;
+
+    let mut checked = pool.begin().await?;
+    share(&mut checked).await?;
+    // Created by this test, so the query cannot be checked at compile time.
+    sqlx::query("INSERT INTO deferred_reference (document_id) VALUES ($1)")
+        .bind(DOC_2)
+        .execute(&mut *checked)
+        .await?;
+    grant(&mut holder, "document", DOC, MEMBER, "user").await?;
+
+    // The check waits for the holder; the holder's commit must not wait for the checker.
+    let checked_commit = checked.commit();
+    let holder_commit = async {
+        wait_for_lock_waiters(&pool).await?;
+        no_wait(&mut holder).await?;
+        holder.commit().await
+    };
+    let (checked, held) = tokio::join!(checked_commit, holder_commit);
+    held?;
+    checked?;
+    assert_eq!(rows(&mut *pool.acquire().await?, DOC).await?.len(), 2);
+    assert_exact(&pool).await
+}
+
+/// A transaction that truncated an input holds it exclusively until it commits; another commit
+/// must wait for that before taking a bucket the truncating transaction needs.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_truncate_and_a_commit_on_its_items_do_not_deadlock(
+    pool: PgPool,
+) -> Result<(), sqlx::Error> {
+    insert(&mut *pool.acquire().await?).await?;
+    let mut sharing = pool.begin().await?;
+    share(&mut sharing).await?;
+
+    let mut truncating = pool.begin().await?;
+    sqlx::query!("TRUNCATE document_sub_type")
+        .execute(&mut *truncating)
+        .await?;
+    make_task(&mut truncating).await?;
+
+    let share_commit = sharing.commit();
+    let truncate_commit = async {
+        wait_for_lock_waiters(&pool).await?;
+        no_wait(&mut truncating).await?;
+        truncating.commit().await
+    };
+    let (shared, truncated) = tokio::join!(share_commit, truncate_commit);
+    truncated?;
+    shared?;
+    assert_eq!(
+        rows(&mut *pool.acquire().await?, DOC).await?,
+        [row(OWNER, "task", Some("2026-01-01 00:00:00"), 1)]
+    );
+    assert_exact(&pool).await
+}
+
+/// Two transactions touching the same two items in opposite statement order commit together.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn commits_on_the_same_items_in_opposite_orders_both_finish(
+    pool: PgPool,
+) -> Result<(), sqlx::Error> {
+    {
+        let mut conn = pool.acquire().await?;
+        insert(&mut conn).await?;
+        insert_document(&mut conn, DOC_2, "2026-01-01 00:00:00").await?;
+    }
+    for _ in 0..20 {
+        let mut one = pool.begin().await?;
+        grant(&mut one, "document", DOC, OWNER, "user").await?;
+        grant(&mut one, "document", DOC_2, OWNER, "user").await?;
+        let mut two = pool.begin().await?;
+        grant(&mut two, "document", DOC_2, MEMBER, "user").await?;
+        grant(&mut two, "document", DOC, MEMBER, "user").await?;
+        commit(Commit::Together, one, two).await?;
+        sqlx::query!("DELETE FROM entity_access").execute(&pool).await?;
+    }
     assert_exact(&pool).await
 }
