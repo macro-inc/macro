@@ -35658,7 +35658,7 @@
               },
               {
                 "$ref": "#/components/schemas/MessagePostedMetadata",
-                "description": "Completed bot answer eligible for explicit mention routing. Ordinary edits\nomit this; older producers remain compatible with the trigger consumer."
+                "description": "Completed bot answer, evaluated for agent triggers like a new post.\nOrdinary edits and streaming updates omit this; older producers remain\ncompatible with the trigger consumer."
               }
             ]
           },
