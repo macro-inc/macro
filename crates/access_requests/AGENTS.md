@@ -11,6 +11,8 @@ the durable notification/realtime dispatcher.
 - `src/domain/service.rs`: reviewer authority, supported levels, cooldowns, and transitions.
 - `src/domain/ports.rs`: transaction and delivery contracts.
 - `src/outbound/postgres.rs`: serialized writes and durable event leases.
+- `src/inbound/toolset.rs`: `RequestEntityAccess` / `ReadEntityAccessRequest`
+  agent tools over `request` and `state`, registered in `ai_tools`.
 
 ## Boundaries
 
@@ -23,6 +25,10 @@ the durable notification/realtime dispatcher.
   or folder, whatever that owner's grant row says, because those entities' read
   extractors do the same. The web app compares the two levels and reloads on a
   mismatch.
+- Agent tools submit and read requests only, as the user; they never resolve
+  requests or set direct grants, so approval always stays with the reviewers.
+  `request` supersedes the requester's latest request without a revision and
+  names reviewers only to a requester who can already see the item.
 - Notification delivery is composed in document storage. Stable event IDs and
   durable withdrawal prevent delayed delivery from resurrecting old requests.
 

@@ -700,6 +700,7 @@
       "crates/workspace-hack"
     ],
     "agent_harness_service": [
+      "crates/access_requests",
       "crates/activity",
       "crates/agent",
       "crates/agent_api_keys",
@@ -905,6 +906,7 @@
       "services/unfurl_service"
     ],
     "agent_inmem": [
+      "crates/access_requests",
       "crates/activity",
       "crates/agent",
       "crates/agent_api_keys",
@@ -1777,6 +1779,7 @@
       "crates/fig_engine"
     ],
     "ai_projections": [
+      "crates/access_requests",
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
@@ -1950,6 +1953,7 @@
       "crates/workspace-hack"
     ],
     "ai_tools": [
+      "crates/access_requests",
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
@@ -3060,6 +3064,7 @@
       "services/call_recording_preview_handler"
     ],
     "channel_bots": [
+      "crates/access_requests",
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
@@ -6010,6 +6015,7 @@
       "crates/workspace-hack"
     ],
     "email_focus_worker": [
+      "crates/access_requests",
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
@@ -10253,6 +10259,7 @@
       "crates/workspace-hack"
     ],
     "memory": [
+      "crates/access_requests",
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
