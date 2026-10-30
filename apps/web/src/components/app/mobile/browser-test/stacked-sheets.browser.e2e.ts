@@ -12,6 +12,27 @@ async function settled(sheet: Locator) {
   await expect(sheet).not.toHaveAttribute('data-transitioning');
 }
 
+/** Drags a sheet by its handle to the bottom of the screen. Playwright has no touch drag. */
+async function swipeDown(page: Page, sheet: Locator) {
+  const box = await sheet.boundingBox();
+  const viewport = page.viewportSize();
+  if (!box || !viewport) throw new Error('The sheet is not rendered');
+  const x = box.x + box.width / 2;
+  const from = box.y + 10;
+  const to = viewport.height - 4;
+  const session = await page.context().newCDPSession(page);
+  const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', y?: number) =>
+    session.send('Input.dispatchTouchEvent', {
+      type,
+      touchPoints: y === undefined ? [] : [{ x, y }],
+    });
+  await touch('touchStart', from);
+  for (let step = 1; step <= 12; step++)
+    await touch('touchMove', from + ((to - from) * step) / 12);
+  await touch('touchEnd');
+  await session.detach();
+}
+
 const pressed = (page: Page) => page.getByRole('status', { name: 'Pressed' });
 
 test('a pointerdown dismissal does not dismiss the parent on pointerup', async ({
@@ -155,4 +176,117 @@ test('a tap on the backdrop of event details closes it without pressing the page
 
   await tap(page, pageControl);
   await expect(pressed(page)).toHaveText('Page control');
+});
+
+test('Keep editing after swiping a sheet down brings it back with its edits', async ({
+  page,
+}) => {
+  await page.goto('/?scenario=composer');
+  const composer = page.getByRole('dialog', { name: 'New event' });
+  await settled(composer);
+  const title = composer.getByRole('textbox', { name: 'Title' });
+  await title.fill('Design review');
+  const prompt = page.getByRole('dialog', {
+    name: 'You still have remaining changes',
+  });
+
+  await swipeDown(page, composer);
+  await settled(prompt);
+  await settled(composer);
+  await tap(page, prompt.getByRole('button', { name: 'Keep editing' }));
+
+  await expect(prompt).toHaveCount(0);
+  await settled(composer);
+  await expect(title).toHaveValue('Design review');
+  await tap(page, composer.getByRole('button', { name: 'Create event' }));
+  await expect(pressed(page)).toHaveText('Create event');
+  await expect(prompt).toHaveCount(0);
+});
+
+test('a sheet asks each time it is swiped down, and Discard closes it', async ({
+  page,
+}) => {
+  await page.goto('/?scenario=composer');
+  const composer = page.getByRole('dialog', { name: 'New event' });
+  await settled(composer);
+  const prompt = page.getByRole('dialog', {
+    name: 'You still have remaining changes',
+  });
+
+  await swipeDown(page, composer);
+  await settled(prompt);
+  await tap(page, prompt.getByRole('button', { name: 'Keep editing' }));
+  await expect(prompt).toHaveCount(0);
+  await settled(composer);
+
+  await swipeDown(page, composer);
+  await settled(prompt);
+  await tap(page, prompt.getByRole('button', { name: 'Discard' }));
+
+  await expect(prompt).toHaveCount(0);
+  await expect(composer).toHaveCount(0);
+  await expect(page.locator('[data-corvu-drawer-overlay]')).toHaveCount(0);
+});
+
+test('a swipe does not hide a confirmation that is still pending', async ({
+  page,
+}) => {
+  await page.goto('/?scenario=pending');
+  const confirmation = page.getByRole('dialog', { name: 'Delete event' });
+  await settled(confirmation);
+
+  await swipeDown(page, confirmation);
+
+  await settled(confirmation);
+  await expect(pressed(page)).toHaveText('');
+});
+
+test('a swipe over event details closes only the sheet on top', async ({
+  page,
+}) => {
+  await page.goto('/?scenario=event');
+  const details = page.getByRole('dialog', { name: 'Weekly product sync' });
+  await settled(details);
+  await tap(page, details.getByRole('button', { name: 'RSVP' }));
+  const rsvp = page.getByRole('dialog', { name: 'RSVP to recurring event' });
+  await settled(rsvp);
+
+  await swipeDown(page, rsvp);
+
+  await expect(rsvp).toHaveCount(0);
+  await settled(details);
+});
+
+test('a swiped-away sheet opens again on screen', async ({ page }) => {
+  await page.goto('/?scenario=event');
+  const details = page.getByRole('dialog', { name: 'Weekly product sync' });
+  await settled(details);
+  await tap(page, details.getByRole('button', { name: 'RSVP' }));
+  const rsvp = page.getByRole('dialog', { name: 'RSVP to recurring event' });
+  await settled(rsvp);
+  await swipeDown(page, rsvp);
+  await expect(rsvp).toHaveCount(0);
+
+  await tap(page, details.getByRole('button', { name: 'RSVP' }));
+  await settled(rsvp);
+
+  await swipeDown(page, rsvp);
+  await expect(rsvp).toHaveCount(0);
+  await settled(details);
+  await swipeDown(page, details);
+  await expect(details).toHaveCount(0);
+});
+
+test('a sheet opened by its trigger slides up, and swipes away', async ({
+  page,
+}) => {
+  await page.goto('/?scenario=uncontrolled');
+  await tap(page, page.getByRole('button', { name: 'Open filters' }));
+  const filters = page.getByRole('dialog', { name: 'Filters' });
+
+  await expect(filters).toHaveAttribute('data-opening');
+  await settled(filters);
+  await swipeDown(page, filters);
+
+  await expect(filters).toHaveCount(0);
 });

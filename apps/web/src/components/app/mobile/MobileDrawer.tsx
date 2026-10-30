@@ -5,6 +5,7 @@ import { Layer } from '@ui/components/Layer';
 import { cn } from '@ui/utils/classname';
 import {
   type ComponentProps,
+  createSignal,
   onCleanup,
   splitProps,
   type ValidComponent,
@@ -283,6 +284,8 @@ export const MobileDrawer = Object.assign(
     ]);
     let uncontrolledOpen = props.initialOpen ?? false;
     let disposed = false;
+    const [snapPoint, setSnapPoint] =
+      createSignal<ComponentProps<typeof Drawer>['activeSnapPoint']>(0);
     onCleanup(() => {
       disposed = true;
     });
@@ -293,10 +296,16 @@ export const MobileDrawer = Object.assign(
         closeOnOutsideFocus={false}
         noOutsidePointerEvents={false}
         restoreFocus={false}
+        activeSnapPoint={snapPoint()}
+        onActiveSnapPointChange={setSnapPoint}
         {...rest}
         onOpenChange={(open) => {
           uncontrolledOpen = open;
           local.onOpenChange?.(open);
+          // Corvu moves a dragged sheet to its closed snap point before asking
+          // to close. An owner that keeps it open (a discard prompt, a pending
+          // action) would leave it off screen behind a live scrim.
+          if (!open && !closed()) setSnapPoint(props.defaultSnapPoint ?? 1);
         }}
         onOutsidePointer={(event) => {
           if (!dismissesDrawer(event)) event.preventDefault();

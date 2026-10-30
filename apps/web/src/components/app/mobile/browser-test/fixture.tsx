@@ -5,16 +5,19 @@ import { SettingsPage, SettingsRow } from '@app/features/settings/primitives';
 import type { SettingsTab } from '@core/constant/SettingsState';
 import { SETTINGS_TAB_GROUPS } from '@core/constant/settingsTabsConfig';
 import { EmailProviderDialog } from '@core/email-link/ProviderDialog';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   Button,
   ConfirmDialog,
+  confirmDialog,
   Dialog,
   ImperativeDialogHost,
+  Input,
   type ManagedDialogProps,
   openDialog,
   useImperativeDialog,
 } from '@ui';
-import { createSignal, getOwner, Show } from 'solid-js';
+import { createSignal, getOwner, Match, Show, Switch } from 'solid-js';
 import { render } from 'solid-js/web';
 import { macroLightTheme } from '../../../../features/theme/themes/macro-light';
 import { MobileDrawer } from '../MobileDrawer';
@@ -182,6 +185,88 @@ function EventScenario() {
   );
 }
 
+/**
+ * Shaped like the event composer: unmounted on close, and a close request
+ * asks first from a prompt outside the sheet's dismiss stack.
+ */
+function DirtyComposerScenario() {
+  const owner = getOwner();
+  const [open, setOpen] = createSignal(true);
+  let asking = false;
+  const requestClose = async () => {
+    if (asking) return;
+    asking = true;
+    const discard = await confirmDialog(
+      {
+        title: 'You still have remaining changes',
+        confirmLabel: 'Discard',
+        cancelLabel: 'Keep editing',
+        tone: 'danger',
+      },
+      { owner }
+    );
+    asking = false;
+    if (discard) setOpen(false);
+  };
+  return (
+    <Show when={open()}>
+      <MobileDrawer
+        side="bottom"
+        open
+        onOpenChange={(next) => {
+          if (!next) fireAndForget(requestClose(), 'stacked-sheets-fixture');
+        }}
+      >
+        <MobileDrawer.Portal>
+          <MobileDrawer.Overlay />
+          <MobileDrawer.Content aria-label="New event" maxHeight={92}>
+            <MobileDrawer.Handle />
+            <MobileDrawer.ScrollBody class="h-80 gap-3 px-6">
+              <Input aria-label="Title" />
+              <Button onClick={() => press('Create event')}>
+                Create event
+              </Button>
+            </MobileDrawer.ScrollBody>
+          </MobileDrawer.Content>
+        </MobileDrawer.Portal>
+      </MobileDrawer>
+    </Show>
+  );
+}
+
+/** A confirmation mid-request refuses every close until the request settles. */
+function PendingConfirmScenario() {
+  return (
+    <ConfirmDialog
+      open
+      pending
+      onOpenChange={() => press('Close pending')}
+      title="Delete event"
+      confirmLabel="Delete"
+      tone="danger"
+      onConfirm={() => press('Confirm delete')}
+    />
+  );
+}
+
+/** Nothing controls this sheet: its trigger opens it. */
+function UncontrolledScenario() {
+  return (
+    <MobileDrawer side="bottom">
+      <MobileDrawer.Trigger as={Button} class="fixed top-20 left-4">
+        Open filters
+      </MobileDrawer.Trigger>
+      <MobileDrawer.Portal>
+        <MobileDrawer.Overlay />
+        <MobileDrawer.Content aria-label="Filters">
+          <MobileDrawer.Handle />
+          <div class="h-40 px-6">Filters</div>
+        </MobileDrawer.Content>
+      </MobileDrawer.Portal>
+    </MobileDrawer>
+  );
+}
+
 function Fixture() {
   const scenario = new URLSearchParams(location.search).get('scenario');
   return (
@@ -192,9 +277,20 @@ function Fixture() {
       <output aria-label="Pressed" class="fixed top-2 left-4 text-xs">
         {pressed().join(', ')}
       </output>
-      <Show when={scenario === 'settings'} fallback={<EventScenario />}>
-        <SettingsScenario />
-      </Show>
+      <Switch fallback={<EventScenario />}>
+        <Match when={scenario === 'settings'}>
+          <SettingsScenario />
+        </Match>
+        <Match when={scenario === 'composer'}>
+          <DirtyComposerScenario />
+        </Match>
+        <Match when={scenario === 'pending'}>
+          <PendingConfirmScenario />
+        </Match>
+        <Match when={scenario === 'uncontrolled'}>
+          <UncontrolledScenario />
+        </Match>
+      </Switch>
       <ImperativeDialogHost />
     </>
   );
