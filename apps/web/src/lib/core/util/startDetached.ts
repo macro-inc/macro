@@ -2,11 +2,11 @@ async function settle(
   work: unknown,
   onRejected: (error: unknown) => void
 ): Promise<void> {
-  try {
-    await work;
-  } catch (error: unknown) {
-    onRejected(error);
-  }
+  // allSettled subscribes to work synchronously; awaiting work itself would
+  // subscribe to a zone.js promise a microtask late, after zone.js may already
+  // have reported its rejection as unhandled.
+  const [result] = await Promise.allSettled([work]);
+  if (result.status === 'rejected') onRejected(result.reason);
 }
 
 /**
