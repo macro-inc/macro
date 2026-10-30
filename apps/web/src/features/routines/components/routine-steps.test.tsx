@@ -63,7 +63,17 @@ const slots: RoutineStepSlots = {
   TagPicker: () => null,
   ChannelPicker: () => null,
   AssigneePicker: () => null,
-  FolderPicker: () => null,
+  // Choose a folder, or clear it as the real picker does with an empty pick.
+  FolderPicker: (props) => (
+    <>
+      <button type="button" onClick={() => props.onChange('folder-1')}>
+        Pick folder
+      </button>
+      <button type="button" onClick={() => props.onChange(undefined)}>
+        Clear folder
+      </button>
+    </>
+  ),
 };
 
 function renderSteps(options: {
@@ -243,6 +253,25 @@ describe('routine steps editor', () => {
       lastMenu().getByRole('option', { name: /^Create task/ })
     ).toBeTruthy();
     expect(lastMenu().getByRole('option', { name: /^Ask AI/ })).toBeTruthy();
+  });
+
+  it('files a created task in a folder and back in none', () => {
+    const steps = renderSteps({ triggers: [daily], steps: [] });
+    openAdd();
+    add('Create task');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Pick folder', hidden: true })
+    );
+    expect(steps()[0]?.kind === 'tool' && steps()[0]).toMatchObject({
+      arguments: { projectId: 'folder-1' },
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Clear folder', hidden: true })
+    );
+    const created = steps()[0];
+    expect(created?.kind === 'tool' && 'projectId' in created.arguments).toBe(
+      false
+    );
   });
 
   it('acts on a task created by an earlier step', () => {

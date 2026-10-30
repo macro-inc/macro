@@ -51,7 +51,8 @@ export type RoutineToolSlots = {
   }>;
   FolderPicker: Component<{
     value: string | undefined;
-    onChange(projectId: string): void;
+    /** Undefined when the folder is cleared. */
+    onChange(projectId: string | undefined): void;
   }>;
 };
 
@@ -398,7 +399,8 @@ export function ToolStepBody(props: {
           <PropRow label="Folder">
             <props.slots.FolderPicker
               value={text(args().projectId) || undefined}
-              onChange={(projectId) => set({ projectId })}
+              // Moving needs a folder; clearing leaves the one chosen.
+              onChange={(projectId) => projectId && set({ projectId })}
             />
           </PropRow>
         </Match>
@@ -427,7 +429,14 @@ export function ToolStepBody(props: {
           <PropRow label="Folder">
             <props.slots.FolderPicker
               value={text(args().projectId) || undefined}
-              onChange={(projectId) => set({ projectId })}
+              onChange={(projectId) => {
+                // Back to None: the new item goes nowhere in particular.
+                const { projectId: _cleared, ...rest } = props.step.arguments;
+                props.onChange({
+                  ...props.step,
+                  arguments: projectId ? { ...rest, projectId } : rest,
+                });
+              }}
             />
           </PropRow>
           <Show when={props.step.output}>

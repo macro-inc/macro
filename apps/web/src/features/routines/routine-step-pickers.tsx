@@ -132,6 +132,8 @@ function EntityPicker(props: {
   placeholder: string;
   search: string;
   onChange(id: string, name: string): void;
+  /** Where choosing nothing is allowed, e.g. an optional folder. */
+  onClear?(): void;
 }) {
   const [open, setOpen] = createSignal(false);
   let trigger: HTMLButtonElement | undefined;
@@ -178,6 +180,7 @@ function EntityPicker(props: {
               setSelectedOptions={(ids) => {
                 const [id] = [...ids];
                 if (id) props.onChange(id, name(id));
+                else props.onClear?.();
                 setOpen(false);
               }}
             />
@@ -220,7 +223,7 @@ function RoutineAssigneePicker(props: {
 
 function RoutineFolderPicker(props: {
   value: string | undefined;
-  onChange(projectId: string): void;
+  onChange(projectId: string | undefined): void;
 }) {
   return (
     <EntityPicker
@@ -229,6 +232,7 @@ function RoutineFolderPicker(props: {
       placeholder="None"
       search="Search folders…"
       onChange={(id) => props.onChange(id)}
+      onClear={() => props.onChange(undefined)}
     />
   );
 }
