@@ -58,7 +58,9 @@ def n_shape(p, x0, counter, top=None, height=None, cut=True, trap_ink=True):
     yc = h * 0.42
     a = arch(xl, xr, top, yc, s, p.hair, join_out=h - p.hair * 0.1, join_in=h - p.hair - h * 0.17, p=p)
     stem_l = rect(x0, 0, xl, h, nw=p.cut if cut else 0)
-    stem_r = rect(xr - s, 0, xr, yc + 1)
+    # Share the edge exactly: an overlap at a curve's vertical extreme can
+    # make pathops resolve the union differently per weight.
+    stem_r = rect(xr - s, 0, xr, yc)
     shape = stem_l + a + stem_r
     if trap_ink:
         crotch_y = h - p.hair - h * 0.17

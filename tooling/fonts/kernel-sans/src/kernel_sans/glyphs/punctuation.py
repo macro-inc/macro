@@ -113,7 +113,7 @@ def _arrow(p, length, heads=(True, False)):
     The shaft and arms have thickness t; arm ends are square to the arm;
     the point is cut flat (which reads as the house chamfer on diagonals)."""
     t = p.hair * 1.1
-    arm = 190 + 0.55 * t  # arm length along its outer edge
+    arm = 120 + 1.4 * t  # arm length along its outer edge
     flat = max(4.0, p.cut * 0.62)  # depth of the cut across the point
     k = 1200
 
@@ -670,9 +670,11 @@ def brokenbar(p):
 
 @glyph("asterisk", 0x002A)
 def asterisk(p):
-    t = p.hair * 0.98
-    r = 172 + 0.3 * p.grow
-    cy = P.CAP - 150
+    """Six square-ended spokes hanging from the cap height; the spokes thin
+    a little at heavy weights so the hub stays open."""
+    t = _damp(p.hair * 0.98, P.params(400).hair * 0.98, 0.75)
+    r = 172 + 0.5 * p.grow
+    cy = P.CAP - r
     sh = Shape()
     for a in (90, 30, 150):
         ra = math.radians(a)
@@ -754,17 +756,32 @@ def at(p):
         2 * xr - W, oy0, W, 2 * yh - oy0, 2 * xr - (W - ws), oy0 + wt, W - ws, 2 * yh - oy0 - wt,
         n, n_in, below(yh) & right_of(xr - 1),
     )
-    # The a: bowl and stem; the counter meets the stem at an angle (ink traps).
+    # The a: bowl and stem. The counter runs a fixed fraction of its radius
+    # past the stem's edge, so it meets the stem at the same angle at every
+    # weight; ink traps deepen those crotches.
     wsb = p.stem * 1.03
-    ix1 = xs + st * 0.25
+    xi0 = xa0 + wsb
+    k = 0.42
+    ix1 = (xs - k * xi0 / 2) / (1 - k / 2)
     iy0, iy1 = oy0 + p.hair, oy1 - p.hair
-    bowl = _ring_part(xa0, oy0, ix1 + wsb, oy1, xa0 + wsb, iy0, ix1, iy1, n, n_in, left_of(xs + 1))
+    bowl = _ring_part(xa0, oy0, ix1 + wsb, oy1, xi0, iy0, ix1, iy1, n, n_in, left_of(xs + 1))
     stem = rect(xs, oy0, xr, oy1, ne=p.cut)
     sh = ringsh + side + hook + bowl + stem
-    yt = _sq_y(xa0 + wsb, iy0, ix1, iy1, n_in, xs, "top")
-    yb = _sq_y(xa0 + wsb, iy0, ix1, iy1, n_in, xs, "bottom")
-    sh = sh - stem_trap(xs, yt, p.trap, side="left", up=True) - stem_trap(xs, yb, p.trap, side="left", up=False)
+    d = p.trap * 0.8
+    for side_ in ("top", "bottom"):
+        sy = 1 if side_ == "top" else -1
+        yc = _sq_y(xi0, iy0, ix1, iy1, n_in, xs, side_)
+        xb = xs - d * 0.9 - 2
+        yb = _sq_y(xi0, iy0, ix1, iy1, n_in, xb, side_) - sy * 3
+        sh = sh - _trap3(d, (xs + d * 0.2, yc + sy * d), (xs - 3, yc - sy * 6), (xb, yb))
     return G(sh, l=p.sbr, r=p.sbr)
+
+
+def _trap3(depth, tip, a, b):
+    """Ink-trap triangle with explicit base points (both in the white)."""
+    if depth < 1:
+        return Shape()
+    return poly([a, tip, b])
 
 
 def _tangent_point(x0, y0, x1, y1, n, slope):
@@ -778,7 +795,9 @@ def _tangent_point(x0, y0, x1, y1, n, slope):
     return cx - rx * math.cos(t) ** a, cy - ry * math.sin(t) ** a
 
 
-AMP = dict(lx=500, lxk=1.0, uw=250, uwk=1.2, m=-1.35, foot=40, footk=0.0, ytail=0.44)
+# Tuned so the leg, loop and tail meet the same way at every weight: the
+# leg's foot drifts left as weight grows to keep the tail's counter open.
+AMP = dict(lx=500, lxk=1.3, uw=272, uwk=1.6, m=-1.3, foot=60, footk=-0.7, ytail=0.44)
 
 
 @glyph("ampersand", 0x0026)
@@ -813,38 +832,37 @@ def ampersand(p):
     counter = squircle(ux0 + lws, uy0 + wt, ux0 + uw - lws, top - wt, n_in)
     leg = poly([(foot - hw, yf), (foot, yf), (tx + hw, ty), (tx, ty)]) - counter
     # Open the bowl at the upper right; its top stroke ends inside the leg.
+    # Above its widest point the right side rises straight as the tail, so
+    # the counter between leg and tail stays open at every weight.
+    lcy = (ly1 - P.COS) / 2
     y_open = ly1 - wt / 2
     x_open = tx + hw / 2 + (ty - y_open) / abs(m)
-    y_tail = P.CAP * a["ytail"]
-    lower = lower - (right_of(x_open) & above(y_tail))
-    xt = outer_x(0, lx1, -P.COS, ly1, n, y_tail, "right")
-    lower = lower - chamfer(xt, y_tail, p.ccut, "ne")
+    lower = lower - (right_of(x_open) & above(lcy))
+    tail = rect(lx1 - ws, lcy, lx1, P.CAP * a["ytail"], ne=p.ccut)
+    lower = lower + tail
     return G(lower + upper + leg, l=p.sbr * 0.9, r=p.sbr * 0.3)
 
 
 @glyph("section", 0x00A7)
 def section(p):
-    """§ : a closed squircle ring in the middle; the top arc runs straight
-    down into its left side and the bottom arc (the same, turned) into its
-    right side. Terminals are cut flat and chamfered as in c."""
-    W = p.w(440, 1.0)
+    """§ : two squircle S shapes sharing their middle bowl, so it reads as
+    three stacked bowls: the top one open at the lower right below its
+    terminal, the middle one closed, the bottom one the top turned round."""
+    W = p.w(420, 1.0)
     ws, wt = p.stem * 1.02, p.hair
     n, n_in = p.sq, p.sq_in
     top = P.CAP + P.COS
     bot = -130
     mid = (top + bot) / 2
-    hm = (top - bot) * 0.42
-    m1 = mid + hm / 2
-    middle = ring(0, mid - hm / 2, W, m1, ws, wt, n=n, n_in=n_in)
-    cyt = m1 + (top - m1) * 0.2  # centre of the top arc's box
-    # The curve overlaps the straight part, never the reverse: pathops drops
-    # pieces when a rectangle overlaps a squircle just past its tangent point.
-    arc = ring(0, 2 * cyt - top, W, top, ws, wt, n=n, n_in=n_in) & above(cyt - 1)
-    y_cut = cyt + (top - cyt) * 0.37
-    arc = arc - (right_of(W / 2) & below(y_cut))
-    xt = outer_x(0, W, 2 * cyt - top, top, n, y_cut, "right")
-    arc = arc - chamfer(xt, y_cut, p.cut, "se")
-    upper = arc + rect(0, mid, ws, cyt)
+    h = (top - bot + 2 * wt) / 3  # each bowl; neighbours share a stroke
+    m0, m1 = mid - h / 2, mid + h / 2
+    middle = ring(0, m0, W, m1, ws, wt, n=n, n_in=n_in)
+    tb = m1 - wt  # the top bowl's bottom stroke is the middle bowl's top
+    upper = ring(0, tb, W, top, ws, wt, n=n, n_in=n_in)
+    y_cut = tb + (top - tb) * 0.66
+    upper = upper - (right_of(W / 2) & below(y_cut))
+    xt = outer_x(0, W, tb, top, n, y_cut, "right")
+    upper = upper - chamfer(xt, y_cut, p.cut, "se")
     return G(middle + upper + upper.rotate180(W / 2, mid), l=p.sbr, r=p.sbr)
 
 
@@ -867,13 +885,13 @@ def paragraph(p):
 
 
 def _damp(v, v400, k):
-    """Grow a stroke more slowly with weight than the letters do, for the
+    """Grow a stroke more slowly than the letters do above Regular, for the
     small letters inside © ® ™ whose counters would close up."""
-    return v400 + k * (v - v400)
+    return v if v <= v400 else v400 + k * (v - v400)
 
 
-def _ring_mark(p, x0, y0, size):
-    t = p.hair * 0.92
+def _ring_mark(p, x0, y0, size, damp=1.0):
+    t = _damp(p.hair * 0.92, P.params(400).hair * 0.92, damp)
     return ring(x0, y0, x0 + size, y0 + size, t, t, n=p.sq * 0.92, n_in=p.sq_in * 0.95)
 
 
@@ -893,21 +911,23 @@ def copyright(p):
     return G(sh + c, l=p.csbr * 0.9, r=p.csbr * 0.9)
 
 
-def _small_r(p, x0, y0, h, st, th):
+def _small_r(p, x0, y0, h, w, st, th):
     """A small R: stem, squircle bowl, straight leg from the bowl."""
     n, n_in = p.sq * 0.92, p.sq_in * 0.95
-    w = h * 0.7
     x1 = x0 + w
     yt = y0 + h
-    yb = y0 + h * 0.42  # bowl bottom
+    yb = y0 + h * 0.4  # bowl bottom
     xc = x0 + st
     wr = st * 1.04  # bowl's right side
     stem = rect(x0, y0, xc, yt)
     bowl = _ring_part(2 * xc - x1, yb, x1, yt, 2 * xc - (x1 - wr), yb + th, x1 - wr, yt - th, n, n_in, right_of(xc - 1))
     dw = st * 0.98
     leg_x = xc + (x1 - xc) * 0.12
-    hw = hwidth(dw, x1 - leg_x, yb + th * 0.5 - y0)
-    leg = poly([(x1 - hw, y0), (x1, y0), (leg_x + hw, yb + th * 0.5), (leg_x, yb + th * 0.5)])
+    ytop = yb + th * 0.5
+    hw = dw
+    for _ in range(20):  # horizontal width for perpendicular thickness dw
+        hw = hwidth(dw, (x1 - hw) - leg_x, ytop - y0)
+    leg = poly([(x1 - hw, y0), (x1, y0), (leg_x + hw, ytop), (leg_x, ytop)])
     return stem + bowl + leg
 
 
@@ -915,15 +935,15 @@ def _small_r(p, x0, y0, h, st, th):
 def registered(p):
     size = (P.CAP + 2 * P.COS) * 0.8
     y0 = P.CAP + P.COS - size
-    sh = _ring_mark(p, 0, y0, size)
+    sh = _ring_mark(p, 0, y0, size, damp=0.7)
     reg = P.params(400)
     st = _damp(p.stem * 0.75, reg.stem * 0.75, 0.5)
     th = _damp(p.hair * 0.7, reg.hair * 0.7, 0.3)
     rh = size * 0.5
-    rw = rh * 0.7
+    rw = p.w(rh * 0.7, 0.6)
     rx0 = size / 2 - rw / 2 + rw * 0.04
     ry0 = y0 + size / 2 - rh / 2
-    return G(sh + _small_r(p, rx0, ry0, rh, st, th), l=p.csbr * 0.6, r=p.csbr * 0.6)
+    return G(sh + _small_r(p, rx0, ry0, rh, rw, st, th), l=p.csbr * 0.6, r=p.csbr * 0.6)
 
 
 @glyph("trademark", 0x2122)

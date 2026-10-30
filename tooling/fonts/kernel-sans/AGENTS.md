@@ -47,6 +47,9 @@ weight, compiles CFF `.otf`, TrueType `.ttf` and `.woff2`, then matches the
   contour order, start points and extra smooth nodes, but not a different
   number of contours or corners. Shapes that touch, or meet exactly on a
   centre line, at some weights only cause that; `--compat` names the glyph.
+- Join a stem to a curve edge to edge at the curve's vertical extreme
+  (`rect(..., yc)`), never with a small overlap: pathops can drop or split the
+  curve differently per weight.
 - `geom.chamfer`, `trap` and `notch` return regions to subtract, not shapes
   to add.
 - pathops outlines are counter-clockwise (PostScript order); `fontbuild.py`

@@ -49,8 +49,8 @@ wins; note the exception in a comment.
      so do the ends of diagonals (they are already angled).
 3. **Ink traps** at acute crotches where a curve or diagonal joins a stem or
    another stroke: n h m r u (shoulder), b d p q a g (bowl joins), k K (arm
-   and leg), and the inner vertices of v w V W M N A. Depth `p.trap` (0 at
-   Light, about 12 at Regular, 37 at ExtraBold); use `geom.stem_trap` along a
+   and leg), and the inner vertices of v w V W M N A. Depth `p.trap` (about 3
+   at Light, 12 at Regular, 37 at ExtraBold); use `geom.stem_trap` along a
    stem edge or `geom.notch` / `geom.trap` elsewhere. Traps must open into the
    white cleanly and never leave slivers.
 4. **Square dots.** Dots of i, j, and punctuation are squares of side `p.dot`

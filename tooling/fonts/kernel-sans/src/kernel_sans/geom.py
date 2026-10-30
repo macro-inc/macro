@@ -358,7 +358,9 @@ def stem_trap(x, y, depth, side="right", up=True):
     sx = 1 if side == "right" else -1
     sy = 1 if up else -1
     tip = (x - sx * depth * 0.22, y + sy * depth)
-    a = (x + sx * 3, y - sy * 6)
+    # Start the cut just below the crotch so no sliver of the curve survives
+    # next to it at any weight.
+    a = (x + sx * (depth * 0.05 + 0.3), y - sy * (depth * 0.4 + 4))
     b = (x + sx * depth * 0.95, y + sy * depth * 1.1)
     return notch(tip, a, b)
 

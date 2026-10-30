@@ -35,11 +35,11 @@ from .parts import arch, outer_x
 
 PROOF_TEXT = [
     "H0H1H2H3H4H5H6H7H8H9H",
-    "0123456789 1234567890 00 n0n1n2n3n4n5n",
-    "$1,250.00 ±3% 98.6° €42 £7 ¥300 ¢ ¤ ƒ",
+    "0123456789 1234567890 n0n1n2n3n4n5n6n7n8n9n",
+    "$1,250.00 ±3% 98.6° €42 £7 ¥300 99¢ ¤ ƒ(x)",
     "2+2=4 5×3≠14 ½ ¼ ¾ 7÷2 1⁄2 x² m³ ¹",
-    "a<b>c ≤ ≥ ≈ ~ ^ ¬ # % ‰ ∞ µm ª º",
-    "HOH 1984 2025 0815 H#H H$H H£H n%n n°n",
+    "a<b>c x≤y≥z π≈3 ~n^2 ¬p #1 50% 3‰ ∞ 5µm 1ª 2º",
+    "HOH 1984 2025 0815 H#H H$H H£H n%n n°n H€H",
 ]
 
 
@@ -148,6 +148,10 @@ def _crotch(x, y, a1, a2, depth):
     the bisector of the white angle."""
     if depth < 1:
         return Shape()
+    # Below ~8 units the notch is invisible anyway, and so small that its
+    # corners blur into the curve differently per weight; keep it at least
+    # that big so every master has the same notch.
+    depth = max(depth, 8.0)
     u1, u2 = _unit(a1), _unit(a2)
     bx, by = u1[0] + u2[0], u1[1] + u2[1]
     m = math.hypot(bx, by)
@@ -155,11 +159,13 @@ def _crotch(x, y, a1, a2, depth):
     e = depth * 0.5
 
     def mouth(u):
-        # A point on the edge, pushed a little into the white.
+        # A point on the edge, pushed a little into the white. Everything
+        # scales with depth, so the notch has the same shape (and corners)
+        # at every weight.
         nx, ny = -u[1], u[0]
         if nx * bx + ny * by < 0:
             nx, ny = -nx, -ny
-        return (x + u[0] * e + nx * 2, y + u[1] * e + ny * 2)
+        return (x + u[0] * e + nx * depth * 0.12, y + u[1] * e + ny * depth * 0.12)
 
     tip = (x - bx * depth, y - by * depth)
     return poly([mouth(u1), tip, mouth(u2), (x + bx * e, y + by * e)])
@@ -219,6 +225,29 @@ def _inward(pt, box, d=1.5):
     return (pt[0] + vx / m * d, pt[1] + vy / m * d)
 
 
+def _ray_hit_sq(p0, d, box, n):
+    """Where the ray p0 + t*d (t > 0) first crosses the squircle exactly as
+    drawn (its cubic outline), and the outline's direction there (degrees,
+    taken left to right)."""
+    pts = _sq_pts(box, n, per=400)
+    best = None
+    m = len(pts)
+    for i in range(m):
+        ax, ay = pts[i]
+        bx, by = pts[(i + 1) % m]
+        ex, ey = bx - ax, by - ay
+        den = d[0] * ey - d[1] * ex
+        if abs(den) < 1e-12:
+            continue
+        t = ((ax - p0[0]) * ey - (ay - p0[1]) * ex) / den
+        u = ((ax - p0[0]) * d[1] - (ay - p0[1]) * d[0]) / den
+        if t > 0 and 0 <= u <= 1 and (best is None or t < best[0]):
+            if ex < 0:
+                ex, ey = -ex, -ey
+            best = (t, (p0[0] + d[0] * t, p0[1] + d[1] * t), math.degrees(math.atan2(ey, ex)))
+    return (best[1], best[2]) if best else (None, None)
+
+
 def _fit(p, shape, dx=0.0, width=None):
     """Centre the outline in the tabular advance (or `width`)."""
     w = _fw(p) if width is None else width
@@ -253,17 +282,18 @@ def _zero_slash(p):
     ibox = (x0 + ws, y0 + h, x1 - ws, y1 - h)
     ni = _ni(p)
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-    t = p.fhair * 0.8
-    th = math.radians(63)
+    g = max(0.0, p.grow) / 70
+    t = p.fhair * (0.8 - 0.22 * g)
+    th = math.radians(68)
     hw = t / (2 * math.sin(th))
-    gap = 18 + 0.25 * t
+    gap = 12 + 0.15 * t
     ry_in = (ibox[3] - ibox[1]) / 2
 
     def fits(L):
         a = L / math.tan(th)
         return cx + a + hw <= _ox(ibox, ni, cy + L, "right") - gap
 
-    lo, hi = 0.0, ry_in * 0.6
+    lo, hi = 0.0, ry_in * 0.42
     for _ in range(40):
         m = (lo + hi) / 2
         if fits(m):
@@ -360,8 +390,8 @@ def _three(p):
     li = (ws * 1.02, lb[1] + h, wl - ws * 1.02, lb[3] - hm)
     cxu, cxl = (ub[0] + ub[2]) / 2, (lb[0] + lb[2]) / 2
     cyu, cyl = (ub[1] + ub[3]) / 2, (lb[1] + lb[3]) / 2
-    ytu = cyu + 0.36 * (ub[3] - ub[1]) / 2
-    ytl = cyl - 0.36 * (lb[3] - lb[1]) / 2
+    ytu = cyu + 0.5 * (ui[3] - cyu)
+    ytl = cyl - 0.5 * (cyl - li[1])
     up = squircle(*ub, n=n) - squircle(*ui, n=ni)
     up = up - (left_of(cxu) & below(ytu))
     up = up - chamfer(_ox(ub, n, ytu, "left"), ytu, p.ccut, "sw")
@@ -456,15 +486,15 @@ def _six(p):
     x_at = lambda y: a_l[0] - (P.CAP - y) * d[0] / d[1]
     ym = tp[1] + (P.CAP - tp[1]) * 0.22
     mo = (x_at(ym), ym)
-    o1, o2 = _handles((0.0, cy), (0.0, 1.0), mo, d, 0.62, 0.5)
-    r = (x_at(cy) + hw, cy)
-    e = 2.0
-    tail = _path((0.0, cy - e), [(0.0, cy), (o1, o2, mo), a_l, a_r, r, (cx, cy - e)])
+    # The blend leaves the bowl's left extreme leaning out by a few degrees,
+    # so it crosses the squircle cleanly instead of grazing it.
+    lean = (-0.07, 1.0)
+    o1, o2 = _handles((0.0, cy), lean, mo, d, 0.62, 0.5)
+    r = (x_at(tp[1]) + hw, tp[1])  # inner edge, level with the tangent point
+    tail = _path((0.0, cy), [(o1, o2, mo), a_l, a_r, r, (cx, cy - 0.1 * (cy - box[1]))])
     shape = (squircle(*box, n=n) + tail) - squircle(*ibox, n=ni)
-    crotch = _line_cross_sq(a_r, (-d[0], -d[1]), box, n)
+    crotch, a_curve = _ray_hit_sq(a_r, (-d[0], -d[1]), box, n)
     if crotch is not None:
-        x2 = crotch[0] + 2
-        a_curve = math.degrees(math.atan2(_oy(box, n, x2) - crotch[1], 2))
         shape = shape - _crotch(crotch[0], crotch[1], math.degrees(math.atan2(d[1], d[0])), a_curve, p.trap)
     return shape
 
@@ -680,8 +710,9 @@ def fraction(p):
 
 
 def _pct_ring(p):
-    rw, rh = p.w(252, 0.6), P.CAP * 0.47
-    ws, h = p.fstem * (0.84 - 0.18 * max(0.0, p.grow) / 70), _fh(p) * (0.8 - 0.14 * max(0.0, p.grow) / 70)
+    g = max(0.0, p.grow) / 70
+    rw, rh = p.w(250, 1.4), P.CAP * 0.46
+    ws, h = p.fstem * (0.84 - 0.22 * g), _fh(p) * (0.8 - 0.18 * g)
     os_ = P.COS * 0.7
     sh = ring(0, -os_, rw, rh + os_, ws, h, n=_n(p), n_in=_ni(p))
     return sh
@@ -810,7 +841,7 @@ def dollar(p):
     bt = p.fstem * 0.82
     cx = w * 0.505
     ext = p.w(92, 0.2)
-    bar = rect(cx - bt / 2, P.CAP - h, cx + bt / 2, P.CAP + ext) + rect(cx - bt / 2, -ext, cx + bt / 2, h)
+    bar = rect(cx - bt / 2, P.CAP + P.COS - h * 0.5, cx + bt / 2, P.CAP + ext) + rect(cx - bt / 2, -ext, cx + bt / 2, -P.COS + h * 0.5)
     return _fit(p, s_ + bar)
 
 
@@ -829,7 +860,7 @@ def cent(p):
     bt = p.fstem * 0.82
     cx = w * 0.53
     ext = p.w(96, 0.2)
-    bar = rect(cx - bt / 2, top - h, cx + bt / 2, top + P.COS + ext) + rect(cx - bt / 2, -P.COS - ext, cx + bt / 2, h - P.COS)
+    bar = rect(cx - bt / 2, top + P.COS - h * 0.5, cx + bt / 2, top + P.COS + ext) + rect(cx - bt / 2, -P.COS - ext, cx + bt / 2, -P.COS + h * 0.5)
     return _fit(p, c_ + bar, dx=-p.w(10, 0.0))
 
 
@@ -842,9 +873,11 @@ def sterling(p):
     xs = p.w(78, 0.3)  # stem left edge
     hook_r = w - p.w(6, 0.0)
     ytop = P.CAP + P.COS
-    hb = P.CAP * 0.56  # hook box bottom
+    g = max(0.0, p.grow) / 70
+    hb = P.CAP * 0.56 - 56 * g  # hook box bottom
+    ht = h * (1 - 0.08 * g)
     box = (xs, hb, hook_r, ytop)
-    ibox = (xs + s, hb + h, hook_r - s * 0.98, ytop - h)
+    ibox = (xs + s, hb + ht, hook_r - s * 0.98, ytop - ht)
     cy = (hb + ytop) / 2
     cxh = (xs + hook_r) / 2
     yt = cy - (ytop - cy) * 0.12  # terminal just below the bowl's widest point
@@ -855,7 +888,8 @@ def sterling(p):
     stem = rect(xs, h - 1, xs + s, cy + 1)
     base = rect(0, 0, w, h)
     bar_y = P.CAP * 0.42
-    bar = rect(xs - p.w(70, 0.1), bar_y - h * 0.9 / 2, xs + s + p.w(150, 0.3), bar_y + h * 0.9 / 2)
+    bt = h * (0.9 - 0.08 * g)
+    bar = rect(xs - p.w(70, 0.1), bar_y - bt / 2, xs + s + p.w(146, 0.3), bar_y + bt / 2)
     return _fit(p, hook + stem + base + bar)
 
 
@@ -897,12 +931,12 @@ def Euro(p):
     h = _fh(p)
     c_ = open_bowl(p, 0, w, -P.COS, P.CAP + P.COS, ws, h, h, cut_top=P.CAP * 0.69, cut_bottom=P.CAP * 0.31,
                    n=n, n_in=ni, chamfer_leg=p.ccut)
-    c_ = c_.move(p.w(64, 0.2), 0)
+    c_ = c_.move(p.w(92, 0.3), 0)
     bt = h * 0.8
     off = bt / 2 + p.w(34, 0.25)
     sh = c_
     for yb in (P.CAP / 2 + off, P.CAP / 2 - off):
-        sh = sh + rect(0, yb - bt / 2, p.w(330, 0.6), yb + bt / 2)
+        sh = sh + rect(0, yb - bt / 2, p.w(350, 0.6), yb + bt / 2)
     return _fit(p, sh)
 
 
@@ -1191,9 +1225,10 @@ def asciicircum(p):
 @glyph("degree", 0x00B0)
 def degree(p):
     n, ni = _n(p), _ni(p)
-    d = p.w(268, 0.5)
-    ws = p.fstem * 0.74
-    h = _fh(p) * 0.68
+    g = max(0.0, p.grow) / 70
+    d = p.w(268, 0.9)
+    ws = p.fstem * (0.74 - 0.16 * g)
+    h = _fh(p) * (0.68 - 0.12 * g)
     top = P.CAP + P.COS * 0.6
     sh = ring(0, top - d, d * 0.94, top, ws, h, n=n, n_in=ni)
     return G(sh, l=p.csbr * 0.9, r=p.csbr * 0.9)
@@ -1212,28 +1247,40 @@ def mu(p):
 
 
 def _small_a(q):
-    """A compact double-storey a (lowercase proportions) for the ordinal."""
+    """A compact double-storey a (lowercase proportions) for the ordinal.
+    The bowl's outer contour and its counter meet the stem at heights solved
+    for, so the joins have the same shape at every weight."""
+    from .parts import solve_cx
+
     n, ni = q.sq, q.sq_in
     s = q.stem
     h = q.hair
-    w = q.w(452, 0.9)
+    w = q.w(452, 1.3)
     xh = P.XH
-    # Stem on the right, from the baseline to where the hook turns.
+    xs = w - s  # stem's left edge
+    # Hook over the top, ending on the left with a horizontal cut.
     ytop = xh + P.OS
     hb = xh * 0.36
     box = (0, hb, w, ytop)
     ibox = (s * 0.98, hb + h, w - s, ytop - h)
     cy = (hb + ytop) / 2
-    yt = cy + (ytop - cy) * 0.36
+    yt = cy + 0.5 * (ibox[3] - cy)
     hook = (squircle(*box, n=n) - squircle(*ibox, n=ni)) & above(cy - 1)
     hook = hook - (left_of(w / 2) & below(yt))
     hook = hook - chamfer(_ox(box, n, yt, "left"), yt, q.cut, "sw")
-    stem = rect(w - s, 0, w, cy + 1)
-    bt = xh * 0.56  # bowl top
-    bb = (0, -P.OS, w - s * 0.4, bt)
-    bi = (s * 1.02, -P.OS + h, w - s, bt - h * 0.95)
-    bowl = squircle(*bb, n=n) - squircle(*bi, n=ni)
-    sh = hook + stem + (bowl & left_of(w - s * 0.5))
+    stem = rect(xs, 0, w, cy + 1)
+    # Bowl: outer contour leaves the stem edge at y_o (and mirrored at the
+    # top); the counter is a squircle clipped by the stem edge.
+    y0, bt = -P.OS, xh * 0.57
+    byc, bry = (y0 + bt) / 2, (bt - y0) / 2
+    y_o = y0 + bry * 0.32
+    bcx = solve_cx(0, xs, y_o, byc, bry, n)
+    outer = squircle(0, y0, 2 * bcx, bt, n=n)
+    iy0, iy1 = y0 + h * 0.98, bt - h * 0.92
+    icy, iry = (iy0 + iy1) / 2, (iy1 - iy0) / 2
+    icx = solve_cx(s * 1.02, xs, iy0 + iry * 0.45, icy, iry, ni)
+    counter = squircle(s * 1.02, iy0, 2 * icx - s * 1.02, iy1, n=ni) & left_of(xs)
+    sh = (hook + stem + (outer & left_of(xs + s * 0.5))) - counter
     return sh, w
 
 
@@ -1266,10 +1313,11 @@ def ordmasculine(p):
 def infinity(p):
     n, ni = _n(p), _ni(p)
     t = _mt(p)
-    ws = t * 1.0
-    h = t * 0.92
-    lw = p.w(330, 0.6)
-    hh = p.w(150, 0.3)
+    g = max(0.0, p.grow) / 70
+    ws = t * (1.0 - 0.1 * g)
+    h = t * (0.9 - 0.15 * g)
+    lw = p.w(330, 1.0)
+    hh = p.w(150, 0.5)
     cy = P.AXIS
     a = (0, cy - hh, lw, cy + hh)
     b = (lw - ws, cy - hh, 2 * lw - ws, cy + hh)
