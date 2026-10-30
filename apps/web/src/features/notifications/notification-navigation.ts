@@ -556,7 +556,7 @@ function getSupportedHandler(
               section: 'overview',
               discussionId: meta.content.messageId,
             }),
-            { newSplit, sourceHandle, onApplied }
+            { newSplit, sourceHandle, onApplied, presentImmediately }
           );
         };
       })
