@@ -93,9 +93,6 @@ pub fn setup_rust_light() -> Step<Use> {
     .add_with(("rust-cache", "false"))
 }
 
-/// Install Nix on a macOS runner. The Linux [`setup_nix`] action doesn't apply
-/// there, so Apple jobs (DMG signing, the iOS simulator preview) install it
-/// with the same script instead.
 /// A `bash` step whose output the job's closing "Comment on the PR" step
 /// quotes when the job fails. The step records its name in
 /// `$RUNNER_TEMP/last-step.name` and tees its stdout and stderr into
@@ -117,6 +114,9 @@ pub fn logged_run(name: &str, script: impl AsRef<str>) -> Step<Run> {
         .add_env(("LOGGED_STEP", name))
 }
 
+/// Install Nix on a macOS runner. The Linux [`setup_nix`] action doesn't apply
+/// there, so Apple jobs (DMG signing, the iOS simulator preview) install it
+/// with the same script instead.
 pub fn install_nix_macos() -> Step<Run> {
     Step::new("Install Nix")
         .run(include_str!("scripts/install_nix_macos.sh"))
