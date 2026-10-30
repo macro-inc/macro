@@ -311,8 +311,7 @@ export const MobileDrawer = Object.assign(
         onOpenChange={(open) => {
           uncontrolledOpen = open;
           local.onOpenChange?.(open);
-          if (!open && !closed())
-            setActiveSnapPoint(props.defaultSnapPoint ?? 1);
+          if (!open && !closed()) setActiveSnapPoint(1);
         }}
         onOutsidePointer={(event) => {
           if (!dismissesDrawer(event)) event.preventDefault();
